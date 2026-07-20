@@ -14,21 +14,16 @@
  */
 void app_init(void)
 {
-#if APP_LOG_ENABLE
-    if (LOG_Init() != LOG_OK)
-    {
-        Error_Handler();
-    }
-#endif
+    (void)LOG_Init();
+    (void)LOG_Printf(LOG_LEVEL_INFO, "LOG", "initialization successful");
 
     if (Board_PMIC_Init() != PMIC_OK)
     {
+        (void)LOG_Printf(LOG_LEVEL_ERROR, "PMIC", "initialization failed");
         Error_Handler();
     }
 
-#if APP_LOG_ENABLE
     (void)LOG_Printf(LOG_LEVEL_INFO, "PMIC", "initialization successful");
-#endif
 }
 
 /**

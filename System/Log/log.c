@@ -8,6 +8,7 @@
   *          文本格式化及底层输出调用。Handle 与端口绑定均不对应用层公开。
   ******************************************************************************
   */
+#include "app_config.h"
 
 /* Includes ------------------------------------------------------------------*/
 #include "Log/log.h"
@@ -77,6 +78,10 @@ static uint8_t LOG_IsMessageLevelValid(LOG_LevelTypeDef Level)
   */
 LOG_StatusTypeDef LOG_Init(void)
 {
+#if APP_LOG_ENABLE == 0
+    return LOG_ERROR;
+#endif /* APP_LOG_ENABLE == 0 */
+
     hlog_default.State = LOG_STATE_RESET;
     hlog_default.Level = LOG_DEFAULT_LEVEL;
 
@@ -174,8 +179,8 @@ LOG_StatusTypeDef LOG_Write(LOG_LevelTypeDef MessageLevel,
     }
 
     return hlog_default.Output.Ops->Write(hlog_default.Output.Context,
-                                          Data,
-                                          Length);
+                                        Data,
+                                        Length);
 }
 
 /**
@@ -190,10 +195,14 @@ LOG_StatusTypeDef LOG_Write(LOG_LevelTypeDef MessageLevel,
   * @retval LOG_ERROR 参数、状态、格式化或底层输出失败。
   */
     LOG_StatusTypeDef LOG_Printf(LOG_LevelTypeDef MessageLevel,
-                             const char *Tag,
-                             const char *Format,
-                             ...)
+                                const char *Tag,
+                                const char *Format,
+                                ...)
 {
+#if APP_LOG_ENABLE == 0
+    return LOG_ERROR;
+#endif /* APP_LOG_ENABLE == 0 */
+
     char buffer[LOG_FORMAT_BUFFER_SIZE];
     uint32_t timestamp_ms;
     size_t used_length;
@@ -224,11 +233,11 @@ LOG_StatusTypeDef LOG_Write(LOG_LevelTypeDef MessageLevel,
         hlog_default.TimeSource.Context);
 
     result = snprintf(buffer,
-                      sizeof(buffer),
-                      "%c (%lu) %s: ",
-                      LOG_LevelToChar(MessageLevel),
-                      (unsigned long)timestamp_ms,
-                      Tag);
+                    sizeof(buffer),
+                    "%c (%lu) %s: ",
+                    LOG_LevelToChar(MessageLevel),
+                    (unsigned long)timestamp_ms,
+                    Tag);
 
     if ((result < 0) || ((size_t)result >= sizeof(buffer)))
     {
