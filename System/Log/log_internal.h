@@ -13,7 +13,7 @@
 #define LOG_INTERNAL_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "Log/log.h"
+#include "System/Log/log.h"
 
 /* Internal types ------------------------------------------------------------*/
 /**

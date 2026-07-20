@@ -9,7 +9,7 @@
 #define LOG_CONFIG_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "Log/log.h"
+#include "System/Log/log.h"
 
 /* Exported constants --------------------------------------------------------*/
 /** @brief 日志系统上电后的默认过滤等级。 */

@@ -5,7 +5,7 @@
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
 
-#define APP_LOG_ENABLE          0U
+#define APP_LOG_ENABLE          1U
 
 #define APP_PMIC_ENABLE         1U
 #define APP_LCD_ENABLE          0U

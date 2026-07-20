@@ -10,9 +10,9 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
-#include "Board/board_pmic.h"
+#include "BSP/Board/board_pmic.h"
 
-#include "Devices/pmic/port/pmic_i2c_port.h"
+#include "BSP/Devices/pmic/port/pmic_i2c_port.h"
 
 /* Private variables ---------------------------------------------------------*/
 /**

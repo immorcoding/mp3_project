@@ -8,18 +8,18 @@
   *          文本格式化及底层输出调用。Handle 与端口绑定均不对应用层公开。
   ******************************************************************************
   */
-#include "app_config.h"
+#include "APP/app_config.h"
 
 /* Includes ------------------------------------------------------------------*/
-#include "Log/log.h"
+#include "System/Log/log.h"
 
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 
-#include "Log/log_config.h"
-#include "Log/log_internal.h"
-#include "Log/port/log_port.h"
+#include "System/Log/log_config.h"
+#include "System/Log/log_internal.h"
+#include "System/Log/port/log_port.h"
 
 /* Private variables ---------------------------------------------------------*/
 /** @brief 默认日志实例，仅允许本文件中的公开函数访问。 */

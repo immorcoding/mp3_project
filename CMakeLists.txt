@@ -57,19 +57,27 @@ file(GLOB_RECURSE SYSTEM_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/System/Log/*.c"
 )
 
+# 自动收集 System 下的 C 源文件
+file(GLOB_RECURSE USB_DEVICE_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/USB_DEVICE/App/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/USB_DEVICE/Target/*.c"
+)
+
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${BSP_SOURCES}
     ${SYSTEM_SOURCES}
+    ${USB_DEVICE_SOURCES}
+
     APP/app.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    BSP
-    System
-    APP
+    ${CMAKE_CURRENT_SOURCE_DIR}
+
+    # Add user defined include paths
 )
 
 # Add project symbols (macros)

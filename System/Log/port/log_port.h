@@ -14,7 +14,7 @@
 #define LOG_PORT_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "Log/log_internal.h"
+#include "System/Log/log_internal.h"
 
 /* Internal functions --------------------------------------------------------*/
 /**

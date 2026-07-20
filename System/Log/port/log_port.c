@@ -11,12 +11,13 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
-#include "Log/port/log_port.h"
+#include "System/Log/port/log_port.h"
 
 #include <stddef.h>
 #include <string.h>
 
-#include "Log/log_config.h"
+#include "USB_DEVICE/App/usbd_cdc_if.h"
+#include "System/Log/log_config.h"
 #include "main.h"
 
 /* Private types -------------------------------------------------------------*/
@@ -42,8 +43,8 @@ static LOG_PortContextTypeDef log_port_context;
     * @retval LOG_ERROR 参数或状态无效。
     */
 static LOG_StatusTypeDef LOG_PortWrite(void *Context,
-                                          const char *Data,
-                                          uint32_t Length)
+                                    const char *Data,
+                                    uint32_t Length)
 {
     LOG_PortContextTypeDef *context = (LOG_PortContextTypeDef *)Context;
 
@@ -61,7 +62,7 @@ static LOG_StatusTypeDef LOG_PortWrite(void *Context,
     context->WriteCount++;
 
 /*******************若更改 输出外设 需要修改此部分****************/
-    
+    CDC_Transmit_FS((uint8_t *)Data, Length);
 /**************************************************************/
 
     return LOG_OK;

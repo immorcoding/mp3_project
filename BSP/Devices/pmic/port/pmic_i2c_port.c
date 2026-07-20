@@ -11,11 +11,11 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
-#include "Devices/pmic/port/pmic_i2c_port.h"
+#include "BSP/Devices/pmic/port/pmic_i2c_port.h"
 
 /* PMIC I2C PORT BACKEND BEGIN: Includes -------------------------------------*/
 /* 当前后端：GPIO 模拟的软件 I2C。替换硬件 I2C 时修改本区域。 */
-#include "Bus/soft_i2c/soft_i2c.h"
+#include "BSP/Bus/soft_i2c/soft_i2c.h"
 #include "main.h"
 /* PMIC I2C PORT BACKEND END: Includes ---------------------------------------*/
 

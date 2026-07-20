@@ -9,7 +9,7 @@
 #define BOARD_PMIC_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "Devices/pmic/pmic.h"
+#include "BSP/Devices/pmic/pmic.h"
 
 #ifdef __cplusplus
 extern "C" {

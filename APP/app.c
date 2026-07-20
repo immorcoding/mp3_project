@@ -7,13 +7,15 @@
 
 #include "main.h"
 
-#include "Board/board_pmic.h"
-#include "Log/log.h"
+#include "BSP/Board/board_pmic.h"
+#include "System/Log/log.h"
 /**
  * @brief  Initialize the application
  */
 void app_init(void)
 {
+    HAL_Delay(2000); // Wait for peripherals to stabilize
+
     (void)LOG_Init();
     (void)LOG_Printf(LOG_LEVEL_INFO, "LOG", "initialization successful");
 

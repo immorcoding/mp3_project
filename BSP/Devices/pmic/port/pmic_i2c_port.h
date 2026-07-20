@@ -13,7 +13,7 @@
 #define PMIC_I2C_PORT_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "Devices/pmic/pmic.h"
+#include "BSP/Devices/pmic/pmic.h"
 
 #ifdef __cplusplus
 extern "C" {
