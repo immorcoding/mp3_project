@@ -49,6 +49,16 @@ typedef enum
     LOG_STATE_ERROR       /*!< 初始化或内部接口发生错误。 */
 } LOG_StateTypeDef;
 
+/** @brief 日志队列及输出 Adapter 的运行统计。 */
+typedef struct
+{
+    uint32_t PendingCount;     /*!< 当前等待发送的日志数。 */
+    uint32_t EnqueuedCount;    /*!< 累计进入 RAM 队列的日志数。 */
+    uint32_t SentCount;        /*!< 累计提交给输出 Adapter 的日志数。 */
+    uint32_t DroppedCount;     /*!< 队列溢出或发送错误造成的丢弃数。 */
+    uint32_t OutputErrorCount; /*!< 输出 Adapter 提交错误累计数。 */
+} LOG_StatsTypeDef;
+
 /* Exported functions --------------------------------------------------------*/
 /**
   * @brief  初始化默认日志实例并绑定内部输出端口与时间源。
@@ -79,12 +89,29 @@ LOG_LevelTypeDef LOG_GetLevel(void);
 LOG_StateTypeDef LOG_GetState(void);
 
 /**
- * @brief 输出一段已经装配完成的日志文本。
+  * @brief  非阻塞处理一条待发送日志。
+  * @note   输出未就绪或正忙时保留队首日志并返回 LOG_OK。
+  *         应在应用主循环中高频、重复调用。
+  * @retval LOG_OK    队列为空、消息已提交或输出暂时不可用。
+  * @retval LOG_ERROR 日志未初始化或输出 Adapter 返回不可恢复错误。
+  */
+LOG_StatusTypeDef LOG_Process(void);
+
+/**
+  * @brief  获取日志队列及输出统计快照。
+  * @param  Stats 接收统计数据的对象。
+  * @retval LOG_OK    获取成功。
+  * @retval LOG_ERROR 参数为空或日志尚未初始化。
+  */
+LOG_StatusTypeDef LOG_GetStats(LOG_StatsTypeDef *Stats);
+
+/**
+ * @brief 将一段已经装配完成的日志文本复制到 RAM 队列。
  * @param MessageLevel 当前消息等级。
  * @param Data         待输出文本。
  * @param Length       文本长度，不包含字符串结尾的 '\0'。
- * @retval LOG_OK    输出成功，或消息被等级正常过滤。
- * @retval LOG_ERROR 参数、状态或底层输出接口无效。
+ * @retval LOG_OK    入队成功，或消息被等级正常过滤。
+ * @retval LOG_ERROR 参数、状态或文本长度无效。
  */
 LOG_StatusTypeDef LOG_Write(LOG_LevelTypeDef MessageLevel,
                             const char *Data,

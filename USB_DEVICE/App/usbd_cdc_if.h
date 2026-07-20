@@ -109,6 +109,13 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
 
+/**
+  * @brief  查询 USB CDC 是否已枚举、串口打开稳定且当前可接收新的发送请求。
+  * @retval 1U USB CDC 当前可发送。
+  * @retval 0U USB CDC 未就绪或上一笔发送尚未完成。
+  */
+uint8_t CDC_IsReady_FS(void);
+
 /* USER CODE END EXPORTED_FUNCTIONS */
 
 /**

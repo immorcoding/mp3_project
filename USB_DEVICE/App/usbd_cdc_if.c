@@ -62,6 +62,13 @@
   */
 
 /* USER CODE BEGIN PRIVATE_DEFINES */
+
+/** @brief CDC Control Line State 请求中 DTR 对应的位掩码。 */
+#define CDC_CONTROL_LINE_DTR_MASK       (1U << 0)
+
+/** @brief DTR 置位后等待主机终端完成读取通道装配的时间。 */
+#define CDC_PORT_OPEN_SETTLE_TIME_MS    1000U
+
 /* USER CODE END PRIVATE_DEFINES */
 
 /**
@@ -94,6 +101,12 @@ uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
 uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
+
+/** @brief 主机是否通过 CDC DTR 表示已经打开虚拟串口。 */
+static volatile uint8_t cdc_port_open_fs = 0U;
+
+/** @brief 最近一次 DTR 从 0 变为 1 时的 HAL 毫秒时间戳。 */
+static volatile uint32_t cdc_port_open_tick_fs = 0U;
 
 /* USER CODE END PRIVATE_VARIABLES */
 
@@ -152,6 +165,9 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_FS =
 static int8_t CDC_Init_FS(void)
 {
   /* USER CODE BEGIN 3 */
+  cdc_port_open_fs = 0U;
+  cdc_port_open_tick_fs = 0U;
+
   /* Set Application Buffers */
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
@@ -166,6 +182,8 @@ static int8_t CDC_Init_FS(void)
 static int8_t CDC_DeInit_FS(void)
 {
   /* USER CODE BEGIN 4 */
+  cdc_port_open_fs = 0U;
+  cdc_port_open_tick_fs = 0U;
   return (USBD_OK);
   /* USER CODE END 4 */
 }
@@ -180,6 +198,8 @@ static int8_t CDC_DeInit_FS(void)
 static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 {
   /* USER CODE BEGIN 5 */
+  UNUSED(length);
+
   switch(cmd)
   {
     case CDC_SEND_ENCAPSULATED_COMMAND:
@@ -228,7 +248,19 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
     break;
 
     case CDC_SET_CONTROL_LINE_STATE:
+      if (pbuf != NULL)
+      {
+        const USBD_SetupReqTypedef *request = (const USBD_SetupReqTypedef *)pbuf;
+        const uint8_t port_open =
+            ((request->wValue & CDC_CONTROL_LINE_DTR_MASK) != 0U) ? 1U : 0U;
 
+        if ((port_open != 0U) && (cdc_port_open_fs == 0U))
+        {
+          cdc_port_open_tick_fs = HAL_GetTick();
+        }
+
+        cdc_port_open_fs = port_open;
+      }
     break;
 
     case CDC_SEND_BREAK:
@@ -261,6 +293,7 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
+  UNUSED(Len);
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
   return (USBD_OK);
@@ -283,7 +316,17 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
   uint8_t result = USBD_OK;
   /* USER CODE BEGIN 7 */
   USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
-  if (hcdc->TxState != 0){
+
+  if ((Buf == NULL) ||
+      (Len == 0U) ||
+      (hcdc == NULL) ||
+      (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED))
+  {
+    return USBD_FAIL;
+  }
+
+  if (hcdc->TxState != 0U)
+  {
     return USBD_BUSY;
   }
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Buf, Len);
@@ -316,6 +359,29 @@ static int8_t CDC_TransmitCplt_FS(uint8_t *Buf, uint32_t *Len, uint8_t epnum)
 }
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
+
+/**
+  * @brief  查询 USB CDC 是否已经可以接收新的异步发送请求。
+  * @retval 1U USB 已配置、主机已打开串口且发送端空闲。
+  * @retval 0U USB CDC 暂时不可发送。
+  */
+uint8_t CDC_IsReady_FS(void)
+{
+  const USBD_CDC_HandleTypeDef *hcdc =
+      (const USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
+
+  if ((hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED) ||
+      (cdc_port_open_fs == 0U) ||
+      ((uint32_t)(HAL_GetTick() - cdc_port_open_tick_fs) <
+       CDC_PORT_OPEN_SETTLE_TIME_MS) ||
+      (hcdc == NULL) ||
+      (hcdc->TxState != 0U))
+  {
+    return 0U;
+  }
+
+  return 1U;
+}
 
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
 
