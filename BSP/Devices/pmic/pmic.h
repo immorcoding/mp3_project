@@ -56,6 +56,8 @@ typedef enum
 
 /**
   * @brief 总线操作的统一返回结果。
+  * @details Status 供 PMIC 驱动跨后端判断控制流；Detail 原样保存当前后端
+  *          的诊断位。更换后端后 Detail 的数值定义允许改变。
   */
 typedef struct
 {
@@ -112,10 +114,12 @@ typedef struct
     PMIC_BusPrepareFunc Prepare; /**< 准备总线；软件 I2C 初始化，硬件 I2C 可空操作。 */
     PMIC_BusMemReadFunc MemRead; /**< 从 PMIC 寄存器读取数据。 */
     PMIC_BusMemWriteFunc MemWrite; /**< 向 PMIC 寄存器写入数据。 */
-} PMIC_BusOpsTypeDef;//包含三个函数指针
+} PMIC_BusOpsTypeDef;
 
 /**
-  * @brief PMIC 驱动状态。与前面Status不同，State是驱动内部状态，Status是函数返回情况。
+  * @brief PMIC 驱动对象的持久运行状态。
+  * @note  State 保存在 Handle 中，可由调试器持续观察；Status 是某一次函数
+  *        调用的立即返回值，两者用途不同。应用不应直接伪造 State。
   */
 typedef enum
 {
@@ -141,18 +145,19 @@ typedef enum
 /**
   * @brief PMIC 设备实例句柄。
   * @note  BusOps 和 BusContext 采用组合与依赖注入方式，使 PMIC 驱动可复用
-  *        于软件 I2C、HAL I2C 或测试总线。
+  *        于软件 I2C、HAL I2C 或测试总线。前四个字段是依赖/配置，后四个
+  *        字段是运行状态和最近一次失败的诊断快照。
   */
 typedef struct
 {
     const PMIC_BusOpsTypeDef *BusOps; /**< 总线操作表；驱动只依赖此抽象接口。 */
     void *BusContext;                 /**< 底层总线实例，相当于操作函数的 this 指针。 */
     uint8_t Address7Bit;              /**< 7 位 I2C 地址，不包含读写位。 */
-    uint8_t ApplyBootConfig;          /**< 是否在识别芯片后应用内置启动配置。 */
+    uint8_t ApplyBootConfig;          /**< 是否在识别芯片后应用启动配置；由 Init 装载默认值。 */
     volatile PMIC_StateTypeDef State; /**< 当前驱动状态。 */
     volatile PMIC_ErrorTypeDef ErrorCode; /**< 最近一次 PMIC 层错误。 */
     uint8_t LastFailedRegister;       /**< 最近一次总线失败对应的寄存器地址。 */
-    uint32_t BusErrorDetail;          /**< 最近一次底层总线原始错误码。 */
+    uint32_t BusErrorDetail;          /**< 最近一次底层原始错误码；解释方式取决于 Port 后端。 */
 } PMIC_HandleTypeDef;
 
 /* Exported functions --------------------------------------------------------*/

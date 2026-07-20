@@ -72,19 +72,19 @@ static const PMIC_RegisterValueTypeDef pmic_boot_profile[] =
     {XPOWERS_AXP2101_MIN_SYS_VOL_CTRL,     0x50u}, /* VSYSDPM：4.6 V。 */
     {XPOWERS_AXP2101_INPUT_VOL_LIMIT_CTRL, 0x06u}, /* VBUS 电压限制：4.36 V。 */
     {XPOWERS_AXP2101_INPUT_CUR_LIMIT_CTRL, 0x01u}, /* 输入电流限制：500 mA。 */
-    {XPOWERS_AXP2101_ADC_CHANNEL_CTRL,     0x1Fu},
-    {XPOWERS_AXP2101_INTEN1,               0x00u},
-    {XPOWERS_AXP2101_INTEN2,               0x00u},
-    {XPOWERS_AXP2101_INTEN3,               0x00u},
-    {XPOWERS_AXP2101_INTSTS1,              0xFFu},
-    {XPOWERS_AXP2101_INTSTS2,              0xFFu},
-    {XPOWERS_AXP2101_INTSTS3,              0xFFu},
+    {XPOWERS_AXP2101_ADC_CHANNEL_CTRL,     0x1Fu}, /* 启用当前选定的 5 路 ADC 测量。 */
+    {XPOWERS_AXP2101_INTEN1,               0x00u}, /* 禁用第 1 组 PMIC 中断源。 */
+    {XPOWERS_AXP2101_INTEN2,               0x00u}, /* 禁用第 2 组 PMIC 中断源。 */
+    {XPOWERS_AXP2101_INTEN3,               0x00u}, /* 禁用第 3 组 PMIC 中断源。 */
+    {XPOWERS_AXP2101_INTSTS1,              0xFFu}, /* 写 1 清除第 1 组挂起状态。 */
+    {XPOWERS_AXP2101_INTSTS2,              0xFFu}, /* 写 1 清除第 2 组挂起状态。 */
+    {XPOWERS_AXP2101_INTSTS3,              0xFFu}, /* 写 1 清除第 3 组挂起状态。 */
     {XPOWERS_AXP2101_ICC_CHG_SET,          0x09u}, /* 充电电流：300 mA。 */
     {XPOWERS_AXP2101_ITERM_CHG_SET_CTRL,   0x15u}, /* 终止电流：125 mA。 */
     {XPOWERS_AXP2101_CV_CHG_VOL_SET,       0x03u}, /* 充电电压：4.2 V。 */
     {XPOWERS_AXP2101_DC_ONOFF_DVM_CTRL,    0x01u}, /* 保持 DCDC1 开启。 */
     {XPOWERS_AXP2101_LDO_ONOFF_CTRL0,      0x04u}, /* 关闭 ALDO1/2，保持 ALDO3。 */
-    {XPOWERS_AXP2101_LDO_ONOFF_CTRL1,      0x00u},
+    {XPOWERS_AXP2101_LDO_ONOFF_CTRL1,      0x00u}, /* 关闭该寄存器控制的全部 LDO。 */
     {XPOWERS_AXP2101_LDO_VOL0_CTRL,        0x1Cu}, /* ALDO1 预设为 3.3 V。 */
     {XPOWERS_AXP2101_LDO_VOL1_CTRL,        0x1Cu}  /* ALDO2 预设为 3.3 V。 */
 };
@@ -97,6 +97,7 @@ static const PMIC_RegisterValueTypeDef pmic_boot_profile[] =
   */
 static void pmic_clear_error(PMIC_HandleTypeDef *hpmic)
 {
+    /* 只清理诊断字段，不触碰总线绑定、地址、启动策略或 State。 */
     hpmic->ErrorCode = PMIC_ERROR_NONE;
     hpmic->LastFailedRegister = 0u;
     hpmic->BusErrorDetail = 0u;
@@ -115,6 +116,10 @@ static PMIC_StatusTypeDef pmic_fail(PMIC_HandleTypeDef *hpmic,
                                     uint8_t reg,
                                     uint32_t bus_detail)
 {
+    /*
+     * 集中写入错误快照，保证所有失败出口具有一致语义。BusErrorDetail 在
+     * 芯片 ID 不匹配等非总线错误时为 0。
+     */
     hpmic->State = PMIC_STATE_ERROR;
     hpmic->ErrorCode = error;
     hpmic->LastFailedRegister = reg;
@@ -134,6 +139,7 @@ static PMIC_StatusTypeDef pmic_read_reg(PMIC_HandleTypeDef *hpmic,
                                         uint8_t reg,
                                         uint8_t *value)
 {
+    /* Device 层只调用抽象 Ops；context 的实际类型由 Port 决定。 */
     PMIC_BusResultTypeDef bus_result =
         hpmic->BusOps->MemRead(hpmic->BusContext,
                                hpmic->Address7Bit,
@@ -160,6 +166,7 @@ static PMIC_StatusTypeDef pmic_write_reg(PMIC_HandleTypeDef *hpmic,
                                          uint8_t reg,
                                          uint8_t value)
 {
+    /* value 是局部变量，但当前所有总线 MemWrite 都是同步阻塞调用。 */
     PMIC_BusResultTypeDef bus_result =
         hpmic->BusOps->MemWrite(hpmic->BusContext,
                                 hpmic->Address7Bit,
@@ -195,6 +202,10 @@ static PMIC_StatusTypeDef pmic_update_bits(PMIC_HandleTypeDef *hpmic,
         return PMIC_ERROR;
     }
 
+    /*
+     * 清除 old 中 mask 选中的位，再写入 value 对应位：
+     * new = (old & ~mask) | (value & mask)。mask 外所有位保持芯片原值。
+     */
     current = (uint8_t)((current & (uint8_t)(~mask)) | (value & mask));
     return pmic_write_reg(hpmic, reg, current);
 }
@@ -218,6 +229,10 @@ static PMIC_StatusTypeDef pmic_apply_boot_config(PMIC_HandleTypeDef *hpmic)
         return PMIC_ERROR;
     }
 
+    /*
+     * 配置顺序即数组顺序。出现首个 NACK/超时即停止，避免在总线状态不明时
+     * 继续修改后续电源寄存器；失败寄存器由 pmic_write_reg 保存。
+     */
     for (uint32_t i = 0u;
          i < (sizeof(pmic_boot_profile) / sizeof(pmic_boot_profile[0]));
          ++i)
@@ -252,11 +267,19 @@ PMIC_StatusTypeDef PMIC_Init(PMIC_HandleTypeDef *hpmic)
         return PMIC_ERROR;
     }
 
+    /*
+     * Init 是设备配置的唯一装配入口：每次调用都恢复本驱动的默认地址和
+     * 启动策略，而不是要求 Board 直接填写 Handle 内部字段。
+     */
     hpmic->Address7Bit = PMIC_DEFAULT_ADDRESS_7BIT;
     hpmic->ApplyBootConfig = PMIC_DEFAULT_BOOT_CONFIG;
     hpmic->State = PMIC_STATE_RESET;
     pmic_clear_error(hpmic);
 
+    /*
+     * BusOps 与 BusContext 应已由 PMIC_I2C_Port_Bind() 成对注入。检查所有
+     * 必需回调，防止通过 NULL 函数指针跳转。
+     */
     if ((hpmic->BusOps == NULL) ||
         (hpmic->BusOps->Prepare == NULL) ||
         (hpmic->BusOps->MemRead == NULL) ||
@@ -269,9 +292,13 @@ PMIC_StatusTypeDef PMIC_Init(PMIC_HandleTypeDef *hpmic)
         return pmic_fail(hpmic, PMIC_ERROR_INVALID_PARAM, 0u, 0u);
     }
 
+    /* 从此处开始会访问硬件；BUSY 防止观察者把初始化中的对象当作可用。 */
     hpmic->State = PMIC_STATE_BUSY;
 
-    //初始化i2c，硬件/软件i2c都可以
+    /*
+     * Prepare 的含义由后端决定：软件 I2C 会检查/恢复物理总线；未来 HAL
+     * 硬件 I2C 可检查 HAL Handle 状态，或在已由 CubeMX 初始化时仅返回 OK。
+     */
     bus_result = hpmic->BusOps->Prepare(hpmic->BusContext);
 
     if (bus_result.Status != PMIC_BUS_OK)
@@ -279,12 +306,12 @@ PMIC_StatusTypeDef PMIC_Init(PMIC_HandleTypeDef *hpmic)
         return pmic_fail(hpmic, PMIC_ERROR_BUS_PREPARE, 0u, bus_result.Detail);
     }
 
-    //读取芯片ID
+    /* 读取只读芯片 ID，先确认地址上的器件确实是期望的 AXP2101。 */
     if (pmic_read_reg(hpmic, XPOWERS_AXP2101_IC_TYPE, &chip_id) != PMIC_OK)
     {
         return PMIC_ERROR;
     }
-    //检查芯片ID是否正确
+    /* 总线成功但 ID 错误属于 Device 层错误，不携带底层总线错误码。 */
     if (chip_id != XPOWERS_AXP2101_CHIP_ID)
     {
         return pmic_fail(hpmic,
@@ -293,12 +320,14 @@ PMIC_StatusTypeDef PMIC_Init(PMIC_HandleTypeDef *hpmic)
                          0u);
     }
 
+    /* 只有芯片身份确认后才允许写电源配置，避免向未知器件写寄存器。 */
     if ((hpmic->ApplyBootConfig == PMIC_BOOT_CONFIG_ENABLED) &&
         (pmic_apply_boot_config(hpmic) != PMIC_OK))
     {
         return PMIC_ERROR;
     }
 
+    /* 所有步骤完成后才进入 READY；任何总线失败已由 pmic_fail 置 ERROR。 */
     hpmic->State = PMIC_STATE_READY;
     return PMIC_OK;
 }

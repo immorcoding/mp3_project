@@ -7,6 +7,11 @@
   *          开漏总线通过“写低”主动拉低，通过“写高”释放线路并由外部上拉
   *          电阻产生高电平。驱动在每次释放 SCL 后读取实际引脚电平，以支持
   *          从机时钟拉伸和线路异常检测。
+  *
+  *          所有公开传输函数都遵循相同状态机：验证参数 -> 要求 READY ->
+  *          置 BUSY/清错误 -> 执行协议阶段 -> 无条件尝试 STOP -> 更新状态。
+  *          NACK 后总线仍可回到 READY；SCL 超时或物理 BUS_BUSY 会进入 ERROR，
+  *          调用者应重新执行 SoftI2C_Init() 检查并恢复总线。
   ******************************************************************************
   */
 
@@ -62,6 +67,7 @@ static SoftI2C_StatusTypeDef SoftI2C_ReleaseSCL(SoftI2C_HandleTypeDef *hi2c)
 {
   SoftI2C_SetSCL(hi2c, GPIO_PIN_SET);
 
+  /* SET 只释放开漏输出；必须轮询 IDR 确认线路真的被上拉到高电平。 */
   for (uint32_t i = 0u; i < hi2c->ClockStretchTimeout; ++i)
   {
     if (HAL_GPIO_ReadPin(hi2c->SCL_Port, hi2c->SCL_Pin) == GPIO_PIN_SET)
@@ -113,6 +119,7 @@ static void SoftI2C_DriveSDALow(SoftI2C_HandleTypeDef *hi2c)
   */
 static SoftI2C_StatusTypeDef SoftI2C_Stop(SoftI2C_HandleTypeDef *hi2c)
 {
+  /* 先确保 SDA 为低，再在 SCL 高电平期间释放 SDA，形成唯一合法 STOP 边沿。 */
   SoftI2C_DriveSDALow(hi2c);
   SoftI2C_Delay(hi2c);
 
@@ -134,15 +141,18 @@ static SoftI2C_StatusTypeDef SoftI2C_Stop(SoftI2C_HandleTypeDef *hi2c)
   */
 static SoftI2C_StatusTypeDef SoftI2C_RecoverInternal(SoftI2C_HandleTypeDef *hi2c)
 {
+  /* 主机必须先释放 SDA，避免与可能仍在输出数据的从机电气冲突。 */
   SoftI2C_ReleaseSDA(hi2c);
 
   for (uint32_t pulse = 0u; pulse < 9u; ++pulse)
   {
+    /* 从机已经释放 SDA 就不再产生多余时钟。 */
     if (HAL_GPIO_ReadPin(hi2c->SDA_Port, hi2c->SDA_Pin) == GPIO_PIN_SET)
     {
       break;
     }
 
+    /* 一个 I2C 字节最多为 8 位数据 + 1 位 ACK，故最多补 9 个时钟。 */
     SoftI2C_DriveSCLLow(hi2c);
     SoftI2C_Delay(hi2c);
     if (SoftI2C_ReleaseSCL(hi2c) != SOFT_I2C_OK)
@@ -152,6 +162,7 @@ static SoftI2C_StatusTypeDef SoftI2C_RecoverInternal(SoftI2C_HandleTypeDef *hi2c
     SoftI2C_Delay(hi2c);
   }
 
+  /* 即便 SDA 已释放，也显式产生 STOP，使从机协议状态机退出当前事务。 */
   if (SoftI2C_Stop(hi2c) != SOFT_I2C_OK)
   {
     return SOFT_I2C_TIMEOUT;
@@ -175,6 +186,7 @@ static SoftI2C_StatusTypeDef SoftI2C_RecoverInternal(SoftI2C_HandleTypeDef *hi2c
   */
 static SoftI2C_StatusTypeDef SoftI2C_Start(SoftI2C_HandleTypeDef *hi2c)
 {
+  /* START 前先构造总线空闲态：SDA/SCL 均释放为高。 */
   SoftI2C_ReleaseSDA(hi2c);
   if (SoftI2C_ReleaseSCL(hi2c) != SOFT_I2C_OK)
   {
@@ -188,6 +200,7 @@ static SoftI2C_StatusTypeDef SoftI2C_Start(SoftI2C_HandleTypeDef *hi2c)
     return SOFT_I2C_BUSY;
   }
 
+  /* SCL 保持高电平时 SDA 高->低即 START；随后拉低 SCL 进入数据阶段。 */
   SoftI2C_DriveSDALow(hi2c);
   SoftI2C_Delay(hi2c);
   SoftI2C_DriveSCLLow(hi2c);
@@ -210,6 +223,7 @@ static SoftI2C_StatusTypeDef SoftI2C_WriteByte(
 {
   for (uint8_t mask = 0x80u; mask != 0u; mask >>= 1u)
   {
+    /* I2C 按 MSB first 发送；SCL 低电平期间改变 SDA，SCL 高时数据稳定。 */
     SoftI2C_DriveSCLLow(hi2c);
     if ((data & mask) != 0u)
     {
@@ -228,6 +242,7 @@ static SoftI2C_StatusTypeDef SoftI2C_WriteByte(
     SoftI2C_Delay(hi2c);
   }
 
+  /* 第 9 个时钟由从机驱动 ACK，因此主机先释放 SDA 再采样实际电平。 */
   SoftI2C_DriveSCLLow(hi2c);
   SoftI2C_ReleaseSDA(hi2c);
   SoftI2C_Delay(hi2c);
@@ -258,6 +273,7 @@ static SoftI2C_StatusTypeDef SoftI2C_ReadByte(
   uint8_t acknowledge)
 {
   uint8_t value = 0u;
+  /* 接收期间 SDA 必须始终释放，由从机驱动每一位。 */
   SoftI2C_ReleaseSDA(hi2c);
 
   for (uint8_t bit = 0u; bit < 8u; ++bit)
@@ -270,6 +286,7 @@ static SoftI2C_StatusTypeDef SoftI2C_ReadByte(
     }
     SoftI2C_Delay(hi2c);
 
+    /* 每次在 SCL 高电平稳定区采样，并按 MSB first 拼入结果。 */
     value <<= 1u;
     if (HAL_GPIO_ReadPin(hi2c->SDA_Port, hi2c->SDA_Pin) == GPIO_PIN_SET)
     {
@@ -277,6 +294,7 @@ static SoftI2C_StatusTypeDef SoftI2C_ReadByte(
     }
   }
 
+  /* 第 9 个时钟改由主机应答：低为 ACK，高（释放）为 NACK。 */
   SoftI2C_DriveSCLLow(hi2c);
   if (acknowledge != 0u)
   {
@@ -434,6 +452,7 @@ static SoftI2C_StatusTypeDef SoftI2C_FinishTransfer(
   SoftI2C_HandleTypeDef *hi2c,
   SoftI2C_StatusTypeDef status)
 {
+  /* 无论前面成功、NACK 或超时都尝试 STOP，尽量把物理总线带回空闲。 */
   SoftI2C_StatusTypeDef stop_status = SoftI2C_Stop(hi2c);
 
   if ((status == SOFT_I2C_OK) && (stop_status != SOFT_I2C_OK))
@@ -441,6 +460,7 @@ static SoftI2C_StatusTypeDef SoftI2C_FinishTransfer(
     status = stop_status;
   }
 
+  /* 物理线路异常需要重新 Init；普通 NACK 不表示总线本身已经损坏。 */
   if ((status == SOFT_I2C_TIMEOUT) || (status == SOFT_I2C_BUSY))
   {
     hi2c->State = SOFT_I2C_STATE_ERROR;
@@ -473,9 +493,10 @@ SoftI2C_StatusTypeDef SoftI2C_Init(SoftI2C_HandleTypeDef *hi2c)
 
   hi2c->State = SOFT_I2C_STATE_BUSY;
   hi2c->ErrorCode = SOFT_I2C_ERROR_NONE;
-  SoftI2C_ReleaseSDA(hi2c); //释放 SDA 让总线回到空闲状态
+  /* 初始化不假定上一次执行状态，先释放 SDA/SCL 并检查真实线路电平。 */
+  SoftI2C_ReleaseSDA(hi2c);
 
-  if (SoftI2C_ReleaseSCL(hi2c) != SOFT_I2C_OK) //释放 SCL 让总线回到空闲状态
+  if (SoftI2C_ReleaseSCL(hi2c) != SOFT_I2C_OK)
   {
     hi2c->State = SOFT_I2C_STATE_ERROR;
     return SOFT_I2C_TIMEOUT;
@@ -484,6 +505,7 @@ SoftI2C_StatusTypeDef SoftI2C_Init(SoftI2C_HandleTypeDef *hi2c)
 
   if (HAL_GPIO_ReadPin(hi2c->SDA_Port, hi2c->SDA_Pin) == GPIO_PIN_RESET)
   {
+    /* SDA 低可能是上次传输中断后从机停在发送态，自动执行 9 脉冲恢复。 */
     SoftI2C_StatusTypeDef status = SoftI2C_RecoverInternal(hi2c);
     if (status != SOFT_I2C_OK)
     {
@@ -533,11 +555,13 @@ SoftI2C_StatusTypeDef SoftI2C_IsDeviceReady(
     hi2c->ErrorCode = SOFT_I2C_ERROR_NONE;
     SoftI2C_StatusTypeDef status = SoftI2C_Start(hi2c);
 
+    /* 探测只发送写方向地址字节，不发送寄存器地址或数据。 */
     if (status == SOFT_I2C_OK)
     {
       status = SoftI2C_WriteByte(hi2c, (uint8_t)(device_address_7bit << 1u), &acknowledged);
     }
 
+    /* 每次试探都是独立事务，收到 ACK/NACK 后均结束为 STOP。 */
     SoftI2C_StatusTypeDef stop_status = SoftI2C_Stop(hi2c);
     if ((status == SOFT_I2C_OK) && (stop_status == SOFT_I2C_OK) && (acknowledged != 0u))
     {
@@ -591,6 +615,7 @@ SoftI2C_StatusTypeDef SoftI2C_MasterTransmit(
   hi2c->ErrorCode = SOFT_I2C_ERROR_NONE;
 
   SoftI2C_StatusTypeDef status = SoftI2C_Start(hi2c);
+  /* 普通发送序列：START -> 地址+W -> N 个数据字节 -> STOP。 */
   if (status == SOFT_I2C_OK)
   {
     status = SoftI2C_WriteCheckedByte(
@@ -643,6 +668,7 @@ SoftI2C_StatusTypeDef SoftI2C_MasterReceive(
   hi2c->ErrorCode = SOFT_I2C_ERROR_NONE;
 
   SoftI2C_StatusTypeDef status = SoftI2C_Start(hi2c);
+  /* 普通接收序列：START -> 地址+R -> N 个数据字节 -> STOP。 */
   if (status == SOFT_I2C_OK)
   {
     status = SoftI2C_WriteCheckedByte(
@@ -652,6 +678,7 @@ SoftI2C_StatusTypeDef SoftI2C_MasterReceive(
 
   for (uint16_t i = 0u; (i < size) && (status == SOFT_I2C_OK); ++i)
   {
+    /* 还有后续字节时回 ACK；最后一字节回 NACK，通知从机结束发送。 */
     status = SoftI2C_ReadByte(hi2c, &data[i], (i + 1u < size) ? 1u : 0u);
   }
 
@@ -699,19 +726,23 @@ SoftI2C_StatusTypeDef SoftI2C_MemRead(
   hi2c->ErrorCode = SOFT_I2C_ERROR_NONE;
 
   SoftI2C_StatusTypeDef status = SoftI2C_Start(hi2c);
+  /* 阶段 1：写方向寻址，用于设置从机内部地址指针。 */
   if (status == SOFT_I2C_OK)
   {
     status = SoftI2C_WriteCheckedByte(
       hi2c, (uint8_t)(device_address_7bit << 1u), SOFT_I2C_ERROR_NACK_ADDRESS);
   }
+  /* 阶段 2：发送 8/16 位内部地址，不插入 STOP。 */
   if (status == SOFT_I2C_OK)
   {
     status = SoftI2C_WriteMemoryAddress(hi2c, mem_address, mem_address_size);
   }
+  /* 阶段 3：重复 START，保持本次总线事务的连续性。 */
   if (status == SOFT_I2C_OK)
   {
     status = SoftI2C_Start(hi2c);
   }
+  /* 阶段 4：读方向重新寻址，然后连续接收数据。 */
   if (status == SOFT_I2C_OK)
   {
     status = SoftI2C_WriteCheckedByte(
@@ -769,6 +800,7 @@ SoftI2C_StatusTypeDef SoftI2C_MemWrite(
   hi2c->ErrorCode = SOFT_I2C_ERROR_NONE;
 
   SoftI2C_StatusTypeDef status = SoftI2C_Start(hi2c);
+  /* 写寄存器序列：START -> 地址+W -> 内部地址 -> 数据 -> STOP。 */
   if (status == SOFT_I2C_OK)
   {
     status = SoftI2C_WriteCheckedByte(

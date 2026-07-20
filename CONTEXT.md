@@ -1,0 +1,73 @@
+# Domain context
+
+## Power application
+
+The **Power application** is the early firmware slice that proves board power, initializes the AXP2101, and keeps lightweight diagnostics running before higher-level MP3 features exist.
+
+It owns startup order and periodic work through `APP/app.c`, while hardware details remain in BSP and reusable services remain in `System`.
+
+Related terms: **Board PMIC**, **PMIC boot profile**, **deferred startup log**.
+
+Example dialogue:
+
+> “Add SD card initialization to the Power application after PMIC setup, but keep the SDMMC driver out of APP.”
+
+## Board PMIC
+
+The **Board PMIC** is the single AXP2101 instance physically fitted to this PCB, represented by the private `hpmic` object in `BSP/Board/board_pmic.c`.
+
+It is not the generic AXP2101 driver and not the software-I2C instance. The Board layer binds the selected bus Port to the generic PMIC Device driver and exposes only `Board_PMIC_Init()` upward.
+
+Related terms: **PMIC I2C Port**, **PMIC boot profile**.
+
+Example dialogue:
+
+> “The Board PMIC should use hardware I2C, but the PMIC Device API must remain unchanged.”
+
+## PMIC I2C Port
+
+The **PMIC I2C Port** is the adapter in `BSP/Devices/pmic/port` that translates one concrete I2C backend into `PMIC_BusOpsTypeDef` plus its matching `BusContext`.
+
+The current backend is `SoftI2C`. Replacing it with HAL I2C should be confined to the marked backend regions; Board and Device layers continue to call the same interface.
+
+Related terms: **Board PMIC**, **BusErrorDetail**.
+
+Example dialogue:
+
+> “Map HAL_TIMEOUT to PMIC_BUS_TIMEOUT inside the PMIC I2C Port.”
+
+## PMIC boot profile
+
+The **PMIC boot profile** is the ordered, driver-private AXP2101 register policy applied by `PMIC_Init()` after the chip ID has been verified.
+
+It controls input limits, charging, interrupt state, ADC channels, DCDC/LDO enable state, and preset voltages. It is a power-policy change, not merely a software refactor, so changes require datasheet, schematic, load-voltage, and bench verification.
+
+Related terms: **Board PMIC**, **Power application**.
+
+Example dialogue:
+
+> “Change the PMIC boot profile so ALDO2 starts disabled but retains its 3.3 V preset.”
+
+## BusErrorDetail
+
+**BusErrorDetail** is the backend-specific raw error snapshot copied into `PMIC_HandleTypeDef` when a PMIC bus operation fails.
+
+Application control flow should use the normalized PMIC error/status fields. `BusErrorDetail` exists for diagnosis and logging; its bit meanings may change when the PMIC I2C Port changes backend.
+
+Related terms: **PMIC I2C Port**, **Board PMIC**.
+
+Example dialogue:
+
+> “PMIC_ERROR_BUS_READ identifies the stage; BusErrorDetail 0x02 identifies an address NACK in the current SoftI2C backend.”
+
+## Deferred startup log
+
+A **deferred startup log** is a formatted message generated during initialization and copied into the fixed RAM queue before the host has opened USB CDC.
+
+`LOG_Process()` later submits it after enumeration, DTR assertion, the port-open settle interval, and CDC transmit-idle checks all pass. Enqueue success does not mean the PC has already displayed the message.
+
+Related terms: **Power application**.
+
+Example dialogue:
+
+> “Keep the deferred startup logs queued until VSCode opens the COM port.”

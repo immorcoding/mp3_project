@@ -13,6 +13,8 @@
   *
   * @note    本驱动使用忙等待产生时序，所有 API 均为阻塞式，不应在要求严格
   *          实时性的中断中调用。
+  * @warning 本模块没有仲裁丢失检测、互斥锁或 RTOS 并发保护，同一句柄在一次
+  *          传输完成前不得被其他执行上下文再次调用。
   ******************************************************************************
   */
 
@@ -64,17 +66,18 @@ typedef enum
   * @brief ErrorCode 可同时记录多个错误，因此使用位掩码表示。
   * @{
   */
-#define SOFT_I2C_ERROR_NONE          0x00000000u
-#define SOFT_I2C_ERROR_BUS_BUSY      0x00000001u
-#define SOFT_I2C_ERROR_NACK_ADDRESS  0x00000002u
-#define SOFT_I2C_ERROR_NACK_DATA     0x00000004u
-#define SOFT_I2C_ERROR_SCL_TIMEOUT   0x00000008u
-#define SOFT_I2C_ERROR_INVALID_PARAM 0x00000010u
+#define SOFT_I2C_ERROR_NONE          0x00000000u /**< 未记录错误。 */
+#define SOFT_I2C_ERROR_BUS_BUSY      0x00000001u /**< 应为空闲时 SDA 仍为低。 */
+#define SOFT_I2C_ERROR_NACK_ADDRESS  0x00000002u /**< 从机未应答地址字节。 */
+#define SOFT_I2C_ERROR_NACK_DATA     0x00000004u /**< 从机未应答寄存器地址或数据。 */
+#define SOFT_I2C_ERROR_SCL_TIMEOUT   0x00000008u /**< 释放 SCL 后超时仍未变高。 */
+#define SOFT_I2C_ERROR_INVALID_PARAM 0x00000010u /**< 句柄、地址、缓冲区或长度非法。 */
 /** @} */
 
 /**
   * @brief 软件 I2C 实例句柄。
   * @note  GPIO 必须由 CubeMX 或板级代码预先配置为开漏输出。
+  *        SCL/SDA 的 SET 操作只是释放开漏输出，真正的高电平依赖外部上拉。
   */
 typedef struct
 {
@@ -121,6 +124,7 @@ SoftI2C_StatusTypeDef SoftI2C_IsDeviceReady(
   * @param  data 待发送缓冲区。
   * @param  size 待发送字节数，必须大于 0。
   * @retval SoftI2C_StatusTypeDef 操作结果；详细错误见 hi2c->ErrorCode。
+  * @note   地址阶段发送 (device_address_7bit << 1)，不会发送寄存器地址。
   */
 SoftI2C_StatusTypeDef SoftI2C_MasterTransmit(
   SoftI2C_HandleTypeDef *hi2c,
@@ -135,6 +139,7 @@ SoftI2C_StatusTypeDef SoftI2C_MasterTransmit(
   * @param  data 接收缓冲区。
   * @param  size 待读取字节数，必须大于 0。
   * @retval SoftI2C_StatusTypeDef 操作结果；最后一个字节后发送 NACK。
+  * @note   地址阶段发送 (device_address_7bit << 1) | 1，不带寄存器语义。
   */
 SoftI2C_StatusTypeDef SoftI2C_MasterReceive(
   SoftI2C_HandleTypeDef *hi2c,
@@ -151,6 +156,7 @@ SoftI2C_StatusTypeDef SoftI2C_MasterReceive(
   * @param  data 接收缓冲区。
   * @param  size 待读取字节数，必须大于 0。
   * @retval SoftI2C_StatusTypeDef 操作结果；详细错误见 hi2c->ErrorCode。
+  * @note   读取序列使用“写地址 -> 内部地址 -> 重复 START -> 读地址”。
   */
 SoftI2C_StatusTypeDef SoftI2C_MemRead(
   SoftI2C_HandleTypeDef *hi2c,

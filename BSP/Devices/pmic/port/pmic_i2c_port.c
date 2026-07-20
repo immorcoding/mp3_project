@@ -20,8 +20,10 @@
 /* PMIC I2C PORT BACKEND END: Includes ---------------------------------------*/
 
 /* PMIC I2C PORT BACKEND BEGIN: Configuration -------------------------------*/
-#define PMIC_I2C_PORT_DELAY_CYCLES           800u   //软件 I2C 每个时序阶段的忙等待循环次数；不是微秒值。
-#define PMIC_I2C_PORT_CLOCK_STRETCH_TIMEOUT  1000u  //释放 SCL 后等待其变高的最大轮询次数。
+/** @brief 软件 I2C 每个时序阶段的忙等待循环次数；不是微秒值。 */
+#define PMIC_I2C_PORT_DELAY_CYCLES           800u
+/** @brief 释放 SCL 后等待其实际变高的最大轮询次数。 */
+#define PMIC_I2C_PORT_CLOCK_STRETCH_TIMEOUT  1000u
 
 /**
   * @brief 当前 PMIC I2C 后端的私有上下文。
@@ -46,19 +48,22 @@ static SoftI2C_HandleTypeDef hpmic_i2c =
   * @brief  将 I2C 状态转换为 PMIC 总线统一状态。
   * @param  hi2c   I2C 句柄，用于取得底层原始 ErrorCode。
   * @param  status I2C 函数返回值。
+  * @note   hi2c 使用 const void * 仅隐藏后端类型并禁止本函数经该指针修改
+  *         Handle；函数内部仍转换为“指向 const 后端句柄”的指针。
   * @retval PMIC_BusResultTypeDef 归一化状态以及未经修改的底层错误码。
   */
 static PMIC_BusResultTypeDef pmic_i2c_port_result(
     const void *hi2c,
     uint32_t status)
 {
-/*******************若更改硬件 I2C 需要修改此部分，I2C 状态返回值转换****************/
+    /* BACKEND: 将 SoftI2C 返回值和 ErrorCode 映射到 PMIC 公共错误模型。 */
     PMIC_BusResultTypeDef result =
     {
         .Status = (status == SOFT_I2C_OK) ? PMIC_BUS_OK : PMIC_BUS_ERROR,
         .Detail = (hi2c != NULL) ? ((const SoftI2C_HandleTypeDef *)hi2c)->ErrorCode : SOFT_I2C_ERROR_INVALID_PARAM
     };
 
+    /* 先以成功/普通错误初始化，再覆盖更具体的可移植状态。 */
     if (status == SOFT_I2C_BUSY)
     {
         result.Status = PMIC_BUS_BUSY;
@@ -72,7 +77,7 @@ static PMIC_BusResultTypeDef pmic_i2c_port_result(
     {
         result.Status = PMIC_BUS_NACK;
     }
-/*********************************************************************************/
+    /* BACKEND END */
 
     return result;
 }
@@ -84,10 +89,10 @@ static PMIC_BusResultTypeDef pmic_i2c_port_result(
   */
 static PMIC_BusResultTypeDef pmic_i2c_port_prepare(void *context)
 {
-/*******************若更改硬件 I2C 需要修改此部分，I2C 初始化的用户函数****************/
+    /* BACKEND: 恢复具体句柄类型并执行软件 I2C 初始化/自动总线恢复。 */
     SoftI2C_HandleTypeDef *hi2c = (SoftI2C_HandleTypeDef *)context;
     SoftI2C_StatusTypeDef status = SoftI2C_Init(hi2c);
-/*********************************************************************************/
+    /* BACKEND END */
 
     return pmic_i2c_port_result(hi2c, (uint32_t)status);
 }
@@ -108,7 +113,7 @@ static PMIC_BusResultTypeDef pmic_i2c_port_mem_read(
     uint8_t *data,
     uint16_t size)
 {
-/*******************若更改硬件 I2C 需要修改此部分，I2C MemRead 用户函数****************/
+    /* BACKEND: AXP2101 使用 8 位寄存器地址；设备地址保持 7 位形式。 */
     SoftI2C_HandleTypeDef *hi2c = (SoftI2C_HandleTypeDef *)context;
     SoftI2C_StatusTypeDef status =
         SoftI2C_MemRead(hi2c,
@@ -117,7 +122,7 @@ static PMIC_BusResultTypeDef pmic_i2c_port_mem_read(
                         SOFT_I2C_MEM_ADDR_8BIT,
                         data,
                         size);
-/*********************************************************************************/
+    /* BACKEND END */
 
     return pmic_i2c_port_result(hi2c, (uint32_t)status);
 }
@@ -139,7 +144,7 @@ static PMIC_BusResultTypeDef pmic_i2c_port_mem_write(
     uint16_t size)
 {
 
-/*******************若更改硬件 I2C 需要修改此部分，I2C MemWrite 用户函数****************/
+    /* BACKEND: 同步写入 8 位寄存器地址和调用者数据。 */
     SoftI2C_HandleTypeDef *hi2c = (SoftI2C_HandleTypeDef *)context;
     SoftI2C_StatusTypeDef status =
         SoftI2C_MemWrite(hi2c,
@@ -148,14 +153,17 @@ static PMIC_BusResultTypeDef pmic_i2c_port_mem_write(
                          SOFT_I2C_MEM_ADDR_8BIT,
                          data,
                          size);
-/*********************************************************************************/
+    /* BACKEND END */
 
     return pmic_i2c_port_result(hi2c, (uint32_t)status);
 }
 /* PMIC I2C PORT BACKEND END: Implementation --------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
-/** @brief 当前 I2C 后端对 PMIC_BusOpsTypeDef 的私有实现表。 */
+/**
+  * @brief 当前 I2C 后端对 PMIC_BusOpsTypeDef 的私有实现表。
+  * @note  三个函数签名稳定；切换后端时函数体可变，Device/Board 无需改动。
+  */
 static const PMIC_BusOpsTypeDef pmic_i2c_port_ops =
 {
     .Prepare = pmic_i2c_port_prepare,
@@ -177,6 +185,7 @@ PMIC_StatusTypeDef PMIC_I2C_Port_Bind(PMIC_HandleTypeDef *hpmic)
         return PMIC_ERROR;
     }
 
+    /* 函数表和它所解释的上下文必须一起安装，构成完整的后端对象。 */
     hpmic->BusOps = &pmic_i2c_port_ops;
     hpmic->BusContext = &hpmic_i2c;
 

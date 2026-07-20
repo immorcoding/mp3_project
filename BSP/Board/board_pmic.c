@@ -6,6 +6,8 @@
   * @details
   *          Board 层只保存 PMIC 实例并组织初始化调用，不直接装载句柄字段；
   *          当前使用软件 I2C 还是硬件 I2C，由 pmic_i2c_port.c 内部决定。
+  *          本层不直接访问寄存器，也不公开 hpmic，避免 Application 绕过
+  *          Device 层修改句柄内部状态。
   ******************************************************************************
   */
 
@@ -30,10 +32,18 @@ static PMIC_HandleTypeDef hpmic;
   */
 PMIC_StatusTypeDef Board_PMIC_Init(void)
 {
+    /*
+     * 第一步仅完成依赖注入：把 Port 提供的 Ops/Context 成对写入 hpmic。
+     * Bind 本身不会产生 I2C 波形，也不会检查 AXP2101 是否在线。
+     */
     if (PMIC_I2C_Port_Bind(&hpmic) != PMIC_OK)
     {
         return PMIC_ERROR;
     }
 
+    /*
+     * 第二步由 Device 层装载默认配置、准备总线、校验芯片 ID，并按需应用
+     * 启动表。错误细节始终保存在同一个 hpmic 对象中。
+     */
     return PMIC_Init(&hpmic);
 }

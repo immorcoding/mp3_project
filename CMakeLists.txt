@@ -45,26 +45,31 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
 )
 
-# 自动收集 BSP 下的 C 源文件
+# Recursively collect user-maintained BSP implementations. CONFIGURE_DEPENDS
+# asks CMake to reconfigure when a matching .c file is added or removed.
+# Keep temporary/test .c files outside these directories, otherwise they become
+# part of the firmware automatically.
 file(GLOB_RECURSE BSP_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/BSP/Bus/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/BSP/Devices/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/BSP/Board/*.c"
 )
 
-# 自动收集 System 下的 C 源文件
+# Collect system services. The pattern is intentionally limited to System/Log;
+# add a new service directory explicitly when its ownership/build policy is clear.
 file(GLOB_RECURSE SYSTEM_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/System/Log/*.c"
 )
 
-# 自动收集 System 下的 C 源文件
+# Collect CubeMX USB Device glue sources. These files remain generator-owned;
+# custom code must stay inside CubeMX USER CODE regions so regeneration preserves it.
 file(GLOB_RECURSE USB_DEVICE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/USB_DEVICE/App/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/USB_DEVICE/Target/*.c"
 )
 
 
-# Add sources to executable
+# Attach discovered user/system sources plus the explicit application entry.
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${BSP_SOURCES}
     ${SYSTEM_SOURCES}
@@ -73,7 +78,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     APP/app.c
 )
 
-# Add include paths
+# Expose only the project root. Source files therefore include project modules
+# with unambiguous full paths such as "BSP/Devices/pmic/pmic.h" instead of adding
+# every leaf directory and relying on short, potentially colliding file names.
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 
@@ -92,7 +99,10 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     # Add user defined libraries
 )
 
-# Generate HEX and BIN after linking ELF
+# Convert the linked ELF into formats used by common programming paths:
+# - Intel HEX keeps address metadata;
+# - raw BIN contains only bytes and needs an externally supplied flash address.
+# $<TARGET_FILE...> generator expressions keep this valid for all build presets.
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_OBJCOPY} -O ihex
             $<TARGET_FILE:${CMAKE_PROJECT_NAME}>

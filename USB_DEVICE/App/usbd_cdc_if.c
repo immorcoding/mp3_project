@@ -63,10 +63,18 @@
 
 /* USER CODE BEGIN PRIVATE_DEFINES */
 
-/** @brief CDC Control Line State 请求中 DTR 对应的位掩码。 */
+/**
+  * @brief CDC ACM SET_CONTROL_LINE_STATE 请求中 DTR 对应的位掩码。
+  * @note  USB 主机把 wValue 的 bit0 置 1 表示“数据终端已就绪/串口已打开”。
+  *        该信号比“设备完成枚举”更接近 VSCode 串口终端真正打开的时刻。
+  */
 #define CDC_CONTROL_LINE_DTR_MASK       (1U << 0)
 
-/** @brief DTR 置位后等待主机终端完成读取通道装配的时间。 */
+/**
+  * @brief DTR 上升沿后额外等待主机终端稳定的时间，单位 ms。
+  * @note  某些 Windows 串口工具在发出 DTR 后仍需短时间才能显示首包。此等待
+  *        不使用 HAL_Delay()；CDC_IsReady_FS() 只比较 tick 并立即返回。
+  */
 #define CDC_PORT_OPEN_SETTLE_TIME_MS    1000U
 
 /* USER CODE END PRIVATE_DEFINES */
@@ -102,7 +110,11 @@ uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
 
-/** @brief 主机是否通过 CDC DTR 表示已经打开虚拟串口。 */
+/**
+  * @brief 主机是否通过 CDC DTR 表示已经打开虚拟串口。
+  * @note  在 USB 控制请求回调中写入，在主循环日志路径中读取，因此使用
+  *        volatile 强制每次从内存取值；volatile 不提供线程互斥。
+  */
 static volatile uint8_t cdc_port_open_fs = 0U;
 
 /** @brief 最近一次 DTR 从 0 变为 1 时的 HAL 毫秒时间戳。 */
@@ -165,6 +177,7 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_FS =
 static int8_t CDC_Init_FS(void)
 {
   /* USER CODE BEGIN 3 */
+  /* 每次 CDC 类重新初始化都视为一次新的主机连接，必须等待新的 DTR。 */
   cdc_port_open_fs = 0U;
   cdc_port_open_tick_fs = 0U;
 
@@ -182,6 +195,7 @@ static int8_t CDC_Init_FS(void)
 static int8_t CDC_DeInit_FS(void)
 {
   /* USER CODE BEGIN 4 */
+  /* 类被释放后旧的 DTR/tick 已无效，防止重连时误判为可发送。 */
   cdc_port_open_fs = 0U;
   cdc_port_open_tick_fs = 0U;
   return (USBD_OK);
@@ -250,15 +264,22 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
     case CDC_SET_CONTROL_LINE_STATE:
       if (pbuf != NULL)
       {
+        /*
+         * Cube USB CDC 类把原始 USB Setup Request 指针传给 Control 回调。
+         * SET_CONTROL_LINE_STATE 没有数据阶段，DTR/RTS 位位于 wValue 中。
+         * const 指针表明这里只读取请求，不会修改 USB 库拥有的结构体。
+         */
         const USBD_SetupReqTypedef *request = (const USBD_SetupReqTypedef *)pbuf;
         const uint8_t port_open =
             ((request->wValue & CDC_CONTROL_LINE_DTR_MASK) != 0U) ? 1U : 0U;
 
+        /* 仅记录 0 -> 1 上升沿；持续重复置 1 不应重新开始稳定计时。 */
         if ((port_open != 0U) && (cdc_port_open_fs == 0U))
         {
           cdc_port_open_tick_fs = HAL_GetTick();
         }
 
+        /* DTR 清零表示终端关闭；下一次打开会重新记录上升沿时间。 */
         cdc_port_open_fs = port_open;
       }
     break;
@@ -317,6 +338,10 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
   /* USER CODE BEGIN 7 */
   USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
 
+  /*
+   * pClassData 只有在 CDC 类完成初始化后才指向有效 Handle。先验证参数、
+   * 类对象和枚举状态，避免解引用 NULL 或在未配置状态提交 IN 传输。
+   */
   if ((Buf == NULL) ||
       (Len == 0U) ||
       (hcdc == NULL) ||
@@ -325,10 +350,18 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
     return USBD_FAIL;
   }
 
+  /*
+   * ST CDC 类内部把 TxState 当作二值忙标志：0U 为空闲，发送请求被接受时
+   * 置 1U，IN 端点传输完成回调中恢复 0U。它不是一个公开枚举。
+   */
   if (hcdc->TxState != 0U)
   {
     return USBD_BUSY;
   }
+  /*
+   * SetTxBuffer 只登记指针和长度，不复制 Buf。调用者必须保证 Buf 在异步
+   * 传输完成前有效且内容不被覆盖；日志端口为此使用静态 TxBuffer。
+   */
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Buf, Len);
   result = USBD_CDC_TransmitPacket(&hUsbDeviceFS);
   /* USER CODE END 7 */
@@ -362,14 +395,20 @@ static int8_t CDC_TransmitCplt_FS(uint8_t *Buf, uint32_t *Len, uint8_t epnum)
 
 /**
   * @brief  查询 USB CDC 是否已经可以接收新的异步发送请求。
-  * @retval 1U USB 已配置、主机已打开串口且发送端空闲。
-  * @retval 0U USB CDC 暂时不可发送。
+  * @details 同时检查设备枚举状态、主机 DTR、DTR 后稳定时间、CDC 类句柄
+  *          和 ST CDC 发送忙标志。函数只读取状态，不等待也不发送数据。
+  * @retval 1U USB 已配置、主机已打开串口、稳定期结束且发送端空闲。
+  * @retval 0U 任一条件不满足；调用者应保留数据并稍后重试。
   */
 uint8_t CDC_IsReady_FS(void)
 {
   const USBD_CDC_HandleTypeDef *hcdc =
       (const USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
 
+  /*
+   * 条件顺序先检查不需要解引用 hcdc 的全局状态，再检查 hcdc 是否为空，
+   * 最后读取 TxState，依赖 C 语言 || 的从左到右短路求值保证安全。
+   */
   if ((hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED) ||
       (cdc_port_open_fs == 0U) ||
       ((uint32_t)(HAL_GetTick() - cdc_port_open_tick_fs) <

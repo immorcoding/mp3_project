@@ -111,6 +111,8 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
 /**
   * @brief  查询 USB CDC 是否已枚举、串口打开稳定且当前可接收新的发送请求。
+  * @note   本函数为用户扩展接口，供非阻塞日志 Port 使用；它不会等待 USB，
+  *         也不会保证下一条语句执行时状态仍不变化，提交结果仍需检查。
   * @retval 1U USB CDC 当前可发送。
   * @retval 0U USB CDC 未就绪或上一笔发送尚未完成。
   */

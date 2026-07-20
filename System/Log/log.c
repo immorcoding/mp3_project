@@ -4,8 +4,14 @@
   * @brief   系统日志核心功能实现。
   *
   * @details
-  *          本文件保存唯一的默认日志对象，完成等级过滤、时间戳读取、
-  *          文本格式化及底层输出调用。Handle 与端口绑定均不对应用层公开。
+  *          本文件保存唯一的默认日志对象，完成等级过滤、时间戳读取、文本
+  *          格式化、固定深度环形队列管理以及非阻塞端口调度。Handle 与端口
+  *          绑定均不对应用层公开。
+  *
+  *          生产路径：LOG_Printf -> LOG_Write -> LOG_QueuePush。
+  *          消费路径：LOG_Process -> Output.Ops->TryWrite -> LOG_QueuePop。
+  *          两条路径通过 RAM 队列解耦，因此 USB 尚未打开时的启动日志仍可
+  *          保留；当前实现不提供并发保护，只允许主循环单上下文调用。
   ******************************************************************************
   */
 #include "APP/app_config.h"
@@ -65,6 +71,7 @@ static char LOG_LevelToChar(LOG_LevelTypeDef Level)
   */
 static uint8_t LOG_IsMessageLevelValid(LOG_LevelTypeDef Level)
 {
+    /* NONE 仅用于过滤配置，不能作为一条实际消息的等级。 */
     return ((Level != LOG_LEVEL_NONE) &&
             ((uint32_t)Level <= (uint32_t)LOG_LEVEL_DEBUG)) ? 1U : 0U;
 }
@@ -96,11 +103,19 @@ static LOG_StatusTypeDef LOG_QueuePush(LOG_HandleTypeDef *hlog,
 
     if (hlog->Queue.Count >= LOG_QUEUE_DEPTH)
     {
+        /*
+         * 队列已满时 Head 指向最旧消息。先移动 Head 并减少 Count，相当于
+         * 丢弃最旧故障现场；随后仍把本次最新消息写入 Tail。
+         */
         hlog->Queue.Head = (uint16_t)((hlog->Queue.Head + 1U) % LOG_QUEUE_DEPTH);
         hlog->Queue.Count--;
         hlog->Queue.DroppedCount++;
     }
 
+    /*
+     * 将调用者数据复制到队列自有槽位。复制完成后，调用者提供的缓冲区
+     * 可以是局部变量，也可以立即被复用，不影响稍后的异步输出。
+     */
     message = &hlog->Queue.Messages[hlog->Queue.Tail];
     (void)memcpy(message->Data, Data, Length);
     message->Data[Length] = '\0';
@@ -133,8 +148,8 @@ static void LOG_QueuePop(LOG_HandleTypeDef *hlog)
 /* Exported functions --------------------------------------------------------*/
 /**
   * @brief  初始化默认日志实例。
-  * @note   本函数设置默认过滤等级，并通过 LOG_Port_Bind() 绑定 RAM 输出
-  *         和毫秒时间源。重复调用会清空当前 RAM 日志快照。
+  * @note   本函数设置默认过滤等级，并通过 LOG_Port_Bind() 绑定 USB 输出
+  *         和毫秒时间源。重复调用会清空待发送队列、统计和端口快照。
   * @retval LOG_OK    初始化成功，日志状态变为 LOG_STATE_READY。
   * @retval LOG_ERROR 默认配置或端口接口无效，日志状态变为 LOG_STATE_ERROR。
   */
@@ -144,22 +159,26 @@ LOG_StatusTypeDef LOG_Init(void)
     return LOG_ERROR;
 #endif /* APP_LOG_ENABLE == 0 */
 
+    /* 一次性复位全部绑定、队列槽位、索引和统计计数器。 */
     (void)memset(&hlog_default, 0, sizeof(hlog_default));
     hlog_default.State = LOG_STATE_RESET;
     hlog_default.Level = LOG_DEFAULT_LEVEL;
 
+    /* 编译期宏仍参与运行时校验，防止非法强制转换值进入 Handle。 */
     if ((uint32_t)hlog_default.Level > (uint32_t)LOG_LEVEL_DEBUG)
     {
         hlog_default.State = LOG_STATE_ERROR;
         return LOG_ERROR;
     }
 
+    /* Port 统一装配 Output 与 TimeSource，应用层不能直接改写这些指针。 */
     if (LOG_Port_Bind(&hlog_default) != LOG_OK)
     {
         hlog_default.State = LOG_STATE_ERROR;
         return LOG_ERROR;
     }
 
+    /* 对所有必需回调做最终防御性检查，避免稍后通过空函数指针调用。 */
     if ((hlog_default.Output.Ops == NULL) ||
         (hlog_default.Output.Ops->TryWrite == NULL) ||
         (hlog_default.TimeSource.GetTimeMs == NULL))
@@ -230,6 +249,7 @@ LOG_StatusTypeDef LOG_Process(void)
         return LOG_OK;
     }
 
+    /* 只查看队首，不提前出队；BUSY/NOT_READY 时必须保留原消息重试。 */
     message = &hlog_default.Queue.Messages[hlog_default.Queue.Head];
     output_status = hlog_default.Output.Ops->TryWrite(
         hlog_default.Output.Context,
@@ -239,6 +259,10 @@ LOG_StatusTypeDef LOG_Process(void)
 
     if (output_status == LOG_OUTPUT_OK)
     {
+        /*
+         * OK 表示端口接受了异步发送请求。USB 可能仍在实际传输，因此
+         * SentCount 不是“PC 终端已经显示”的严格确认计数。
+         */
         hlog_default.Queue.SentCount++;
         LOG_QueuePop(&hlog_default);
         return LOG_OK;
@@ -247,9 +271,14 @@ LOG_StatusTypeDef LOG_Process(void)
     if ((output_status == LOG_OUTPUT_BUSY) ||
         (output_status == LOG_OUTPUT_NOT_READY))
     {
+        /* 暂态不是错误：保持 Head/Count，等待下次主循环再次尝试。 */
         return LOG_OK;
     }
 
+    /*
+     * 永久错误若一直保留队首会阻塞后续所有消息，因此记录错误并丢弃
+     * 当前消息，让队列仍有机会继续工作。
+     */
     hlog_default.Queue.OutputErrorCount++;
     hlog_default.Queue.DroppedCount++;
     LOG_QueuePop(&hlog_default);
@@ -301,6 +330,7 @@ LOG_StatusTypeDef LOG_Write(LOG_LevelTypeDef MessageLevel,
 
     if (MessageLevel > hlog_default.Level)
     {
+        /* 数值越大越详细；超过当前阈值的消息不占用队列。 */
         return LOG_OK;
     }
 
@@ -308,20 +338,20 @@ LOG_StatusTypeDef LOG_Write(LOG_LevelTypeDef MessageLevel,
 }
 
 /**
-  * @brief  装配并输出包含等级、时间戳和模块标签的日志。
+  * @brief  装配并入队一条包含等级、时间戳和模块标签的日志。
   * @param  MessageLevel 当前消息等级。
   * @param  Tag          模块标签。
   * @param  Format       printf 风格的正文格式字符串。
   * @param  ...          Format 对应的可变参数。
   * @note   本函数使用固定大小的栈缓冲区；若完整日志超过
   *         LOG_FORMAT_BUFFER_SIZE，则返回 LOG_ERROR，不输出截断文本。
-  * @retval LOG_OK    输出成功，或消息被等级策略正常过滤。
-  * @retval LOG_ERROR 参数、状态、格式化或底层输出失败。
+  * @retval LOG_OK    入队成功，或消息被等级策略正常过滤。
+  * @retval LOG_ERROR 参数、状态、时间源或格式化长度无效。
   */
-    LOG_StatusTypeDef LOG_Printf(LOG_LevelTypeDef MessageLevel,
-                                const char *Tag,
-                                const char *Format,
-                                ...)
+LOG_StatusTypeDef LOG_Printf(LOG_LevelTypeDef MessageLevel,
+                             const char *Tag,
+                             const char *Format,
+                             ...)
 {
 #if APP_LOG_ENABLE == 0
     return LOG_ERROR;
@@ -353,15 +383,17 @@ LOG_StatusTypeDef LOG_Write(LOG_LevelTypeDef MessageLevel,
         return LOG_ERROR;
     }
 
+    /* 时间戳记录消息产生时刻，而不是稍后 USB 真正提交的时刻。 */
     timestamp_ms = hlog_default.TimeSource.GetTimeMs(
         hlog_default.TimeSource.Context);
 
+    /* 先装配固定前缀，返回值是“不含 '\0' 的理论字符数”。 */
     result = snprintf(buffer,
-                    sizeof(buffer),
-                    "%c (%lu) %s: ",
-                    LOG_LevelToChar(MessageLevel),
-                    (unsigned long)timestamp_ms,
-                    Tag);
+                      sizeof(buffer),
+                      "%c (%lu) %s: ",
+                      LOG_LevelToChar(MessageLevel),
+                      (unsigned long)timestamp_ms,
+                      Tag);
 
     if ((result < 0) || ((size_t)result >= sizeof(buffer)))
     {
@@ -370,6 +402,7 @@ LOG_StatusTypeDef LOG_Write(LOG_LevelTypeDef MessageLevel,
 
     used_length = (size_t)result;
 
+    /* 至少预留 CR、LF 和最终 '\0'；vsnprintf 的容量参数已包含 '\0'。 */
     if ((sizeof(buffer) - used_length) <= 2U)
     {
         return LOG_ERROR;
@@ -377,6 +410,10 @@ LOG_StatusTypeDef LOG_Write(LOG_LevelTypeDef MessageLevel,
 
     message_capacity = sizeof(buffer) - used_length - 2U;
 
+    /*
+     * message_capacity 已扣除 CR/LF 两字节。若 vsnprintf 报告需要的长度
+     * 不小于容量，说明正文被截断；本模块选择整条拒绝而非发送半条日志。
+     */
     va_start(args, Format);
     result = vsnprintf(&buffer[used_length], message_capacity, Format, args);
     va_end(args);
@@ -386,6 +423,7 @@ LOG_StatusTypeDef LOG_Write(LOG_LevelTypeDef MessageLevel,
         return LOG_ERROR;
     }
 
+    /* 为串口终端统一追加 CRLF，再由 LOG_Write 复制到持久队列槽位。 */
     used_length += (size_t)result;
     buffer[used_length++] = '\r';
     buffer[used_length++] = '\n';

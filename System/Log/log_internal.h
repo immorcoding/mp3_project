@@ -6,6 +6,8 @@
   * @details
   *          本文件只供 log.c 与日志 Port 使用。应用层和普通功能模块应仅
   *          包含 log.h，不应依赖本文件中的 Handle、Ops 或 Context 类型。
+  *          这些类型共同构成一个小型 C 语言对象模型：Handle 保存状态，
+  *          Ops 保存可替换行为，Context 是传给该行为的具体对象指针。
   ******************************************************************************
   */
 
@@ -44,13 +46,19 @@ typedef LOG_OutputStatusTypeDef (*LOG_OutputTryWriteFuncTypeDef)(
     const char *Data,
     uint32_t Length);
 
-/** @brief 输出后端操作表。 */
+/**
+  * @brief 输出后端操作表。
+  * @note  当前只有 TryWrite；以后增加 flush 等能力时可继续扩展此表。
+  */
 typedef struct
 {
     LOG_OutputTryWriteFuncTypeDef TryWrite; /*!< 非阻塞文本提交函数。 */
 } LOG_OutputOpsTypeDef;
 
-/** @brief 已绑定的输出后端及其对象上下文。 */
+/**
+  * @brief 已绑定的输出后端及其对象上下文。
+  * @note  Ops 与 Context 必须由同一个 Port 成对安装，不能分别替换。
+  */
 typedef struct
 {
     const LOG_OutputOpsTypeDef *Ops; /*!< 输出后端操作表。 */
@@ -64,14 +72,21 @@ typedef struct
   */
 typedef uint32_t (*LOG_GetTimeMsFuncTypeDef)(void *Context);
 
-/** @brief 已绑定的时间源及其对象上下文。 */
+/**
+  * @brief 已绑定的时间源及其对象上下文。
+  * @note  时间源和输出端口具有独立 Context，避免强迫两个无关后端共享
+  *        同一种对象类型。
+  */
 typedef struct
 {
     LOG_GetTimeMsFuncTypeDef GetTimeMs; /*!< 获取毫秒时间戳的函数。 */
     void *Context;                      /*!< 传给时间函数的对象上下文。 */
 } LOG_TimeSourceTypeDef;
 
-/** @brief RAM 队列中的一条完整日志。 */
+/**
+  * @brief RAM 队列中的一条完整日志槽位。
+  * @note  Data 拥有消息副本，解决调用者栈缓冲区在异步发送前失效的问题。
+  */
 typedef struct
 {
     char Data[LOG_FORMAT_BUFFER_SIZE]; /*!< 日志正文，以 '\0' 结尾。 */
@@ -79,7 +94,11 @@ typedef struct
     LOG_LevelTypeDef Level;            /*!< 消息等级。 */
 } LOG_MessageTypeDef;
 
-/** @brief 默认日志实例持有的固定槽位 RAM 队列。 */
+/**
+  * @brief 默认日志实例持有的固定槽位环形队列。
+  * @details Head 指向最旧待发送消息，Tail 指向下一写入位置，Count 区分
+  *          空队列与满队列。所有索引均以 LOG_QUEUE_DEPTH 取模回绕。
+  */
 typedef struct
 {
     LOG_MessageTypeDef Messages[LOG_QUEUE_DEPTH]; /*!< 日志槽位。 */
@@ -87,12 +106,15 @@ typedef struct
     uint16_t Tail;                                /*!< 下一条新消息写入索引。 */
     uint16_t Count;                               /*!< 当前待发送消息数。 */
     uint32_t EnqueuedCount;                       /*!< 累计入队消息数。 */
-    uint32_t SentCount;                           /*!< 累计提交给 Adapter 的消息数。 */
+    uint32_t SentCount;                           /*!< 累计被端口接受的消息数。 */
     uint32_t DroppedCount;                        /*!< 队列溢出或发送错误丢弃数。 */
     uint32_t OutputErrorCount;                    /*!< Adapter 提交错误累计数。 */
 } LOG_QueueTypeDef;
 
-/** @brief 默认日志对象的内部 Handle。 */
+/**
+  * @brief 默认日志对象的内部 Handle。
+  * @note  该类型不会出现在 log.h 中，应用只能通过公共函数操作唯一实例。
+  */
 typedef struct
 {
     LOG_OutputTypeDef Output;         /*!< 当前输出后端绑定。 */

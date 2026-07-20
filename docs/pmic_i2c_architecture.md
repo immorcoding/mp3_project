@@ -3,7 +3,7 @@
 > 适用工程：`power`  
 > 当前芯片：AXP2101  
 > 当前总线后端：GPIO 模拟软件 I2C  
-> 文档状态：与 2026-07-19 的工程代码同步
+> 文档状态：与 2026-07-20 的工程代码同步
 
 ## 1. 文档目的
 
@@ -36,7 +36,8 @@
 
 ```mermaid
 flowchart TD
-    Main["Core/Src/main.c<br/>系统启动入口"] --> Board["BSP/Board/board_pmic<br/>板级 PMIC 实例"]
+    Main["Core/Src/main.c<br/>CubeMX 系统入口"] --> App["APP/app.c<br/>应用初始化与主循环"]
+    App --> Board["BSP/Board/board_pmic<br/>板级 PMIC 实例"]
     Board --> Device["BSP/Devices/pmic/pmic<br/>AXP2101 器件驱动"]
     Board --> Port["BSP/Devices/pmic/port/pmic_i2c_port<br/>I2C 后端绑定与适配"]
     Device --> Ops["PMIC_BusOpsTypeDef<br/>统一总线接口"]
@@ -48,7 +49,7 @@ flowchart TD
 
 关键依赖方向：
 
-1. `main.c` 只依赖 Board 层入口，不了解 PMIC 寄存器和 I2C 实现。
+1. `main.c` 只调用 `app_init()/app_run()`，不直接依赖 PMIC 或日志实现。
 2. Board 层创建 `hpmic`，但不保存软件 I2C 句柄。
 3. Device 层只调用 `PMIC_BusOpsTypeDef`，不包含 GPIO、SoftI2C 或 HAL I2C 类型。
 4. Port 层同时了解 PMIC 总线抽象和当前 I2C 后端，负责二者转换。
@@ -60,8 +61,9 @@ flowchart TD
 
 | 文件 | 层 | 职责 | 不应包含的内容 |
 | --- | --- | --- | --- |
-| `Core/Src/main.c` | 系统入口 | 初始化 HAL、时钟、GPIO，调用 `Board_PMIC_Init()`。 | AXP2101 寄存器配置、I2C 位操作。 |
-| `BSP/Board/board_pmic.c/.h` | Board | 定义全局 `hpmic`，设置地址和启动策略，组织初始化顺序。 | `SoftI2C_HandleTypeDef`、SCL/SDA 时序、寄存器读写细节。 |
+| `Core/Src/main.c` | 系统入口 | 初始化 HAL、时钟、GPIO、USB，调用 `app_init()/app_run()`。 | AXP2101 寄存器配置、应用策略。 |
+| `APP/app.c/.h` | Application | 初始化日志和板级 PMIC，周期推进日志与 LED 心跳。 | 软件 I2C 位操作、AXP2101 裸寄存器值。 |
+| `BSP/Board/board_pmic.c/.h` | Board | 定义私有 `hpmic`，绑定后端并组织 PMIC 初始化。 | `SoftI2C_HandleTypeDef`、SCL/SDA 时序、寄存器读写细节。 |
 | `BSP/Devices/pmic/pmic.c/.h` | Device | 定义 PMIC 抽象类型，识别 AXP2101，保存诊断信息，应用启动配置。 | 具体 GPIO、HAL I2C 句柄、软件 I2C 函数调用。 |
 | `BSP/Devices/pmic/axp2101_regs.h` | Device 数据 | 保存 AXP2101 地址、芯片 ID、寄存器地址等器件定义。 | 板级引脚和应用业务逻辑。 |
 | `BSP/Devices/pmic/port/pmic_i2c_port.c/.h` | Port | 创建当前后端上下文，映射状态，向 `hpmic` 注入 Ops 和 Context。 | AXP2101 启动配置表、应用策略。 |
@@ -83,11 +85,14 @@ flowchart TD
 1. `HAL_Init()`：初始化 HAL、Flash 接口和 SysTick。
 2. `SystemClock_Config()`：配置系统时钟。
 3. `MX_GPIO_Init()`：配置 GPIO。软件 I2C 要求 SCL、SDA 已配置为开漏输出并具备外部上拉。
-4. `Board_PMIC_Init()`：绑定 PMIC 的 I2C 后端并初始化 AXP2101。
-5. 返回值不是 `PMIC_OK` 时进入 `Error_Handler()`。
-6. 初始化成功后进入主循环并执行当前点灯逻辑。
+4. `MX_USB_DEVICE_Init()`：初始化 USB Device/CDC 类。
+5. `app_init()`：先初始化日志，再调用 `Board_PMIC_Init()` 初始化 AXP2101。
+6. PMIC 返回值不是 `PMIC_OK` 时记录失败日志并进入 `Error_Handler()`。
+7. 初始化成功后进入主循环，持续调用 `app_run()` 推进 USB 日志和 LED 心跳。
 
-因此，GPIO 初始化必须位于 PMIC 初始化之前。
+因此，GPIO 初始化必须位于 PMIC 初始化之前；USB Device 初始化必须位于日志
+开始消费队列之前。启动期 `LOG_Printf()` 只把消息复制进 RAM 队列，实际 USB
+提交发生在主循环 `LOG_Process()` 中，完整机制见 `log_architecture.md`。
 
 ### 5.2 Board 层装配
 
@@ -104,14 +109,15 @@ flowchart TD
 
 `PMIC_Init()` 执行：
 
-1. 验证 `hpmic`、`BusOps`、三个 Ops 函数、`BusContext` 和 7 位地址。
-2. 将 `State` 设置为 `PMIC_STATE_BUSY`。
-3. 使用 `pmic_clear_error()` 清除上次错误上下文。
-4. 调用 `BusOps->Prepare(BusContext)` 准备底层总线。
-5. 调用私有 `pmic_read_reg()` 读取 `XPOWERS_AXP2101_IC_TYPE`（`0x03`）。
-6. 校验读到的芯片 ID 是否为 `XPOWERS_AXP2101_CHIP_ID`（`0x47`）。
-7. 若 `ApplyBootConfig == PMIC_BOOT_CONFIG_ENABLED`，调用 `pmic_apply_boot_config()`。
-8. 全部成功后将 `State` 设置为 `PMIC_STATE_READY` 并返回 `PMIC_OK`。
+1. 验证 `hpmic` 非空。
+2. 装载 `PMIC_DEFAULT_ADDRESS_7BIT` 和 `PMIC_DEFAULT_BOOT_CONFIG`，重置状态并清除旧错误。
+3. 验证 `BusOps`、三个 Ops 函数、`BusContext`、7 位地址和启动策略。
+4. 将 `State` 设置为 `PMIC_STATE_BUSY`。
+5. 调用 `BusOps->Prepare(BusContext)` 准备底层总线。
+6. 调用私有 `pmic_read_reg()` 读取 `XPOWERS_AXP2101_IC_TYPE`（`0x03`）。
+7. 校验读到的芯片 ID 是否为 `XPOWERS_AXP2101_CHIP_ID`（`0x47`）。
+8. 若 `ApplyBootConfig == PMIC_BOOT_CONFIG_ENABLED`，调用 `pmic_apply_boot_config()`。
+9. 全部成功后将 `State` 设置为 `PMIC_STATE_READY` 并返回 `PMIC_OK`。
 
 任一步失败都会通过 `pmic_fail()` 保存诊断信息，并把 `State` 设置为 `PMIC_STATE_ERROR`。
 
@@ -410,7 +416,7 @@ SoftI2C_StatusTypeDef + SoftI2C_HandleTypeDef.ErrorCode
   -> pmic_fail()
   -> hpmic.ErrorCode + LastFailedRegister + BusErrorDetail
   -> Board_PMIC_Init() 返回 PMIC_ERROR
-  -> main() 进入 Error_Handler()
+  -> app_init() 记录日志并进入 Error_Handler()
 ```
 
 三种信息的分工：
@@ -531,17 +537,25 @@ BSP/Devices/*.c
 BSP/Board/*.c
 ```
 
-并把 `BSP` 添加为统一包含目录。因此：
+同时递归收集 `System/Log/*.c` 和 `USB_DEVICE/App|Target/*.c`，并把工程根目录
+`${CMAKE_CURRENT_SOURCE_DIR}` 添加为包含目录。因此工程自维护代码使用从根目录
+开始的完整包含路径：
 
 ```c
-#include "Devices/pmic/pmic.h"
-#include "Bus/soft_i2c/soft_i2c.h"
-#include "Board/board_pmic.h"
+#include "BSP/Devices/pmic/pmic.h"
+#include "BSP/Bus/soft_i2c/soft_i2c.h"
+#include "BSP/Board/board_pmic.h"
 ```
 
-比 `#include "./pmic/pmic.h"` 更清楚，因为包含路径直接表达所属层。
+比 `#include "./pmic/pmic.h"` 更清楚，因为包含路径同时表达工程根、所属层和模块。
 
 新增这些目录下的 `.c` 文件后，CMake 的 `CONFIGURE_DEPENDS` 会触发重新配置。不要把临时测试 `.c` 放进 `BSP`，否则也会被编入固件。
+
+注意：CubeMX 生成的 `cmake/stm32cubemx/CMakeLists.txt` 当前也列出了同一批
+`USB_DEVICE` 源文件；顶层 `USB_DEVICE_SOURCES` 因而属于重复收集。当前 CMake
+构建能够正常去重/处理这些路径，但后续整理构建规则时可删除顶层 USB glob，
+让生成的 `stm32cubemx` INTERFACE target 单独管理官方源文件。此次仅同步注释
+和文档，没有改变现有构建输入。
 
 ## 16. 扩展规则
 
@@ -593,13 +607,14 @@ BSP/Board/*.c
 - 软件 I2C 切换为硬件 I2C；
 - 目录层级或 CMake 收集规则变化；
 - 错误码和状态映射变化；
-- 加入 RTOS、互斥、异步传输或日志系统。
+- 加入 RTOS、互斥或异步 I2C 传输；日志系统变化记录在 `log_architecture.md`。
 
 维护时优先更新“调用链”“结构体字段”“错误传递”“对外接口”和“当前限制”五部分，避免代码已变但文档仍描述旧行为。
 
 ## 19. 代码索引
 
 - 系统入口：[`../Core/Src/main.c`](../Core/Src/main.c)
+- 应用入口：[`../APP/app.c`](../APP/app.c)
 - Board 实例：[`../BSP/Board/board_pmic.c`](../BSP/Board/board_pmic.c)
 - Board 公共接口：[`../BSP/Board/board_pmic.h`](../BSP/Board/board_pmic.h)
 - PMIC 驱动实现：[`../BSP/Devices/pmic/pmic.c`](../BSP/Devices/pmic/pmic.c)
@@ -608,3 +623,4 @@ BSP/Board/*.c
 - PMIC I2C Port：[`../BSP/Devices/pmic/port/pmic_i2c_port.c`](../BSP/Devices/pmic/port/pmic_i2c_port.c)
 - 软件 I2C：[`../BSP/Bus/soft_i2c/soft_i2c.c`](../BSP/Bus/soft_i2c/soft_i2c.c)
 - 构建规则：[`../CMakeLists.txt`](../CMakeLists.txt)
+- 日志架构：[`log_architecture.md`](log_architecture.md)
