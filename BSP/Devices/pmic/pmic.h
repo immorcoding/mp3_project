@@ -13,6 +13,7 @@
 #define PMIC_H
 
 /* Includes ------------------------------------------------------------------*/
+#include <stdbool.h>
 #include <stdint.h>
 #include "axp2101_regs.h"
 
@@ -168,6 +169,26 @@ typedef struct
   * @retval PMIC_ERROR 初始化失败，错误上下文保存在句柄中。
   */
 PMIC_StatusTypeDef PMIC_Init(PMIC_HandleTypeDef *hpmic);
+
+/**
+  * @brief  开启或关闭 AXP2101 的 ALDO1 输出。
+  * @param  hpmic PMIC 句柄指针。
+  * @param  enabled true 表示开启 ALDO1，false 表示关闭 ALDO1。
+  * @retval PMIC_OK 操作成功。
+  * @retval PMIC_ERROR 句柄/状态非法或总线读写失败，详细原因保存在句柄中。
+  */
+PMIC_StatusTypeDef PMIC_SetALDO1Enabled(PMIC_HandleTypeDef *hpmic,
+                                        bool enabled);
+
+/**
+  * @brief  开启或关闭 AXP2101 的 ALDO2 输出。
+  * @param  hpmic PMIC 句柄指针。
+  * @param  enabled true 表示开启 ALDO2，false 表示关闭 ALDO2。
+  * @retval PMIC_OK 操作成功。
+  * @retval PMIC_ERROR 句柄/状态非法或总线读写失败，详细原因保存在句柄中。
+  */
+PMIC_StatusTypeDef PMIC_SetALDO2Enabled(PMIC_HandleTypeDef *hpmic,
+                                        bool enabled);
 
 #ifdef __cplusplus
 }

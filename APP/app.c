@@ -23,7 +23,56 @@
 
 #include "BSP/Board/board.h"
 #include "System/Log/log.h"
+
+#include "APP/Audio/audio_test_pcm.h"
+
+/* Variables ------------------------------------------------------------------*/
+
+
 /* Exported functions --------------------------------------------------------*/
+#define APP_AUDIO_TX_CHUNK_SAMPLES  (65534U)
+
+static Board_StatusTypeDef app_audio_test(void)
+{
+    uint32_t offset = 0U;
+
+    /* PCM5102A XSMT 拉高，解除静音。 */
+    if (Board_Audio_SetMute(false) != BOARD_OK)
+    {
+        return BOARD_AUDIO_ERROR;
+    }
+    (void)LOG_Printf(LOG_LEVEL_INFO, "BOARD", "Audio mute off.");
+
+    while (offset < AUDIO_TEST_PCM_SAMPLE_COUNT)
+    {
+        uint32_t remaining = AUDIO_TEST_PCM_SAMPLE_COUNT - offset;
+
+        /*
+         * HAL_I2S_Transmit() 的 Size 是 uint16_t。
+         * 使用 65534 而不是 65535，是为了保证每块包含偶数个
+         * 16-bit 样本，不破坏 L/R 立体声配对。
+         */
+        uint16_t chunk_size =
+            (remaining > APP_AUDIO_TX_CHUNK_SAMPLES)
+            ? APP_AUDIO_TX_CHUNK_SAMPLES
+            : (uint16_t)remaining;
+
+        if (Board_Audio_Transmit(&g_audio_test_pcm[offset],
+                                 chunk_size) != BOARD_OK)
+        {
+            (void)Board_Audio_SetMute(true);
+            return BOARD_AUDIO_ERROR;
+        }
+
+        offset += chunk_size;
+    }
+
+    /* 播放结束后重新静音。 */
+    // (void)Board_Audio_SetMute(true);
+
+    return BOARD_OK;
+}
+
 /**
   * @brief  初始化应用服务和板级设备。
   * @note   LOG_Init() 失败时后续 LOG_Printf() 会返回 LOG_ERROR；当前代码
@@ -52,6 +101,19 @@ void app_init(void)
 
         default:
             (void)LOG_Printf(LOG_LEVEL_ERROR, "BOARD", "Board initialization failed");
+            Error_Handler();
+            break;
+    }
+
+    board_status = app_audio_test();
+    switch (board_status)
+    {
+        case BOARD_OK:
+            (void)LOG_Printf(LOG_LEVEL_INFO, "BOARD", "Board Audio test successful");
+            break;
+
+        default:
+            (void)LOG_Printf(LOG_LEVEL_ERROR, "BOARD", "Board Audio test failed");
             Error_Handler();
             break;
     }

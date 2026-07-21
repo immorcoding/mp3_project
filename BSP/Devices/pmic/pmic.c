@@ -51,6 +51,11 @@
     (AXP2101_COMMON_OFF_DISCHARGE_MASK | \
      AXP2101_COMMON_PWRON_16S_SHUTDOWN_MASK)
 
+/** @brief REG90H bit0：ALDO1 输出使能位，1 为开启，0 为关闭。 */
+#define AXP2101_LDO_CTRL0_ALDO1_ENABLE_MASK  (1u << 0)
+/** @brief REG90H bit1：ALDO2 输出使能位，1 为开启，0 为关闭。 */
+#define AXP2101_LDO_CTRL0_ALDO2_ENABLE_MASK  (1u << 1)
+
 /* Private types -------------------------------------------------------------*/
 /**
   * @brief 单字节 PMIC 寄存器配置项。
@@ -246,6 +251,64 @@ static PMIC_StatusTypeDef pmic_apply_boot_config(PMIC_HandleTypeDef *hpmic)
     }
 
     return PMIC_OK;
+}
+
+/**
+  * @brief  修改 REG90H 中指定 LDO 的使能位，同时保留其他电源轨状态。
+  * @param  hpmic PMIC 句柄指针。
+  * @param  enable_mask 目标 LDO 在 REG90H 中对应的使能位掩码。
+  * @param  enabled true 表示置位并开启，false 表示清零并关闭。
+  * @retval PMIC_OK 操作成功，句柄恢复为 PMIC_STATE_READY。
+  * @retval PMIC_ERROR 参数、状态、总线绑定或寄存器访问失败；详情保存在句柄中。
+  * @note   本函数采用读-改-写，禁止直接覆盖整个 REG90H，以免改变其他 LDO 状态。
+  */
+static PMIC_StatusTypeDef pmic_set_ldo_enabled(PMIC_HandleTypeDef *hpmic,
+                                                uint8_t enable_mask,
+                                                bool enabled)
+{
+    if (hpmic == NULL)
+    {
+        return PMIC_ERROR;
+    }
+    if ((hpmic->State != PMIC_STATE_READY) ||
+        (hpmic->BusOps == NULL) ||
+        (hpmic->BusOps->MemRead == NULL) ||
+        (hpmic->BusOps->MemWrite == NULL) ||
+        (hpmic->BusContext == NULL) ||
+        (hpmic->Address7Bit > 0x7Fu))
+    {
+        return pmic_fail(hpmic, PMIC_ERROR_INVALID_PARAM, 0u, 0u);
+    }
+
+    pmic_clear_error(hpmic);
+    hpmic->State = PMIC_STATE_BUSY;
+
+    if (pmic_update_bits(hpmic,
+                         XPOWERS_AXP2101_LDO_ONOFF_CTRL0,
+                         enable_mask,
+                         enabled ? enable_mask : 0u) != PMIC_OK)
+    {
+        return PMIC_ERROR;
+    }
+
+    hpmic->State = PMIC_STATE_READY;
+    return PMIC_OK;
+}
+
+PMIC_StatusTypeDef PMIC_SetALDO1Enabled(PMIC_HandleTypeDef *hpmic,
+                                        bool enabled)
+{
+    return pmic_set_ldo_enabled(hpmic,
+                                AXP2101_LDO_CTRL0_ALDO1_ENABLE_MASK,
+                                enabled);
+}
+
+PMIC_StatusTypeDef PMIC_SetALDO2Enabled(PMIC_HandleTypeDef *hpmic,
+                                        bool enabled)
+{
+    return pmic_set_ldo_enabled(hpmic,
+                                AXP2101_LDO_CTRL0_ALDO2_ENABLE_MASK,
+                                enabled);
 }
 
 /* Exported functions --------------------------------------------------------*/

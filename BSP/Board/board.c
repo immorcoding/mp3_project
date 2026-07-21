@@ -6,11 +6,40 @@
 
 #include "BSP/Devices/pmic/pmic.h"
 #include "BSP/Devices/pmic/port/pmic_i2c_port.h"
+#include "stm32h7xx_hal.h"
 
 static PMIC_HandleTypeDef hpmic;
 static Audio_HandleTypeDef haudio;
 
-Audio_StatusTypeDef Board_Audio_Init(void)
+Board_StatusTypeDef Board_Audio_Transmit(const uint16_t *data, uint16_t size)
+{
+    if (Audio_Transmit(&haudio, data, size) != AUDIO_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                         "AUDIO",
+                         "Audio transmit failed");
+
+        return BOARD_AUDIO_ERROR;
+    }
+
+    return BOARD_OK;
+}
+
+Board_StatusTypeDef Board_Audio_SetMute(bool mute)
+{
+    if (Audio_Mute(&haudio, mute) != AUDIO_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                         "AUDIO",
+                         "Audio SetMute failed");
+
+        return BOARD_AUDIO_ERROR;
+    }
+
+    return BOARD_OK;
+}
+
+static Audio_StatusTypeDef Board_Audio_Init(void)
 {
     if (Audio_Port_Bind(&haudio) != AUDIO_OK)
     {
@@ -20,13 +49,14 @@ Audio_StatusTypeDef Board_Audio_Init(void)
     Audio_StatusTypeDef audio_status = Audio_Init(&haudio);
     if (audio_status != AUDIO_OK)
     {
-        (void)LOG_Printf(LOG_LEVEL_ERROR, "AUDIO", "PMIC initialization failed");
+        (void)LOG_Printf(LOG_LEVEL_ERROR, "AUDIO", "Audio initialization failed");
+        return AUDIO_ERROR;
     }
 
-    return Audio_Init(&haudio);
+    return AUDIO_OK;
 }
 
-PMIC_StatusTypeDef Board_PMIC_Init(void)
+static PMIC_StatusTypeDef Board_PMIC_Init(void)
 {
     /*
      * 第一步仅完成依赖注入：把 Port 提供的 Ops/Context 成对写入 hpmic。
@@ -51,6 +81,34 @@ PMIC_StatusTypeDef Board_PMIC_Init(void)
     return PMIC_OK;
 }
 
+Board_StatusTypeDef Board_Audio_SetPower(bool enabled)
+{
+    if (PMIC_SetALDO1Enabled(&hpmic, enabled) != PMIC_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                         "AUDIO",
+                         "Audio power control failed with PMIC error: %d",
+                         hpmic.ErrorCode);
+        return BOARD_AUDIO_ERROR;
+    }
+
+    return BOARD_OK;
+}
+
+Board_StatusTypeDef Board_LCD_SetPower(bool enabled)
+{
+    if (PMIC_SetALDO2Enabled(&hpmic, enabled) != PMIC_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                         "LCD",
+                         "LCD power control failed with PMIC error: %d",
+                         hpmic.ErrorCode);
+        return BOARD_LCD_ERROR;
+    }
+
+    return BOARD_OK;
+}
+
 Board_StatusTypeDef Board_Init(void)
 {
     /* 初始化 PMIC */
@@ -59,6 +117,15 @@ Board_StatusTypeDef Board_Init(void)
         // Handle PMIC initialization error
         return BOARD_PMIC_ERROR;
     }
+
+    /* AUDIO_POWER 由 AXP2101 ALDO1 供电，必须在音频设备初始化之前开启。 */
+    if (Board_Audio_SetPower(true) != BOARD_OK)
+    {
+        return BOARD_AUDIO_ERROR;
+    }
+
+    //等待供电稳定
+    HAL_Delay(500);
 
     /* 初始化 Audio */
     if (Board_Audio_Init() != AUDIO_OK)

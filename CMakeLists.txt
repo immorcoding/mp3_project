@@ -76,6 +76,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${USB_DEVICE_SOURCES}
 
     APP/app.c
+    APP/Audio/audio_test_pcm.c
 )
 
 # Expose only the project root. Source files therefore include project modules
