@@ -21,7 +21,7 @@
 
 #include "main.h"
 
-#include "BSP/Board/board_pmic.h"
+#include "BSP/Board/board.h"
 #include "System/Log/log.h"
 /* Exported functions --------------------------------------------------------*/
 /**
@@ -41,15 +41,20 @@ void app_init(void)
     /* 此时 USB 可能尚未被主机打开；日志先复制进 RAM 队列等待发送。 */
     (void)LOG_Printf(LOG_LEVEL_INFO, "LOG", "initialization successful");
 
-    /* Board 层负责绑定 PMIC 总线后端、识别 AXP2101 并应用启动配置。 */
-    if (Board_PMIC_Init() != PMIC_OK)
-    {
-        (void)LOG_Printf(LOG_LEVEL_ERROR, "PMIC", "initialization failed");
-        Error_Handler();
-    }
+    /* Board 层负责初始化板级设备。 */
+    Board_StatusTypeDef board_status = Board_Init();
 
-    /* 记录初始化结果；真正的 USB 提交由 app_run() 中 LOG_Process() 完成。 */
-    (void)LOG_Printf(LOG_LEVEL_INFO, "PMIC", "initialization successful");
+    switch (board_status)
+    {
+        case BOARD_OK:
+            (void)LOG_Printf(LOG_LEVEL_INFO, "BOARD", "Board initialization successful");
+            break;
+
+        default:
+            (void)LOG_Printf(LOG_LEVEL_ERROR, "BOARD", "Board initialization failed");
+            Error_Handler();
+            break;
+    }
 }
 
 /**

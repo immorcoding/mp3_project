@@ -1,0 +1,81 @@
+#include "BSP/Devices/audio/audio.h"
+#include "i2s.h"
+#include "audio_port.h"
+
+Audio_BusStateTypeDef audio_fail(uint32_t error_code)
+{
+/*******自定义修改状态码*******/
+    switch (error_code)
+    {
+        case HAL_OK:
+            return AUDIO_BUS_OK; // Handle specific error case
+            break;
+        case HAL_ERROR:
+            return AUDIO_BUS_ERROR; // Handle specific error case
+            break;
+        case HAL_BUSY:
+            return AUDIO_BUS_BUSY; // Handle specific error case
+            break;
+        case HAL_TIMEOUT:
+            return AUDIO_BUS_TIMEOUT; // Handle specific error case
+            break;
+        default:
+            // Handle other errors
+            return AUDIO_BUS_ERROR; //unknown error
+            break;
+    
+    }
+/*****************************/
+}
+
+Audio_BusStateTypeDef audio_prepare(void *AudioContext)
+{
+    // Implement the actual preparation of the audio bus (e.g., configure GPIOs, I2C/SPI, etc.)
+    // This function should be implemented according to the specific hardware.
+
+    if (AudioContext == NULL)
+    {
+        return AUDIO_BUS_ERROR; // Handle the error appropriately
+    }
+
+/**************** 自定义的音频模块初始化函数 ****************/
+    return AUDIO_BUS_OK; //参照return audio_fail();
+/****************************************************/
+}
+
+Audio_BusStateTypeDef audio_transmit(void *AudioContext, const uint16_t *data, uint16_t size)
+{
+    // Implement the actual data transmission over the audio bus (e.g., I2C/SPI).
+    // This function should be implemented according to the specific hardware.
+
+    if (AudioContext == NULL || data == NULL || size == 0)
+    {
+        return AUDIO_BUS_ERROR; // Handle the error appropriately
+    }
+
+/**************** 自定义的音频发送函数 ****************/
+    return audio_fail(HAL_I2S_Transmit((I2S_HandleTypeDef *)AudioContext, data, size, 1000)); // Return the appropriate state after transmission
+/****************************************************/
+}
+
+static Audio_BusOpsTypeDef audio_bus_ops =
+{
+    .Transmit = audio_transmit,
+    .Prepare = audio_prepare
+};
+
+Audio_StatusTypeDef Audio_Port_Bind(Audio_HandleTypeDef *haudio)
+{
+    // Initialize the audio port (e.g., configure GPIOs, I2C/SPI, etc.)
+    // This function should be implemented according to the specific hardware.
+
+    if (haudio == NULL)
+    {
+        return AUDIO_ERROR; // Handle the error appropriately
+    }
+    haudio->BusOps = &audio_bus_ops; // Assign the appropriate bus operations for the audio hardware
+/**************** 句柄绑定，由用户改动 ****************/
+    haudio->BusContext = &hi2s2;
+
+    return AUDIO_OK;
+}

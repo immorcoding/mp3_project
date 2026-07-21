@@ -11,7 +11,7 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
-#include "BSP/Devices/pmic/port/pmic_i2c_port.h"
+#include "pmic_i2c_port.h"
 
 /* PMIC I2C PORT BACKEND BEGIN: Includes -------------------------------------*/
 /* 当前后端：GPIO 模拟的软件 I2C。替换硬件 I2C 时修改本区域。 */
@@ -25,8 +25,9 @@
 /** @brief 释放 SCL 后等待其实际变高的最大轮询次数。 */
 #define PMIC_I2C_PORT_CLOCK_STRETCH_TIMEOUT  1000u
 
+/*******i2c实例，用户自定义，也可使用hal库的示例，就不需要定义这个SoftI2C_HandleTypeDef********/
 /**
-  * @brief 当前 PMIC I2C 后端的私有上下文。
+  * @brief 当前 PMIC I2C 后端的私有上下文。软件 I2C。
   * @note  名称 hpmic_i2c 应在切换后端时保持不变，类型和初始化字段可以替换。
   */
 static SoftI2C_HandleTypeDef hpmic_i2c =
@@ -40,6 +41,7 @@ static SoftI2C_HandleTypeDef hpmic_i2c =
     .State = SOFT_I2C_STATE_RESET,
     .ErrorCode = SOFT_I2C_ERROR_NONE
 };
+/****************************************************************************************/
 /* PMIC I2C PORT BACKEND END: Configuration ---------------------------------*/
 
 /* Private functions ---------------------------------------------------------*/
@@ -84,22 +86,21 @@ static PMIC_BusResultTypeDef pmic_i2c_port_result(
 
 /**
   * @brief  初始化当前软件 I2C 后端。
-  * @param  context 必须指向 SoftI2C_HandleTypeDef。
+  * @param  context 必须指向 I2C 句柄。
   * @retval PMIC_BusResultTypeDef 总线准备结果。
   */
 static PMIC_BusResultTypeDef pmic_i2c_port_prepare(void *context)
 {
     /* BACKEND: 恢复具体句柄类型并执行软件 I2C 初始化/自动总线恢复。 */
-    SoftI2C_HandleTypeDef *hi2c = (SoftI2C_HandleTypeDef *)context;
-    SoftI2C_StatusTypeDef status = SoftI2C_Init(hi2c);
+    SoftI2C_StatusTypeDef status = SoftI2C_Init((SoftI2C_HandleTypeDef *)context);
     /* BACKEND END */
 
-    return pmic_i2c_port_result(hi2c, (uint32_t)status);
+    return pmic_i2c_port_result((SoftI2C_HandleTypeDef *)context, (uint32_t)status);
 }
 
 /**
   * @brief  通过当前软件 I2C 后端读取 PMIC 的 8 位寄存器。
-  * @param  context             必须指向 SoftI2C_HandleTypeDef。
+  * @param  context             必须指向 I2C 句柄。
   * @param  device_address_7bit 7 位从机地址，不包含读写位。
   * @param  reg                 起始寄存器地址。
   * @param  data                接收缓冲区。
@@ -114,9 +115,8 @@ static PMIC_BusResultTypeDef pmic_i2c_port_mem_read(
     uint16_t size)
 {
     /* BACKEND: AXP2101 使用 8 位寄存器地址；设备地址保持 7 位形式。 */
-    SoftI2C_HandleTypeDef *hi2c = (SoftI2C_HandleTypeDef *)context;
     SoftI2C_StatusTypeDef status =
-        SoftI2C_MemRead(hi2c,
+        SoftI2C_MemRead((SoftI2C_HandleTypeDef *)context,
                         device_address_7bit,
                         reg,
                         SOFT_I2C_MEM_ADDR_8BIT,
@@ -124,12 +124,12 @@ static PMIC_BusResultTypeDef pmic_i2c_port_mem_read(
                         size);
     /* BACKEND END */
 
-    return pmic_i2c_port_result(hi2c, (uint32_t)status);
+    return pmic_i2c_port_result((SoftI2C_HandleTypeDef *)context, (uint32_t)status);
 }
 
 /**
   * @brief  通过当前软件 I2C 后端写入 PMIC 的 8 位寄存器。
-  * @param  context             软件 I2C 必须指向 SoftI2C_HandleTypeDef。
+  * @param  context             必须指向 I2C 句柄。
   * @param  device_address_7bit 7 位从机地址，不包含读写位。
   * @param  reg                 起始寄存器地址。
   * @param  data                发送缓冲区。
@@ -145,17 +145,15 @@ static PMIC_BusResultTypeDef pmic_i2c_port_mem_write(
 {
 
     /* BACKEND: 同步写入 8 位寄存器地址和调用者数据。 */
-    SoftI2C_HandleTypeDef *hi2c = (SoftI2C_HandleTypeDef *)context;
-    SoftI2C_StatusTypeDef status =
-        SoftI2C_MemWrite(hi2c,
-                         device_address_7bit,
-                         reg,
-                         SOFT_I2C_MEM_ADDR_8BIT,
-                         data,
-                         size);
+    SoftI2C_StatusTypeDef status = SoftI2C_MemWrite((SoftI2C_HandleTypeDef *)context,
+                                                    device_address_7bit,
+                                                    reg,
+                                                    SOFT_I2C_MEM_ADDR_8BIT,
+                                                    data,
+                                                    size);
     /* BACKEND END */
 
-    return pmic_i2c_port_result(hi2c, (uint32_t)status);
+    return pmic_i2c_port_result((SoftI2C_HandleTypeDef *)context, (uint32_t)status);
 }
 /* PMIC I2C PORT BACKEND END: Implementation --------------------------------*/
 
@@ -172,12 +170,6 @@ static const PMIC_BusOpsTypeDef pmic_i2c_port_ops =
 };
 
 /* Exported functions --------------------------------------------------------*/
-/**
-  * @brief  为 PMIC 句柄安装当前 I2C 后端的操作表和上下文。
-  * @param  hpmic 待绑定的 PMIC 句柄。
-  * @retval PMIC_OK    绑定成功。
-  * @retval PMIC_ERROR hpmic 为空。
-  */
 PMIC_StatusTypeDef PMIC_I2C_Port_Bind(PMIC_HandleTypeDef *hpmic)
 {
     if (hpmic == NULL)
@@ -187,7 +179,9 @@ PMIC_StatusTypeDef PMIC_I2C_Port_Bind(PMIC_HandleTypeDef *hpmic)
 
     /* 函数表和它所解释的上下文必须一起安装，构成完整的后端对象。 */
     hpmic->BusOps = &pmic_i2c_port_ops;
-    hpmic->BusContext = &hpmic_i2c;
 
+/*******i2c实例，用户自定义，也可使用hal库的实例，就不需要定义这个hpmic_i2c********/
+    hpmic->BusContext = &hpmic_i2c;
+/*************************************************************************** */
     return PMIC_OK;
 }

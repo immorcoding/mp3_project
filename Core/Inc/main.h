@@ -58,6 +58,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define USER_LED_Pin GPIO_PIN_13
 #define USER_LED_GPIO_Port GPIOC
+#define PCM_XSMT_Pin GPIO_PIN_14
+#define PCM_XSMT_GPIO_Port GPIOB
 #define AXP2101_IRQ_Pin GPIO_PIN_5
 #define AXP2101_IRQ_GPIO_Port GPIOB
 #define AXP2101_SDA_Pin GPIO_PIN_6

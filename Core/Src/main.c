@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "i2s.h"
 #include "memorymap.h"
 #include "usb_device.h"
 #include "gpio.h"
@@ -89,6 +90,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USB_DEVICE_Init();
+  MX_I2S2_Init();
   /* USER CODE BEGIN 2 */
   app_init();
   /* USER CODE END 2 */
