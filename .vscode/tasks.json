@@ -4,12 +4,12 @@
     {
       "label": "DFU 烧录 HEX",
       "type": "shell",
-      "command": "C:\\Program Files\\STMicroelectronics\\STM32Cube\\STM32CubeProgrammer\\bin\\STM32_Programmer_CLI.exe",
+      "command": "D:\\stm32cubeprogrammer\\bin\\STM32_Programmer_CLI.exe",
       "args": [
         "-c",
         "port=usb1",
         "-w",
-        "${workspaceFolder}\\build\\mp3_project.hex",
+        "${workspaceFolder}\\build\\Debug\\mp3_project.hex",
         "-v"
       ],
       "problemMatcher": []
