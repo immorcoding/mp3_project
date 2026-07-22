@@ -22,8 +22,82 @@
 #include "main.h"
 
 #include "BSP/Board/board.h"
+#include "BSP/Board/sd/board_sd.h"
 #include "System/Log/log.h"
 /* Variables ------------------------------------------------------------------*/
+
+
+/* Private functions ---------------------------------------------------------*/
+/**
+  * @brief  初始化 可移除 SD 卡 并记录当前介质状态。仅实现句柄、ops绑定等操作，不涉及通信。
+  * @details
+  *         SD 卡不是整机启动的强依赖：没有插卡时 Board_SD_Init() 返回
+  *         BOARD_OK，并通过 BOARD_SD_STATE_NOT_PRESENT 表达物理状态；真正的
+  *         初始化错误只记录日志，不让播放器进入全局 Error_Handler()。
+  * @retval None
+  */
+static void app_init_sd(void)
+{
+    Board_StatusTypeDef status = Board_SD_Init();
+    Board_SD_StateTypeDef state = Board_SD_GetState();
+
+    if (status != BOARD_OK)
+    {
+        Board_SD_DiagnosticsTypeDef diagnostics;
+
+        if (Board_SD_GetDiagnostics(&diagnostics) == BOARD_OK)
+        {
+            (void)LOG_Printf(LOG_LEVEL_ERROR,
+                             "SD",
+                             "initialization failed: device=%lu, port=%lu, detail=0x%08lX",
+                             (unsigned long)diagnostics.DeviceError,
+                             (unsigned long)diagnostics.PortStatus,
+                             (unsigned long)diagnostics.PortErrorDetail);
+        }
+        else
+        {
+            (void)LOG_Printf(LOG_LEVEL_ERROR,
+                             "SD",
+                             "initialization failed without diagnostics");
+        }
+
+        return;
+    }
+
+    if (state == BOARD_SD_STATE_NOT_PRESENT)
+    {
+        (void)LOG_Printf(LOG_LEVEL_INFO,
+                         "SD",
+                         "no card inserted");
+        return;
+    }
+
+    if (state == BOARD_SD_STATE_READY)
+    {
+        Board_SD_InfoTypeDef info;
+
+        /*
+         * GetInfo() 只复制 Board 私有缓存；失败时绝不继续使用未初始化的
+         * 局部变量，避免旧实现中的未定义容量日志。
+         */
+        if (Board_SD_GetInfo(&info) == BOARD_OK)
+        {
+            uint32_t capacity_mb = (uint32_t)(info.CapacityBytes / (1024ULL * 1024ULL));
+
+            (void)LOG_Printf(LOG_LEVEL_INFO,
+                             "SD",
+                             "card ready: %lu MB, block size: %lu",
+                             (unsigned long)capacity_mb,
+                             (unsigned long)info.BlockSize);
+        }
+        else
+        {
+            (void)LOG_Printf(LOG_LEVEL_ERROR,
+                             "SD",
+                             "card ready but information is unavailable");
+        }
+    }
+}
 
 
 /* Exported functions --------------------------------------------------------*/
@@ -51,6 +125,7 @@ void app_init(void)
     {
         case BOARD_OK:
             (void)LOG_Printf(LOG_LEVEL_INFO, "BOARD", "Board initialization successful");
+            app_init_sd();
             break;
 
         default:
@@ -86,6 +161,11 @@ void app_run(void)
     {
         last_led_toggle_ms = now_ms;
         HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+
+        if (Board_SD_Refresh() != BOARD_OK) // * 扫描 SD 卡是否插上，插上就初始化
+        {
+            /* 可读取诊断信息，但不要直接进入 Error_Handler。 */
+        }
     }
 }
 

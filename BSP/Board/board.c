@@ -1,13 +1,16 @@
-#include "board.h"
-#include "System/Log/log.h"
+#include "BSP/Board/board.h"
 
 #include "BSP/Board/audio/board_audio.h"
 #include "BSP/Board/pmic/board_pmic.h"
-#include "BSP/Board/sd/board_sd.h"
 
-#include "sd/board_sd.h"
 #include "stm32h7xx_hal.h"
 
+/**
+  * @brief  初始化整机启动所必需的 Board Module。
+  * @retval BOARD_OK          初始化成功。
+  * @retval BOARD_PMIC_ERROR  PMIC 初始化失败。
+  * @retval BOARD_AUDIO_ERROR 音频供电或音频设备初始化失败。
+  */
 Board_StatusTypeDef Board_Init(void)
 {
     /* 初始化 PMIC */
@@ -32,29 +35,6 @@ Board_StatusTypeDef Board_Init(void)
         // Handle Audio initialization error
         return BOARD_AUDIO_ERROR;
     }
-
-    if (Board_SD_Init() != BOARD_OK)
-    {
-        (void)LOG_Printf(LOG_LEVEL_ERROR,
-                     "SD",
-                     "SD card init failed");
-    }
-
-    Board_SD_InfoTypeDef sd_info;
-    if (Board_SD_GetInfo(&sd_info) != BOARD_OK)
-    {
-        (void)LOG_Printf(LOG_LEVEL_ERROR,
-                     "SD",
-                     "SD card get info failed");
-    }
-
-    uint32_t capacity_mb = (uint32_t)(sd_info.CapacityBytes / (1024ULL * 1024ULL));
-
-    (void)LOG_Printf(LOG_LEVEL_INFO,
-                    "SD",
-                    "Card capacity: %lu MB, block size: %lu",
-                    (unsigned long)capacity_mb,
-                    (unsigned long)sd_info.BlockSize);
 
     return BOARD_OK;
 }

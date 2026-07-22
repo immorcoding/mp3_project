@@ -71,3 +71,33 @@ Related terms: **Power application**.
 Example dialogue:
 
 > “Keep the deferred startup logs queued until VSCode opens the COM port.”
+
+## Board SD
+
+The **Board SD** is the single removable SD slot fitted to this PCB, represented by a private Device handle in `BSP/Board/sd/board_sd.c` and connected to SDMMC1 with an active-low card-detect signal on PC7.
+
+Related terms: **SD Card Device**, **SD Card Port**, **Power application**.
+
+Example dialogue:
+
+> “Board SD reports NOT_PRESENT as a normal removable-media state, so the Power application can continue booting without a card.”
+
+## SD Card Device
+
+The **SD Card Device** is the reusable block-oriented module that owns SD media state, normalized information, range validation, synchronous block access, and error snapshots without depending on STM32 HAL types.
+
+Related terms: **Board SD**, **SD Card Port**.
+
+Example dialogue:
+
+> “FatFs should eventually consume the SD Card Device's block semantics through a storage adapter rather than call HAL_SD_ReadBlocks directly.”
+
+## SD Card Port
+
+The **SD Card Port** is the adapter in `BSP/Devices/sd/port` that binds the SD Card Device to this PCB's `hsd1`, SDMMC1 configuration, active-low PC7 card detect, and STM32 HAL error codes.
+
+Related terms: **Board SD**, **SD Card Device**.
+
+Example dialogue:
+
+> “A future SPI SD implementation can replace the SD Card Port backend while preserving the SD Card Device interface.”
