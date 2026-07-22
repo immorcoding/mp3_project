@@ -1,118 +1,17 @@
 #include "board.h"
 #include "System/Log/log.h"
 
-#include "BSP/Devices/audio/audio.h"
-#include "BSP/Devices/audio/port/audio_port.h"
+#include "BSP/Board/audio/board_audio.h"
+#include "BSP/Board/pmic/board_pmic.h"
+#include "BSP/Board/sd/board_sd.h"
 
-#include "BSP/Devices/pmic/pmic.h"
-#include "BSP/Devices/pmic/port/pmic_i2c_port.h"
+#include "sd/board_sd.h"
 #include "stm32h7xx_hal.h"
-
-static PMIC_HandleTypeDef hpmic;
-static Audio_HandleTypeDef haudio;
-
-Board_StatusTypeDef Board_Audio_Transmit(const uint16_t *data, uint16_t size)
-{
-    if (Audio_Transmit(&haudio, data, size) != AUDIO_OK)
-    {
-        (void)LOG_Printf(LOG_LEVEL_ERROR,
-                         "AUDIO",
-                         "Audio transmit failed");
-
-        return BOARD_AUDIO_ERROR;
-    }
-
-    return BOARD_OK;
-}
-
-Board_StatusTypeDef Board_Audio_SetMute(bool mute)
-{
-    if (Audio_Mute(&haudio, mute) != AUDIO_OK)
-    {
-        (void)LOG_Printf(LOG_LEVEL_ERROR,
-                         "AUDIO",
-                         "Audio SetMute failed");
-
-        return BOARD_AUDIO_ERROR;
-    }
-
-    return BOARD_OK;
-}
-
-static Audio_StatusTypeDef Board_Audio_Init(void)
-{
-    if (Audio_Port_Bind(&haudio) != AUDIO_OK)
-    {
-        (void)LOG_Printf(LOG_LEVEL_ERROR, "AUDIO", "Audio port bind failed");
-        return AUDIO_ERROR;
-    }
-    Audio_StatusTypeDef audio_status = Audio_Init(&haudio);
-    if (audio_status != AUDIO_OK)
-    {
-        (void)LOG_Printf(LOG_LEVEL_ERROR, "AUDIO", "Audio initialization failed");
-        return AUDIO_ERROR;
-    }
-
-    return AUDIO_OK;
-}
-
-static PMIC_StatusTypeDef Board_PMIC_Init(void)
-{
-    /*
-     * 第一步仅完成依赖注入：把 Port 提供的 Ops/Context 成对写入 hpmic。
-     * Bind 本身不会产生 I2C 波形，也不会检查 AXP2101 是否在线。
-     */
-    if (PMIC_I2C_Port_Bind(&hpmic) != PMIC_OK)
-    {
-        (void)LOG_Printf(LOG_LEVEL_ERROR, "PMIC", "PMIC I2C port bind failed");
-        return PMIC_ERROR;
-    }
-
-    /*
-     * 第二步由 Device 层装载默认配置、准备总线、校验芯片 ID，并按需应用
-     * 启动表。错误细节始终保存在同一个 hpmic 对象中。
-     */
-    PMIC_StatusTypeDef pmic_status = PMIC_Init(&hpmic);
-    if (pmic_status != PMIC_OK)
-    {
-        (void)LOG_Printf(LOG_LEVEL_ERROR, "PMIC", "PMIC initialization failed with error code: %d", hpmic.ErrorCode);
-        return PMIC_ERROR;
-    }
-    return PMIC_OK;
-}
-
-Board_StatusTypeDef Board_Audio_SetPower(bool enabled)
-{
-    if (PMIC_SetALDO1Enabled(&hpmic, enabled) != PMIC_OK)
-    {
-        (void)LOG_Printf(LOG_LEVEL_ERROR,
-                         "AUDIO",
-                         "Audio power control failed with PMIC error: %d",
-                         hpmic.ErrorCode);
-        return BOARD_AUDIO_ERROR;
-    }
-
-    return BOARD_OK;
-}
-
-Board_StatusTypeDef Board_LCD_SetPower(bool enabled)
-{
-    if (PMIC_SetALDO2Enabled(&hpmic, enabled) != PMIC_OK)
-    {
-        (void)LOG_Printf(LOG_LEVEL_ERROR,
-                         "LCD",
-                         "LCD power control failed with PMIC error: %d",
-                         hpmic.ErrorCode);
-        return BOARD_LCD_ERROR;
-    }
-
-    return BOARD_OK;
-}
 
 Board_StatusTypeDef Board_Init(void)
 {
     /* 初始化 PMIC */
-    if (Board_PMIC_Init() != PMIC_OK)
+    if (Board_PMIC_Init() != BOARD_OK)
     {
         // Handle PMIC initialization error
         return BOARD_PMIC_ERROR;
@@ -133,6 +32,29 @@ Board_StatusTypeDef Board_Init(void)
         // Handle Audio initialization error
         return BOARD_AUDIO_ERROR;
     }
+
+    if (Board_SD_Init() != BOARD_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                     "SD",
+                     "SD card init failed");
+    }
+
+    Board_SD_InfoTypeDef sd_info;
+    if (Board_SD_GetInfo(&sd_info) != BOARD_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                     "SD",
+                     "SD card get info failed");
+    }
+
+    uint32_t capacity_mb = (uint32_t)(sd_info.CapacityBytes / (1024ULL * 1024ULL));
+
+    (void)LOG_Printf(LOG_LEVEL_INFO,
+                    "SD",
+                    "Card capacity: %lu MB, block size: %lu",
+                    (unsigned long)capacity_mb,
+                    (unsigned long)sd_info.BlockSize);
 
     return BOARD_OK;
 }

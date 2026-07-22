@@ -1,0 +1,49 @@
+#include "BSP/Board/board.h"
+#include "System/Log/log.h"
+
+static Audio_HandleTypeDef haudio;
+
+Board_StatusTypeDef Board_Audio_Transmit(const uint16_t *data, uint16_t size)
+{
+    if (Audio_Transmit(&haudio, data, size) != AUDIO_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                         "AUDIO",
+                         "Audio transmit failed");
+
+        return BOARD_AUDIO_ERROR;
+    }
+
+    return BOARD_OK;
+}
+
+Board_StatusTypeDef Board_Audio_SetMute(bool mute)
+{
+    if (Audio_Mute(&haudio, mute) != AUDIO_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                         "AUDIO",
+                         "Audio SetMute failed");
+
+        return BOARD_AUDIO_ERROR;
+    }
+
+    return BOARD_OK;
+}
+
+Audio_StatusTypeDef Board_Audio_Init(void)
+{
+    if (Audio_Port_Bind(&haudio) != AUDIO_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR, "AUDIO", "Audio port bind failed");
+        return AUDIO_ERROR;
+    }
+    Audio_StatusTypeDef audio_status = Audio_Init(&haudio);
+    if (audio_status != AUDIO_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR, "AUDIO", "Audio initialization failed");
+        return AUDIO_ERROR;
+    }
+
+    return AUDIO_OK;
+}
