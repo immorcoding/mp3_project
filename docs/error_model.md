@@ -1,93 +1,110 @@
-# Device error model
+# 设备错误模型
 
-## 1. Four different values
+> 适用工程：`version0.1.1`
+>
+> 覆盖模块：Audio、PMIC、SD Card Device
+>
+> 原则：公共错误表达稳定，后端原始错误不跨越 Port 边界
 
-The Audio, PMIC and SD modules use the same diagnostic model:
+## 1. 四类值分别表达什么
 
-| Value | Lifetime | Purpose |
+Audio、PMIC 和 SD 模块采用相同的诊断结构：
+
+| 值 | 生命周期 | 作用 |
 | --- | --- | --- |
-| Function status | One call | Reports whether the current API call succeeded. |
-| `State` | Persistent | Describes RESET, READY, BUSY, ERROR, and for SD, NOT_PRESENT. |
-| `ErrorCode` | Until cleared/overwritten | Identifies the semantic stage that failed. |
-| `LastBusStatus` / `LastPortStatus` | Until cleared/overwritten | Identifies the normalized lower-layer result. |
+| 函数返回状态 | 单次调用 | 表示当前 API 调用成功或失败。 |
+| `State` | 持续保存 | 表示 `RESET`、`READY`、`BUSY`、`ERROR`；SD 还包含 `NOT_PRESENT`。 |
+| `ErrorCode` | 清除或覆盖前持续保存 | 表示 Device 的哪个语义阶段失败。 |
+| `LastBusStatus` / `LastPortStatus` | 清除或覆盖前持续保存 | 表示归一化后的底层结果。 |
 
-`ErrorCode` answers “which operation failed?”. The normalized transport status
-answers “did the lower layer report ERROR, BUSY, TIMEOUT, NACK, or no card?”.
-When a failure is entirely inside the Device layer, the transport status remains
-`OK`.
+`ErrorCode`回答“哪一步失败”；归一化状态回答“底层大致因为什么失败”，例如 `ERROR`、`BUSY`、`TIMEOUT`、`NACK` 或无卡。若错误完全发生在 Device 内部，底层状态保持 `OK`。
 
-Raw HAL or SoftI2C error bits are not copied into Device or Board handles. They
-remain in the concrete Port handle and are inspected only for backend-specific
-debugging:
+HAL 或 SoftI2C 的原始错误位不会复制进 Device 或 Board 句柄，而是留在具体 Port 句柄中，仅在需要分析特定后端时查看：
 
-- Audio: `hi2s2.ErrorCode`;
-- PMIC SoftI2C Port: `hpmic_i2c.ErrorCode`;
-- SD Port: `hsd1.ErrorCode`.
+- Audio：`hi2s2.ErrorCode`；
+- PMIC SoftI2C Port：`hpmic_i2c.ErrorCode`；
+- SD Port：`hsd1.ErrorCode`。
 
-Each concrete Port routes its SDK's immediate return value through a stable
-`int32_t native_status` conversion entry. The conversion body casts that carrier
-back to the active SDK status type and maps it to the Device-facing normalized
-status. A signed carrier also supports SDK conventions that use negative errors.
+各 Port 都先用稳定的 `int32_t native_status` 承接当前 SDK 的立即返回值，再在转换函数内部还原为当前后端的状态类型并映射到 Device 可理解的归一化状态。使用有符号类型也兼容以负数表示错误的其他 SDK。
 
-## 2. Audio ErrorCode
+## 2. Audio 的 `ErrorCode`
 
-| Value | Symbol | Meaning |
+| 数值 | 符号 | 含义 |
 | ---: | --- | --- |
-| 0 | `AUDIO_ERROR_NONE` | No error. |
-| 1 | `AUDIO_ERROR_INVALID_PARAM` | Invalid buffer, length, or handle-related parameter. |
-| 2 | `AUDIO_ERROR_PORT_NOT_BOUND` | Required Ops, Context, or mute callback is missing. |
-| 3 | `AUDIO_ERROR_NOT_READY` | Current lifecycle state does not allow the operation. |
-| 4 | `AUDIO_ERROR_BUS_PREPARE` | I2S/backend preparation failed. |
-| 5 | `AUDIO_ERROR_BUS_TRANSMIT` | Audio data transmission failed. |
-| 6 | `AUDIO_ERROR_MUTE` | Mute/unmute operation failed. |
+| 0 | `AUDIO_ERROR_NONE` | 无错误。 |
+| 1 | `AUDIO_ERROR_INVALID_PARAM` | 句柄、缓冲区或长度参数非法。 |
+| 2 | `AUDIO_ERROR_PORT_NOT_BOUND` | 必需的 Ops、Context 或静音回调没有绑定。 |
+| 3 | `AUDIO_ERROR_NOT_READY` | 当前生命周期状态不允许执行该操作。 |
+| 4 | `AUDIO_ERROR_BUS_PREPARE` | I2S 或其他音频后端准备失败。 |
+| 5 | `AUDIO_ERROR_BUS_TRANSMIT` | 音频数据发送失败。 |
+| 6 | `AUDIO_ERROR_MUTE` | 静音或解除静音操作失败。 |
 
-`Audio_BusStatusTypeDef` values are `AUDIO_BUS_OK`, `AUDIO_BUS_ERROR`,
-`AUDIO_BUS_BUSY`, and `AUDIO_BUS_TIMEOUT`. I2S has no NACK concept.
+`Audio_BusStatusTypeDef` 包含：
 
-## 3. PMIC ErrorCode
+- `AUDIO_BUS_OK`
+- `AUDIO_BUS_ERROR`
+- `AUDIO_BUS_BUSY`
+- `AUDIO_BUS_TIMEOUT`
 
-| Value | Symbol | Meaning |
+I2S 没有 I2C 的 NACK 概念，因此 Audio 的归一化总线状态不包含 NACK。
+
+## 3. PMIC 的 `ErrorCode`
+
+| 数值 | 符号 | 含义 |
 | ---: | --- | --- |
-| 0 | `PMIC_ERROR_NONE` | No error. |
-| 1 | `PMIC_ERROR_INVALID_PARAM` | Invalid handle, address, or configuration. |
-| 2 | `PMIC_ERROR_PORT_NOT_BOUND` | Bus Ops or Context is missing. |
-| 3 | `PMIC_ERROR_NOT_READY` | Current lifecycle state does not allow the operation. |
-| 4 | `PMIC_ERROR_BUS_PREPARE` | I2C/backend preparation failed. |
-| 5 | `PMIC_ERROR_BUS_READ` | Register read failed. |
-| 6 | `PMIC_ERROR_BUS_WRITE` | Register write failed. |
-| 7 | `PMIC_ERROR_WRONG_CHIP_ID` | Register access succeeded, but the chip ID is not AXP2101. |
+| 0 | `PMIC_ERROR_NONE` | 无错误。 |
+| 1 | `PMIC_ERROR_INVALID_PARAM` | 句柄、地址或配置参数非法。 |
+| 2 | `PMIC_ERROR_PORT_NOT_BOUND` | Bus Ops 或 Bus Context 没有绑定。 |
+| 3 | `PMIC_ERROR_NOT_READY` | 当前生命周期状态不允许执行该操作。 |
+| 4 | `PMIC_ERROR_BUS_PREPARE` | I2C 或其他总线后端准备失败。 |
+| 5 | `PMIC_ERROR_BUS_READ` | 寄存器读取失败。 |
+| 6 | `PMIC_ERROR_BUS_WRITE` | 寄存器写入失败。 |
+| 7 | `PMIC_ERROR_WRONG_CHIP_ID` | 寄存器访问成功，但芯片 ID 不是预期的 AXP2101。 |
 
-`PMIC_BusStatusTypeDef` values are `PMIC_BUS_OK`, `PMIC_BUS_ERROR`,
-`PMIC_BUS_BUSY`, `PMIC_BUS_TIMEOUT`, and `PMIC_BUS_NACK`.
-`LastFailedRegister` records the associated register address.
+`PMIC_BusStatusTypeDef` 包含：
 
-## 4. SD ErrorCode
+- `PMIC_BUS_OK`
+- `PMIC_BUS_ERROR`
+- `PMIC_BUS_BUSY`
+- `PMIC_BUS_TIMEOUT`
+- `PMIC_BUS_NACK`
 
-| Value | Symbol | Meaning |
+`LastFailedRegister` 保存最近一次总线失败对应的寄存器地址。
+
+## 4. SD 的 `ErrorCode`
+
+| 数值 | 符号 | 含义 |
 | ---: | --- | --- |
-| 0 | `SDCARD_ERROR_NONE` | No error. |
-| 1 | `SDCARD_ERROR_INVALID_PARAM` | Invalid buffer, count, or handle-related parameter. |
-| 2 | `SDCARD_ERROR_PORT_NOT_BOUND` | Port Ops or Context is missing. |
-| 3 | `SDCARD_ERROR_NOT_PRESENT` | No card is currently detected. |
-| 4 | `SDCARD_ERROR_NOT_READY` | Current lifecycle state does not allow the operation. |
-| 5 | `SDCARD_ERROR_OUT_OF_RANGE` | Requested logical-block range exceeds the medium. |
-| 6 | `SDCARD_ERROR_INVALID_INFO` | Port returned invalid block geometry. |
-| 7 | `SDCARD_ERROR_PORT_INIT` | Controller/card initialization failed. |
-| 8 | `SDCARD_ERROR_PORT_DEINIT` | Controller deinitialization failed. |
-| 9 | `SDCARD_ERROR_PORT_GET_INFO` | Reading medium information failed. |
-| 10 | `SDCARD_ERROR_PORT_READ` | Block read failed. |
-| 11 | `SDCARD_ERROR_PORT_WRITE` | Block write failed. |
-| 12 | `SDCARD_ERROR_PORT_SYNC` | Waiting for the card to return to transfer-ready failed. |
+| 0 | `SDCARD_ERROR_NONE` | 无错误。 |
+| 1 | `SDCARD_ERROR_INVALID_PARAM` | 句柄、缓冲区或块数量参数非法。 |
+| 2 | `SDCARD_ERROR_PORT_NOT_BOUND` | Port Ops 或 Port Context 没有绑定。 |
+| 3 | `SDCARD_ERROR_NOT_PRESENT` | 当前没有检测到 SD 卡。 |
+| 4 | `SDCARD_ERROR_NOT_READY` | 当前生命周期状态不允许执行该操作。 |
+| 5 | `SDCARD_ERROR_OUT_OF_RANGE` | 请求的逻辑块范围超出介质容量。 |
+| 6 | `SDCARD_ERROR_INVALID_INFO` | Port 返回的块数量或块大小非法。 |
+| 7 | `SDCARD_ERROR_PORT_INIT` | 控制器或 SD 卡初始化失败。 |
+| 8 | `SDCARD_ERROR_PORT_DEINIT` | 控制器反初始化失败。 |
+| 9 | `SDCARD_ERROR_PORT_GET_INFO` | 获取介质信息失败。 |
+| 10 | `SDCARD_ERROR_PORT_READ` | 逻辑块读取失败。 |
+| 11 | `SDCARD_ERROR_PORT_WRITE` | 逻辑块写入失败。 |
+| 12 | `SDCARD_ERROR_PORT_SYNC` | 等待 SD 卡恢复到可传输状态失败。 |
 
-`SDCard_PortStatusTypeDef` values are `SDCARD_PORT_OK`,
-`SDCARD_PORT_ERROR`, `SDCARD_PORT_BUSY`, `SDCARD_PORT_TIMEOUT`, and
-`SDCARD_PORT_NOT_PRESENT`.
+`SDCard_PortStatusTypeDef` 包含：
 
-## 5. Recommended debugger order
+- `SDCARD_PORT_OK`
+- `SDCARD_PORT_ERROR`
+- `SDCARD_PORT_BUSY`
+- `SDCARD_PORT_TIMEOUT`
+- `SDCARD_PORT_NOT_PRESENT`
 
-1. Inspect `State`.
-2. Inspect `ErrorCode`.
-3. Inspect `LastBusStatus` or `LastPortStatus`.
-4. For PMIC, inspect `LastFailedRegister`.
-5. Only if the normalized values are insufficient, inspect the concrete Port
-   handle's raw `ErrorCode`.
+“没有插卡”可以是正常的持续状态：`SDCard_Init()` 在没有检测到卡时返回 `SDCARD_OK`，并把 `State` 设为 `SDCARD_STATE_NOT_PRESENT`。但在无卡状态下调用读块等无法完成的操作时，函数仍会失败并设置对应错误。
+
+## 5. 推荐的调试器查看顺序
+
+1. 查看 `State`，确认设备当前处于什么生命周期阶段；
+2. 查看 `ErrorCode`，定位失败发生在哪个 Device 语义步骤；
+3. 查看 `LastBusStatus` 或 `LastPortStatus`，判断底层属于错误、忙、超时、NACK 或无卡；
+4. PMIC 额外查看 `LastFailedRegister`；
+5. 只有归一化信息不够时，再查看具体 Port 私有句柄的原始 `ErrorCode`。
+
+上层业务不应依据 HAL 或 SoftI2C 原始错误位编写控制逻辑，因为这样会破坏 Port 隔离。原始错误只用于特定后端的深入调试。

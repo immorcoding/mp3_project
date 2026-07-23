@@ -1,139 +1,135 @@
-# Domain context
+# 项目领域上下文
 
-## Power application
+本文档统一记录工程中的稳定术语和职责边界。具体文件路径、字段、调用链和硬件参数由 `docs/` 下的技术文档维护，避免同一实现事实被重复记录后逐渐不一致。
 
-The **Power application** is the early firmware slice that proves board power, initializes the AXP2101, and keeps lightweight diagnostics running before higher-level MP3 features exist.
+## 播放器应用（Player application）
 
-It owns startup order and periodic work through `APP/app.c`, while hardware details remain in BSP and reusable services remain in `System`.
+**播放器应用**是固件的产品行为入口，负责组织系统服务、板级强依赖设备和可移除介质的启动顺序，并持续推进播放器运行所需的周期任务。
 
-Related terms: **Board PMIC**, **PMIC boot profile**, **deferred startup log**.
+它决定“什么时候初始化、失败是否致命、事件如何影响播放器行为”，但不实现器件寄存器协议、总线时序或芯片厂商接口。
 
-Example dialogue:
+相关术语：**板级 PMIC**、**延后启动日志**、**板级 SD**。
 
-> “Add SD card initialization to the Power application after PMIC setup, but keep the SDMMC driver out of APP.”
+示例：
 
-## Board PMIC
+> 播放器应用把 SD 卡视为可选介质，因此未插卡不会阻止系统启动。
 
-The **Board PMIC** is the single AXP2101 instance physically fitted to this PCB, represented by the private `hpmic` object in `BSP/Board/board_pmic.c`.
+## 板级 PMIC（Board PMIC）
 
-It is not the generic AXP2101 driver and not the software-I2C instance. The Board layer binds the selected bus Port to the generic PMIC Device driver and exposes only `Board_PMIC_Init()` upward.
+**板级 PMIC**表示本 PCB 上实际安装的电源管理器件及其板级用途。
 
-Related terms: **PMIC I2C Port**, **PMIC boot profile**.
+它负责把通用 PMIC Device 与本板选用的通信后端和供电策略组合起来，并向上层提供本板需要的电源控制语义。它不等同于通用器件驱动，也不等同于某一种 I2C 实现。
 
-Example dialogue:
+相关术语：**PMIC I2C 端口**、**PMIC 启动配置**。
 
-> “The Board PMIC should use hardware I2C, but the PMIC Device API must remain unchanged.”
+示例：
 
-## PMIC I2C Port
+> 板级 PMIC 可以改用硬件 I2C，但上层看到的电源控制语义不应变化。
 
-The **PMIC I2C Port** is the adapter in `BSP/Devices/pmic/port` that translates one concrete I2C backend into `PMIC_BusOpsTypeDef` plus its matching `BusContext`.
+## PMIC I2C 端口（PMIC I2C Port）
 
-The current backend is `SoftI2C`. Replacing it with HAL I2C should be confined to the marked backend regions; Board and Device layers continue to call the same interface.
+**PMIC I2C 端口**是 PMIC Device 与具体 I2C 后端之间的适配边界。
 
-Related terms: **Board PMIC**, **normalized transport status**.
+它把具体后端的上下文、读写操作和状态码转换成 PMIC Device 能理解的统一总线接口。切换软件 I2C、硬件 I2C 或测试后端时，变化应限制在该边界内。
 
-Example dialogue:
+相关术语：**板级 PMIC**、**归一化传输状态**。
 
-> “Map HAL_TIMEOUT to PMIC_BUS_TIMEOUT inside the PMIC I2C Port.”
+示例：
 
-## PMIC boot profile
+> 硬件 I2C 的超时状态应在 PMIC I2C 端口内转换成统一的 PMIC 总线超时。
 
-The **PMIC boot profile** is the ordered, driver-private AXP2101 register policy applied by `PMIC_Init()` after the chip ID has been verified.
+## PMIC 启动配置（PMIC boot profile）
 
-It controls input limits, charging, interrupt state, ADC channels, DCDC/LDO enable state, and preset voltages. It is a power-policy change, not merely a software refactor, so changes require datasheet, schematic, load-voltage, and bench verification.
+**PMIC 启动配置**是 PMIC 完成器件识别后应用的一组有顺序的电源策略。
 
-Related terms: **Board PMIC**, **Power application**.
+它控制输入限制、充电、中断、ADC、DCDC/LDO 使能和预设电压。修改该配置属于电源策略变更，不只是软件重构，必须同时核对数据手册、原理图、负载允许电压、上电顺序和实测结果。
 
-Example dialogue:
+相关术语：**板级 PMIC**、**播放器应用**。
 
-> “Change the PMIC boot profile so ALDO2 starts disabled but retains its 3.3 V preset.”
+示例：
 
-## Normalized transport status
+> 关闭某一路 LDO 的启动使能，不代表应同时清除它的电压预设。
 
-The **normalized transport status** is the backend-independent result stored as
-`LastBusStatus` or `LastPortStatus`, such as OK, BUSY, TIMEOUT, NACK, or
-NOT_PRESENT.
+## 归一化传输状态（Normalized transport status）
 
-Device `ErrorCode` identifies the semantic failure stage, while the normalized
-transport status explains the broad lower-layer reason. Backend-specific raw error
-bits stay in the concrete Port handle (`hpmic_i2c`, `hsd1`, or `hi2s2`) and do not
-cross the Port seam.
+**归一化传输状态**是跨越 Port 边界后仍保持稳定的底层结果类别，例如成功、忙、超时、未应答或介质不存在。
 
-Related terms: **PMIC I2C Port**, **SD Card Port**, **Board PMIC**.
+Device 错误表示“哪个语义步骤失败”，归一化传输状态表示“底层大致因为什么失败”。芯片厂商或具体后端专属的原始错误只用于深入诊断，不应成为上层业务逻辑的一部分。
 
-Example dialogue:
+相关术语：**PMIC I2C 端口**、**SD 卡端口**。
 
-> “PMIC_ERROR_BUS_READ identifies the stage; PMIC_BUS_NACK identifies the
-> portable transport reason; the SoftI2C raw bit remains private to the Port.”
+示例：
 
-## Deferred startup log
+> “寄存器读取失败”表示失败阶段，“从机未应答”表示可移植的底层原因。
 
-A **deferred startup log** is a formatted message generated during initialization and copied into the fixed RAM queue before the host has opened USB CDC.
+## 延后启动日志（Deferred startup log）
 
-`LOG_Process()` later submits it after enumeration, DTR assertion, the port-open settle interval, and CDC transmit-idle checks all pass. Enqueue success does not mean the PC has already displayed the message.
+**延后启动日志**是在输出端尚未就绪时先保存在 RAM 中，并在输出端可以接收后再提交的启动消息。
 
-Related terms: **Power application**, **USB CDC log backend**.
+消息成功进入日志队列不代表主机已经显示。该机制用于解耦 MCU 的初始化时刻与 USB 串口终端的打开时刻。
 
-Example dialogue:
+相关术语：**播放器应用**、**USB CDC 日志后端**。
 
-> “Keep the deferred startup logs queued until VSCode opens the COM port.”
+示例：
 
-## USB CDC log backend
+> 即使 PC 晚于 MCU 打开虚拟串口，初始化日志仍应在端口就绪后显示。
 
-The **USB CDC log backend** is the logging Adapter in
-`System/Log/backends/log_backend_usb_cdc.c`. It translates the ST USB Device
-status returned by `CDC_Transmit_FS()` into `LOG_OutputStatusTypeDef`, owns the
-persistent asynchronous transmit buffer, adds optional ANSI color, and preserves
-the last submitted message for debugger inspection.
+## USB CDC 日志后端（USB CDC log backend）
 
-The logging Core crosses the Backend seam only through `LOG_OutputOpsTypeDef`.
-USB enumeration, DTR, `TxState`, and ST status values remain private to this
-Adapter. `LOG_Backend_BindDefault()` is the internal composition point that binds
-the current USB CDC Adapter and HAL millisecond time source to the private default
-log handle.
+**USB CDC 日志后端**是日志核心与 USB 虚拟串口之间的输出适配器。
 
-Related terms: **Deferred startup log**, **Normalized transport status**.
+它负责判断 USB 输出是否就绪、维护异步发送期间的数据生命周期，并把厂商 USB 状态转换为日志系统的统一输出结果。日志核心不应依赖 USB 枚举、控制请求或端点状态等具体概念。
 
-Example dialogue:
+相关术语：**延后启动日志**、**归一化传输状态**。
 
-> “Map USBD_BUSY to LOG_OUTPUT_BUSY inside the USB CDC log backend without
-> exposing ST USB types to log.c.”
+示例：
 
-## Board SD
+> USB 正忙属于可重试状态，日志核心应保留消息并稍后再次提交。
 
-The **Board SD** is the single removable SD slot fitted to this PCB, represented by
-a private Device handle in `BSP/Board/sd/board_sd.c` and connected to SDMMC1 with an
-active-low card-detect signal on PC7.
+## 板级 SD（Board SD）
 
-Its current bare-metal hotplug path uses a binary ISR notification and restartable
-30 ms deferred debounce. `Board_SD_Process()` converts only stable Device state
-changes into `INSERTED` or `REMOVED`; mechanical edge counts are not part of the
-domain. Marked regions in `board_sd.c` form the future RTOS scheduling seam, where
-FreeRTOS task notification can replace polling without changing Device refresh or
-Board event semantics.
+**板级 SD**表示本 PCB 上唯一的可移除 SD 卡槽及其板级行为。
 
-Related terms: **SD Card Device**, **SD Card Port**, **Power application**.
+它组合通用 SD Card Device、当前 Port 和卡检测事件，并向播放器应用报告经过消抖后的稳定插入或拔出。机械触点产生了多少次边沿不属于播放器业务语义。
 
-Example dialogue:
+相关术语：**SD 卡设备**、**SD 卡端口**、**板级中断分发器**。
 
-> “Board SD reports NOT_PRESENT as a normal removable-media state, so the Power application can continue booting without a card.”
+示例：
 
-## SD Card Device
+> 板级 SD 可以处于“未插卡”状态，同时整机仍然正常运行。
 
-The **SD Card Device** is the reusable block-oriented module that owns SD media state, normalized information, range validation, synchronous block access, and error snapshots without depending on STM32 HAL types.
+## SD 卡设备（SD Card Device）
 
-Related terms: **Board SD**, **SD Card Port**.
+**SD 卡设备**是可复用、面向逻辑块的介质模块。
 
-Example dialogue:
+它维护介质生命周期、容量信息、块范围校验、同步块访问和稳定错误语义，不依赖某个 MCU 或厂商 HAL。文件系统挂载和 USB MSC 所有权不属于该 Device。
 
-> “FatFs should eventually consume the SD Card Device's block semantics through a storage adapter rather than call HAL_SD_ReadBlocks directly.”
+相关术语：**板级 SD**、**SD 卡端口**。
 
-## SD Card Port
+示例：
 
-The **SD Card Port** is the adapter in `BSP/Devices/sd/port` that binds the SD Card Device to this PCB's `hsd1`, SDMMC1 configuration, active-low PC7 card detect, and normalized STM32 HAL results.
+> 文件系统应使用 SD Card Device 的逻辑块语义，而不是直接调用厂商 SD 驱动。
 
-Related terms: **Board SD**, **SD Card Device**.
+## SD 卡端口（SD Card Port）
 
-Example dialogue:
+**SD 卡端口**是 SD Card Device 与具体 SD 控制器、卡检测信号及厂商驱动之间的适配边界。
 
-> “A future SPI SD implementation can replace the SD Card Port backend while preserving the SD Card Device interface.”
+它负责执行具体硬件访问并归一化后端结果，使 Device 不需要认识 MCU 句柄、GPIO 极性或 HAL 状态码。
+
+相关术语：**板级 SD**、**SD 卡设备**、**归一化传输状态**。
+
+示例：
+
+> SPI SD 后端可以替换 SDMMC 后端，同时保持 SD Card Device 的公共语义不变。
+
+## 板级中断分发器（Board IRQ dispatcher）
+
+**板级中断分发器**把具体硬件中断映射为具有板级含义的逻辑中断源，并把事件交给对应板级模块。
+
+中断回调只允许执行中断安全的轻量操作，例如发布通知或置位标志。消抖、日志、设备通信和文件系统操作必须延后到普通执行上下文。
+
+相关术语：**板级 SD**。
+
+示例：
+
+> 卡检测中断只发布“检测状态可能变化”的通知，稳定状态由普通上下文确认。

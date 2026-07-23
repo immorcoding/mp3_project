@@ -33,7 +33,7 @@
 ```text
 Core/Src/main.c
   -> HAL_Init / SystemClock_Config / MX_GPIO_Init
-  -> MX_USB_DEVICE_Init
+  -> MX_USB_DEVICE_Init / MX_I2S2_Init
   -> app_init
        -> LOG_Init
             -> 清零 hlog_default
@@ -44,13 +44,19 @@ Core/Src/main.c
                  -> 绑定 LOG_TimeSourceHal_GetTimeMs + NULL Context
        -> LOG_Printf("LOG", ...)
             -> 格式化并入队
-       -> Board_PMIC_Init
-       -> LOG_Printf("PMIC", ...)
-            -> 格式化并入队
+       -> Board_Init
+            -> Board_IRQ_Init
+            -> Board_PMIC_Init
+            -> Board_Audio_SetPower
+            -> Board_Audio_Init
+       -> app_init_sd
+            -> Board_SD_Init
+       -> 各模块初始化日志继续入队
   -> while (1)
        -> app_run
             -> LOG_Process
                  -> 每次最多尝试提交队首一条
+            -> Board_SD_Process
 ```
 
 `LOG_Printf()` 返回 `LOG_OK` 时，通常只说明消息已进入 RAM 队列。主机实际看到日志要等到后续 `LOG_Process()` 成功提交，并由 USB 完成 IN 传输。

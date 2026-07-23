@@ -5,13 +5,16 @@
   *
   * @details
   *          本文件是 CubeMX 生成代码与自维护模块之间的入口：main.c 负责
-  *          MCU 基础设施初始化，app_init() 负责装配日志与板级 PMIC，
-  *          app_run() 负责持续推进非阻塞日志发送和 LED 心跳。
+  *          MCU 基础设施初始化；app_init() 负责初始化日志、整机强依赖
+  *          Board Module 和可选 SD 卡；app_run() 负责持续推进非阻塞日志、
+  *          SD 热插拔处理和 LED 心跳。
   *
   *          当前初始化依赖顺序为：
-  *          LOG_Init() -> 启动日志入队 -> Board_PMIC_Init() -> PMIC 结果入队。
-  *          日志入队不等于主机已经收到；队列由 app_run() 中的
-  *          LOG_Process() 在 USB CDC 可发送后逐条排空。
+  *          LOG_Init() -> 启动日志入队 -> Board_Init() -> Board_SD_Init()。
+  *          Board_Init() 内部初始化 IRQ Dispatcher、PMIC、音频电源和 Audio
+  *          Device；SD 卡是可选介质，其初始化失败不会进入全局 Error_Handler()。
+  *          日志入队不等于主机已经收到；队列由 app_run() 中的 LOG_Process()
+  *          在 USB CDC 可发送后逐条排空。
   ******************************************************************************
   */
 
@@ -30,11 +33,12 @@ static bool app_sd_initialized;
 
 /* Private functions ---------------------------------------------------------*/
 /**
-  * @brief  初始化 可移除 SD 卡 并记录当前介质状态。仅实现句柄、ops绑定等操作，不涉及通信。
+  * @brief  初始化可移除 SD 卡并记录当前介质状态。
   * @details
   *         SD 卡不是整机启动的强依赖：没有插卡时 Board_SD_Init() 返回
   *         BOARD_OK，并通过 BOARD_SD_STATE_NOT_PRESENT 表达物理状态；真正的
   *         初始化错误只记录日志，不让播放器进入全局 Error_Handler()。
+  *         插卡启动时 Board_SD_Init() 会初始化 SDMMC、识别介质并读取块信息。
   * @retval None
   */
 static void app_init_sd(void)

@@ -1,9 +1,12 @@
 # PMIC 与 I2C 子系统技术文档
 
-> 适用工程：`power`  
-> 当前芯片：AXP2101  
-> 当前总线后端：GPIO 模拟软件 I2C  
-> 文档状态：与 2026-07-20 的工程代码同步
+> 适用工程：`version0.1.1`
+>
+> 当前芯片：AXP2101
+>
+> 当前总线后端：GPIO 模拟软件 I2C
+>
+> 文档状态：已按 `version0.1.1` 当前代码复核
 
 ## 1. 文档目的
 
@@ -37,7 +40,7 @@
 ```mermaid
 flowchart TD
     Main["Core/Src/main.c<br/>CubeMX 系统入口"] --> App["APP/app.c<br/>应用初始化与主循环"]
-    App --> Board["BSP/Board/board_pmic<br/>板级 PMIC 实例"]
+    App --> Board["BSP/Board/pmic/board_pmic<br/>板级 PMIC 实例"]
     Board --> Device["BSP/Devices/pmic/pmic<br/>AXP2101 器件驱动"]
     Board --> Port["BSP/Devices/pmic/port/pmic_i2c_port<br/>I2C 后端绑定与适配"]
     Device --> Ops["PMIC_BusOpsTypeDef<br/>统一总线接口"]
@@ -62,8 +65,8 @@ flowchart TD
 | 文件 | 层 | 职责 | 不应包含的内容 |
 | --- | --- | --- | --- |
 | `Core/Src/main.c` | 系统入口 | 初始化 HAL、时钟、GPIO、USB，调用 `app_init()/app_run()`。 | AXP2101 寄存器配置、应用策略。 |
-| `APP/app.c/.h` | Application | 初始化日志和板级 PMIC，周期推进日志与 LED 心跳。 | 软件 I2C 位操作、AXP2101 裸寄存器值。 |
-| `BSP/Board/board_pmic.c/.h` | Board | 定义私有 `hpmic`，绑定后端并组织 PMIC 初始化。 | `SoftI2C_HandleTypeDef`、SCL/SDA 时序、寄存器读写细节。 |
+| `APP/app.c/.h` | Application | 初始化日志和板级设备，初始化可选 SD 卡，周期推进日志、SD 热插拔与 LED 心跳。 | 软件 I2C 位操作、AXP2101 裸寄存器值。 |
+| `BSP/Board/pmic/board_pmic.c/.h` | Board | 定义私有 `hpmic`，绑定后端并组织 PMIC 初始化和板级电源轨控制。 | `SoftI2C_HandleTypeDef`、SCL/SDA 时序、寄存器读写细节。 |
 | `BSP/Devices/pmic/pmic.c/.h` | Device | 定义 PMIC 抽象类型，识别 AXP2101，保存诊断信息，应用启动配置。 | 具体 GPIO、HAL I2C 句柄、软件 I2C 函数调用。 |
 | `BSP/Devices/pmic/axp2101_regs.h` | Device 数据 | 保存 AXP2101 地址、芯片 ID、寄存器地址等器件定义。 | 板级引脚和应用业务逻辑。 |
 | `BSP/Devices/pmic/port/pmic_i2c_port.c/.h` | Port | 创建当前后端上下文，映射状态，向 `hpmic` 注入 Ops 和 Context。 | AXP2101 启动配置表、应用策略。 |
@@ -74,21 +77,24 @@ flowchart TD
 - QSPI、SPI、SDMMC 等通用总线放 `BSP/Bus/`；
 - Flash、SD Card、LCD 控制器等器件驱动放 `BSP/Devices/`；
 - 本 PCB 的具体实例、片选、复位和总线选择放 `BSP/Board/`；
-- 音乐播放、电源策略、界面状态等产品行为放 `Application/`。
+- 音乐播放、电源策略、界面状态等产品行为放 `APP/`。
 
 ## 5. 上电后的完整调用链
 
 ### 5.1 系统入口
 
-`main()` 当前执行顺序：
+`main()` 与应用层当前执行顺序：
 
-1. `HAL_Init()`：初始化 HAL、Flash 接口和 SysTick。
-2. `SystemClock_Config()`：配置系统时钟。
-3. `MX_GPIO_Init()`：配置 GPIO。软件 I2C 要求 SCL、SDA 已配置为开漏输出并具备外部上拉。
-4. `MX_USB_DEVICE_Init()`：初始化 USB Device/CDC 类。
-5. `app_init()`：先初始化日志，再调用 `Board_PMIC_Init()` 初始化 AXP2101。
-6. PMIC 返回值不是 `PMIC_OK` 时记录失败日志并进入 `Error_Handler()`。
-7. 初始化成功后进入主循环，持续调用 `app_run()` 推进 USB 日志和 LED 心跳。
+1. `HAL_Init()`：初始化 HAL、Flash 接口和 SysTick；
+2. `SystemClock_Config()`：配置系统时钟；
+3. `MX_GPIO_Init()`：配置 GPIO，软件 I2C 的 SCL/SDA 必须为开漏并具备外部上拉；
+4. `MX_USB_DEVICE_Init()`：初始化 USB Device/CDC；
+5. `MX_I2S2_Init()`：准备当前 Audio Port 使用的 I2S2 句柄；
+6. `app_init()` 先调用 `LOG_Init()`，再调用 `Board_Init()`；
+7. `Board_Init()` 依次初始化 IRQ Dispatcher、板级 PMIC、ALDO1 音频供电和 Audio Device；
+8. `Board_Init()` 失败时 APP 记录日志并进入 `Error_Handler()`；
+9. 强依赖设备成功后，APP 单独调用 `Board_SD_Init()` 初始化可选 SD 卡；
+10. 主循环持续调用 `app_run()`，推进 USB 日志、SD 热插拔处理和 LED 心跳。
 
 因此，GPIO 初始化必须位于 PMIC 初始化之前；USB Device 初始化必须位于日志
 开始消费队列之前。启动期 `LOG_Printf()` 只把消息复制进 RAM 队列，实际 USB
@@ -350,18 +356,23 @@ new_value = (old_value & ~mask) | (boot_value & mask);
 
 ## 10. 对外开放的接口
 
-### 10.1 应用层推荐接口
+### 10.1 Board 层推荐接口
 
 | 接口 | 使用者 | 说明 |
 | --- | --- | --- |
-| `Board_PMIC_Init()` | `main.c` 或系统初始化模块 | 推荐的本板 PMIC 初始化入口。 |
-| `hpmic` | 调试器、日志和未来电源服务 | 用于查看状态和错误；不建议应用直接修改运行状态字段。 |
+| `Board_PMIC_Init()` | `Board_Init()` | 绑定并初始化本板唯一的 AXP2101。 |
+| `Board_Audio_SetPower(bool)` | Board/Application 策略 | 通过 ALDO1 开关音频电源。 |
+| `Board_LCD_SetPower(bool)` | Board/Application 策略 | 通过 ALDO2 开关 LCD 电源。 |
+
+`hpmic` 是 `board_pmic.c` 的私有 `static` 实例，应用不能直接访问。Board 在失败时读取其诊断字段并写入日志；以后若需要向上层提供诊断，应增加只读快照接口，而不是公开句柄。
 
 ### 10.2 PMIC 驱动接口
 
 | 接口 | 使用者 | 说明 |
 | --- | --- | --- |
 | `PMIC_Init(PMIC_HandleTypeDef *)` | Board 层或独立测试 | 通用 PMIC 初始化入口，调用前必须已经绑定总线。 |
+| `PMIC_SetALDO1Enabled(PMIC_HandleTypeDef *, bool)` | Board 层 | 读-改-写 REG90H 的 ALDO1 使能位。 |
+| `PMIC_SetALDO2Enabled(PMIC_HandleTypeDef *, bool)` | Board 层 | 读-改-写 REG90H 的 ALDO2 使能位。 |
 
 当前 PMIC Device 层没有公开任意寄存器读写接口，`pmic_read_reg()` 和 `pmic_write_reg()` 都是 `static`。这是为了避免应用层绕过器件语义直接修改危险寄存器。
 
@@ -394,8 +405,8 @@ Port 的 `pmic_i2c_port_ops` 和 `hpmic_i2c` 均为 `static`，不对外暴露�
 | --- | --- | --- |
 | `PMIC_I2C_Port_Bind(&hpmic)` | 可以 | 重复写入相同的 Ops 和 Context 指针，不产生总线波形。 |
 | `SoftI2C_Init(&handle)` | 可以 | 会重新检查/恢复总线、清除旧底层错误并重置状态。 |
-| `PMIC_Init(&hpmic)` | 可以 | 会清除旧 PMIC 错误、重新识别芯片；启用 BootConfig 时会再次写配置表。 |
-| `Board_PMIC_Init()` | 可以 | 等价于重新绑定并重新执行 `PMIC_Init()`。不应与正在进行的传输并发调用。 |
+| `PMIC_Init(&hpmic)` | 技术上可以 | 会清除旧错误、重新识别芯片并重新应用启动表；当前启动表会关闭 ALDO1/2，因此运行期重复调用可能切断 Audio/LCD 电源。 |
+| `Board_PMIC_Init()` | 仅建议在启动或受控重初始化流程调用 | 等价于重新绑定并重新执行 `PMIC_Init()`；不得与传输并发，调用后还必须按整机策略重新开启所需电源轨。 |
 | 软件 I2C 收发接口 | 可以 | 仅在句柄为 READY 时；均为阻塞调用，不支持同一句柄并发。 |
 | 读取 `hpmic` 错误字段 | 可以 | 建议只读；日志读取时应考虑错误可能被下一次初始化覆盖。 |
 
@@ -520,7 +531,7 @@ BSP/Board/*.c
 ```c
 #include "BSP/Devices/pmic/pmic.h"
 #include "BSP/Bus/soft_i2c/soft_i2c.h"
-#include "BSP/Board/board_pmic.h"
+#include "BSP/Board/pmic/board_pmic.h"
 ```
 
 比 `#include "./pmic/pmic.h"` 更清楚，因为包含路径同时表达工程根、所属层和模块。
@@ -557,13 +568,13 @@ BSP/Board/*.c
 - 总线控制器和通用传输封装：`BSP/Bus`；
 - 具体芯片命令、寄存器和协议：`BSP/Devices`；
 - PCB 引脚、片选、复位、背光和实例绑定：`BSP/Board`；
-- 文件系统、图片加载、界面、电源管理策略：`Middleware` 或 `Application`。
+- 文件系统、图片加载等可复用服务放 `System/`，界面和电源管理策略等产品行为放 `APP/`。
 
 是否需要 Ops 抽象，应根据是否存在多种后端、是否需要主机测试以及器件驱动是否会复用决定，不必为每个简单模块机械增加函数指针。
 
 ## 17. 当前限制和后续改进点
 
-1. `PMIC_Init()` 是 PMIC Device 层目前唯一公开功能接口。
+1. PMIC Device 当前公开初始化和 ALDO1/ALDO2 使能控制，尚未提供电池状态、ADC、电压配置等更完整的语义接口。
 2. `pmic_boot_profile[]` 仍是固定的寄存器和值，后续可演进为带字段含义的配置结构体。
 3. Port 只保存一个静态 `hpmic_i2c`，适合当前单 PMIC；多实例需要独立上下文或让 Board 注入上下文。
 4. 软件 I2C 没有 RTOS 互斥，也没有异步传输。
@@ -592,8 +603,8 @@ BSP/Board/*.c
 
 - 系统入口：[`../Core/Src/main.c`](../Core/Src/main.c)
 - 应用入口：[`../APP/app.c`](../APP/app.c)
-- Board 实例：[`../BSP/Board/board_pmic.c`](../BSP/Board/board_pmic.c)
-- Board 公共接口：[`../BSP/Board/board_pmic.h`](../BSP/Board/board_pmic.h)
+- Board 实例：[`../BSP/Board/pmic/board_pmic.c`](../BSP/Board/pmic/board_pmic.c)
+- Board 公共接口：[`../BSP/Board/pmic/board_pmic.h`](../BSP/Board/pmic/board_pmic.h)
 - PMIC 驱动实现：[`../BSP/Devices/pmic/pmic.c`](../BSP/Devices/pmic/pmic.c)
 - PMIC 公共类型和接口：[`../BSP/Devices/pmic/pmic.h`](../BSP/Devices/pmic/pmic.h)
 - AXP2101 寄存器定义：[`../BSP/Devices/pmic/axp2101_regs.h`](../BSP/Devices/pmic/axp2101_regs.h)
