@@ -8,6 +8,10 @@
   *          STM32 HAL、SDMMC 实例或卡检测 GPIO。驱动负责介质状态、容量
   *          信息缓存、块范围校验、同步等待和错误诊断；Board 层负责绑定
   *          当前 PCB 对应的 Port Adapter。
+  *
+  *          Status 只描述单次调用结果，State 描述持续生命周期。无卡时 Init
+  *          可以成功并进入 NOT_PRESENT；DeInit 可重复调用。Refresh 不负责
+  *          卡检测消抖且不得从 ISR 调用。
   ******************************************************************************
   */
 
@@ -155,71 +159,29 @@ typedef struct
 } SDCard_HandleTypeDef;
 
 /* Exported functions --------------------------------------------------------*/
-/**
-  * @brief  初始化 SD 卡并缓存介质信息。
-  * @param  hsdcard 已安装 PortOps 和 PortContext 的 Device 句柄。
-  * @retval SDCARD_OK 状态同步成功；无卡时 State 为 NOT_PRESENT。
-  * @retval SDCARD_ERROR Port 未绑定、初始化失败或介质信息非法。
-  */
 SDCard_StatusTypeDef SDCard_Init(SDCard_HandleTypeDef *hsdcard);
 
-/**
-  * @brief  反初始化 SD 卡 Port 并清除缓存信息。
-  * @param  hsdcard SD 卡设备句柄。
-  * @retval SDCARD_OK 操作成功；重复反初始化同样成功。
-  * @retval SDCARD_ERROR 句柄/Port 非法或底层反初始化失败。
-  */
 SDCard_StatusTypeDef SDCard_DeInit(SDCard_HandleTypeDef *hsdcard);
 
-/**
-  * @brief  根据当前介质检测状态处理一次插入或移除。
-  * @param  hsdcard SD 卡设备句柄。
-  * @note   调用者负责去抖；不得从中断服务函数调用。
-  */
 SDCard_StatusTypeDef SDCard_Refresh(SDCard_HandleTypeDef *hsdcard);
 
-/**
-  * @brief  读取一个或多个连续逻辑块。
-  * @param  hsdcard SD 卡设备句柄。
-  * @param  data 接收数据的缓冲区。
-  * @param  start_block 起始逻辑块编号。
-  * @param  block_count 连续读取的逻辑块数量。
-  */
 SDCard_StatusTypeDef SDCard_ReadBlocks(SDCard_HandleTypeDef *hsdcard,
                                        uint8_t *data,
                                        uint32_t start_block,
                                        uint32_t block_count);
 
-/**
-  * @brief  写入一个或多个连续逻辑块。
-  * @param  hsdcard SD 卡设备句柄。
-  * @param  data 待写入的数据缓冲区。
-  * @param  start_block 起始逻辑块编号。
-  * @param  block_count 连续写入的逻辑块数量。
-  */
 SDCard_StatusTypeDef SDCard_WriteBlocks(SDCard_HandleTypeDef *hsdcard,
                                         const uint8_t *data,
                                         uint32_t start_block,
                                         uint32_t block_count);
 
-/** @brief 等待介质完成内部操作并回到可传输状态。 */
 SDCard_StatusTypeDef SDCard_Sync(SDCard_HandleTypeDef *hsdcard);
 
-/**
-  * @brief  复制缓存的介质信息。
-  * @param  hsdcard SD 卡设备句柄。
-  * @param  info 接收信息快照的指针。
-  */
 SDCard_StatusTypeDef SDCard_GetInfo(const SDCard_HandleTypeDef *hsdcard,
                                     SDCard_InfoTypeDef *info);
 
-/** @brief 获取设备当前持续状态；空句柄按 ERROR 处理。 */
 SDCard_StateTypeDef SDCard_GetState(const SDCard_HandleTypeDef *hsdcard);
 
-/**
-  * @brief  读取当前 Port 的原始介质检测值。
-  * @note   本函数不会自动改变句柄 State。
-  */
 bool SDCard_IsPresent(const SDCard_HandleTypeDef *hsdcard);
 
 #ifdef __cplusplus

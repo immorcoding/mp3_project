@@ -1,6 +1,7 @@
 #include "BSP/Board/board.h"
 
 #include "BSP/Board/audio/board_audio.h"
+#include "BSP/Board/board_irq.h"
 #include "BSP/Board/pmic/board_pmic.h"
 
 #include "stm32h7xx_hal.h"
@@ -13,6 +14,12 @@
   */
 Board_StatusTypeDef Board_Init(void)
 {
+    /* IRQ Dispatcher 必须先于所有可能注册板级中断的 Module 初始化。 */
+    if (Board_IRQ_Init() != BOARD_OK)
+    {
+        return BOARD_IRQ_ERROR;
+    }
+
     /* 初始化 PMIC */
     if (Board_PMIC_Init() != BOARD_OK)
     {

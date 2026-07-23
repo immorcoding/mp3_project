@@ -13,6 +13,8 @@
   *
   * @note    本驱动使用忙等待产生时序，所有 API 均为阻塞式，不应在要求严格
   *          实时性的中断中调用。
+  * @note    设备地址统一使用不包含读写位的 7 位形式；寄存器读取采用
+  *          “写内部地址、重复 START、读数据”的标准组合传输。
   * @warning 本模块没有仲裁丢失检测、互斥锁或 RTOS 并发保护，同一句柄在一次
   *          传输完成前不得被其他执行上下文再次调用。
   ******************************************************************************
@@ -92,69 +94,22 @@ typedef struct
 } SoftI2C_HandleTypeDef;
 
 /* Exported functions --------------------------------------------------------*/
-/**
-  * @brief  初始化软件 I2C，并在 SDA 被拉低时自动尝试恢复总线。
-  * @param  hi2c 软件 I2C 句柄指针。
-  * @retval SOFT_I2C_OK      初始化成功，总线空闲。
-  * @retval SOFT_I2C_ERROR   句柄参数非法。
-  * @retval SOFT_I2C_BUSY    恢复后 SDA 仍被拉低。
-  * @retval SOFT_I2C_TIMEOUT SCL 无法释放。
-  */
 SoftI2C_StatusTypeDef SoftI2C_Init(SoftI2C_HandleTypeDef *hi2c);
 
-/**
-  * @brief  轮询指定 7 位地址，检查从机是否返回 ACK。
-  * @param  hi2c 软件 I2C 句柄指针。
-  * @param  device_address_7bit 从机 7 位地址，不包含读写位。
-  * @param  trials 最大探测次数，必须大于 0。
-  * @retval SOFT_I2C_OK      从机应答。
-  * @retval SOFT_I2C_ERROR   参数非法或所有探测均收到地址 NACK。
-  * @retval SOFT_I2C_BUSY    句柄当前不处于 READY 状态。
-  * @retval SOFT_I2C_TIMEOUT SCL 无法释放。
-  */
 SoftI2C_StatusTypeDef SoftI2C_IsDeviceReady(SoftI2C_HandleTypeDef *hi2c,
                                             uint8_t device_address_7bit,
                                             uint32_t trials);
 
-/**
-  * @brief  以主机发送模式向从机连续发送数据。
-  * @param  hi2c 软件 I2C 句柄指针。
-  * @param  device_address_7bit 从机 7 位地址，不包含读写位。
-  * @param  data 待发送缓冲区。
-  * @param  size 待发送字节数，必须大于 0。
-  * @retval SoftI2C_StatusTypeDef 操作结果；详细错误见 hi2c->ErrorCode。
-  * @note   地址阶段发送 (device_address_7bit << 1)，不会发送寄存器地址。
-  */
 SoftI2C_StatusTypeDef SoftI2C_MasterTransmit(SoftI2C_HandleTypeDef *hi2c,
                                              uint8_t device_address_7bit,
                                              const uint8_t *data,
                                              uint16_t size);
 
-/**
-  * @brief  以主机接收模式从从机连续读取数据。
-  * @param  hi2c 软件 I2C 句柄指针。
-  * @param  device_address_7bit 从机 7 位地址，不包含读写位。
-  * @param  data 接收缓冲区。
-  * @param  size 待读取字节数，必须大于 0。
-  * @retval SoftI2C_StatusTypeDef 操作结果；最后一个字节后发送 NACK。
-  * @note   地址阶段发送 (device_address_7bit << 1) | 1，不带寄存器语义。
-  */
 SoftI2C_StatusTypeDef SoftI2C_MasterReceive(SoftI2C_HandleTypeDef *hi2c,
                                             uint8_t device_address_7bit,
                                             uint8_t *data,
                                             uint16_t size);
 
-/**
-  * @brief  从从机内部寄存器连续读取数据。
-  * @param  hi2c 软件 I2C 句柄指针。
-  * @param  device_address_7bit 从机 7 位地址，不包含读写位。
-  * @param  mem_address 从机内部寄存器地址。
-  * @param  mem_address_size 寄存器地址宽度。
-  * @param  data 接收缓冲区。
-  * @param  size 待读取字节数，必须大于 0。
-  * @retval SoftI2C_StatusTypeDef 操作结果；详细错误见 hi2c->ErrorCode。
-  * @note   读取序列使用“写地址 -> 内部地址 -> 重复 START -> 读地址”。
-  */
 SoftI2C_StatusTypeDef SoftI2C_MemRead(SoftI2C_HandleTypeDef *hi2c,
                                       uint8_t device_address_7bit,
                                       uint16_t mem_address,
@@ -162,16 +117,6 @@ SoftI2C_StatusTypeDef SoftI2C_MemRead(SoftI2C_HandleTypeDef *hi2c,
                                       uint8_t *data,
                                       uint16_t size);
 
-/**
-  * @brief  向从机内部寄存器连续写入数据。
-  * @param  hi2c 软件 I2C 句柄指针。
-  * @param  device_address_7bit 从机 7 位地址，不包含读写位。
-  * @param  mem_address 从机内部寄存器地址。
-  * @param  mem_address_size 寄存器地址宽度。
-  * @param  data 待发送缓冲区。
-  * @param  size 待写入字节数，必须大于 0。
-  * @retval SoftI2C_StatusTypeDef 操作结果；详细错误见 hi2c->ErrorCode。
-  */
 SoftI2C_StatusTypeDef SoftI2C_MemWrite(SoftI2C_HandleTypeDef *hi2c,
                                        uint8_t device_address_7bit,
                                        uint16_t mem_address,

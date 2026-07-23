@@ -6,22 +6,39 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
-#include "System/Log/log.h"
 #include "BSP/Board/sd/board_sd.h"
 
 #include <stddef.h>
 
 #include "BSP/Board/board.h"
+#include "BSP/Board/board_irq.h"
 #include "BSP/Devices/sd/sd.h"
 #include "BSP/Devices/sd/port/sd_port.h"
+#include "main.h"
+
+/**
+  * @brief Board SD 热插拔非阻塞消抖时间。
+  */
+#define BOARD_SD_DEBOUNCE_MS 30U
+
+/* Private types -------------------------------------------------------------*/
+/**
+  * @brief 本板唯一 SD 卡槽的私有 Handle。
+  * @note  Device 保存通用 SD Card Device 状态；其余字段记录卡检测通知和
+  *        非阻塞消抖状态。
+  */
+typedef struct
+{
+    SDCard_HandleTypeDef Device;
+    volatile bool DetectPending; /**< FreeRTOS 下由任务通知替代。 */
+    uint32_t DebounceStartMs;
+    bool Debouncing;
+    bool IRQRegistered;
+} Board_SD_HandleTypeDef;
 
 /* Private variables ---------------------------------------------------------*/
-/**
-  * @brief 本板唯一 SD 卡槽对应的私有 Device 实例。
-  * @note  static 只限制 C 代码链接可见性；调试构建仍可在调试器中观察其
-  *        State、ErrorCode 和 LastPortStatus。
-  */
-static SDCard_HandleTypeDef hboard_sd;
+/** @brief 本板唯一 SD 卡槽对应的私有实例。 */
+static Board_SD_HandleTypeDef hboard_sd;
 
 /* Private functions ---------------------------------------------------------*/
 /** @brief 将 Device 返回值转换为 Board 层统一状态码。 */
@@ -53,6 +70,66 @@ static Board_SD_StateTypeDef board_sd_state(SDCard_StateTypeDef state)
     }
 }
 
+/******************** FreeRTOS 移植替换区：开始 *******************************
+ * FreeRTOS 下由任务通知替代本函数和 DetectPending。
+ *****************************************************************************/
+/**
+  * @brief  在普通上下文原子地取出并清除一个检测通知。
+  * @param  hsd Board SD 私有 Handle。
+  * @retval true  本次成功取得一个待处理通知。
+  * @retval false 当前没有待处理通知。
+  */
+static bool board_sd_take_detect_event(Board_SD_HandleTypeDef *hsd)
+{
+    uint32_t primask;
+    bool pending;
+
+    /*
+     * 无通知是主循环中的常见路径。先做一次快速检查，避免每次调用
+     * Board_SD_Process() 都短暂关闭全局中断；若检查后才到达中断，
+     * 通知仍会保留到下一轮处理。
+     */
+    if (!hsd->DetectPending)
+    {
+        return false;
+    }
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+
+    pending = hsd->DetectPending;
+    hsd->DetectPending = false;
+
+    /* 保持调用本函数前的中断总开关状态，不能无条件重新开启中断。 */
+    if (primask == 0U)
+    {
+        __enable_irq();
+    }
+
+    return pending;
+}
+/******************** FreeRTOS 移植替换区：结束 *******************************/
+
+/**
+  * @brief  在 ISR 中记录一次 SD 卡检测边沿。
+  * @param  context 注册时绑定的 Board SD 私有 Handle。
+  * @param  source  触发回调的板级逻辑中断源。
+  * @note   本函数只发布二值通知，不执行消抖、SDMMC 操作或日志输出。
+  */
+static void board_sd_detect_irq_cb(void *context, Board_IRQ_SourceTypeDef source)
+{
+    Board_SD_HandleTypeDef *hsd = (Board_SD_HandleTypeDef *)context;
+
+    if ((hsd != NULL) && (source == BOARD_IRQ_SOURCE_SD_DETECT))
+    {
+        /**************** FreeRTOS 移植替换区：开始 ***************************
+         * 改为 vTaskNotifyGiveFromISR()，并按返回值决定是否请求任务切换。
+         *********************************************************************/
+        hsd->DetectPending = true;
+        /**************** FreeRTOS 移植替换区：结束 ***************************/
+    }
+}
+
 /* Exported functions --------------------------------------------------------*/
 /**
   * @brief  绑定本板 SDMMC Adapter 并初始化当前介质。
@@ -63,71 +140,161 @@ static Board_SD_StateTypeDef board_sd_state(SDCard_StateTypeDef state)
   */
 Board_StatusTypeDef Board_SD_Init(void)
 {
-    if (SDCard_Port_Bind(&hboard_sd) != SDCARD_OK)
+    Board_StatusTypeDef status;
+
+    if (hboard_sd.IRQRegistered)
     {
         return BOARD_SD_ERROR;
     }
 
-    return board_sd_status(SDCard_Init(&hboard_sd));
-}
+    hboard_sd.DetectPending = false;
+    hboard_sd.DebounceStartMs = 0U;
+    hboard_sd.Debouncing = false;
 
-/**
-  * @brief  释放 SDMMC 资源并把 Board SD 恢复为 RESET。
-  * @retval BOARD_OK    反初始化成功或原本已经处于 RESET。
-  * @retval BOARD_SD_ERROR 底层反初始化失败。
-  */
-Board_StatusTypeDef Board_SD_DeInit(void)
-{
-    return board_sd_status(SDCard_DeInit(&hboard_sd));
-}
-
-/**
-  * @brief  根据当前 SD_CD 电平刷新插拔状态。
-  * @note   本函数不实现去抖，不得从 EXTI ISR 调用。APP 或未来 Storage task
-  *         应在确认检测电平稳定后调用。
-  */
-Board_StatusTypeDef Board_SD_Refresh(void)
-{
-    Board_SD_StateTypeDef previous_state = Board_SD_GetState();
-    Board_StatusTypeDef status = board_sd_status(SDCard_Refresh(&hboard_sd));
-    Board_SD_StateTypeDef current_state = Board_SD_GetState();
-
-    if ((status != BOARD_OK) || (current_state == previous_state))
+    if (SDCard_Port_Bind(&hboard_sd.Device) != SDCARD_OK)
     {
-        return status;
+        return BOARD_SD_ERROR;
     }
 
-    /*
-     * Polling only discovers state transitions. Logging on the edge prevents
-     * every Refresh call from printing the same READY message.
-     */
-    if (current_state == BOARD_SD_STATE_READY)
+    if (Board_IRQ_Register(BOARD_IRQ_SOURCE_SD_DETECT,
+                           board_sd_detect_irq_cb,
+                           &hboard_sd) != BOARD_OK)
     {
-        Board_SD_InfoTypeDef info;
-
-        if (Board_SD_GetInfo(&info) == BOARD_OK)
-        {
-            uint32_t capacity_mb = (uint32_t)(info.CapacityBytes / (1024ULL * 1024ULL));
-
-            (void)LOG_Printf(LOG_LEVEL_INFO,
-                             "SD",
-                             "card ready: %lu MB, block size: %lu",
-                             (unsigned long)capacity_mb,
-                             (unsigned long)info.BlockSize);
-        }
+        return BOARD_SD_ERROR;
     }
-    else if (current_state == BOARD_SD_STATE_NOT_PRESENT)
+
+    hboard_sd.IRQRegistered = true;
+    status = board_sd_status(SDCard_Init(&hboard_sd.Device));
+
+    if (status != BOARD_OK)
     {
-        (void)LOG_Printf(LOG_LEVEL_INFO, "SD", "card removed");
+        (void)Board_IRQ_Unregister(BOARD_IRQ_SOURCE_SD_DETECT);
+        hboard_sd.IRQRegistered = false;
     }
 
     return status;
 }
 
+/**
+  * @brief  解除卡检测 IRQ 绑定、释放 SDMMC 资源并恢复为 RESET。
+  * @retval BOARD_OK    反初始化成功或原本已经处于 RESET。
+  * @retval BOARD_SD_ERROR 底层反初始化失败。
+  */
+Board_StatusTypeDef Board_SD_DeInit(void)
+{
+    Board_StatusTypeDef status = BOARD_OK;
+
+    if (hboard_sd.IRQRegistered)
+    {
+        if (Board_IRQ_Unregister(BOARD_IRQ_SOURCE_SD_DETECT) != BOARD_OK)
+        {
+            status = BOARD_SD_ERROR;
+        }
+        else
+        {
+            hboard_sd.IRQRegistered = false;
+        }
+    }
+
+    if (SDCard_DeInit(&hboard_sd.Device) != SDCARD_OK)
+    {
+        status = BOARD_SD_ERROR;
+    }
+
+    hboard_sd.DetectPending = false;
+    hboard_sd.DebounceStartMs = 0U;
+    hboard_sd.Debouncing = false;
+    return status;
+}
+
+/**
+  * @brief  根据当前 SD_CD 电平刷新插拔状态。
+  * @note   本函数不实现去抖且不得从 EXTI ISR 调用。正常热插拔路径应通过
+  *         Board_SD_Process() 在检测电平稳定后间接调用。
+  */
+Board_StatusTypeDef Board_SD_Refresh(void)
+{
+    return board_sd_status(SDCard_Refresh(&hboard_sd.Device));
+}
+
+/**
+  * @brief  推进一次 Board SD 热插拔事件处理。
+  * @param  event 接收本次稳定状态变化。
+  * @retval BOARD_OK 本次处理正常完成。
+  * @retval BOARD_SD_ERROR 参数无效、Board SD 未初始化或刷新失败。
+  * @note   每次取到新的检测通知都会重新开始 30 ms 消抖。只有连续稳定满
+  *         30 ms 后才刷新 Device；状态未变化时仍返回 EVENT_NONE。
+  */
+Board_StatusTypeDef Board_SD_Process(Board_SD_EventTypeDef *event)
+{
+    Board_SD_StateTypeDef previous_state;
+    Board_SD_StateTypeDef current_state;
+    Board_StatusTypeDef status;
+
+    if (event == NULL)
+    {
+        return BOARD_SD_ERROR;
+    }
+
+    *event = BOARD_SD_EVENT_NONE;
+
+    if (!hboard_sd.IRQRegistered)
+    {
+        return BOARD_SD_ERROR;
+    }
+
+    /**************** FreeRTOS 移植替换区：开始 *******************************
+     * Storage Task 使用 ulTaskNotifyTake() 等待通知，并在最后一次通知后等待
+     * 30 ms；超时后继续执行下面的 Board_SD_Refresh()。
+     *************************************************************************/
+    if (board_sd_take_detect_event(&hboard_sd))
+    {
+        hboard_sd.DebounceStartMs = HAL_GetTick();
+        hboard_sd.Debouncing = true;
+        return BOARD_OK;
+    }
+
+    if (!hboard_sd.Debouncing)
+    {
+        return BOARD_OK;
+    }
+
+    if ((uint32_t)(HAL_GetTick() - hboard_sd.DebounceStartMs) < BOARD_SD_DEBOUNCE_MS)
+    {
+        return BOARD_OK;
+    }
+
+    hboard_sd.Debouncing = false;
+    /**************** FreeRTOS 移植替换区：结束 *******************************/
+
+    previous_state = Board_SD_GetState();
+    status = Board_SD_Refresh();
+
+    if (status != BOARD_OK)
+    {
+        return status;
+    }
+
+    current_state = Board_SD_GetState();
+
+    if ((previous_state != current_state) &&
+        (current_state == BOARD_SD_STATE_READY))
+    {
+        *event = BOARD_SD_EVENT_INSERTED;
+    }
+    else if ((previous_state != current_state) &&
+             (current_state == BOARD_SD_STATE_NOT_PRESENT))
+    {
+        *event = BOARD_SD_EVENT_REMOVED;
+    }
+
+    return BOARD_OK;
+}
+
 /** @brief 返回 Board SD 当前持续状态。 */
 Board_SD_StateTypeDef Board_SD_GetState(void)
 {
-    return board_sd_state(SDCard_GetState(&hboard_sd));
+    return board_sd_state(SDCard_GetState(&hboard_sd.Device));
 }
 
 /**
@@ -136,7 +303,7 @@ Board_SD_StateTypeDef Board_SD_GetState(void)
   */
 bool Board_SD_IsPresent(void)
 {
-    return SDCard_IsPresent(&hboard_sd);
+    return SDCard_IsPresent(&hboard_sd.Device);
 }
 
 /**
@@ -154,7 +321,7 @@ Board_StatusTypeDef Board_SD_GetInfo(Board_SD_InfoTypeDef *info)
         return BOARD_SD_ERROR;
     }
 
-    if (SDCard_GetInfo(&hboard_sd, &device_info) != SDCARD_OK)
+    if (SDCard_GetInfo(&hboard_sd.Device, &device_info) != SDCARD_OK)
     {
         return BOARD_SD_ERROR;
     }
@@ -178,8 +345,8 @@ Board_StatusTypeDef Board_SD_GetDiagnostics(Board_SD_DiagnosticsTypeDef *diagnos
         return BOARD_SD_ERROR;
     }
 
-    diagnostics->DeviceError = (uint32_t)hboard_sd.ErrorCode;
-    diagnostics->PortStatus = (uint32_t)hboard_sd.LastPortStatus;
+    diagnostics->DeviceError = (uint32_t)hboard_sd.Device.ErrorCode;
+    diagnostics->PortStatus = (uint32_t)hboard_sd.Device.LastPortStatus;
     return BOARD_OK;
 }
 
@@ -188,7 +355,7 @@ Board_StatusTypeDef Board_SD_ReadBlocks(uint8_t *data,
                                         uint32_t start_block,
                                         uint32_t block_count)
 {
-    return board_sd_status(SDCard_ReadBlocks(&hboard_sd,
+    return board_sd_status(SDCard_ReadBlocks(&hboard_sd.Device,
                                               data,
                                               start_block,
                                               block_count));
@@ -199,7 +366,7 @@ Board_StatusTypeDef Board_SD_WriteBlocks(const uint8_t *data,
                                          uint32_t start_block,
                                          uint32_t block_count)
 {
-    return board_sd_status(SDCard_WriteBlocks(&hboard_sd,
+    return board_sd_status(SDCard_WriteBlocks(&hboard_sd.Device,
                                                data,
                                                start_block,
                                                block_count));
@@ -208,5 +375,5 @@ Board_StatusTypeDef Board_SD_WriteBlocks(const uint8_t *data,
 /** @brief 等待本板 SD 卡完成内部操作。 */
 Board_StatusTypeDef Board_SD_Sync(void)
 {
-    return board_sd_status(SDCard_Sync(&hboard_sd));
+    return board_sd_status(SDCard_Sync(&hboard_sd.Device));
 }

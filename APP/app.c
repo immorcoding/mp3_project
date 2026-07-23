@@ -25,7 +25,8 @@
 #include "BSP/Board/sd/board_sd.h"
 #include "System/Log/log.h"
 /* Variables ------------------------------------------------------------------*/
-
+/** @brief 标记 Board SD 模块是否已成功初始化，可否进入周期处理。 */
+static bool app_sd_initialized;
 
 /* Private functions ---------------------------------------------------------*/
 /**
@@ -40,6 +41,8 @@ static void app_init_sd(void)
 {
     Board_StatusTypeDef status = Board_SD_Init();
     Board_SD_StateTypeDef state = Board_SD_GetState();
+
+    app_sd_initialized = false;
 
     if (status != BOARD_OK)
     {
@@ -62,6 +65,8 @@ static void app_init_sd(void)
 
         return;
     }
+
+    app_sd_initialized = true;
 
     if (state == BOARD_SD_STATE_NOT_PRESENT)
     {
@@ -95,6 +100,63 @@ static void app_init_sd(void)
                              "SD",
                              "card ready but information is unavailable");
         }
+    }
+}
+
+/**
+  * @brief  推进 SD 卡热插拔消抖并处理一次稳定状态变化。
+  * @note   Board SD 只报告介质事件；日志和未来的文件系统挂载策略由应用层负责。
+  * @retval None
+  */
+static void app_process_sd(void)
+{
+    Board_SD_EventTypeDef event;
+
+    if (!app_sd_initialized)
+    {
+        return;
+    }
+
+    if (Board_SD_Process(&event) != BOARD_OK)
+    {
+        Board_SD_DiagnosticsTypeDef diagnostics;
+
+        if (Board_SD_GetDiagnostics(&diagnostics) == BOARD_OK)
+        {
+            (void)LOG_Printf(LOG_LEVEL_ERROR,
+                             "SD",
+                             "hotplug refresh failed: device=%lu, port=%lu",
+                             (unsigned long)diagnostics.DeviceError,
+                             (unsigned long)diagnostics.PortStatus);
+        }
+
+        return;
+    }
+
+    if (event == BOARD_SD_EVENT_INSERTED)
+    {
+        Board_SD_InfoTypeDef info;
+
+        if (Board_SD_GetInfo(&info) == BOARD_OK)
+        {
+            uint32_t capacity_mb = (uint32_t)(info.CapacityBytes / (1024ULL * 1024ULL));
+
+            (void)LOG_Printf(LOG_LEVEL_INFO,
+                             "SD",
+                             "card inserted: %lu MB, block size: %lu",
+                             (unsigned long)capacity_mb,
+                             (unsigned long)info.BlockSize);
+        }
+        else
+        {
+            (void)LOG_Printf(LOG_LEVEL_ERROR,
+                             "SD",
+                             "card inserted but information is unavailable");
+        }
+    }
+    else if (event == BOARD_SD_EVENT_REMOVED)
+    {
+        (void)LOG_Printf(LOG_LEVEL_INFO, "SD", "card removed");
     }
 }
 
@@ -151,6 +213,7 @@ void app_run(void)
      * 因此主循环调用频率越高，USB 空闲后队列排空得越及时。
      */
     (void)LOG_Process();
+    app_process_sd();
 
     /*
      * 无符号减法可以正确跨越 HAL_GetTick() 的 32 位自然回绕点；只要判断
@@ -160,11 +223,6 @@ void app_run(void)
     {
         last_led_toggle_ms = now_ms;
         HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-
-        if (Board_SD_Refresh() != BOARD_OK) // * 扫描 SD 卡是否插上，插上就初始化
-        {
-            /* 可读取诊断信息，但不要直接进入 Error_Handler。 */
-        }
     }
 }
 

@@ -5,6 +5,12 @@
 
 static PMIC_HandleTypeDef hpmic;
 
+/**
+  * @brief  通过 AXP2101 ALDO1 开启或关闭板级音频电源。
+  * @param  enabled true 表示开启，false 表示关闭。
+  * @retval BOARD_OK 电源状态设置成功。
+  * @retval BOARD_AUDIO_ERROR PMIC 寄存器访问失败。
+  */
 Board_StatusTypeDef Board_Audio_SetPower(bool enabled)
 {
     if (PMIC_SetALDO1Enabled(&hpmic, enabled) != PMIC_OK)
@@ -21,6 +27,12 @@ Board_StatusTypeDef Board_Audio_SetPower(bool enabled)
     return BOARD_OK;
 }
 
+/**
+  * @brief  通过 AXP2101 ALDO2 开启或关闭板级 LCD 电源。
+  * @param  enabled true 表示开启，false 表示关闭。
+  * @retval BOARD_OK 电源状态设置成功。
+  * @retval BOARD_LCD_ERROR PMIC 寄存器访问失败。
+  */
 Board_StatusTypeDef Board_LCD_SetPower(bool enabled)
 {
     if (PMIC_SetALDO2Enabled(&hpmic, enabled) != PMIC_OK)
@@ -37,6 +49,11 @@ Board_StatusTypeDef Board_LCD_SetPower(bool enabled)
     return BOARD_OK;
 }
 
+/**
+  * @brief  绑定本板 PMIC I2C Port 并初始化唯一的 AXP2101 Device 实例。
+  * @retval BOARD_OK AXP2101 识别及启动配置应用成功。
+  * @retval BOARD_PMIC_ERROR Port 绑定、总线准备、芯片识别或启动配置失败。
+  */
 Board_StatusTypeDef Board_PMIC_Init(void)
 {
     /*

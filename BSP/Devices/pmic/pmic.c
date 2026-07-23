@@ -323,6 +323,13 @@ static PMIC_StatusTypeDef pmic_set_ldo_enabled(PMIC_HandleTypeDef *hpmic,
     return PMIC_OK;
 }
 
+/**
+  * @brief  修改 AXP2101 ALDO1 输出使能位。
+  * @param  hpmic 已初始化且处于 READY 状态的 PMIC Handle。
+  * @param  enabled true 开启 ALDO1，false 关闭 ALDO1。
+  * @retval PMIC_OK 寄存器更新成功。
+  * @retval PMIC_ERROR Handle、状态或总线操作失败。
+  */
 PMIC_StatusTypeDef PMIC_SetALDO1Enabled(PMIC_HandleTypeDef *hpmic,
                                         bool enabled)
 {
@@ -331,6 +338,13 @@ PMIC_StatusTypeDef PMIC_SetALDO1Enabled(PMIC_HandleTypeDef *hpmic,
                                 enabled);
 }
 
+/**
+  * @brief  修改 AXP2101 ALDO2 输出使能位。
+  * @param  hpmic 已初始化且处于 READY 状态的 PMIC Handle。
+  * @param  enabled true 开启 ALDO2，false 关闭 ALDO2。
+  * @retval PMIC_OK 寄存器更新成功。
+  * @retval PMIC_ERROR Handle、状态或总线操作失败。
+  */
 PMIC_StatusTypeDef PMIC_SetALDO2Enabled(PMIC_HandleTypeDef *hpmic,
                                         bool enabled)
 {

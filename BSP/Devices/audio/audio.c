@@ -1,12 +1,25 @@
 #include "audio.h"
 #include <stdbool.h>
 
+/**
+  * @brief  清除 Audio Handle 中保存的最近一次错误诊断。
+  * @param  haudio Audio Device Handle。
+  * @retval None
+  */
 static void audio_clear_error(Audio_HandleTypeDef *haudio)
 {
     haudio->ErrorCode = AUDIO_ERROR_NONE;
     haudio->LastBusStatus = AUDIO_BUS_OK;
 }
 
+/**
+  * @brief  统一保存 Audio Device 失败阶段、总线状态和后续生命周期状态。
+  * @param  haudio Audio Device Handle。
+  * @param  error Device 层失败原因。
+  * @param  bus_status 归一化后的底层总线状态。
+  * @param  next_state 失败后写入 Handle 的生命周期状态。
+  * @retval AUDIO_ERROR
+  */
 static Audio_StatusTypeDef audio_fail(Audio_HandleTypeDef *haudio,
                                       Audio_ErrorTypeDef error,
                                       Audio_BusStatusTypeDef bus_status,
@@ -18,6 +31,14 @@ static Audio_StatusTypeDef audio_fail(Audio_HandleTypeDef *haudio,
     return AUDIO_ERROR;
 }
 
+/**
+  * @brief  通过已绑定的 Audio Bus Adapter 同步发送 PCM 数据。
+  * @param  haudio Audio Device Handle。
+  * @param  data PCM 数据缓冲区。
+  * @param  size 待发送的 16 位数据数量。
+  * @retval AUDIO_OK 发送成功，Handle 返回 READY。
+  * @retval AUDIO_ERROR 参数、绑定、状态或底层发送失败。
+  */
 Audio_StatusTypeDef Audio_Transmit(Audio_HandleTypeDef *haudio,
                                     const uint16_t *data,
                                     uint16_t size)
@@ -74,6 +95,13 @@ Audio_StatusTypeDef Audio_Transmit(Audio_HandleTypeDef *haudio,
     return AUDIO_OK;
 }
 
+/**
+  * @brief  通过已绑定的静音 Adapter 设置音频静音状态。
+  * @param  haudio Audio Device Handle。
+  * @param  mute true 表示静音，false 表示解除静音。
+  * @retval AUDIO_OK 静音状态设置成功。
+  * @retval AUDIO_ERROR Handle、绑定、生命周期状态或静音操作无效。
+  */
 Audio_StatusTypeDef Audio_Mute(Audio_HandleTypeDef *haudio, bool mute)
 {
     if (haudio == NULL)
@@ -111,6 +139,12 @@ Audio_StatusTypeDef Audio_Mute(Audio_HandleTypeDef *haudio, bool mute)
     return mute_status;
 }
 
+/**
+  * @brief  校验 Audio Adapter 绑定、准备音频总线并以静音状态进入 READY。
+  * @param  haudio 已由 Port 安装 BusOps、BusContext 和 Mute 回调的 Handle。
+  * @retval AUDIO_OK 初始化成功。
+  * @retval AUDIO_ERROR Handle 无效、Port 未完整绑定、总线准备或静音失败。
+  */
 Audio_StatusTypeDef Audio_Init(Audio_HandleTypeDef *haudio)
 {
     // Initialize audio hardware

@@ -26,7 +26,11 @@ BSP/Devices/sd/
 
 BSP/Board/sd/
   board_sd.h                    Board Interface used by APP/future Storage
-  board_sd.c                    private Device instance and Board status mapping
+  board_sd.c                    private Device, hotplug debounce and event mapping
+
+BSP/Board/
+  board_irq.h                   logical Board IRQ registration Interface
+  board_irq.c                   HAL GPIO pin to logical IRQ source dispatch
 
 Core/Inc/sdmmc.h
 Core/Src/sdmmc.c                CubeMX-owned hsd1 and HAL MSP init/deinit
@@ -43,8 +47,9 @@ knowledge remains local to `sd_port.c`.
 app_init()
   -> Board_Init()                         mandatory board devices
   -> Board_SD_Init()                      optional removable medium
-     -> SDCard_Port_Bind(&hboard_sd)      install Ops + Context
-     -> SDCard_Init(&hboard_sd)
+     -> Board_IRQ_Register(SD_DETECT)      bind the slot's private ISR callback
+     -> SDCard_Port_Bind(&hboard_sd.Device)
+     -> SDCard_Init(&hboard_sd.Device)
         -> IsPresent(PC7)
         -> Port.Init(&hsd1)
            -> HAL_SD_Init(&hsd1)
@@ -87,6 +92,35 @@ Board_SD_ReadBlocks()
 
 Write follows the same chain. Waiting for `TRANSFER` is especially important after
 writes because the card may still be programming internal flash after the data phase.
+
+### 3.4 Hotplug in the current bare-metal scheduler
+
+```text
+EXTI9_5_IRQHandler()
+  -> HAL_GPIO_EXTI_IRQHandler(SD_CD_Pin)
+  -> HAL_GPIO_EXTI_Callback()
+  -> Board_IRQ_DispatchFromISR(SD_DETECT)
+  -> Board SD callback
+     -> set binary NotificationPending
+
+app_run()
+  -> Board_SD_Process()
+     -> atomically take and clear NotificationPending
+     -> restart the 30 ms debounce delay
+     -> return until the last notification has remained quiet for 30 ms
+     -> Board_SD_Refresh()
+     -> report INSERTED or REMOVED only when persistent state changes
+```
+
+The notification is binary because contact-bounce edge counts have no domain
+meaning. Its take-and-clear operation uses a very short interrupt critical section;
+`volatile` alone would not prevent an ISR update from being overwritten by normal
+context.
+
+The marked FreeRTOS replacement regions in `board_sd.c` are the scheduling seam.
+After RTOS integration, the ISR should publish with `vTaskNotifyGiveFromISR()`, and
+the future Storage Task should restart a 30 ms notification timeout whenever another
+edge arrives. The Device refresh and Board event conversion remain unchanged.
 
 ## 4. Status, state and diagnostics
 
@@ -133,8 +167,9 @@ ERROR
 ```
 
 `SDCard_Refresh()` does not debounce the mechanical card-detect contact and must not
-be called from an EXTI ISR. An interrupt may only record an event. APP or a future
-Storage task must wait for a stable level before calling Refresh.
+be called from an EXTI ISR. `Board_SD_Process()` currently owns the bare-metal
+restartable debounce and invokes Refresh only after the detect input has remained
+quiet for 30 ms.
 
 ## 6. Why the Device Module is not a HAL wrapper
 
@@ -196,8 +231,8 @@ belong to a future `System/Storage` Module.
 
 1. Transfers use blocking HAL polling; DMA and interrupt modes are not implemented.
 2. No D-Cache maintenance or DMA-accessible-buffer policy exists yet.
-3. `SDCard_Refresh()` is available, but APP does not yet implement debounce or EXTI
-   event processing.
+3. Hotplug scheduling currently depends on frequent calls to `Board_SD_Process()`;
+   a future Storage Task should replace this polling with RTOS task notification.
 4. There is no RTOS mutex; callers must not access one Device handle concurrently.
 5. Transfer and synchronization timeouts are fixed inside the Device Implementation.
 6. The SDMMC initialization values in the SD Card Port must be kept consistent with

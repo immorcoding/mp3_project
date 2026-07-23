@@ -282,6 +282,13 @@ static const SDCard_PortOpsTypeDef sdcard_port_ops = {
 };
 
 /* Exported functions --------------------------------------------------------*/
+/**
+  * @brief  将本板 SDMMC1 Adapter 的 Ops 和 hsd1 Context 安装到 Device Handle。
+  * @param  hsdcard 待绑定的 SD Card Device Handle。
+  * @retval SDCARD_OK 绑定成功。
+  * @retval SDCARD_ERROR hsdcard 为空。
+  * @note   本函数只完成依赖装配，不初始化 SDMMC1，也不访问 SD 卡。
+  */
 SDCard_StatusTypeDef SDCard_Port_Bind(SDCard_HandleTypeDef *hsdcard)
 {
     if (hsdcard == NULL)

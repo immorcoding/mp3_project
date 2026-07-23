@@ -101,7 +101,16 @@ Example dialogue:
 
 ## Board SD
 
-The **Board SD** is the single removable SD slot fitted to this PCB, represented by a private Device handle in `BSP/Board/sd/board_sd.c` and connected to SDMMC1 with an active-low card-detect signal on PC7.
+The **Board SD** is the single removable SD slot fitted to this PCB, represented by
+a private Device handle in `BSP/Board/sd/board_sd.c` and connected to SDMMC1 with an
+active-low card-detect signal on PC7.
+
+Its current bare-metal hotplug path uses a binary ISR notification and restartable
+30 ms deferred debounce. `Board_SD_Process()` converts only stable Device state
+changes into `INSERTED` or `REMOVED`; mechanical edge counts are not part of the
+domain. Marked regions in `board_sd.c` form the future RTOS scheduling seam, where
+FreeRTOS task notification can replace polling without changing Device refresh or
+Board event semantics.
 
 Related terms: **SD Card Device**, **SD Card Port**, **Power application**.
 

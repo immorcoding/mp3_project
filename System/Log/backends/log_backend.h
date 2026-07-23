@@ -12,6 +12,7 @@
   *          Device 类型或 ST USB 状态码。以后替换或增加 UART、RTT、文件
   *          等后端时，应保持日志核心的队列和格式化实现不变。
   *          本头文件属于日志模块内部接口，不是 Application 层 API。
+  *          Bind 只成对安装 Backend Ops、Context 和时间源，不发送日志。
   ******************************************************************************
   */
 
@@ -22,15 +23,6 @@
 #include "System/Log/log_internal.h"
 
 /* Internal functions --------------------------------------------------------*/
-/**
-  * @brief  为默认日志实例绑定本工程选定的输出后端和毫秒时间源。
-  * @param  hlog 待绑定的内部日志 Handle。
-  * @note   当前 Implementation 选择 USB CDC Backend 和 HAL_GetTick()。
-  *         本函数只装配函数表/上下文并复位 Backend 私有状态，不枚举 USB，
-  *         也不发送数据。
-  * @retval LOG_OK    绑定成功。
-  * @retval LOG_ERROR hlog 为空。
-  */
 LOG_StatusTypeDef LOG_Backend_BindDefault(LOG_HandleTypeDef *hlog);
 
 #endif /* LOG_BACKEND_H */

@@ -7,6 +7,11 @@
   *          Board 层私有持有 SD Card Device 句柄，调用者只能通过本接口
   *          初始化、查询状态、复制信息和读写逻辑块，不能直接访问 hsd1
   *          或修改 Device 运行状态。
+  *
+  *          无卡是正常状态：初始化可以返回 BOARD_OK，同时状态为
+  *          BOARD_SD_STATE_NOT_PRESENT。EXTI cb 只记录检测边沿；
+  *          Board_SD_Process() 在普通执行上下文完成非阻塞消抖和状态刷新。
+  *          Board_SD_Refresh() 保留为不带消抖的显式刷新入口，不得从 ISR 调用。
   ******************************************************************************
   */
 
@@ -33,6 +38,16 @@ typedef enum
 } Board_SD_StateTypeDef;
 
 /**
+  * @brief Board SD 向上层报告的热插拔状态变化。
+  */
+typedef enum
+{
+    BOARD_SD_EVENT_NONE = 0U, /**< 本次处理没有产生稳定的介质状态变化。 */
+    BOARD_SD_EVENT_INSERTED,  /**< SD 卡经过消抖后进入 READY。 */
+    BOARD_SD_EVENT_REMOVED    /**< SD 卡经过消抖后进入 NOT_PRESENT。 */
+} Board_SD_EventTypeDef;
+
+/**
   * @brief Board 层公开的 SD 卡逻辑块信息快照。
   */
 typedef struct
@@ -56,45 +71,20 @@ typedef struct
 } Board_SD_DiagnosticsTypeDef;
 
 /* Exported functions --------------------------------------------------------*/
-/**
-  * @brief  绑定本板 SDMMC Adapter 并初始化当前介质。
-  * @retval BOARD_OK 状态同步成功；无卡时状态为 NOT_PRESENT。
-  * @retval BOARD_SD_ERROR Adapter 绑定或介质初始化失败。
-  */
 Board_StatusTypeDef Board_SD_Init(void);
-
-/** @brief 反初始化本板 SD 卡槽。 */
 Board_StatusTypeDef Board_SD_DeInit(void);
-
-/**
-  * @brief  根据稳定后的 SD_CD 电平刷新插拔状态。
-  * @note   不提供去抖，且不得在 EXTI ISR 中调用。
-  */
 Board_StatusTypeDef Board_SD_Refresh(void);
-
-/** @brief 获取本板 SD 卡槽的持续状态。 */
+Board_StatusTypeDef Board_SD_Process(Board_SD_EventTypeDef *event);
 Board_SD_StateTypeDef Board_SD_GetState(void);
-
-/** @brief 读取当前低有效 SD_CD 电平。 */
 bool Board_SD_IsPresent(void);
-
-/** @brief 将当前介质信息复制到调用者提供的对象。 */
 Board_StatusTypeDef Board_SD_GetInfo(Board_SD_InfoTypeDef *info);
-
-/** @brief 复制最近一次 Device 和 Port 错误快照。 */
 Board_StatusTypeDef Board_SD_GetDiagnostics(Board_SD_DiagnosticsTypeDef *diagnostics);
-
-/** @brief 从本板 SD 卡读取连续逻辑块。 */
 Board_StatusTypeDef Board_SD_ReadBlocks(uint8_t *data,
                                         uint32_t start_block,
                                         uint32_t block_count);
-
-/** @brief 向本板 SD 卡写入连续逻辑块。 */
 Board_StatusTypeDef Board_SD_WriteBlocks(const uint8_t *data,
                                          uint32_t start_block,
                                          uint32_t block_count);
-
-/** @brief 等待本板 SD 卡完成内部操作。 */
 Board_StatusTypeDef Board_SD_Sync(void);
 
 #endif /* BOARD_SD_H */

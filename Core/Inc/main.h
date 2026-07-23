@@ -62,8 +62,10 @@ void Error_Handler(void);
 #define PCM_XSMT_GPIO_Port GPIOB
 #define SD_CD_Pin GPIO_PIN_7
 #define SD_CD_GPIO_Port GPIOC
+#define SD_CD_EXTI_IRQn EXTI9_5_IRQn
 #define AXP2101_IRQ_Pin GPIO_PIN_5
 #define AXP2101_IRQ_GPIO_Port GPIOB
+#define AXP2101_IRQ_EXTI_IRQn EXTI9_5_IRQn
 #define AXP2101_SDA_Pin GPIO_PIN_6
 #define AXP2101_SDA_GPIO_Port GPIOB
 #define AXP2101_SCL_Pin GPIO_PIN_7

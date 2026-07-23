@@ -168,6 +168,13 @@ static const PMIC_BusOpsTypeDef pmic_i2c_port_ops = {
 };
 
 /* Exported functions --------------------------------------------------------*/
+/**
+  * @brief  将当前 I2C Adapter 的 Ops 和 Context 安装到 PMIC Device Handle。
+  * @param  hpmic 待绑定的 PMIC Device Handle。
+  * @retval PMIC_OK 绑定成功。
+  * @retval PMIC_ERROR hpmic 为空。
+  * @note   本函数只完成依赖装配，不初始化总线，也不产生 I2C 波形。
+  */
 PMIC_StatusTypeDef PMIC_I2C_Port_Bind(PMIC_HandleTypeDef *hpmic)
 {
     if (hpmic == NULL)

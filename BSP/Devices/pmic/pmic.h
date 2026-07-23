@@ -151,31 +151,11 @@ typedef struct
 } PMIC_HandleTypeDef;
 
 /* Exported functions --------------------------------------------------------*/
-/**
-  * @brief  初始化 PMIC、校验 AXP2101 芯片 ID，并按需应用启动配置。
-  * @param  hpmic PMIC 句柄指针。
-  * @retval PMIC_OK    初始化成功，State 被设置为 PMIC_STATE_READY。
-  * @retval PMIC_ERROR 初始化失败，错误上下文保存在句柄中。
-  */
 PMIC_StatusTypeDef PMIC_Init(PMIC_HandleTypeDef *hpmic);
 
-/**
-  * @brief  开启或关闭 AXP2101 的 ALDO1 输出。
-  * @param  hpmic PMIC 句柄指针。
-  * @param  enabled true 表示开启 ALDO1，false 表示关闭 ALDO1。
-  * @retval PMIC_OK 操作成功。
-  * @retval PMIC_ERROR 句柄/状态非法或总线读写失败，详细原因保存在句柄中。
-  */
 PMIC_StatusTypeDef PMIC_SetALDO1Enabled(PMIC_HandleTypeDef *hpmic,
                                         bool enabled);
 
-/**
-  * @brief  开启或关闭 AXP2101 的 ALDO2 输出。
-  * @param  hpmic PMIC 句柄指针。
-  * @param  enabled true 表示开启 ALDO2，false 表示关闭 ALDO2。
-  * @retval PMIC_OK 操作成功。
-  * @retval PMIC_ERROR 句柄/状态非法或总线读写失败，详细原因保存在句柄中。
-  */
 PMIC_StatusTypeDef PMIC_SetALDO2Enabled(PMIC_HandleTypeDef *hpmic,
                                         bool enabled);
 
