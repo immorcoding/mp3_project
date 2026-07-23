@@ -72,11 +72,32 @@ A **deferred startup log** is a formatted message generated during initializatio
 
 `LOG_Process()` later submits it after enumeration, DTR assertion, the port-open settle interval, and CDC transmit-idle checks all pass. Enqueue success does not mean the PC has already displayed the message.
 
-Related terms: **Power application**.
+Related terms: **Power application**, **USB CDC log backend**.
 
 Example dialogue:
 
 > “Keep the deferred startup logs queued until VSCode opens the COM port.”
+
+## USB CDC log backend
+
+The **USB CDC log backend** is the logging Adapter in
+`System/Log/backends/log_backend_usb_cdc.c`. It translates the ST USB Device
+status returned by `CDC_Transmit_FS()` into `LOG_OutputStatusTypeDef`, owns the
+persistent asynchronous transmit buffer, adds optional ANSI color, and preserves
+the last submitted message for debugger inspection.
+
+The logging Core crosses the Backend seam only through `LOG_OutputOpsTypeDef`.
+USB enumeration, DTR, `TxState`, and ST status values remain private to this
+Adapter. `LOG_Backend_BindDefault()` is the internal composition point that binds
+the current USB CDC Adapter and HAL millisecond time source to the private default
+log handle.
+
+Related terms: **Deferred startup log**, **Normalized transport status**.
+
+Example dialogue:
+
+> “Map USBD_BUSY to LOG_OUTPUT_BUSY inside the USB CDC log backend without
+> exposing ST USB types to log.c.”
 
 ## Board SD
 

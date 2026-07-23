@@ -1,4 +1,6 @@
 #include "BSP/Board/board.h"
+#include "BSP/Devices/pmic/pmic.h"
+#include "BSP/Devices/pmic/port/pmic_i2c_port.h"
 #include "System/Log/log.h"
 
 static PMIC_HandleTypeDef hpmic;

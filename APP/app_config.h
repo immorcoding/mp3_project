@@ -15,14 +15,6 @@
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
 
-/** @brief 1U：启用系统日志；0U：LOG_Init()/LOG_Printf() 返回 LOG_ERROR。 */
-#define APP_LOG_ENABLE          1U
 
-/** @brief 1U：应用启动阶段初始化板级 PMIC。 */
-#define APP_PMIC_ENABLE         1U
-/** @brief LCD 功能预留开关；当前尚未接入应用流程。 */
-#define APP_LCD_ENABLE          0U
-/** @brief SD Card 功能预留开关；当前尚未接入应用流程。 */
-#define APP_SD_CARD_ENABLE      0U
 
 #endif /* APP_CONFIG_H */

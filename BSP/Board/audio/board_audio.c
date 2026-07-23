@@ -1,4 +1,6 @@
 #include "BSP/Board/board.h"
+#include "BSP/Devices/audio/audio.h"
+#include "BSP/Devices/audio/port/audio_port.h"
 #include "System/Log/log.h"
 
 static Audio_HandleTypeDef haudio;

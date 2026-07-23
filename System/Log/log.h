@@ -5,11 +5,11 @@
   *
   * @details
   *          本文件仅公开默认日志实例的初始化、等级控制、消息生产接口和
-  *          主循环处理接口。日志 Handle、输出操作表及端口上下文均为模块
+  *          主循环处理接口。日志 Handle、输出操作表及 Backend 上下文均为模块
   *          内部实现，应用层不能直接改写绑定关系。
   *
   *          LOG_Write()/LOG_Printf() 是“生产者”：只把完整消息复制进固定
-  *          深度 RAM 队列。LOG_Process() 是“消费者”：每次最多向端口提交
+  *          深度 RAM 队列。LOG_Process() 是“消费者”：每次最多向 Backend 提交
   *          队首一条消息。因此 LOG_OK 通常表示消息已入队或被过滤，不表示
   *          PC 终端已经显示该消息。
   *
@@ -58,25 +58,25 @@ typedef enum
 } LOG_StateTypeDef;
 
 /**
-  * @brief 日志队列及输出端口的运行统计快照。
+  * @brief 日志队列及输出 Backend 的运行统计快照。
   * @note  各字段为自 LOG_Init() 起的累计值；再次初始化会全部清零。
   */
 typedef struct
 {
     uint32_t PendingCount;     /*!< 当前等待发送的日志数。 */
     uint32_t EnqueuedCount;    /*!< 累计进入 RAM 队列的日志数。 */
-    uint32_t SentCount;        /*!< 累计被端口接受的日志数，不等同于主机已显示。 */
+    uint32_t SentCount;        /*!< 累计被 Backend 接受的日志数，不等同于主机已显示。 */
     uint32_t DroppedCount;     /*!< 队列溢出或发送错误造成的丢弃数。 */
     uint32_t OutputErrorCount; /*!< 输出 Adapter 提交错误累计数。 */
 } LOG_StatsTypeDef;
 
 /* Exported functions --------------------------------------------------------*/
 /**
-  * @brief  初始化默认日志实例并绑定内部输出端口与时间源。
-  * @note   重复调用会清空待发送队列、统计值和端口调试快照，尚未发送的
+  * @brief  初始化默认日志实例并绑定内部输出 Backend 与时间源。
+  * @note   重复调用会清空待发送队列、统计值和 Backend 调试快照，尚未发送的
   *         日志会丢失。
   * @retval LOG_OK    初始化成功。
-  * @retval LOG_ERROR 默认配置、端口绑定或接口校验失败。
+  * @retval LOG_ERROR 默认配置、Backend 绑定或 Interface 校验失败。
   */
 LOG_StatusTypeDef LOG_Init(void);
 

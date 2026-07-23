@@ -4,7 +4,7 @@
   * @brief   系统日志模块内部类型定义。
   *
   * @details
-  *          本文件只供 log.c 与日志 Port 使用。应用层和普通功能模块应仅
+  *          本文件只供 log.c 与日志 Backend 使用。应用层和普通功能模块应仅
   *          包含 log.h，不应依赖本文件中的 Handle、Ops 或 Context 类型。
   *          这些类型共同构成一个小型 C 语言对象模型：Handle 保存状态，
   *          Ops 保存可替换行为，Context 是传给该行为的具体对象指针。
@@ -56,7 +56,7 @@ typedef struct
 
 /**
   * @brief 已绑定的输出后端及其对象上下文。
-  * @note  Ops 与 Context 必须由同一个 Port 成对安装，不能分别替换。
+  * @note  Ops 与 Context 必须由同一个 Backend 成对安装，不能分别替换。
   */
 typedef struct
 {
@@ -73,7 +73,7 @@ typedef uint32_t (*LOG_GetTimeMsFuncTypeDef)(void *Context);
 
 /**
   * @brief 已绑定的时间源及其对象上下文。
-  * @note  时间源和输出端口具有独立 Context，避免强迫两个无关后端共享
+  * @note  时间源和输出 Backend 具有独立 Context，避免强迫两个无关实现共享
   *        同一种对象类型。
   */
 typedef struct
@@ -105,7 +105,7 @@ typedef struct
     uint16_t Tail;                                /*!< 下一条新消息写入索引。 */
     uint16_t Count;                               /*!< 当前待发送消息数。 */
     uint32_t EnqueuedCount;                       /*!< 累计入队消息数。 */
-    uint32_t SentCount;                           /*!< 累计被端口接受的消息数。 */
+    uint32_t SentCount;                           /*!< 累计被 Backend 接受的消息数。 */
     uint32_t DroppedCount;                        /*!< 队列溢出或发送错误丢弃数。 */
     uint32_t OutputErrorCount;                    /*!< Adapter 提交错误累计数。 */
 } LOG_QueueTypeDef;

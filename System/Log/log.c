@@ -5,7 +5,7 @@
   *
   * @details
   *          本文件保存唯一的默认日志对象，完成等级过滤、时间戳读取、文本
-  *          格式化、固定深度环形队列管理以及非阻塞端口调度。Handle 与端口
+  *          格式化、固定深度环形队列管理以及非阻塞后端调度。Handle 与后端
   *          绑定均不对应用层公开。
   *
   *          生产路径：LOG_Printf -> LOG_Write -> LOG_QueuePush。
@@ -14,8 +14,6 @@
   *          保留；当前实现不提供并发保护，只允许主循环单上下文调用。
   ******************************************************************************
   */
-#include "APP/app_config.h"
-
 /* Includes ------------------------------------------------------------------*/
 #include "System/Log/log.h"
 
@@ -26,7 +24,7 @@
 
 #include "System/Log/log_config.h"
 #include "System/Log/log_internal.h"
-#include "System/Log/port/log_port.h"
+#include "System/Log/backends/log_backend.h"
 
 /* Private variables ---------------------------------------------------------*/
 /** @brief 默认日志实例，仅允许本文件中的公开函数访问。 */
@@ -148,17 +146,13 @@ static void LOG_QueuePop(LOG_HandleTypeDef *hlog)
 /* Exported functions --------------------------------------------------------*/
 /**
   * @brief  初始化默认日志实例。
-  * @note   本函数设置默认过滤等级，并通过 LOG_Port_Bind() 绑定 USB 输出
-  *         和毫秒时间源。重复调用会清空待发送队列、统计和端口快照。
+  * @note   本函数设置默认过滤等级，并通过 LOG_Backend_BindDefault() 绑定 USB 输出
+  *         和毫秒时间源。重复调用会清空待发送队列、统计和 Backend 快照。
   * @retval LOG_OK    初始化成功，日志状态变为 LOG_STATE_READY。
-  * @retval LOG_ERROR 默认配置或端口接口无效，日志状态变为 LOG_STATE_ERROR。
+  * @retval LOG_ERROR 默认配置或 Backend Interface 无效，日志状态变为 LOG_STATE_ERROR。
   */
 LOG_StatusTypeDef LOG_Init(void)
 {
-#if APP_LOG_ENABLE == 0
-    return LOG_ERROR;
-#endif /* APP_LOG_ENABLE == 0 */
-
     /* 一次性复位全部绑定、队列槽位、索引和统计计数器。 */
     (void)memset(&hlog_default, 0, sizeof(hlog_default));
     hlog_default.State = LOG_STATE_RESET;
@@ -171,8 +165,8 @@ LOG_StatusTypeDef LOG_Init(void)
         return LOG_ERROR;
     }
 
-    /* Port 统一装配 Output 与 TimeSource，应用层不能直接改写这些指针。 */
-    if (LOG_Port_Bind(&hlog_default) != LOG_OK)
+    /* Backend 模块统一装配 Output 与 TimeSource，应用层不能直接改写这些指针。 */
+    if (LOG_Backend_BindDefault(&hlog_default) != LOG_OK)
     {
         hlog_default.State = LOG_STATE_ERROR;
         return LOG_ERROR;
@@ -259,7 +253,7 @@ LOG_StatusTypeDef LOG_Process(void)
     if (output_status == LOG_OUTPUT_OK)
     {
         /*
-         * OK 表示端口接受了异步发送请求。USB 可能仍在实际传输，因此
+         * OK 表示 Backend 接受了异步发送请求。USB 可能仍在实际传输，因此
          * SentCount 不是“PC 终端已经显示”的严格确认计数。
          */
         hlog_default.Queue.SentCount++;
@@ -352,10 +346,6 @@ LOG_StatusTypeDef LOG_Printf(LOG_LevelTypeDef MessageLevel,
                              const char *Format,
                              ...)
 {
-#if APP_LOG_ENABLE == 0
-    return LOG_ERROR;
-#endif /* APP_LOG_ENABLE == 0 */
-
     char buffer[LOG_FORMAT_BUFFER_SIZE];
     uint32_t timestamp_ms;
     size_t used_length;

@@ -1,12 +1,6 @@
 #ifndef BOARD_H
 #define BOARD_H
 
-#include "BSP/Devices/audio/audio.h"
-#include "BSP/Devices/audio/port/audio_port.h"
-
-#include "BSP/Devices/pmic/pmic.h"
-#include "BSP/Devices/pmic/port/pmic_i2c_port.h"
-
 /**
   * @brief Board 层函数使用的统一状态码。
   * @note  具体设备的持续状态和详细错误由各 Board Module 单独提供。

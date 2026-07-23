@@ -1,9 +1,9 @@
 # 系统日志与 USB CDC 输出技术文档
 
-> 适用工程：`power`  
-> 当前输出后端：USB Full-Speed CDC ACM（虚拟串口）  
-> 当前时间源：`HAL_GetTick()`  
-> 文档状态：与 2026-07-20 的工程代码同步
+> 适用工程：`version0.1.1`
+> 当前输出后端：USB Full-Speed CDC ACM（虚拟串口）
+> 当前时间源：`HAL_GetTick()`
+> 文档状态：与 2026-07-23 的工程代码同步
 
 ## 1. 设计目标
 
@@ -18,11 +18,12 @@
 
 | 文件 | 职责 | 不负责的内容 |
 | --- | --- | --- |
-| `System/Log/log.h` | Application 可见的日志公共 API、等级、状态和统计类型。 | USB 类型、Handle 装配、端口缓冲区。 |
+| `System/Log/log.h` | Application 可见的日志公共 Interface、等级、状态和统计类型。 | USB 类型、Handle 装配、Backend 缓冲区。 |
 | `System/Log/log.c` | 格式化、等级过滤、固定深度环形队列和消费调度。 | 判断 DTR、操作 USB CDC。 |
 | `System/Log/log_internal.h` | 内部 Handle、Ops、Context、消息槽位和队列定义。 | Application 公共接口。 |
 | `System/Log/log_config.h` | RAM 容量、默认等级、ANSI 颜色等编译期配置。 | 运行期状态。 |
-| `System/Log/port/log_port.c/.h` | 绑定 USB 输出和 HAL 时间源，维护 USB 异步发送缓冲区。 | 日志格式和队列溢出策略。 |
+| `System/Log/backends/log_backend.h` | 日志核心使用的默认 Backend 绑定 Interface。 | USB Device 类型和原始状态码。 |
+| `System/Log/backends/log_backend_usb_cdc.c` | USB CDC Adapter、ST 状态转换、HAL 时间源和异步发送缓冲区。 | 日志队列、等级过滤和溢出策略。 |
 | `USB_DEVICE/App/usbd_cdc_if.c/.h` 的 `USER CODE` 区 | 提供 CDC 发送函数、DTR 状态和 `CDC_IsReady_FS()`。 | 日志等级、格式和队列。 |
 
 `USB_DEVICE` 其余部分、`Middlewares/ST/STM32_USB_Device_Library` 和 `Drivers` 为 CubeMX/ST 管理代码。自维护改动必须留在 CubeMX 的 `USER CODE BEGIN/END` 区域。
@@ -37,10 +38,10 @@ Core/Src/main.c
        -> LOG_Init
             -> 清零 hlog_default
             -> 装载 LOG_DEFAULT_LEVEL
-            -> LOG_Port_Bind
-                 -> 清零 log_port_context
-                 -> 绑定 log_port_output_ops + log_port_context
-                 -> 绑定 LOG_PortGetTimeMs + NULL Context
+            -> LOG_Backend_BindDefault
+                 -> 清零 log_usb_cdc_backend_context
+                 -> 绑定 log_usb_cdc_backend_ops + log_usb_cdc_backend_context
+                 -> 绑定 LOG_TimeSourceHal_GetTimeMs + NULL Context
        -> LOG_Printf("LOG", ...)
             -> 格式化并入队
        -> Board_PMIC_Init
@@ -58,7 +59,7 @@ Core/Src/main.c
 
 | 接口 | 能否重复调用 | 作用 |
 | --- | --- | --- |
-| `LOG_Init()` | 可以，但会清空队列和统计 | 初始化唯一默认实例并绑定端口。 |
+| `LOG_Init()` | 可以，但会清空队列和统计 | 初始化唯一默认实例并绑定 Backend。 |
 | `LOG_SetLevel()` | 可以 | 修改后续新消息的过滤阈值，不清理已入队消息。 |
 | `LOG_GetLevel()` | 可以 | 读取当前过滤等级。 |
 | `LOG_GetState()` | 可以 | 读取 RESET、READY 或 ERROR。 |
@@ -67,7 +68,7 @@ Core/Src/main.c
 | `LOG_Process()` | 必须高频重复调用 | 非阻塞处理队首一条消息。 |
 | `LOG_GetStats()` | 可以 | 取得统计快照，不清零计数器。 |
 
-当前实现不允许应用直接取得 `LOG_HandleTypeDef`、Output Ops、TimeSource 或 Port Context。初始化和装配只通过 `LOG_Init()` 完成，避免外部代码任意替换内部依赖。
+当前实现不允许应用直接取得 `LOG_HandleTypeDef`、Output Ops、TimeSource 或 Backend Context。初始化和装配只通过 `LOG_Init()` 完成，避免外部代码任意替换内部依赖。
 
 ## 5. 格式化与等级过滤
 
@@ -103,22 +104,36 @@ I (28) PMIC: initialization successful\r\n
 
 队列满时采用“丢最旧、留最新”策略：先移动 Head 并增加 `DroppedCount`，再把新消息写入 Tail。这样更倾向保留最新故障现场，但重要的早期日志仍可能在持续拥塞时被覆盖。
 
-## 7. LOG_Process 的四种端口结果
+## 7. LOG_Process 的四种 Backend 结果
 
 `LOG_Process()` 一次最多查看并处理队首一条：
 
-| 端口结果 | 队首处理 | 返回值 | 含义 |
+| Backend 结果 | 队首处理 | 返回值 | 含义 |
 | --- | --- | --- | --- |
-| `LOG_OUTPUT_OK` | 出队，`SentCount++` | `LOG_OK` | 端口接受了异步发送请求。 |
+| `LOG_OUTPUT_OK` | 出队，`SentCount++` | `LOG_OK` | Backend 接受了异步发送请求。 |
 | `LOG_OUTPUT_BUSY` | 保留 | `LOG_OK` | 发送端暂时忙，下次重试。 |
 | `LOG_OUTPUT_NOT_READY` | 保留 | `LOG_OK` | USB/终端尚未就绪，下次重试。 |
 | `LOG_OUTPUT_ERROR` | 丢弃，错误计数增加 | `LOG_ERROR` | 不可恢复的本次提交错误；避免坏消息永久堵塞队列。 |
 
-`SentCount` 表示消息已被端口/USB Device 库接受，不是主机应用已经显示该消息的端到端确认。
+`SentCount` 表示消息已被 Backend/USB Device 库接受，不是主机应用已经显示该消息的端到端确认。
 
-## 8. Port Context 与异步缓冲区
+`LOG_BackendUsbCdc_Result()` 是 USB CDC Adapter 内部的状态转换函数。它的
+Interface 使用 `int32_t` 接收原始值，Implementation 内部再按
+`USBD_StatusTypeDef` 解释：
 
-`LOG_PortContextTypeDef` 包含：
+| ST USB Device 原始状态 | 日志统一状态 |
+| --- | --- |
+| `USBD_OK` | `LOG_OUTPUT_OK` |
+| `USBD_BUSY` | `LOG_OUTPUT_BUSY` |
+| `USBD_EMEM`、`USBD_FAIL`、未知值 | `LOG_OUTPUT_ERROR` |
+
+USB 尚未枚举、DTR 未置位、稳定期未结束或 `TxState` 非空闲时，并不会调用
+`CDC_Transmit_FS()`，而是由 Adapter 直接返回 `LOG_OUTPUT_NOT_READY`。因此
+ST 原始状态不会跨越 Backend Seam，`log.c` 只处理统一状态。
+
+## 8. USB CDC Backend Context 与异步缓冲区
+
+`LOG_UsbCdcBackendContextTypeDef` 包含：
 
 | 字段 | 作用 |
 | --- | --- |
@@ -127,9 +142,9 @@ I (28) PMIC: initialization successful\r\n
 | `WriteCount` | USB 接受发送请求的累计次数。 |
 | `TxBuffer` | `颜色前缀 + 日志正文 + 颜色复位` 的持久异步发送缓冲区。 |
 
-核心 Queue 和 Port `TxBuffer` 不能简单共用：ST CDC 的 `USBD_CDC_SetTxBuffer()` 只登记指针，不复制数据。直到 IN 端点传输完成，原缓冲区都必须保持有效且不能被覆盖。当前端口只有一个 `TxBuffer`，因此 `CDC_IsReady_FS()` 必须确认上一笔发送已完成，才允许拼接下一条。
+核心 Queue 和 Backend `TxBuffer` 不能简单共用：ST CDC 的 `USBD_CDC_SetTxBuffer()` 只登记指针，不复制数据。直到 IN 端点传输完成，原缓冲区都必须保持有效且不能被覆盖。当前 Backend 只有一个 `TxBuffer`，因此 `CDC_IsReady_FS()` 必须确认上一笔发送已完成，才允许拼接下一条。
 
-ANSI 颜色仅在 Port 层添加：ERROR 红、WARN 黄、INFO 绿、DEBUG 青。队列正文和 `LastMessage` 不包含颜色转义序列。若终端不支持颜色，可将 `LOG_PORT_ANSI_COLOR_ENABLE` 设为 `0U`。
+ANSI 颜色仅在 USB CDC Backend 添加：ERROR 红、WARN 黄、INFO 绿、DEBUG 青。队列正文和 `LastMessage` 不包含颜色转义序列。若终端不支持颜色，可将 `LOG_BACKEND_USB_CDC_ANSI_COLOR_ENABLE` 设为 `0U`。
 
 ## 9. 为什么只完成 USB 枚举还不够
 
@@ -181,9 +196,9 @@ USBD_CDC_HandleTypeDef
 
 - `PendingCount`：当前队列积压；
 - `EnqueuedCount`：累计入队；
-- `SentCount`：累计被端口接受；
-- `DroppedCount`：队列溢出或端口永久错误造成的丢弃；
-- `OutputErrorCount`：端口永久提交错误。
+- `SentCount`：累计被 Backend 接受；
+- `DroppedCount`：队列溢出或 Backend 永久错误造成的丢弃；
+- `OutputErrorCount`：Backend 永久提交错误。
 
 典型判断：
 
@@ -194,12 +209,12 @@ USBD_CDC_HandleTypeDef
 | 一条后全部卡住 | `TxState` 长期非 0 | USB IN 完成中断、USB IRQ、发送缓冲区生命周期。 |
 | OutputError 增加 | 永久提交错误 | 参数长度、CDC Handle、USB Device 状态。 |
 
-`log_port_context` 是 `static`，普通 C 代码无法外部引用，但带调试信息的构建通常仍可在调试器按符号/地址查看其 `LastMessage` 和计数。
+`log_usb_cdc_backend_context` 是 `static`，普通 C 代码无法外部引用，但带调试信息的构建通常仍可在调试器按符号/地址查看其 `LastMessage` 和计数。
 
 ## 13. 当前限制
 
 1. 只有一个全局默认日志实例；
-2. 环形队列和 Port 都没有锁，仅支持单执行上下文；
+2. 环形队列和 Backend 都没有锁，仅支持单执行上下文；
 3. `LOG_Process()` 依赖主循环持续运行，进入关闭中断的 `Error_Handler()` 后队列不会继续排空；
 4. 队列满时只记录丢弃数，不为 ERROR 等级预留专用槽位；
 5. USB CDC 没有主机端“已显示”确认；
@@ -208,7 +223,7 @@ USBD_CDC_HandleTypeDef
 
 ## 14. 后续扩展原则
 
-- 增加 UART/SWO 输出：在 Port 层实现新的非阻塞 `TryWrite`，不要修改日志格式和队列；
+- 增加 UART/SWO 输出：新增相应 Backend Adapter，实现统一的非阻塞 `TryWrite`，不要修改日志格式和队列；
 - 增加 QSPI/SD 历史日志：建议作为独立持久化 Sink，并明确写放大、掉电一致性和刷盘策略；
 - 增加 RTOS：为核心队列增加临界区或消息队列，禁止直接从多个任务无锁访问；
 - USB 同时需要 CDC 日志和 MSC 文件传输：设备必须改为 CDC+MSC Composite，端点数量、描述符、类路由和缓冲区要统一设计；单独把类切为 MSC 会失去 CDC 日志；
@@ -233,8 +248,7 @@ USBD_CDC_HandleTypeDef
 - 日志核心：[`../System/Log/log.c`](../System/Log/log.c)
 - 内部对象模型：[`../System/Log/log_internal.h`](../System/Log/log_internal.h)
 - 编译期配置：[`../System/Log/log_config.h`](../System/Log/log_config.h)
-- USB 日志 Port：[`../System/Log/port/log_port.c`](../System/Log/port/log_port.c)
+- USB CDC 日志 Backend：[`../System/Log/backends/log_backend_usb_cdc.c`](../System/Log/backends/log_backend_usb_cdc.c)
 - CDC 用户接口：[`../USB_DEVICE/App/usbd_cdc_if.c`](../USB_DEVICE/App/usbd_cdc_if.c)
 - ST CDC Handle：[`../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h`](../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h)
 - ST CDC 状态实现：[`../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c`](../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c)
-
