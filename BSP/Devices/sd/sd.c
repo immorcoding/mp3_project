@@ -63,26 +63,24 @@ static void sdcard_clear_error(SDCard_HandleTypeDef *hsdcard)
 {
     hsdcard->ErrorCode = SDCARD_ERROR_NONE;
     hsdcard->LastPortStatus = SDCARD_PORT_OK;
-    hsdcard->PortErrorDetail = 0u;
 }
 
 /**
-  * @brief  集中保存一次失败的完整诊断上下文。
+  * @brief  集中保存一次失败的稳定语义诊断。
   * @param  hsdcard SD 卡设备句柄。
   * @param  error Device 层错误阶段。
-  * @param  port_result Port 的统一状态和原始错误码。
+  * @param  port_status Port 返回的归一化状态。
   * @param  next_state 失败后应进入的持续状态。
   * @retval SDCARD_ERROR
   */
 static SDCard_StatusTypeDef sdcard_fail(
     SDCard_HandleTypeDef *hsdcard,
     SDCard_ErrorTypeDef error,
-    SDCard_PortResultTypeDef port_result,
+    SDCard_PortStatusTypeDef port_status,
     SDCard_StateTypeDef next_state)
 {
     hsdcard->ErrorCode = error;
-    hsdcard->LastPortStatus = port_result.Status;
-    hsdcard->PortErrorDetail = port_result.Detail;
+    hsdcard->LastPortStatus = port_status;
     hsdcard->State = next_state;
 
     if (next_state == SDCARD_STATE_NOT_PRESENT)
@@ -91,21 +89,6 @@ static SDCard_StatusTypeDef sdcard_fail(
     }
 
     return SDCARD_ERROR;
-}
-
-/**
-  * @brief  构造不涉及底层调用的 Device 内部错误结果。
-  * @retval SDCard_PortResultTypeDef Status 为 SDCARD_PORT_ERROR，Detail 为 0。
-  */
-static SDCard_PortResultTypeDef sdcard_internal_error_result(void)
-{
-    SDCard_PortResultTypeDef result =
-    {
-        .Status = SDCARD_PORT_ERROR,
-        .Detail = 0u
-    };
-
-    return result;
 }
 
 /**
@@ -159,16 +142,16 @@ static SDCard_StatusTypeDef sdcard_wait_ready(
     SDCard_HandleTypeDef *hsdcard,
     SDCard_ErrorTypeDef error)
 {
-    SDCard_PortResultTypeDef result =
+    SDCard_PortStatusTypeDef port_status =
         hsdcard->PortOps->Sync(hsdcard->PortContext,
                                SDCARD_SYNC_TIMEOUT_MS);
 
-    if (result.Status != SDCARD_PORT_OK)
+    if (port_status != SDCARD_PORT_OK)
     {
         return sdcard_fail(hsdcard,
                            error,
-                           result,
-                           sdcard_state_after_port_failure(result.Status));
+                           port_status,
+                           sdcard_state_after_port_failure(port_status));
     }
 
     return SDCARD_OK;
@@ -186,7 +169,7 @@ static SDCard_StatusTypeDef sdcard_wait_ready(
   */
 SDCard_StatusTypeDef SDCard_Init(SDCard_HandleTypeDef *hsdcard)
 {
-    SDCard_PortResultTypeDef result;
+    SDCard_PortStatusTypeDef port_status;
 
     if (hsdcard == NULL)
     {
@@ -198,7 +181,6 @@ SDCard_StatusTypeDef SDCard_Init(SDCard_HandleTypeDef *hsdcard)
         hsdcard->State = SDCARD_STATE_ERROR;
         hsdcard->ErrorCode = SDCARD_ERROR_PORT_NOT_BOUND;
         hsdcard->LastPortStatus = SDCARD_PORT_ERROR;
-        hsdcard->PortErrorDetail = 0u;
         return SDCARD_ERROR;
     }
 
@@ -206,7 +188,7 @@ SDCard_StatusTypeDef SDCard_Init(SDCard_HandleTypeDef *hsdcard)
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_NOT_READY,
-                           sdcard_internal_error_result(),
+                           SDCARD_PORT_OK,
                            SDCARD_STATE_BUSY);
     }
 
@@ -220,14 +202,14 @@ SDCard_StatusTypeDef SDCard_Init(SDCard_HandleTypeDef *hsdcard)
          */
         if (hsdcard->IsPortInitialized)
         {
-            result = hsdcard->PortOps->DeInit(hsdcard->PortContext);
+            port_status = hsdcard->PortOps->DeInit(hsdcard->PortContext);
             hsdcard->IsPortInitialized = false;
 
-            if (result.Status != SDCARD_PORT_OK)
+            if (port_status != SDCARD_PORT_OK)
             {
                 return sdcard_fail(hsdcard,
                                    SDCARD_ERROR_PORT_DEINIT,
-                                   result,
+                                   port_status,
                                    SDCARD_STATE_NOT_PRESENT);
             }
         }
@@ -248,14 +230,14 @@ SDCard_StatusTypeDef SDCard_Init(SDCard_HandleTypeDef *hsdcard)
     /* 从 ERROR 等状态重试时，先清理可能残留的底层资源。 */
     if (hsdcard->IsPortInitialized)
     {
-        result = hsdcard->PortOps->DeInit(hsdcard->PortContext);
+        port_status = hsdcard->PortOps->DeInit(hsdcard->PortContext);
         hsdcard->IsPortInitialized = false;
 
-        if (result.Status != SDCARD_PORT_OK)
+        if (port_status != SDCARD_PORT_OK)
         {
             return sdcard_fail(hsdcard,
                                SDCARD_ERROR_PORT_DEINIT,
-                               result,
+                               port_status,
                                SDCARD_STATE_ERROR);
         }
     }
@@ -263,21 +245,21 @@ SDCard_StatusTypeDef SDCard_Init(SDCard_HandleTypeDef *hsdcard)
     sdcard_invalidate_info(hsdcard);
     hsdcard->State = SDCARD_STATE_BUSY;
 
-    result = hsdcard->PortOps->Init(hsdcard->PortContext);
-    if (result.Status != SDCARD_PORT_OK)
+    port_status = hsdcard->PortOps->Init(hsdcard->PortContext);
+    if (port_status != SDCARD_PORT_OK)
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_PORT_INIT,
-                           result,
-                           (result.Status == SDCARD_PORT_NOT_PRESENT)
+                           port_status,
+                           (port_status == SDCARD_PORT_NOT_PRESENT)
                                ? SDCARD_STATE_NOT_PRESENT
                                : SDCARD_STATE_ERROR);
     }
     hsdcard->IsPortInitialized = true;
 
-    result = hsdcard->PortOps->GetInfo(hsdcard->PortContext,
-                                       &hsdcard->Info);
-    if (result.Status != SDCARD_PORT_OK)
+    port_status = hsdcard->PortOps->GetInfo(hsdcard->PortContext,
+                                            &hsdcard->Info);
+    if (port_status != SDCARD_PORT_OK)
     {
         /* GetInfo 失败后主动释放已初始化的 Port，避免留下半初始化状态。 */
         (void)hsdcard->PortOps->DeInit(hsdcard->PortContext);
@@ -286,8 +268,8 @@ SDCard_StatusTypeDef SDCard_Init(SDCard_HandleTypeDef *hsdcard)
 
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_PORT_GET_INFO,
-                           result,
-                           (result.Status == SDCARD_PORT_NOT_PRESENT)
+                           port_status,
+                           (port_status == SDCARD_PORT_NOT_PRESENT)
                                ? SDCARD_STATE_NOT_PRESENT
                                : SDCARD_STATE_ERROR);
     }
@@ -301,7 +283,7 @@ SDCard_StatusTypeDef SDCard_Init(SDCard_HandleTypeDef *hsdcard)
 
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_INVALID_INFO,
-                           sdcard_internal_error_result(),
+                           SDCARD_PORT_OK,
                            SDCARD_STATE_ERROR);
     }
 
@@ -316,7 +298,7 @@ SDCard_StatusTypeDef SDCard_Init(SDCard_HandleTypeDef *hsdcard)
   */
 SDCard_StatusTypeDef SDCard_DeInit(SDCard_HandleTypeDef *hsdcard)
 {
-    SDCard_PortResultTypeDef result;
+    SDCard_PortStatusTypeDef port_status;
 
     if (hsdcard == NULL)
     {
@@ -327,6 +309,7 @@ SDCard_StatusTypeDef SDCard_DeInit(SDCard_HandleTypeDef *hsdcard)
     {
         hsdcard->State = SDCARD_STATE_ERROR;
         hsdcard->ErrorCode = SDCARD_ERROR_PORT_NOT_BOUND;
+        hsdcard->LastPortStatus = SDCARD_PORT_ERROR;
         return SDCARD_ERROR;
     }
 
@@ -334,7 +317,7 @@ SDCard_StatusTypeDef SDCard_DeInit(SDCard_HandleTypeDef *hsdcard)
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_NOT_READY,
-                           sdcard_internal_error_result(),
+                           SDCARD_PORT_OK,
                            SDCARD_STATE_BUSY);
     }
 
@@ -342,12 +325,12 @@ SDCard_StatusTypeDef SDCard_DeInit(SDCard_HandleTypeDef *hsdcard)
 
     if (hsdcard->IsPortInitialized)
     {
-        result = hsdcard->PortOps->DeInit(hsdcard->PortContext);
-        if (result.Status != SDCARD_PORT_OK)
+        port_status = hsdcard->PortOps->DeInit(hsdcard->PortContext);
+        if (port_status != SDCARD_PORT_OK)
         {
             return sdcard_fail(hsdcard,
                                SDCARD_ERROR_PORT_DEINIT,
-                               result,
+                               port_status,
                                SDCARD_STATE_ERROR);
         }
     }
@@ -369,25 +352,33 @@ SDCard_StatusTypeDef SDCard_DeInit(SDCard_HandleTypeDef *hsdcard)
   */
 SDCard_StatusTypeDef SDCard_Refresh(SDCard_HandleTypeDef *hsdcard)
 {
-    SDCard_PortResultTypeDef result;
+    SDCard_PortStatusTypeDef port_status;
 
-    if ((hsdcard == NULL) || (!sdcard_is_port_bound(hsdcard)))
+    if (hsdcard == NULL)
     {
         return SDCARD_ERROR;
+    }
+
+    if (!sdcard_is_port_bound(hsdcard))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_PORT_NOT_BOUND,
+                           SDCARD_PORT_ERROR,
+                           SDCARD_STATE_ERROR);
     }
 
     if (!SDCard_IsPresent(hsdcard))
     {
         if (hsdcard->IsPortInitialized)
         {
-            result = hsdcard->PortOps->DeInit(hsdcard->PortContext);
+            port_status = hsdcard->PortOps->DeInit(hsdcard->PortContext);
             hsdcard->IsPortInitialized = false;
 
-            if (result.Status != SDCARD_PORT_OK)
+            if (port_status != SDCARD_PORT_OK)
             {
                 return sdcard_fail(hsdcard,
                                    SDCARD_ERROR_PORT_DEINIT,
-                                   result,
+                                   port_status,
                                    SDCARD_STATE_NOT_PRESENT);
             }
         }
@@ -411,7 +402,10 @@ SDCard_StatusTypeDef SDCard_Refresh(SDCard_HandleTypeDef *hsdcard)
 
     if (hsdcard->State == SDCARD_STATE_BUSY)
     {
-        return SDCARD_ERROR;
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_NOT_READY,
+                           SDCARD_PORT_OK,
+                           SDCARD_STATE_BUSY);
     }
 
     return SDCARD_OK;
@@ -427,18 +421,26 @@ SDCard_StatusTypeDef SDCard_ReadBlocks(SDCard_HandleTypeDef *hsdcard,
                                        uint32_t start_block,
                                        uint32_t block_count)
 {
-    SDCard_PortResultTypeDef result;
+    SDCard_PortStatusTypeDef port_status;
 
-    if ((hsdcard == NULL) || (data == NULL) || (block_count == 0u))
+    if (hsdcard == NULL)
     {
         return SDCARD_ERROR;
+    }
+
+    if ((data == NULL) || (block_count == 0u))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_INVALID_PARAM,
+                           SDCARD_PORT_OK,
+                           hsdcard->State);
     }
 
     if (!sdcard_is_port_bound(hsdcard))
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_PORT_NOT_BOUND,
-                           sdcard_internal_error_result(),
+                           SDCARD_PORT_ERROR,
                            SDCARD_STATE_ERROR);
     }
 
@@ -446,7 +448,7 @@ SDCard_StatusTypeDef SDCard_ReadBlocks(SDCard_HandleTypeDef *hsdcard,
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_NOT_PRESENT,
-                           (SDCard_PortResultTypeDef){SDCARD_PORT_NOT_PRESENT, 0u},
+                           SDCARD_PORT_NOT_PRESENT,
                            SDCARD_STATE_NOT_PRESENT);
     }
 
@@ -454,7 +456,7 @@ SDCard_StatusTypeDef SDCard_ReadBlocks(SDCard_HandleTypeDef *hsdcard,
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_NOT_READY,
-                           sdcard_internal_error_result(),
+                           SDCARD_PORT_OK,
                            hsdcard->State);
     }
 
@@ -462,24 +464,24 @@ SDCard_StatusTypeDef SDCard_ReadBlocks(SDCard_HandleTypeDef *hsdcard,
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_OUT_OF_RANGE,
-                           sdcard_internal_error_result(),
+                           SDCARD_PORT_OK,
                            SDCARD_STATE_READY);
     }
 
     sdcard_clear_error(hsdcard);
     hsdcard->State = SDCARD_STATE_BUSY;
 
-    result = hsdcard->PortOps->ReadBlocks(hsdcard->PortContext,
-                                          data,
-                                          start_block,
-                                          block_count,
-                                          SDCARD_TRANSFER_TIMEOUT_MS);
-    if (result.Status != SDCARD_PORT_OK)
+    port_status = hsdcard->PortOps->ReadBlocks(hsdcard->PortContext,
+                                               data,
+                                               start_block,
+                                               block_count,
+                                               SDCARD_TRANSFER_TIMEOUT_MS);
+    if (port_status != SDCARD_PORT_OK)
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_PORT_READ,
-                           result,
-                           sdcard_state_after_port_failure(result.Status));
+                           port_status,
+                           sdcard_state_after_port_failure(port_status));
     }
 
     if (sdcard_wait_ready(hsdcard, SDCARD_ERROR_PORT_SYNC) != SDCARD_OK)
@@ -501,18 +503,26 @@ SDCard_StatusTypeDef SDCard_WriteBlocks(SDCard_HandleTypeDef *hsdcard,
                                         uint32_t start_block,
                                         uint32_t block_count)
 {
-    SDCard_PortResultTypeDef result;
+    SDCard_PortStatusTypeDef port_status;
 
-    if ((hsdcard == NULL) || (data == NULL) || (block_count == 0u))
+    if (hsdcard == NULL)
     {
         return SDCARD_ERROR;
+    }
+
+    if ((data == NULL) || (block_count == 0u))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_INVALID_PARAM,
+                           SDCARD_PORT_OK,
+                           hsdcard->State);
     }
 
     if (!sdcard_is_port_bound(hsdcard))
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_PORT_NOT_BOUND,
-                           sdcard_internal_error_result(),
+                           SDCARD_PORT_ERROR,
                            SDCARD_STATE_ERROR);
     }
 
@@ -520,7 +530,7 @@ SDCard_StatusTypeDef SDCard_WriteBlocks(SDCard_HandleTypeDef *hsdcard,
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_NOT_PRESENT,
-                           (SDCard_PortResultTypeDef){SDCARD_PORT_NOT_PRESENT, 0u},
+                           SDCARD_PORT_NOT_PRESENT,
                            SDCARD_STATE_NOT_PRESENT);
     }
 
@@ -528,7 +538,7 @@ SDCard_StatusTypeDef SDCard_WriteBlocks(SDCard_HandleTypeDef *hsdcard,
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_NOT_READY,
-                           sdcard_internal_error_result(),
+                           SDCARD_PORT_OK,
                            hsdcard->State);
     }
 
@@ -536,24 +546,24 @@ SDCard_StatusTypeDef SDCard_WriteBlocks(SDCard_HandleTypeDef *hsdcard,
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_OUT_OF_RANGE,
-                           sdcard_internal_error_result(),
+                           SDCARD_PORT_OK,
                            SDCARD_STATE_READY);
     }
 
     sdcard_clear_error(hsdcard);
     hsdcard->State = SDCARD_STATE_BUSY;
 
-    result = hsdcard->PortOps->WriteBlocks(hsdcard->PortContext,
-                                           data,
-                                           start_block,
-                                           block_count,
-                                           SDCARD_TRANSFER_TIMEOUT_MS);
-    if (result.Status != SDCARD_PORT_OK)
+    port_status = hsdcard->PortOps->WriteBlocks(hsdcard->PortContext,
+                                                data,
+                                                start_block,
+                                                block_count,
+                                                SDCARD_TRANSFER_TIMEOUT_MS);
+    if (port_status != SDCARD_PORT_OK)
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_PORT_WRITE,
-                           result,
-                           sdcard_state_after_port_failure(result.Status));
+                           port_status,
+                           sdcard_state_after_port_failure(port_status));
     }
 
     if (sdcard_wait_ready(hsdcard, SDCARD_ERROR_PORT_SYNC) != SDCARD_OK)
@@ -580,7 +590,7 @@ SDCard_StatusTypeDef SDCard_Sync(SDCard_HandleTypeDef *hsdcard)
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_PORT_NOT_BOUND,
-                           sdcard_internal_error_result(),
+                           SDCARD_PORT_ERROR,
                            SDCARD_STATE_ERROR);
     }
 
@@ -588,7 +598,7 @@ SDCard_StatusTypeDef SDCard_Sync(SDCard_HandleTypeDef *hsdcard)
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_NOT_PRESENT,
-                           (SDCard_PortResultTypeDef){SDCARD_PORT_NOT_PRESENT, 0u},
+                           SDCARD_PORT_NOT_PRESENT,
                            SDCARD_STATE_NOT_PRESENT);
     }
 
@@ -596,7 +606,7 @@ SDCard_StatusTypeDef SDCard_Sync(SDCard_HandleTypeDef *hsdcard)
     {
         return sdcard_fail(hsdcard,
                            SDCARD_ERROR_NOT_READY,
-                           sdcard_internal_error_result(),
+                           SDCARD_PORT_OK,
                            hsdcard->State);
     }
 

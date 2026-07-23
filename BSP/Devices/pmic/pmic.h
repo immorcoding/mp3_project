@@ -56,22 +56,11 @@ typedef enum
 } PMIC_BusStatusTypeDef;
 
 /**
-  * @brief 总线操作的统一返回结果。
-  * @details Status 供 PMIC 驱动跨后端判断控制流；Detail 原样保存当前后端
-  *          的诊断位。更换后端后 Detail 的数值定义允许改变。
-  */
-typedef struct
-{
-    PMIC_BusStatusTypeDef Status; /**< 归一化后的总线状态。 */
-    uint32_t Detail;              /**< 底层原始错误码，供调试器和日志定位。 */
-} PMIC_BusResultTypeDef;
-
-/**
   * @brief  准备 PMIC 底层总线的函数类型。
   * @param  context BusContext 指向的底层总线实例。
-  * @retval PMIC_BusResultTypeDef 归一化状态和底层错误细节。
+  * @retval PMIC_BusStatusTypeDef 归一化后的总线状态。
   */
-typedef PMIC_BusResultTypeDef (*PMIC_BusPrepareFunc)(void *context);
+typedef PMIC_BusStatusTypeDef (*PMIC_BusPrepareFunc)(void *context);
 
 /**
   * @brief  读取 PMIC 8 位寄存器的函数类型。
@@ -80,9 +69,9 @@ typedef PMIC_BusResultTypeDef (*PMIC_BusPrepareFunc)(void *context);
   * @param  reg 起始寄存器地址。
   * @param  data 接收缓冲区。
   * @param  size 待读取字节数。
-  * @retval PMIC_BusResultTypeDef 归一化状态和底层错误细节。
+  * @retval PMIC_BusStatusTypeDef 归一化后的总线状态。
   */
-typedef PMIC_BusResultTypeDef (*PMIC_BusMemReadFunc)(
+typedef PMIC_BusStatusTypeDef (*PMIC_BusMemReadFunc)(
     void *context,
     uint8_t device_address_7bit,
     uint8_t reg,
@@ -96,9 +85,9 @@ typedef PMIC_BusResultTypeDef (*PMIC_BusMemReadFunc)(
   * @param  reg 起始寄存器地址。
   * @param  data 待发送缓冲区。
   * @param  size 待写入字节数。
-  * @retval PMIC_BusResultTypeDef 归一化状态和底层错误细节。
+  * @retval PMIC_BusStatusTypeDef 归一化后的总线状态。
   */
-typedef PMIC_BusResultTypeDef (*PMIC_BusMemWriteFunc)(
+typedef PMIC_BusStatusTypeDef (*PMIC_BusMemWriteFunc)(
     void *context,
     uint8_t device_address_7bit,
     uint8_t reg,
@@ -135,19 +124,21 @@ typedef enum
   */
 typedef enum
 {
-    PMIC_ERROR_NONE = 0u,     /**< 无错误。 */
-    PMIC_ERROR_INVALID_PARAM, /**< 句柄、操作表、上下文或地址非法。 */
-    PMIC_ERROR_BUS_PREPARE,   /**< 底层总线准备失败。 */
-    PMIC_ERROR_BUS_READ,      /**< 寄存器读取失败。 */
-    PMIC_ERROR_BUS_WRITE,     /**< 寄存器写入失败。 */
-    PMIC_ERROR_WRONG_CHIP_ID  /**< 读取成功，但芯片 ID 与 AXP2101 不符。 */
+    PMIC_ERROR_NONE = 0u,      /**< 无错误。 */
+    PMIC_ERROR_INVALID_PARAM,  /**< 句柄、地址或配置参数非法。 */
+    PMIC_ERROR_PORT_NOT_BOUND, /**< Bus Ops 或 Bus Context 尚未绑定。 */
+    PMIC_ERROR_NOT_READY,      /**< 当前生命周期状态不允许执行该操作。 */
+    PMIC_ERROR_BUS_PREPARE,    /**< 底层总线准备失败。 */
+    PMIC_ERROR_BUS_READ,       /**< 寄存器读取失败。 */
+    PMIC_ERROR_BUS_WRITE,      /**< 寄存器写入失败。 */
+    PMIC_ERROR_WRONG_CHIP_ID   /**< 读取成功，但芯片 ID 与 AXP2101 不符。 */
 } PMIC_ErrorTypeDef;
 
 /**
   * @brief PMIC 设备实例句柄。
   * @note  BusOps 和 BusContext 采用组合与依赖注入方式，使 PMIC 驱动可复用
   *        于软件 I2C、HAL I2C 或测试总线。前四个字段是依赖/配置，后四个
-  *        字段是运行状态和最近一次失败的诊断快照。
+  *        字段是运行状态和最近一次失败的稳定语义诊断。
   */
 typedef struct
 {
@@ -157,8 +148,8 @@ typedef struct
     uint8_t ApplyBootConfig;          /**< 是否在识别芯片后应用启动配置；由 Init 装载默认值。 */
     volatile PMIC_StateTypeDef State; /**< 当前驱动状态。 */
     volatile PMIC_ErrorTypeDef ErrorCode; /**< 最近一次 PMIC 层错误。 */
+    volatile PMIC_BusStatusTypeDef LastBusStatus; /**< 最近一次失败对应的归一化总线状态。 */
     uint8_t LastFailedRegister;       /**< 最近一次总线失败对应的寄存器地址。 */
-    uint32_t BusErrorDetail;          /**< 最近一次底层原始错误码；解释方式取决于 Port 后端。 */
 } PMIC_HandleTypeDef;
 
 /* Exported functions --------------------------------------------------------*/

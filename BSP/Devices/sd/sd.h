@@ -80,15 +80,6 @@ typedef enum
 } SDCard_PortStatusTypeDef;
 
 /**
-  * @brief Port 操作的归一化返回结果。
-  */
-typedef struct
-{
-    SDCard_PortStatusTypeDef Status; /**< 供 Device 控制流程使用的统一状态。 */
-    uint32_t Detail;                 /**< Adapter 保存的底层原始错误码。 */
-} SDCard_PortResultTypeDef;
-
-/**
   * @brief 经过归一化的 SD 卡块设备信息。
   */
 typedef struct
@@ -104,18 +95,18 @@ typedef struct
 typedef bool (*SDCard_PortIsPresentFunc)(const void *context);
 
 /** @brief 初始化底层控制器和介质的 Port 函数类型。 */
-typedef SDCard_PortResultTypeDef (*SDCard_PortInitFunc)(void *context);
+typedef SDCard_PortStatusTypeDef (*SDCard_PortInitFunc)(void *context);
 
 /** @brief 反初始化底层控制器的 Port 函数类型。 */
-typedef SDCard_PortResultTypeDef (*SDCard_PortDeInitFunc)(void *context);
+typedef SDCard_PortStatusTypeDef (*SDCard_PortDeInitFunc)(void *context);
 
 /** @brief 获取归一化介质信息的 Port 函数类型。 */
-typedef SDCard_PortResultTypeDef (*SDCard_PortGetInfoFunc)(
+typedef SDCard_PortStatusTypeDef (*SDCard_PortGetInfoFunc)(
     void *context,
     SDCard_InfoTypeDef *info);
 
 /** @brief 从连续逻辑块读取数据的 Port 函数类型。 */
-typedef SDCard_PortResultTypeDef (*SDCard_PortReadBlocksFunc)(
+typedef SDCard_PortStatusTypeDef (*SDCard_PortReadBlocksFunc)(
     void *context,
     uint8_t *data,
     uint32_t start_block,
@@ -123,7 +114,7 @@ typedef SDCard_PortResultTypeDef (*SDCard_PortReadBlocksFunc)(
     uint32_t timeout_ms);
 
 /** @brief 向连续逻辑块写入数据的 Port 函数类型。 */
-typedef SDCard_PortResultTypeDef (*SDCard_PortWriteBlocksFunc)(
+typedef SDCard_PortStatusTypeDef (*SDCard_PortWriteBlocksFunc)(
     void *context,
     const uint8_t *data,
     uint32_t start_block,
@@ -131,7 +122,7 @@ typedef SDCard_PortResultTypeDef (*SDCard_PortWriteBlocksFunc)(
     uint32_t timeout_ms);
 
 /** @brief 等待介质完成内部操作并回到可传输状态的 Port 函数类型。 */
-typedef SDCard_PortResultTypeDef (*SDCard_PortSyncFunc)(
+typedef SDCard_PortStatusTypeDef (*SDCard_PortSyncFunc)(
     void *context,
     uint32_t timeout_ms);
 
@@ -162,7 +153,6 @@ typedef struct
     volatile SDCard_StateTypeDef State;   /**< 当前持续状态。 */
     volatile SDCard_ErrorTypeDef ErrorCode; /**< 最近一次 Device 层错误。 */
     volatile SDCard_PortStatusTypeDef LastPortStatus; /**< 最近一次 Port 状态。 */
-    uint32_t PortErrorDetail;             /**< 最近一次底层原始错误码。 */
     SDCard_InfoTypeDef Info;              /**< 初始化成功后缓存的介质信息。 */
     bool IsInfoValid;                     /**< Info 是否可向调用者复制。 */
     bool IsPortInitialized;               /**< Adapter 是否已经成功初始化。 */

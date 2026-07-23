@@ -9,7 +9,9 @@ Board_StatusTypeDef Board_Audio_Transmit(const uint16_t *data, uint16_t size)
     {
         (void)LOG_Printf(LOG_LEVEL_ERROR,
                          "AUDIO",
-                         "Audio transmit failed");
+                         "transmit failed: error=%d, bus=%d",
+                         (int)haudio.ErrorCode,
+                         (int)haudio.LastBusStatus);
 
         return BOARD_AUDIO_ERROR;
     }
@@ -23,7 +25,9 @@ Board_StatusTypeDef Board_Audio_SetMute(bool mute)
     {
         (void)LOG_Printf(LOG_LEVEL_ERROR,
                          "AUDIO",
-                         "Audio SetMute failed");
+                         "mute control failed: error=%d, bus=%d",
+                         (int)haudio.ErrorCode,
+                         (int)haudio.LastBusStatus);
 
         return BOARD_AUDIO_ERROR;
     }
@@ -31,19 +35,23 @@ Board_StatusTypeDef Board_Audio_SetMute(bool mute)
     return BOARD_OK;
 }
 
-Audio_StatusTypeDef Board_Audio_Init(void)
+Board_StatusTypeDef Board_Audio_Init(void)
 {
     if (Audio_Port_Bind(&haudio) != AUDIO_OK)
     {
         (void)LOG_Printf(LOG_LEVEL_ERROR, "AUDIO", "Audio port bind failed");
-        return AUDIO_ERROR;
+        return BOARD_AUDIO_ERROR;
     }
     Audio_StatusTypeDef audio_status = Audio_Init(&haudio);
     if (audio_status != AUDIO_OK)
     {
-        (void)LOG_Printf(LOG_LEVEL_ERROR, "AUDIO", "Audio initialization failed");
-        return AUDIO_ERROR;
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                         "AUDIO",
+                         "initialization failed: error=%d, bus=%d",
+                         (int)haudio.ErrorCode,
+                         (int)haudio.LastBusStatus);
+        return BOARD_AUDIO_ERROR;
     }
 
-    return AUDIO_OK;
+    return BOARD_OK;
 }

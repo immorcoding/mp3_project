@@ -46,14 +46,13 @@ typedef struct
 
 /**
   * @brief Board SD 最近一次错误的只读诊断快照。
-  * @note  DeviceError 和 PortStatus 是归一化值；PortErrorDetail 是当前 HAL
-  *        Adapter 的原始错误位，更换 Adapter 后其数值定义允许变化。
+  * @note  DeviceError 描述失败阶段，PortStatus 描述归一化后的底层结果。
+  *        HAL 原始错误仍保留在 Port 私有句柄中，不跨越 Adapter 边界。
   */
 typedef struct
 {
     uint32_t DeviceError;    /**< SD Card Device 层错误阶段。 */
     uint32_t PortStatus;     /**< 归一化后的 Port 状态。 */
-    uint32_t PortErrorDetail; /**< 底层原始错误码。 */
 } Board_SD_DiagnosticsTypeDef;
 
 /* Exported functions --------------------------------------------------------*/

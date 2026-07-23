@@ -9,8 +9,10 @@ Board_StatusTypeDef Board_Audio_SetPower(bool enabled)
     {
         (void)LOG_Printf(LOG_LEVEL_ERROR,
                          "AUDIO",
-                         "Audio power control failed with PMIC error: %d",
-                         hpmic.ErrorCode);
+                         "power control failed: error=%d, bus=%d, reg=0x%02X",
+                         (int)hpmic.ErrorCode,
+                         (int)hpmic.LastBusStatus,
+                         (unsigned int)hpmic.LastFailedRegister);
         return BOARD_AUDIO_ERROR;
     }
 
@@ -23,15 +25,17 @@ Board_StatusTypeDef Board_LCD_SetPower(bool enabled)
     {
         (void)LOG_Printf(LOG_LEVEL_ERROR,
                          "LCD",
-                         "LCD power control failed with PMIC error: %d",
-                         hpmic.ErrorCode);
+                         "power control failed: error=%d, bus=%d, reg=0x%02X",
+                         (int)hpmic.ErrorCode,
+                         (int)hpmic.LastBusStatus,
+                         (unsigned int)hpmic.LastFailedRegister);
         return BOARD_LCD_ERROR;
     }
 
     return BOARD_OK;
 }
 
-PMIC_StatusTypeDef Board_PMIC_Init(void)
+Board_StatusTypeDef Board_PMIC_Init(void)
 {
     /*
      * 第一步仅完成依赖注入：把 Port 提供的 Ops/Context 成对写入 hpmic。
@@ -40,7 +44,7 @@ PMIC_StatusTypeDef Board_PMIC_Init(void)
     if (PMIC_I2C_Port_Bind(&hpmic) != PMIC_OK)
     {
         (void)LOG_Printf(LOG_LEVEL_ERROR, "PMIC", "PMIC I2C port bind failed");
-        return PMIC_ERROR;
+        return BOARD_PMIC_ERROR;
     }
 
     /*
@@ -50,8 +54,13 @@ PMIC_StatusTypeDef Board_PMIC_Init(void)
     PMIC_StatusTypeDef pmic_status = PMIC_Init(&hpmic);
     if (pmic_status != PMIC_OK)
     {
-        (void)LOG_Printf(LOG_LEVEL_ERROR, "PMIC", "PMIC initialization failed with error code: %d", hpmic.ErrorCode);
-        return PMIC_ERROR;
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                         "PMIC",
+                         "initialization failed: error=%d, bus=%d, reg=0x%02X",
+                         (int)hpmic.ErrorCode,
+                         (int)hpmic.LastBusStatus,
+                         (unsigned int)hpmic.LastFailedRegister);
+        return BOARD_PMIC_ERROR;
     }
-    return PMIC_OK;
+    return BOARD_OK;
 }

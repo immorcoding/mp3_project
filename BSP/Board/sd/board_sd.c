@@ -19,7 +19,7 @@
 /**
   * @brief 本板唯一 SD 卡槽对应的私有 Device 实例。
   * @note  static 只限制 C 代码链接可见性；调试构建仍可在调试器中观察其
-  *        State、ErrorCode 和 PortErrorDetail。
+  *        State、ErrorCode 和 LastPortStatus。
   */
 static SDCard_HandleTypeDef hboard_sd;
 
@@ -88,11 +88,25 @@ Board_StatusTypeDef Board_SD_DeInit(void)
   */
 Board_StatusTypeDef Board_SD_Refresh(void)
 {
-    Board_StatusTypeDef status = board_sd_status(SDCard_Refresh(&hboard_sd));
-    if(!status)
+    Board_SD_StateTypeDef previous_state = Board_SD_GetState();
+    Board_StatusTypeDef status =
+        board_sd_status(SDCard_Refresh(&hboard_sd));
+    Board_SD_StateTypeDef current_state = Board_SD_GetState();
+
+    if ((status != BOARD_OK) || (current_state == previous_state))
+    {
+        return status;
+    }
+
+    /*
+     * Polling only discovers state transitions. Logging on the edge prevents
+     * every Refresh call from printing the same READY message.
+     */
+    if (current_state == BOARD_SD_STATE_READY)
     {
         Board_SD_InfoTypeDef info;
-        if(!Board_SD_GetInfo(&info))
+
+        if (Board_SD_GetInfo(&info) == BOARD_OK)
         {
             uint32_t capacity_mb = (uint32_t)(info.CapacityBytes / (1024ULL * 1024ULL));
 
@@ -103,6 +117,11 @@ Board_StatusTypeDef Board_SD_Refresh(void)
                              (unsigned long)info.BlockSize);
         }
     }
+    else if (current_state == BOARD_SD_STATE_NOT_PRESENT)
+    {
+        (void)LOG_Printf(LOG_LEVEL_INFO, "SD", "card removed");
+    }
+
     return status;
 }
 
@@ -163,7 +182,6 @@ Board_StatusTypeDef Board_SD_GetDiagnostics(
 
     diagnostics->DeviceError = (uint32_t)hboard_sd.ErrorCode;
     diagnostics->PortStatus = (uint32_t)hboard_sd.LastPortStatus;
-    diagnostics->PortErrorDetail = hboard_sd.PortErrorDetail;
     return BOARD_OK;
 }
 

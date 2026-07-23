@@ -30,7 +30,7 @@ Board_StatusTypeDef Board_Init(void)
     HAL_Delay(500);
 
     /* 初始化 Audio */
-    if (Board_Audio_Init() != AUDIO_OK)
+    if (Board_Audio_Init() != BOARD_OK)
     {
         // Handle Audio initialization error
         return BOARD_AUDIO_ERROR;

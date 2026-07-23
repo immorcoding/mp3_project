@@ -153,8 +153,8 @@ PMIC_Init
           -> 7位地址 + Read
           -> 读取数据，最后一个字节后发送 NACK
           -> STOP
-        -> pmic_i2c_port_result
-      -> PMIC_BusResultTypeDef
+        -> pmic_i2c_port_status
+      -> PMIC_BusStatusTypeDef
     -> 失败时 pmic_fail
 ```
 
@@ -187,7 +187,7 @@ device_address_7bit << 1        /* 写地址字节 */
 - 配置：`Address7Bit`、`ApplyBootConfig`；
 - 依赖：`BusOps`、`BusContext`；
 - 运行状态：`State`；
-- 错误上下文：`ErrorCode`、`LastFailedRegister`、`BusErrorDetail`。
+- 错误上下文：`ErrorCode`、`LastBusStatus`、`LastFailedRegister`。
 
 `SoftI2C_HandleTypeDef hpmic_i2c` 可以看成一个软件 I2C 对象实例，但它是 Port 私有变量，上层不能直接访问。
 
@@ -254,21 +254,19 @@ hpmic
 | --- | --- | --- | --- |
 | `BusOps` | `PMIC_I2C_Port_Bind()` | 指向当前总线实现的 Ops 表。 | 不建议；由 Port 管理。 |
 | `BusContext` | `PMIC_I2C_Port_Bind()` | 指向当前总线实例。 | 不建议；必须与 Ops 配对。 |
-| `Address7Bit` | Board 静态初始化 | PMIC 的 7 位地址，当前为 `0x34`。 | 可在初始化前修改。 |
-| `ApplyBootConfig` | Board 静态初始化 | 控制是否写入内置启动配置。 | 可在每次 `PMIC_Init()` 前修改。 |
+| `Address7Bit` | `PMIC_Init()` | PMIC 的 7 位默认地址，当前来自 `AXP2101_SLAVE_ADDRESS`。 | 只读观察；默认策略由 Device 装载。 |
+| `ApplyBootConfig` | `PMIC_Init()` | 控制是否写入内置启动配置。 | 只读观察；默认策略由 Device 装载。 |
 | `State` | PMIC 驱动 | RESET、BUSY、READY 或 ERROR。 | 只读观察，不应由应用伪造。 |
 | `ErrorCode` | PMIC 驱动 | PMIC 层对失败阶段的分类。 | 只读观察。 |
+| `LastBusStatus` | PMIC 驱动 | OK、ERROR、BUSY、TIMEOUT 或 NACK。 | 只读观察。 |
 | `LastFailedRegister` | PMIC 驱动 | 最近一次失败涉及的寄存器地址。 | 只读观察。 |
-| `BusErrorDetail` | PMIC 驱动 | 从 Port 取得的底层原始错误码。 | 只读观察。 |
 
-### 7.2 PMIC_BusResultTypeDef
+### 7.2 PMIC_BusStatusTypeDef
 
-| 字段 | 含义 |
-| --- | --- |
-| `Status` | PMIC 能理解的统一状态：OK、ERROR、BUSY、TIMEOUT、NACK。 |
-| `Detail` | 后端原始错误码。当前软件 I2C 后端直接复制 `hi2c->ErrorCode`。 |
-
-统一 `Status` 适合控制流程；`Detail` 适合调试和日志。应用不应仅凭 `Detail` 决定跨后端业务行为，因为换成 HAL I2C 后原始错误码定义会变化。
+Port 的每个操作直接返回 `PMIC_BusStatusTypeDef`：`OK`、`ERROR`、`BUSY`、
+`TIMEOUT` 或 `NACK`。Device 因而不需要知道 SoftI2C/HAL 的状态类型，也不
+复制后端原始错误位。若需要深入诊断，可在调试器中查看当前 Port 私有
+句柄的 `ErrorCode`。
 
 ### 7.3 SoftI2C_HandleTypeDef
 
@@ -403,7 +401,7 @@ Port 的 `pmic_i2c_port_ops` 和 `hpmic_i2c` 均为 `static`，不对外暴露�
 
 `volatile` 只表示每次都从内存读取或写入，不提供线程安全、互斥或原子事务。未来加入 RTOS 后，应在总线层或更上层增加互斥保护。
 
-## 12. 错误传递和 BusErrorDetail
+## 12. 错误传递和诊断边界
 
 ### 12.1 三层错误信息
 
@@ -411,50 +409,26 @@ Port 的 `pmic_i2c_port_ops` 和 `hpmic_i2c` 均为 `static`，不对外暴露�
 
 ```text
 SoftI2C_StatusTypeDef + SoftI2C_HandleTypeDef.ErrorCode
-  -> pmic_i2c_port_result()
-  -> PMIC_BusResultTypeDef.Status + Detail
+  -> pmic_i2c_port_status()
+  -> PMIC_BusStatusTypeDef
   -> pmic_fail()
-  -> hpmic.ErrorCode + LastFailedRegister + BusErrorDetail
-  -> Board_PMIC_Init() 返回 PMIC_ERROR
-  -> app_init() 记录日志并进入 Error_Handler()
+  -> hpmic.ErrorCode + LastBusStatus + LastFailedRegister
+  -> Board_PMIC_Init() 返回 BOARD_PMIC_ERROR
+  -> app_init() 记录归一化日志并进入 Error_Handler()
 ```
 
-三种信息的分工：
+三种公开诊断信息的分工：
 
-- `hpmic.ErrorCode`：失败发生在 PMIC 初始化的哪个阶段；
-- `hpmic.LastFailedRegister`：失败访问的是哪个寄存器；
-- `hpmic.BusErrorDetail`：底层总线为什么失败。
+- `hpmic.ErrorCode`：失败发生在 PMIC 操作的哪个语义阶段；
+- `hpmic.LastBusStatus`：底层属于 ERROR、BUSY、TIMEOUT 还是 NACK；
+- `hpmic.LastFailedRegister`：失败访问的是哪个寄存器。
 
-### 12.2 BusErrorDetail 如何取得原始错误码
+`SoftI2C_HandleTypeDef.ErrorCode` 不再复制到 PMIC Handle。它是当前后端的
+私有诊断细节，只有在归一化状态还不足以定位问题时，才通过调试器查看
+Port 内的 `hpmic_i2c.ErrorCode`。这样切换为 HAL I2C 后，Device、Board 和
+日志格式不必理解另一套原始错误位。
 
-以软件 I2C 读取失败为例：
-
-1. `SoftI2C_MemRead()` 在 `hpmic_i2c.ErrorCode` 中设置 `SOFT_I2C_ERROR_xxx` 位。
-2. `pmic_i2c_port_mem_read()` 调用 `pmic_i2c_port_result()`。
-3. `pmic_i2c_port_result()` 执行等价逻辑：
-
-   ```c
-   result.Detail = hi2c->ErrorCode;
-   ```
-
-4. `pmic_read_reg()` 收到 `PMIC_BusResultTypeDef`。
-5. 读取失败时调用：
-
-   ```c
-   pmic_fail(hpmic, PMIC_ERROR_BUS_READ, reg, bus_result.Detail);
-   ```
-
-6. `pmic_fail()` 把 `bus_result.Detail` 保存到 `hpmic.BusErrorDetail`。
-
-因此当前软件 I2C 后端下：
-
-```text
-hpmic.BusErrorDetail == hpmic_i2c.ErrorCode（失败发生时的副本）
-```
-
-`hpmic_i2c` 是 Port 私有变量，调试器无需直接访问它；查看 `hpmic.BusErrorDetail` 即可。
-
-### 12.3 软件 I2C 原始错误位
+### 12.2 软件 I2C 原始错误位
 
 | 宏 | 值 | 含义 | Port 统一状态 |
 | --- | ---: | --- | --- |
@@ -467,24 +441,25 @@ hpmic.BusErrorDetail == hpmic_i2c.ErrorCode（失败发生时的副本）
 
 `ErrorCode` 是位掩码，理论上可以同时存在多个位。判断时应使用按位与，而不是只使用相等比较。
 
-### 12.4 调试器查看顺序
+### 12.3 调试器查看顺序
 
 初始化失败时建议依次查看：
 
 1. `hpmic.State`
 2. `hpmic.ErrorCode`
-3. `hpmic.LastFailedRegister`
-4. `hpmic.BusErrorDetail`
+3. `hpmic.LastBusStatus`
+4. `hpmic.LastFailedRegister`
+5. 若仍不能定位，再查看 Port 私有的 `hpmic_i2c.ErrorCode`
 
 常见组合：
 
-| ErrorCode | LastFailedRegister | BusErrorDetail | 优先检查 |
-| --- | ---: | ---: | --- |
-| `PMIC_ERROR_BUS_PREPARE` | `0x00` | `0x01` | SDA 是否一直为低、焊接、上拉、引脚映射。 |
-| `PMIC_ERROR_BUS_PREPARE` | `0x00` | `0x08` | SCL 是否被拉低、引脚模式、短路或时钟拉伸。 |
-| `PMIC_ERROR_BUS_READ` | `0x03` | `0x02` | AXP2101 地址、SDA/SCL 是否对调、芯片焊接和供电。 |
-| `PMIC_ERROR_WRONG_CHIP_ID` | `0x03` | `0x00` | 波形能通信但器件返回值不是 `0x47`。 |
-| `PMIC_ERROR_BUS_WRITE` | 某配置地址 | `0x04` | 从机在数据阶段 NACK、供电状态或写入条件。 |
+| ErrorCode | LastBusStatus | LastFailedRegister | 优先检查 |
+| --- | --- | ---: | --- |
+| `PMIC_ERROR_BUS_PREPARE` | `PMIC_BUS_BUSY` | `0x00` | SDA 是否一直为低、焊接、上拉、引脚映射。 |
+| `PMIC_ERROR_BUS_PREPARE` | `PMIC_BUS_TIMEOUT` | `0x00` | SCL 是否被拉低、引脚模式、短路或时钟拉伸。 |
+| `PMIC_ERROR_BUS_READ` | `PMIC_BUS_NACK` | `0x03` | AXP2101 地址、SDA/SCL 是否对调、芯片焊接和供电。 |
+| `PMIC_ERROR_WRONG_CHIP_ID` | `PMIC_BUS_OK` | `0x03` | 波形能通信但器件返回值不是 `0x47`。 |
+| `PMIC_ERROR_BUS_WRITE` | `PMIC_BUS_NACK` | 某配置地址 | 从机在数据阶段 NACK、供电状态或写入条件。 |
 
 ## 13. 软件 I2C 的执行特性
 
@@ -522,7 +497,8 @@ pmic_i2c_port_mem_write
 - 把 7 位地址转换为 HAL API 所要求的地址格式；STM32 HAL Mem API 通常接收左移一位后的地址，应以具体 HAL 声明为准；
 - 使用 `I2C_MEMADD_SIZE_8BIT` 访问 AXP2101 寄存器；
 - 把 `HAL_OK/HAL_BUSY/HAL_TIMEOUT/HAL_ERROR` 转为 `PMIC_BusStatusTypeDef`；
-- 把 `HAL_I2C_GetError()` 或 `hi2c->ErrorCode` 保存到 `PMIC_BusResultTypeDef.Detail`；
+- HAL 原始错误只保留在硬件 I2C 句柄中；若可识别 AF/NACK，可在 Port
+  内将其归一化为 `PMIC_BUS_NACK`；
 - 确保 `Prepare()` 在 CubeMX 初始化顺序下有效。若硬件 I2C 已由 `MX_I2Cx_Init()` 初始化，Prepare 可做状态检查或返回 OK。
 
 Board、PMIC Device 和 Application 不应因切换后端而修改。
@@ -592,7 +568,8 @@ BSP/Board/*.c
 3. Port 只保存一个静态 `hpmic_i2c`，适合当前单 PMIC；多实例需要独立上下文或让 Board 注入上下文。
 4. 软件 I2C 没有 RTOS 互斥，也没有异步传输。
 5. Recover 只在初始化时自动执行，没有读写失败重试策略。
-6. `BusErrorDetail` 是后端相关原始值；日志系统应同时记录统一错误和原始错误。
+6. Device/Board 日志只记录稳定的 `ErrorCode`、`LastBusStatus` 和失败寄存器；
+   后端原始错误仅用于 Port 内断点诊断。
 7. 当前后端通过修改 Port 源码选择，没有增加软件/硬件 I2C 编译宏。这保持了单一明确实现，但不支持一份构建配置动态切换。
 8. 启动配置会改变供电轨和充电参数，改动必须经过硬件核对与实测。
 

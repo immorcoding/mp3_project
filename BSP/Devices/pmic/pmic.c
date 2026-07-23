@@ -104,31 +104,30 @@ static void pmic_clear_error(PMIC_HandleTypeDef *hpmic)
 {
     /* 只清理诊断字段，不触碰总线绑定、地址、启动策略或 State。 */
     hpmic->ErrorCode = PMIC_ERROR_NONE;
+    hpmic->LastBusStatus = PMIC_BUS_OK;
     hpmic->LastFailedRegister = 0u;
-    hpmic->BusErrorDetail = 0u;
 }
 
 /**
-  * @brief  将 PMIC 句柄切换为错误状态并保存完整错误上下文。
+  * @brief  保存 PMIC 层错误阶段和归一化总线原因。
   * @param  hpmic PMIC 句柄指针。
   * @param  error PMIC 驱动层错误类型。
   * @param  reg 失败寄存器地址；总线准备或参数错误时为 0。
-  * @param  bus_detail 底层总线原始错误码。
+  * @param  bus_status 与本次错误关联的归一化总线状态。
+  * @param  next_state 失败后应进入的持续状态。
   * @retval PMIC_ERROR
   */
 static PMIC_StatusTypeDef pmic_fail(PMIC_HandleTypeDef *hpmic,
                                     PMIC_ErrorTypeDef error,
                                     uint8_t reg,
-                                    uint32_t bus_detail)
+                                    PMIC_BusStatusTypeDef bus_status,
+                                    PMIC_StateTypeDef next_state)
 {
-    /*
-     * 集中写入错误快照，保证所有失败出口具有一致语义。BusErrorDetail 在
-     * 芯片 ID 不匹配等非总线错误时为 0。
-     */
-    hpmic->State = PMIC_STATE_ERROR;
+    /* Device 只保存稳定语义；SoftI2C/HAL 原始错误留在具体后端句柄中。 */
+    hpmic->State = next_state;
     hpmic->ErrorCode = error;
+    hpmic->LastBusStatus = bus_status;
     hpmic->LastFailedRegister = reg;
-    hpmic->BusErrorDetail = bus_detail;
     return PMIC_ERROR;
 }
 
@@ -145,16 +144,22 @@ static PMIC_StatusTypeDef pmic_read_reg(PMIC_HandleTypeDef *hpmic,
                                         uint8_t *value)
 {
     /* Device 层只调用抽象 Ops；context 的实际类型由 Port 决定。 */
-    PMIC_BusResultTypeDef bus_result =
+    PMIC_BusStatusTypeDef bus_status =
         hpmic->BusOps->MemRead(hpmic->BusContext,
                                hpmic->Address7Bit,
                                reg,
                                value,
                                1u);
 
-    if (bus_result.Status != PMIC_BUS_OK)
+    if (bus_status != PMIC_BUS_OK)
     {
-        return pmic_fail(hpmic, PMIC_ERROR_BUS_READ, reg, bus_result.Detail);
+        return pmic_fail(hpmic,
+                         PMIC_ERROR_BUS_READ,
+                         reg,
+                         bus_status,
+                         (bus_status == PMIC_BUS_BUSY)
+                             ? PMIC_STATE_READY
+                             : PMIC_STATE_ERROR);
     }
     return PMIC_OK;
 }
@@ -172,16 +177,22 @@ static PMIC_StatusTypeDef pmic_write_reg(PMIC_HandleTypeDef *hpmic,
                                          uint8_t value)
 {
     /* value 是局部变量，但当前所有总线 MemWrite 都是同步阻塞调用。 */
-    PMIC_BusResultTypeDef bus_result =
+    PMIC_BusStatusTypeDef bus_status =
         hpmic->BusOps->MemWrite(hpmic->BusContext,
                                 hpmic->Address7Bit,
                                 reg,
                                 &value,
                                 1u);
 
-    if (bus_result.Status != PMIC_BUS_OK)
+    if (bus_status != PMIC_BUS_OK)
     {
-        return pmic_fail(hpmic, PMIC_ERROR_BUS_WRITE, reg, bus_result.Detail);
+        return pmic_fail(hpmic,
+                         PMIC_ERROR_BUS_WRITE,
+                         reg,
+                         bus_status,
+                         (bus_status == PMIC_BUS_BUSY)
+                             ? PMIC_STATE_READY
+                             : PMIC_STATE_ERROR);
     }
     return PMIC_OK;
 }
@@ -270,14 +281,34 @@ static PMIC_StatusTypeDef pmic_set_ldo_enabled(PMIC_HandleTypeDef *hpmic,
     {
         return PMIC_ERROR;
     }
-    if ((hpmic->State != PMIC_STATE_READY) ||
-        (hpmic->BusOps == NULL) ||
+    if (hpmic->State != PMIC_STATE_READY)
+    {
+        return pmic_fail(hpmic,
+                         PMIC_ERROR_NOT_READY,
+                         0u,
+                         PMIC_BUS_OK,
+                         hpmic->State);
+    }
+
+    if ((hpmic->BusOps == NULL) ||
         (hpmic->BusOps->MemRead == NULL) ||
         (hpmic->BusOps->MemWrite == NULL) ||
-        (hpmic->BusContext == NULL) ||
-        (hpmic->Address7Bit > 0x7Fu))
+        (hpmic->BusContext == NULL))
     {
-        return pmic_fail(hpmic, PMIC_ERROR_INVALID_PARAM, 0u, 0u);
+        return pmic_fail(hpmic,
+                         PMIC_ERROR_PORT_NOT_BOUND,
+                         0u,
+                         PMIC_BUS_OK,
+                         PMIC_STATE_ERROR);
+    }
+
+    if (hpmic->Address7Bit > 0x7Fu)
+    {
+        return pmic_fail(hpmic,
+                         PMIC_ERROR_INVALID_PARAM,
+                         0u,
+                         PMIC_BUS_OK,
+                         PMIC_STATE_ERROR);
     }
 
     pmic_clear_error(hpmic);
@@ -322,7 +353,7 @@ PMIC_StatusTypeDef PMIC_SetALDO2Enabled(PMIC_HandleTypeDef *hpmic,
   */
 PMIC_StatusTypeDef PMIC_Init(PMIC_HandleTypeDef *hpmic)
 {
-    PMIC_BusResultTypeDef bus_result;
+    PMIC_BusStatusTypeDef bus_status;
     uint8_t chip_id = 0u;
 
     if (hpmic == NULL)
@@ -347,12 +378,24 @@ PMIC_StatusTypeDef PMIC_Init(PMIC_HandleTypeDef *hpmic)
         (hpmic->BusOps->Prepare == NULL) ||
         (hpmic->BusOps->MemRead == NULL) ||
         (hpmic->BusOps->MemWrite == NULL) ||
-        (hpmic->BusContext == NULL) ||
-        (hpmic->Address7Bit > 0x7Fu) ||
+        (hpmic->BusContext == NULL))
+    {
+        return pmic_fail(hpmic,
+                         PMIC_ERROR_PORT_NOT_BOUND,
+                         0u,
+                         PMIC_BUS_OK,
+                         PMIC_STATE_ERROR);
+    }
+
+    if ((hpmic->Address7Bit > 0x7Fu) ||
         ((hpmic->ApplyBootConfig != PMIC_BOOT_CONFIG_DISABLED) &&
          (hpmic->ApplyBootConfig != PMIC_BOOT_CONFIG_ENABLED)))
     {
-        return pmic_fail(hpmic, PMIC_ERROR_INVALID_PARAM, 0u, 0u);
+        return pmic_fail(hpmic,
+                         PMIC_ERROR_INVALID_PARAM,
+                         0u,
+                         PMIC_BUS_OK,
+                         PMIC_STATE_ERROR);
     }
 
     /* 从此处开始会访问硬件；BUSY 防止观察者把初始化中的对象当作可用。 */
@@ -362,11 +405,15 @@ PMIC_StatusTypeDef PMIC_Init(PMIC_HandleTypeDef *hpmic)
      * Prepare 的含义由后端决定：软件 I2C 会检查/恢复物理总线；未来 HAL
      * 硬件 I2C 可检查 HAL Handle 状态，或在已由 CubeMX 初始化时仅返回 OK。
      */
-    bus_result = hpmic->BusOps->Prepare(hpmic->BusContext);
+    bus_status = hpmic->BusOps->Prepare(hpmic->BusContext);
 
-    if (bus_result.Status != PMIC_BUS_OK)
+    if (bus_status != PMIC_BUS_OK)
     {
-        return pmic_fail(hpmic, PMIC_ERROR_BUS_PREPARE, 0u, bus_result.Detail);
+        return pmic_fail(hpmic,
+                         PMIC_ERROR_BUS_PREPARE,
+                         0u,
+                         bus_status,
+                         PMIC_STATE_ERROR);
     }
 
     /* 读取只读芯片 ID，先确认地址上的器件确实是期望的 AXP2101。 */
@@ -380,7 +427,8 @@ PMIC_StatusTypeDef PMIC_Init(PMIC_HandleTypeDef *hpmic)
         return pmic_fail(hpmic,
                          PMIC_ERROR_WRONG_CHIP_ID,
                          XPOWERS_AXP2101_IC_TYPE,
-                         0u);
+                         PMIC_BUS_OK,
+                         PMIC_STATE_ERROR);
     }
 
     /* 只有芯片身份确认后才允许写电源配置，避免向未知器件写寄存器。 */

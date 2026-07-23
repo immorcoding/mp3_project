@@ -30,7 +30,7 @@ The **PMIC I2C Port** is the adapter in `BSP/Devices/pmic/port` that translates 
 
 The current backend is `SoftI2C`. Replacing it with HAL I2C should be confined to the marked backend regions; Board and Device layers continue to call the same interface.
 
-Related terms: **Board PMIC**, **BusErrorDetail**.
+Related terms: **Board PMIC**, **normalized transport status**.
 
 Example dialogue:
 
@@ -48,17 +48,23 @@ Example dialogue:
 
 > “Change the PMIC boot profile so ALDO2 starts disabled but retains its 3.3 V preset.”
 
-## BusErrorDetail
+## Normalized transport status
 
-**BusErrorDetail** is the backend-specific raw error snapshot copied into `PMIC_HandleTypeDef` when a PMIC bus operation fails.
+The **normalized transport status** is the backend-independent result stored as
+`LastBusStatus` or `LastPortStatus`, such as OK, BUSY, TIMEOUT, NACK, or
+NOT_PRESENT.
 
-Application control flow should use the normalized PMIC error/status fields. `BusErrorDetail` exists for diagnosis and logging; its bit meanings may change when the PMIC I2C Port changes backend.
+Device `ErrorCode` identifies the semantic failure stage, while the normalized
+transport status explains the broad lower-layer reason. Backend-specific raw error
+bits stay in the concrete Port handle (`hpmic_i2c`, `hsd1`, or `hi2s2`) and do not
+cross the Port seam.
 
-Related terms: **PMIC I2C Port**, **Board PMIC**.
+Related terms: **PMIC I2C Port**, **SD Card Port**, **Board PMIC**.
 
 Example dialogue:
 
-> “PMIC_ERROR_BUS_READ identifies the stage; BusErrorDetail 0x02 identifies an address NACK in the current SoftI2C backend.”
+> “PMIC_ERROR_BUS_READ identifies the stage; PMIC_BUS_NACK identifies the
+> portable transport reason; the SoftI2C raw bit remains private to the Port.”
 
 ## Deferred startup log
 
@@ -94,7 +100,7 @@ Example dialogue:
 
 ## SD Card Port
 
-The **SD Card Port** is the adapter in `BSP/Devices/sd/port` that binds the SD Card Device to this PCB's `hsd1`, SDMMC1 configuration, active-low PC7 card detect, and STM32 HAL error codes.
+The **SD Card Port** is the adapter in `BSP/Devices/sd/port` that binds the SD Card Device to this PCB's `hsd1`, SDMMC1 configuration, active-low PC7 card detect, and normalized STM32 HAL results.
 
 Related terms: **Board SD**, **SD Card Device**.
 

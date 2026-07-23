@@ -103,13 +103,13 @@ The Device handle additionally keeps:
 | Field | Purpose |
 | --- | --- |
 | `LastPortStatus` | Backend-independent control-flow category. |
-| `PortErrorDetail` | Raw HAL error bits captured at failure time. |
 | `Info` | Cached normalized geometry. |
 | `IsInfoValid` | Whether `Info` may be copied to a caller. |
 | `IsPortInitialized` | Whether deinitialization must release Port resources. |
 
 `Board_SD_GetDiagnostics()` copies the error fields without exposing the private
-Device handle.
+Device handle. Raw STM32 HAL bits stay in `hsd1.ErrorCode` inside the concrete
+Port and may be inspected with a debugger when backend-specific diagnosis is needed.
 
 ## 5. State model
 
@@ -147,7 +147,7 @@ APP, FatFs DiskIO and USB MSC callers:
 - overflow-safe block-range checks;
 - BUSY transitions;
 - post-transfer synchronization;
-- normalized errors plus raw backend diagnostics;
+- normalized Device and Port diagnostics;
 - cleanup after partial initialization.
 
 If `SDCard_ReadBlocks()` only forwarded to `HAL_SD_ReadBlocks()`, deleting the module

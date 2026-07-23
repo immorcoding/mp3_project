@@ -48,54 +48,55 @@ static SoftI2C_HandleTypeDef hpmic_i2c =
 /* PMIC I2C PORT BACKEND BEGIN: Implementation ------------------------------*/
 /**
   * @brief  将 I2C 状态转换为 PMIC 总线统一状态。
-  * @param  hi2c   I2C 句柄，用于取得底层原始 ErrorCode。
   * @param  status I2C 函数返回值。
-  * @note   hi2c 使用 const void * 仅隐藏后端类型并禁止本函数经该指针修改
-  *         Handle；函数内部仍转换为“指向 const 后端句柄”的指针。
-  * @retval PMIC_BusResultTypeDef 归一化状态以及未经修改的底层错误码。
+  * @note   SoftI2C 原始 ErrorCode 保留在其私有 Handle 中，不跨越 Port Seam。
+  * @retval PMIC_BusStatusTypeDef 归一化后的总线状态。
   */
-static PMIC_BusResultTypeDef pmic_i2c_port_result(
-    const void *hi2c,
-    uint32_t status)
+static PMIC_BusStatusTypeDef pmic_i2c_port_status(
+    const SoftI2C_HandleTypeDef *hi2c,
+    SoftI2C_StatusTypeDef status)
 {
     /* BACKEND: 将 SoftI2C 返回值和 ErrorCode 映射到 PMIC 公共错误模型。 */
-    PMIC_BusResultTypeDef result =
+    if (status == SOFT_I2C_OK)
     {
-        .Status = (status == SOFT_I2C_OK) ? PMIC_BUS_OK : PMIC_BUS_ERROR,
-        .Detail = (hi2c != NULL) ? ((const SoftI2C_HandleTypeDef *)hi2c)->ErrorCode : SOFT_I2C_ERROR_INVALID_PARAM
-    };
+        return PMIC_BUS_OK;
+    }
 
-    /* 先以成功/普通错误初始化，再覆盖更具体的可移植状态。 */
     if (status == SOFT_I2C_BUSY)
     {
-        result.Status = PMIC_BUS_BUSY;
+        return PMIC_BUS_BUSY;
     }
-    else if (status == SOFT_I2C_TIMEOUT)
+
+    if (status == SOFT_I2C_TIMEOUT)
     {
-        result.Status = PMIC_BUS_TIMEOUT;
+        return PMIC_BUS_TIMEOUT;
     }
-    else if ((status == SOFT_I2C_ERROR) &&
-             (result.Detail & (SOFT_I2C_ERROR_NACK_ADDRESS | SOFT_I2C_ERROR_NACK_DATA)))
+
+    if ((status == SOFT_I2C_ERROR) &&
+        (hi2c != NULL) &&
+        ((hi2c->ErrorCode &
+          (SOFT_I2C_ERROR_NACK_ADDRESS | SOFT_I2C_ERROR_NACK_DATA)) != 0u))
     {
-        result.Status = PMIC_BUS_NACK;
+        return PMIC_BUS_NACK;
     }
     /* BACKEND END */
 
-    return result;
+    return PMIC_BUS_ERROR;
 }
 
 /**
   * @brief  初始化当前软件 I2C 后端。
   * @param  context 必须指向 I2C 句柄。
-  * @retval PMIC_BusResultTypeDef 总线准备结果。
+  * @retval PMIC_BusStatusTypeDef 总线准备结果。
   */
-static PMIC_BusResultTypeDef pmic_i2c_port_prepare(void *context)
+static PMIC_BusStatusTypeDef pmic_i2c_port_prepare(void *context)
 {
     /* BACKEND: 恢复具体句柄类型并执行软件 I2C 初始化/自动总线恢复。 */
     SoftI2C_StatusTypeDef status = SoftI2C_Init((SoftI2C_HandleTypeDef *)context);
     /* BACKEND END */
 
-    return pmic_i2c_port_result((SoftI2C_HandleTypeDef *)context, (uint32_t)status);
+    return pmic_i2c_port_status((const SoftI2C_HandleTypeDef *)context,
+                                status);
 }
 
 /**
@@ -105,9 +106,9 @@ static PMIC_BusResultTypeDef pmic_i2c_port_prepare(void *context)
   * @param  reg                 起始寄存器地址。
   * @param  data                接收缓冲区。
   * @param  size                待读取字节数。
-  * @retval PMIC_BusResultTypeDef 寄存器读取结果。
+  * @retval PMIC_BusStatusTypeDef 寄存器读取结果。
   */
-static PMIC_BusResultTypeDef pmic_i2c_port_mem_read(
+static PMIC_BusStatusTypeDef pmic_i2c_port_mem_read(
     void *context,
     uint8_t device_address_7bit,
     uint8_t reg,
@@ -124,7 +125,8 @@ static PMIC_BusResultTypeDef pmic_i2c_port_mem_read(
                         size);
     /* BACKEND END */
 
-    return pmic_i2c_port_result((SoftI2C_HandleTypeDef *)context, (uint32_t)status);
+    return pmic_i2c_port_status((const SoftI2C_HandleTypeDef *)context,
+                                status);
 }
 
 /**
@@ -134,9 +136,9 @@ static PMIC_BusResultTypeDef pmic_i2c_port_mem_read(
   * @param  reg                 起始寄存器地址。
   * @param  data                发送缓冲区。
   * @param  size                待写入字节数。
-  * @retval PMIC_BusResultTypeDef 寄存器写入结果。
+  * @retval PMIC_BusStatusTypeDef 寄存器写入结果。
   */
-static PMIC_BusResultTypeDef pmic_i2c_port_mem_write(
+static PMIC_BusStatusTypeDef pmic_i2c_port_mem_write(
     void *context,
     uint8_t device_address_7bit,
     uint8_t reg,
@@ -153,7 +155,8 @@ static PMIC_BusResultTypeDef pmic_i2c_port_mem_write(
                                                     size);
     /* BACKEND END */
 
-    return pmic_i2c_port_result((SoftI2C_HandleTypeDef *)context, (uint32_t)status);
+    return pmic_i2c_port_status((const SoftI2C_HandleTypeDef *)context,
+                                status);
 }
 /* PMIC I2C PORT BACKEND END: Implementation --------------------------------*/
 

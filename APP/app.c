@@ -49,10 +49,9 @@ static void app_init_sd(void)
         {
             (void)LOG_Printf(LOG_LEVEL_ERROR,
                              "SD",
-                             "initialization failed: device=%lu, port=%lu, detail=0x%08lX",
+                             "initialization failed: device=%lu, port=%lu",
                              (unsigned long)diagnostics.DeviceError,
-                             (unsigned long)diagnostics.PortStatus,
-                             (unsigned long)diagnostics.PortErrorDetail);
+                             (unsigned long)diagnostics.PortStatus);
         }
         else
         {

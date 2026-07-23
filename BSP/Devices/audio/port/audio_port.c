@@ -5,10 +5,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-static Audio_BusStateTypeDef audio_fail(uint32_t error_code)
+static Audio_BusStatusTypeDef audio_port_result(HAL_StatusTypeDef status)
 {
 /*******自定义修改状态码*******/
-    switch (error_code)
+    switch (status)
     {
         case HAL_OK:
             return AUDIO_BUS_OK; // Handle specific error case
@@ -26,7 +26,7 @@ static Audio_BusStateTypeDef audio_fail(uint32_t error_code)
 /*****************************/
 }
 
-static Audio_BusStateTypeDef audio_prepare(void *AudioContext)
+static Audio_BusStatusTypeDef audio_prepare(void *AudioContext)
 {
     // Implement the actual preparation of the audio bus (e.g., configure GPIOs, I2C/SPI, etc.)
     // This function should be implemented according to the specific hardware.
@@ -45,7 +45,7 @@ static Audio_BusStateTypeDef audio_prepare(void *AudioContext)
 /****************************************************/
 }
 
-static Audio_BusStateTypeDef audio_transmit(void *AudioContext, const uint16_t *data, uint16_t size)
+static Audio_BusStatusTypeDef audio_transmit(void *AudioContext, const uint16_t *data, uint16_t size)
 {
     // Implement the actual data transmission over the audio bus (e.g., I2C/SPI).
     // This function should be implemented according to the specific hardware.
@@ -56,7 +56,7 @@ static Audio_BusStateTypeDef audio_transmit(void *AudioContext, const uint16_t *
     }
 
 /**************** 自定义的音频发送函数 ****************/
-    return audio_fail(HAL_I2S_Transmit((I2S_HandleTypeDef *)AudioContext, data, size, 1000)); // Return the appropriate state after transmission
+    return audio_port_result(HAL_I2S_Transmit((I2S_HandleTypeDef *)AudioContext, data, size, 1000)); // Return the appropriate state after transmission
 /****************************************************/
 }
 

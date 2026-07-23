@@ -31,41 +31,28 @@ static bool sdcard_port_is_present(const void *context)
 }
 
 /**
-  * @brief  将 HAL 返回值和原始错误位转换为 Device Port 结果。
-  * @param  hal_sd HAL SD 句柄。
+  * @brief  将 HAL 返回值转换为 Device 可理解的 Port 状态。
   * @param  hal_status HAL 函数的立即返回值。
+  * @note   HAL 原始 ErrorCode 继续保留在 hsd1 中，不跨越 Port Seam。
   */
-static SDCard_PortResultTypeDef sdcard_port_result(
-    const SD_HandleTypeDef *hal_sd,
+static SDCard_PortStatusTypeDef sdcard_port_status(
     HAL_StatusTypeDef hal_status)
 {
-    SDCard_PortResultTypeDef result =
-    {
-        .Status = SDCARD_PORT_ERROR,
-        .Detail = (hal_sd != NULL) ? HAL_SD_GetError(hal_sd) : HAL_SD_ERROR_PARAM
-    };
-
     switch (hal_status)
     {
         case HAL_OK:
-            result.Status = SDCARD_PORT_OK;
-            break;
+            return SDCARD_PORT_OK;
 
         case HAL_BUSY:
-            result.Status = SDCARD_PORT_BUSY;
-            break;
+            return SDCARD_PORT_BUSY;
 
         case HAL_TIMEOUT:
-            result.Status = SDCARD_PORT_TIMEOUT;
-            break;
+            return SDCARD_PORT_TIMEOUT;
 
         case HAL_ERROR:
         default:
-            result.Status = SDCARD_PORT_ERROR;
-            break;
+            return SDCARD_PORT_ERROR;
     }
-
-    return result;
 }
 
 /**
@@ -73,19 +60,18 @@ static SDCard_PortResultTypeDef sdcard_port_result(
   * @note   参数与当前 CubeMX SDMMC1 配置保持一致。以后在 CubeMX 修改总线
   *         宽度、时钟沿或分频时，必须同步检查本函数。
   */
-static SDCard_PortResultTypeDef sdcard_port_init(void *context)
+static SDCard_PortStatusTypeDef sdcard_port_init(void *context)
 {
     SD_HandleTypeDef *hal_sd = (SD_HandleTypeDef *)context;
 
     if (hal_sd == NULL)
     {
-        return (SDCard_PortResultTypeDef){SDCARD_PORT_ERROR,
-                                          HAL_SD_ERROR_PARAM};
+        return SDCARD_PORT_ERROR;
     }
 
     if (!sdcard_port_is_present(context))
     {
-        return (SDCard_PortResultTypeDef){SDCARD_PORT_NOT_PRESENT, 0u};
+        return SDCARD_PORT_NOT_PRESENT;
     }
 
     /*
@@ -101,12 +87,12 @@ static SDCard_PortResultTypeDef sdcard_port_init(void *context)
     hal_sd->Init.ClockDiv = 0u;
 
     HAL_StatusTypeDef hal_status = HAL_SD_Init(hal_sd);
-    SDCard_PortResultTypeDef result = sdcard_port_result(hal_sd, hal_status);
+    SDCard_PortStatusTypeDef status = sdcard_port_status(hal_status);
 
     /* 初始化期间被拔卡时，优先报告介质不存在而不是泛化 HAL_ERROR。 */
     if ((hal_status != HAL_OK) && (!sdcard_port_is_present(context)))
     {
-        result.Status = SDCARD_PORT_NOT_PRESENT;
+        status = SDCARD_PORT_NOT_PRESENT;
     }
 
     if (hal_status != HAL_OK)
@@ -115,24 +101,24 @@ static SDCard_PortResultTypeDef sdcard_port_init(void *context)
         (void)HAL_SD_DeInit(hal_sd);
     }
 
-    return result;
+    return status;
 }
 
 /** @brief 反初始化 SDMMC1 和对应 MSP 资源。 */
-static SDCard_PortResultTypeDef sdcard_port_deinit(void *context)
+static SDCard_PortStatusTypeDef sdcard_port_deinit(void *context)
 {
     SD_HandleTypeDef *hal_sd = (SD_HandleTypeDef *)context;
 
     if (hal_sd == NULL)
     {
-        return (SDCard_PortResultTypeDef){SDCARD_PORT_ERROR, HAL_SD_ERROR_PARAM};
+        return SDCARD_PORT_ERROR;
     }
 
-    return sdcard_port_result(hal_sd, HAL_SD_DeInit(hal_sd));
+    return sdcard_port_status(HAL_SD_DeInit(hal_sd));
 }
 
 /** @brief 将 HAL 卡信息转换为 Device 的逻辑块信息。 */
-static SDCard_PortResultTypeDef sdcard_port_get_info(
+static SDCard_PortStatusTypeDef sdcard_port_get_info(
     void *context,
     SDCard_InfoTypeDef *info)
 {
@@ -141,21 +127,21 @@ static SDCard_PortResultTypeDef sdcard_port_get_info(
 
     if ((hal_sd == NULL) || (info == NULL))
     {
-        return (SDCard_PortResultTypeDef){SDCARD_PORT_ERROR, HAL_SD_ERROR_PARAM};
+        return SDCARD_PORT_ERROR;
     }
 
     if (!sdcard_port_is_present(context))
     {
-        return (SDCard_PortResultTypeDef){SDCARD_PORT_NOT_PRESENT, 0u};
+        return SDCARD_PORT_NOT_PRESENT;
     }
 
     HAL_StatusTypeDef hal_status = HAL_SD_GetCardInfo(hal_sd, &hal_info);
-    SDCard_PortResultTypeDef result =
-        sdcard_port_result(hal_sd, hal_status);
+    SDCard_PortStatusTypeDef status =
+        sdcard_port_status(hal_status);
 
-    if (result.Status != SDCARD_PORT_OK)
+    if (status != SDCARD_PORT_OK)
     {
-        return result;
+        return status;
     }
 
     info->BlockCount = hal_info.LogBlockNbr;
@@ -165,11 +151,11 @@ static SDCard_PortResultTypeDef sdcard_port_get_info(
     info->CardType = hal_info.CardType;
     info->CardVersion = hal_info.CardVersion;
 
-    return result;
+    return status;
 }
 
 /** @brief 使用 HAL 轮询接口读取一个或多个逻辑块。 */
-static SDCard_PortResultTypeDef sdcard_port_read_blocks(
+static SDCard_PortStatusTypeDef sdcard_port_read_blocks(
     void *context,
     uint8_t *data,
     uint32_t start_block,
@@ -180,33 +166,32 @@ static SDCard_PortResultTypeDef sdcard_port_read_blocks(
 
     if ((hal_sd == NULL) || (data == NULL) || (block_count == 0u))
     {
-        return (SDCard_PortResultTypeDef){SDCARD_PORT_ERROR, HAL_SD_ERROR_PARAM};
+        return SDCARD_PORT_ERROR;
     }
 
     if (!sdcard_port_is_present(context))
     {
-        return (SDCard_PortResultTypeDef){SDCARD_PORT_NOT_PRESENT, 0u};
+        return SDCARD_PORT_NOT_PRESENT;
     }
 
-    SDCard_PortResultTypeDef result = sdcard_port_result(
-        hal_sd,
+    SDCard_PortStatusTypeDef status = sdcard_port_status(
         HAL_SD_ReadBlocks(hal_sd,
                           data,
                           start_block,
                           block_count,
                           timeout_ms));
 
-    if ((result.Status != SDCARD_PORT_OK) &&
+    if ((status != SDCARD_PORT_OK) &&
         (!sdcard_port_is_present(context)))
     {
-        result.Status = SDCARD_PORT_NOT_PRESENT;
+        status = SDCARD_PORT_NOT_PRESENT;
     }
 
-    return result;
+    return status;
 }
 
 /** @brief 使用 HAL 轮询接口写入一个或多个逻辑块。 */
-static SDCard_PortResultTypeDef sdcard_port_write_blocks(
+static SDCard_PortStatusTypeDef sdcard_port_write_blocks(
     void *context,
     const uint8_t *data,
     uint32_t start_block,
@@ -217,29 +202,28 @@ static SDCard_PortResultTypeDef sdcard_port_write_blocks(
 
     if ((hal_sd == NULL) || (data == NULL) || (block_count == 0u))
     {
-        return (SDCard_PortResultTypeDef){SDCARD_PORT_ERROR, HAL_SD_ERROR_PARAM};
+        return SDCARD_PORT_ERROR;
     }
 
     if (!sdcard_port_is_present(context))
     {
-        return (SDCard_PortResultTypeDef){SDCARD_PORT_NOT_PRESENT, 0u};
+        return SDCARD_PORT_NOT_PRESENT;
     }
 
-    SDCard_PortResultTypeDef result = sdcard_port_result(
-        hal_sd,
+    SDCard_PortStatusTypeDef status = sdcard_port_status(
         HAL_SD_WriteBlocks(hal_sd,
                            data,
                            start_block,
                            block_count,
                            timeout_ms));
 
-    if ((result.Status != SDCARD_PORT_OK) &&
+    if ((status != SDCARD_PORT_OK) &&
         (!sdcard_port_is_present(context)))
     {
-        result.Status = SDCARD_PORT_NOT_PRESENT;
+        status = SDCARD_PORT_NOT_PRESENT;
     }
 
-    return result;
+    return status;
 }
 
 /**
@@ -248,15 +232,15 @@ static SDCard_PortResultTypeDef sdcard_port_write_blocks(
   *         HAL 的阻塞读写完成数据搬运后，卡内部仍可能处于 PROGRAMMING。
   *         本函数让 Device 成功返回前确认介质真正可以接受下一条命令。
   */
-static SDCard_PortResultTypeDef sdcard_port_sync(void *context,
-                                                    uint32_t timeout_ms)
+static SDCard_PortStatusTypeDef sdcard_port_sync(void *context,
+                                                 uint32_t timeout_ms)
 {
     SD_HandleTypeDef *hal_sd = (SD_HandleTypeDef *)context;
     uint32_t start_tick;
 
     if (hal_sd == NULL)
     {
-        return (SDCard_PortResultTypeDef){SDCARD_PORT_ERROR, HAL_SD_ERROR_PARAM};
+        return SDCARD_PORT_ERROR;
     }
 
     start_tick = HAL_GetTick();
@@ -265,32 +249,26 @@ static SDCard_PortResultTypeDef sdcard_port_sync(void *context,
     {
         if (!sdcard_port_is_present(context))
         {
-            return (SDCard_PortResultTypeDef){SDCARD_PORT_NOT_PRESENT, HAL_SD_GetError(hal_sd)};
+            return SDCARD_PORT_NOT_PRESENT;
         }
 
         HAL_SD_CardStateTypeDef card_state = HAL_SD_GetCardState(hal_sd);
 
         if (card_state == HAL_SD_CARD_TRANSFER)
         {
-            return (SDCard_PortResultTypeDef){SDCARD_PORT_OK, HAL_SD_GetError(hal_sd)};
+            return SDCARD_PORT_OK;
         }
 
         if ((card_state == HAL_SD_CARD_ERROR) ||
             (card_state == HAL_SD_CARD_DISCONNECTED))
         {
-            return (SDCard_PortResultTypeDef){SDCARD_PORT_ERROR, HAL_SD_GetError(hal_sd)};
+            return SDCARD_PORT_ERROR;
         }
 
         /* 无符号时间差可安全跨越 HAL_GetTick() 的 32 位回绕点。 */
         if ((uint32_t)(HAL_GetTick() - start_tick) >= timeout_ms)
         {
-            uint32_t detail = HAL_SD_GetError(hal_sd);
-            if (detail == HAL_SD_ERROR_NONE)
-            {
-                detail = HAL_SD_ERROR_TIMEOUT;
-            }
-
-            return (SDCard_PortResultTypeDef){SDCARD_PORT_TIMEOUT, detail};
+            return SDCARD_PORT_TIMEOUT;
         }
     }
 }
