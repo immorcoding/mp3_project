@@ -101,29 +101,25 @@ typedef SDCard_PortStatusTypeDef (*SDCard_PortInitFunc)(void *context);
 typedef SDCard_PortStatusTypeDef (*SDCard_PortDeInitFunc)(void *context);
 
 /** @brief 获取归一化介质信息的 Port 函数类型。 */
-typedef SDCard_PortStatusTypeDef (*SDCard_PortGetInfoFunc)(
-    void *context,
+typedef SDCard_PortStatusTypeDef (*SDCard_PortGetInfoFunc)(void *context,
     SDCard_InfoTypeDef *info);
 
 /** @brief 从连续逻辑块读取数据的 Port 函数类型。 */
-typedef SDCard_PortStatusTypeDef (*SDCard_PortReadBlocksFunc)(
-    void *context,
+typedef SDCard_PortStatusTypeDef (*SDCard_PortReadBlocksFunc)(void *context,
     uint8_t *data,
     uint32_t start_block,
     uint32_t block_count,
     uint32_t timeout_ms);
 
 /** @brief 向连续逻辑块写入数据的 Port 函数类型。 */
-typedef SDCard_PortStatusTypeDef (*SDCard_PortWriteBlocksFunc)(
-    void *context,
+typedef SDCard_PortStatusTypeDef (*SDCard_PortWriteBlocksFunc)(void *context,
     const uint8_t *data,
     uint32_t start_block,
     uint32_t block_count,
     uint32_t timeout_ms);
 
 /** @brief 等待介质完成内部操作并回到可传输状态的 Port 函数类型。 */
-typedef SDCard_PortStatusTypeDef (*SDCard_PortSyncFunc)(
-    void *context,
+typedef SDCard_PortStatusTypeDef (*SDCard_PortSyncFunc)(void *context,
     uint32_t timeout_ms);
 
 /**

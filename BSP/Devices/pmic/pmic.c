@@ -72,8 +72,7 @@ typedef struct
   * @note  寄存器表仅在驱动内部可见；是否应用由
   *        PMIC_HandleTypeDef::ApplyBootConfig 显式控制。
   */
-static const PMIC_RegisterValueTypeDef pmic_boot_profile[] =
-{
+static const PMIC_RegisterValueTypeDef pmic_boot_profile[] = {
     {XPOWERS_AXP2101_MIN_SYS_VOL_CTRL,     0x50u}, /* VSYSDPM：4.6 V。 */
     {XPOWERS_AXP2101_INPUT_VOL_LIMIT_CTRL, 0x06u}, /* VBUS 电压限制：4.36 V。 */
     {XPOWERS_AXP2101_INPUT_CUR_LIMIT_CTRL, 0x01u}, /* 输入电流限制：500 mA。 */
@@ -144,12 +143,11 @@ static PMIC_StatusTypeDef pmic_read_reg(PMIC_HandleTypeDef *hpmic,
                                         uint8_t *value)
 {
     /* Device 层只调用抽象 Ops；context 的实际类型由 Port 决定。 */
-    PMIC_BusStatusTypeDef bus_status =
-        hpmic->BusOps->MemRead(hpmic->BusContext,
-                               hpmic->Address7Bit,
-                               reg,
-                               value,
-                               1u);
+    PMIC_BusStatusTypeDef bus_status = hpmic->BusOps->MemRead(hpmic->BusContext,
+                                                              hpmic->Address7Bit,
+                                                              reg,
+                                                              value,
+                                                              1u);
 
     if (bus_status != PMIC_BUS_OK)
     {
@@ -177,12 +175,11 @@ static PMIC_StatusTypeDef pmic_write_reg(PMIC_HandleTypeDef *hpmic,
                                          uint8_t value)
 {
     /* value 是局部变量，但当前所有总线 MemWrite 都是同步阻塞调用。 */
-    PMIC_BusStatusTypeDef bus_status =
-        hpmic->BusOps->MemWrite(hpmic->BusContext,
-                                hpmic->Address7Bit,
-                                reg,
-                                &value,
-                                1u);
+    PMIC_BusStatusTypeDef bus_status = hpmic->BusOps->MemWrite(hpmic->BusContext,
+                                                               hpmic->Address7Bit,
+                                                               reg,
+                                                               &value,
+                                                               1u);
 
     if (bus_status != PMIC_BUS_OK)
     {

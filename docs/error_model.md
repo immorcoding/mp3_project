@@ -24,6 +24,11 @@ debugging:
 - PMIC SoftI2C Port: `hpmic_i2c.ErrorCode`;
 - SD Port: `hsd1.ErrorCode`.
 
+Each concrete Port routes its SDK's immediate return value through a stable
+`int32_t native_status` conversion entry. The conversion body casts that carrier
+back to the active SDK status type and maps it to the Device-facing normalized
+status. A signed carrier also supports SDK conventions that use negative errors.
+
 ## 2. Audio ErrorCode
 
 | Value | Symbol | Meaning |

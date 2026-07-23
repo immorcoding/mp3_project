@@ -89,8 +89,7 @@ Board_StatusTypeDef Board_SD_DeInit(void)
 Board_StatusTypeDef Board_SD_Refresh(void)
 {
     Board_SD_StateTypeDef previous_state = Board_SD_GetState();
-    Board_StatusTypeDef status =
-        board_sd_status(SDCard_Refresh(&hboard_sd));
+    Board_StatusTypeDef status = board_sd_status(SDCard_Refresh(&hboard_sd));
     Board_SD_StateTypeDef current_state = Board_SD_GetState();
 
     if ((status != BOARD_OK) || (current_state == previous_state))
@@ -172,8 +171,7 @@ Board_StatusTypeDef Board_SD_GetInfo(Board_SD_InfoTypeDef *info)
   * @brief  复制最近一次 Device/Port 错误诊断。
   * @param  diagnostics 接收诊断快照的指针。
   */
-Board_StatusTypeDef Board_SD_GetDiagnostics(
-    Board_SD_DiagnosticsTypeDef *diagnostics)
+Board_StatusTypeDef Board_SD_GetDiagnostics(Board_SD_DiagnosticsTypeDef *diagnostics)
 {
     if (diagnostics == NULL)
     {

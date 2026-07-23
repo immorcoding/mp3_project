@@ -216,10 +216,9 @@ static SoftI2C_StatusTypeDef SoftI2C_Start(SoftI2C_HandleTypeDef *hi2c)
   * @retval SOFT_I2C_OK      字节和 ACK 时钟发送完成。
   * @retval SOFT_I2C_TIMEOUT 任一位期间 SCL 无法释放。
   */
-static SoftI2C_StatusTypeDef SoftI2C_WriteByte(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t data,
-  uint8_t *acknowledged)
+static SoftI2C_StatusTypeDef SoftI2C_WriteByte(SoftI2C_HandleTypeDef *hi2c,
+                                               uint8_t data,
+                                               uint8_t *acknowledged)
 {
   for (uint8_t mask = 0x80u; mask != 0u; mask >>= 1u)
   {
@@ -267,10 +266,9 @@ static SoftI2C_StatusTypeDef SoftI2C_WriteByte(
   * @retval SOFT_I2C_TIMEOUT 任一位期间 SCL 无法释放。
   * @note   连续读取时除最后一个字节外均应发送 ACK；最后一个字节发送 NACK。
   */
-static SoftI2C_StatusTypeDef SoftI2C_ReadByte(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t *data,
-  uint8_t acknowledge)
+static SoftI2C_StatusTypeDef SoftI2C_ReadByte(SoftI2C_HandleTypeDef *hi2c,
+                                              uint8_t *data,
+                                              uint8_t acknowledge)
 {
   uint8_t value = 0u;
   /* 接收期间 SDA 必须始终释放，由从机驱动每一位。 */
@@ -328,10 +326,9 @@ static SoftI2C_StatusTypeDef SoftI2C_ReadByte(
   * @retval SOFT_I2C_ERROR   从机返回 NACK。
   * @retval SOFT_I2C_TIMEOUT SCL 无法释放。
   */
-static SoftI2C_StatusTypeDef SoftI2C_WriteCheckedByte(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t data,
-  uint32_t nack_error)
+static SoftI2C_StatusTypeDef SoftI2C_WriteCheckedByte(SoftI2C_HandleTypeDef *hi2c,
+                                                      uint8_t data,
+                                                      uint32_t nack_error)
 {
   uint8_t acknowledged = 0u;
   SoftI2C_StatusTypeDef status = SoftI2C_WriteByte(hi2c, data, &acknowledged);
@@ -357,25 +354,26 @@ static SoftI2C_StatusTypeDef SoftI2C_WriteCheckedByte(
   * @retval SoftI2C_StatusTypeDef 发送结果。
   * @note   16 位地址按照高字节、低字节顺序发送。
   */
-static SoftI2C_StatusTypeDef SoftI2C_WriteMemoryAddress(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint16_t mem_address,
-  SoftI2C_MemAddrSizeTypeDef mem_address_size)
+static SoftI2C_StatusTypeDef SoftI2C_WriteMemoryAddress(SoftI2C_HandleTypeDef *hi2c,
+                                                        uint16_t mem_address,
+                                                        SoftI2C_MemAddrSizeTypeDef mem_address_size)
 {
   SoftI2C_StatusTypeDef status;
 
   if (mem_address_size == SOFT_I2C_MEM_ADDR_16BIT)
   {
-    status = SoftI2C_WriteCheckedByte(
-      hi2c, (uint8_t)(mem_address >> 8u), SOFT_I2C_ERROR_NACK_DATA);
+    status = SoftI2C_WriteCheckedByte(hi2c,
+                                      (uint8_t)(mem_address >> 8u),
+                                      SOFT_I2C_ERROR_NACK_DATA);
     if (status != SOFT_I2C_OK)
     {
       return status;
     }
   }
 
-  return SoftI2C_WriteCheckedByte(
-    hi2c, (uint8_t)mem_address, SOFT_I2C_ERROR_NACK_DATA);
+  return SoftI2C_WriteCheckedByte(hi2c,
+                                  (uint8_t)mem_address,
+                                  SOFT_I2C_ERROR_NACK_DATA);
 }
 
 /**
@@ -404,12 +402,11 @@ static uint8_t SoftI2C_IsHandleValid(const SoftI2C_HandleTypeDef *hi2c)
   * @retval 1 参数有效。
   * @retval 0 至少一个参数非法。
   */
-static uint8_t SoftI2C_IsTransferValid(
-  const SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  SoftI2C_MemAddrSizeTypeDef mem_address_size,
-  const uint8_t *data,
-  uint16_t size)
+static uint8_t SoftI2C_IsTransferValid(const SoftI2C_HandleTypeDef *hi2c,
+                                       uint8_t device_address_7bit,
+                                       SoftI2C_MemAddrSizeTypeDef mem_address_size,
+                                       const uint8_t *data,
+                                       uint16_t size)
 {
   return (SoftI2C_IsHandleValid(hi2c) != 0u) &&
          (device_address_7bit <= 0x7Fu) &&
@@ -428,11 +425,10 @@ static uint8_t SoftI2C_IsTransferValid(
   * @retval 1 参数有效。
   * @retval 0 至少一个参数非法。
   */
-static uint8_t SoftI2C_IsBufferTransferValid(
-  const SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  const uint8_t *data,
-  uint16_t size)
+static uint8_t SoftI2C_IsBufferTransferValid(const SoftI2C_HandleTypeDef *hi2c,
+                                             uint8_t device_address_7bit,
+                                             const uint8_t *data,
+                                             uint16_t size)
 {
   return (SoftI2C_IsHandleValid(hi2c) != 0u) &&
          (device_address_7bit <= 0x7Fu) &&
@@ -448,9 +444,8 @@ static uint8_t SoftI2C_IsBufferTransferValid(
   * @note   若数据阶段成功但 STOP 失败，返回 STOP 错误；TIMEOUT/BUSY 会让
   *         句柄进入 ERROR，NACK 等普通错误结束后句柄恢复 READY。
   */
-static SoftI2C_StatusTypeDef SoftI2C_FinishTransfer(
-  SoftI2C_HandleTypeDef *hi2c,
-  SoftI2C_StatusTypeDef status)
+static SoftI2C_StatusTypeDef SoftI2C_FinishTransfer(SoftI2C_HandleTypeDef *hi2c,
+                                                    SoftI2C_StatusTypeDef status)
 {
   /* 无论前面成功、NACK 或超时都尝试 STOP，尽量把物理总线带回空闲。 */
   SoftI2C_StatusTypeDef stop_status = SoftI2C_Stop(hi2c);
@@ -526,10 +521,9 @@ SoftI2C_StatusTypeDef SoftI2C_Init(SoftI2C_HandleTypeDef *hi2c)
   * @param  trials 最大探测次数。
   * @retval SoftI2C_StatusTypeDef 探测结果。
   */
-SoftI2C_StatusTypeDef SoftI2C_IsDeviceReady(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  uint32_t trials)
+SoftI2C_StatusTypeDef SoftI2C_IsDeviceReady(SoftI2C_HandleTypeDef *hi2c,
+                                            uint8_t device_address_7bit,
+                                            uint32_t trials)
 {
   if ((SoftI2C_IsHandleValid(hi2c) == 0u) ||
       (device_address_7bit > 0x7Fu) ||
@@ -590,14 +584,12 @@ SoftI2C_StatusTypeDef SoftI2C_IsDeviceReady(
   * @param  size 待发送字节数。
   * @retval SoftI2C_StatusTypeDef 传输结果。
   */
-SoftI2C_StatusTypeDef SoftI2C_MasterTransmit(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  const uint8_t *data,
-  uint16_t size)
+SoftI2C_StatusTypeDef SoftI2C_MasterTransmit(SoftI2C_HandleTypeDef *hi2c,
+                                             uint8_t device_address_7bit,
+                                             const uint8_t *data,
+                                             uint16_t size)
 {
-  if (SoftI2C_IsBufferTransferValid(
-        hi2c, device_address_7bit, data, size) == 0u)
+  if (SoftI2C_IsBufferTransferValid(hi2c, device_address_7bit, data, size) == 0u)
   {
     if (hi2c != NULL)
     {
@@ -618,8 +610,9 @@ SoftI2C_StatusTypeDef SoftI2C_MasterTransmit(
   /* 普通发送序列：START -> 地址+W -> N 个数据字节 -> STOP。 */
   if (status == SOFT_I2C_OK)
   {
-    status = SoftI2C_WriteCheckedByte(
-      hi2c, (uint8_t)(device_address_7bit << 1u), SOFT_I2C_ERROR_NACK_ADDRESS);
+    status = SoftI2C_WriteCheckedByte(hi2c,
+                                      (uint8_t)(device_address_7bit << 1u),
+                                      SOFT_I2C_ERROR_NACK_ADDRESS);
   }
 
   for (uint16_t i = 0u; (i < size) && (status == SOFT_I2C_OK); ++i)
@@ -643,14 +636,12 @@ SoftI2C_StatusTypeDef SoftI2C_MasterTransmit(
   * @param  size 待读取字节数。
   * @retval SoftI2C_StatusTypeDef 传输结果。
   */
-SoftI2C_StatusTypeDef SoftI2C_MasterReceive(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  uint8_t *data,
-  uint16_t size)
+SoftI2C_StatusTypeDef SoftI2C_MasterReceive(SoftI2C_HandleTypeDef *hi2c,
+                                            uint8_t device_address_7bit,
+                                            uint8_t *data,
+                                            uint16_t size)
 {
-  if (SoftI2C_IsBufferTransferValid(
-        hi2c, device_address_7bit, data, size) == 0u)
+  if (SoftI2C_IsBufferTransferValid(hi2c, device_address_7bit, data, size) == 0u)
   {
     if (hi2c != NULL)
     {
@@ -671,9 +662,9 @@ SoftI2C_StatusTypeDef SoftI2C_MasterReceive(
   /* 普通接收序列：START -> 地址+R -> N 个数据字节 -> STOP。 */
   if (status == SOFT_I2C_OK)
   {
-    status = SoftI2C_WriteCheckedByte(
-      hi2c, (uint8_t)((device_address_7bit << 1u) | 1u),
-      SOFT_I2C_ERROR_NACK_ADDRESS);
+    status = SoftI2C_WriteCheckedByte(hi2c,
+                                      (uint8_t)((device_address_7bit << 1u) | 1u),
+                                      SOFT_I2C_ERROR_NACK_ADDRESS);
   }
 
   for (uint16_t i = 0u; (i < size) && (status == SOFT_I2C_OK); ++i)
@@ -700,13 +691,12 @@ SoftI2C_StatusTypeDef SoftI2C_MasterReceive(
   * @param  size 待读取字节数。
   * @retval SoftI2C_StatusTypeDef 传输结果。
   */
-SoftI2C_StatusTypeDef SoftI2C_MemRead(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  uint16_t mem_address,
-  SoftI2C_MemAddrSizeTypeDef mem_address_size,
-  uint8_t *data,
-  uint16_t size)
+SoftI2C_StatusTypeDef SoftI2C_MemRead(SoftI2C_HandleTypeDef *hi2c,
+                                      uint8_t device_address_7bit,
+                                      uint16_t mem_address,
+                                      SoftI2C_MemAddrSizeTypeDef mem_address_size,
+                                      uint8_t *data,
+                                      uint16_t size)
 {
   if (SoftI2C_IsTransferValid(hi2c, device_address_7bit, mem_address_size, data, size) == 0u)
   {
@@ -729,8 +719,9 @@ SoftI2C_StatusTypeDef SoftI2C_MemRead(
   /* 阶段 1：写方向寻址，用于设置从机内部地址指针。 */
   if (status == SOFT_I2C_OK)
   {
-    status = SoftI2C_WriteCheckedByte(
-      hi2c, (uint8_t)(device_address_7bit << 1u), SOFT_I2C_ERROR_NACK_ADDRESS);
+    status = SoftI2C_WriteCheckedByte(hi2c,
+                                      (uint8_t)(device_address_7bit << 1u),
+                                      SOFT_I2C_ERROR_NACK_ADDRESS);
   }
   /* 阶段 2：发送 8/16 位内部地址，不插入 STOP。 */
   if (status == SOFT_I2C_OK)
@@ -745,9 +736,9 @@ SoftI2C_StatusTypeDef SoftI2C_MemRead(
   /* 阶段 4：读方向重新寻址，然后连续接收数据。 */
   if (status == SOFT_I2C_OK)
   {
-    status = SoftI2C_WriteCheckedByte(
-      hi2c, (uint8_t)((device_address_7bit << 1u) | 1u),
-      SOFT_I2C_ERROR_NACK_ADDRESS);
+    status = SoftI2C_WriteCheckedByte(hi2c,
+                                      (uint8_t)((device_address_7bit << 1u) | 1u),
+                                      SOFT_I2C_ERROR_NACK_ADDRESS);
   }
 
   for (uint16_t i = 0u; (i < size) && (status == SOFT_I2C_OK); ++i)
@@ -773,13 +764,12 @@ SoftI2C_StatusTypeDef SoftI2C_MemRead(
   * @param  size 待写入字节数。
   * @retval SoftI2C_StatusTypeDef 传输结果。
   */
-SoftI2C_StatusTypeDef SoftI2C_MemWrite(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  uint16_t mem_address,
-  SoftI2C_MemAddrSizeTypeDef mem_address_size,
-  const uint8_t *data,
-  uint16_t size)
+SoftI2C_StatusTypeDef SoftI2C_MemWrite(SoftI2C_HandleTypeDef *hi2c,
+                                       uint8_t device_address_7bit,
+                                       uint16_t mem_address,
+                                       SoftI2C_MemAddrSizeTypeDef mem_address_size,
+                                       const uint8_t *data,
+                                       uint16_t size)
 {
   if (SoftI2C_IsTransferValid(hi2c, device_address_7bit, mem_address_size,
                               data, size) == 0u)
@@ -803,8 +793,9 @@ SoftI2C_StatusTypeDef SoftI2C_MemWrite(
   /* 写寄存器序列：START -> 地址+W -> 内部地址 -> 数据 -> STOP。 */
   if (status == SOFT_I2C_OK)
   {
-    status = SoftI2C_WriteCheckedByte(
-      hi2c, (uint8_t)(device_address_7bit << 1u), SOFT_I2C_ERROR_NACK_ADDRESS);
+    status = SoftI2C_WriteCheckedByte(hi2c,
+                                      (uint8_t)(device_address_7bit << 1u),
+                                      SOFT_I2C_ERROR_NACK_ADDRESS);
   }
   if (status == SOFT_I2C_OK)
   {

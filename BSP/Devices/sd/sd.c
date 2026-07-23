@@ -73,8 +73,7 @@ static void sdcard_clear_error(SDCard_HandleTypeDef *hsdcard)
   * @param  next_state 失败后应进入的持续状态。
   * @retval SDCARD_ERROR
   */
-static SDCard_StatusTypeDef sdcard_fail(
-    SDCard_HandleTypeDef *hsdcard,
+static SDCard_StatusTypeDef sdcard_fail(SDCard_HandleTypeDef *hsdcard,
     SDCard_ErrorTypeDef error,
     SDCard_PortStatusTypeDef port_status,
     SDCard_StateTypeDef next_state)
@@ -96,8 +95,7 @@ static SDCard_StatusTypeDef sdcard_fail(
   * @param  port_status Port 返回的统一状态。
   * @retval SDCard_StateTypeDef
   */
-static SDCard_StateTypeDef sdcard_state_after_port_failure(
-    SDCard_PortStatusTypeDef port_status)
+static SDCard_StateTypeDef sdcard_state_after_port_failure(SDCard_PortStatusTypeDef port_status)
 {
     if (port_status == SDCARD_PORT_NOT_PRESENT)
     {
@@ -138,13 +136,11 @@ static bool sdcard_is_range_valid(const SDCard_HandleTypeDef *hsdcard,
   * @retval SDCARD_OK    介质已经回到可传输状态。
   * @retval SDCARD_ERROR 等待失败，诊断信息已写入句柄。
   */
-static SDCard_StatusTypeDef sdcard_wait_ready(
-    SDCard_HandleTypeDef *hsdcard,
+static SDCard_StatusTypeDef sdcard_wait_ready(SDCard_HandleTypeDef *hsdcard,
     SDCard_ErrorTypeDef error)
 {
-    SDCard_PortStatusTypeDef port_status =
-        hsdcard->PortOps->Sync(hsdcard->PortContext,
-                               SDCARD_SYNC_TIMEOUT_MS);
+    SDCard_PortStatusTypeDef port_status = hsdcard->PortOps->Sync(hsdcard->PortContext,
+                                                                  SDCARD_SYNC_TIMEOUT_MS);
 
     if (port_status != SDCARD_PORT_OK)
     {

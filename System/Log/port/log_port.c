@@ -186,8 +186,7 @@ static uint32_t LOG_PortGetTimeMs(void *Context)
   * @brief 当前日志端口的输出操作表。
   * @note  日志核心只持有该接口，不直接包含 USB_DEVICE 的类型。
   */
-static const LOG_OutputOpsTypeDef log_port_output_ops =
-{
+static const LOG_OutputOpsTypeDef log_port_output_ops = {
     .TryWrite = LOG_PortTryWrite
 };
 

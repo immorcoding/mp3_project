@@ -112,10 +112,9 @@ SoftI2C_StatusTypeDef SoftI2C_Init(SoftI2C_HandleTypeDef *hi2c);
   * @retval SOFT_I2C_BUSY    句柄当前不处于 READY 状态。
   * @retval SOFT_I2C_TIMEOUT SCL 无法释放。
   */
-SoftI2C_StatusTypeDef SoftI2C_IsDeviceReady(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  uint32_t trials);
+SoftI2C_StatusTypeDef SoftI2C_IsDeviceReady(SoftI2C_HandleTypeDef *hi2c,
+                                            uint8_t device_address_7bit,
+                                            uint32_t trials);
 
 /**
   * @brief  以主机发送模式向从机连续发送数据。
@@ -126,11 +125,10 @@ SoftI2C_StatusTypeDef SoftI2C_IsDeviceReady(
   * @retval SoftI2C_StatusTypeDef 操作结果；详细错误见 hi2c->ErrorCode。
   * @note   地址阶段发送 (device_address_7bit << 1)，不会发送寄存器地址。
   */
-SoftI2C_StatusTypeDef SoftI2C_MasterTransmit(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  const uint8_t *data,
-  uint16_t size);
+SoftI2C_StatusTypeDef SoftI2C_MasterTransmit(SoftI2C_HandleTypeDef *hi2c,
+                                             uint8_t device_address_7bit,
+                                             const uint8_t *data,
+                                             uint16_t size);
 
 /**
   * @brief  以主机接收模式从从机连续读取数据。
@@ -141,11 +139,10 @@ SoftI2C_StatusTypeDef SoftI2C_MasterTransmit(
   * @retval SoftI2C_StatusTypeDef 操作结果；最后一个字节后发送 NACK。
   * @note   地址阶段发送 (device_address_7bit << 1) | 1，不带寄存器语义。
   */
-SoftI2C_StatusTypeDef SoftI2C_MasterReceive(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  uint8_t *data,
-  uint16_t size);
+SoftI2C_StatusTypeDef SoftI2C_MasterReceive(SoftI2C_HandleTypeDef *hi2c,
+                                            uint8_t device_address_7bit,
+                                            uint8_t *data,
+                                            uint16_t size);
 
 /**
   * @brief  从从机内部寄存器连续读取数据。
@@ -158,13 +155,12 @@ SoftI2C_StatusTypeDef SoftI2C_MasterReceive(
   * @retval SoftI2C_StatusTypeDef 操作结果；详细错误见 hi2c->ErrorCode。
   * @note   读取序列使用“写地址 -> 内部地址 -> 重复 START -> 读地址”。
   */
-SoftI2C_StatusTypeDef SoftI2C_MemRead(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  uint16_t mem_address,
-  SoftI2C_MemAddrSizeTypeDef mem_address_size,
-  uint8_t *data,
-  uint16_t size);
+SoftI2C_StatusTypeDef SoftI2C_MemRead(SoftI2C_HandleTypeDef *hi2c,
+                                      uint8_t device_address_7bit,
+                                      uint16_t mem_address,
+                                      SoftI2C_MemAddrSizeTypeDef mem_address_size,
+                                      uint8_t *data,
+                                      uint16_t size);
 
 /**
   * @brief  向从机内部寄存器连续写入数据。
@@ -176,13 +172,12 @@ SoftI2C_StatusTypeDef SoftI2C_MemRead(
   * @param  size 待写入字节数，必须大于 0。
   * @retval SoftI2C_StatusTypeDef 操作结果；详细错误见 hi2c->ErrorCode。
   */
-SoftI2C_StatusTypeDef SoftI2C_MemWrite(
-  SoftI2C_HandleTypeDef *hi2c,
-  uint8_t device_address_7bit,
-  uint16_t mem_address,
-  SoftI2C_MemAddrSizeTypeDef mem_address_size,
-  const uint8_t *data,
-  uint16_t size);
+SoftI2C_StatusTypeDef SoftI2C_MemWrite(SoftI2C_HandleTypeDef *hi2c,
+                                       uint8_t device_address_7bit,
+                                       uint16_t mem_address,
+                                       SoftI2C_MemAddrSizeTypeDef mem_address_size,
+                                       const uint8_t *data,
+                                       uint16_t size);
 
 #ifdef __cplusplus
 }

@@ -8,9 +8,7 @@
 
 Board_StatusTypeDef Board_Audio_SetPower(bool enabled);
 Board_StatusTypeDef Board_Audio_SetMute(bool mute);
-Board_StatusTypeDef Board_Audio_Transmit(
-    const uint16_t *data,
-    uint16_t size);
+Board_StatusTypeDef Board_Audio_Transmit(const uint16_t *data, uint16_t size);
 
 Board_StatusTypeDef Board_Audio_Init(void);
 

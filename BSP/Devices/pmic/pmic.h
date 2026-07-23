@@ -71,8 +71,7 @@ typedef PMIC_BusStatusTypeDef (*PMIC_BusPrepareFunc)(void *context);
   * @param  size 待读取字节数。
   * @retval PMIC_BusStatusTypeDef 归一化后的总线状态。
   */
-typedef PMIC_BusStatusTypeDef (*PMIC_BusMemReadFunc)(
-    void *context,
+typedef PMIC_BusStatusTypeDef (*PMIC_BusMemReadFunc)(void *context,
     uint8_t device_address_7bit,
     uint8_t reg,
     uint8_t *data,
@@ -87,8 +86,7 @@ typedef PMIC_BusStatusTypeDef (*PMIC_BusMemReadFunc)(
   * @param  size 待写入字节数。
   * @retval PMIC_BusStatusTypeDef 归一化后的总线状态。
   */
-typedef PMIC_BusStatusTypeDef (*PMIC_BusMemWriteFunc)(
-    void *context,
+typedef PMIC_BusStatusTypeDef (*PMIC_BusMemWriteFunc)(void *context,
     uint8_t device_address_7bit,
     uint8_t reg,
     const uint8_t *data,

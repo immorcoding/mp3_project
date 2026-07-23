@@ -32,12 +32,13 @@ static bool sdcard_port_is_present(const void *context)
 
 /**
   * @brief  将 HAL 返回值转换为 Device 可理解的 Port 状态。
-  * @param  hal_status HAL 函数的立即返回值。
+  * @param  native_status 当前 SDK 函数的立即返回状态。
   * @note   HAL 原始 ErrorCode 继续保留在 hsd1 中，不跨越 Port Seam。
   */
-static SDCard_PortStatusTypeDef sdcard_port_status(
-    HAL_StatusTypeDef hal_status)
+static SDCard_PortStatusTypeDef sdcard_port_status(int32_t native_status)
 {
+    HAL_StatusTypeDef hal_status = (HAL_StatusTypeDef)native_status;
+
     switch (hal_status)
     {
         case HAL_OK:
@@ -87,7 +88,7 @@ static SDCard_PortStatusTypeDef sdcard_port_init(void *context)
     hal_sd->Init.ClockDiv = 0u;
 
     HAL_StatusTypeDef hal_status = HAL_SD_Init(hal_sd);
-    SDCard_PortStatusTypeDef status = sdcard_port_status(hal_status);
+    SDCard_PortStatusTypeDef status = sdcard_port_status((int32_t)hal_status);
 
     /* 初始化期间被拔卡时，优先报告介质不存在而不是泛化 HAL_ERROR。 */
     if ((hal_status != HAL_OK) && (!sdcard_port_is_present(context)))
@@ -114,13 +115,12 @@ static SDCard_PortStatusTypeDef sdcard_port_deinit(void *context)
         return SDCARD_PORT_ERROR;
     }
 
-    return sdcard_port_status(HAL_SD_DeInit(hal_sd));
+    return sdcard_port_status((int32_t)HAL_SD_DeInit(hal_sd));
 }
 
 /** @brief 将 HAL 卡信息转换为 Device 的逻辑块信息。 */
-static SDCard_PortStatusTypeDef sdcard_port_get_info(
-    void *context,
-    SDCard_InfoTypeDef *info)
+static SDCard_PortStatusTypeDef sdcard_port_get_info(void *context,
+                                                     SDCard_InfoTypeDef *info)
 {
     SD_HandleTypeDef *hal_sd = (SD_HandleTypeDef *)context;
     HAL_SD_CardInfoTypeDef hal_info;
@@ -136,8 +136,7 @@ static SDCard_PortStatusTypeDef sdcard_port_get_info(
     }
 
     HAL_StatusTypeDef hal_status = HAL_SD_GetCardInfo(hal_sd, &hal_info);
-    SDCard_PortStatusTypeDef status =
-        sdcard_port_status(hal_status);
+    SDCard_PortStatusTypeDef status = sdcard_port_status((int32_t)hal_status);
 
     if (status != SDCARD_PORT_OK)
     {
@@ -146,8 +145,7 @@ static SDCard_PortStatusTypeDef sdcard_port_get_info(
 
     info->BlockCount = hal_info.LogBlockNbr;
     info->BlockSize = hal_info.LogBlockSize;
-    info->CapacityBytes =
-        (uint64_t)hal_info.LogBlockNbr * (uint64_t)hal_info.LogBlockSize;
+    info->CapacityBytes = (uint64_t)hal_info.LogBlockNbr * (uint64_t)hal_info.LogBlockSize;
     info->CardType = hal_info.CardType;
     info->CardVersion = hal_info.CardVersion;
 
@@ -155,12 +153,11 @@ static SDCard_PortStatusTypeDef sdcard_port_get_info(
 }
 
 /** @brief 使用 HAL 轮询接口读取一个或多个逻辑块。 */
-static SDCard_PortStatusTypeDef sdcard_port_read_blocks(
-    void *context,
-    uint8_t *data,
-    uint32_t start_block,
-    uint32_t block_count,
-    uint32_t timeout_ms)
+static SDCard_PortStatusTypeDef sdcard_port_read_blocks(void *context,
+                                                        uint8_t *data,
+                                                        uint32_t start_block,
+                                                        uint32_t block_count,
+                                                        uint32_t timeout_ms)
 {
     SD_HandleTypeDef *hal_sd = (SD_HandleTypeDef *)context;
 
@@ -174,12 +171,12 @@ static SDCard_PortStatusTypeDef sdcard_port_read_blocks(
         return SDCARD_PORT_NOT_PRESENT;
     }
 
-    SDCard_PortStatusTypeDef status = sdcard_port_status(
-        HAL_SD_ReadBlocks(hal_sd,
-                          data,
-                          start_block,
-                          block_count,
-                          timeout_ms));
+    HAL_StatusTypeDef hal_status = HAL_SD_ReadBlocks(hal_sd,
+                                                     data,
+                                                     start_block,
+                                                     block_count,
+                                                     timeout_ms);
+    SDCard_PortStatusTypeDef status = sdcard_port_status((int32_t)hal_status);
 
     if ((status != SDCARD_PORT_OK) &&
         (!sdcard_port_is_present(context)))
@@ -191,12 +188,11 @@ static SDCard_PortStatusTypeDef sdcard_port_read_blocks(
 }
 
 /** @brief 使用 HAL 轮询接口写入一个或多个逻辑块。 */
-static SDCard_PortStatusTypeDef sdcard_port_write_blocks(
-    void *context,
-    const uint8_t *data,
-    uint32_t start_block,
-    uint32_t block_count,
-    uint32_t timeout_ms)
+static SDCard_PortStatusTypeDef sdcard_port_write_blocks(void *context,
+                                                         const uint8_t *data,
+                                                         uint32_t start_block,
+                                                         uint32_t block_count,
+                                                         uint32_t timeout_ms)
 {
     SD_HandleTypeDef *hal_sd = (SD_HandleTypeDef *)context;
 
@@ -210,12 +206,12 @@ static SDCard_PortStatusTypeDef sdcard_port_write_blocks(
         return SDCARD_PORT_NOT_PRESENT;
     }
 
-    SDCard_PortStatusTypeDef status = sdcard_port_status(
-        HAL_SD_WriteBlocks(hal_sd,
-                           data,
-                           start_block,
-                           block_count,
-                           timeout_ms));
+    HAL_StatusTypeDef hal_status = HAL_SD_WriteBlocks(hal_sd,
+                                                      data,
+                                                      start_block,
+                                                      block_count,
+                                                      timeout_ms);
+    SDCard_PortStatusTypeDef status = sdcard_port_status((int32_t)hal_status);
 
     if ((status != SDCARD_PORT_OK) &&
         (!sdcard_port_is_present(context)))
@@ -275,8 +271,7 @@ static SDCard_PortStatusTypeDef sdcard_port_sync(void *context,
 
 /* Private variables ---------------------------------------------------------*/
 /** @brief 当前 PCB 的 SDMMC1 Port Adapter。 */
-static const SDCard_PortOpsTypeDef sdcard_port_ops =
-{
+static const SDCard_PortOpsTypeDef sdcard_port_ops = {
     .IsPresent = sdcard_port_is_present,
     .Init = sdcard_port_init,
     .DeInit = sdcard_port_deinit,

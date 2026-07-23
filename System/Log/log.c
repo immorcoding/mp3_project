@@ -251,11 +251,10 @@ LOG_StatusTypeDef LOG_Process(void)
 
     /* 只查看队首，不提前出队；BUSY/NOT_READY 时必须保留原消息重试。 */
     message = &hlog_default.Queue.Messages[hlog_default.Queue.Head];
-    output_status = hlog_default.Output.Ops->TryWrite(
-        hlog_default.Output.Context,
-        message->Level,
-        message->Data,
-        message->Length);
+    output_status = hlog_default.Output.Ops->TryWrite(hlog_default.Output.Context,
+                                                      message->Level,
+                                                      message->Data,
+                                                      message->Length);
 
     if (output_status == LOG_OUTPUT_OK)
     {
@@ -384,8 +383,7 @@ LOG_StatusTypeDef LOG_Printf(LOG_LevelTypeDef MessageLevel,
     }
 
     /* 时间戳记录消息产生时刻，而不是稍后 USB 真正提交的时刻。 */
-    timestamp_ms = hlog_default.TimeSource.GetTimeMs(
-        hlog_default.TimeSource.Context);
+    timestamp_ms = hlog_default.TimeSource.GetTimeMs(hlog_default.TimeSource.Context);
 
     /* 先装配固定前缀，返回值是“不含 '\0' 的理论字符数”。 */
     result = snprintf(buffer,

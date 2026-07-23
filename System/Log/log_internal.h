@@ -40,8 +40,7 @@ typedef enum
   * @retval LOG_OUTPUT_NOT_READY Adapter 尚未就绪。
   * @retval LOG_OUTPUT_ERROR     Adapter 提交失败。
   */
-typedef LOG_OutputStatusTypeDef (*LOG_OutputTryWriteFuncTypeDef)(
-    void *Context,
+typedef LOG_OutputStatusTypeDef (*LOG_OutputTryWriteFuncTypeDef)(void *Context,
     LOG_LevelTypeDef Level,
     const char *Data,
     uint32_t Length);

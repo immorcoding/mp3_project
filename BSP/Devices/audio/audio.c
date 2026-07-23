@@ -56,10 +56,9 @@ Audio_StatusTypeDef Audio_Transmit(Audio_HandleTypeDef *haudio,
     audio_clear_error(haudio);
     haudio->State = AUDIO_STATE_BUSY;
 
-    Audio_BusStatusTypeDef result =
-        haudio->BusOps->Transmit(haudio->BusContext,
-                                 data,
-                                 size);
+    Audio_BusStatusTypeDef result = haudio->BusOps->Transmit(haudio->BusContext,
+                                                             data,
+                                                             size);
 
     if (result != AUDIO_BUS_OK)
     {
@@ -142,8 +141,7 @@ Audio_StatusTypeDef Audio_Init(Audio_HandleTypeDef *haudio)
 
     haudio->State = AUDIO_STATE_BUSY;
 
-    Audio_BusStatusTypeDef bus_status =
-        haudio->BusOps->Prepare(haudio->BusContext);
+    Audio_BusStatusTypeDef bus_status = haudio->BusOps->Prepare(haudio->BusContext);
 
     if(bus_status != AUDIO_BUS_OK)
     {

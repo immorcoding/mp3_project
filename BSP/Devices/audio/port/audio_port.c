@@ -5,9 +5,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-static Audio_BusStatusTypeDef audio_port_result(HAL_StatusTypeDef status)
+static Audio_BusStatusTypeDef audio_port_result(int32_t native_status)
 {
 /*******自定义修改状态码*******/
+    HAL_StatusTypeDef status = (HAL_StatusTypeDef)native_status;
+
     switch (status)
     {
         case HAL_OK:
@@ -56,7 +58,11 @@ static Audio_BusStatusTypeDef audio_transmit(void *AudioContext, const uint16_t 
     }
 
 /**************** 自定义的音频发送函数 ****************/
-    return audio_port_result(HAL_I2S_Transmit((I2S_HandleTypeDef *)AudioContext, data, size, 1000)); // Return the appropriate state after transmission
+    HAL_StatusTypeDef status = HAL_I2S_Transmit((I2S_HandleTypeDef *)AudioContext,
+                                                data,
+                                                size,
+                                                1000);
+    return audio_port_result((int32_t)status); // Return the appropriate state after transmission
 /****************************************************/
 }
 
@@ -70,8 +76,7 @@ static Audio_StatusTypeDef audio_mute(void *MuteContext, bool mute)
     return AUDIO_OK;
 }
 
-static const Audio_BusOpsTypeDef audio_bus_ops =
-{
+static const Audio_BusOpsTypeDef audio_bus_ops = {
     .Transmit = audio_transmit,
     .Prepare = audio_prepare
 };

@@ -30,8 +30,7 @@
   * @brief 当前 PMIC I2C 后端的私有上下文。软件 I2C。
   * @note  名称 hpmic_i2c 应在切换后端时保持不变，类型和初始化字段可以替换。
   */
-static SoftI2C_HandleTypeDef hpmic_i2c =
-{
+static SoftI2C_HandleTypeDef hpmic_i2c = {
     .SCL_Port = AXP2101_SCL_GPIO_Port,
     .SCL_Pin = AXP2101_SCL_Pin,
     .SDA_Port = AXP2101_SDA_GPIO_Port,
@@ -48,14 +47,17 @@ static SoftI2C_HandleTypeDef hpmic_i2c =
 /* PMIC I2C PORT BACKEND BEGIN: Implementation ------------------------------*/
 /**
   * @brief  将 I2C 状态转换为 PMIC 总线统一状态。
-  * @param  status I2C 函数返回值。
+  * @param  context 当前底层总线句柄，用于读取后端私有诊断。
+  * @param  native_status 当前 SDK/驱动函数的立即返回状态。
   * @note   SoftI2C 原始 ErrorCode 保留在其私有 Handle 中，不跨越 Port Seam。
   * @retval PMIC_BusStatusTypeDef 归一化后的总线状态。
   */
-static PMIC_BusStatusTypeDef pmic_i2c_port_status(
-    const SoftI2C_HandleTypeDef *hi2c,
-    SoftI2C_StatusTypeDef status)
+static PMIC_BusStatusTypeDef pmic_i2c_port_status(const void *context,
+                                                  int32_t native_status)
 {
+    const SoftI2C_HandleTypeDef *hi2c = (const SoftI2C_HandleTypeDef *)context;
+    SoftI2C_StatusTypeDef status = (SoftI2C_StatusTypeDef)native_status;
+
     /* BACKEND: 将 SoftI2C 返回值和 ErrorCode 映射到 PMIC 公共错误模型。 */
     if (status == SOFT_I2C_OK)
     {
@@ -95,8 +97,7 @@ static PMIC_BusStatusTypeDef pmic_i2c_port_prepare(void *context)
     SoftI2C_StatusTypeDef status = SoftI2C_Init((SoftI2C_HandleTypeDef *)context);
     /* BACKEND END */
 
-    return pmic_i2c_port_status((const SoftI2C_HandleTypeDef *)context,
-                                status);
+    return pmic_i2c_port_status(context, (int32_t)status);
 }
 
 /**
@@ -108,25 +109,22 @@ static PMIC_BusStatusTypeDef pmic_i2c_port_prepare(void *context)
   * @param  size                待读取字节数。
   * @retval PMIC_BusStatusTypeDef 寄存器读取结果。
   */
-static PMIC_BusStatusTypeDef pmic_i2c_port_mem_read(
-    void *context,
-    uint8_t device_address_7bit,
-    uint8_t reg,
-    uint8_t *data,
-    uint16_t size)
+static PMIC_BusStatusTypeDef pmic_i2c_port_mem_read(void *context,
+                                                    uint8_t device_address_7bit,
+                                                    uint8_t reg,
+                                                    uint8_t *data,
+                                                    uint16_t size)
 {
     /* BACKEND: AXP2101 使用 8 位寄存器地址；设备地址保持 7 位形式。 */
-    SoftI2C_StatusTypeDef status =
-        SoftI2C_MemRead((SoftI2C_HandleTypeDef *)context,
-                        device_address_7bit,
-                        reg,
-                        SOFT_I2C_MEM_ADDR_8BIT,
-                        data,
-                        size);
+    SoftI2C_StatusTypeDef status = SoftI2C_MemRead((SoftI2C_HandleTypeDef *)context,
+                                                   device_address_7bit,
+                                                   reg,
+                                                   SOFT_I2C_MEM_ADDR_8BIT,
+                                                   data,
+                                                   size);
     /* BACKEND END */
 
-    return pmic_i2c_port_status((const SoftI2C_HandleTypeDef *)context,
-                                status);
+    return pmic_i2c_port_status(context, (int32_t)status);
 }
 
 /**
@@ -138,12 +136,11 @@ static PMIC_BusStatusTypeDef pmic_i2c_port_mem_read(
   * @param  size                待写入字节数。
   * @retval PMIC_BusStatusTypeDef 寄存器写入结果。
   */
-static PMIC_BusStatusTypeDef pmic_i2c_port_mem_write(
-    void *context,
-    uint8_t device_address_7bit,
-    uint8_t reg,
-    const uint8_t *data,
-    uint16_t size)
+static PMIC_BusStatusTypeDef pmic_i2c_port_mem_write(void *context,
+                                                     uint8_t device_address_7bit,
+                                                     uint8_t reg,
+                                                     const uint8_t *data,
+                                                     uint16_t size)
 {
 
     /* BACKEND: 同步写入 8 位寄存器地址和调用者数据。 */
@@ -155,8 +152,7 @@ static PMIC_BusStatusTypeDef pmic_i2c_port_mem_write(
                                                     size);
     /* BACKEND END */
 
-    return pmic_i2c_port_status((const SoftI2C_HandleTypeDef *)context,
-                                status);
+    return pmic_i2c_port_status(context, (int32_t)status);
 }
 /* PMIC I2C PORT BACKEND END: Implementation --------------------------------*/
 
@@ -165,8 +161,7 @@ static PMIC_BusStatusTypeDef pmic_i2c_port_mem_write(
   * @brief 当前 I2C 后端对 PMIC_BusOpsTypeDef 的私有实现表。
   * @note  三个函数签名稳定；切换后端时函数体可变，Device/Board 无需改动。
   */
-static const PMIC_BusOpsTypeDef pmic_i2c_port_ops =
-{
+static const PMIC_BusOpsTypeDef pmic_i2c_port_ops = {
     .Prepare = pmic_i2c_port_prepare,
     .MemRead = pmic_i2c_port_mem_read,
     .MemWrite = pmic_i2c_port_mem_write
