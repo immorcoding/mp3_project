@@ -39,6 +39,7 @@ add_executable(${CMAKE_PROJECT_NAME})
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
+add_subdirectory(Middlewares/Third_Party/FreeRTOS)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -65,6 +66,11 @@ file(GLOB_RECURSE SYSTEM_SOURCES CONFIGURE_DEPENDS
 # custom code must stay inside CubeMX USER CODE regions so regeneration preserves it.
 file(GLOB_RECURSE USB_DEVICE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/USB_DEVICE/App/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/USB_DEVICE/Target/*.c"
+)
+
+file(GLOB_RECURSE FREERTOS_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Middlewares/App/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/USB_DEVICE/Target/*.c"
 )
 
@@ -95,8 +101,8 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 # Add linked libraries
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
-
     # Add user defined libraries
+    freertos_kernel
 )
 
 # Convert the linked ELF into formats used by common programming paths:
