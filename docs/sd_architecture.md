@@ -1,10 +1,10 @@
 # SD 卡子系统架构
 
-> 适用工程：`version0.1.1`
+> 适用工程：`version0.1.2`
 >
 > 当前后端：STM32H743 SDMMC1，4 位总线
 >
-> 当前调度：裸机主循环 + EXTI 二值通知 + 30 ms 非阻塞消抖
+> 当前调度：FreeRTOS 已接入；SD 热插拔仍保留可替换的轻量通知接缝
 >
 > 当前范围：逻辑块访问和热插拔，不包含 FatFs
 
@@ -14,8 +14,8 @@
 
 - 一个可复用、面向逻辑块的 SD Card Device；
 - 一个绑定 STM32H743 SDMMC1 的具体 Port；
-- 一个代表本板唯一物理卡槽的 Board 接口；
-- 一个把 GPIO EXTI 映射为逻辑中断源的 Board IRQ 分发器；
+- 一个代表本板唯一物理卡槽的 Platform 接口；
+- 一个把 GPIO EXTI 映射为逻辑中断源的 Platform IRQ 分发器；
 - APP 对“可选介质”的启动和日志策略。
 
 当前不抽象通用 `BlockDevice`。SD 是现阶段唯一的块设备；等 QSPI Flash 成为第二个真实实现，并明确其擦除、对齐和写入规则后，再从两个具体需求中提取公共接口更稳妥。
@@ -26,26 +26,30 @@
 APP/
   app.c                         可选介质启动策略、事件处理和日志
 
-BSP/Devices/sd/
+Components/sd/
   sd.h                          可复用 Device 公共类型和接口
   sd.c                          状态机、参数校验、块访问和错误处理
-  port/
-    sd_port.h                   当前 Port 的绑定接口
-    sd_port.c                   hsd1、SDMMC1、PC7 和 STM32 HAL 适配
 
-BSP/Board/sd/
-  board_sd.h                    APP/未来 Storage 使用的 Board 接口
-  board_sd.c                    私有 Device、IRQ 绑定、消抖和事件映射
+Adapters/sd_stm32_hal/
+  sd_stm32_hal_adapter.h        STM32 HAL SDMMC Adapter 绑定接口
+  sd_stm32_hal_adapter.c        STM32 HAL SD/GPIO 调用和状态转换
 
-BSP/Board/
-  board_irq.h                   逻辑中断源注册与分发接口
-  board_irq.c                   GPIO 引脚到逻辑中断源的映射
+Platform/sd/
+  platform_sd.h                    APP/未来 Storage 使用的 Platform 接口
+  platform_sd.c                    私有 Device、hsd1/SD_CD 装配、消抖和事件映射
+
+Platform/irq/
+  platform_irq.h                   逻辑中断源注册与分发接口
+  platform_irq.c                   GPIO 引脚到逻辑中断源的映射
 
 Core/Inc/sdmmc.h
 Core/Src/sdmmc.c                CubeMX 管理的 hsd1 和 HAL MSP 初始化/反初始化
 ```
 
-`sd.c` 不得包含 `sdmmc.h`、`main.h` 或 STM32 HAL 头文件。`hsd1`、PC7 检测极性和 HAL 状态只允许出现在具体 Port 中。Board 私有持有 Device 句柄，上层不能直接修改其状态。
+`sd.c` 不得包含 `sdmmc.h`、`main.h` 或 STM32 HAL 头文件。具体 Adapter
+可以认识 STM32 HAL 类型，但不固定使用 `hsd1` 或某个检测引脚。Platform 通过
+`SDCard_STM32HALAdapterTypeDef` 装配 `hsd1`、SD_CD GPIO 和低有效电平，
+并私有持有 Device 句柄，上层不能直接修改其状态。
 
 ## 3. 启动调用链
 
@@ -53,11 +57,11 @@ Core/Src/sdmmc.c                CubeMX 管理的 hsd1 和 HAL MSP 初始化/反�
 
 ```text
 app_init()
-  -> Board_Init()                          初始化整机强依赖设备
+  -> Platform_Init()                          初始化整机强依赖设备
   -> app_init_sd()                         初始化可选介质
-     -> Board_SD_Init()
-        -> SDCard_Port_Bind(&Device)
-        -> Board_IRQ_Register(SD_DETECT)   注册卡槽私有 ISR 回调
+     -> Platform_SD_Init()
+        -> SDCard_STM32HALAdapter_Bind(&Device, &Adapter)
+        -> Platform_IRQ_Register(SD_DETECT)   注册卡槽私有 ISR 回调
         -> SDCard_Init(&Device)
            -> Port.IsPresent(PC7)
            -> Port.Init(&hsd1)
@@ -68,18 +72,18 @@ app_init()
            -> State = READY
 ```
 
-初始化成功后，APP 通过 `Board_SD_GetInfo()` 取得副本并打印容量，不直接接触私有 Device 句柄或 `hsd1`。
+初始化成功后，APP 通过 `Platform_SD_GetInfo()` 取得副本并打印容量，不直接接触私有 Device 句柄或 `hsd1`。
 
 ### 3.2 未插卡启动
 
 ```text
-Board_SD_Init()
+Platform_SD_Init()
   -> SDCard_Init()
      -> IsPresent() == false
      -> 清除缓存信息有效标志
      -> State = NOT_PRESENT
      -> return SDCARD_OK
-  -> return BOARD_OK
+  -> return PLATFORM_OK
 ```
 
 没有插卡是正常的持续状态，不是整机故障。因此 APP 可以继续启动。之后若在 `NOT_PRESENT` 状态读取逻辑块或获取卡信息，因为该次操作无法完成，函数仍会返回失败。
@@ -87,7 +91,7 @@ Board_SD_Init()
 ## 4. 同步块读取链
 
 ```text
-Board_SD_ReadBlocks()
+Platform_SD_ReadBlocks()
   -> SDCard_ReadBlocks()
      -> 校验指针、块数量和当前状态
      -> 以不会整数溢出的方式校验起始块和块数量
@@ -107,17 +111,17 @@ Board_SD_ReadBlocks()
 EXTI9_5_IRQHandler()
   -> HAL_GPIO_EXTI_IRQHandler(SD_CD_Pin)
   -> HAL_GPIO_EXTI_Callback(SD_CD_Pin)
-  -> Board_IRQ_DispatchFromISR(BOARD_IRQ_SOURCE_SD_DETECT)
-  -> board_sd_detect_irq_cb()
+  -> Platform_IRQ_DispatchFromISR(PLATFORM_IRQ_SOURCE_SD_DETECT)
+  -> platform_sd_detect_irq_cb()
      -> DetectPending = true
 
 app_run()
   -> app_process_sd()
-     -> Board_SD_Process(&event)
+     -> Platform_SD_Process(&event)
         -> 原子取得并清除 DetectPending
         -> 记录 DebounceStartMs，进入 Debouncing
         -> 30 ms 内收到新边沿时重新开始计时
-        -> 连续安静满 30 ms 后调用 Board_SD_Refresh()
+        -> 连续安静满 30 ms 后调用 Platform_SD_Refresh()
         -> 仅在持续状态变化时产生 INSERTED 或 REMOVED
   -> APP 根据 event 记录日志
 ```
@@ -130,18 +134,18 @@ app_run()
 
 `volatile` 只保证每次都真实访问内存，不保证“读取并清除”这个复合操作不可被 ISR 打断。如果普通上下文读取到 `true` 后 ISR 再次写入 `true`，随后普通上下文清零，就可能丢掉新通知。
 
-`board_sd_take_detect_event()` 使用极短的 PRIMASK 临界区原子地取得并清除通知，并恢复调用前的全局中断状态。快速路径会先判断无通知并直接返回，避免主循环每轮都短暂关中断。
+`platform_sd_take_detect_event()` 使用极短的 PRIMASK 临界区原子地取得并清除通知，并恢复调用前的全局中断状态。快速路径会先判断无通知并直接返回，避免主循环每轮都短暂关中断。
 
 ### 5.3 FreeRTOS 替换接缝
 
-`board_sd.c` 中带有“FreeRTOS 移植替换区”的代码是调度接缝。接入 RTOS 后建议：
+`platform_sd.c` 中带有“FreeRTOS 移植替换区”的代码是调度接缝。接入 RTOS 后建议：
 
 - ISR 中用 `vTaskNotifyGiveFromISR()` 通知 Storage Task；
 - Storage Task 收到通知后启动或重新启动 30 ms 消抖等待；
-- 消抖结束后仍调用相同的 `Board_SD_Refresh()`；
-- Board 的 `INSERTED` / `REMOVED` 事件语义保持不变。
+- 消抖结束后仍调用相同的 `Platform_SD_Refresh()`；
+- Platform 的 `INSERTED` / `REMOVED` 事件语义保持不变。
 
-Device 状态机、Port、错误模型和 Board 公共接口不需要因为调度方式变化而重写。
+Device 状态机、Port、错误模型和 Platform 公共接口不需要因为调度方式变化而重写。
 
 ## 6. 状态、返回值与诊断
 
@@ -162,7 +166,7 @@ Device 句柄还保存：
 | `IsInfoValid` | `Info` 当前是否可以复制给调用者。 |
 | `IsPortInitialized` | 反初始化时是否需要释放 Port 资源。 |
 
-`Board_SD_GetDiagnostics()` 只复制 `DeviceError` 和 `PortStatus`，不会暴露私有 Device 句柄。若归一化信息不足，再用调试器查看具体 Port 中 `hsd1.ErrorCode` 的 HAL 原始错误位。
+`Platform_SD_GetDiagnostics()` 只复制 `DeviceError` 和 `PortStatus`，不会暴露私有 Device 句柄。若归一化信息不足，再用调试器查看具体 Port 中 `hsd1.ErrorCode` 的 HAL 原始错误位。
 
 ## 7. 状态机
 
@@ -185,7 +189,7 @@ ERROR
   `-- 拔卡后 Refresh ------------------> NOT_PRESENT
 ```
 
-`SDCard_Refresh()` 不负责机械触点消抖，也不能从 EXTI ISR 调用。当前由 `Board_SD_Process()` 在普通上下文完成可重新开始的 30 ms 消抖，然后再调用 Refresh。
+`SDCard_Refresh()` 不负责机械触点消抖，也不能从 EXTI ISR 调用。当前由 `Platform_SD_Process()` 在普通上下文完成可重新开始的 30 ms 消抖，然后再调用 Refresh。
 
 ## 8. Device 为什么不是简单 HAL 包装
 
@@ -214,7 +218,7 @@ CubeMX 继续管理：
 
 当前不自动调用 `MX_SDMMC1_SD_Init()`。SD Card Port 直接调用有返回值的 `HAL_SD_Init()`，因为 CubeMX 生成的 `MX_SDMMC1_SD_Init()` 返回 `void`，失败时会进入 `Error_Handler()`，不适合可移除介质。
 
-因此 `sdcard_port_init()` 中保存了与 CubeMX 一致的以下参数：
+因此 `sd_stm32_hal_init()` 中保存了与 CubeMX 一致的以下参数：
 
 - 时钟采样沿；
 - 空闲时钟节能设置；
@@ -228,23 +232,23 @@ CubeMX 继续管理：
 
 当前版本不实现 FatFs。未来 DiskIO Adapter 可以这样映射：
 
-| FatFs DiskIO 操作 | Board SD 接口 |
+| FatFs DiskIO 操作 | Platform SD 接口 |
 | --- | --- |
-| `disk_initialize` | 稳定检测后调用 `Board_SD_Init()` 或 `Board_SD_Refresh()` |
-| `disk_status` | `Board_SD_GetState()` 和 `Board_SD_IsPresent()` |
-| `disk_read` | `Board_SD_ReadBlocks()` |
-| `disk_write` | `Board_SD_WriteBlocks()` |
-| `CTRL_SYNC` | `Board_SD_Sync()` |
-| `GET_SECTOR_COUNT` | `Board_SD_GetInfo()` 返回的 `BlockCount` |
-| `GET_SECTOR_SIZE` | `Board_SD_GetInfo()` 返回的 `BlockSize` |
+| `disk_initialize` | 稳定检测后调用 `Platform_SD_Init()` 或 `Platform_SD_Refresh()` |
+| `disk_status` | `Platform_SD_GetState()` 和 `Platform_SD_IsPresent()` |
+| `disk_read` | `Platform_SD_ReadBlocks()` |
+| `disk_write` | `Platform_SD_WriteBlocks()` |
+| `CTRL_SYNC` | `Platform_SD_Sync()` |
+| `GET_SECTOR_COUNT` | `Platform_SD_GetInfo()` 返回的 `BlockCount` |
+| `GET_SECTOR_SIZE` | `Platform_SD_GetInfo()` 返回的 `BlockSize` |
 
-文件系统挂载状态不属于 `SDCard_StateTypeDef`。挂载/卸载、打开文件失效处理，以及本地 FatFs 与 USB MSC 之间的介质所有权仲裁，应由未来的 `System/Storage` 模块负责。
+文件系统挂载状态不属于 `SDCard_StateTypeDef`。挂载/卸载、打开文件失效处理，以及本地 FatFs 与 USB MSC 之间的介质所有权仲裁，应由未来的 `Services/storage` 模块负责。
 
 ## 11. 当前限制
 
 1. 块传输使用 HAL 阻塞轮询，尚未实现 DMA 或中断传输；
 2. 尚未制定 D-Cache 维护和 DMA 可访问缓冲区策略；
-3. 裸机阶段需要主循环频繁调用 `Board_SD_Process()`，以后由 Storage Task 的任务通知替代；
+3. 裸机阶段需要主循环频繁调用 `Platform_SD_Process()`，以后由 Storage Task 的任务通知替代；
 4. 尚无 RTOS Mutex，同一 Device 句柄不能被多个执行上下文并发访问；
 5. 传输和同步超时当前固定在 Device 实现中；
 6. SD Card Port 的 SDMMC 初始化值必须与 CubeMX 配置保持一致；
@@ -252,7 +256,7 @@ CubeMX 继续管理：
 
 ## 12. 对外使用规则
 
-应用代码通常只调用 `Board_SD_*`。`SDCard_*` 接口用于 Board 装配、Device 独立测试和未来替换 Port；`hsd1` 始终是 SD Card Port 的实现细节。
+应用代码通常只调用 `Platform_SD_*`。`SDCard_*` 接口用于 Platform 装配、Device 独立测试和未来替换 Port；`hsd1` 始终是 SD Card Port 的实现细节。
 
 架构变化时，应同时更新本文和根目录的 `CONTEXT.md`，重点核对：
 

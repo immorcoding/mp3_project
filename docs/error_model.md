@@ -1,14 +1,14 @@
 # 设备错误模型
 
-> 适用工程：`version0.1.1`
+> 适用工程：`version0.1.2`
 >
-> 覆盖模块：Audio、PMIC、SD Card Device
+> 覆盖模块：Audio、AXP2101、SD Card Device
 >
 > 原则：公共错误表达稳定，后端原始错误不跨越 Port 边界
 
 ## 1. 四类值分别表达什么
 
-Audio、PMIC 和 SD 模块采用相同的诊断结构：
+Audio、AXP2101 和 SD 模块采用相同的诊断结构：
 
 | 值 | 生命周期 | 作用 |
 | --- | --- | --- |
@@ -19,10 +19,10 @@ Audio、PMIC 和 SD 模块采用相同的诊断结构：
 
 `ErrorCode`回答“哪一步失败”；归一化状态回答“底层大致因为什么失败”，例如 `ERROR`、`BUSY`、`TIMEOUT`、`NACK` 或无卡。若错误完全发生在 Device 内部，底层状态保持 `OK`。
 
-HAL 或 SoftI2C 的原始错误位不会复制进 Device 或 Board 句柄，而是留在具体 Port 句柄中，仅在需要分析特定后端时查看：
+HAL 或 SoftI2C 的原始错误位不会复制进 Device 或 Platform 句柄，而是留在具体 Port 句柄中，仅在需要分析特定后端时查看：
 
 - Audio：`hi2s2.ErrorCode`；
-- PMIC SoftI2C Port：`hpmic_i2c.ErrorCode`；
+- AXP2101 SoftI2C 后端：Platform Power 私有的 `hplatform_power_i2c.ErrorCode`；
 - SD Port：`hsd1.ErrorCode`。
 
 各 Port 都先用稳定的 `int32_t native_status` 承接当前 SDK 的立即返回值，再在转换函数内部还原为当前后端的状态类型并映射到 Device 可理解的归一化状态。使用有符号类型也兼容以负数表示错误的其他 SDK。
@@ -48,26 +48,26 @@ HAL 或 SoftI2C 的原始错误位不会复制进 Device 或 Board 句柄，而�
 
 I2S 没有 I2C 的 NACK 概念，因此 Audio 的归一化总线状态不包含 NACK。
 
-## 3. PMIC 的 `ErrorCode`
+## 3. AXP2101 的 `ErrorCode`
 
 | 数值 | 符号 | 含义 |
 | ---: | --- | --- |
-| 0 | `PMIC_ERROR_NONE` | 无错误。 |
-| 1 | `PMIC_ERROR_INVALID_PARAM` | 句柄、地址或配置参数非法。 |
-| 2 | `PMIC_ERROR_PORT_NOT_BOUND` | Bus Ops 或 Bus Context 没有绑定。 |
-| 3 | `PMIC_ERROR_NOT_READY` | 当前生命周期状态不允许执行该操作。 |
-| 4 | `PMIC_ERROR_BUS_PREPARE` | I2C 或其他总线后端准备失败。 |
-| 5 | `PMIC_ERROR_BUS_READ` | 寄存器读取失败。 |
-| 6 | `PMIC_ERROR_BUS_WRITE` | 寄存器写入失败。 |
-| 7 | `PMIC_ERROR_WRONG_CHIP_ID` | 寄存器访问成功，但芯片 ID 不是预期的 AXP2101。 |
+| 0 | `AXP2101_ERROR_NONE` | 无错误。 |
+| 1 | `AXP2101_ERROR_INVALID_PARAM` | 句柄、地址或配置参数非法。 |
+| 2 | `AXP2101_ERROR_PORT_NOT_BOUND` | Bus Ops 或 Bus Context 没有绑定。 |
+| 3 | `AXP2101_ERROR_NOT_READY` | 当前生命周期状态不允许执行该操作。 |
+| 4 | `AXP2101_ERROR_BUS_PREPARE` | I2C 或其他总线后端准备失败。 |
+| 5 | `AXP2101_ERROR_BUS_READ` | 寄存器读取失败。 |
+| 6 | `AXP2101_ERROR_BUS_WRITE` | 寄存器写入失败。 |
+| 7 | `AXP2101_ERROR_WRONG_CHIP_ID` | 寄存器访问成功，但芯片 ID 不是预期的 AXP2101。 |
 
-`PMIC_BusStatusTypeDef` 包含：
+`AXP2101_BusStatusTypeDef` 包含：
 
-- `PMIC_BUS_OK`
-- `PMIC_BUS_ERROR`
-- `PMIC_BUS_BUSY`
-- `PMIC_BUS_TIMEOUT`
-- `PMIC_BUS_NACK`
+- `AXP2101_BUS_OK`
+- `AXP2101_BUS_ERROR`
+- `AXP2101_BUS_BUSY`
+- `AXP2101_BUS_TIMEOUT`
+- `AXP2101_BUS_NACK`
 
 `LastFailedRegister` 保存最近一次总线失败对应的寄存器地址。
 
@@ -104,7 +104,7 @@ I2S 没有 I2C 的 NACK 概念，因此 Audio 的归一化总线状态不包含 
 1. 查看 `State`，确认设备当前处于什么生命周期阶段；
 2. 查看 `ErrorCode`，定位失败发生在哪个 Device 语义步骤；
 3. 查看 `LastBusStatus` 或 `LastPortStatus`，判断底层属于错误、忙、超时、NACK 或无卡；
-4. PMIC 额外查看 `LastFailedRegister`；
+4. AXP2101 额外查看 `LastFailedRegister`；
 5. 只有归一化信息不够时，再查看具体 Port 私有句柄的原始 `ErrorCode`。
 
 上层业务不应依据 HAL 或 SoftI2C 原始错误位编写控制逻辑，因为这样会破坏 Port 隔离。原始错误只用于特定后端的深入调试。
