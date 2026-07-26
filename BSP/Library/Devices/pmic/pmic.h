@@ -23,7 +23,10 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /** @brief AXP2101 默认 7 位 I2C 地址，不包含读写位。 */
-#define PMIC_DEFAULT_ADDRESS_7BIT  AXP2101_SLAVE_ADDRESS
+#ifdef AXP2101_SLAVE_ADDRESS
+  #define PMIC_DEFAULT_ADDRESS_7BIT   AXP2101_SLAVE_ADDRESS
+#else
+  #define PMIC_DEFAULT_ADDRESS_7BIT   
 
 /** @brief PMIC_Init() 仅识别设备，不写入启动配置。 */
 #define PMIC_BOOT_CONFIG_DISABLED  0u
