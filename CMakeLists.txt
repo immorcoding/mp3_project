@@ -13,6 +13,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 
 
+
 # 未由外部指定构建类型时，默认使用 Debug
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
@@ -50,15 +51,24 @@ file(GLOB_RECURSE COMPONENT_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Components/*.c"
 )
 
+list(JOIN COMPONENT_SOURCES "\n" COMPONENT_SOURCES_MESSAGE)
+message(STATUS "Components Sources:\n" ${COMPONENT_SOURCES_MESSAGE})
+
 # 收集 Component 所定义接口的硬件或厂商相关 Adapter 实现
 file(GLOB_RECURSE ADAPTER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Adapters/*.c"
 )
 
+list(JOIN ADAPTER_SOURCES "\n" ADAPTER_SOURCES_MESSAGE)
+message(STATUS "Adapters Sources:\n" ${ADAPTER_SOURCES_MESSAGE})
+
 # 收集当前产品/PCB 的对象装配代码以及面向产品的硬件能力
 file(GLOB_RECURSE PLATFORM_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Platform/*.c"
 )
+
+list(JOIN PLATFORM_SOURCES "\n" PLATFORM_SOURCES_MESSAGE)
+message(STATUS "Platform Sources:\n" ${PLATFORM_SOURCES_MESSAGE})
 
 # 收集 CubeMX USB Device 连接代码。
 # 这些文件仍由生成器管理；自定义代码必须写在 CubeMX 的 USER CODE 区域内，
@@ -67,6 +77,9 @@ file(GLOB_RECURSE USB_DEVICE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/USB_DEVICE/App/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/USB_DEVICE/Target/*.c"
 )
+
+list(JOIN USB_DEVICE_SOURCES "\n" USB_DEVICE_SOURCES_MESSAGE)
+message(STATUS "USB Device Sources:\n" ${USB_DEVICE_SOURCES_MESSAGE})
 
 # 将上面收集的自维护源文件以及显式指定的应用入口加入最终固件目标
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
