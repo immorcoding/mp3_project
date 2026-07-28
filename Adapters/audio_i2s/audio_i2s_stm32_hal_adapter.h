@@ -1,5 +1,5 @@
-#ifndef AUDIO_STM32_I2S_ADAPTER_H
-#define AUDIO_STM32_I2S_ADAPTER_H
+#ifndef AUDIO_I2S_STM32_HAL_ADAPTER_H
+#define AUDIO_I2S_STM32_HAL_ADAPTER_H
 
 #include <stdint.h>
 
@@ -18,14 +18,14 @@ typedef struct
     I2S_HandleTypeDef *I2SHandle; /**< CubeMX 生成并初始化的 I2S Handle。 */
     GPIO_TypeDef *MutePort;       /**< 硬件静音 GPIO 端口。 */
     uint16_t MutePin;             /**< 硬件静音 GPIO 引脚掩码。 */
-} Audio_STM32I2SAdapterTypeDef;
+} AudioI2S_STM32HALAdapterTypeDef;
 
-Audio_StatusTypeDef Audio_STM32I2SAdapter_Bind(
+Audio_StatusTypeDef AudioI2S_STM32HALAdapter_Bind(
     Audio_HandleTypeDef *haudio,
-    Audio_STM32I2SAdapterTypeDef *adapter);
+    AudioI2S_STM32HALAdapterTypeDef *adapter);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* AUDIO_STM32_I2S_ADAPTER_H */
+#endif /* AUDIO_I2S_STM32_HAL_ADAPTER_H */

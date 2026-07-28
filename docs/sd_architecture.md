@@ -30,15 +30,19 @@ Components/sd/
   sd.h                          可复用 Device 公共类型和接口
   sd.c                          状态机、参数校验、块访问和错误处理
 
-Adapters/sd_stm32_hal/
+Adapters/sd/
   sd_stm32_hal_adapter.h        STM32 HAL SDMMC Adapter 绑定接口
   sd_stm32_hal_adapter.c        STM32 HAL SD/GPIO 调用和状态转换
+
+Adapters/irq/
+  irq_stm32_hal_adapter.h       STM32 HAL EXTI 单一上行回调接口
+  irq_stm32_hal_adapter.c       HAL GPIO EXTI 回调桥接
 
 Platform/sd/
   platform_sd.h                    APP/未来 Storage 使用的 Platform 接口
   platform_sd.c                    私有 Device、hsd1/SD_CD 装配、消抖和事件映射
 
-Platform/irq/
+Platform/
   platform_irq.h                   逻辑中断源注册与分发接口
   platform_irq.c                   GPIO 引脚到逻辑中断源的映射
 
@@ -111,7 +115,9 @@ Platform_SD_ReadBlocks()
 EXTI9_5_IRQHandler()
   -> HAL_GPIO_EXTI_IRQHandler(SD_CD_Pin)
   -> HAL_GPIO_EXTI_Callback(SD_CD_Pin)
-  -> Platform_IRQ_DispatchFromISR(PLATFORM_IRQ_SOURCE_SD_DETECT)
+  -> IRQ_STM32HALAdapter 的上行回调
+  -> platform_irq_stm32_hal_callback(SD_CD_Pin)
+  -> Platform IRQ 私有逻辑源分发
   -> platform_sd_detect_irq_cb()
      -> DetectPending = true
 

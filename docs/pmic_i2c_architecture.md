@@ -46,9 +46,9 @@ Components/
     axp2101_regs.h
 
 Adapters/
-  soft_i2c_stm32_gpio/
-    soft_i2c_stm32_gpio_adapter.c
-    soft_i2c_stm32_gpio_adapter.h
+  soft_i2c/
+    soft_i2c_stm32_hal_adapter.c
+    soft_i2c_stm32_hal_adapter.h
   axp2101_soft_i2c/
     axp2101_soft_i2c_adapter.c
     axp2101_soft_i2c_adapter.h
@@ -75,10 +75,10 @@ Platform/
 ```text
 Platform_Init()
   -> Platform_Power_Init()
-       -> SoftI2C_STM32GPIOAdapter_Bind(&hplatform_power_i2c,
-                                        &hplatform_power_gpio,
-                                        delay,
-                                        timeout)
+       -> SoftI2C_STM32HALAdapter_Bind(&hplatform_power_i2c,
+                                       &hplatform_power_gpio,
+                                       delay,
+                                       timeout)
             -> hplatform_power_i2c.GPIOOps = STM32 GPIO Ops
             -> hplatform_power_i2c.GPIOContext = &hplatform_power_gpio
        -> AXP2101_SoftI2CAdapter_Bind(&hplatform_power,
@@ -333,4 +333,4 @@ Power_GetBatteryStatus(...)
 - 寄存器定义：[`../Components/axp2101/axp2101_regs.h`](../Components/axp2101/axp2101_regs.h)
 - SoftI2C Adapter：[`../Adapters/axp2101_soft_i2c/axp2101_soft_i2c_adapter.c`](../Adapters/axp2101_soft_i2c/axp2101_soft_i2c_adapter.c)
 - SoftI2C Component：[`../Components/soft_i2c/soft_i2c.c`](../Components/soft_i2c/soft_i2c.c)
-- STM32 GPIO Adapter：[`../Adapters/soft_i2c_stm32_gpio/soft_i2c_stm32_gpio_adapter.c`](../Adapters/soft_i2c_stm32_gpio/soft_i2c_stm32_gpio_adapter.c)
+- STM32 GPIO Adapter：[`../Adapters/soft_i2c/soft_i2c_stm32_hal_adapter.c`](../Adapters/soft_i2c/soft_i2c_stm32_hal_adapter.c)

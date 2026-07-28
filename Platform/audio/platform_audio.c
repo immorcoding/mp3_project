@@ -1,13 +1,13 @@
 #include "Platform/platform.h"
 #include "Components/audio/audio.h"
-#include "Adapters/audio_stm32_i2s/audio_stm32_i2s_adapter.h"
+#include "Adapters/audio_i2s/audio_i2s_stm32_hal_adapter.h"
 #include "Components/log/log.h"
 #include "i2s.h"
 #include "main.h"
 
 static Audio_HandleTypeDef haudio;
 
-static Audio_STM32I2SAdapterTypeDef hplatform_audio_adapter = {
+static AudioI2S_STM32HALAdapterTypeDef hplatform_audio_adapter = {
     .I2SHandle = &hi2s2,
     .MutePort = PCM_XSMT_GPIO_Port,
     .MutePin = PCM_XSMT_Pin
@@ -65,8 +65,9 @@ Platform_StatusTypeDef Platform_Audio_SetMute(bool mute)
   */
 Platform_StatusTypeDef Platform_Audio_Init(void)
 {
-    if (Audio_STM32I2SAdapter_Bind(&haudio,
-                                  &hplatform_audio_adapter) != AUDIO_OK)
+    if (AudioI2S_STM32HALAdapter_Bind(
+            &haudio,
+            &hplatform_audio_adapter) != AUDIO_OK)
     {
         (void)LOG_Printf(LOG_LEVEL_ERROR, "AUDIO", "Audio port bind failed");
         return PLATFORM_AUDIO_ERROR;

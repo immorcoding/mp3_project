@@ -26,7 +26,7 @@ Platform/log
 | `Components/log/log_internal.h` | 私有 Handle、消息槽位和队列结构。 |
 | `Components/log/log_config.h` | 日志等级、消息长度和队列深度。 |
 | `Components/log/log.c` | 格式化、过滤、RAM 队列和消费调度。 |
-| `Adapters/log_usb_cdc/log_usb_cdc_adapter.*` | USB 就绪判断、异步缓冲、ANSI 颜色和 HAL 时间源。 |
+| `Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.*` | USB 就绪判断、异步缓冲、ANSI 颜色和 HAL 时间源。 |
 | `Platform/log/platform_log.*` | 持有具体 Adapter，并调用 Bind 和 `LOG_Init()`。 |
 
 日志核心不包含 USB、HAL 或 CubeMX 头文件。USB Adapter 不访问日志内部 Handle。
@@ -36,7 +36,7 @@ Platform/log
 ```text
 app_init
   -> Platform_Log_Init
-       -> LOG_UsbCDCAdapter_Bind
+       -> LOG_UsbCDC_STM32HALAdapter_Bind
             -> 清空 Platform 持有的 USB Adapter Context
             -> 生成 Output = Ops + Context
             -> 生成 TimeSource = GetTimeMs + Context
@@ -89,7 +89,7 @@ LOG_Process
 2. 日志核心在消息出队后可以复用该队列槽位；
 3. 若直接把队列槽位交给 USB，复用时会修改正在发送的数据。
 
-因此 Platform 持有的 `LOG_UsbCDCAdapterTypeDef` 必须具有静态生命周期。
+因此 Platform 持有的 `LOG_UsbCDC_STM32HALAdapterTypeDef` 必须具有静态生命周期。
 
 ## 5. USB 就绪和 DTR
 
@@ -117,7 +117,7 @@ MCU 先启动、VS Code 稍后手工打开 COM 口，启动日志仍可以在端
 Adapter 在 `TxBuffer` 中拼接颜色前缀和复位序列，不修改日志核心中的原始消息，
 也不污染 `LastMessage` 调试快照。
 
-`LOG_USB_CDC_ADAPTER_ANSI_COLOR_ENABLE` 可以在编译期关闭。
+`LOG_USB_CDC_STM32_HAL_ADAPTER_ANSI_COLOR_ENABLE` 可以在编译期关闭。
 
 ## 7. RAM 与统计
 
@@ -172,5 +172,5 @@ Adapter 在 `TxBuffer` 中拼接颜色前缀和复位序列，不修改日志核
 - [`../Components/log/log.h`](../Components/log/log.h)
 - [`../Components/log/log_adapter.h`](../Components/log/log_adapter.h)
 - [`../Components/log/log.c`](../Components/log/log.c)
-- [`../Adapters/log_usb_cdc/log_usb_cdc_adapter.c`](../Adapters/log_usb_cdc/log_usb_cdc_adapter.c)
+- [`../Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.c`](../Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.c)
 - [`../Platform/log/platform_log.c`](../Platform/log/platform_log.c)

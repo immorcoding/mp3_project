@@ -11,9 +11,9 @@
 #include <stddef.h>
 
 #include "Platform/platform.h"
-#include "Platform/irq/platform_irq.h"
+#include "Platform/platform_irq.h"
 #include "Components/sd/sd.h"
-#include "Adapters/sd_stm32_hal/sd_stm32_hal_adapter.h"
+#include "Adapters/sd/sd_stm32_hal_adapter.h"
 #include "main.h"
 #include "sdmmc.h"
 
@@ -122,14 +122,13 @@ static bool platform_sd_take_detect_event(Platform_SD_HandleTypeDef *hsd)
 /**
   * @brief  在 ISR 中记录一次 SD 卡检测边沿。
   * @param  context 注册时绑定的 Platform SD 私有 Handle。
-  * @param  source  触发回调的板级逻辑中断源。
   * @note   本函数只发布二值通知，不执行消抖、SDMMC 操作或日志输出。
   */
-static void platform_sd_detect_irq_cb(void *context, Platform_IRQ_SourceTypeDef source)
+static void platform_sd_detect_irq_cb(void *context)
 {
     Platform_SD_HandleTypeDef *hsd = (Platform_SD_HandleTypeDef *)context;
 
-    if ((hsd != NULL) && (source == PLATFORM_IRQ_SOURCE_SD_DETECT))
+    if (hsd != NULL)
     {
         /**************** FreeRTOS 移植替换区：开始 ***************************
          * 改为 vTaskNotifyGiveFromISR()，并按返回值决定是否请求任务切换。
@@ -168,8 +167,8 @@ Platform_StatusTypeDef Platform_SD_Init(void)
     }
 
     if (Platform_IRQ_Register(PLATFORM_IRQ_SOURCE_SD_DETECT,
-                           platform_sd_detect_irq_cb,
-                           &hplatform_sd) != PLATFORM_OK)
+                              platform_sd_detect_irq_cb,
+                              &hplatform_sd) != PLATFORM_OK)
     {
         return PLATFORM_SD_ERROR;
     }

@@ -1,6 +1,6 @@
 /**
   ******************************************************************************
-  * @file    log_usb_cdc_adapter.c
+  * @file    log_usb_cdc_stm32_hal_adapter.c
   * @brief   Log Component 到 STM32 USB CDC 的输出 Adapter。
   *
   * @details
@@ -16,7 +16,7 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
-#include "Adapters/log_usb_cdc/log_usb_cdc_adapter.h"
+#include "Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -31,10 +31,11 @@
   * @param  Level 当前消息等级。
   * @retval const char * ANSI 控制字符串；禁用颜色时返回空字符串。
   */
-static const char *LOG_UsbCDCAdapter_GetAnsiColor(LOG_LevelTypeDef Level)
+static const char *log_usb_cdc_stm32_hal_get_ansi_color(
+    LOG_LevelTypeDef level)
 {
-#if LOG_USB_CDC_ADAPTER_ANSI_COLOR_ENABLE == 1U
-    switch (Level)
+#if LOG_USB_CDC_STM32_HAL_ADAPTER_ANSI_COLOR_ENABLE == 1U
+    switch (level)
     {
         case LOG_LEVEL_ERROR:
             /* ANSI SGR 31：红色。 */
@@ -56,9 +57,9 @@ static const char *LOG_UsbCDCAdapter_GetAnsiColor(LOG_LevelTypeDef Level)
             return "";
     }
 #else
-    (void)Level;
+    (void)level;
     return "";
-#endif /* LOG_USB_CDC_ADAPTER_ANSI_COLOR_ENABLE */
+#endif /* LOG_USB_CDC_STM32_HAL_ADAPTER_ANSI_COLOR_ENABLE */
 }
 
 /**
@@ -70,9 +71,10 @@ static const char *LOG_UsbCDCAdapter_GetAnsiColor(LOG_LevelTypeDef Level)
   * @retval LOG_OUTPUT_BUSY  USB Device 当前仍在处理上一笔发送。
   * @retval LOG_OUTPUT_ERROR 内存不足、USB 失败或未知原始状态。
   */
-static LOG_OutputStatusTypeDef LOG_UsbCDCAdapter_Result(int32_t NativeStatus)
+static LOG_OutputStatusTypeDef log_usb_cdc_stm32_hal_result(
+    int32_t native_status)
 {
-    switch ((USBD_StatusTypeDef)NativeStatus)
+    switch ((USBD_StatusTypeDef)native_status)
     {
         case USBD_OK:
             return LOG_OUTPUT_OK;
@@ -99,12 +101,14 @@ static LOG_OutputStatusTypeDef LOG_UsbCDCAdapter_Result(int32_t NativeStatus)
   * @retval LOG_OUTPUT_NOT_READY USB 未枚举、主机未置 DTR、稳定期未结束或忙。
   * @retval LOG_OUTPUT_ERROR     参数、长度或 USB 提交发生错误。
   */
-static LOG_OutputStatusTypeDef LOG_UsbCDCAdapter_TryWrite(void *Context,
-                                                          LOG_LevelTypeDef Level,
-                                                          const char *Data,
-                                                          uint32_t Length)
+static LOG_OutputStatusTypeDef log_usb_cdc_stm32_hal_try_write(
+    void *context_pointer,
+    LOG_LevelTypeDef level,
+    const char *data,
+    uint32_t length)
 {
-    LOG_UsbCDCAdapterTypeDef *context = (LOG_UsbCDCAdapterTypeDef *)Context;
+    LOG_UsbCDC_STM32HALAdapterTypeDef *context =
+        (LOG_UsbCDC_STM32HALAdapterTypeDef *)context_pointer;
     LOG_OutputStatusTypeDef output_status;
     const char *color;
     const char *reset;
@@ -113,9 +117,9 @@ static LOG_OutputStatusTypeDef LOG_UsbCDCAdapter_TryWrite(void *Context,
     size_t tx_length;
 
     if ((context == NULL) ||
-        (Data == NULL) ||
-        (Length == 0U) ||
-        (Length >= (uint32_t)sizeof(context->LastMessage)))
+        (data == NULL) ||
+        (length == 0U) ||
+        (length >= (uint32_t)sizeof(context->LastMessage)))
     {
         return LOG_OUTPUT_ERROR;
     }
@@ -130,16 +134,16 @@ static LOG_OutputStatusTypeDef LOG_UsbCDCAdapter_TryWrite(void *Context,
     }
 
     /* 颜色只属于输出表现层，不写回核心队列，也不污染 LastMessage 快照。 */
-    color = LOG_UsbCDCAdapter_GetAnsiColor(Level);
-#if LOG_USB_CDC_ADAPTER_ANSI_COLOR_ENABLE == 1U
+    color = log_usb_cdc_stm32_hal_get_ansi_color(level);
+#if LOG_USB_CDC_STM32_HAL_ADAPTER_ANSI_COLOR_ENABLE == 1U
     reset = "\x1B[0m";
 #else
     reset = "";
-#endif /* LOG_USB_CDC_ADAPTER_ANSI_COLOR_ENABLE */
+#endif /* LOG_USB_CDC_STM32_HAL_ADAPTER_ANSI_COLOR_ENABLE */
 
     color_length = strlen(color);
     reset_length = strlen(reset);
-    tx_length = color_length + (size_t)Length + reset_length;
+    tx_length = color_length + (size_t)length + reset_length;
 
     if (tx_length > sizeof(context->TxBuffer))
     {
@@ -151,15 +155,15 @@ static LOG_OutputStatusTypeDef LOG_UsbCDCAdapter_TryWrite(void *Context,
      * USB Device 库异步持有该指针，发送完成前不得覆写该缓冲区。
      */
     (void)memcpy(context->TxBuffer, color, color_length);
-    (void)memcpy(&context->TxBuffer[color_length], Data, Length);
-    (void)memcpy(&context->TxBuffer[color_length + Length], reset, reset_length);
+    (void)memcpy(&context->TxBuffer[color_length], data, length);
+    (void)memcpy(&context->TxBuffer[color_length + length], reset, reset_length);
 
     /*
      * CDC_Transmit_FS() 返回 ST USB Device 原始状态。先在 Adapter 内转换为
      * 统一输出状态，再交还日志核心，避免 vendor 状态码跨越 Adapter Seam。
      */
-    output_status = LOG_UsbCDCAdapter_Result((int32_t)CDC_Transmit_FS(context->TxBuffer,
-                                                                     (uint16_t)tx_length));
+    output_status = log_usb_cdc_stm32_hal_result(
+        (int32_t)CDC_Transmit_FS(context->TxBuffer, (uint16_t)tx_length));
     if (output_status != LOG_OUTPUT_OK)
     {
         return output_status;
@@ -169,9 +173,9 @@ static LOG_OutputStatusTypeDef LOG_UsbCDCAdapter_TryWrite(void *Context,
      * 只有 USB 接受请求后才更新调试快照；这里保存无 ANSI 字符的原始日志，
      * 便于 Memory Inspector 直接按 C 字符串查看。
      */
-    (void)memcpy(context->LastMessage, Data, Length);
-    context->LastMessage[Length] = '\0';
-    context->LastMessageLength = Length;
+    (void)memcpy(context->LastMessage, data, length);
+    context->LastMessage[length] = '\0';
+    context->LastMessageLength = length;
     context->WriteCount++;
 
     return LOG_OUTPUT_OK;
@@ -182,9 +186,9 @@ static LOG_OutputStatusTypeDef LOG_UsbCDCAdapter_TryWrite(void *Context,
   * @param  Context 当前实现不使用该参数，允许为 NULL。
   * @retval uint32_t HAL_GetTick() 返回的毫秒计数值。
   */
-static uint32_t LOG_TimeSourceHal_GetTimeMs(void *Context)
+static uint32_t log_usb_cdc_stm32_hal_get_time_ms(void *context)
 {
-    (void)Context;
+    (void)context;
     return HAL_GetTick();
 }
 
@@ -192,8 +196,8 @@ static uint32_t LOG_TimeSourceHal_GetTimeMs(void *Context)
   * @brief USB CDC 日志适配器的输出操作表。
   * @note  日志核心只持有该接口，不直接包含 USB_DEVICE 的类型。
   */
-static const LOG_OutputOpsTypeDef log_usb_cdc_adapter_ops = {
-    .TryWrite = LOG_UsbCDCAdapter_TryWrite
+static const LOG_OutputOpsTypeDef log_usb_cdc_stm32_hal_ops = {
+    .TryWrite = log_usb_cdc_stm32_hal_try_write
 };
 
 /* Exported functions --------------------------------------------------------*/
@@ -206,8 +210,8 @@ static const LOG_OutputOpsTypeDef log_usb_cdc_adapter_ops = {
   * @retval LOG_OK    绑定成功。
   * @retval LOG_ERROR 任一参数为空。
   */
-LOG_StatusTypeDef LOG_UsbCDCAdapter_Bind(
-    LOG_UsbCDCAdapterTypeDef *adapter,
+LOG_StatusTypeDef LOG_UsbCDC_STM32HALAdapter_Bind(
+    LOG_UsbCDC_STM32HALAdapterTypeDef *adapter,
     LOG_OutputTypeDef *output,
     LOG_TimeSourceTypeDef *time_source)
 {
@@ -220,11 +224,11 @@ LOG_StatusTypeDef LOG_UsbCDCAdapter_Bind(
     (void)memset(adapter, 0, sizeof(*adapter));
 
     /* Ops 与 Context 成对绑定：TryWrite 会把该指针还原为 Adapter 上下文。 */
-    output->Ops = &log_usb_cdc_adapter_ops;
+    output->Ops = &log_usb_cdc_stm32_hal_ops;
     output->Context = adapter;
 
     /* 时间源独立绑定；当前 HAL_GetTick() 不需要对象，因此 Context 为 NULL。 */
-    time_source->GetTimeMs = LOG_TimeSourceHal_GetTimeMs;
+    time_source->GetTimeMs = log_usb_cdc_stm32_hal_get_time_ms;
     time_source->Context = NULL;
 
     return LOG_OK;

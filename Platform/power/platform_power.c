@@ -15,7 +15,7 @@
 #include <stddef.h>
 
 #include "Adapters/axp2101_soft_i2c/axp2101_soft_i2c_adapter.h"
-#include "Adapters/soft_i2c_stm32_gpio/soft_i2c_stm32_gpio_adapter.h"
+#include "Adapters/soft_i2c/soft_i2c_stm32_hal_adapter.h"
 #include "Components/axp2101/axp2101.h"
 #include "main.h"
 
@@ -41,7 +41,7 @@
 
 static SoftI2C_HandleTypeDef hplatform_power_i2c;
 
-static SoftI2C_STM32GPIOAdapterTypeDef hplatform_power_gpio = {
+static SoftI2C_STM32HALAdapterTypeDef hplatform_power_gpio = {
     .SCLPort = AXP2101_SCL_GPIO_Port,
     .SCLPin = AXP2101_SCL_Pin,
     .SDAPort = AXP2101_SDA_GPIO_Port,
@@ -93,10 +93,11 @@ Platform_StatusTypeDef Platform_Power_Init(void)
      * Platform 持有具体引脚并依次完成两级装配：
      * STM32 GPIO -> SoftI2C Component -> AXP2101 Component。
      */
-    if (SoftI2C_STM32GPIOAdapter_Bind(&hplatform_power_i2c,
-                                     &hplatform_power_gpio,
-                                     PLATFORM_POWER_I2C_DELAY_CYCLES,
-                                     PLATFORM_POWER_I2C_STRETCH_TIMEOUT) != SOFT_I2C_OK)
+    if (SoftI2C_STM32HALAdapter_Bind(
+            &hplatform_power_i2c,
+            &hplatform_power_gpio,
+            PLATFORM_POWER_I2C_DELAY_CYCLES,
+            PLATFORM_POWER_I2C_STRETCH_TIMEOUT) != SOFT_I2C_OK)
     {
         return PLATFORM_PMIC_ERROR;
     }

@@ -1,7 +1,7 @@
 #include "Platform/platform.h"
 
 #include "Platform/audio/platform_audio.h"
-#include "Platform/irq/platform_irq.h"
+#include "Platform/platform_irq.h"
 #include "Platform/power/platform_power.h"
 
 #include "stm32h7xx_hal.h"

@@ -123,9 +123,10 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | 目录 | 职责 |
 | --- | --- |
 | `Adapters/axp2101_soft_i2c` | SoftI2C API 到 AXP2101 Bus Ops。 |
-| `Adapters/audio_stm32_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
-| `Adapters/sd_stm32_hal` | STM32 HAL SDMMC/GPIO 到 SD Port Ops。 |
-| `Adapters/soft_i2c_stm32_gpio` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
+| `Adapters/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
+| `Adapters/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops。 |
+| `Adapters/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
+| `Adapters/irq` | STM32 HAL EXTI 全局回调到 Platform IRQ Dispatcher。 |
 | `Adapters/log_usb_cdc` | USB CDC 非阻塞输出和 HAL 毫秒时间源。 |
 | `Adapters/freertos` | 本工程的 FreeRTOS 配置、异常处理和移植接缝。 |
 
@@ -258,7 +259,7 @@ Read(context, line)
 
 ```text
 Platform_Power_Init
-  -> SoftI2C_STM32GPIOAdapter_Bind
+  -> SoftI2C_STM32HALAdapter_Bind
        -> GPIOOps + STM32 GPIO Context
   -> AXP2101_SoftI2CAdapter_Bind
        -> AXP2101 BusOps + SoftI2C Context
@@ -317,6 +318,7 @@ Adapter 的状态转换函数入口统一使用 `int32_t native_status`，内部
 ```text
 Vendor IRQHandler
   -> HAL Callback
+  -> IRQ STM32 HAL Adapter
   -> Platform IRQ Dispatcher
   -> 模块 ISR callback
   -> 只置位或发送 FromISR 通知
@@ -337,10 +339,10 @@ ISR 禁止：
 | 对象 | 形式 | 示例 |
 | --- | --- | --- |
 | Component API | `Module_Action` | `AXP2101_Init` |
-| Adapter API | `Module_BackendAdapter_Bind` | `SoftI2C_STM32GPIOAdapter_Bind` |
+| Adapter API | `Module_BackendAdapter_Bind` | `SoftI2C_STM32HALAdapter_Bind` |
 | Platform API | `Platform_Module_Action` | `Platform_SD_GetInfo` |
 | Component Handle | `Module_HandleTypeDef` | `SDCard_HandleTypeDef` |
-| Adapter Context | `Module_BackendAdapterTypeDef` | `Audio_STM32I2SAdapterTypeDef` |
+| Adapter Context | `Module_BackendAdapterTypeDef` | `AudioI2S_STM32HALAdapterTypeDef` |
 | Platform 私有实例 | `hplatform_*` | `hplatform_power_i2c` |
 
 不再新增 `Board_*`、`BSP/*`、`*_port` 作为模糊层级名称。已有 Component 内部的

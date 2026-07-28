@@ -11,7 +11,7 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
-#include "Adapters/sd_stm32_hal/sd_stm32_hal_adapter.h"
+#include "Adapters/sd/sd_stm32_hal_adapter.h"
 
 #include <stddef.h>
 

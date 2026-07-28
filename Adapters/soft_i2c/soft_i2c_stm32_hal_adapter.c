@@ -1,4 +1,4 @@
-#include "Adapters/soft_i2c_stm32_gpio/soft_i2c_stm32_gpio_adapter.h"
+#include "Adapters/soft_i2c/soft_i2c_stm32_hal_adapter.h"
 
 #include <stddef.h>
 
@@ -9,11 +9,12 @@
   * @param state 主动拉低或释放开漏输出。
   * @retval None
   */
-static void soft_i2c_stm32_gpio_write(void *context,
-                                      SoftI2C_LineTypeDef line,
-                                      SoftI2C_LineStateTypeDef state)
+static void soft_i2c_stm32_hal_write(void *context,
+                                     SoftI2C_LineTypeDef line,
+                                     SoftI2C_LineStateTypeDef state)
 {
-  SoftI2C_STM32GPIOAdapterTypeDef *adapter = (SoftI2C_STM32GPIOAdapterTypeDef *)context;
+  SoftI2C_STM32HALAdapterTypeDef *adapter =
+      (SoftI2C_STM32HALAdapterTypeDef *)context;
   GPIO_TypeDef *port = (line == SOFT_I2C_LINE_SCL)
       ? adapter->SCLPort
       : adapter->SDAPort;
@@ -34,10 +35,11 @@ static void soft_i2c_stm32_gpio_write(void *context,
   * @retval true 线条为高电平。
   * @retval false 线条为低电平。
   */
-static bool soft_i2c_stm32_gpio_read(const void *context,
-                                     SoftI2C_LineTypeDef line)
+static bool soft_i2c_stm32_hal_read(const void *context,
+                                    SoftI2C_LineTypeDef line)
 {
-  const SoftI2C_STM32GPIOAdapterTypeDef *adapter = (const SoftI2C_STM32GPIOAdapterTypeDef *)context;
+  const SoftI2C_STM32HALAdapterTypeDef *adapter =
+      (const SoftI2C_STM32HALAdapterTypeDef *)context;
   GPIO_TypeDef *port = (line == SOFT_I2C_LINE_SCL)
       ? adapter->SCLPort
       : adapter->SDAPort;
@@ -48,9 +50,9 @@ static bool soft_i2c_stm32_gpio_read(const void *context,
   return HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET;
 }
 
-static const SoftI2C_GPIOOpsTypeDef soft_i2c_stm32_gpio_ops = {
-    .Write = soft_i2c_stm32_gpio_write,
-    .Read = soft_i2c_stm32_gpio_read
+static const SoftI2C_GPIOOpsTypeDef soft_i2c_stm32_hal_ops = {
+    .Write = soft_i2c_stm32_hal_write,
+    .Read = soft_i2c_stm32_hal_read
 };
 
 /**
@@ -62,9 +64,9 @@ static const SoftI2C_GPIOOpsTypeDef soft_i2c_stm32_gpio_ops = {
   * @retval SOFT_I2C_OK 装配完成。
   * @retval SOFT_I2C_ERROR 参数无效。
   */
-SoftI2C_StatusTypeDef SoftI2C_STM32GPIOAdapter_Bind(
+SoftI2C_StatusTypeDef SoftI2C_STM32HALAdapter_Bind(
     SoftI2C_HandleTypeDef *hi2c,
-    SoftI2C_STM32GPIOAdapterTypeDef *adapter,
+    SoftI2C_STM32HALAdapterTypeDef *adapter,
     uint32_t delay_cycles,
     uint32_t clock_stretch_timeout)
 {
@@ -79,7 +81,7 @@ SoftI2C_StatusTypeDef SoftI2C_STM32GPIOAdapter_Bind(
     return SOFT_I2C_ERROR;
   }
 
-  hi2c->GPIOOps = &soft_i2c_stm32_gpio_ops;
+  hi2c->GPIOOps = &soft_i2c_stm32_hal_ops;
   hi2c->GPIOContext = adapter;
   hi2c->DelayCycles = delay_cycles;
   hi2c->ClockStretchTimeout = clock_stretch_timeout;

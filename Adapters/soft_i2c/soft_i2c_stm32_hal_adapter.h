@@ -1,5 +1,5 @@
-#ifndef SOFT_I2C_STM32_GPIO_ADAPTER_H
-#define SOFT_I2C_STM32_GPIO_ADAPTER_H
+#ifndef SOFT_I2C_STM32_HAL_ADAPTER_H
+#define SOFT_I2C_STM32_HAL_ADAPTER_H
 
 #include <stdint.h>
 
@@ -19,11 +19,11 @@ typedef struct
   uint16_t SCLPin;       /**< SCL GPIO 引脚掩码。 */
   GPIO_TypeDef *SDAPort; /**< SDA GPIO 端口。 */
   uint16_t SDAPin;       /**< SDA GPIO 引脚掩码。 */
-} SoftI2C_STM32GPIOAdapterTypeDef;
+} SoftI2C_STM32HALAdapterTypeDef;
 
-SoftI2C_StatusTypeDef SoftI2C_STM32GPIOAdapter_Bind(
+SoftI2C_StatusTypeDef SoftI2C_STM32HALAdapter_Bind(
     SoftI2C_HandleTypeDef *hi2c,
-    SoftI2C_STM32GPIOAdapterTypeDef *adapter,
+    SoftI2C_STM32HALAdapterTypeDef *adapter,
     uint32_t delay_cycles,
     uint32_t clock_stretch_timeout);
 
@@ -31,4 +31,4 @@ SoftI2C_StatusTypeDef SoftI2C_STM32GPIOAdapter_Bind(
 }
 #endif
 
-#endif /* SOFT_I2C_STM32_GPIO_ADAPTER_H */
+#endif /* SOFT_I2C_STM32_HAL_ADAPTER_H */
