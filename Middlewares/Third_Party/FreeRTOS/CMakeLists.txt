@@ -19,7 +19,7 @@ target_sources(freertos_kernel PRIVATE
 )
 
 target_include_directories(freertos_kernel PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}/../../../Adapters/freertos
+    ${CMAKE_CURRENT_LIST_DIR}/../../../Adapters/freertos #config.h在这个目录下
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/Source/include
     ${CMAKE_CURRENT_LIST_DIR}/Source/portable/GCC/ARM_CM7/r0p1

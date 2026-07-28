@@ -192,6 +192,8 @@ static uint32_t log_usb_cdc_stm32_hal_get_time_ms(void *context)
     return HAL_GetTick();
 }
 
+
+
 /**
   * @brief USB CDC 日志适配器的输出操作表。
   * @note  日志核心只持有该接口，不直接包含 USB_DEVICE 的类型。

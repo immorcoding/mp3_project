@@ -22,6 +22,8 @@
 #include "app.h"
 #include "app_config.h"
 
+#include "APP/tasks/app_tasks.h"
+
 #include "main.h"
 
 #include "Platform/platform.h"
@@ -109,62 +111,62 @@ static void app_init_sd(void)
     }
 }
 
-/**
-  * @brief  推进 SD 卡热插拔消抖并处理一次稳定状态变化。
-  * @note   Platform SD 只报告介质事件；日志和未来的文件系统挂载策略由应用层负责。
-  * @retval None
-  */
-static void app_process_sd(void)
-{
-    Platform_SD_EventTypeDef event;
+// /**
+//   * @brief  推进 SD 卡热插拔消抖并处理一次稳定状态变化。
+//   * @note   Platform SD 只报告介质事件；日志和未来的文件系统挂载策略由应用层负责。
+//   * @retval None
+//   */
+// static void app_process_sd(void)
+// {
+//     Platform_SD_EventTypeDef event;
 
-    if (!app_sd_initialized)
-    {
-        return;
-    }
+//     if (!app_sd_initialized)
+//     {
+//         return;
+//     }
 
-    if (Platform_SD_Process(&event) != PLATFORM_OK)
-    {
-        Platform_SD_DiagnosticsTypeDef diagnostics;
+//     if (Platform_SD_Process(&event) != PLATFORM_OK)
+//     {
+//         Platform_SD_DiagnosticsTypeDef diagnostics;
 
-        if (Platform_SD_GetDiagnostics(&diagnostics) == PLATFORM_OK)
-        {
-            (void)LOG_Printf(LOG_LEVEL_ERROR,
-                             "SD",
-                             "hotplug refresh failed: device=%lu, port=%lu",
-                             (unsigned long)diagnostics.DeviceError,
-                             (unsigned long)diagnostics.PortStatus);
-        }
+//         if (Platform_SD_GetDiagnostics(&diagnostics) == PLATFORM_OK)
+//         {
+//             (void)LOG_Printf(LOG_LEVEL_ERROR,
+//                              "SD",
+//                              "hotplug refresh failed: device=%lu, port=%lu",
+//                              (unsigned long)diagnostics.DeviceError,
+//                              (unsigned long)diagnostics.PortStatus);
+//         }
 
-        return;
-    }
+//         return;
+//     }
 
-    if (event == PLATFORM_SD_EVENT_INSERTED)
-    {
-        Platform_SD_InfoTypeDef info;
+//     if (event == PLATFORM_SD_EVENT_INSERTED)
+//     {
+//         Platform_SD_InfoTypeDef info;
 
-        if (Platform_SD_GetInfo(&info) == PLATFORM_OK)
-        {
-            uint32_t capacity_mb = (uint32_t)(info.CapacityBytes / (1024ULL * 1024ULL));
+//         if (Platform_SD_GetInfo(&info) == PLATFORM_OK)
+//         {
+//             uint32_t capacity_mb = (uint32_t)(info.CapacityBytes / (1024ULL * 1024ULL));
 
-            (void)LOG_Printf(LOG_LEVEL_INFO,
-                             "SD",
-                             "card inserted: %lu MB, block size: %lu",
-                             (unsigned long)capacity_mb,
-                             (unsigned long)info.BlockSize);
-        }
-        else
-        {
-            (void)LOG_Printf(LOG_LEVEL_ERROR,
-                             "SD",
-                             "card inserted but information is unavailable");
-        }
-    }
-    else if (event == PLATFORM_SD_EVENT_REMOVED)
-    {
-        (void)LOG_Printf(LOG_LEVEL_INFO, "SD", "card removed");
-    }
-}
+//             (void)LOG_Printf(LOG_LEVEL_INFO,
+//                              "SD",
+//                              "card inserted: %lu MB, block size: %lu",
+//                              (unsigned long)capacity_mb,
+//                              (unsigned long)info.BlockSize);
+//         }
+//         else
+//         {
+//             (void)LOG_Printf(LOG_LEVEL_ERROR,
+//                              "SD",
+//                              "card inserted but information is unavailable");
+//         }
+//     }
+//     else if (event == PLATFORM_SD_EVENT_REMOVED)
+//     {
+//         (void)LOG_Printf(LOG_LEVEL_INFO, "SD", "card removed");
+//     }
+// }
 
 
 /* Exported functions --------------------------------------------------------*/
@@ -185,44 +187,46 @@ void app_init(void)
         Error_Handler();
     }
 
-    /* 此时 USB 可能尚未被主机打开；日志先复制进 RAM 队列等待发送。 */
-    (void)LOG_Printf(LOG_LEVEL_INFO, "LOG", "initialization successful");
+    // /* 此时 USB 可能尚未被主机打开；日志先复制进 RAM 队列等待发送。 */
+    // (void)LOG_Printf(LOG_LEVEL_INFO, "LOG", "initialization successful");
 
-    /* Platform 层负责初始化板级设备。 */
-    Platform_StatusTypeDef platform_status = Platform_Init();
+    // /* Platform 层负责初始化板级设备。 */
+    // Platform_StatusTypeDef platform_status = Platform_Init();
 
-    switch (platform_status)
-    {
-        case PLATFORM_OK:
-            (void)LOG_Printf(LOG_LEVEL_INFO, "PLATFORM", "initialization successful");
-            app_init_sd();
-            break;
+    // switch (platform_status)
+    // {
+    //     case PLATFORM_OK:
+    //         (void)LOG_Printf(LOG_LEVEL_INFO, "PLATFORM", "initialization successful");
+    //         app_init_sd();
+    //         break;
 
-        case PLATFORM_PMIC_ERROR:
-        {
-            Platform_Power_DiagnosticsTypeDef diagnostics;
+    //     case PLATFORM_PMIC_ERROR:
+    //     {
+    //         Platform_Power_DiagnosticsTypeDef diagnostics;
 
-            if (Platform_Power_GetDiagnostics(&diagnostics) == PLATFORM_OK)
-            {
-                (void)LOG_Printf(
-                    LOG_LEVEL_ERROR,
-                    "POWER",
-                    "initialization failed: state=%lu, error=%lu, bus=%lu, reg=0x%02X",
-                    (unsigned long)diagnostics.DeviceState,
-                    (unsigned long)diagnostics.DeviceError,
-                    (unsigned long)diagnostics.BusStatus,
-                    (unsigned int)diagnostics.FailedRegister);
-            }
+    //         if (Platform_Power_GetDiagnostics(&diagnostics) == PLATFORM_OK)
+    //         {
+    //             (void)LOG_Printf(
+    //                 LOG_LEVEL_ERROR,
+    //                 "POWER",
+    //                 "initialization failed: state=%lu, error=%lu, bus=%lu, reg=0x%02X",
+    //                 (unsigned long)diagnostics.DeviceState,
+    //                 (unsigned long)diagnostics.DeviceError,
+    //                 (unsigned long)diagnostics.BusStatus,
+    //                 (unsigned int)diagnostics.FailedRegister);
+    //         }
 
-            Error_Handler();
-            break;
-        }
+    //         Error_Handler();
+    //         break;
+    //     }
 
-        default:
-            (void)LOG_Printf(LOG_LEVEL_ERROR, "PLATFORM", "initialization failed");
-            Error_Handler();
-            break;
-    }
+    //     default:
+    //         (void)LOG_Printf(LOG_LEVEL_ERROR, "PLATFORM", "initialization failed");
+    //         Error_Handler();
+    //         break;
+    // }
+
+    app_tasks_init();
 }
 
 /**
@@ -231,29 +235,29 @@ void app_init(void)
   *         因而 USB 日志队列可持续得到处理。
   * @retval None
   */
-void app_run(void)
-{
-    /* static 变量跨调用保存上次翻转时刻，上电清零后不占用栈空间。 */
-    static uint32_t last_led_toggle_ms = 0U;
-    uint32_t now_ms = HAL_GetTick();
+// void app_run(void)
+// {
+//     /* static 变量跨调用保存上次翻转时刻，上电清零后不占用栈空间。 */
+//     static uint32_t last_led_toggle_ms = 0U;
+//     uint32_t now_ms = HAL_GetTick();
 
-    /*
-     * 每次最多处理一条日志：USB 未就绪或正忙时立即返回，队首保持不变。
-     * 因此主循环调用频率越高，USB 空闲后队列排空得越及时。
-     */
-    (void)LOG_Process();
-    app_process_sd();
+//     /*
+//      * 每次最多处理一条日志：USB 未就绪或正忙时立即返回，队首保持不变。
+//      * 因此主循环调用频率越高，USB 空闲后队列排空得越及时。
+//      */
+//     (void)LOG_Process();
+//     app_process_sd();
 
-    /*
-     * 无符号减法可以正确跨越 HAL_GetTick() 的 32 位自然回绕点；只要判断
-     * 周期远小于 2^31 ms，就不需要为 tick 溢出编写特殊分支。
-     */
-    if ((uint32_t)(now_ms - last_led_toggle_ms) >= 500U)
-    {
-        last_led_toggle_ms = now_ms;
-        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-    }
-}
+//     /*
+//      * 无符号减法可以正确跨越 HAL_GetTick() 的 32 位自然回绕点；只要判断
+//      * 周期远小于 2^31 ms，就不需要为 tick 溢出编写特殊分支。
+//      */
+//     if ((uint32_t)(now_ms - last_led_toggle_ms) >= 500U)
+//     {
+//         last_led_toggle_ms = now_ms;
+//         HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+//     }
+// }
 
 /**
   * @brief  应用层错误处理扩展入口。

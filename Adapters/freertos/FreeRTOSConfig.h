@@ -104,5 +104,9 @@ void vAssertCalled(const char *file, uint32_t line);
 /* 把 FreeRTOS Port 层处理函数映射到启动文件使用的 CMSIS 异常入口名称。 */
 #define vPortSVCHandler                                     SVC_Handler
 #define xPortPendSVHandler                                  PendSV_Handler
+#define xPortSysTickHandler                                 SysTick_Handler
+
+#define INCLUDE_vTaskDelay                                  1
+#define INCLUDE_vTaskDelete                                 1
 
 #endif /* FREERTOS_CONFIG_H */

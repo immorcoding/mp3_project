@@ -99,7 +99,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    app_run();
+    // app_run();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
