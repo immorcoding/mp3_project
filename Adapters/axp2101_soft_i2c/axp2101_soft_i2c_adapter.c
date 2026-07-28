@@ -117,6 +117,10 @@ static AXP2101_BusStatusTypeDef axp2101_soft_i2c_mem_write(
     return axp2101_soft_i2c_status(context, (int32_t)status);
 }
 
+/**
+  * @brief AXP2101 Device 使用的 SoftI2C 总线操作表。
+  * @note  具体 SoftI2C 实例不保存在表中，通过 BusContext 注入。
+  */
 static const AXP2101_BusOpsTypeDef axp2101_soft_i2c_ops = {
     .Prepare = axp2101_soft_i2c_prepare,
     .MemRead = axp2101_soft_i2c_mem_read,

@@ -95,34 +95,71 @@ typedef struct
     uint32_t CardVersion;   /**< Adapter 提供的卡版本标识，仅用于诊断。 */
 } SDCard_InfoTypeDef;
 
-/** @brief 判断卡槽中是否存在介质的 Port 函数类型。 */
+/**
+  * @brief 判断卡槽中是否存在介质的 Port 函数类型。
+  * @param context 与 PortOps 成对绑定的底层控制器和卡检测对象。
+  * @retval true 当前检测到介质。
+  * @retval false 当前没有检测到介质。
+  */
 typedef bool (*SDCard_PortIsPresentFunc)(const void *context);
 
-/** @brief 初始化底层控制器和介质的 Port 函数类型。 */
+/**
+  * @brief 初始化底层控制器和介质的 Port 函数类型。
+  * @param context 与 PortOps 成对绑定的底层对象。
+  * @retval SDCard_PortStatusTypeDef 归一化后的初始化结果。
+  */
 typedef SDCard_PortStatusTypeDef (*SDCard_PortInitFunc)(void *context);
 
-/** @brief 反初始化底层控制器的 Port 函数类型。 */
+/**
+  * @brief 反初始化底层控制器的 Port 函数类型。
+  * @param context 与 PortOps 成对绑定的底层对象。
+  * @retval SDCard_PortStatusTypeDef 归一化后的资源释放结果。
+  */
 typedef SDCard_PortStatusTypeDef (*SDCard_PortDeInitFunc)(void *context);
 
-/** @brief 获取归一化介质信息的 Port 函数类型。 */
+/**
+  * @brief 获取归一化介质信息的 Port 函数类型。
+  * @param context 与 PortOps 成对绑定的底层对象。
+  * @param info 接收容量、逻辑块和诊断信息的对象。
+  * @retval SDCard_PortStatusTypeDef 归一化后的查询结果。
+  */
 typedef SDCard_PortStatusTypeDef (*SDCard_PortGetInfoFunc)(void *context,
     SDCard_InfoTypeDef *info);
 
-/** @brief 从连续逻辑块读取数据的 Port 函数类型。 */
+/**
+  * @brief 从连续逻辑块读取数据的 Port 函数类型。
+  * @param context 与 PortOps 成对绑定的底层对象。
+  * @param data 接收块数据的缓冲区。
+  * @param start_block 第一个逻辑块编号。
+  * @param block_count 连续读取的逻辑块数量。
+  * @param timeout_ms 底层数据阶段允许的最长时间。
+  */
 typedef SDCard_PortStatusTypeDef (*SDCard_PortReadBlocksFunc)(void *context,
     uint8_t *data,
     uint32_t start_block,
     uint32_t block_count,
     uint32_t timeout_ms);
 
-/** @brief 向连续逻辑块写入数据的 Port 函数类型。 */
+/**
+  * @brief 向连续逻辑块写入数据的 Port 函数类型。
+  * @param context 与 PortOps 成对绑定的底层对象。
+  * @param data 提供块数据的只读缓冲区。
+  * @param start_block 第一个逻辑块编号。
+  * @param block_count 连续写入的逻辑块数量。
+  * @param timeout_ms 底层数据阶段允许的最长时间。
+  */
 typedef SDCard_PortStatusTypeDef (*SDCard_PortWriteBlocksFunc)(void *context,
     const uint8_t *data,
     uint32_t start_block,
     uint32_t block_count,
     uint32_t timeout_ms);
 
-/** @brief 等待介质完成内部操作并回到可传输状态的 Port 函数类型。 */
+/**
+  * @brief 等待介质完成内部操作并回到可传输状态的 Port 函数类型。
+  * @param context 与 PortOps 成对绑定的底层对象。
+  * @param timeout_ms 最长等待时间。
+  * @retval SDCard_PortStatusTypeDef 归一化后的同步结果。
+  */
 typedef SDCard_PortStatusTypeDef (*SDCard_PortSyncFunc)(void *context,
     uint32_t timeout_ms);
 

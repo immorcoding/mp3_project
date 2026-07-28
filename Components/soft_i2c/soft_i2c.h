@@ -82,10 +82,23 @@ typedef enum
   SOFT_I2C_LINE_RELEASED  /**< 释放开漏线条。 */
 } SoftI2C_LineStateTypeDef;
 
+/**
+  * @brief 驱动或释放一条逻辑 I2C 线的 GPIO 函数类型。
+  * @param context 与 GPIOOps 成对绑定的具体 GPIO 后端对象。
+  * @param line 需要操作的 SCL 或 SDA。
+  * @param state 主动拉低或释放开漏输出。
+  */
 typedef void (*SoftI2C_GPIOWriteFunc)(void *context,
                                       SoftI2C_LineTypeDef line,
                                       SoftI2C_LineStateTypeDef state);
 
+/**
+  * @brief 读取一条逻辑 I2C 线实际电平的 GPIO 函数类型。
+  * @param context 与 GPIOOps 成对绑定的只读 GPIO 后端对象。
+  * @param line 需要采样的 SCL 或 SDA。
+  * @retval true 线条实际为高电平。
+  * @retval false 线条实际为低电平。
+  */
 typedef bool (*SoftI2C_GPIOReadFunc)(const void *context,
                                      SoftI2C_LineTypeDef line);
 

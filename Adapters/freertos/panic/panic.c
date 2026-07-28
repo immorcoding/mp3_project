@@ -9,7 +9,10 @@
 
 #include "stm32h7xx.h"
 
+/** @brief 最近一次触发 configASSERT 的源文件名，供调试器读取。 */
 static const char *volatile assert_file;
+
+/** @brief 最近一次触发 configASSERT 的源代码行号，供调试器读取。 */
 static volatile uint32_t assert_line;
 
 /**

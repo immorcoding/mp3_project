@@ -1,7 +1,13 @@
+/**
+  ******************************************************************************
+  * @file    platform.c
+  * @brief   整机强依赖硬件能力的 Platform 初始化顺序实现。
+  ******************************************************************************
+  */
+
 #include "Platform/platform.h"
 
 #include "Platform/audio/platform_audio.h"
-#include "Platform/platform_irq.h"
 #include "Platform/power/platform_power.h"
 
 #include "stm32h7xx_hal.h"
@@ -14,12 +20,6 @@
   */
 Platform_StatusTypeDef Platform_Init(void)
 {
-    /* IRQ Dispatcher 必须先于所有可能注册板级中断的 Module 初始化。 */
-    if (Platform_IRQ_Init() != PLATFORM_OK)
-    {
-        return PLATFORM_IRQ_ERROR;
-    }
-
     /* 初始化本板电源管理和 AXP2101 启动策略。 */
     if (Platform_Power_Init() != PLATFORM_OK)
     {

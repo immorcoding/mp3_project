@@ -1,3 +1,10 @@
+/**
+  ******************************************************************************
+  * @file    platform.h
+  * @brief   Platform 层公共状态和整机初始化入口。
+  ******************************************************************************
+  */
+
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
@@ -12,8 +19,7 @@ typedef enum
     PLATFORM_PMIC_ERROR,   /**< PMIC 操作失败。 */
     PLATFORM_AUDIO_ERROR,  /**< Audio 操作失败。 */
     PLATFORM_LCD_ERROR,    /**< LCD 操作失败。 */
-    PLATFORM_SD_ERROR,     /**< SD 操作失败。 */
-    PLATFORM_IRQ_ERROR     /**< IRQ Dispatcher 操作失败。 */
+    PLATFORM_SD_ERROR      /**< SD 操作失败。 */
 } Platform_StatusTypeDef;
 
 Platform_StatusTypeDef Platform_Init(void);

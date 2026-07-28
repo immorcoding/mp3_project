@@ -11,8 +11,8 @@
 #include <stddef.h>
 
 #include "Platform/platform.h"
-#include "Platform/platform_irq.h"
 #include "Components/sd/sd.h"
+#include "Adapters/irq/irq_stm32_hal_adapter.h"
 #include "Adapters/sd/sd_stm32_hal_adapter.h"
 #include "main.h"
 #include "sdmmc.h"
@@ -30,18 +30,23 @@
   */
 typedef struct
 {
-    SDCard_HandleTypeDef Device;
-    volatile bool DetectPending; /**< FreeRTOS 下由任务通知替代。 */
-    uint32_t DebounceStartMs;
-    bool Debouncing;
-    bool IRQRegistered;
+    SDCard_HandleTypeDef Device; /**< 通用 SD Card Device 状态机和诊断。 */
+    IRQ_STM32HALAdapter_CallbackTypeDef DetectIRQCallback; /**< 调用者持有的卡检测 IRQ 链表节点。 */
+    volatile bool DetectPending; /**< ISR 发布的二值通知；FreeRTOS 下由任务通知替代。 */
+    uint32_t DebounceStartMs;     /**< 最近一次检测边沿开始消抖的 HAL tick。 */
+    bool Debouncing;              /**< 当前是否正在等待检测输入保持稳定。 */
+    bool IRQRegistered;           /**< DetectIRQCallback 是否已注册到 IRQ Adapter。 */
 } Platform_SD_HandleTypeDef;
 
 /* Private variables ---------------------------------------------------------*/
 /** @brief 本板唯一 SD 卡槽对应的私有实例。 */
 static Platform_SD_HandleTypeDef hplatform_sd;
 
-/** @brief 本板 SDMMC1 Handle 和低有效卡检测信号的 Adapter 装配。 */
+/**
+  * @brief 本板 SDMMC1 Handle 和低有效卡检测信号的 Adapter Context。
+  * @note  Platform 拥有本装配关系；hsd1 和 GPIO Port 由 CubeMX/Vendor
+  *        代码持有，本对象只保存借用引用。
+  */
 static SDCard_STM32HALAdapterTypeDef hplatform_sd_adapter = {
     .Handle = &hsd1,
     .DetectPort = SD_CD_GPIO_Port,
@@ -50,13 +55,22 @@ static SDCard_STM32HALAdapterTypeDef hplatform_sd_adapter = {
 };
 
 /* Private functions ---------------------------------------------------------*/
-/** @brief 将 Device 返回值转换为 Platform 层统一状态码。 */
+/**
+  * @brief  将 Device 返回值转换为 Platform 层统一状态码。
+  * @param  status SD Card Device 的立即返回状态。
+  * @retval PLATFORM_OK Device 调用成功。
+  * @retval PLATFORM_SD_ERROR Device 调用失败。
+  */
 static Platform_StatusTypeDef platform_sd_status(SDCard_StatusTypeDef status)
 {
     return (status == SDCARD_OK) ? PLATFORM_OK : PLATFORM_SD_ERROR;
 }
 
-/** @brief 将 Device 的持续状态转换为 Platform 对外状态。 */
+/**
+  * @brief  将 Device 的持续状态转换为 Platform 对外状态。
+  * @param  state SD Card Device 当前生命周期状态。
+  * @return 与输入语义对应的 Platform SD 状态；未知值归为 ERROR。
+  */
 static Platform_SD_StateTypeDef platform_sd_state(SDCard_StateTypeDef state)
 {
     switch (state)
@@ -121,14 +135,15 @@ static bool platform_sd_take_detect_event(Platform_SD_HandleTypeDef *hsd)
 
 /**
   * @brief  在 ISR 中记录一次 SD 卡检测边沿。
+  * @param  gpio_pin 触发回调的 STM32 HAL GPIO_Pin 位掩码。
   * @param  context 注册时绑定的 Platform SD 私有 Handle。
   * @note   本函数只发布二值通知，不执行消抖、SDMMC 操作或日志输出。
   */
-static void platform_sd_detect_irq_cb(void *context)
+static void platform_sd_detect_irq_cb(uint16_t gpio_pin, void *context)
 {
     Platform_SD_HandleTypeDef *hsd = (Platform_SD_HandleTypeDef *)context;
 
-    if (hsd != NULL)
+    if ((hsd != NULL) && ((gpio_pin & SD_CD_Pin) != 0U))
     {
         /**************** FreeRTOS 移植替换区：开始 ***************************
          * 改为 vTaskNotifyGiveFromISR()，并按返回值决定是否请求任务切换。
@@ -166,9 +181,10 @@ Platform_StatusTypeDef Platform_SD_Init(void)
         return PLATFORM_SD_ERROR;
     }
 
-    if (Platform_IRQ_Register(PLATFORM_IRQ_SOURCE_SD_DETECT,
-                              platform_sd_detect_irq_cb,
-                              &hplatform_sd) != PLATFORM_OK)
+    if (IRQ_STM32HALAdapter_Register(&hplatform_sd.DetectIRQCallback,
+                                    SD_CD_Pin,
+                                    platform_sd_detect_irq_cb,
+                                    &hplatform_sd) != IRQ_STM32_HAL_ADAPTER_OK)
     {
         return PLATFORM_SD_ERROR;
     }
@@ -178,7 +194,7 @@ Platform_StatusTypeDef Platform_SD_Init(void)
 
     if (status != PLATFORM_OK)
     {
-        (void)Platform_IRQ_Unregister(PLATFORM_IRQ_SOURCE_SD_DETECT);
+        (void)IRQ_STM32HALAdapter_Unregister(&hplatform_sd.DetectIRQCallback);
         hplatform_sd.IRQRegistered = false;
     }
 
@@ -196,7 +212,8 @@ Platform_StatusTypeDef Platform_SD_DeInit(void)
 
     if (hplatform_sd.IRQRegistered)
     {
-        if (Platform_IRQ_Unregister(PLATFORM_IRQ_SOURCE_SD_DETECT) != PLATFORM_OK)
+        if (IRQ_STM32HALAdapter_Unregister(
+                &hplatform_sd.DetectIRQCallback) != IRQ_STM32_HAL_ADAPTER_OK)
         {
             status = PLATFORM_SD_ERROR;
         }
@@ -219,6 +236,8 @@ Platform_StatusTypeDef Platform_SD_DeInit(void)
 
 /**
   * @brief  根据当前 SD_CD 电平刷新插拔状态。
+  * @retval PLATFORM_OK 检测状态与 Device 生命周期刷新成功。
+  * @retval PLATFORM_SD_ERROR Device 刷新失败。
   * @note   本函数不实现去抖且不得从 EXTI ISR 调用。正常热插拔路径应通过
   *         Platform_SD_Process() 在检测电平稳定后间接调用。
   */
@@ -301,7 +320,10 @@ Platform_StatusTypeDef Platform_SD_Process(Platform_SD_EventTypeDef *event)
     return PLATFORM_OK;
 }
 
-/** @brief 返回 Platform SD 当前持续状态。 */
+/**
+  * @brief  返回 Platform SD 当前持续状态。
+  * @return 从私有 SD Card Device 状态转换得到的 Platform 状态。
+  */
 Platform_SD_StateTypeDef Platform_SD_GetState(void)
 {
     return platform_sd_state(SDCard_GetState(&hplatform_sd.Device));
@@ -309,6 +331,8 @@ Platform_SD_StateTypeDef Platform_SD_GetState(void)
 
 /**
   * @brief  直接读取当前卡检测电平。
+  * @retval true 卡检测输入当前表示已插卡。
+  * @retval false 卡检测输入当前表示未插卡，或 Port 尚未正确绑定。
   * @note   本函数不更新 Platform SD 状态；状态转换必须通过 Init/Refresh 完成。
   */
 bool Platform_SD_IsPresent(void)
@@ -347,6 +371,8 @@ Platform_StatusTypeDef Platform_SD_GetInfo(Platform_SD_InfoTypeDef *info)
 /**
   * @brief  复制最近一次 Device/Port 错误诊断。
   * @param  diagnostics 接收诊断快照的指针。
+  * @retval PLATFORM_OK 快照复制成功。
+  * @retval PLATFORM_SD_ERROR diagnostics 为空。
   */
 Platform_StatusTypeDef Platform_SD_GetDiagnostics(Platform_SD_DiagnosticsTypeDef *diagnostics)
 {
@@ -360,7 +386,14 @@ Platform_StatusTypeDef Platform_SD_GetDiagnostics(Platform_SD_DiagnosticsTypeDef
     return PLATFORM_OK;
 }
 
-/** @brief 从本板 SD 卡读取连续逻辑块。 */
+/**
+  * @brief  从本板 SD 卡读取连续逻辑块。
+  * @param  data 接收块数据的缓冲区。
+  * @param  start_block 第一个逻辑块编号。
+  * @param  block_count 连续读取的逻辑块数量。
+  * @retval PLATFORM_OK 读取和同步完成。
+  * @retval PLATFORM_SD_ERROR 参数、状态、范围或底层读取失败。
+  */
 Platform_StatusTypeDef Platform_SD_ReadBlocks(uint8_t *data,
                                         uint32_t start_block,
                                         uint32_t block_count)
@@ -371,7 +404,14 @@ Platform_StatusTypeDef Platform_SD_ReadBlocks(uint8_t *data,
                                               block_count));
 }
 
-/** @brief 向本板 SD 卡写入连续逻辑块。 */
+/**
+  * @brief  向本板 SD 卡写入连续逻辑块。
+  * @param  data 提供块数据的只读缓冲区。
+  * @param  start_block 第一个逻辑块编号。
+  * @param  block_count 连续写入的逻辑块数量。
+  * @retval PLATFORM_OK 写入和同步完成。
+  * @retval PLATFORM_SD_ERROR 参数、状态、范围或底层写入失败。
+  */
 Platform_StatusTypeDef Platform_SD_WriteBlocks(const uint8_t *data,
                                          uint32_t start_block,
                                          uint32_t block_count)
@@ -382,7 +422,11 @@ Platform_StatusTypeDef Platform_SD_WriteBlocks(const uint8_t *data,
                                                block_count));
 }
 
-/** @brief 等待本板 SD 卡完成内部操作。 */
+/**
+  * @brief  等待本板 SD 卡完成内部编程并回到可传输状态。
+  * @retval PLATFORM_OK 介质已经可以接受下一条命令。
+  * @retval PLATFORM_SD_ERROR 无卡、状态非法、底层错误或等待超时。
+  */
 Platform_StatusTypeDef Platform_SD_Sync(void)
 {
     return platform_sd_status(SDCard_Sync(&hplatform_sd.Device));

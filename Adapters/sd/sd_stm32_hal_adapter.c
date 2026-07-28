@@ -17,8 +17,10 @@
 
 /* Private functions ---------------------------------------------------------*/
 /**
-  * @brief  读取本板低有效 SD_CD 信号。
-  * @param  context 当前未使用；保留以满足通用 Port Interface。
+  * @brief  根据 Context 中的 GPIO 和有效电平读取卡检测状态。
+  * @param  context 必须指向 SDCard_STM32HALAdapterTypeDef。
+  * @retval true 检测电平与 PresentState 相同。
+  * @retval false Context 无效或当前没有检测到介质。
   */
 static bool sd_stm32_hal_is_present(const void *context)
 {
@@ -36,6 +38,7 @@ static bool sd_stm32_hal_is_present(const void *context)
 /**
   * @brief  将 HAL 返回值转换为 Device 可理解的 Port 状态。
   * @param  native_status 当前 SDK 函数的立即返回状态。
+  * @return 与 HAL_OK/BUSY/TIMEOUT/ERROR 对应的归一化 Port 状态。
   * @note   HAL 原始 ErrorCode 继续保留在 hsd1 中，不跨越 Port Seam。
   */
 static SDCard_PortStatusTypeDef sd_stm32_hal_status(int32_t native_status)
@@ -61,6 +64,10 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_status(int32_t native_status)
 
 /**
   * @brief  配置 hsd1 并初始化 SDMMC1 和 SD 卡。
+  * @param  context 必须指向包含 SD Handle 和卡检测 GPIO 的 Adapter Context。
+  * @retval SDCARD_PORT_OK 控制器和介质初始化成功。
+  * @retval SDCARD_PORT_NOT_PRESENT 初始化前或失败后检测到介质不存在。
+  * @retval SDCARD_PORT_ERROR Context 无效或 HAL 初始化失败。
   * @note   参数与当前 CubeMX SDMMC1 配置保持一致。以后在 CubeMX 修改总线
   *         宽度、时钟沿或分频时，必须同步检查本函数。
   */
@@ -110,7 +117,11 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_init(void *context)
     return status;
 }
 
-/** @brief 反初始化 SDMMC1 和对应 MSP 资源。 */
+/**
+  * @brief  反初始化当前 Context 指向的 SD Handle 和对应 MSP 资源。
+  * @param  context 必须指向有效 SDCard_STM32HALAdapterTypeDef。
+  * @return HAL_SD_DeInit() 转换后的归一化 Port 状态。
+  */
 static SDCard_PortStatusTypeDef sd_stm32_hal_deinit(void *context)
 {
     SDCard_STM32HALAdapterTypeDef *adapter = context;
@@ -123,7 +134,14 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_deinit(void *context)
     return sd_stm32_hal_status((int32_t)HAL_SD_DeInit(adapter->Handle));
 }
 
-/** @brief 将 HAL 卡信息转换为 Device 的逻辑块信息。 */
+/**
+  * @brief  将 HAL 卡信息转换为 Device 的逻辑块信息。
+  * @param  context 必须指向有效 SDCard_STM32HALAdapterTypeDef。
+  * @param  info 接收归一化容量、块大小、卡类型和版本信息。
+  * @retval SDCARD_PORT_OK 信息读取并转换成功。
+  * @retval SDCARD_PORT_NOT_PRESENT 当前没有检测到介质。
+  * @retval SDCARD_PORT_ERROR 参数或 HAL 查询失败。
+  */
 static SDCard_PortStatusTypeDef sd_stm32_hal_get_info(
     void *context,
     SDCard_InfoTypeDef *info)
@@ -160,7 +178,15 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_get_info(
     return status;
 }
 
-/** @brief 使用 HAL 轮询接口读取一个或多个逻辑块。 */
+/**
+  * @brief  使用 HAL 轮询接口读取一个或多个逻辑块。
+  * @param  context 必须指向有效 SDCard_STM32HALAdapterTypeDef。
+  * @param  data 接收数据的缓冲区。
+  * @param  start_block 起始逻辑块编号。
+  * @param  block_count 连续读取的逻辑块数量。
+  * @param  timeout_ms HAL 数据阶段超时时间。
+  * @return HAL 结果转换后的 Port 状态；传输中拔卡优先返回 NOT_PRESENT。
+  */
 static SDCard_PortStatusTypeDef sd_stm32_hal_read_blocks(
     void *context,
     uint8_t *data,
@@ -201,7 +227,15 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_read_blocks(
     return status;
 }
 
-/** @brief 使用 HAL 轮询接口写入一个或多个逻辑块。 */
+/**
+  * @brief  使用 HAL 轮询接口写入一个或多个逻辑块。
+  * @param  context 必须指向有效 SDCard_STM32HALAdapterTypeDef。
+  * @param  data 提供数据的只读缓冲区。
+  * @param  start_block 起始逻辑块编号。
+  * @param  block_count 连续写入的逻辑块数量。
+  * @param  timeout_ms HAL 数据阶段超时时间。
+  * @return HAL 结果转换后的 Port 状态；传输中拔卡优先返回 NOT_PRESENT。
+  */
 static SDCard_PortStatusTypeDef sd_stm32_hal_write_blocks(
     void *context,
     const uint8_t *data,
@@ -247,6 +281,12 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_write_blocks(
   * @details
   *         HAL 的阻塞读写完成数据搬运后，卡内部仍可能处于 PROGRAMMING。
   *         本函数让 Device 成功返回前确认介质真正可以接受下一条命令。
+  * @param  context 必须指向有效 SDCard_STM32HALAdapterTypeDef。
+  * @param  timeout_ms 等待介质回到 TRANSFER 状态的最长时间。
+  * @retval SDCARD_PORT_OK 介质已经回到可传输状态。
+  * @retval SDCARD_PORT_NOT_PRESENT 等待期间介质被拔出。
+  * @retval SDCARD_PORT_ERROR HAL 报告错误或断开状态。
+  * @retval SDCARD_PORT_TIMEOUT 等待时间达到上限。
   */
 static SDCard_PortStatusTypeDef sd_stm32_hal_sync(
     void *context,
@@ -292,7 +332,10 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_sync(
 }
 
 /* Private variables ---------------------------------------------------------*/
-/** @brief 当前 PCB 的 SDMMC1 Port Adapter。 */
+/**
+  * @brief SD Card Device 使用的 STM32 HAL SDMMC Port 操作表。
+  * @note  具体 SD Handle、卡检测 GPIO 和极性通过 PortContext 注入。
+  */
 static const SDCard_PortOpsTypeDef sd_stm32_hal_ops = {
     .IsPresent = sd_stm32_hal_is_present,
     .Init = sd_stm32_hal_init,
@@ -309,7 +352,7 @@ static const SDCard_PortOpsTypeDef sd_stm32_hal_ops = {
   * @param  hsdcard 待绑定的 SD Card Device Handle。
   * @param  adapter Platform 层装配的 HAL Handle 和卡检测配置。
   * @retval SDCARD_OK 绑定成功。
-  * @retval SDCARD_ERROR hsdcard 为空。
+  * @retval SDCARD_ERROR Device Handle、Adapter Context 或必需资源无效。
   * @note   本函数只完成依赖装配，不初始化 SDMMC1，也不访问 SD 卡。
   */
 SDCard_StatusTypeDef SDCard_STM32HALAdapter_Bind(

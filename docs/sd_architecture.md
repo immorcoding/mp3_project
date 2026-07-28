@@ -15,7 +15,7 @@
 - 一个可复用、面向逻辑块的 SD Card Device；
 - 一个绑定 STM32H743 SDMMC1 的具体 Port；
 - 一个代表本板唯一物理卡槽的 Platform 接口；
-- 一个把 GPIO EXTI 映射为逻辑中断源的 Platform IRQ 分发器；
+- 一个按 GPIO PinMask 注册调用者回调的 STM32 HAL IRQ Adapter；
 - APP 对“可选介质”的启动和日志策略。
 
 当前不抽象通用 `BlockDevice`。SD 是现阶段唯一的块设备；等 QSPI Flash 成为第二个真实实现，并明确其擦除、对齐和写入规则后，再从两个具体需求中提取公共接口更稳妥。
@@ -35,16 +35,12 @@ Adapters/sd/
   sd_stm32_hal_adapter.c        STM32 HAL SD/GPIO 调用和状态转换
 
 Adapters/irq/
-  irq_stm32_hal_adapter.h       STM32 HAL EXTI 单一上行回调接口
-  irq_stm32_hal_adapter.c       HAL GPIO EXTI 回调桥接
+  irq_stm32_hal_adapter.h       调用者持有的 IRQ 回调对象和注册接口
+  irq_stm32_hal_adapter.c       HAL GPIO EXTI 入口和回调链表分发
 
 Platform/sd/
-  platform_sd.h                    APP/未来 Storage 使用的 Platform 接口
-  platform_sd.c                    私有 Device、hsd1/SD_CD 装配、消抖和事件映射
-
-Platform/
-  platform_irq.h                   逻辑中断源注册与分发接口
-  platform_irq.c                   GPIO 引脚到逻辑中断源的映射
+  platform_sd.h                 APP/未来 Storage 使用的 Platform 接口
+  platform_sd.c                 私有 Device、IRQ Callback、hsd1/SD_CD 装配和消抖
 
 Core/Inc/sdmmc.h
 Core/Src/sdmmc.c                CubeMX 管理的 hsd1 和 HAL MSP 初始化/反初始化
@@ -65,7 +61,11 @@ app_init()
   -> app_init_sd()                         初始化可选介质
      -> Platform_SD_Init()
         -> SDCard_STM32HALAdapter_Bind(&Device, &Adapter)
-        -> Platform_IRQ_Register(SD_DETECT)   注册卡槽私有 ISR 回调
+        -> IRQ_STM32HALAdapter_Register(
+               &DetectIRQCallback,
+               SD_CD_Pin,
+               platform_sd_detect_irq_cb,
+               &hplatform_sd)
         -> SDCard_Init(&Device)
            -> Port.IsPresent(PC7)
            -> Port.Init(&hsd1)
@@ -115,10 +115,9 @@ Platform_SD_ReadBlocks()
 EXTI9_5_IRQHandler()
   -> HAL_GPIO_EXTI_IRQHandler(SD_CD_Pin)
   -> HAL_GPIO_EXTI_Callback(SD_CD_Pin)
-  -> IRQ_STM32HALAdapter 的上行回调
-  -> platform_irq_stm32_hal_callback(SD_CD_Pin)
-  -> Platform IRQ 私有逻辑源分发
-  -> platform_sd_detect_irq_cb()
+  -> IRQ_STM32HALAdapter 遍历回调链表
+  -> PinMask 匹配 DetectIRQCallback
+  -> platform_sd_detect_irq_cb(SD_CD_Pin, &hplatform_sd)
      -> DetectPending = true
 
 app_run()
@@ -136,13 +135,24 @@ app_run()
 
 卡座触点抖动可能产生多个边沿，但边沿次数没有业务意义。系统只关心“检测输入发生过变化，请在稳定后重新读取”。因此 `DetectPending` 是二值通知，不记录插拔次数。
 
-### 5.2 为什么不能只依赖 `volatile`
+### 5.2 为什么由 Platform SD 持有 IRQ Callback
+
+IRQ Adapter 只认识 STM32 HAL 的 GPIO PinMask，不认识 SD、PMIC 或产品逻辑中断源。
+`Platform_SD` 长期持有 `DetectIRQCallback`，初始化时注册、反初始化时注销，
+回调上下文直接指回自己的私有 Handle。这与 Zephyr 中使用者持有
+`struct gpio_callback` 并注册到 GPIO Driver 的方式接近。
+
+因此不再需要额外的 `Platform_IRQ_SourceTypeDef`、GPIO 到逻辑源的映射表或
+Platform IRQ 二次分发。以后新增按键或 PMIC 中断时，由各自模块持有并注册新的
+Callback 对象，IRQ Adapter 的实现不需要修改。
+
+### 5.3 为什么不能只依赖 `volatile`
 
 `volatile` 只保证每次都真实访问内存，不保证“读取并清除”这个复合操作不可被 ISR 打断。如果普通上下文读取到 `true` 后 ISR 再次写入 `true`，随后普通上下文清零，就可能丢掉新通知。
 
 `platform_sd_take_detect_event()` 使用极短的 PRIMASK 临界区原子地取得并清除通知，并恢复调用前的全局中断状态。快速路径会先判断无通知并直接返回，避免主循环每轮都短暂关中断。
 
-### 5.3 FreeRTOS 替换接缝
+### 5.4 FreeRTOS 替换接缝
 
 `platform_sd.c` 中带有“FreeRTOS 移植替换区”的代码是调度接缝。接入 RTOS 后建议：
 

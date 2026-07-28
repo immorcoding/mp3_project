@@ -1,9 +1,22 @@
+/**
+  ******************************************************************************
+  * @file    FreeRTOSConfig.h
+  * @brief   STM32H743 播放器固件使用的 FreeRTOS 内核编译配置。
+  *
+  * @details
+  *          本文件属于当前产品的 RTOS Adapter 配置，不随 FreeRTOS 内核
+  *          复用。修改优先级数量、Tick、堆或中断阈值前必须重新核对任务
+  *          设计、NVIC 优先级和 RAM 预算。
+  ******************************************************************************
+  */
+
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
 #include <stddef.h>
 #include <stdint.h>
 
+/* 调度器、Tick、任务基础能力与对象数量配置。 */
 #define configUSE_PREEMPTION                                        1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION                     0
 #define configUSE_TICKLESS_IDLE                                     0
@@ -31,14 +44,14 @@
 #define configMESSAGE_BUFFER_LENGTH_TYPE                            size_t
 #define configHEAP_CLEAR_MEMORY_ON_FREE                             0
 
-/* Memory allocation related definitions. */
+/* 动态/静态内存分配策略；当前由 heap_4.c 提供 32 KiB 内核堆。 */
 #define configSUPPORT_STATIC_ALLOCATION                             0
 #define configSUPPORT_DYNAMIC_ALLOCATION                            1
 #define configTOTAL_HEAP_SIZE                                       32768
 #define configAPPLICATION_ALLOCATED_HEAP                            0
 #define configSTACK_ALLOCATION_FROM_SEPARATE_HEAP                   0
 
-/* Hook function related definitions. */
+/* Hook 函数和运行期故障检测；启用后必须提供对应函数实现。 */
 #define configUSE_IDLE_HOOK                                 0
 #define configUSE_TICK_HOOK                                 0
 #define configCHECK_FOR_STACK_OVERFLOW                      0
@@ -46,16 +59,16 @@
 #define configUSE_DAEMON_TASK_STARTUP_HOOK                  0
 #define configUSE_SB_COMPLETED_CALLBACK                     0
 
-/* Run time and task stats gathering related definitions. */
+/* 运行时间统计和任务状态查询支持。 */
 #define configGENERATE_RUN_TIME_STATS                       0
 #define configUSE_TRACE_FACILITY                            1
 #define configUSE_STATS_FORMATTING_FUNCTIONS                1
 
-/* Co-routine related definitions. */
+/* 已弃用的 Co-routine 功能；新代码使用普通 Task。 */
 #define configUSE_CO_ROUTINES                               0
 #define configMAX_CO_ROUTINE_PRIORITIES                     1
 
-/* Software timer related definitions. */
+/* 软件定时器及其守护任务配置。 */
 #define configUSE_TIMERS                                    1
 #define configTIMER_TASK_PRIORITY                           3
 #define configTIMER_QUEUE_LENGTH                            10
@@ -63,7 +76,7 @@
 
 void vAssertCalled(const char *file, uint32_t line);
 
-/* Define to trap errors during development. */
+/* 开发期断言：保存文件和行号后进入不可恢复停机流程。 */
 #define configASSERT(x)                                                    \
     do                                                                     \
     {                                                                      \
@@ -72,29 +85,23 @@ void vAssertCalled(const char *file, uint32_t line);
             vAssertCalled(__FILE__, (uint32_t)__LINE__);                   \
         }                                                                  \
     } while (0)
-/* A header file that defines trace macro can be included here. */
-
-/* Cortex-M specific definitions. */
+/* Cortex-M7 NVIC 优先级位数和 FreeRTOS 可调用 FromISR API 的阈值。 */
 #define configPRIO_BITS                                     4U
-/* The lowest interrupt priority that can be used in a call to a "set priority"
-function. */
+/* 数值最大的 NVIC 优先级，也就是逻辑上的最低抢占优先级。 */
 #define configLIBRARY_LOWEST_INTERRUPT_PRIORITY             0xF
 
-/* The highest interrupt priority that can be used by any interrupt service
-routine that makes calls to interrupt safe FreeRTOS API functions.  DO NOT CALL
-INTERRUPT SAFE FREERTOS API FUNCTIONS FROM ANY INTERRUPT THAT HAS A HIGHER
-PRIORITY THAN THIS! (higher priorities are lower numeric values. */
+/*
+ * 允许调用 xxxFromISR() 的最高逻辑中断优先级。数值小于 5 的 ISR 优先级
+ * 更高，禁止调用任何 FreeRTOS API。
+ */
 #define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY        5
 
-/* Interrupt priorities used by the kernel port layer itself.  These are generic
-to all Cortex-M ports, and do not rely on any particular library functions. */
+/* 把 CMSIS 风格的 4 位优先级转换成写入 Cortex-M 寄存器的左对齐值。 */
 #define configKERNEL_INTERRUPT_PRIORITY                     ( configLIBRARY_LOWEST_INTERRUPT_PRIORITY << (8 - configPRIO_BITS) )
-/* !!!! configMAX_SYSCALL_INTERRUPT_PRIORITY must not be set to zero !!!!
-See http://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html. */
+/* 该值绝对不能为 0，否则 BASEPRI 无法屏蔽内核可管理的中断。 */
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY                ( configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS) )
 
-/* Definitions that map the FreeRTOS port interrupt handlers to their CMSIS
-   standard names. */
+/* 把 FreeRTOS Port 层处理函数映射到启动文件使用的 CMSIS 异常入口名称。 */
 #define vPortSVCHandler                                     SVC_Handler
 #define xPortPendSVHandler                                  PendSV_Handler
 

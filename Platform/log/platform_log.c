@@ -1,8 +1,20 @@
+/**
+  ******************************************************************************
+  * @file    platform_log.c
+  * @brief   本板默认 USB CDC 日志输出和 HAL 时间源的装配实现。
+  ******************************************************************************
+  */
+
 #include "Platform/log/platform_log.h"
 
 #include "Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.h"
 #include "Components/log/log_adapter.h"
 
+/**
+  * @brief 本板默认日志输出使用的 USB CDC Adapter 持久上下文。
+  * @note  TxBuffer 在异步 USB 发送完成前必须保持有效，因此不能放在
+  *        Platform_Log_Init() 的局部栈中。
+  */
 static LOG_UsbCDC_STM32HALAdapterTypeDef hplatform_log_usb_cdc;
 
 /**

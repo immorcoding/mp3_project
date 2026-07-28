@@ -12,25 +12,10 @@
 #ifndef APP_H
 #define APP_H
 
-/**
-  * @brief  初始化应用使用的各项服务和板级设备。
-  * @note   必须在 HAL、系统时钟、GPIO 和 USB Device 初始化完成后调用。
-  * @retval None
-  */
 void app_init(void);
 
-/**
-  * @brief  执行一次应用主循环任务。
-  * @note   main() 应在 while(1) 中高频调用；本函数不得包含长时间阻塞。
-  * @retval None
-  */
 void app_run(void);
 
-/**
-  * @brief  应用层错误处理扩展入口。
-  * @note   当前为空实现，预留给以后记录故障或执行安全关断。
-  * @retval None
-  */
 void app_error(void);
 
 #endif /* APP_H */

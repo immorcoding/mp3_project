@@ -1,3 +1,10 @@
+/**
+  ******************************************************************************
+  * @file    soft_i2c_stm32_hal_adapter.c
+  * @brief   STM32 HAL GPIO 到 SoftI2C GPIO Interface 的 Adapter。
+  ******************************************************************************
+  */
+
 #include "Adapters/soft_i2c/soft_i2c_stm32_hal_adapter.h"
 
 #include <stddef.h>
@@ -50,6 +57,10 @@ static bool soft_i2c_stm32_hal_read(const void *context,
   return HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET;
 }
 
+/**
+  * @brief SoftI2C 算法使用的 STM32 HAL GPIO 操作表。
+  * @note  SCL/SDA 的具体 Port/Pin 不保存在表中，通过 GPIOContext 注入。
+  */
 static const SoftI2C_GPIOOpsTypeDef soft_i2c_stm32_hal_ops = {
     .Write = soft_i2c_stm32_hal_write,
     .Read = soft_i2c_stm32_hal_read

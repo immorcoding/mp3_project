@@ -1,3 +1,14 @@
+/**
+  ******************************************************************************
+  * @file    audio_i2s_stm32_hal_adapter.c
+  * @brief   STM32 HAL I2S/GPIO 到 Audio Device Interface 的 Adapter。
+  *
+  * @details
+  *          本文件实现 I2S 准备、阻塞发送、硬件静音和 HAL 状态归一化。
+  *          具体 I2S Handle 与静音 GPIO 由 Platform 通过 Context 注入。
+  ******************************************************************************
+  */
+
 #include "Adapters/audio_i2s/audio_i2s_stm32_hal_adapter.h"
 
 #include <stddef.h>
@@ -11,25 +22,26 @@
   */
 static Audio_BusStatusTypeDef audio_i2s_stm32_hal_result(int32_t native_status)
 {
-/*******自定义修改状态码*******/
     HAL_StatusTypeDef status = (HAL_StatusTypeDef)native_status;
 
     switch (status)
     {
         case HAL_OK:
-            return AUDIO_BUS_OK; // Handle specific error case
+            return AUDIO_BUS_OK;
+
         case HAL_ERROR:
-            return AUDIO_BUS_ERROR; // Handle specific error case
+            return AUDIO_BUS_ERROR;
+
         case HAL_BUSY:
-            return AUDIO_BUS_BUSY; // Handle specific error case
+            return AUDIO_BUS_BUSY;
+
         case HAL_TIMEOUT:
-            return AUDIO_BUS_TIMEOUT; // Handle specific error case
+            return AUDIO_BUS_TIMEOUT;
+
         default:
-            // Handle other errors
-            return AUDIO_BUS_ERROR; //unknown error
-    
+            /* 未知 Vendor 状态不能泄漏到 Device，统一归为普通总线错误。 */
+            return AUDIO_BUS_ERROR;
     }
-/*****************************/
 }
 
 /**
@@ -48,13 +60,12 @@ static Audio_BusStatusTypeDef audio_i2s_stm32_hal_prepare(void *context)
         return AUDIO_BUS_ERROR;
     }
 
-/**************** 自定义的音频模块初始化函数 ****************/
     if (HAL_I2S_GetState(adapter->I2SHandle) != HAL_I2S_STATE_READY)
     {
         return AUDIO_BUS_ERROR;
     }
+
     return AUDIO_BUS_OK;
-/****************************************************/
 }
 
 /**
@@ -80,13 +91,11 @@ static Audio_BusStatusTypeDef audio_i2s_stm32_hal_transmit(
         return AUDIO_BUS_ERROR;
     }
 
-/**************** 自定义的音频发送函数 ****************/
     HAL_StatusTypeDef status = HAL_I2S_Transmit(adapter->I2SHandle,
                                                 data,
                                                 size,
                                                 1000U);
     return audio_i2s_stm32_hal_result((int32_t)status);
-/****************************************************/
 }
 
 /**
@@ -107,24 +116,27 @@ static Audio_StatusTypeDef audio_i2s_stm32_hal_mute(void *context, bool mute)
         return AUDIO_ERROR;
     }
 
-/**************** 自定义的静音函数 ****************/
     HAL_GPIO_WritePin(adapter->MutePort,
                       adapter->MutePin,
                       mute ? GPIO_PIN_RESET : GPIO_PIN_SET);
-/****************************************************/
     return AUDIO_OK;
 }
 
+/**
+  * @brief Audio Device 使用的 STM32 HAL I2S 操作表。
+  * @note  表本身由 Adapter 持有，具体 I2S 实例通过 BusContext 注入。
+  */
 static const Audio_BusOpsTypeDef audio_i2s_stm32_hal_bus_ops = {
     .Transmit = audio_i2s_stm32_hal_transmit,
     .Prepare = audio_i2s_stm32_hal_prepare
 };
 
 /**
-  * @brief  将本板 I2S2 和 PCM_XSMT Adapter 安装到 Audio Device Handle。
+  * @brief  将 STM32 HAL I2S 和 GPIO 静音 Adapter 安装到 Audio Device Handle。
   * @param  haudio 待绑定的 Audio Device Handle。
+  * @param  adapter Platform 长期持有的具体 I2S/GPIO Adapter Context。
   * @retval AUDIO_OK Ops 和 Context 已成对安装。
-  * @retval AUDIO_ERROR haudio 为空。
+  * @retval AUDIO_ERROR 句柄、Context 或必需的 Vendor 引用无效。
   * @note   本函数只完成依赖装配，不发送 PCM 数据，也不改变 XSMT 电平。
   */
 Audio_StatusTypeDef AudioI2S_STM32HALAdapter_Bind(
@@ -142,7 +154,8 @@ Audio_StatusTypeDef AudioI2S_STM32HALAdapter_Bind(
 
     haudio->BusOps = &audio_i2s_stm32_hal_bus_ops;
     haudio->Mute = &audio_i2s_stm32_hal_mute;
-/**************** 句柄绑定，由用户改动 ****************/
+
+    /* 同一 Context 同时提供 I2S 传输和当前硬件静音 GPIO。 */
     haudio->BusContext = adapter;
     haudio->MuteContext = adapter;
 

@@ -59,10 +59,20 @@ typedef enum
     AUDIO_ERROR_MUTE             /**< 静音或解除静音操作失败。 */
 } Audio_ErrorTypeDef;
 
-/** @brief 音频数据发送 Adapter 的函数类型。 */
+/**
+  * @brief 音频数据发送 Adapter 的函数类型。
+  * @param BusContext 与 BusOps 成对绑定的底层音频后端对象。
+  * @param data 按 I2S 帧顺序排列的 16 位 PCM 数据。
+  * @param size 需要发送的 16 位数据单元数量，不是字节数。
+  * @retval Audio_BusStatusTypeDef 归一化后的发送结果。
+  */
 typedef Audio_BusStatusTypeDef (*Audio_BusTransmitFunc)(void *BusContext, const uint16_t *data, uint16_t size);
 
-/** @brief 音频总线准备 Adapter 的函数类型。 */
+/**
+  * @brief 音频总线准备 Adapter 的函数类型。
+  * @param BusContext 与 BusOps 成对绑定的底层音频后端对象。
+  * @retval Audio_BusStatusTypeDef 后端可用性检查或准备结果。
+  */
 typedef Audio_BusStatusTypeDef (*Audio_BusPrepareFunc)(void *BusContext);
 
 /** @brief Audio Device 使用的总线操作表。 */
@@ -72,7 +82,13 @@ typedef struct
     Audio_BusPrepareFunc Prepare;   /**< 检查或准备底层音频总线。 */
 } Audio_BusOpsTypeDef;
 
-/** @brief 音频静音控制 Adapter 的函数类型。 */
+/**
+  * @brief 音频静音控制 Adapter 的函数类型。
+  * @param MuteContext 与静音函数成对绑定的控制后端对象。
+  * @param mute true 请求静音，false 请求解除静音。
+  * @retval AUDIO_OK 控制请求已经执行。
+  * @retval AUDIO_ERROR 参数或具体静音后端操作失败。
+  */
 typedef Audio_StatusTypeDef (*Audio_MuteFunc)(void *MuteContext, bool mute);
 
 /**

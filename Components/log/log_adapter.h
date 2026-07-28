@@ -1,3 +1,10 @@
+/**
+  ******************************************************************************
+  * @file    log_adapter.h
+  * @brief   日志核心初始化所需的输出和时间源 Adapter Interface。
+  ******************************************************************************
+  */
+
 #ifndef LOG_ADAPTER_H
 #define LOG_ADAPTER_H
 
@@ -18,6 +25,14 @@ typedef enum
     LOG_OUTPUT_ERROR      /**< Adapter 发生不可恢复的提交错误。 */
 } LOG_OutputStatusTypeDef;
 
+/**
+  * @brief 尝试非阻塞提交一条完整日志的输出函数类型。
+  * @param Context 与输出 Ops 成对绑定的具体 Adapter 对象。
+  * @param Level 当前消息等级，可用于选择 ANSI 颜色或输出通道。
+  * @param Data 完整日志文本；在函数返回前必须保持只读。
+  * @param Length 日志文本字节数，不包含结尾 '\0'。
+  * @retval LOG_OutputStatusTypeDef 本次提交的归一化结果。
+  */
 typedef LOG_OutputStatusTypeDef (*LOG_OutputTryWriteFuncTypeDef)(
     void *Context,
     LOG_LevelTypeDef Level,
@@ -41,6 +56,11 @@ typedef struct
     void *Context;                   /**< 传递给输出函数的 Adapter 对象。 */
 } LOG_OutputTypeDef;
 
+/**
+  * @brief 获取日志时间戳的函数类型。
+  * @param Context 与时间源成对绑定的对象，可以为 NULL。
+  * @return 自时间源起点开始累计的无符号毫秒值，允许自然回绕。
+  */
 typedef uint32_t (*LOG_GetTimeMsFuncTypeDef)(void *Context);
 
 /**

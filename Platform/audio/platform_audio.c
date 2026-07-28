@@ -1,3 +1,10 @@
+/**
+  ******************************************************************************
+  * @file    platform_audio.c
+  * @brief   本板 Audio Device、I2S2 和 PCM5102A 静音控制的装配实现。
+  ******************************************************************************
+  */
+
 #include "Platform/platform.h"
 #include "Components/audio/audio.h"
 #include "Adapters/audio_i2s/audio_i2s_stm32_hal_adapter.h"
@@ -5,8 +12,17 @@
 #include "i2s.h"
 #include "main.h"
 
+/**
+  * @brief 本板唯一 Audio Device 实例。
+  * @note  实例由 Platform 持有，APP 只能通过 Platform_Audio_* 操作。
+  */
 static Audio_HandleTypeDef haudio;
 
+/**
+  * @brief 本板 Audio Device 使用的 STM32 HAL I2S 与静音 GPIO 装配上下文。
+  * @note  Platform 拥有本装配关系，但只借用 CubeMX 创建的 hi2s2 和 GPIO
+  *        Vendor 对象，不拥有这些对象本身的生命周期。
+  */
 static AudioI2S_STM32HALAdapterTypeDef hplatform_audio_adapter = {
     .I2SHandle = &hi2s2,
     .MutePort = PCM_XSMT_GPIO_Port,
@@ -72,7 +88,9 @@ Platform_StatusTypeDef Platform_Audio_Init(void)
         (void)LOG_Printf(LOG_LEVEL_ERROR, "AUDIO", "Audio port bind failed");
         return PLATFORM_AUDIO_ERROR;
     }
+
     Audio_StatusTypeDef audio_status = Audio_Init(&haudio);
+
     if (audio_status != AUDIO_OK)
     {
         (void)LOG_Printf(LOG_LEVEL_ERROR,

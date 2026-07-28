@@ -1,3 +1,10 @@
+/**
+  ******************************************************************************
+  * @file    soft_i2c_stm32_hal_adapter.h
+  * @brief   SoftI2C STM32 HAL GPIO Adapter 的 Context 和绑定接口。
+  ******************************************************************************
+  */
+
 #ifndef SOFT_I2C_STM32_HAL_ADAPTER_H
 #define SOFT_I2C_STM32_HAL_ADAPTER_H
 
@@ -12,6 +19,8 @@ extern "C" {
 
 /**
   * @brief STM32 HAL GPIO 实现所需的私有上下文。
+  * @note  对象由 Platform 长期持有；GPIO Port 指针只是对 Vendor 寄存器映射
+  *        的借用引用，Adapter Context 不拥有 GPIO 外设。
   */
 typedef struct
 {
