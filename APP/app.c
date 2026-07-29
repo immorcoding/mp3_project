@@ -60,7 +60,7 @@ static void app_init_sd(void)
         {
             (void)LOG_Printf(LOG_LEVEL_ERROR,
                              "SD",
-                             "initialization failed: device=%lu, port=%lu",
+                             "Initialization failed: device=%lu, port=%lu.",
                              (unsigned long)diagnostics.DeviceError,
                              (unsigned long)diagnostics.PortStatus);
         }
@@ -68,7 +68,7 @@ static void app_init_sd(void)
         {
             (void)LOG_Printf(LOG_LEVEL_ERROR,
                              "SD",
-                             "initialization failed without diagnostics");
+                             "Initialization failed without diagnostics.");
         }
 
         return;
@@ -80,7 +80,7 @@ static void app_init_sd(void)
     {
         (void)LOG_Printf(LOG_LEVEL_INFO,
                          "SD",
-                         "no card inserted");
+                         "No card inserted.");
         return;
     }
 
@@ -98,7 +98,7 @@ static void app_init_sd(void)
 
             (void)LOG_Printf(LOG_LEVEL_INFO,
                              "SD",
-                             "card ready: %lu MB, block size: %lu",
+                             "Card ready: %lu MB, block size: %lu.",
                              (unsigned long)capacity_mb,
                              (unsigned long)info.BlockSize);
         }
@@ -106,7 +106,7 @@ static void app_init_sd(void)
         {
             (void)LOG_Printf(LOG_LEVEL_ERROR,
                              "SD",
-                             "card ready but information is unavailable");
+                             "Card ready but information is unavailable.");
         }
     }
 }
@@ -187,44 +187,44 @@ void app_init(void)
         Error_Handler();
     }
 
-    // /* 此时 USB 可能尚未被主机打开；日志先复制进 RAM 队列等待发送。 */
-    // (void)LOG_Printf(LOG_LEVEL_INFO, "LOG", "initialization successful");
+    /* 此时 USB 可能尚未被主机打开；日志先复制进 RAM 队列等待发送。 */
+    (void)LOG_Printf(LOG_LEVEL_INFO, "LOG", "Initialization successful.");
 
-    // /* Platform 层负责初始化板级设备。 */
-    // Platform_StatusTypeDef platform_status = Platform_Init();
+    /* Platform 层负责初始化板级设备。 */
+    Platform_StatusTypeDef platform_status = Platform_Init();
 
-    // switch (platform_status)
-    // {
-    //     case PLATFORM_OK:
-    //         (void)LOG_Printf(LOG_LEVEL_INFO, "PLATFORM", "initialization successful");
-    //         app_init_sd();
-    //         break;
+    switch (platform_status)
+    {
+        case PLATFORM_OK:
+            (void)LOG_Printf(LOG_LEVEL_INFO, "PLATFORM", "Initialization successful.");
+            app_init_sd();
+            break;
 
-    //     case PLATFORM_PMIC_ERROR:
-    //     {
-    //         Platform_Power_DiagnosticsTypeDef diagnostics;
+        case PLATFORM_PMIC_ERROR:
+        {
+            Platform_Power_DiagnosticsTypeDef diagnostics;
 
-    //         if (Platform_Power_GetDiagnostics(&diagnostics) == PLATFORM_OK)
-    //         {
-    //             (void)LOG_Printf(
-    //                 LOG_LEVEL_ERROR,
-    //                 "POWER",
-    //                 "initialization failed: state=%lu, error=%lu, bus=%lu, reg=0x%02X",
-    //                 (unsigned long)diagnostics.DeviceState,
-    //                 (unsigned long)diagnostics.DeviceError,
-    //                 (unsigned long)diagnostics.BusStatus,
-    //                 (unsigned int)diagnostics.FailedRegister);
-    //         }
+            if (Platform_Power_GetDiagnostics(&diagnostics) == PLATFORM_OK)
+            {
+                (void)LOG_Printf(
+                    LOG_LEVEL_ERROR,
+                    "POWER",
+                    "Initialization failed: state=%lu, error=%lu, bus=%lu, reg=0x%02X.",
+                    (unsigned long)diagnostics.DeviceState,
+                    (unsigned long)diagnostics.DeviceError,
+                    (unsigned long)diagnostics.BusStatus,
+                    (unsigned int)diagnostics.FailedRegister);
+            }
 
-    //         Error_Handler();
-    //         break;
-    //     }
+            Error_Handler();
+            break;
+        }
 
-    //     default:
-    //         (void)LOG_Printf(LOG_LEVEL_ERROR, "PLATFORM", "initialization failed");
-    //         Error_Handler();
-    //         break;
-    // }
+        default:
+            (void)LOG_Printf(LOG_LEVEL_ERROR, "PLATFORM", "Initialization failed.");
+            Error_Handler();
+            break;
+    }
 
     app_tasks_init();
 }

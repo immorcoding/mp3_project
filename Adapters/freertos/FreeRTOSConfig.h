@@ -54,7 +54,7 @@
 /* Hook 函数和运行期故障检测；启用后必须提供对应函数实现。 */
 #define configUSE_IDLE_HOOK                                 0
 #define configUSE_TICK_HOOK                                 0
-#define configCHECK_FOR_STACK_OVERFLOW                      0
+#define configCHECK_FOR_STACK_OVERFLOW                      2
 #define configUSE_MALLOC_FAILED_HOOK                        0
 #define configUSE_DAEMON_TASK_STARTUP_HOOK                  0
 #define configUSE_SB_COMPLETED_CALLBACK                     0
@@ -108,6 +108,5 @@ void vAssertCalled(const char *file, uint32_t line);
 
 #define INCLUDE_vTaskDelay                                  1
 #define INCLUDE_vTaskDelete                                 1
-#define INCLUDE_uxTaskGetStackHighWaterMark                 1
 
 #endif /* FREERTOS_CONFIG_H */

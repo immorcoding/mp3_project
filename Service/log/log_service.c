@@ -12,7 +12,7 @@ typedef struct
 {
     LOG_LevelTypeDef level;
     const char *tag;    // 约定为字符串字面量，例如 "player"
-    char text[64];     // 已格式化的正文
+    char text[128];     // 已格式化的正文
 } LogServiceMessage_t;
 
 static LogServiceMessage_t msg[LOGMSG_QUEUE_LENGTH];
