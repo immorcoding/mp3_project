@@ -108,5 +108,6 @@ void vAssertCalled(const char *file, uint32_t line);
 
 #define INCLUDE_vTaskDelay                                  1
 #define INCLUDE_vTaskDelete                                 1
+#define INCLUDE_uxTaskGetStackHighWaterMark                 1
 
 #endif /* FREERTOS_CONFIG_H */
