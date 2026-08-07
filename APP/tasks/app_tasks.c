@@ -1,53 +1,86 @@
+/**
+  ******************************************************************************
+  * @file    app_tasks.c
+  * @brief   FreeRTOS 应用任务创建和调度器启动。
+  *
+  * @details
+  *          Create Task 先建立 Log Service 的静态消息池与 FreeRTOS 队列，再创建
+  *          消费日志的 Log Task、独占 SD 热插拔普通上下文的 Storage Task，以及
+  *          其他应用任务。所有任务创建成功后 Create Task 自删。
+  ******************************************************************************
+  */
+
 #include "APP/tasks/app_tasks.h"
-#include "Components/log/log.h"
+
+#include "APP/tasks/log/app_log_task.h"
+#include "APP/tasks/other/app_other_task.h"
+#include "APP/tasks/storage/app_storage_task.h"
+#include "Service/log/log_service.h"
+#include "main.h"
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
-#include "APP/tasks/log/app_log_task.h"
-#include "APP/tasks/storage/app_storage_task.h"
-#include "APP/tasks/other/app_other_task.h"
-
-#include "Service/log/log_service.h"
-#include "main.h"
-
-
-void create_task(void *handle) //创建所有任务后删除
+/**
+  * @brief  创建应用运行所需的全部任务，然后删除自身。
+  * @param  handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
+  * @note   Log Service 必须先于任意可能调用 LOG_Service_Post() 的任务创建。
+  *         Storage Task 优先级高于 Log Task；它完成短暂初始化后会阻塞等待 SD
+  *         检测通知，不会长期占用 CPU。
+  */
+static void create_task(void *handle)
 {
     (void)handle;
-    BaseType_t error_code;
-    Log_Service_Init(); //先初始化日志服务，再创建任务
 
-    // error_code = xTaskCreate(storage_task, "Storage Task", (const uint16_t) 128, NULL, 4, NULL);
-    error_code = xTaskCreate(log_task, "Log Task", LOG_TASK_STACK_WORDS, NULL, 1, NULL);
-    error_code = xTaskCreate(other_task, "Other Task", OTHER_TASK_STACK_WORDS, NULL, 1, NULL);
-
-
-    if(error_code == pdPASS)
+    if (Log_Service_Init() != LOG_OK)
     {
-        (void)LOG_Service_Post(LOG_LEVEL_INFO,
-                         "RTOS",
-                         "All task created.");
-
-        vTaskDelete(NULL); //删除自己
-    }
-    else
-    {
-        //日志任务都没启动，不发送日志
         Error_Handler();
     }
+
+    if ((xTaskCreate(log_task,
+                     "Log Task",
+                     LOG_TASK_STACK_WORDS,
+                     NULL,
+                     LOG_TASK_PRIORITY,
+                     NULL) != pdPASS) ||
+        (xTaskCreate(storage_task,
+                     "Storage Task",
+                     STORAGE_TASK_STACK_WORDS,
+                     NULL,
+                     STORAGE_TASK_PRIORITY,
+                     NULL) != pdPASS) ||
+        (xTaskCreate(other_task,
+                     "Other Task",
+                     OTHER_TASK_STACK_WORDS,
+                     NULL,
+                     OTHER_TASK_PRIORITY,
+                     NULL) != pdPASS))
+    {
+        /* Log Task 可能尚未得到调度，不通过日志服务报告致命创建失败。 */
+        Error_Handler();
+    }
+
+    (void)LOG_Service_Post(LOG_LEVEL_INFO, "RTOS", "All task created.");
+    vTaskDelete(NULL);
 }
 
+/**
+  * @brief  创建 Create Task 并启动 FreeRTOS 调度器。
+  * @note   调度器正常运行后不会返回。若返回，通常表示空闲任务创建失败或内核
+  *         堆不足；此时直接进入 CubeMX 的 Error_Handler()。
+  */
 void app_tasks_init(void)
 {
-    BaseType_t error_code = xTaskCreate(create_task, "Create Task", CREATE_TASK_STACK_WORDS, NULL, 0, NULL);
-
-    if(error_code == pdFALSE)
+    if (xTaskCreate(create_task,
+                    "Create Task",
+                    CREATE_TASK_STACK_WORDS,
+                    NULL,
+                    CREATE_TASK_PRIORITY,
+                    NULL) != pdPASS)
     {
-        //日志任务都没启动，不发送日志
         Error_Handler();
     }
-    
-    vTaskStartScheduler(); //调度器开启
-    return;
+
+    vTaskStartScheduler();
+    Error_Handler();
 }

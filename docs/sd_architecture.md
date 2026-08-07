@@ -4,7 +4,7 @@
 >
 > 当前后端：STM32H743 SDMMC1，4 位总线
 >
-> 当前调度：FreeRTOS 已接入；SD 热插拔仍保留可替换的轻量通知接缝
+> 当前调度：FreeRTOS Storage Task 通过直接任务通知处理 SD 热插拔
 >
 > 当前范围：逻辑块访问和热插拔，不包含 FatFs
 
@@ -15,8 +15,8 @@
 - 一个可复用、面向逻辑块的 SD Card Device；
 - 一个绑定 STM32H743 SDMMC1 的具体 Port；
 - 一个代表本板唯一物理卡槽的 Platform 接口；
-- 一个按 GPIO PinMask 注册调用者回调的 STM32 HAL IRQ Adapter；
-- APP 对“可选介质”的启动和日志策略。
+- 一个按 GPIO PinMask 注册调用者回调的 STM32 HAL GPIO EXTI Adapter；
+- 一个独占 SD 初始化、消抖和介质事件日志的 Storage Task。
 
 当前不抽象通用 `BlockDevice`。SD 是现阶段唯一的块设备；等 QSPI Flash 成为第二个真实实现，并明确其擦除、对齐和写入规则后，再从两个具体需求中提取公共接口更稳妥。
 
@@ -34,13 +34,16 @@ Adapters/sd/
   sd_stm32_hal_adapter.h        STM32 HAL SDMMC Adapter 绑定接口
   sd_stm32_hal_adapter.c        STM32 HAL SD/GPIO 调用和状态转换
 
-Adapters/irq/
-  irq_stm32_hal_adapter.h       调用者持有的 IRQ 回调对象和注册接口
-  irq_stm32_hal_adapter.c       HAL GPIO EXTI 入口和回调链表分发
+Adapters/gpio_exti/
+  gpio_exti_stm32_hal_adapter.h 调用者持有的 GPIO EXTI 回调对象和注册接口
+  gpio_exti_stm32_hal_adapter.c HAL GPIO EXTI 入口和回调链表分发
 
 Platform/sd/
-  platform_sd.h                 APP/未来 Storage 使用的 Platform 接口
-  platform_sd.c                 私有 Device、IRQ Callback、hsd1/SD_CD 装配和消抖
+  platform_sd.h                 Storage 使用的 Platform 接口和检测通知回调类型
+  platform_sd.c                 私有 Device、GPIO EXTI Callback、hsd1/SD_CD 装配
+
+APP/tasks/storage/
+  app_storage_task.c            FreeRTOS 通知、30 ms 消抖、介质事件和日志
 
 Core/Inc/sdmmc.h
 Core/Src/sdmmc.c                CubeMX 管理的 hsd1 和 HAL MSP 初始化/反初始化
@@ -58,10 +61,12 @@ Core/Src/sdmmc.c                CubeMX 管理的 hsd1 和 HAL MSP 初始化/反�
 ```text
 app_init()
   -> Platform_Init()                          初始化整机强依赖设备
-  -> app_init_sd()                         初始化可选介质
-     -> Platform_SD_Init()
+  -> app_tasks_init()
+     -> Create Task 创建 Storage Task
+        -> storage_task()
+           -> Platform_SD_Init(storage_sd_callback, StorageTaskHandle)
         -> SDCard_STM32HALAdapter_Bind(&Device, &Adapter)
-        -> IRQ_STM32HALAdapter_Register(
+        -> GPIOEXTI_STM32HALAdapter_Register(
                &DetectIRQCallback,
                SD_CD_Pin,
                platform_sd_detect_irq_cb,
@@ -115,53 +120,47 @@ Platform_SD_ReadBlocks()
 EXTI9_5_IRQHandler()
   -> HAL_GPIO_EXTI_IRQHandler(SD_CD_Pin)
   -> HAL_GPIO_EXTI_Callback(SD_CD_Pin)
-  -> IRQ_STM32HALAdapter 遍历回调链表
+  -> GPIOEXTI_STM32HALAdapter 遍历回调链表
   -> PinMask 匹配 DetectIRQCallback
   -> platform_sd_detect_irq_cb(SD_CD_Pin, &hplatform_sd)
-     -> DetectPending = true
+     -> storage_sd_callback(StorageTaskHandle)
+        -> vTaskNotifyGiveFromISR()
 
-app_run()
-  -> app_process_sd()
-     -> Platform_SD_Process(&event)
-        -> 原子取得并清除 DetectPending
-        -> 记录 DebounceStartMs，进入 Debouncing
-        -> 30 ms 内收到新边沿时重新开始计时
-        -> 连续安静满 30 ms 后调用 Platform_SD_Refresh()
+Storage Task
+  -> ulTaskNotifyTake(portMAX_DELAY) 取得边沿通知
+  -> 以 30 ms 超时再次 ulTaskNotifyTake()
+     -> 有新边沿：重新开始完整 30 ms 静默期
+     -> 超时：Platform_SD_Process(&event)
+        -> Platform_SD_Refresh()
         -> 仅在持续状态变化时产生 INSERTED 或 REMOVED
   -> APP 根据 event 记录日志
 ```
 
 ### 5.1 为什么使用二值通知
 
-卡座触点抖动可能产生多个边沿，但边沿次数没有业务意义。系统只关心“检测输入发生过变化，请在稳定后重新读取”。因此 `DetectPending` 是二值通知，不记录插拔次数。
+卡座触点抖动可能产生多个边沿，但边沿次数没有业务意义。系统只关心“检测输入发生过变化，请在稳定后重新读取”。Storage Task 将任务通知视为重新开始消抖窗口的信号，不把通知计数解释为插拔次数。
 
-### 5.2 为什么由 Platform SD 持有 IRQ Callback
+### 5.2 为什么由 Platform SD 持有 GPIO EXTI Callback
 
-IRQ Adapter 只认识 STM32 HAL 的 GPIO PinMask，不认识 SD、PMIC 或产品逻辑中断源。
+GPIO EXTI Adapter 只认识 STM32 HAL 的 GPIO PinMask，不认识 SD、PMIC 或产品逻辑中断源。
 `Platform_SD` 长期持有 `DetectIRQCallback`，初始化时注册、反初始化时注销，
-回调上下文直接指回自己的私有 Handle。这与 Zephyr 中使用者持有
-`struct gpio_callback` 并注册到 GPIO Driver 的方式接近。
+回调上下文直接指回自己的私有 Handle。Platform 的原始 ISR 回调再调用
+`Platform_SD_Init()` 注入的 `DetectCallback`；当前该回调由 Storage Task 实现为
+`vTaskNotifyGiveFromISR()`，但 Platform 本身不包含 FreeRTOS。
 
 因此不再需要额外的 `Platform_IRQ_SourceTypeDef`、GPIO 到逻辑源的映射表或
 Platform IRQ 二次分发。以后新增按键或 PMIC 中断时，由各自模块持有并注册新的
-Callback 对象，IRQ Adapter 的实现不需要修改。
+Callback 对象，GPIO EXTI Adapter 的实现不需要修改。
 
-### 5.3 为什么不能只依赖 `volatile`
+### 5.3 为什么使用直接任务通知
 
-`volatile` 只保证每次都真实访问内存，不保证“读取并清除”这个复合操作不可被 ISR 打断。如果普通上下文读取到 `true` 后 ISR 再次写入 `true`，随后普通上下文清零，就可能丢掉新通知。
+`volatile` 只保证每次都真实访问内存，不保证“读取并清除”这个复合操作不可被 ISR 打断。直接任务通知由 FreeRTOS 原子维护，且 Storage Task 是唯一接收者；它既没有额外队列存储，也不需要跨文件全局初始化标志。
 
-`platform_sd_take_detect_event()` 使用极短的 PRIMASK 临界区原子地取得并清除通知，并恢复调用前的全局中断状态。快速路径会先判断无通知并直接返回，避免主循环每轮都短暂关中断。
+ISR 只调用 `vTaskNotifyGiveFromISR()`，Storage Task 使用 `ulTaskNotifyTake()` 等待。每次收到新边沿后，任务重新等待完整的 30 ms；只有该时间内没有新通知，才执行后续刷新。
 
-### 5.4 FreeRTOS 替换接缝
+### 5.4 FreeRTOS 实现
 
-`platform_sd.c` 中带有“FreeRTOS 移植替换区”的代码是调度接缝。接入 RTOS 后建议：
-
-- ISR 中用 `vTaskNotifyGiveFromISR()` 通知 Storage Task；
-- Storage Task 收到通知后启动或重新启动 30 ms 消抖等待；
-- 消抖结束后仍调用相同的 `Platform_SD_Refresh()`；
-- Platform 的 `INSERTED` / `REMOVED` 事件语义保持不变。
-
-Device 状态机、Port、错误模型和 Platform 公共接口不需要因为调度方式变化而重写。
+当前实现中，`Platform_SD_Process()` 不再保存检测通知或主动等待；它只在消抖完成后调用 `Platform_SD_Refresh()` 并翻译 `INSERTED` / `REMOVED` 事件。Device 状态机、Port、错误模型和 Platform 公共接口都不依赖 FreeRTOS。
 
 ## 6. 状态、返回值与诊断
 
@@ -205,7 +204,7 @@ ERROR
   `-- 拔卡后 Refresh ------------------> NOT_PRESENT
 ```
 
-`SDCard_Refresh()` 不负责机械触点消抖，也不能从 EXTI ISR 调用。当前由 `Platform_SD_Process()` 在普通上下文完成可重新开始的 30 ms 消抖，然后再调用 Refresh。
+`SDCard_Refresh()` 不负责机械触点消抖，也不能从 EXTI ISR 调用。当前由 Storage Task 在普通上下文以可重新开始的 30 ms 任务通知等待完成消抖，再调用 `Platform_SD_Process()` 和 `Refresh()`。
 
 ## 8. Device 为什么不是简单 HAL 包装
 
@@ -264,7 +263,7 @@ CubeMX 继续管理：
 
 1. 块传输使用 HAL 阻塞轮询，尚未实现 DMA 或中断传输；
 2. 尚未制定 D-Cache 维护和 DMA 可访问缓冲区策略；
-3. 裸机阶段需要主循环频繁调用 `Platform_SD_Process()`，以后由 Storage Task 的任务通知替代；
+3. 当前热插拔路径依赖 FreeRTOS Storage Task；若要回到裸机，应在应用层提供轮询通知和消抖策略，而不是把 FreeRTOS 依赖加入 Platform；
 4. 尚无 RTOS Mutex，同一 Device 句柄不能被多个执行上下文并发访问；
 5. 传输和同步超时当前固定在 Device 实现中；
 6. SD Card Port 的 SDMMC 初始化值必须与 CubeMX 配置保持一致；

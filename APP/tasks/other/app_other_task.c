@@ -20,6 +20,11 @@ UBaseType_t task_totalstack_get(const char *task_name)
         return CREATE_TASK_STACK_WORDS;
     }
 
+    if (strcmp(task_name, "Storage Task") == 0)
+    {
+        return STORAGE_TASK_STACK_WORDS;
+    }
+
     if (strcmp(task_name, "Log Task") == 0)
     {
         return LOG_TASK_STACK_WORDS;
@@ -60,9 +65,7 @@ void task_snapshot_get(void)
 
     for(UBaseType_t i = 0; i < count; i++)
     {
-        uint16_t post_str_size = 64 * sizeof(char);
-        char *post_str = pvPortMalloc(post_str_size);
-        if(post_str == NULL) break;
+        char post_str[64];
 
         UBaseType_t total_words = task_totalstack_get(task_snapshot[i].pcTaskName);
         UBaseType_t free_words = task_snapshot[i].usStackHighWaterMark;
@@ -70,7 +73,7 @@ void task_snapshot_get(void)
         unsigned long peak_x10 = (unsigned long)used_words * 1000 / (unsigned long)total_words; //snprintf似乎不能double
 
         (void)snprintf(post_str, 
-                       post_str_size,
+                       64,
                        "%s: total= %lu B, min free = %lu B, peak = %lu.%lu%%",
                        task_snapshot[i].pcTaskName,
                        (unsigned long)(total_words * sizeof(StackType_t)),
@@ -79,7 +82,6 @@ void task_snapshot_get(void)
                        peak_x10 % 10);
 
         LOG_Service_Post(LOG_LEVEL_INFO, "MONITOR", post_str);
-        vPortFree(post_str);
     }
 
     vPortFree(task_snapshot);

@@ -126,7 +126,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
 | `Adapters/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops。 |
 | `Adapters/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
-| `Adapters/irq` | 独占 STM32 HAL EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
+| `Adapters/gpio_exti` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
 | `Adapters/log_usb_cdc` | USB CDC 非阻塞输出和 HAL 毫秒时间源。 |
 | `Adapters/freertos` | 本工程的 FreeRTOS 配置、异常处理和移植接缝。 |
 
@@ -159,7 +159,7 @@ Platform 表示当前产品板卡向上提供的稳定硬件能力，也是唯�
 - 执行 `Adapter_Bind()`；
 - 初始化 Component；
 - 把芯片能力映射成 Audio、LCD、SD、Power 等产品语义；
-- 为板级设备持有并注册 IRQ 回调对象，处理热插拔消抖；
+- 为板级设备持有并注册 GPIO EXTI 回调对象，并向上层发布轻量检测通知；
 - 选择日志输出 Adapter。
 
 Platform 对 APP 隐藏：
@@ -316,20 +316,24 @@ Adapter 的状态转换函数入口统一使用 `int32_t native_status`，内部
 中断路径必须短：
 
 ```text
-Vendor IRQHandler
+GPIO EXTI IRQHandler
   -> HAL Callback
-  -> IRQ STM32 HAL Adapter
+  -> GPIO EXTI STM32 HAL Adapter
   -> 按 GPIO PinMask 遍历已注册回调
   -> 使用者持有的 ISR callback
   -> 只置位或发送 FromISR 通知
 ```
 
-IRQ Adapter 采用与 Zephyr `gpio_callback` 相近的调用者持有模式：
+GPIO EXTI Adapter 采用与 Zephyr `gpio_callback` 相近的调用者持有模式：
 
 - Adapter 独占 `HAL_GPIO_EXTI_Callback()`，但不认识 SD、PMIC 等产品语义；
 - 使用者长期持有一个 Callback 对象，并在普通上下文注册或注销；
 - Adapter 维护侵入式单向链表，允许不同模块订阅不同或相同 GPIO PinMask；
 - Platform SD 等模块只在自己的回调中发布轻量通知，后续工作留给普通上下文。
+
+GPIO EXTI Adapter 不是通用 NVIC 中断框架。SDMMC、DMA、USB、UART、定时器等
+外设中断继续由 CubeMX 向量函数调用相应 `HAL_*_IRQHandler()`，再由对应 Adapter
+或 Platform 模块处理其完成事件，不能注册到 GPIO EXTI 回调链表。
 
 ISR 禁止：
 

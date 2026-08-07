@@ -129,9 +129,9 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **平台 SD**表示本 PCB 上唯一的可移除 SD 卡槽及其平台行为。
 
-它组合通用 SD Card Device、当前 Port 和卡检测事件，并向播放器应用报告经过消抖后的稳定插入或拔出。机械触点产生了多少次边沿不属于播放器业务语义。
+它组合通用 SD Card Device、当前 Port 和卡检测事件，并向播放器应用报告稳定的插入或拔出。GPIO EXTI 边沿只作为轻量通知；由 Storage Task 决定消抖调度，机械触点产生了多少次边沿不属于播放器业务语义。
 
-相关术语：**SD 卡设备**、**SD 卡端口**、**STM32 HAL IRQ 适配器**。
+相关术语：**SD 卡设备**、**SD 卡端口**、**STM32 HAL GPIO EXTI 适配器**。
 
 示例：
 
@@ -161,14 +161,14 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 > SPI SD 后端可以替换 SDMMC 后端，同时保持 SD Card Device 的公共语义不变。
 
-## STM32 HAL IRQ 适配器（STM32 HAL IRQ adapter）
+## STM32 HAL GPIO EXTI 适配器（STM32 HAL GPIO EXTI adapter）
 
-**STM32 HAL IRQ 适配器**占有 STM32 HAL 唯一的 `HAL_GPIO_EXTI_Callback()` 入口，并按 GPIO 引脚位掩码把事件交给已注册的调用者回调。
+**STM32 HAL GPIO EXTI 适配器**占有 STM32 HAL 唯一的 `HAL_GPIO_EXTI_Callback()` 入口，并按 GPIO 引脚位掩码把事件交给已注册的调用者回调。
 
-它维护由调用者长期持有的侵入式回调链表，但不认识 SD、PMIC 或其他产品语义。调用者在普通上下文注册和注销回调；Adapter 在 ISR 中只匹配 PinMask 并调用处理函数。回调只能发布通知或置位，消抖、日志、设备通信和文件系统操作必须延后到普通执行上下文。
+它维护由调用者长期持有的侵入式回调链表，但不认识 SD、PMIC 或其他产品语义，也不处理 SDMMC、DMA、USB、UART 等非 GPIO 外设中断。调用者在普通上下文注册和注销回调；Adapter 在 ISR 中只匹配 PinMask 并调用处理函数。回调只能发布通知或置位，消抖、日志、设备通信和文件系统操作必须延后到普通执行上下文。
 
 相关术语：**平台 SD**。
 
 示例：
 
-> 平台 SD 持有卡检测 Callback，使用 `SD_CD_Pin` 注册；更换 MCU EXTI 后端只替换 IRQ Adapter。
+> 平台 SD 持有卡检测 Callback，使用 `SD_CD_Pin` 注册；更换 MCU GPIO EXTI 后端只替换 GPIO EXTI Adapter。

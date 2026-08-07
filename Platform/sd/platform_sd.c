@@ -2,50 +2,49 @@
   ******************************************************************************
   * @file    platform_sd.c
   * @brief   本板唯一 SD 卡槽的 Device 装配和 Platform Interface 实现。
+  *
+  * @details
+  *          本文件装配 hsd1、低有效 SD_CD 引脚、SD Card Device 与 STM32 HAL
+  *          GPIO EXTI Adapter。它持有 GPIO EXTI 链表节点，并把原始检测边沿
+  *          转交给调用者提供的通用通知回调。
+  *
+  *          Platform 不包含 FreeRTOS 头文件，也不认识 TaskHandle_t。这样同一
+  *          个 Platform SD 能力可被裸机轮询、FreeRTOS Task 通知或其他运行时
+  *          机制使用；调用者只需在检测回调内完成自身的轻量唤醒。
   ******************************************************************************
   */
 
-/* Includes ------------------------------------------------------------------*/
 #include "Platform/sd/platform_sd.h"
 
 #include <stddef.h>
 
-#include "Platform/platform.h"
-#include "Components/sd/sd.h"
-#include "Adapters/irq/irq_stm32_hal_adapter.h"
+#include "Adapters/gpio_exti/gpio_exti_stm32_hal_adapter.h"
 #include "Adapters/sd/sd_stm32_hal_adapter.h"
+#include "Components/sd/sd.h"
 #include "main.h"
 #include "sdmmc.h"
 
 /**
-  * @brief Platform SD 热插拔非阻塞消抖时间。
-  */
-#define PLATFORM_SD_DEBOUNCE_MS 30U
-
-/* Private types -------------------------------------------------------------*/
-/**
   * @brief 本板唯一 SD 卡槽的私有 Handle。
-  * @note  Device 保存通用 SD Card Device 状态；其余字段记录卡检测通知和
-  *        非阻塞消抖状态。
+  * @note  DetectIRQCallback 是 GPIO EXTI Adapter 中的侵入式节点；其余两个
+  *        Detect 字段组成 Platform 与调用者之间的调度接缝。
   */
 typedef struct
 {
     SDCard_HandleTypeDef Device; /**< 通用 SD Card Device 状态机和诊断。 */
-    IRQ_STM32HALAdapter_CallbackTypeDef DetectIRQCallback; /**< 调用者持有的卡检测 IRQ 链表节点。 */
-    volatile bool DetectPending; /**< ISR 发布的二值通知；FreeRTOS 下由任务通知替代。 */
-    uint32_t DebounceStartMs;     /**< 最近一次检测边沿开始消抖的 HAL tick。 */
-    bool Debouncing;              /**< 当前是否正在等待检测输入保持稳定。 */
-    bool IRQRegistered;           /**< DetectIRQCallback 是否已注册到 IRQ Adapter。 */
+    GPIOEXTI_STM32HALAdapter_CallbackTypeDef DetectIRQCallback; /**< 卡检测 EXTI 节点。 */
+    Platform_SD_DetectCallback_t DetectCallback; /**< ISR 中调用的上层轻量通知。 */
+    void *DetectContext; /**< 原样传给 DetectCallback 的调用者上下文。 */
+    bool IRQRegistered; /**< DetectIRQCallback 是否已经注册到 GPIO EXTI Adapter。 */
 } Platform_SD_HandleTypeDef;
 
-/* Private variables ---------------------------------------------------------*/
 /** @brief 本板唯一 SD 卡槽对应的私有实例。 */
 static Platform_SD_HandleTypeDef hplatform_sd;
 
 /**
-  * @brief 本板 SDMMC1 Handle 和低有效卡检测信号的 Adapter Context。
-  * @note  Platform 拥有本装配关系；hsd1 和 GPIO Port 由 CubeMX/Vendor
-  *        代码持有，本对象只保存借用引用。
+  * @brief 本板 SDMMC1 Handle 和低有效卡检测信号的 STM32 HAL Adapter Context。
+  * @note  Platform 拥有这份 PCB 装配关系；hsd1 和 GPIO Port 仍由 CubeMX
+  *        代码拥有，本对象只保存借用引用。
   */
 static SDCard_STM32HALAdapterTypeDef hplatform_sd_adapter = {
     .Handle = &hsd1,
@@ -54,7 +53,6 @@ static SDCard_STM32HALAdapterTypeDef hplatform_sd_adapter = {
     .PresentState = GPIO_PIN_RESET
 };
 
-/* Private functions ---------------------------------------------------------*/
 /**
   * @brief  将 Device 返回值转换为 Platform 层统一状态码。
   * @param  status SD Card Device 的立即返回状态。
@@ -93,153 +91,102 @@ static Platform_SD_StateTypeDef platform_sd_state(SDCard_StateTypeDef state)
     }
 }
 
-/******************** FreeRTOS 移植替换区：开始 *******************************
- * FreeRTOS 下由任务通知替代本函数和 DetectPending。
- *****************************************************************************/
 /**
-  * @brief  在普通上下文原子地取出并清除一个检测通知。
-  * @param  hsd Platform SD 私有 Handle。
-  * @retval true  本次成功取得一个待处理通知。
-  * @retval false 当前没有待处理通知。
-  */
-static bool platform_sd_take_detect_event(Platform_SD_HandleTypeDef *hsd)
-{
-    uint32_t primask;
-    bool pending;
-
-    /*
-     * 无通知是主循环中的常见路径。先做一次快速检查，避免每次调用
-     * Platform_SD_Process() 都短暂关闭全局中断；若检查后才到达中断，
-     * 通知仍会保留到下一轮处理。
-     */
-    if (!hsd->DetectPending)
-    {
-        return false;
-    }
-
-    primask = __get_PRIMASK();
-    __disable_irq();
-
-    pending = hsd->DetectPending;
-    hsd->DetectPending = false;
-
-    /* 保持调用本函数前的中断总开关状态，不能无条件重新开启中断。 */
-    if (primask == 0U)
-    {
-        __enable_irq();
-    }
-
-    return pending;
-}
-/******************** FreeRTOS 移植替换区：结束 *******************************/
-
-/**
-  * @brief  在 ISR 中记录一次 SD 卡检测边沿。
-  * @param  gpio_pin 触发回调的 STM32 HAL GPIO_Pin 位掩码。
+  * @brief  接收 SD_CD GPIO EXTI 事件并转交调用者的检测通知。
+  * @param  gpio_pin GPIO EXTI Adapter 传入的 HAL GPIO_Pin 位掩码。
   * @param  context 注册时绑定的 Platform SD 私有 Handle。
-  * @note   本函数只发布二值通知，不执行消抖、SDMMC 操作或日志输出。
+  * @note   本函数运行在 ISR 上下文。它不做消抖、SDMMC、日志或文件系统操作；
+  *         其唯一职责是把已经匹配的硬件边沿通知给 Platform 的调用者。
   */
 static void platform_sd_detect_irq_cb(uint16_t gpio_pin, void *context)
 {
     Platform_SD_HandleTypeDef *hsd = (Platform_SD_HandleTypeDef *)context;
 
-    if ((hsd != NULL) && ((gpio_pin & SD_CD_Pin) != 0U))
+    if ((hsd != NULL) &&
+        ((gpio_pin & SD_CD_Pin) != 0U) &&
+        (hsd->DetectCallback != NULL))
     {
-        /**************** FreeRTOS 移植替换区：开始 ***************************
-         * 改为 vTaskNotifyGiveFromISR()，并按返回值决定是否请求任务切换。
-         *********************************************************************/
-        hsd->DetectPending = true;
-        /**************** FreeRTOS 移植替换区：结束 ***************************/
+        hsd->DetectCallback(hsd->DetectContext);
     }
 }
 
-/* Exported functions --------------------------------------------------------*/
 /**
-  * @brief  绑定本板 SDMMC Adapter 并初始化当前介质。
-  * @retval PLATFORM_OK
-  *         Platform SD 正常完成状态同步；没有插卡时也返回成功，此时状态为
-  *         PLATFORM_SD_STATE_NOT_PRESENT。
-  * @retval PLATFORM_SD_ERROR Adapter 绑定或介质初始化失败。
+  * @brief  绑定本板 SDMMC Adapter、注册卡检测 EXTI 并初始化当前介质。
+  * @param  detect_callback 在 SD_CD 边沿到达时从 ISR 调用的轻量通知回调。
+  * @param  detect_context 原样传给 detect_callback 的调用者上下文，可为 NULL。
+  * @retval PLATFORM_OK 介质状态已同步；未插卡同样成功，此时状态为 NOT_PRESENT。
+  * @retval PLATFORM_SD_ERROR Adapter 绑定、GPIO EXTI 注册或介质初始化失败。
+  * @note   即使 SDCard_Init() 因当前介质异常而失败，GPIO EXTI 注册仍会保留，
+  *         以便后续拔卡后恢复到 NOT_PRESENT，并允许下次稳定插卡重新初始化。
+  *         本函数不可重复调用；调用者应先执行 Platform_SD_DeInit()。
   */
-Platform_StatusTypeDef Platform_SD_Init(void)
+Platform_StatusTypeDef Platform_SD_Init(Platform_SD_DetectCallback_t detect_callback,
+                                        void *detect_context)
 {
     Platform_StatusTypeDef status;
 
-    if (hplatform_sd.IRQRegistered)
+    if ((detect_callback == NULL) || hplatform_sd.IRQRegistered)
     {
         return PLATFORM_SD_ERROR;
     }
 
-    hplatform_sd.DetectPending = false;
-    hplatform_sd.DebounceStartMs = 0U;
-    hplatform_sd.Debouncing = false;
-
-    if (SDCard_STM32HALAdapter_Bind(
-            &hplatform_sd.Device,
-            &hplatform_sd_adapter) != SDCARD_OK)
+    if (SDCard_STM32HALAdapter_Bind(&hplatform_sd.Device,
+                                    &hplatform_sd_adapter) != SDCARD_OK)
     {
         return PLATFORM_SD_ERROR;
     }
 
-    if (IRQ_STM32HALAdapter_Register(&hplatform_sd.DetectIRQCallback,
-                                    SD_CD_Pin,
-                                    platform_sd_detect_irq_cb,
-                                    &hplatform_sd) != IRQ_STM32_HAL_ADAPTER_OK)
+    hplatform_sd.DetectCallback = detect_callback;
+    hplatform_sd.DetectContext = detect_context;
+
+    if (GPIOEXTI_STM32HALAdapter_Register(&hplatform_sd.DetectIRQCallback,
+                                           SD_CD_Pin,
+                                           platform_sd_detect_irq_cb,
+                                           &hplatform_sd) != GPIOEXTI_STM32HAL_ADAPTER_OK)
     {
+        hplatform_sd.DetectCallback = NULL;
+        hplatform_sd.DetectContext = NULL;
         return PLATFORM_SD_ERROR;
     }
 
     hplatform_sd.IRQRegistered = true;
     status = platform_sd_status(SDCard_Init(&hplatform_sd.Device));
 
-    if (status != PLATFORM_OK)
-    {
-        (void)IRQ_STM32HALAdapter_Unregister(&hplatform_sd.DetectIRQCallback);
-        hplatform_sd.IRQRegistered = false;
-    }
-
     return status;
 }
 
 /**
-  * @brief  解除卡检测 IRQ 绑定、释放 SDMMC 资源并恢复为 RESET。
-  * @retval PLATFORM_OK    反初始化成功或原本已经处于 RESET。
-  * @retval PLATFORM_SD_ERROR 底层反初始化失败。
+  * @brief  注销卡检测 EXTI、释放 SDMMC 资源并恢复为 RESET。
+  * @retval PLATFORM_OK 反初始化成功。
+  * @retval PLATFORM_SD_ERROR GPIO EXTI 注销或底层反初始化失败。
+  * @note   若 GPIO EXTI 注销失败，本函数不会清空回调指针或继续释放 SD Device，
+  *         避免 ISR 仍可达时破坏 Platform 私有实例的一致性。
   */
 Platform_StatusTypeDef Platform_SD_DeInit(void)
 {
-    Platform_StatusTypeDef status = PLATFORM_OK;
-
     if (hplatform_sd.IRQRegistered)
     {
-        if (IRQ_STM32HALAdapter_Unregister(
-                &hplatform_sd.DetectIRQCallback) != IRQ_STM32_HAL_ADAPTER_OK)
+        if (GPIOEXTI_STM32HALAdapter_Unregister(
+                &hplatform_sd.DetectIRQCallback) != GPIOEXTI_STM32HAL_ADAPTER_OK)
         {
-            status = PLATFORM_SD_ERROR;
+            return PLATFORM_SD_ERROR;
         }
-        else
-        {
-            hplatform_sd.IRQRegistered = false;
-        }
+
+        hplatform_sd.IRQRegistered = false;
     }
 
-    if (SDCard_DeInit(&hplatform_sd.Device) != SDCARD_OK)
-    {
-        status = PLATFORM_SD_ERROR;
-    }
+    hplatform_sd.DetectCallback = NULL;
+    hplatform_sd.DetectContext = NULL;
 
-    hplatform_sd.DetectPending = false;
-    hplatform_sd.DebounceStartMs = 0U;
-    hplatform_sd.Debouncing = false;
-    return status;
+    return platform_sd_status(SDCard_DeInit(&hplatform_sd.Device));
 }
 
 /**
-  * @brief  根据当前 SD_CD 电平刷新插拔状态。
+  * @brief  根据当前稳定的 SD_CD 电平刷新介质生命周期。
   * @retval PLATFORM_OK 检测状态与 Device 生命周期刷新成功。
   * @retval PLATFORM_SD_ERROR Device 刷新失败。
-  * @note   本函数不实现去抖且不得从 EXTI ISR 调用。正常热插拔路径应通过
-  *         Platform_SD_Process() 在检测电平稳定后间接调用。
+  * @note   本函数不实现机械触点消抖，且不得从 EXTI ISR 调用。当前 Storage
+  *         Task 在最后一个检测通知后的 30 ms 静默期结束后调用本函数。
   */
 Platform_StatusTypeDef Platform_SD_Refresh(void)
 {
@@ -247,12 +194,12 @@ Platform_StatusTypeDef Platform_SD_Refresh(void)
 }
 
 /**
-  * @brief  推进一次 Platform SD 热插拔事件处理。
-  * @param  event 接收本次稳定状态变化。
-  * @retval PLATFORM_OK 本次处理正常完成。
-  * @retval PLATFORM_SD_ERROR 参数无效、Platform SD 未初始化或刷新失败。
-  * @note   每次取到新的检测通知都会重新开始 30 ms 消抖。只有连续稳定满
-  *         30 ms 后才刷新 Device；状态未变化时仍返回 EVENT_NONE。
+  * @brief  处理一次已经完成消抖的 SD 卡状态刷新并生成稳定事件。
+  * @param  event 接收本次产生的稳定状态变化，不能为空。
+  * @retval PLATFORM_OK 刷新成功；无状态变化时 *event 为 EVENT_NONE。
+  * @retval PLATFORM_SD_ERROR 参数无效、Platform 尚未初始化或刷新失败。
+  * @note   本函数不等待也不消抖。调用者必须确保其在普通执行上下文调用，并且
+  *         SD_CD 输入已稳定；Storage Task 的任务通知循环负责这一时序。
   */
 Platform_StatusTypeDef Platform_SD_Process(Platform_SD_EventTypeDef *event)
 {
@@ -260,42 +207,12 @@ Platform_StatusTypeDef Platform_SD_Process(Platform_SD_EventTypeDef *event)
     Platform_SD_StateTypeDef current_state;
     Platform_StatusTypeDef status;
 
-    if (event == NULL)
+    if ((event == NULL) || !hplatform_sd.IRQRegistered)
     {
         return PLATFORM_SD_ERROR;
     }
 
     *event = PLATFORM_SD_EVENT_NONE;
-
-    if (!hplatform_sd.IRQRegistered)
-    {
-        return PLATFORM_SD_ERROR;
-    }
-
-    /**************** FreeRTOS 移植替换区：开始 *******************************
-     * Storage Task 使用 ulTaskNotifyTake() 等待通知，并在最后一次通知后等待
-     * 30 ms；超时后继续执行下面的 Platform_SD_Refresh()。
-     *************************************************************************/
-    if (platform_sd_take_detect_event(&hplatform_sd))
-    {
-        hplatform_sd.DebounceStartMs = HAL_GetTick();
-        hplatform_sd.Debouncing = true;
-        return PLATFORM_OK;
-    }
-
-    if (!hplatform_sd.Debouncing)
-    {
-        return PLATFORM_OK;
-    }
-
-    if ((uint32_t)(HAL_GetTick() - hplatform_sd.DebounceStartMs) < PLATFORM_SD_DEBOUNCE_MS)
-    {
-        return PLATFORM_OK;
-    }
-
-    hplatform_sd.Debouncing = false;
-    /**************** FreeRTOS 移植替换区：结束 *******************************/
-
     previous_state = Platform_SD_GetState();
     status = Platform_SD_Refresh();
 
@@ -333,7 +250,8 @@ Platform_SD_StateTypeDef Platform_SD_GetState(void)
   * @brief  直接读取当前卡检测电平。
   * @retval true 卡检测输入当前表示已插卡。
   * @retval false 卡检测输入当前表示未插卡，或 Port 尚未正确绑定。
-  * @note   本函数不更新 Platform SD 状态；状态转换必须通过 Init/Refresh 完成。
+  * @note   本函数不更新 Platform SD 持续状态；状态转换必须通过 Init、Refresh
+  *         或 Process 完成。
   */
 bool Platform_SD_IsPresent(void)
 {
@@ -343,7 +261,7 @@ bool Platform_SD_IsPresent(void)
 /**
   * @brief  将 Device 缓存的介质信息复制到调用者对象。
   * @param  info 接收 Platform SD 信息快照的指针。
-  * @retval PLATFORM_OK    信息有效且复制成功。
+  * @retval PLATFORM_OK 信息有效且复制成功。
   * @retval PLATFORM_SD_ERROR 参数为空或介质未就绪。
   */
 Platform_StatusTypeDef Platform_SD_GetInfo(Platform_SD_InfoTypeDef *info)
@@ -395,13 +313,13 @@ Platform_StatusTypeDef Platform_SD_GetDiagnostics(Platform_SD_DiagnosticsTypeDef
   * @retval PLATFORM_SD_ERROR 参数、状态、范围或底层读取失败。
   */
 Platform_StatusTypeDef Platform_SD_ReadBlocks(uint8_t *data,
-                                        uint32_t start_block,
-                                        uint32_t block_count)
+                                              uint32_t start_block,
+                                              uint32_t block_count)
 {
     return platform_sd_status(SDCard_ReadBlocks(&hplatform_sd.Device,
-                                              data,
-                                              start_block,
-                                              block_count));
+                                                data,
+                                                start_block,
+                                                block_count));
 }
 
 /**
@@ -413,13 +331,13 @@ Platform_StatusTypeDef Platform_SD_ReadBlocks(uint8_t *data,
   * @retval PLATFORM_SD_ERROR 参数、状态、范围或底层写入失败。
   */
 Platform_StatusTypeDef Platform_SD_WriteBlocks(const uint8_t *data,
-                                         uint32_t start_block,
-                                         uint32_t block_count)
+                                               uint32_t start_block,
+                                               uint32_t block_count)
 {
     return platform_sd_status(SDCard_WriteBlocks(&hplatform_sd.Device,
-                                               data,
-                                               start_block,
-                                               block_count));
+                                                 data,
+                                                 start_block,
+                                                 block_count));
 }
 
 /**
