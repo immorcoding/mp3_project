@@ -74,7 +74,7 @@ GPIOEXTI_STM32HALAdapter_StatusTypeDef GPIOEXTI_STM32HALAdapter_Register(
     callback->Next = hgpio_exti_callback_list;
     hgpio_exti_callback_list = callback;
 
-    if (primask == 0U)
+    if (primask == 0U) // 仅在调用前中断未被禁止时恢复中断状态
     {
         __enable_irq();
     }
