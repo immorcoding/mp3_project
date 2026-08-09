@@ -15,10 +15,13 @@ target_compile_definitions(stm32cubemx INTERFACE
 
 target_include_directories(stm32cubemx INTERFACE
     ../../Core/Inc
+    ../../FATFS/Target
+    ../../FATFS/App
     ../../USB_DEVICE/App
     ../../USB_DEVICE/Target
     ../../Drivers/STM32H7xx_HAL_Driver/Inc
     ../../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
+    ../../Middlewares/Third_Party/FatFs/src
     ../../Middlewares/ST/STM32_USB_Device_Library/Core/Inc
     ../../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
     ../../Drivers/CMSIS/Device/ST/STM32H7xx/Include
@@ -34,6 +37,10 @@ target_sources(stm32cubemx INTERFACE
     ../../Core/Src/stm32h7xx_it.c
     ../../Core/Src/stm32h7xx_hal_msp.c
     ../../Core/Src/stm32h7xx_hal_timebase_tim.c
+    ../../FATFS/Target/bsp_driver_sd.c
+    ../../FATFS/Target/sd_diskio.c
+    ../../FATFS/Target/user_diskio.c
+    ../../FATFS/App/fatfs.c
     ../../USB_DEVICE/App/usb_device.c
     ../../USB_DEVICE/App/usbd_desc.c
     ../../USB_DEVICE/App/usbd_cdc_if.c
@@ -68,6 +75,11 @@ target_sources(stm32cubemx INTERFACE
     ../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_mmc.c
     ../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_mmc_ex.c
     ../../Core/Src/system_stm32h7xx.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/option/syscall.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c
     ../../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c
     ../../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c
     ../../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ioreq.c
