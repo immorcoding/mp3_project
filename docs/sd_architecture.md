@@ -1,12 +1,13 @@
 # SD 卡子系统架构
 
-> 适用工程：`version0.1.2`
+> 适用工程：`version0.2.1`
 >
 > 当前后端：STM32H743 SDMMC1，4 位总线
 >
 > 当前调度：FreeRTOS Storage Task 通过直接任务通知处理 SD 热插拔
 >
-> 当前范围：逻辑块访问和热插拔，不包含 FatFs
+> 当前范围：逻辑块访问、热插拔、同步 FatFs DiskIO Bridge，以及由 Storage Task
+> 串行执行的 FAT32 挂载、卸载与显式格式化。
 
 ## 1. 设计目的
 
@@ -43,7 +44,14 @@ Platform/sd/
   platform_sd.c                 私有 Device、GPIO EXTI Callback、hsd1/SD_CD 装配
 
 APP/tasks/storage/
-  app_storage_task.c            FreeRTOS 通知、30 ms 消抖、介质事件和日志
+  app_storage_task.c            FreeRTOS 通知、30 ms 消抖和调度循环
+  app_storage_sd.h/.c           Platform SD 生命周期、FatFs 卷管理和介质日志
+
+Service/filesystem/
+  filesystem_service.c          FatFs 路径转换、挂载、卸载和格式化 Service 入口
+
+FATFS/App/
+  fatfs.c                       CubeMX Driver Link 与 BSP_SD_* 到 Platform SD 的桥接
 
 Core/Inc/sdmmc.h
 Core/Src/sdmmc.c                CubeMX 管理的 hsd1 和 HAL MSP 初始化/反初始化
@@ -243,13 +251,14 @@ CubeMX 继续管理：
 
 以后在 CubeMX 修改 SDMMC 配置时，必须同步核对该函数。自维护代码不应修改 CubeMX/ST 管理区；必须接入回调时，仅使用允许修改的 `USER CODE` 区。
 
-## 10. 未来 FatFs 适配
+## 10. FatFs 适配边界
 
-当前版本不实现 FatFs。未来 DiskIO Adapter 可以这样映射：
+当前 `FATFS/App/fatfs.c` 在 CubeMX 的 USER CODE 区强定义 `BSP_SD_*`，使生成的
+`sd_diskio.c` 通过 Platform SD 访问介质，而不是直接使用 `hsd1`。映射关系为：
 
 | FatFs DiskIO 操作 | Platform SD 接口 |
 | --- | --- |
-| `disk_initialize` | 稳定检测后调用 `Platform_SD_Init()` 或 `Platform_SD_Refresh()` |
+| `disk_initialize` | 检查已由 Storage Task 初始化完成的 `Platform_SD_GetState()` |
 | `disk_status` | `Platform_SD_GetState()` 和 `Platform_SD_IsPresent()` |
 | `disk_read` | `Platform_SD_ReadBlocks()` |
 | `disk_write` | `Platform_SD_WriteBlocks()` |
@@ -257,7 +266,10 @@ CubeMX 继续管理：
 | `GET_SECTOR_COUNT` | `Platform_SD_GetInfo()` 返回的 `BlockCount` |
 | `GET_SECTOR_SIZE` | `Platform_SD_GetInfo()` 返回的 `BlockSize` |
 
-文件系统挂载状态不属于 `SDCard_StateTypeDef`。挂载/卸载、打开文件失效处理，以及本地 FatFs 与 USB MSC 之间的介质所有权仲裁，应由未来的 `Services/storage` 模块负责。
+文件系统挂载状态不属于 `SDCard_StateTypeDef`。`Filesystem_Service` 不会调用
+`Platform_SD_Init()`；Storage Task 必须先完成卡检测、消抖和 Platform 生命周期，
+再调用挂载；拔卡后由同一任务注销 FatFs 卷对象。打开文件失效处理，以及本地
+FatFs 与 USB MSC 之间的介质所有权仲裁，仍由未来的 Storage Service 负责。
 
 ## 11. 当前限制
 

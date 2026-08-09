@@ -96,7 +96,7 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_init(void *context)
     hal_sd->Init.ClockEdge = SDMMC_CLOCK_EDGE_RISING;
     hal_sd->Init.ClockPowerSave = SDMMC_CLOCK_POWER_SAVE_DISABLE;
     hal_sd->Init.BusWide = SDMMC_BUS_WIDE_4B;
-    hal_sd->Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
+    hal_sd->Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_ENABLE;
     hal_sd->Init.ClockDiv = 0u;
 
     HAL_StatusTypeDef hal_status = HAL_SD_Init(hal_sd);

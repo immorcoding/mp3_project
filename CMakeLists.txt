@@ -91,6 +91,14 @@ file(GLOB_RECURSE SERVICE_SOURCES CONFIGURE_DEPENDS
 list(JOIN SERVICE_SOURCES "\n" SERVICE_SOURCES_MESSAGE)
 message(STATUS "Service Sources:\n" ${SERVICE_SOURCES_MESSAGE})
 
+# FreeRTOS 内核源码保留在 Middlewares/Third_Party/FreeRTOS/Source；与本项目
+# 相关的配置、Hook 和断言处理放在同级 Config，避免把它们误归入 HAL Adapter。
+file(GLOB_RECURSE FREERTOS_CONFIG_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Middlewares/Third_Party/FreeRTOS/Config/*.c"
+)
+list(JOIN FREERTOS_CONFIG_SOURCES "\n" FREERTOS_CONFIG_SOURCES_MESSAGE)
+message(STATUS "FreeRTOS Config Sources:\n" ${FREERTOS_CONFIG_SOURCES_MESSAGE})
+
 # 将上面收集的自维护源文件以及显式指定的应用入口加入最终固件目标
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${COMPONENT_SOURCES}
@@ -98,6 +106,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${PLATFORM_SOURCES}
     ${USB_DEVICE_SOURCES}
     ${SERVICE_SOURCES}
+    ${FREERTOS_CONFIG_SOURCES}
     ${APP_SOURCES}
 )
 

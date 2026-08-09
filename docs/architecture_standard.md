@@ -47,10 +47,10 @@ APP/                         产品入口、顶层启动和任务入口
 Services/                    产品级服务；有真实服务代码时再创建
 Platform/                    本板实例装配和产品可见硬件能力
 Components/                  可复用、与具体 MCU 无关的组件
-Adapters/                    HAL、RTOS、USB 和具体硬件实现
+Adapters/                    HAL、USB 和具体硬件实现
 Core/                        CubeMX 生成的 MCU 初始化代码
 Drivers/                     ST HAL/CMSIS 等 Vendor 代码
-Middlewares/                 ST/第三方中间件
+Middlewares/                 ST/第三方中间件及其项目级配置接缝
 USB_DEVICE/                  CubeMX 生成的 USB Device glue
 cmake/                       工具链与 CubeMX 生成的构建描述
 docs/                        中文技术文档和本规范
@@ -128,7 +128,17 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
 | `Adapters/gpio_exti` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
 | `Adapters/log_usb_cdc` | USB CDC 非阻塞输出和 HAL 毫秒时间源。 |
-| `Adapters/freertos` | 本工程的 FreeRTOS 配置、异常处理和移植接缝。 |
+
+FreeRTOS 内核源码、项目配置与 Hook 的边界为：
+
+```text
+Middlewares/Third_Party/FreeRTOS/
+  Source/                     未修改的 FreeRTOS Kernel 与 Cortex-M Port
+  Config/                     本项目的 FreeRTOSConfig、Hook 和断言处理
+```
+
+`Config/` 不属于 Adapter：它不实现 Component Ops，而是定义本固件如何使用
+FreeRTOS。不要把项目代码写入 `Source/`。
 
 ### 3.3 Components
 

@@ -1,12 +1,12 @@
 /**
   ******************************************************************************
   * @file    FreeRTOSConfig.h
-  * @brief   STM32H743 播放器固件使用的 FreeRTOS 内核编译配置。
+  * @brief   本项目的 FreeRTOS 内核配置。
   *
   * @details
-  *          本文件属于当前产品的 RTOS Adapter 配置，不随 FreeRTOS 内核
-  *          复用。修改优先级数量、Tick、堆或中断阈值前必须重新核对任务
-  *          设计、NVIC 优先级和 RAM 预算。
+  *          本文件属于 FreeRTOS 与当前固件之间的项目配置接缝，而不是第三方
+  *          内核源码。FreeRTOS Kernel 通过 CMake 提供的 Config include path
+  *          读取本文件。
   ******************************************************************************
   */
 
@@ -19,7 +19,6 @@
 /* 调度器、Tick、任务基础能力与对象数量配置。 */
 #define configUSE_PREEMPTION                                        1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION                     0
-#define configUSE_TICKLESS_IDLE                                     0
 #define configCPU_CLOCK_HZ                                          480000000
 #define configTICK_RATE_HZ                                          1000
 #define configMAX_PRIORITIES                                        5
@@ -52,27 +51,27 @@
 #define configSTACK_ALLOCATION_FROM_SEPARATE_HEAP                   0
 
 /* Hook 函数和运行期故障检测；启用后必须提供对应函数实现。 */
-#define configUSE_IDLE_HOOK                                 0
-#define configUSE_TICK_HOOK                                 0
-#define configCHECK_FOR_STACK_OVERFLOW                      2
-#define configUSE_MALLOC_FAILED_HOOK                        0
-#define configUSE_DAEMON_TASK_STARTUP_HOOK                  0
-#define configUSE_SB_COMPLETED_CALLBACK                     0
+#define configUSE_IDLE_HOOK                                         0
+#define configUSE_TICK_HOOK                                         0
+#define configCHECK_FOR_STACK_OVERFLOW                              2
+#define configUSE_MALLOC_FAILED_HOOK                                0
+#define configUSE_DAEMON_TASK_STARTUP_HOOK                          0
+#define configUSE_SB_COMPLETED_CALLBACK                             0
 
 /* 运行时间统计和任务状态查询支持。 */
-#define configGENERATE_RUN_TIME_STATS                       0
-#define configUSE_TRACE_FACILITY                            1
-#define configUSE_STATS_FORMATTING_FUNCTIONS                1
+#define configGENERATE_RUN_TIME_STATS                               0
+#define configUSE_TRACE_FACILITY                                    1
+#define configUSE_STATS_FORMATTING_FUNCTIONS                        1
 
 /* 已弃用的 Co-routine 功能；新代码使用普通 Task。 */
-#define configUSE_CO_ROUTINES                               0
-#define configMAX_CO_ROUTINE_PRIORITIES                     1
+#define configUSE_CO_ROUTINES                                       0
+#define configMAX_CO_ROUTINE_PRIORITIES                             1
 
 /* 软件定时器及其守护任务配置。 */
-#define configUSE_TIMERS                                    1
-#define configTIMER_TASK_PRIORITY                           3
-#define configTIMER_QUEUE_LENGTH                            10
-#define configTIMER_TASK_STACK_DEPTH                        configMINIMAL_STACK_SIZE
+#define configUSE_TIMERS                                            1
+#define configTIMER_TASK_PRIORITY                                   3
+#define configTIMER_QUEUE_LENGTH                                    10
+#define configTIMER_TASK_STACK_DEPTH                                configMINIMAL_STACK_SIZE
 
 void vAssertCalled(const char *file, uint32_t line);
 
@@ -85,6 +84,7 @@ void vAssertCalled(const char *file, uint32_t line);
             vAssertCalled(__FILE__, (uint32_t)__LINE__);                   \
         }                                                                  \
     } while (0)
+
 /* Cortex-M7 NVIC 优先级位数和 FreeRTOS 可调用 FromISR API 的阈值。 */
 #define configPRIO_BITS                                     4U
 /* 数值最大的 NVIC 优先级，也就是逻辑上的最低抢占优先级。 */

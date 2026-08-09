@@ -41,3 +41,17 @@ Platform
 Application
 
 具体的情况参考每个工程目录下的 分层.png
+
+## Agent skills
+
+### Issue tracker
+
+需求说明和可执行 issue 使用本地 Markdown 维护，放在 `.scratch/<feature-slug>/` 下。具体格式见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+本项目使用固定的本地状态标签来标记需求和 issue 的处理状态。具体定义见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+项目领域上下文以根目录 `CONTEXT.md` 为唯一入口；架构决策记录放在 `docs/adr/`。具体读取规则见 `docs/agents/domain.md`。
