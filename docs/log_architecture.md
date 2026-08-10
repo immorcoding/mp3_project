@@ -1,16 +1,20 @@
 # 日志组件架构
 
-> 适用工程：`version0.1.2`
+> 适用工程：`version0.2.3`
 >
 > 当前输出：USB CDC
 >
-> 当前模型：固定深度 RAM 队列、非阻塞提交、Platform 装配
+> 当前模型：日志核心固定深度 RAM 队列、LogService 静态消息块池、普通任务非阻塞投递、Log Task 单消费者、Platform 装配输出 Adapter
 
 ## 1. 分层
 
 ```text
-APP / Platform / Services
-       -> LOG_Printf / LOG_Write / LOG_Process
+APP 启动阶段 / Platform 启动路径
+       -> Platform_Log_Init / LOG_Printf（调度器启动前）
+普通 FreeRTOS Task
+       -> LogService_Post
+Service/log + Log Task
+       -> LogService_Consume -> LOG_Printf / LOG_Process
 Components/log
        -> LOG_OutputOpsTypeDef
 Adapters/log_usb_cdc
@@ -28,6 +32,8 @@ Platform/log
 | `Components/log/log.c` | 格式化、过滤、RAM 队列和消费调度。 |
 | `Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.*` | USB 就绪判断、异步缓冲、ANSI 颜色和 HAL 时间源。 |
 | `Platform/log/platform_log.*` | 持有具体 Adapter，并调用 Bind 和 `LOG_Init()`。 |
+| `Service/log/log_service.*` | FreeRTOS 静态消息块池、free/ready queue，以及任务间日志投递 Interface。 |
+| `APP/tasks/log/log_task.*` | 唯一调用 `LogService_Consume()` 的 Log Task。 |
 
 日志核心不包含 USB、HAL 或 CubeMX 头文件。USB Adapter 不访问日志内部 Handle。
 
@@ -47,6 +53,13 @@ app_init
             -> State = READY
   -> LOG_Printf("initialization successful")
        -> 日志先进入 RAM 队列
+  -> Platform_Init() 期间的启动日志继续直接进入日志核心
+  -> app_task_start()
+       -> Create Task
+            -> LogService_Init()
+                 -> 创建 free queue 与 ready queue
+                 -> 将全部静态消息块放入 free queue
+            -> 创建 Log Task、Storage Task 与 Monitor Task
 ```
 
 `LOG_Init()` 不再选择所谓“默认 Backend”。选择 USB、UART、RTT 或文件输出属于
@@ -54,7 +67,7 @@ Platform 装配策略。
 
 ## 3. 生产与消费
 
-生产路径：
+日志核心的生产路径：
 
 ```text
 LOG_Printf
@@ -64,7 +77,7 @@ LOG_Printf
   -> 复制进固定槽位 RAM 队列
 ```
 
-消费路径：
+日志核心的消费路径：
 
 ```text
 LOG_Process
@@ -77,6 +90,26 @@ LOG_Process
 ```
 
 `LOG_OK` 表示消息成功入队或被输出 Adapter 接受，不表示 PC 终端已经显示。
+
+调度器启动后，普通任务不直接并发调用日志核心，而通过 LogService 投递：
+
+```text
+LogService_Post(level, tag, text)
+  -> 从 free queue 取得一个静态消息块指针
+  -> 复制 level、tag 指针和以 '\0' 结尾的 text
+  -> 将同一消息块指针送入 ready queue
+
+Log Task
+  -> LogService_Consume()
+       -> LOG_Process() 推进 USB 输出
+       -> 若 Components/log 的 RAM 队列未满，则从 ready queue 取得一个消息块
+       -> LOG_Printf() 将该消息转交给日志核心
+       -> 将同一消息块指针归还 free queue
+```
+
+两个 FreeRTOS 队列存放的是消息块**指针值**，不复制完整正文。一个消息块在任意时刻只属于
+`free queue`、一个生产者局部变量或 `ready queue` 三者之一；这使任务间投递具备明确的
+所有权流转，同时避免每次队列操作复制 128 B 文本。
 
 ## 4. 为什么需要两个缓冲区
 
@@ -143,15 +176,18 @@ Adapter 在 `TxBuffer` 中拼接颜色前缀和复位序列，不修改日志核
 
 ## 8. RTOS 约束
 
-当前 Log Component 没有锁，尚不能从多个 Task 和 ISR 并发调用。
+当前 Log Component 本身没有锁，因此其调用权由 LogService 和启动阶段约束，而不是假设
+`LOG_Printf()` 可以从多个任务并发调用：
 
-接入正式 RTOS 日志任务时建议：
+1. `LogService_Init()` 必须在 Create Task 中先完成，再创建任何可能调用 `LogService_Post()` 的任务；
+2. 调度器启动后，普通任务使用 `LogService_Post()`，不得直接调用 `LOG_Printf()`、`LOG_Write()` 或 `LOG_Process()`；
+3. 只有 Log Task 调用 `LogService_Consume()`，并因此成为调度器启动后的日志核心消费者；
+4. ISR 不调用 `LogService_Post()`、`snprintf()`、USB CDC 或普通日志 API；ISR 只能发布极短通知，由普通任务随后记录日志；
+5. `tag` 是指针，不会复制到消息块；调用者必须传入静态存储期字符串，例如字符串字面量；
+6. `LogService_Post()` 从不等待空闲块。消息池耗尽时当前消息被丢弃，业务任务不会因日志输出而阻塞。
 
-1. 普通 Task 通过线程安全队列提交日志；
-2. 单独 Log Task 调用输出 Adapter；
-3. ISR 仅使用专门的 ISR-safe 接口或发布极短事件；
-4. 不在 ISR 内调用 `snprintf()`、USB CDC 或普通日志 API；
-5. 保留现有 Output Ops，避免把 USB 细节写入日志任务。
+启动阶段的 `app_init()` 和 Platform 初始化仍可直接使用 `LOG_Printf()`，因为此时调度器尚未
+启动，不存在多个任务并发访问日志核心的情况。
 
 ## 9. 新增输出 Adapter
 
@@ -174,3 +210,6 @@ Adapter 在 `TxBuffer` 中拼接颜色前缀和复位序列，不修改日志核
 - [`../Components/log/log.c`](../Components/log/log.c)
 - [`../Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.c`](../Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.c)
 - [`../Platform/log/platform_log.c`](../Platform/log/platform_log.c)
+- [`../Service/log/log_service.h`](../Service/log/log_service.h)
+- [`../Service/log/log_service.c`](../Service/log/log_service.c)
+- [`../APP/tasks/log/log_task.c`](../APP/tasks/log/log_task.c)

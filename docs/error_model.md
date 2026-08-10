@@ -1,6 +1,6 @@
 # 设备错误模型
 
-> 适用工程：`version0.1.2`
+> 适用工程：`version0.2.3`
 >
 > 覆盖模块：Audio、AXP2101、SD Card Device
 >

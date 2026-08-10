@@ -11,13 +11,15 @@
 
 ## 1. 设计目的
 
-本文记录接入 FatFs 之前的可移除 SD 卡栈。当前实现包含：
+本文记录当前已经接入 FatFs 的可移除 SD 卡栈。当前实现包含：
 
 - 一个可复用、面向逻辑块的 SD Card Device；
 - 一个绑定 STM32H743 SDMMC1 的具体 Port；
 - 一个代表本板唯一物理卡槽的 Platform 接口；
 - 一个按 GPIO PinMask 注册调用者回调的 STM32 HAL GPIO EXTI Adapter；
-- 一个独占 SD 初始化、消抖和介质事件日志的 Storage Task。
+- 一个独占 SD 初始化、消抖、FatFs 卷生命周期和介质事件日志的 Storage Task；
+- 一个只封装 FatFs 逻辑卷操作的 Filesystem Module；
+- 一个由 CubeMX DiskIO 调用并桥接到 Platform SD 的同步 FatFs Bridge。
 
 当前不抽象通用 `BlockDevice`。SD 是现阶段唯一的块设备；等 QSPI Flash 成为第二个真实实现，并明确其擦除、对齐和写入规则后，再从两个具体需求中提取公共接口更稳妥。
 
@@ -25,7 +27,7 @@
 
 ```text
 APP/
-  app.c                         可选介质启动策略、事件处理和日志
+  app.c                         顶层启动编排和调度器启动前日志
 
 Components/sd/
   sd.h                          可复用 Device 公共类型和接口
@@ -70,9 +72,15 @@ Core/Src/sdmmc.c                CubeMX 管理的 hsd1 和 HAL MSP 初始化/反�
 app_init()
   -> Platform_Init()                          初始化整机强依赖设备
   -> app_task_start()
-     -> Create Task 创建 Storage Task
-        -> storage_task()
-           -> Platform_SD_Init(storage_sd_callback, StorageTaskHandle)
+     -> Create Task
+        -> LogService_Init()
+        -> 创建 Log Task、Storage Task 与 Monitor Task
+
+Storage Task
+  -> storage_task()
+     -> xTaskGetCurrentTaskHandle()
+     -> storage_sd_init(task_handle)
+        -> Platform_SD_Init(storage_sd_detect_callback, task_handle)
         -> SDCard_STM32HALAdapter_Bind(&Device, &Adapter)
         -> GPIOEXTI_STM32HALAdapter_Register(
                &DetectIRQCallback,
@@ -89,7 +97,7 @@ app_init()
            -> State = READY
 ```
 
-初始化成功后，APP 通过 `Platform_SD_GetInfo()` 取得副本并打印容量，不直接接触私有 Device 句柄或 `hsd1`。
+初始化成功后，Storage Task 通过 `Platform_SD_GetInfo()` 取得副本并记录容量日志，不直接接触私有 Device 句柄或 `hsd1`。
 
 ### 3.2 未插卡启动
 
@@ -103,7 +111,7 @@ Platform_SD_Init()
   -> return PLATFORM_OK
 ```
 
-没有插卡是正常的持续状态，不是整机故障。因此 APP 可以继续启动。之后若在 `NOT_PRESENT` 状态读取逻辑块或获取卡信息，因为该次操作无法完成，函数仍会返回失败。
+没有插卡是正常的持续状态，不是整机故障。因此系统可以继续启动。之后若在 `NOT_PRESENT` 状态读取逻辑块或获取卡信息，因为该次操作无法完成，函数仍会返回失败。
 
 ## 4. 同步块读取链
 
@@ -141,7 +149,7 @@ Storage Task
      -> 超时：Platform_SD_Process(&event)
         -> Platform_SD_Refresh()
         -> 仅在持续状态变化时产生 INSERTED 或 REMOVED
-  -> APP 根据 event 记录日志
+  -> Storage Task 根据 event 记录日志，并挂载或注销 FatFs 卷
 ```
 
 ### 5.1 为什么使用二值通知
@@ -153,7 +161,8 @@ Storage Task
 GPIO EXTI Adapter 只认识 STM32 HAL 的 GPIO PinMask，不认识 SD、PMIC 或产品逻辑中断源。
 `Platform_SD` 长期持有 `DetectIRQCallback`，初始化时注册、反初始化时注销，
 回调上下文直接指回自己的私有 Handle。Platform 的原始 ISR 回调再调用
-`Platform_SD_Init()` 注入的 `DetectCallback`；当前该回调由 Storage Task 实现为
+`Platform_SD_Init()` 注入的 `DetectCallback`；当前该回调由 Storage Task 的
+`storage_sd_detect_callback()` 实现为
 `vTaskNotifyGiveFromISR()`，但 Platform 本身不包含 FreeRTOS。
 
 因此不再需要额外的 `Platform_IRQ_SourceTypeDef`、GPIO 到逻辑源的映射表或
@@ -268,8 +277,10 @@ CubeMX 继续管理：
 
 文件系统挂载状态不属于 `SDCard_StateTypeDef`。`Filesystem` Module 不会调用
 `Platform_SD_Init()`；Storage Task 必须先完成卡检测、消抖和 Platform 生命周期，
-再调用挂载；拔卡后由同一任务注销 FatFs 卷对象。打开文件失效处理，以及本地
-FatFs 与 USB MSC 之间的介质所有权仲裁，仍由未来的 Storage Service 负责。
+再调用挂载；拔卡后由同一任务注销 FatFs 卷对象。当前 Storage Task 是 SD 与本地
+FatFs 的唯一普通任务上下文。未来若出现 `Service/storage`，它只应接收跨任务命令、
+协调文件打开状态，并处理本地 FatFs 与 USB MSC 之间的介质所有权仲裁，而不应复制
+Storage Task 的 Platform SD 生命周期实现。
 
 ## 11. 当前限制
 
@@ -279,7 +290,7 @@ FatFs 与 USB MSC 之间的介质所有权仲裁，仍由未来的 Storage Servi
 4. 尚无 RTOS Mutex，同一 Device 句柄不能被多个执行上下文并发访问；
 5. 传输和同步超时当前固定在 Device 实现中；
 6. SD Card Port 的 SDMMC 初始化值必须与 CubeMX 配置保持一致；
-7. 尚未实现 FatFs、USB MSC 以及二者之间的所有权切换。
+7. 已实现本地 FatFs 挂载、卸载和显式格式化；尚未实现 USB MSC，以及本地 FatFs 与 USB MSC 之间的所有权切换。
 
 ## 12. 对外使用规则
 

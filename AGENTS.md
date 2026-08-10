@@ -11,7 +11,8 @@
 - SDMMC SD 卡访问与热插拔；
 - USB CDC 日志；
 - FreeRTOS；
-- 后续将加入 FatFs、音频解码、LVGL、LCD、QSPI Flash 和 USB MSC。
+- FatFs 文件系统与 SD 热插拔；
+- 后续将加入音频解码、LVGL、LCD、QSPI Flash 和 USB MSC。
 
 技术文档和代码注释统一使用中文。
 

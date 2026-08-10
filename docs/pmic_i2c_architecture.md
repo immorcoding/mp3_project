@@ -1,6 +1,6 @@
 # AXP2101 与板级电源架构
 
-> 适用工程：`version0.1.2`
+> 适用工程：`version0.2.3`
 >
 > 当前器件：AXP2101
 >
@@ -295,6 +295,9 @@ GPIO Ops 只有两项：
 Components/*.c
 Adapters/*.c
 Platform/*.c
+APP/*.c
+Service/*.c
+Middlewares/Third_Party/FreeRTOS/Config/*.c
 ```
 
 工程根目录作为唯一私有 include path，因此代码使用完整、无歧义的路径，例如：

@@ -13,5 +13,6 @@ Adapters/     STM32 HAL、USB 等具体后端 Implementation
 FATFS/App/    CubeMX FatFs 与本项目 SD 桥接接缝
 ```
 
-完整分层与依赖规则见 [docs/architecture_standard.md](docs/architecture_standard.md)，命名与注释规则见 [docs/coding_standard.md](docs/coding_standard.md)。`Core`、`Drivers`、`Middlewares`、`USB_DEVICE` 和 `FATFS/Target` 主要由 CubeMX 或第三方维护；不要把产品策略直接写入其中。
+完整分层与依赖规则见 [docs/architecture_standard.md](docs/architecture_standard.md)，命名与注释规则见 [docs/coding_standard.md](docs/coding_standard.md)，稳定领域术语见 [CONTEXT.md](CONTEXT.md)。`Core`、`Drivers`、`Middlewares`、`USB_DEVICE` 和 `FATFS/Target` 主要由 CubeMX 或第三方维护；不要把产品策略直接写入其中。
 
+`README.md` 用于导航和局部工作入口；`CONTEXT.md` 用于领域术语和产品职责；`docs/` 用于跨 Module 的技术事实。三者互相链接，不重复维护同一份调用链或实现细节。

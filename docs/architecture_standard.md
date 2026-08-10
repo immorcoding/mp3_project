@@ -17,7 +17,7 @@ Components
       ↑
 Platform
       ↑
-Services
+Service
       ↑
 APP
 ```
@@ -35,7 +35,7 @@ Adapter 实现 Interface    Platform 绑定 Ops + Context
 1. 可复用算法、芯片协议和稳定状态机属于 `Components`；
 2. HAL、USB Device、具体 MCU Handle 和 GPIO 类型只属于 `Adapters` 或 Vendor；
 3. 本 PCB 的实例、引脚、供电轨映射和启动策略属于 `Platform`；
-4. 跨多个 Platform 能力的产品流程属于 `Services`；
+4. 跨多个 Platform 能力的产品流程属于 `Service`；
 5. `APP` 只决定启动顺序、顶层策略和任务入口，不直接装配底层 Handle；
 6. Ops Interface 由使用它的 Component 拥有，而不是由 Adapter 自己发明；
 7. Ops 与 Context 必须成对绑定，且 Context 生命周期必须覆盖全部调用期。
@@ -182,19 +182,21 @@ Platform 对 APP 隐藏：
 - USB CDC 状态；
 - Component 内部 Handle。
 
-### 3.5 Services
+### 3.5 Service
 
 Service 表达跨模块产品流程，例如：
 
-- Playback Service：文件读取、解码、音频缓冲和播放状态机；
-- Storage Service：FatFs 挂载、热插拔、USB MSC 所有权仲裁；
+- Playback Module：文件读取、解码、音频缓冲和播放状态机；
+- 未来的 Storage Module：跨任务存储命令、文件打开状态和 USB MSC 所有权仲裁；
 - Media Library：扫描、索引和曲目元数据。
 
 Service 可以依赖 Platform 和 Components，但不直接依赖 HAL。
 
 当前的 `Service/log` 负责 RTOS 日志消息块的投递与消费，`Service/filesystem`
-负责 Storage Task 独占期间的 FatFs 操作。它们的公开 Interface、资源所有权和调用
-约束必须在各自 README 中明确；新 Module 不创建空目录或占位 Interface。
+负责 Storage Task 独占期间的 FatFs 操作。SD 生命周期、热插拔消抖与卷调用时序目前
+属于 `APP/tasks/storage` 的 Storage Task，不等同于未来的 `Service/storage` Module。
+它们的公开 Interface、资源所有权和调用约束必须在各自 README 中明确；新 Module 不创建
+空目录或占位 Interface。
 
 ### 3.6 APP
 
@@ -202,8 +204,8 @@ APP 是固件顶层入口，负责：
 
 - 调用 Platform 初始化；
 - 决定可选设备失败是否致命；
-- 创建未来 RTOS Tasks；
-- 启动和连接 Services；
+- 创建并启动当前 FreeRTOS Tasks；
+- 启动和连接 Service Module；
 - 执行顶层产品策略。
 
 APP 不负责：
@@ -390,6 +392,9 @@ ISR 禁止：
 Components/*.c
 Adapters/*.c
 Platform/*.c
+APP/*.c
+Service/*.c
+Middlewares/Third_Party/FreeRTOS/Config/*.c
 USB_DEVICE/App/*.c
 USB_DEVICE/Target/*.c
 ```
