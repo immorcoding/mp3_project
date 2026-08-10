@@ -31,6 +31,7 @@
   */
 static bool sdcard_is_port_bound(const SDCard_HandleTypeDef *hsdcard)
 {
+    /* StartReadBlocks 与 StartWriteBlocks 是 DMA 可选能力，不属于基础绑定条件。 */
     return (hsdcard != NULL) &&
            (hsdcard->PortOps != NULL) &&
            (hsdcard->PortContext != NULL) &&
@@ -569,6 +570,254 @@ SDCard_StatusTypeDef SDCard_WriteBlocks(SDCard_HandleTypeDef *hsdcard,
 
     hsdcard->State = SDCARD_STATE_READY;
     return SDCARD_OK;
+}
+
+/**
+  * @brief  启动一次非阻塞 SD 块读取。
+  * @param  hsdcard 已初始化且当前处于 READY 的 SD Card Device。
+  * @param  data DMA 将写入的连续块缓冲区。
+  * @param  start_block 第一个逻辑块编号。
+  * @param  block_count 连续读取的逻辑块数量。
+  * @retval SDCARD_OK DMA 请求已被 Port 接受，Device 进入 BUSY。
+  * @retval SDCARD_ERROR 参数、状态、范围或底层启动操作失败。
+  * @note   本函数刻意不轮询 Sync，也不把状态改回 READY。DMA 完成 IRQ 到达后，
+  *         运行时上层必须在普通任务上下文调用 SDCard_CompleteTransfer()；DMA
+  *         错误、超时或中止时则调用 SDCard_FailTransfer()。这样 ISR 不会修改
+  *         Device 状态机，且发起者不会误把“DMA 已启动”当作“数据已可读取”。
+  */
+SDCard_StatusTypeDef SDCard_StartReadBlocks(SDCard_HandleTypeDef *hsdcard,
+                                            uint8_t *data,
+                                            uint32_t start_block,
+                                            uint32_t block_count)
+{
+    SDCard_PortStatusTypeDef port_status;
+
+    if (hsdcard == NULL)
+    {
+        return SDCARD_ERROR;
+    }
+
+    if ((data == NULL) || (block_count == 0u))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_INVALID_PARAM,
+                           SDCARD_PORT_OK,
+                           hsdcard->State);
+    }
+
+    if ((!sdcard_is_port_bound(hsdcard)) ||
+        (hsdcard->PortOps->StartReadBlocks == NULL))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_PORT_NOT_BOUND,
+                           SDCARD_PORT_ERROR,
+                           SDCARD_STATE_ERROR);
+    }
+
+    if (!SDCard_IsPresent(hsdcard))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_NOT_PRESENT,
+                           SDCARD_PORT_NOT_PRESENT,
+                           SDCARD_STATE_NOT_PRESENT);
+    }
+
+    if (hsdcard->State != SDCARD_STATE_READY)
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_NOT_READY,
+                           SDCARD_PORT_OK,
+                           hsdcard->State);
+    }
+
+    if (!sdcard_is_range_valid(hsdcard, start_block, block_count))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_OUT_OF_RANGE,
+                           SDCARD_PORT_OK,
+                           SDCARD_STATE_READY);
+    }
+
+    sdcard_clear_error(hsdcard);
+    hsdcard->State = SDCARD_STATE_BUSY;
+
+    port_status = hsdcard->PortOps->StartReadBlocks(hsdcard->PortContext,
+                                                    data,
+                                                    start_block,
+                                                    block_count);
+    if (port_status != SDCARD_PORT_OK)
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_PORT_READ,
+                           port_status,
+                           sdcard_state_after_port_failure(port_status));
+    }
+
+    return SDCARD_OK;
+}
+
+/**
+  * @brief  启动一次非阻塞 SD 块写入。
+  * @param  hsdcard 已初始化且当前处于 READY 的 SD Card Device。
+  * @param  data DMA 将读取的连续块缓冲区。
+  * @param  start_block 第一个逻辑块编号。
+  * @param  block_count 连续写入的逻辑块数量。
+  * @retval SDCARD_OK DMA 请求已被 Port 接受，Device 进入 BUSY。
+  * @retval SDCARD_ERROR 参数、状态、范围或底层启动操作失败。
+  * @note   data 从本函数返回后仍被 DMA 使用，直至传输完成事件被普通任务处理。
+  *         因此调用者必须维持缓冲区内容和生命周期；本函数不会调用 Sync 或把
+  *         Device 提前改为 READY。
+  */
+SDCard_StatusTypeDef SDCard_StartWriteBlocks(SDCard_HandleTypeDef *hsdcard,
+                                             const uint8_t *data,
+                                             uint32_t start_block,
+                                             uint32_t block_count)
+{
+    SDCard_PortStatusTypeDef port_status;
+
+    if (hsdcard == NULL)
+    {
+        return SDCARD_ERROR;
+    }
+
+    if ((data == NULL) || (block_count == 0u))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_INVALID_PARAM,
+                           SDCARD_PORT_OK,
+                           hsdcard->State);
+    }
+
+    if ((!sdcard_is_port_bound(hsdcard)) ||
+        (hsdcard->PortOps->StartWriteBlocks == NULL))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_PORT_NOT_BOUND,
+                           SDCARD_PORT_ERROR,
+                           SDCARD_STATE_ERROR);
+    }
+
+    if (!SDCard_IsPresent(hsdcard))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_NOT_PRESENT,
+                           SDCARD_PORT_NOT_PRESENT,
+                           SDCARD_STATE_NOT_PRESENT);
+    }
+
+    if (hsdcard->State != SDCARD_STATE_READY)
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_NOT_READY,
+                           SDCARD_PORT_OK,
+                           hsdcard->State);
+    }
+
+    if (!sdcard_is_range_valid(hsdcard, start_block, block_count))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_OUT_OF_RANGE,
+                           SDCARD_PORT_OK,
+                           SDCARD_STATE_READY);
+    }
+
+    sdcard_clear_error(hsdcard);
+    hsdcard->State = SDCARD_STATE_BUSY;
+
+    port_status = hsdcard->PortOps->StartWriteBlocks(hsdcard->PortContext,
+                                                     data,
+                                                     start_block,
+                                                     block_count);
+    if (port_status != SDCARD_PORT_OK)
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_PORT_WRITE,
+                           port_status,
+                           sdcard_state_after_port_failure(port_status));
+    }
+
+    return SDCARD_OK;
+}
+
+/**
+  * @brief  在普通任务上下文确认一次 DMA 数据阶段成功完成。
+  * @param  hsdcard 当前执行 DMA 传输的 SD Card Device。
+  * @retval SDCARD_OK 卡已回到可继续发送命令的 READY 状态。
+  * @retval SDCARD_ERROR 当前并无待完成传输，或卡在数据结束后未能回到 TRANSFER。
+  * @details
+  *          HAL 的读/写完成回调表示 SDMMC 的 DMA 数据阶段已经结束，但尤其对写入
+  *          而言，SD 卡仍可能处于内部 PROGRAMMING 状态。故此函数仍通过 Port
+  *          Sync 确认卡已回到 TRANSFER，再把 Device 从 BUSY 转为 READY。
+  *
+  *          该等待发生在任务上下文，而不是 IRQ 中；IRQ 只负责发布完成事件。
+  */
+SDCard_StatusTypeDef SDCard_CompleteTransfer(SDCard_HandleTypeDef *hsdcard)
+{
+    if (hsdcard == NULL)
+    {
+        return SDCARD_ERROR;
+    }
+
+    if (!sdcard_is_port_bound(hsdcard))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_PORT_NOT_BOUND,
+                           SDCARD_PORT_ERROR,
+                           SDCARD_STATE_ERROR);
+    }
+
+    if (!SDCard_IsPresent(hsdcard))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_NOT_PRESENT,
+                           SDCARD_PORT_NOT_PRESENT,
+                           SDCARD_STATE_NOT_PRESENT);
+    }
+
+    if (hsdcard->State != SDCARD_STATE_BUSY)
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_NOT_READY,
+                           SDCARD_PORT_OK,
+                           hsdcard->State);
+    }
+
+    if (sdcard_wait_ready(hsdcard, SDCARD_ERROR_PORT_SYNC) != SDCARD_OK)
+    {
+        return SDCARD_ERROR;
+    }
+
+    hsdcard->State = SDCARD_STATE_READY;
+    return SDCARD_OK;
+}
+
+/**
+  * @brief  在普通任务上下文记录 DMA 失败或超时。
+  * @param  hsdcard 当前执行 DMA 传输的 SD Card Device。
+  * @retval SDCARD_ERROR 始终返回失败；详细原因记录在 Device 诊断快照中。
+  * @note   IRQ 上报失败时不得直接写 Device 状态。上层在接收事件后调用本函数，
+  *         由单一普通上下文完成状态转换；若此时卡已被移除，则优先进入
+  *         NOT_PRESENT，而不是泛化 ERROR。
+  */
+SDCard_StatusTypeDef SDCard_FailTransfer(SDCard_HandleTypeDef *hsdcard)
+{
+    if (hsdcard == NULL)
+    {
+        return SDCARD_ERROR;
+    }
+
+    if (!SDCard_IsPresent(hsdcard))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_NOT_PRESENT,
+                           SDCARD_PORT_NOT_PRESENT,
+                           SDCARD_STATE_NOT_PRESENT);
+    }
+
+    return sdcard_fail(hsdcard,
+                       SDCARD_ERROR_PORT_SYNC,
+                       SDCARD_PORT_ERROR,
+                       SDCARD_STATE_ERROR);
 }
 
 /**

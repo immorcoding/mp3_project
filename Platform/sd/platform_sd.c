@@ -18,7 +18,8 @@
 
 #include <stddef.h>
 
-#include "Adapters/gpio_exti/gpio_exti_stm32_hal_adapter.h"
+#include "Adapters/irq/stm32_gpio_exti_irq.h"
+#include "Adapters/irq/stm32_sdmmc_irq.h"
 #include "Adapters/sd/sd_stm32_hal_adapter.h"
 #include "Components/sd/sd.h"
 #include "main.h"
@@ -33,9 +34,13 @@ typedef struct
 {
     SDCard_HandleTypeDef Device; /**< 通用 SD Card Device 状态机和诊断。 */
     GPIOEXTI_STM32HALAdapter_CallbackTypeDef DetectIRQCallback; /**< 卡检测 EXTI 节点。 */
+    STM32SDMMCIRQ_CallbackTypeDef TransferIRQCallback; /**< SDMMC DMA IRQ 节点。 */
     Platform_SD_DetectCallback_t DetectCallback; /**< ISR 中调用的上层轻量通知。 */
     void *DetectContext; /**< 原样传给 DetectCallback 的调用者上下文。 */
+    Platform_SD_TransferCallback_t TransferCallback; /**< ISR 中调用的 DMA 事件通知。 */
+    void *TransferContext; /**< 原样传给 TransferCallback 的调用者上下文。 */
     bool IRQRegistered; /**< DetectIRQCallback 是否已经注册到 GPIO EXTI Adapter。 */
+    bool TransferIRQRegistered; /**< TransferIRQCallback 是否已经注册到 SDMMC IRQ Adapter。 */
 } Platform_SD_HandleTypeDef;
 
 /** @brief 本板唯一 SD 卡槽对应的私有实例。 */
@@ -111,17 +116,106 @@ static void platform_sd_detect_irq_cb(uint16_t gpio_pin, void *context)
 }
 
 /**
+  * @brief  把 STM32 SDMMC DMA 生命周期事件转换为 Platform SD 事件。
+  * @param  event SDMMC IRQ Adapter 发布的源特定事件。
+  * @param  context 注册时绑定的 Platform SD 私有 Handle。
+  * @note   本函数运行在 IRQ 上下文；它不修改 Device 状态、不处理 Cache，也不调用
+  *         FreeRTOS。Storage Task 的已注入回调负责执行 xxxFromISR() 唤醒任务。
+  */
+static void platform_sd_transfer_irq_cb(STM32SDMMCIRQ_EventTypeDef event,
+                                        void *context)
+{
+    Platform_SD_HandleTypeDef *hsd = (Platform_SD_HandleTypeDef *)context;
+    Platform_SD_TransferEventTypeDef platform_event;
+
+    if ((hsd == NULL) || (hsd->TransferCallback == NULL))
+    {
+        return;
+    }
+
+    switch (event)
+    {
+        case STM32SDMMCIRQ_EVENT_READ_COMPLETE:
+            platform_event = PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE;
+            break;
+
+        case STM32SDMMCIRQ_EVENT_WRITE_COMPLETE:
+            platform_event = PLATFORM_SD_TRANSFER_EVENT_WRITE_COMPLETE;
+            break;
+
+        case STM32SDMMCIRQ_EVENT_ABORTED:
+            platform_event = PLATFORM_SD_TRANSFER_EVENT_ABORTED;
+            break;
+
+        case STM32SDMMCIRQ_EVENT_ERROR:
+        default:
+            platform_event = PLATFORM_SD_TRANSFER_EVENT_ERROR;
+            break;
+    }
+
+    hsd->TransferCallback(platform_event, hsd->TransferContext);
+}
+
+/**
+  * @brief  根据当前 Device 状态注册或移除 SDMMC DMA 回调节点。
+  * @retval PLATFORM_OK 节点与当前介质生命周期保持一致。
+  * @retval PLATFORM_SD_ERROR 回调注册或注销失败。
+  * @details
+  *          HAL_SD_Init() 在热插卡后会重置其回调指针，因而节点不能只在系统启动时
+  *          注册一次。READY 时安装回调；卡移除后的 NOT_PRESENT/RESET 时移除节点，
+  *          保证 IRQ Adapter 永远不会保留已反初始化 Device 的 Platform 上下文。
+  */
+static Platform_StatusTypeDef platform_sd_sync_transfer_irq(void)
+{
+    SDCard_StateTypeDef state = SDCard_GetState(&hplatform_sd.Device);
+
+    if (state == SDCARD_STATE_READY)
+    {
+        if ((hplatform_sd.TransferCallback != NULL) &&
+            (!hplatform_sd.TransferIRQRegistered))
+        {
+            if (STM32SDMMCIRQ_Register(&hplatform_sd.TransferIRQCallback,
+                                        hplatform_sd_adapter.Handle,
+                                        platform_sd_transfer_irq_cb,
+                                        &hplatform_sd) != STM32SDMMCIRQ_OK)
+            {
+                return PLATFORM_SD_ERROR;
+            }
+
+            hplatform_sd.TransferIRQRegistered = true;
+        }
+    }
+    else if (hplatform_sd.TransferIRQRegistered)
+    {
+        if (STM32SDMMCIRQ_Unregister(&hplatform_sd.TransferIRQCallback) != STM32SDMMCIRQ_OK)
+        {
+            return PLATFORM_SD_ERROR;
+        }
+
+        hplatform_sd.TransferIRQRegistered = false;
+    }
+
+    return PLATFORM_OK;
+}
+
+/**
   * @brief  绑定本板 SDMMC Adapter、注册卡检测 EXTI 并初始化当前介质。
   * @param  detect_callback 在 SD_CD 边沿到达时从 ISR 调用的轻量通知回调。
   * @param  detect_context 原样传给 detect_callback 的调用者上下文，可为 NULL。
+  * @param  transfer_callback 在 SDMMC DMA 完成、错误或中止时从 ISR 调用的轻量回调。
+  * @param  transfer_context 原样传给 transfer_callback 的调用者上下文，可为 NULL。
   * @retval PLATFORM_OK 介质状态已同步；未插卡同样成功，此时状态为 NOT_PRESENT。
-  * @retval PLATFORM_SD_ERROR Adapter 绑定、GPIO EXTI 注册或介质初始化失败。
+  * @retval PLATFORM_SD_ERROR Adapter 绑定、GPIO EXTI/SDMMC IRQ 注册或介质初始化失败。
   * @note   即使 SDCard_Init() 因当前介质异常而失败，GPIO EXTI 注册仍会保留，
   *         以便后续拔卡后恢复到 NOT_PRESENT，并允许下次稳定插卡重新初始化。
+  *         SDCard_Init() 成功后，本函数才为 hsd1 安装 SDMMC 回调；这样没有
+  *         READY 的 HAL Handle 不会向中断 Adapter 暴露半初始化实例。
   *         本函数不可重复调用；调用者应先执行 Platform_SD_DeInit()。
   */
 Platform_StatusTypeDef Platform_SD_Init(Platform_SD_DetectCallback_t detect_callback,
-                                        void *detect_context)
+                                        void *detect_context,
+                                        Platform_SD_TransferCallback_t transfer_callback,
+                                        void *transfer_context)
 {
     Platform_StatusTypeDef status;
 
@@ -138,6 +232,8 @@ Platform_StatusTypeDef Platform_SD_Init(Platform_SD_DetectCallback_t detect_call
 
     hplatform_sd.DetectCallback = detect_callback;
     hplatform_sd.DetectContext = detect_context;
+    hplatform_sd.TransferCallback = transfer_callback;
+    hplatform_sd.TransferContext = transfer_context;
 
     if (GPIOEXTI_STM32HALAdapter_Register(&hplatform_sd.DetectIRQCallback,
                                            SD_CD_Pin,
@@ -146,24 +242,42 @@ Platform_StatusTypeDef Platform_SD_Init(Platform_SD_DetectCallback_t detect_call
     {
         hplatform_sd.DetectCallback = NULL;
         hplatform_sd.DetectContext = NULL;
+        hplatform_sd.TransferCallback = NULL;
+        hplatform_sd.TransferContext = NULL;
         return PLATFORM_SD_ERROR;
     }
 
     hplatform_sd.IRQRegistered = true;
     status = platform_sd_status(SDCard_Init(&hplatform_sd.Device));
 
+    if ((status == PLATFORM_OK) &&
+        (platform_sd_sync_transfer_irq() != PLATFORM_OK))
+    {
+        status = PLATFORM_SD_ERROR;
+    }
+
     return status;
 }
 
 /**
-  * @brief  注销卡检测 EXTI、释放 SDMMC 资源并恢复为 RESET。
+  * @brief  注销卡检测 EXTI、SDMMC 传输回调，释放 SDMMC 资源并恢复为 RESET。
   * @retval PLATFORM_OK 反初始化成功。
-  * @retval PLATFORM_SD_ERROR GPIO EXTI 注销或底层反初始化失败。
-  * @note   若 GPIO EXTI 注销失败，本函数不会清空回调指针或继续释放 SD Device，
-  *         避免 ISR 仍可达时破坏 Platform 私有实例的一致性。
+  * @retval PLATFORM_SD_ERROR GPIO EXTI/SDMMC 回调注销或底层反初始化失败。
+  * @note   先移除 SDMMC 回调，再注销 GPIO EXTI，最后才释放 SD Device。若任一步
+  *         注销失败，本函数不会继续破坏仍可能被 ISR 到达的 Platform 私有实例。
   */
 Platform_StatusTypeDef Platform_SD_DeInit(void)
 {
+    if (hplatform_sd.TransferIRQRegistered)
+    {
+        if (STM32SDMMCIRQ_Unregister(&hplatform_sd.TransferIRQCallback) != STM32SDMMCIRQ_OK)
+        {
+            return PLATFORM_SD_ERROR;
+        }
+
+        hplatform_sd.TransferIRQRegistered = false;
+    }
+
     if (hplatform_sd.IRQRegistered)
     {
         if (GPIOEXTI_STM32HALAdapter_Unregister(
@@ -177,6 +291,8 @@ Platform_StatusTypeDef Platform_SD_DeInit(void)
 
     hplatform_sd.DetectCallback = NULL;
     hplatform_sd.DetectContext = NULL;
+    hplatform_sd.TransferCallback = NULL;
+    hplatform_sd.TransferContext = NULL;
 
     return platform_sd_status(SDCard_DeInit(&hplatform_sd.Device));
 }
@@ -190,7 +306,15 @@ Platform_StatusTypeDef Platform_SD_DeInit(void)
   */
 Platform_StatusTypeDef Platform_SD_Refresh(void)
 {
-    return platform_sd_status(SDCard_Refresh(&hplatform_sd.Device));
+    Platform_StatusTypeDef status = platform_sd_status(SDCard_Refresh(&hplatform_sd.Device));
+
+    if ((status == PLATFORM_OK) &&
+        (platform_sd_sync_transfer_irq() != PLATFORM_OK))
+    {
+        return PLATFORM_SD_ERROR;
+    }
+
+    return status;
 }
 
 /**
@@ -338,6 +462,71 @@ Platform_StatusTypeDef Platform_SD_WriteBlocks(const uint8_t *data,
                                                  data,
                                                  start_block,
                                                  block_count));
+}
+
+/**
+  * @brief  启动本板 SD 卡的一次 DMA 块读取。
+  * @note   返回 PLATFORM_OK 只表示 DMA 已启动。调用者必须等待先前在 Init 中注入的
+  *         传输事件，再调用 Platform_SD_CompleteTransfer() 推进 Device 状态。
+  */
+Platform_StatusTypeDef Platform_SD_StartReadBlocks(uint8_t *data,
+                                                   uint32_t start_block,
+                                                   uint32_t block_count)
+{
+    if (!hplatform_sd.TransferIRQRegistered)
+    {
+        return PLATFORM_SD_ERROR;
+    }
+
+    return platform_sd_status(SDCard_StartReadBlocks(&hplatform_sd.Device,
+                                                     data,
+                                                     start_block,
+                                                     block_count));
+}
+
+/**
+  * @brief  启动本板 SD 卡的一次 DMA 块写入。
+  * @note   data 必须保持有效且不可修改，直至接收完成/失败事件的任务完成后续处理。
+  */
+Platform_StatusTypeDef Platform_SD_StartWriteBlocks(const uint8_t *data,
+                                                    uint32_t start_block,
+                                                    uint32_t block_count)
+{
+    if (!hplatform_sd.TransferIRQRegistered)
+    {
+        return PLATFORM_SD_ERROR;
+    }
+
+    return platform_sd_status(SDCard_StartWriteBlocks(&hplatform_sd.Device,
+                                                      data,
+                                                      start_block,
+                                                      block_count));
+}
+
+/**
+  * @brief  在普通任务上下文处理已到达的 DMA 传输事件。
+  * @param  event Storage Task 从 IRQ 通知中取得的 Platform 传输事件。
+  * @retval PLATFORM_OK 数据阶段成功且介质已经回到 TRANSFER。
+  * @retval PLATFORM_SD_ERROR DMA 失败/中止、事件非法或完成后的同步失败。
+  * @note   此函数是 IRQ 与 Device 状态机之间唯一的普通上下文接缝。它不会等待
+  *         一个新的 IRQ；成功事件仅在数据阶段结束后检查卡的内部编程是否完成。
+  */
+Platform_StatusTypeDef Platform_SD_CompleteTransfer(
+    Platform_SD_TransferEventTypeDef event)
+{
+    if ((event == PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE) ||
+        (event == PLATFORM_SD_TRANSFER_EVENT_WRITE_COMPLETE))
+    {
+        return platform_sd_status(SDCard_CompleteTransfer(&hplatform_sd.Device));
+    }
+
+    if ((event == PLATFORM_SD_TRANSFER_EVENT_ERROR) ||
+        (event == PLATFORM_SD_TRANSFER_EVENT_ABORTED))
+    {
+        return platform_sd_status(SDCard_FailTransfer(&hplatform_sd.Device));
+    }
+
+    return PLATFORM_SD_ERROR;
 }
 
 /**

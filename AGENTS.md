@@ -8,11 +8,11 @@
 
 - AXP2101 电源管理；
 - PCM5102A I2S 音频输出；
-- SDMMC SD 卡访问与热插拔；
+- SDMMC SD 卡访问、热插拔与 Storage Task 内的同步 DMA FatFs Bridge；
 - USB CDC 日志；
 - FreeRTOS；
-- FatFs 文件系统与 SD 热插拔；
-- 后续将加入音频解码、LVGL、LCD、QSPI Flash 和 USB MSC。
+- FatFs 文件系统的挂载、卸载和显式格式化；
+- 后续将加入音频解码、LVGL、LCD、QSPI Flash 和 USB MSC 所有权切换。
 
 技术文档和代码注释统一使用中文。
 

@@ -17,7 +17,8 @@ Storage task 是 SD 卡生命周期、插拔消抖、FatFs 挂载/卸载与显�
 ## 资源与约束
 
 - 本任务独占 FatFs 的 `FATFS`/`FIL` 生命周期；
-- 卡检测 ISR 仅调用 `vTaskNotifyGiveFromISR()`；消抖、挂载、卸载、格式化和日志均在任务上下文执行；
+- 卡检测 ISR 仅调用 `vTaskNotifyGiveIndexedFromISR(..., index = 0)`；SDMMC DMA ISR 仅调用 `xTaskNotifyIndexedFromISR(..., index = 1)`；消抖、DMA 状态提交、挂载、卸载、格式化和日志均在任务上下文执行；
+- DMA DiskIO 仅在本任务中同步等待；中断不能直接调用 FatFs、`Platform_SD_CompleteTransfer()` 或访问 DMA 缓冲区；
 - 格式化是破坏性操作，只允许本任务并在卡 READY 时执行；
 - 不直接调用 `HAL_SD_*`、`BSP_SD_*` 或访问 `hsd1`。
 

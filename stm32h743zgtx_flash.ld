@@ -167,6 +167,18 @@ SECTIONS
     __bss_end__ = _ebss;
   } >DTCMRAM
 
+  /*
+   * SDMMC 的内部 DMA 必须访问 AXI SRAM，不能使用默认位于 DTCMRAM 的 .bss。
+   * 此段由每个用户在第一次 DMA 前完整写入，故设为 NOLOAD；32 字节对齐避免
+   * Cortex-M7 D-Cache Clean/Invalidate 操作覆盖同一 cache line 的相邻变量。
+   */
+  .sd_dma_buffer (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sd_dma_buffer)
+    . = ALIGN(32);
+  } >RAM
+
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack :
   {

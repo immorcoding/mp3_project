@@ -67,7 +67,12 @@ static bool filesystem_make_drive_path(
   */
 FRESULT Filesystem_Init(void)
 {
-    return ((retSD == 0U) && (SDPath[0] != '\0')) ? FR_OK : FR_NOT_READY;
+    if ((retSD != 0U) || (SDPath[0] == '\0'))
+    {
+        return FR_NOT_READY;
+    }
+
+    return FatFs_SD_BindCurrentTask() ? FR_OK : FR_INT_ERR;
 }
 
 /**

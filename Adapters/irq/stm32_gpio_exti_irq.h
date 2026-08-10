@@ -1,6 +1,6 @@
 /**
   ******************************************************************************
-  * @file    gpio_exti_stm32_hal_adapter.h
+  * @file    stm32_gpio_exti_irq.h
   * @brief   STM32 HAL GPIO EXTI 回调对象和注册接口。
   *
   * @details
@@ -11,8 +11,8 @@
   ******************************************************************************
   */
 
-#ifndef GPIO_EXTI_STM32_HAL_ADAPTER_H
-#define GPIO_EXTI_STM32_HAL_ADAPTER_H
+#ifndef STM32_GPIO_EXTI_IRQ_H
+#define STM32_GPIO_EXTI_IRQ_H
 
 #include <stdint.h>
 
@@ -54,4 +54,4 @@ GPIOEXTI_STM32HALAdapter_StatusTypeDef GPIOEXTI_STM32HALAdapter_Register(
 GPIOEXTI_STM32HALAdapter_StatusTypeDef GPIOEXTI_STM32HALAdapter_Unregister(
     GPIOEXTI_STM32HALAdapter_CallbackTypeDef *callback);
 
-#endif /* GPIO_EXTI_STM32_HAL_ADAPTER_H */
+#endif /* STM32_GPIO_EXTI_IRQ_H */

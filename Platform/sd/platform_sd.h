@@ -8,10 +8,10 @@
   *          回调节点。调用者只能通过本接口初始化、刷新状态、复制信息和访问
   *          逻辑块，不能直接访问 hsd1 或修改 Device 运行状态。
   *
-  *          SD 检测边沿会在 ISR 上下文调用初始化时注入的 DetectCallback。
-  *          Platform 不依赖 FreeRTOS；调用者负责把该轻量通知转换为所属运行时的
-  *          调度机制。当前 Storage Task 使用 vTaskNotifyGiveFromISR()，完成
-  *          消抖后再调用 Platform_SD_Process()。
+  *          SD 检测边沿和 SDMMC DMA 事件会在 ISR 上下文调用初始化时注入的回调。
+  *          Platform 不依赖 FreeRTOS；调用者负责把轻量事件转换为所属运行时的
+  *          调度机制。当前 Storage Task 使用索引 0 处理卡检测消抖，并使用索引 1
+  *          等待 DMA 完成后调用 Platform_SD_CompleteTransfer()。
   ******************************************************************************
   */
 
@@ -31,7 +31,7 @@ typedef enum
     PLATFORM_SD_STATE_RESET = 0U,  /**< Platform SD 尚未初始化或已经反初始化。 */
     PLATFORM_SD_STATE_NOT_PRESENT, /**< 当前卡槽没有介质。 */
     PLATFORM_SD_STATE_READY,       /**< SD 卡可以进行逻辑块访问。 */
-    PLATFORM_SD_STATE_BUSY,        /**< SD 卡正在执行同步操作。 */
+    PLATFORM_SD_STATE_BUSY,        /**< SD 卡正在执行同步或 DMA 传输。 */
     PLATFORM_SD_STATE_ERROR        /**< 最近一次底层操作失败。 */
 } Platform_SD_StateTypeDef;
 
@@ -75,8 +75,29 @@ typedef struct
   */
 typedef void (*Platform_SD_DetectCallback_t)(void *context);
 
+/**
+  * @brief Platform SD 在 SDMMC IRQ 中发布的 DMA 生命周期事件。
+  */
+typedef enum
+{
+    PLATFORM_SD_TRANSFER_EVENT_NONE = 0U,
+    PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE,
+    PLATFORM_SD_TRANSFER_EVENT_WRITE_COMPLETE,
+    PLATFORM_SD_TRANSFER_EVENT_ERROR,
+    PLATFORM_SD_TRANSFER_EVENT_ABORTED
+} Platform_SD_TransferEventTypeDef;
+
+/**
+  * @brief Platform SD 在 SDMMC IRQ 中调用的传输事件通知。
+  * @note  回调在 ISR 上下文执行；实现只能使用 xxxFromISR() 或其他常数时间操作。
+  */
+typedef void (*Platform_SD_TransferCallback_t)(Platform_SD_TransferEventTypeDef event,
+                                                void *context);
+
 Platform_StatusTypeDef Platform_SD_Init(Platform_SD_DetectCallback_t detect_callback,
-                                        void *detect_context);
+                                        void *detect_context,
+                                        Platform_SD_TransferCallback_t transfer_callback,
+                                        void *transfer_context);
 Platform_StatusTypeDef Platform_SD_DeInit(void);
 Platform_StatusTypeDef Platform_SD_Refresh(void);
 Platform_StatusTypeDef Platform_SD_Process(Platform_SD_EventTypeDef *event);
@@ -90,6 +111,14 @@ Platform_StatusTypeDef Platform_SD_ReadBlocks(uint8_t *data,
 Platform_StatusTypeDef Platform_SD_WriteBlocks(const uint8_t *data,
                                                 uint32_t start_block,
                                                 uint32_t block_count);
+Platform_StatusTypeDef Platform_SD_StartReadBlocks(uint8_t *data,
+                                                    uint32_t start_block,
+                                                    uint32_t block_count);
+Platform_StatusTypeDef Platform_SD_StartWriteBlocks(const uint8_t *data,
+                                                     uint32_t start_block,
+                                                     uint32_t block_count);
+Platform_StatusTypeDef Platform_SD_CompleteTransfer(
+    Platform_SD_TransferEventTypeDef event);
 Platform_StatusTypeDef Platform_SD_Sync(void);
 
 #endif /* PLATFORM_SD_H */

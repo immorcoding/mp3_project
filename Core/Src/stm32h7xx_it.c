@@ -57,6 +57,7 @@
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
 extern TIM_HandleTypeDef htim17;
+extern SD_HandleTypeDef hsd1;
 
 /* USER CODE BEGIN EV */
 
@@ -158,6 +159,17 @@ void EXTI9_5_IRQHandler(void)
   /* USER CODE BEGIN EXTI9_5_IRQn 1 */
 
   /* USER CODE END EXTI9_5_IRQn 1 */
+}
+
+/**
+  * @brief This function handles SDMMC1 global interrupt.
+  * @note  HAL_SD_IRQHandler() decodes DMA completion/error flags and invokes the
+  *        callbacks registered by Adapters/irq. It must remain short: Cache
+  *        maintenance and FatFs operations run later in Storage Task context.
+  */
+void SDMMC1_IRQHandler(void)
+{
+  HAL_SD_IRQHandler(&hsd1);
 }
 
 /**

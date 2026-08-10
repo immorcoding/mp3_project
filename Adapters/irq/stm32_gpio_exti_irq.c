@@ -1,6 +1,6 @@
 /**
   ******************************************************************************
-  * @file    gpio_exti_stm32_hal_adapter.c
+  * @file    stm32_gpio_exti_irq.c
   * @brief   STM32 HAL GPIO EXTI 入口和调用者持有回调链表的 Adapter。
   *
   * @details
@@ -14,7 +14,7 @@
   ******************************************************************************
   */
 
-#include "Adapters/gpio_exti/gpio_exti_stm32_hal_adapter.h"
+#include "Adapters/irq/stm32_gpio_exti_irq.h"
 
 #include <stddef.h>
 

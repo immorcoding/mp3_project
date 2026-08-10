@@ -142,6 +142,6 @@ void monitor_task(void *handle)
             monitor_log_stack_snapshot();
         }
 
-        HAL_GPIO_TogglePin(USER_LED_GPIO_Port, USER_LED_Pin);
+        HAL_GPIO_TogglePin(USER_LED_GPIO_Port, USER_LED_Pin); //测试指示灯闪烁
     }
 }

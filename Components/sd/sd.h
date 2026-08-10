@@ -155,6 +155,26 @@ typedef SDCard_PortStatusTypeDef (*SDCard_PortWriteBlocksFunc)(void *context,
     uint32_t timeout_ms);
 
 /**
+  * @brief 启动非阻塞块读取的 Port 函数类型。
+  * @note  返回 SDCARD_PORT_OK 只表示控制器已接受 DMA 请求；完成或失败通过
+  *        上层注册的 IRQ 事件报告，随后由普通任务调用 SDCard_CompleteTransfer()
+  *        或 SDCard_FailTransfer() 推进 Device 状态机。
+  */
+typedef SDCard_PortStatusTypeDef (*SDCard_PortStartReadBlocksFunc)(void *context,
+    uint8_t *data,
+    uint32_t start_block,
+    uint32_t block_count);
+
+/**
+  * @brief 启动非阻塞块写入的 Port 函数类型。
+  * @note  data 在传输完成事件到达前必须保持有效且不得被调用者修改。
+  */
+typedef SDCard_PortStatusTypeDef (*SDCard_PortStartWriteBlocksFunc)(void *context,
+    const uint8_t *data,
+    uint32_t start_block,
+    uint32_t block_count);
+
+/**
   * @brief 等待介质完成内部操作并回到可传输状态的 Port 函数类型。
   * @param context 与 PortOps 成对绑定的底层对象。
   * @param timeout_ms 最长等待时间。
@@ -175,6 +195,8 @@ typedef struct
     SDCard_PortGetInfoFunc GetInfo;       /**< 取得卡容量和逻辑块信息。 */
     SDCard_PortReadBlocksFunc ReadBlocks; /**< 同步发起块读取。 */
     SDCard_PortWriteBlocksFunc WriteBlocks; /**< 同步发起块写入。 */
+    SDCard_PortStartReadBlocksFunc StartReadBlocks; /**< 启动异步块读取，可选。 */
+    SDCard_PortStartWriteBlocksFunc StartWriteBlocks; /**< 启动异步块写入，可选。 */
     SDCard_PortSyncFunc Sync;             /**< 等待卡回到传输状态。 */
 } SDCard_PortOpsTypeDef;
 
@@ -211,6 +233,20 @@ SDCard_StatusTypeDef SDCard_WriteBlocks(SDCard_HandleTypeDef *hsdcard,
                                         const uint8_t *data,
                                         uint32_t start_block,
                                         uint32_t block_count);
+
+SDCard_StatusTypeDef SDCard_StartReadBlocks(SDCard_HandleTypeDef *hsdcard,
+                                            uint8_t *data,
+                                            uint32_t start_block,
+                                            uint32_t block_count);
+
+SDCard_StatusTypeDef SDCard_StartWriteBlocks(SDCard_HandleTypeDef *hsdcard,
+                                             const uint8_t *data,
+                                             uint32_t start_block,
+                                             uint32_t block_count);
+
+SDCard_StatusTypeDef SDCard_CompleteTransfer(SDCard_HandleTypeDef *hsdcard);
+
+SDCard_StatusTypeDef SDCard_FailTransfer(SDCard_HandleTypeDef *hsdcard);
 
 SDCard_StatusTypeDef SDCard_Sync(SDCard_HandleTypeDef *hsdcard);
 

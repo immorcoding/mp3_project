@@ -35,13 +35,17 @@ void storage_task(void *handle)
     (void)handle;
     task_handle = xTaskGetCurrentTaskHandle();
     storage_sd_init(task_handle);
-    storage_sd_format_and_mount();
+    // storage_sd_format_and_mount();
 
     for (;;)
     {
-        (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        (void)ulTaskNotifyTakeIndexed(FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT,
+                                      pdTRUE,
+                                      portMAX_DELAY);
 
-        while (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(STORAGE_SD_DEBOUNCE_MS)) != 0U)
+        while (ulTaskNotifyTakeIndexed(FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT,
+                                       pdTRUE,
+                                       pdMS_TO_TICKS(STORAGE_SD_DEBOUNCE_MS)) != 0U)
         {
             /* 每个新边沿都会重新开始完整的静默消抖窗口。 */
         }

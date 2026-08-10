@@ -28,6 +28,15 @@
 #define configIDLE_SHOULD_YIELD                                     1
 #define configUSE_TASK_NOTIFICATIONS                                1
 #define configTASK_NOTIFICATION_ARRAY_ENTRIES                       3
+
+/*
+ * 任务通知索引是项目运行时资源：索引 0 用于 Storage 的卡检测消抖，索引 1 用于
+ * Storage 的 DMA 传输完成；两者独立，避免 DMA 完成被误解释为热插拔边沿。 
+ */
+ //存储任务消息队列
+#define FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT                     0U
+#define FREERTOS_NOTIFY_INDEX_STORAGE_SD_TRANSFER                   1U
+
 #define configUSE_MUTEXES                                           1
 #define configUSE_RECURSIVE_MUTEXES                                 0
 #define configUSE_COUNTING_SEMAPHORES                               1

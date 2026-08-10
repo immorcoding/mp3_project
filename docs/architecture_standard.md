@@ -128,7 +128,8 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
 | `Adapters/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops。 |
 | `Adapters/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
-| `Adapters/gpio_exti` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
+| `Adapters/irq/stm32_gpio_exti_irq` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
+| `Adapters/irq/stm32_sdmmc_irq` | 按 `SD_HandleTypeDef` 注册 HAL SD 完成、错误和中止回调，并发布强类型传输事件。 |
 | `Adapters/log_usb_cdc` | USB CDC 非阻塞输出和 HAL 毫秒时间源。 |
 
 FreeRTOS 内核源码、项目配置与 Hook 的边界为：
@@ -350,6 +351,21 @@ GPIO EXTI Adapter 采用与 Zephyr `gpio_callback` 相近的调用者持有模�
 GPIO EXTI Adapter 不是通用 NVIC 中断框架。SDMMC、DMA、USB、UART、定时器等
 外设中断继续由 CubeMX 向量函数调用相应 `HAL_*_IRQHandler()`，再由对应 Adapter
 或 Platform 模块处理其完成事件，不能注册到 GPIO EXTI 回调链表。
+
+SDMMC DMA 的当前路径为：
+
+```text
+SDMMC1_IRQHandler()
+  -> HAL_SD_IRQHandler(&hsd1)
+  -> STM32 SDMMC IRQ Adapter（按 Handle 匹配）
+  -> Platform SD 注入的传输 callback
+  -> Storage Task 的通知索引 1
+  -> FatFs 同步桥接等待返回后调用 Platform_SD_CompleteTransfer()
+```
+
+卡检测边沿保留通知索引 0，DMA 完成使用索引 1；两类事件的含义、消抖规则和等待方式不同，
+不得共用同一个无类型通知。`Adapters/irq` 只集中 HAL 全局回调的唯一所有权，GPIO EXTI 和
+SDMMC 仍保留各自的强类型 Interface，不能收敛为 `IRQ_ID + void *` 的通用分发器。
 
 ISR 禁止：
 

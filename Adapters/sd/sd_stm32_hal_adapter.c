@@ -12,6 +12,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "Adapters/sd/sd_stm32_hal_adapter.h"
+#include "stm32h7xx_hal_sd.h"
 
 #include <stddef.h>
 
@@ -277,6 +278,107 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_write_blocks(
 }
 
 /**
+  * @brief  通过 STM32H7 SDMMC 内部 DMA 启动非阻塞块读取。
+  * @param  context 指向已装配的 STM32 HAL SD Adapter Context。
+  * @param  data SDMMC IDMA 将写入的缓冲区。
+  * @param  start_block 起始逻辑块编号。
+  * @param  block_count 连续逻辑块数量。
+  * @retval SDCARD_PORT_OK SDMMC 已接受 DMA 请求。
+  * @retval 其他值 参数无效、无卡或 HAL 拒绝本次启动。
+  * @note   此处不能等待 HAL_SD_CARD_TRANSFER，也不能修改 SD Card Device 状态。
+  *         HAL 完成或错误回调由 IRQ Adapter 分发给 Platform，再由 Storage Task
+  *         在普通上下文完成同步和状态推进。调用者负责 DMA 缓冲区的 Cache 一致性。
+  */
+static SDCard_PortStatusTypeDef sd_stm32_hal_read_blocks_dma(
+    void *context,
+    uint8_t *data,
+    uint32_t start_block,
+    uint32_t block_count)
+{
+    SDCard_STM32HALAdapterTypeDef *adapter = context;
+
+    if ((adapter == NULL) ||
+        (adapter->Handle == NULL) ||
+        (data == NULL) ||
+        (block_count == 0u))
+    {
+        return SDCARD_PORT_ERROR;
+    }
+
+    SD_HandleTypeDef *hal_sd = adapter->Handle;
+
+    if (!sd_stm32_hal_is_present(context))
+    {
+        return SDCARD_PORT_NOT_PRESENT;
+    }
+
+    HAL_StatusTypeDef hal_status = HAL_SD_ReadBlocks_DMA(hal_sd,
+                                                         data,
+                                                         start_block,
+                                                         block_count);
+
+    SDCard_PortStatusTypeDef status = sd_stm32_hal_status((int32_t)hal_status);
+
+    if ((status != SDCARD_PORT_OK) &&
+        (!sd_stm32_hal_is_present(context)))
+    {
+        status = SDCARD_PORT_NOT_PRESENT;
+    }
+
+    return status;
+}
+
+/**
+  * @brief  通过 STM32H7 SDMMC 内部 DMA 启动非阻塞块写入。
+  * @param  context 指向已装配的 STM32 HAL SD Adapter Context。
+  * @param  data SDMMC IDMA 将读取的缓冲区；完成前内容必须保持稳定。
+  * @param  start_block 起始逻辑块编号。
+  * @param  block_count 连续逻辑块数量。
+  * @retval SDCARD_PORT_OK SDMMC 已接受 DMA 请求。
+  * @retval 其他值 参数无效、无卡或 HAL 拒绝本次启动。
+  * @note   写方向在启动 DMA 前必须由缓冲区所有者执行 D-Cache Clean；本 Adapter
+  *         只转换 HAL 调用结果，故不擅自假设任意调用者的 Cache 与内存布局。
+  */
+static SDCard_PortStatusTypeDef sd_stm32_hal_write_blocks_dma(
+    void *context,
+    const uint8_t *data,
+    uint32_t start_block,
+    uint32_t block_count)
+{
+    SDCard_STM32HALAdapterTypeDef *adapter = context;
+
+    if ((adapter == NULL) ||
+        (adapter->Handle == NULL) ||
+        (data == NULL) ||
+        (block_count == 0u))
+    {
+        return SDCARD_PORT_ERROR;
+    }
+
+    SD_HandleTypeDef *hal_sd = adapter->Handle;
+
+    if (!sd_stm32_hal_is_present(context))
+    {
+        return SDCARD_PORT_NOT_PRESENT;
+    }
+
+    HAL_StatusTypeDef hal_status = HAL_SD_WriteBlocks_DMA(hal_sd,
+                                                          data,
+                                                          start_block,
+                                                          block_count);
+
+    SDCard_PortStatusTypeDef status = sd_stm32_hal_status((int32_t)hal_status);
+
+    if ((status != SDCARD_PORT_OK) &&
+        (!sd_stm32_hal_is_present(context)))
+    {
+        status = SDCARD_PORT_NOT_PRESENT;
+    }
+
+    return status;
+}
+
+/**
   * @brief  轮询卡状态，直到回到 HAL_SD_CARD_TRANSFER。
   * @details
   *         HAL 的阻塞读写完成数据搬运后，卡内部仍可能处于 PROGRAMMING。
@@ -343,6 +445,8 @@ static const SDCard_PortOpsTypeDef sd_stm32_hal_ops = {
     .GetInfo = sd_stm32_hal_get_info,
     .ReadBlocks = sd_stm32_hal_read_blocks,
     .WriteBlocks = sd_stm32_hal_write_blocks,
+    .StartReadBlocks = sd_stm32_hal_read_blocks_dma,
+    .StartWriteBlocks = sd_stm32_hal_write_blocks_dma,
     .Sync = sd_stm32_hal_sync
 };
 
