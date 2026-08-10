@@ -1,6 +1,6 @@
 # 工程分层、依赖与装配标准
 
-> 适用工程：`version0.1.2` 及后续版本  
+> 适用工程：`version0.2.3` 及后续版本
 > 状态：当前工程的规范性架构文档  
 > 目的：避免同一类模块在后续扩展时使用不同的分层、命名和装配方式
 
@@ -44,7 +44,7 @@ Adapter 实现 Interface    Platform 绑定 Ops + Context
 
 ```text
 APP/                         产品入口、顶层启动和任务入口
-Services/                    产品级服务；有真实服务代码时再创建
+Service/                     产品级流程 Module
 Platform/                    本板实例装配和产品可见硬件能力
 Components/                  可复用、与具体 MCU 无关的组件
 Adapters/                    HAL、USB 和具体硬件实现
@@ -70,16 +70,18 @@ Components/
 这些模块虽然用途不同，但在架构上都是可独立复用的 Component。只有目录规模显著
 增长并出现稳定分类需求时，才考虑增加新的分组。
 
-`Services` 不属于 `Components` 的子目录。未来可能出现：
+`Service` 不属于 `Components` 的子目录。当前已有日志投递和文件系统 Module；未来还可能出现：
 
 ```text
-Services/
+Service/
+  log/
+  filesystem/
   playback/
   storage/
   media_library/
 ```
 
-Service 可以组织多个 Component 和 Platform 能力，表达播放器产品行为，因此不能
+Service 目录中的 Module 可以组织多个 Component 和 Platform 能力，表达播放器产品行为，因此不能
 伪装成底层可复用组件。
 
 ## 3. 各层职责
@@ -190,7 +192,9 @@ Service 表达跨模块产品流程，例如：
 
 Service 可以依赖 Platform 和 Components，但不直接依赖 HAL。
 
-当前尚未形成真实 Service，因此不创建空目录和占位接口。
+当前的 `Service/log` 负责 RTOS 日志消息块的投递与消费，`Service/filesystem`
+负责 Storage Task 独占期间的 FatFs 操作。它们的公开 Interface、资源所有权和调用
+约束必须在各自 README 中明确；新 Module 不创建空目录或占位 Interface。
 
 ### 3.6 APP
 
@@ -357,26 +361,23 @@ ISR 禁止：
 
 ## 9. 命名标准
 
-| 对象 | 形式 | 示例 |
-| --- | --- | --- |
-| Component API | `Module_Action` | `AXP2101_Init` |
-| Adapter API | `Module_BackendAdapter_Bind` | `SoftI2C_STM32HALAdapter_Bind` |
-| Platform API | `Platform_Module_Action` | `Platform_SD_GetInfo` |
-| Component Handle | `Module_HandleTypeDef` | `SDCard_HandleTypeDef` |
-| Adapter Context | `Module_BackendAdapterTypeDef` | `AudioI2S_STM32HALAdapterTypeDef` |
-| Platform 私有实例 | `hplatform_*` | `hplatform_power_i2c` |
+命名的唯一规范见 [coding_standard.md](coding_standard.md)。摘要如下：
 
-不再新增 `Board_*`、`BSP/*`、`*_port` 作为模糊层级名称。已有 Component 内部的
-`PortOps` 表示稳定的设备端口接口，不等同于目录层级。
+- 文件内和同 Module 的私有 Implementation 使用 `snake_case`；
+- 跨 Module 的公开 Interface 使用 Pascal 分段命名，例如 `Platform_SD_GetInfo()`、
+  `SDCard_ReadBlocks()` 与 `LogService_Post()`；
+- FreeRTOS Task 入口保留 `storage_task()` 这类 `snake_case`；
+- 不删除能表达 Adapter 后端或资源语义的名称，仅移除重复的层级词；
+- 不再新增 `Board_*`、`BSP/*`、`*_port` 作为模糊层级名称。已有 Component 内部的
+  `PortOps` 表示稳定的设备端口 Interface，不等同于目录层级。
 
 ## 10. 头文件与注释
 
 按本工程约定：
 
-- `.h` 中函数声明保持干净，不写逐函数 Doxygen；
-- `.h` 中公共枚举、结构体和关键字段可以写类型说明；
-- `.c` 中公开函数实现写完整 Doxygen；
-- 复杂私有函数和关键时序内部写必要注释；
+- `.h` 中函数声明保持干净，不写逐函数 Doxygen；公共枚举、结构体和关键字段可写类型说明；
+- 公开函数的完整 Doxygen 只写在对应 `.c` 的定义处，避免声明和定义的重复说明漂移；
+- 复杂私有函数和关键时序内部写必要注释，重点说明资源、并发和时序约束；
 - include 使用工程根目录起始的完整路径；
 - 避免无意义地在 `=` 后立即换行；
 - 不在注释中保留已失效的目录名和旧层名。
@@ -420,5 +421,9 @@ USB_DEVICE/Target/*.c
 5. 是否只负责顶层启动、任务创建和产品策略？是：APP；
 6. 接口由谁消费？Ops 应由消费方 Component 定义；
 7. 对象由谁拥有？具体实例通常由 Platform 持有并装配。
+
+每个自维护目录还必须提供 README，写明 Module 职责、资源所有权、公开 Interface、
+允许调用的 Interface、禁止依赖及任务/ISR 约束。README 用于缩短理解路径；它不能
+替代本文件的全局规则。
 
 无法清楚回答时，不要急着新建目录，先在本文中补充边界决定。

@@ -4,7 +4,7 @@
   * @brief   应用层生命周期公共接口。
   *
   * @details
-  *          Core/Src/main.c 只需要调用本文件提供的三个入口，不必了解
+  *          Core/Src/main.c 只需要调用本文件提供的两个入口，不必了解
   *          PMIC、日志、USB 等子模块的装配细节。这样 CubeMX 重新生成
   *          Core 目录时，应用功能仍集中保存在 APP 目录中。
   ******************************************************************************
@@ -13,7 +13,6 @@
 #define APP_H
 
 void app_init(void);
-void app_run(void);
 void app_error(void);
 
 #endif /* APP_H */

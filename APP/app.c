@@ -10,7 +10,7 @@
   *          热插拔消抖和后续文件系统工作由 Storage Task 独占处理。
   *
   *          当前初始化依赖顺序为：
-  *          Platform_Log_Init() -> 启动日志入队 -> Platform_Init() -> app_tasks_init()。
+  *          Platform_Log_Init() -> 启动日志入队 -> Platform_Init() -> app_task_start()。
   *          Platform_Init() 内部初始化 GPIO EXTI Adapter、PMIC、音频电源和
   *          Audio Device；Storage Task 在 Log Service 就绪后处理可选 SD 卡。
   *          启动日志先保存在 Components/log 环形队列，调度器启动后由 Log Task
@@ -90,38 +90,8 @@ void app_init(void)
             break;
     }
 
-    app_tasks_init();
+    app_task_start();
 }
-
-/**
-  * @brief  执行一次应用周期任务。
-  * @note   本函数采用“高频轮询 + 时间差判断”，不会调用 HAL_Delay()，
-  *         因而 USB 日志队列可持续得到处理。
-  * @retval None
-  */
-// void app_run(void)
-// {
-//     /* static 变量跨调用保存上次翻转时刻，上电清零后不占用栈空间。 */
-//     static uint32_t last_led_toggle_ms = 0U;
-//     uint32_t now_ms = HAL_GetTick();
-
-//     /*
-//      * 每次最多处理一条日志：USB 未就绪或正忙时立即返回，队首保持不变。
-//      * 因此主循环调用频率越高，USB 空闲后队列排空得越及时。
-//      */
-//     (void)LOG_Process();
-//     app_process_sd();
-
-//     /*
-//      * 无符号减法可以正确跨越 HAL_GetTick() 的 32 位自然回绕点；只要判断
-//      * 周期远小于 2^31 ms，就不需要为 tick 溢出编写特殊分支。
-//      */
-//     if ((uint32_t)(now_ms - last_led_toggle_ms) >= 500U)
-//     {
-//         last_led_toggle_ms = now_ms;
-//         HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-//     }
-// }
 
 /**
   * @brief  应用层错误处理扩展入口。

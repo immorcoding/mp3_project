@@ -12,9 +12,9 @@
 
 #include "APP/tasks/app_tasks.h"
 
-#include "APP/tasks/log/app_log_task.h"
-#include "APP/tasks/other/app_other_task.h"
-#include "APP/tasks/storage/app_storage_task.h"
+#include "APP/tasks/log/log_task.h"
+#include "APP/tasks/monitor/monitor_task.h"
+#include "APP/tasks/storage/storage_task.h"
 #include "Service/log/log_service.h"
 #include "main.h"
 
@@ -24,7 +24,7 @@
 /**
   * @brief  创建应用运行所需的全部任务，然后删除自身。
   * @param  handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
-  * @note   Log Service 必须先于任意可能调用 LOG_Service_Post() 的任务创建。
+  * @note   LogService 必须先于任意可能调用 LogService_Post() 的任务创建。
   *         Storage Task 优先级高于 Log Task；它完成短暂初始化后会阻塞等待 SD
   *         检测通知，不会长期占用 CPU。
   */
@@ -32,35 +32,35 @@ static void create_task(void *handle)
 {
     (void)handle;
 
-    if (Log_Service_Init() != LOG_OK)
+    if (LogService_Init() != LOG_OK)
     {
         Error_Handler();
     }
 
     if ((xTaskCreate(log_task,
                      "Log Task",
-                     LOG_TASK_STACK_WORDS,
+                     APP_LOG_TASK_STACK_WORDS,
                      NULL,
-                     LOG_TASK_PRIORITY,
+                     APP_LOG_TASK_PRIORITY,
                      NULL) != pdPASS) ||
         (xTaskCreate(storage_task,
                      "Storage Task",
-                     STORAGE_TASK_STACK_WORDS,
+                     APP_STORAGE_TASK_STACK_WORDS,
                      NULL,
-                     STORAGE_TASK_PRIORITY,
+                     APP_STORAGE_TASK_PRIORITY,
                      NULL) != pdPASS) ||
-        (xTaskCreate(other_task,
-                     "Other Task",
-                     OTHER_TASK_STACK_WORDS,
+        (xTaskCreate(monitor_task,
+                     "Monitor Task",
+                     APP_MONITOR_TASK_STACK_WORDS,
                      NULL,
-                     OTHER_TASK_PRIORITY,
+                     APP_MONITOR_TASK_PRIORITY,
                      NULL) != pdPASS))
     {
         /* Log Task 可能尚未得到调度，不通过日志服务报告致命创建失败。 */
         Error_Handler();
     }
 
-    (void)LOG_Service_Post(LOG_LEVEL_INFO, "RTOS", "All task created.");
+    (void)LogService_Post(LOG_LEVEL_INFO, "RTOS", "All task created.");
     vTaskDelete(NULL);
 }
 
@@ -69,13 +69,13 @@ static void create_task(void *handle)
   * @note   调度器正常运行后不会返回。若返回，通常表示空闲任务创建失败或内核
   *         堆不足；此时直接进入 CubeMX 的 Error_Handler()。
   */
-void app_tasks_init(void)
+void app_task_start(void)
 {
     if (xTaskCreate(create_task,
                     "Create Task",
-                    CREATE_TASK_STACK_WORDS,
+                    APP_BOOT_TASK_STACK_WORDS,
                     NULL,
-                    CREATE_TASK_PRIORITY,
+                    APP_BOOT_TASK_PRIORITY,
                     NULL) != pdPASS)
     {
         Error_Handler();

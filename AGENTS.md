@@ -38,7 +38,10 @@ Components
     ↓
 Platform
     ↓
-Application
+Service
+    ↓
+APP
+```
 
 具体的情况参考每个工程目录下的 分层.png
 

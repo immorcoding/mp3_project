@@ -1,17 +1,17 @@
 /**
   ******************************************************************************
-  * @file    app_storage_task.c
+  * @file    storage_task.c
   * @brief   Storage Task 的 FreeRTOS 调度循环。
   *
   * @details
   *          本模块只处理直接任务通知与 30 ms 静默窗口。Platform SD 生命周期、
-  *          FatFs 挂载/卸载和介质日志均由 app_storage_sd 模块集中处理，避免
+  *          FatFs 挂载/卸载和介质日志均由 storage_sd 模块集中处理，避免
   *          任务循环同时持有 RTOS、Platform 与文件系统细节。
   ******************************************************************************
   */
 
-#include "APP/tasks/storage/app_storage_task.h"
-#include "APP/tasks/storage/app_storage_sd.h"
+#include "APP/tasks/storage/storage_task.h"
+#include "APP/tasks/storage/storage_sd.h"
 
 #include <stdint.h>
 

@@ -1,6 +1,6 @@
 /**
   ******************************************************************************
-  * @file    app_storage_sd.c
+  * @file    storage_sd.c
   * @brief   Storage Task 的 SD 介质生命周期和 FatFs 卷管理。
   *
   * @details
@@ -10,7 +10,7 @@
   ******************************************************************************
   */
 
-#include "APP/tasks/storage/app_storage_sd.h"
+#include "APP/tasks/storage/storage_sd.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -49,7 +49,7 @@ static void storage_sd_post_diagnostics(const char *operation)
         (void)snprintf(text, sizeof(text), "%s failed without diagnostics.", operation);
     }
 
-    (void)LOG_Service_Post(LOG_LEVEL_ERROR, STORAGE_SD_LOG_TAG, text);
+    (void)LogService_Post(LOG_LEVEL_ERROR, STORAGE_SD_LOG_TAG, text);
 }
 
 /**
@@ -63,7 +63,7 @@ static void storage_sd_log_card_ready(const char *prefix)
 
     if (Platform_SD_GetInfo(&info) != PLATFORM_OK)
     {
-        (void)LOG_Service_Post(LOG_LEVEL_ERROR,
+        (void)LogService_Post(LOG_LEVEL_ERROR,
                                STORAGE_SD_LOG_TAG,
                                "Card ready but information is unavailable.");
         return;
@@ -75,7 +75,7 @@ static void storage_sd_log_card_ready(const char *prefix)
                    prefix,
                    (unsigned long)(info.CapacityBytes / (1024ULL * 1024ULL)),
                    (unsigned long)info.BlockSize);
-    (void)LOG_Service_Post(LOG_LEVEL_INFO, STORAGE_SD_LOG_TAG, text);
+    (void)LogService_Post(LOG_LEVEL_INFO, STORAGE_SD_LOG_TAG, text);
 }
 
 /**
@@ -85,11 +85,11 @@ static void storage_sd_log_card_ready(const char *prefix)
   */
 static FRESULT storage_sd_prepare_filesystem(void)
 {
-    FRESULT result = Filesystem_Service_Init();
+    FRESULT result = Filesystem_Init();
 
     if (result != FR_OK)
     {
-        (void)LOG_Service_Post(LOG_LEVEL_ERROR,
+        (void)LogService_Post(LOG_LEVEL_ERROR,
                                STORAGE_SD_LOG_TAG,
                                "FatFs driver is not ready.");
     }
@@ -112,20 +112,20 @@ static void storage_sd_mount(void)
         return;
     }
 
-    result = Filesystem_Service_MountSD();
+    result = Filesystem_MountSD();
     if (result == FR_OK)
     {
-        (void)LOG_Service_Post(LOG_LEVEL_INFO, STORAGE_SD_LOG_TAG, "Filesystem mounted.");
+        (void)LogService_Post(LOG_LEVEL_INFO, STORAGE_SD_LOG_TAG, "Filesystem mounted.");
     }
     else if (result == FR_NO_FILESYSTEM)
     {
-        (void)LOG_Service_Post(LOG_LEVEL_WARN,
+        (void)LogService_Post(LOG_LEVEL_WARN,
                                STORAGE_SD_LOG_TAG,
                                "No FAT filesystem found.");
     }
     else
     {
-        (void)LOG_Service_Post(LOG_LEVEL_ERROR,
+        (void)LogService_Post(LOG_LEVEL_ERROR,
                                STORAGE_SD_LOG_TAG,
                                "Filesystem mount failed.");
     }
@@ -147,10 +147,10 @@ static FRESULT storage_sd_unmount(void)
         return result;
     }
 
-    result = Filesystem_Service_UnmountSD();
+    result = Filesystem_UnmountSD();
     if (result != FR_OK)
     {
-        (void)LOG_Service_Post(LOG_LEVEL_ERROR,
+        (void)LogService_Post(LOG_LEVEL_ERROR,
                                STORAGE_SD_LOG_TAG,
                                "Filesystem unmount failed.");
     }
@@ -175,6 +175,12 @@ static void storage_sd_detect_callback(void *context)
     }
 }
 
+/**
+  * @brief  初始化 Platform SD，并处理启动时已经插入的介质。
+  * @param  task_handle 当前 Storage Task 的有效任务句柄。
+  * @note   本函数把 EXTI 轻量通知绑定到 task_handle。无卡属于正常状态；已插卡
+  *         时会在 Storage Task 上下文尝试挂载文件系统。
+  */
 void storage_sd_init(TaskHandle_t task_handle)
 {
     Platform_StatusTypeDef status;
@@ -182,7 +188,7 @@ void storage_sd_init(TaskHandle_t task_handle)
 
     if (task_handle == NULL)
     {
-        (void)LOG_Service_Post(LOG_LEVEL_ERROR,
+        (void)LogService_Post(LOG_LEVEL_ERROR,
                                STORAGE_SD_LOG_TAG,
                                "Storage task handle is invalid.");
         return;
@@ -200,7 +206,7 @@ void storage_sd_init(TaskHandle_t task_handle)
 
     if (state == PLATFORM_SD_STATE_NOT_PRESENT)
     {
-        (void)LOG_Service_Post(LOG_LEVEL_INFO, STORAGE_SD_LOG_TAG, "No card inserted.");
+        (void)LogService_Post(LOG_LEVEL_INFO, STORAGE_SD_LOG_TAG, "No card inserted.");
     }
     else if (state == PLATFORM_SD_STATE_READY)
     {
@@ -209,12 +215,17 @@ void storage_sd_init(TaskHandle_t task_handle)
     }
     else
     {
-        (void)LOG_Service_Post(LOG_LEVEL_ERROR,
+        (void)LogService_Post(LOG_LEVEL_ERROR,
                                STORAGE_SD_LOG_TAG,
                                "Initialization returned an unexpected SD state.");
     }
 }
 
+/**
+  * @brief  处理已完成消抖的一次 SD 卡检测事件。
+  * @note   仅能在 Storage Task 普通上下文调用。插卡后挂载，拔卡后先注销 FatFs
+  *         卷对象；本函数不执行机械触点消抖。
+  */
 void storage_sd_process(void)
 {
     Platform_SD_EventTypeDef event;
@@ -233,10 +244,16 @@ void storage_sd_process(void)
     else if (event == PLATFORM_SD_EVENT_REMOVED)
     {
         (void)storage_sd_unmount();
-        (void)LOG_Service_Post(LOG_LEVEL_INFO, STORAGE_SD_LOG_TAG, "Card removed.");
+        (void)LogService_Post(LOG_LEVEL_INFO, STORAGE_SD_LOG_TAG, "Card removed.");
     }
 }
 
+/**
+  * @brief  显式格式化 SD 卡为 FAT32，并在成功后重新挂载。
+  * @warning 此操作会销毁卷中所有文件，绝不会由启动或热插拔路径自动调用。
+  * @note    调用者必须是已经初始化的 Storage Task；其他任务将来只能经由受控的
+  *          Storage 命令请求此操作。
+  */
 void storage_sd_format_and_mount(void)
 {
     FRESULT result;
@@ -244,7 +261,7 @@ void storage_sd_format_and_mount(void)
     if ((storage_sd_task_handle == NULL) ||
         (xTaskGetCurrentTaskHandle() != storage_sd_task_handle))
     {
-        (void)LOG_Service_Post(LOG_LEVEL_ERROR,
+        (void)LogService_Post(LOG_LEVEL_ERROR,
                                STORAGE_SD_LOG_TAG,
                                "Format request rejected outside Storage Task.");
         return;
@@ -252,7 +269,7 @@ void storage_sd_format_and_mount(void)
 
     if (Platform_SD_GetState() != PLATFORM_SD_STATE_READY)
     {
-        (void)LOG_Service_Post(LOG_LEVEL_ERROR,
+        (void)LogService_Post(LOG_LEVEL_ERROR,
                                STORAGE_SD_LOG_TAG,
                                "Format request rejected: card is not ready.");
         return;
@@ -264,15 +281,15 @@ void storage_sd_format_and_mount(void)
         return;
     }
 
-    result = Filesystem_Service_MkfsSD();
+    result = Filesystem_FormatSD();
     if (result != FR_OK)
     {
-        (void)LOG_Service_Post(LOG_LEVEL_ERROR,
+        (void)LogService_Post(LOG_LEVEL_ERROR,
                                STORAGE_SD_LOG_TAG,
                                "Filesystem format failed.");
         return;
     }
 
-    (void)LOG_Service_Post(LOG_LEVEL_INFO, STORAGE_SD_LOG_TAG, "Filesystem formatted.");
+    (void)LogService_Post(LOG_LEVEL_INFO, STORAGE_SD_LOG_TAG, "Filesystem formatted.");
     storage_sd_mount();
 }

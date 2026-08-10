@@ -1,96 +1,137 @@
-#include "log_service.h"
+/**
+  ******************************************************************************
+  * @file    log_service.c
+  * @brief   FreeRTOS 异步日志消息块池 Implementation。
+  *
+  * @details
+  *          静态消息块依次在 free queue、生产者局部变量和 ready queue 之间转移。
+  *          两个 FreeRTOS 队列保存的是消息块指针值，不复制 128 B 的正文；Log task
+  *          消费后把同一指针归还 free queue。所有公开函数只能在普通任务上下文调用。
+  ******************************************************************************
+  */
 
-#include "Components/log/log.h"
+#include "Service/log/log_service.h"
+
+#include <stddef.h>
+#include <string.h>
+
 #include "Components/log/log_config.h"
+
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/queue.h"
 
-#include "stdio.h"
-#include "string.h"
-
+/** @brief 单个静态日志块；tag 必须在 Log task 消费前保持有效。 */
 typedef struct
 {
     LOG_LevelTypeDef level;
-    const char *tag;    // 约定为字符串字面量，例如 "player"
-    char text[128];     // 已格式化的正文
-} LogServiceMessage_t;
+    const char *tag;
+    char text[128];
+} log_service_message_t;
 
-static LogServiceMessage_t msg[LOGMSG_QUEUE_LENGTH];
+/** @brief 固定消息块池；其存储期覆盖所有生产者和 Log task。 */
+static log_service_message_t message_pool[LOG_SERVICE_QUEUE_LENGTH];
+
+/** @brief 可被生产者取得的空闲消息块地址队列。 */
 static QueueHandle_t message_free_queue;
-static QueueHandle_t message_ready_queue;
-//零拷贝消息队列
 
-LOG_StatusTypeDef Log_Service_Init(void)
+/** @brief 等待 Log task 转交至 Components/log 的消息块地址队列。 */
+static QueueHandle_t message_ready_queue;
+
+/**
+  * @brief  创建静态消息块池及 free/ready queue。
+  * @retval LOG_OK 两个队列已创建，且每个消息块都位于 free queue。
+  * @retval LOG_ERROR 队列创建或初始块入队失败。
+  * @note   必须在任何调用 LogService_Post() 的任务开始运行前调用一次；不支持 ISR。
+  */
+LOG_StatusTypeDef LogService_Init(void)
 {
-    message_free_queue = xQueueCreate(LOGMSG_QUEUE_LENGTH, sizeof(LogServiceMessage_t *));
-    message_ready_queue = xQueueCreate(LOGMSG_QUEUE_LENGTH, sizeof(LogServiceMessage_t *));
+    message_free_queue = xQueueCreate(LOG_SERVICE_QUEUE_LENGTH,
+                                      sizeof(log_service_message_t *));
+    message_ready_queue = xQueueCreate(LOG_SERVICE_QUEUE_LENGTH,
+                                       sizeof(log_service_message_t *));
 
     if ((message_free_queue == NULL) || (message_ready_queue == NULL))
     {
         return LOG_ERROR;
     }
 
-    memset(msg, 0, sizeof(msg));
+    memset(message_pool, 0, sizeof(message_pool));
 
-    for(uint8_t i = 0; i < LOGMSG_QUEUE_LENGTH; i++)
+    for (uint8_t index = 0U; index < LOG_SERVICE_QUEUE_LENGTH; index++)
     {
-        LogServiceMessage_t *msg_addr = &msg[i];
-        if (xQueueSend(message_free_queue, &msg_addr, 0) != pdPASS)
+        log_service_message_t *message = &message_pool[index];
+
+        /* 队列复制的是 message 指针值，因此传入其地址供 xQueueSend() 读取。 */
+        if (xQueueSend(message_free_queue, &message, 0U) != pdPASS)
         {
             return LOG_ERROR;
         }
     }
+
     return LOG_OK;
 }
 
-LOG_StatusTypeDef LOG_Service_Post(LOG_LevelTypeDef Level, const char *tag, const char *text)
+/**
+  * @brief  将一条已格式化日志投递给 Log task。
+  * @param  level 日志等级。
+  * @param  tag 长期有效的标签字符串；通常应为字符串字面量。
+  * @param  text 以 '\0' 结尾且长度不超过单块正文容量的日志内容。
+  * @retval LOG_OK 消息块已从 free queue 移至 ready queue。
+  * @retval LOG_ERROR 参数无效、没有空闲块、文本过长或队列转移失败。
+  * @note   本函数从不等待空闲块；队列满时丢弃当前消息，避免业务任务因日志阻塞。
+  */
+LOG_StatusTypeDef LogService_Post(LOG_LevelTypeDef level, const char *tag, const char *text)
 {
-    if(Level > LOG_LEVEL_DEBUG || tag == NULL || text == NULL)
+    log_service_message_t *message;
+    size_t text_length;
+
+    if ((level > LOG_LEVEL_DEBUG) || (tag == NULL) || (text == NULL))
     {
         return LOG_ERROR;
     }
 
-    LogServiceMessage_t *msg_addr; //接收一块空内存 转移到就绪队列
-    if(xQueueReceive(message_free_queue, &msg_addr, 0) == pdFAIL)
+    if (xQueueReceive(message_free_queue, &message, 0U) != pdPASS)
     {
         return LOG_ERROR;
     }
 
-    size_t len = strlen(text);
-
-    if(len >= sizeof(msg_addr->text)) //字符串过长 留一个字节给\0防止越界
+    text_length = strlen(text);
+    if (text_length >= sizeof(message->text))
     {
-        (void)xQueueSend(message_free_queue, &msg_addr, 0); //失败归还
+        /* 参数错误也必须把已取得的块归还，避免逐次投递耗尽整个消息池。 */
+        (void)xQueueSend(message_free_queue, &message, 0U);
         return LOG_ERROR;
     }
 
-    //修改取出的空闲地址的属性
-    msg_addr->level = Level;
-    msg_addr->tag = tag;
-    memcpy(msg_addr->text, text, len + 1); //留一个字节给\0防止越界
+    message->level = level;
+    message->tag = tag;
+    memcpy(message->text, text, text_length + 1U);
 
-    if(xQueueSend(message_ready_queue, &msg_addr, 0) == pdFAIL)
+    if (xQueueSend(message_ready_queue, &message, 0U) != pdPASS)
     {
-        (void)xQueueSend(message_free_queue, &msg_addr, 0); //失败归还
+        (void)xQueueSend(message_free_queue, &message, 0U);
         return LOG_ERROR;
     }
 
     return LOG_OK;
 }
 
-LOG_StatusTypeDef LOG_Service_Consume(void)
+/**
+  * @brief  推进底层日志输出，并在其有容量时转交一个 ready 消息块。
+  * @retval LOG_OK 无待处理消息、输出暂忙，或已完成一次转交。
+  * @retval LOG_ERROR Components/log 处理、状态查询或消息块归还失败。
+  * @note   仅由 Log task 调用。Components/log 的环形队列已满时不取 ready 消息，
+  *         从而避免因队列满而丢弃 ready 消息。消息一旦转交给 LOG_Printf()，无论
+  *         其输出结果如何，均视为本次消费完成并归还静态消息块。
+  */
+LOG_StatusTypeDef LogService_Consume(void)
 {
     LOG_StatsTypeDef stats;
-    LogServiceMessage_t *msg_addr;
     LOG_StatusTypeDef status;
+    log_service_message_t *message;
 
-    /*
-     * 先尝试把 Components/log 环形队列中已有的一条日志提交给 USB。
-     * USB 忙时 LOG_Process() 会保留队首，正常返回。
-     */
     status = LOG_Process();
-
-    if(status != LOG_OK)
+    if (status != LOG_OK)
     {
         return LOG_ERROR;
     }
@@ -100,20 +141,20 @@ LOG_StatusTypeDef LOG_Service_Consume(void)
         return LOG_ERROR;
     }
 
-    if (stats.PendingCount >= LOG_QUEUE_DEPTH) //待发送消息塞满缓存池，返回
+    if (stats.PendingCount >= LOG_QUEUE_DEPTH)
     {
         return LOG_OK;
     }
 
-    if(xQueueReceive(message_ready_queue, &msg_addr, 0) == pdFAIL)
+    if (xQueueReceive(message_ready_queue, &message, 0U) != pdPASS)
     {
-        //没有待发送
         return LOG_OK;
     }
 
-    status = LOG_Printf(msg_addr->level, msg_addr->tag, "%s", msg_addr->text);
+    (void)LOG_Printf(message->level, message->tag, "%s", message->text);
 
-    if(xQueueSend(message_free_queue, &msg_addr, 0) == pdFAIL)//归还
+    /* 无论转交结果如何，消息块的本次所有权都在此结束，必须归还 free queue。 */
+    if (xQueueSend(message_free_queue, &message, 0U) != pdPASS)
     {
         return LOG_ERROR;
     }
