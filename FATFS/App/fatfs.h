@@ -29,7 +29,7 @@
 #include "user_diskio.h" /* defines USER_Driver as external */
 
 /* USER CODE BEGIN Includes */
-#include <stdbool.h>
+
 /* USER CODE END Includes */
 
 extern uint8_t retSD; /* Return value for SD */
@@ -44,7 +44,6 @@ extern FIL USERFile; /* File object for USER */
 void MX_FATFS_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-bool FatFs_SD_BindCurrentTask(void);
 
 /* USER CODE END Prototypes */
 #ifdef __cplusplus

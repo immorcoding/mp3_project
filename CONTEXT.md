@@ -143,7 +143,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **平台 SD**表示本 PCB 上唯一的可移除 SD 卡槽及其平台行为。
 
-它组合通用 SD Card Device、当前 Port、卡检测事件和 SDMMC DMA 完成事件，并向播放器应用报告稳定的插入或拔出。GPIO EXTI 边沿和 SDMMC 完成 IRQ 都只作为轻量通知；由 Storage Task 决定消抖、DMA 等待与后续文件系统时序，机械触点产生了多少次边沿不属于播放器业务语义。
+它组合通用 SD Card Device、当前 Port、卡检测事件和 SDMMC DMA 完成事件，并向播放器应用报告稳定的插入或拔出。GPIO EXTI 边沿和 SDMMC 完成 IRQ 都只作为轻量通知；Storage Task 决定消抖和卷生命周期，Filesystem Module 在该任务上下文中决定 DMA 等待与后续文件系统时序，机械触点产生了多少次边沿不属于播放器业务语义。
 
 相关术语：**SD 卡设备**、**SD 卡端口**、**STM32 HAL GPIO EXTI 适配器**、**STM32 SDMMC IRQ 适配器**。
 
@@ -177,7 +177,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 存储任务（Storage Task）
 
-**存储任务**是 SD 热插拔、SDMMC DMA 完成和当前 FatFs 卷生命周期的唯一执行上下文。它通过独立通知索引接收 GPIO EXTI 和 SDMMC 触发的轻量事件，完成机械触点消抖、DMA 等待、平台 SD 生命周期推进，并在插卡时挂载、拔卡时注销文件系统卷。
+**存储任务**是 SD 热插拔、SDMMC DMA 完成和当前 FatFs 卷生命周期的唯一执行上下文。它通过索引 0 接收 GPIO EXTI 的轻量事件并完成机械触点消抖、平台 SD 生命周期推进；Filesystem Module 在同一任务上下文中通过索引 1 等待 SDMMC DMA 结果，并在插卡时挂载、拔卡时注销文件系统卷。
 
 存储任务拥有 SD 卡与本地 FatFs 的访问时序，但不拥有 SDMMC、GPIO EXTI 或卡座引脚。中断回调只通知该任务，不能在 ISR 中执行消抖、FatFs、日志格式化或 SD 块访问。
 
@@ -221,4 +221,4 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 示例：
 
-> SDMMC1 的读 DMA 完成后，Adapter 发布“读完成”；Storage Task 收到通知后才调用 Platform SD，使 SD Card Device 从 `BUSY` 回到 `READY`。
+> SDMMC1 的读 DMA 完成后，Adapter 发布“读完成”；Filesystem Module 的私有执行器在 Storage Task 上下文收到通知后才调用 Platform SD，使 SD Card Device 从 `BUSY` 回到 `READY`。

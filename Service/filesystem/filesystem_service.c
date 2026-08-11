@@ -16,6 +16,7 @@
 #include <stdint.h>
 
 #include "FATFS/App/fatfs.h"
+#include "Service/filesystem/filesystem_sd_transfer.h"
 
 /** @brief CubeMX 生成的逻辑卷路径固定为 "N:/" 加结尾 '\0'。 */
 #define FILESYSTEM_DRIVE_PATH_LENGTH        4U
@@ -72,7 +73,7 @@ FRESULT Filesystem_Init(void)
         return FR_NOT_READY;
     }
 
-    return FatFs_SD_BindCurrentTask() ? FR_OK : FR_INT_ERR;
+    return filesystem_sd_transfer_init() ? FR_OK : FR_INT_ERR;
 }
 
 /**

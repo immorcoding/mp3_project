@@ -8,7 +8,8 @@
   *          回调节点。调用者只能通过本接口初始化、刷新状态、复制信息和访问
   *          逻辑块，不能直接访问 hsd1 或修改 Device 运行状态。
   *
-  *          SD 检测边沿和 SDMMC DMA 事件会在 ISR 上下文调用初始化时注入的回调。
+  *          SD 检测边沿会在 ISR 上下文调用初始化时注入的回调；SDMMC DMA 事件会调用
+  *          后续由唯一订阅者通过 Platform_SD_SetTransferCallback() 设置的回调。
   *          Platform 不依赖 FreeRTOS；调用者负责把轻量事件转换为所属运行时的
   *          调度机制。当前 Storage Task 使用索引 0 处理卡检测消抖，并使用索引 1
   *          等待 DMA 完成后调用 Platform_SD_CompleteTransfer()。
@@ -95,9 +96,11 @@ typedef void (*Platform_SD_TransferCallback_t)(Platform_SD_TransferEventTypeDef 
                                                 void *context);
 
 Platform_StatusTypeDef Platform_SD_Init(Platform_SD_DetectCallback_t detect_callback,
-                                        void *detect_context,
-                                        Platform_SD_TransferCallback_t transfer_callback,
-                                        void *transfer_context);
+                                        void *detect_context);
+Platform_StatusTypeDef Platform_SD_SetTransferCallback(
+    Platform_SD_TransferCallback_t transfer_callback,
+    void *transfer_context);
+Platform_StatusTypeDef Platform_SD_ClearTransferCallback(void);
 Platform_StatusTypeDef Platform_SD_DeInit(void);
 Platform_StatusTypeDef Platform_SD_Refresh(void);
 Platform_StatusTypeDef Platform_SD_Process(Platform_SD_EventTypeDef *event);

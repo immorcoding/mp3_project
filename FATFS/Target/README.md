@@ -1,19 +1,18 @@
-# FATFS Target
+# CubeMX FatFs Target 生成目录
 
-本目录是 CubeMX 生成的 FatFs DiskIO 与 BSP 模板，负责把逻辑卷操作下传到 Driver Link；除 CubeMX USER CODE 区外，不在这里放产品策略。
+本生成目录提供 FatFs DiskIO Glue，并声明 Cube 的 `BSP_SD_*` 外部 Override Seam。
 
 ## 公开 Interface
 
-- CubeMX 生成的 `diskio`、`SD_Driver` 与 `USER_Driver` Interface；
-- `bsp_driver_sd.h` 声明的 `BSP_SD_*` 外部契约。
+- `bsp_driver_sd.h`：声明 `BSP_SD_*`、`BSP_SD_CardInfo` 和 Cube 状态值。
+- `sd_diskio.c`：从 FatFs `disk_*` 操作中同步调用该 Interface。
 
 ## 调用的 Interface
 
-- `FATFS/App/fatfs.c` USER CODE 中的唯一 `BSP_SD_*` 实现；该实现同步等待 Platform SD 的 DMA 传输完成；
-- CubeMX 生成的 Driver Link 机制。
+- 由 `Service/filesystem/filesystem_fatfs_bsp.c` 实现的 `BSP_SD_*` 强定义 Adapter。
 
 ## 约束
 
-- 不在 `sd_diskio.c` 直接访问 `hsd1` 或绕过 Platform；
-- 不重复定义 HAL SD 完成回调或 `BSP_SD_*`；全局 HAL 回调分发由 `Adapters/irq/stm32_sdmmc_irq.*` 管理；
-- CubeMX 重新生成后，检查生成文件仍只调用 `BSP_SD_*`，并保留 `FATFS/App/fatfs.c` USER CODE 区。
+- 不修改生成的 `sd_diskio.c` 来嵌入项目任务、Cache 或板级细节。
+- `bsp_driver_sd.c` 提供弱默认实现；Service Adapter 有意以强定义覆盖它们。
+- HAL 全局完成回调不是第二条 FatFs 通知路径；SDMMC 完成事件只由已注册的 IRQ Adapter 管理。

@@ -178,33 +178,6 @@ static void storage_sd_detect_callback(void *context)
 }
 
 /**
-  * @brief  在 SDMMC DMA IRQ 中向 Storage Task 发布传输生命周期事件。
-  * @param  event Platform SD 已归一化的读完成、写完成、错误或中止事件。
-  * @param  context 注册时传入的 Storage TaskHandle_t。
-  * @details
-  *          索引 1 与卡检测使用的索引 0 完全独立。此处采用 eSetValueWithOverwrite，
-  *          因为 Storage/FatFs 串行执行，一次最多只有一条 DMA 在飞；完整事件值比
-  *          计数通知更适合区分成功、错误和中止。真正的 Cache 处理、卡状态推进和
-  *          FatFs 返回均由被唤醒的普通任务完成，ISR 不访问文件系统。
-  */
-static void storage_sd_transfer_callback(Platform_SD_TransferEventTypeDef event,
-                                         void *context)
-{
-    TaskHandle_t task_handle = (TaskHandle_t)context;
-    BaseType_t higher_priority_task_woken = pdFALSE;
-
-    if (task_handle != NULL)
-    {
-        (void)xTaskNotifyIndexedFromISR(task_handle,
-                                        FREERTOS_NOTIFY_INDEX_STORAGE_SD_TRANSFER,
-                                        (uint32_t)event,
-                                        eSetValueWithOverwrite,
-                                        &higher_priority_task_woken);
-        portYIELD_FROM_ISR(higher_priority_task_woken);
-    }
-}
-
-/**
   * @brief  初始化 Platform SD，并处理启动时已经插入的介质。
   * @param  task_handle 当前 Storage Task 的有效任务句柄。
   * @note   本函数把 EXTI 轻量通知绑定到 task_handle。无卡属于正常状态；已插卡
@@ -225,14 +198,17 @@ void storage_sd_init(TaskHandle_t task_handle)
 
     storage_sd_task_handle = task_handle;
     status = Platform_SD_Init(storage_sd_detect_callback,
-                              task_handle,
-                              storage_sd_transfer_callback,
                               task_handle);
     state = Platform_SD_GetState();
 
     if (status != PLATFORM_OK)
     {
         storage_sd_post_diagnostics("Initialization");
+        return;
+    }
+
+    if (storage_sd_prepare_filesystem() != FR_OK)
+    {
         return;
     }
 

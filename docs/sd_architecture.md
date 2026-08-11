@@ -18,8 +18,7 @@
 - 一个代表本板唯一物理卡槽的 Platform 接口；
 - `Adapters/irq` 下两个源特定的 STM32 IRQ Adapter：GPIO EXTI 的 PinMask 回调分发，以及 SDMMC 的传输完成/错误分发；
 - 一个独占 SD 初始化、消抖、FatFs 卷生命周期和介质事件日志的 Storage Task；
-- 一个只封装 FatFs 逻辑卷操作的 Filesystem Module；
-- 一个由 CubeMX DiskIO 调用并桥接到 Platform SD 的同步 FatFs Bridge。
+- 一个封装 FatFs 逻辑卷操作、同步 DMA 执行器和 Cube BSP Override Adapter 的 Filesystem Module。
 
 当前不抽象通用 `BlockDevice`。SD 是现阶段唯一的块设备；等 QSPI Flash 成为第二个真实实现，并明确其擦除、对齐和写入规则后，再从两个具体需求中提取公共接口更稳妥。
 
@@ -80,8 +79,7 @@ Storage Task
   -> storage_task()
      -> xTaskGetCurrentTaskHandle()
      -> storage_sd_init(task_handle)
-        -> Platform_SD_Init(storage_sd_detect_callback, task_handle,
-                            storage_sd_transfer_callback, task_handle)
+        -> Platform_SD_Init(storage_sd_detect_callback, task_handle)
         -> SDCard_STM32HALAdapter_Bind(&Device, &Adapter)
         -> GPIOEXTI_STM32HALAdapter_Register(
                &DetectIRQCallback,
@@ -89,7 +87,11 @@ Storage Task
                platform_sd_detect_irq_cb,
                &hplatform_sd)
         -> SDCard_Init(&Device)
-        -> STM32SDMMCIRQ_Register(&TransferIRQCallback, &hsd1, ...)
+        -> Filesystem_Init()
+           -> filesystem_sd_transfer_init()
+           -> Platform_SD_SetTransferCallback(
+                  filesystem_sd_transfer_irq_callback, ...)
+           -> STM32SDMMCIRQ_Register(&TransferIRQCallback, &hsd1, ...)
            -> Port.IsPresent(PC7)
            -> Port.Init(&hsd1)
               -> HAL_SD_Init(&hsd1)
@@ -123,7 +125,8 @@ FatFs 当前使用同步 DMA Bridge：对 DiskIO 来说调用仍同步返回，�
 
 ```text
 FatFs disk_read / disk_write
-  -> FATFS/App/fatfs.c 的 BSP_SD_ReadBlocks / BSP_SD_WriteBlocks
+  -> Service/filesystem/filesystem_fatfs_bsp.c 的 BSP_SD_ReadBlocks / BSP_SD_WriteBlocks
+  -> Service/filesystem/filesystem_sd_transfer.c
   -> 复制到 4 KiB、32 字节对齐的 AXI SRAM 中转缓冲区
   -> 按方向 Clean 或 Clean+Invalidate D-Cache
   -> Platform_SD_StartReadBlocks / Platform_SD_StartWriteBlocks
@@ -194,10 +197,10 @@ SDMMC1_IRQHandler()
   -> HAL 按 hsd1 注册的 Rx / Tx / Error / Abort callback
   -> STM32SDMMCIRQAdapter（按 SD_HandleTypeDef 匹配）
   -> Platform SD 的传输 callback
-  -> storage_sd_transfer_callback()
+  -> filesystem_sd_transfer_irq_callback()
      -> xTaskNotifyIndexedFromISR(index = 1, event, eSetValueWithOverwrite)
 
-Storage Task 中的 FatFs Bridge
+Storage Task 上下文中的 Filesystem DMA executor
   -> xTaskNotifyWaitIndexed(index = 1)
   -> Platform_SD_CompleteTransfer(event)
 ```
@@ -291,8 +294,9 @@ CubeMX 继续管理：
 
 ## 10. FatFs 适配边界
 
-当前 `FATFS/App/fatfs.c` 在 CubeMX 的 USER CODE 区强定义 `BSP_SD_*`，使生成的
-`sd_diskio.c` 通过 Platform SD 访问介质，而不是直接使用 `hsd1`。映射关系为：
+当前 `Service/filesystem/filesystem_fatfs_bsp.c` 强定义 CubeMX `BSP_SD_*`，使生成的
+`sd_diskio.c` 通过 Filesystem Module 和 Platform SD 访问介质，而不是直接使用 `hsd1`。`fatfs.c`
+仅保留逻辑卷对象和 Driver Link。映射关系为：
 
 | FatFs DiskIO 操作 | Platform SD 接口 |
 | --- | --- |
@@ -313,7 +317,7 @@ Storage Task 的 Platform SD 生命周期实现。
 
 ## 11. 当前限制
 
-1. FatFs DMA Bridge 只允许 Storage Task 作为唯一调用者；尚未实现 Mutex、多任务文件系统服务或 USB MSC 所有权切换；
+1. Filesystem DMA executor 只允许 Storage Task 作为唯一调用者；尚未实现 Mutex、多任务文件系统服务或 USB MSC 所有权切换；
 2. 当前使用固定的 4 KiB、32 字节对齐 AXI SRAM 中转缓冲区。它每次传输最多 8 个逻辑块，大请求会串行分块；
 3. Cache 操作仅覆盖该专用缓冲区。未来若直接 DMA 到其他缓冲区，必须重新满足 AXI SRAM 可访问性、32 字节对齐和 Clean/Invalidate 规则；
 4. DMA 等待超时、错误或中止会使 Device 进入 `ERROR`；当前恢复策略是由后续卡检测/重新初始化恢复，尚未实现传输中的 HAL Abort 与原地重试；

@@ -1,27 +1,26 @@
-# Storage Task
+# 存储任务
 
-Storage task 是 SD 卡生命周期、插拔消抖、FatFs 挂载/卸载与显式格式化的唯一任务上下文。它把 GPIO EXTI 边沿解释为“需要重新检查”，而不是“已经插卡/拔卡”。
+Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任务上下文。GPIO EXTI 边沿只表示“稍后重新检查”，并不直接表示“已经插卡”或“已经拔卡”。
 
 ## 公开 Interface
 
-- `storage_task(void *handle)`：由 App 创建；
-- `storage_sd_*()`：仅供同一 Task Module 的调度循环调用，不向其他任务公开文件系统访问。
+- `storage_task(void *argument)`：由 APP 创建的任务入口。
+- `storage_sd_*()`：本 Task Module 的内部调度 Interface，不是面向其他任务的通用文件访问 Interface。
 
 ## 调用的 Interface
 
-- `Platform_SD_*`；
-- `Filesystem_*`；
-- `LogService_Post()`；
-- FreeRTOS 任务通知和 FromISR 通知 Interface。
+- Platform SD 卡检测生命周期 Interface。
+- Filesystem Service 的初始化、挂载、卸载和格式化 Interface。
+- Log Service 投递 Interface。
+- 仅用于卡检测消抖的原生 FreeRTOS 索引任务通知 Interface。
 
-## 资源与约束
+## 约束
 
-- 本任务独占 FatFs 的 `FATFS`/`FIL` 生命周期；
-- 卡检测 ISR 仅调用 `vTaskNotifyGiveIndexedFromISR(..., index = 0)`；SDMMC DMA ISR 仅调用 `xTaskNotifyIndexedFromISR(..., index = 1)`；消抖、DMA 状态提交、挂载、卸载、格式化和日志均在任务上下文执行；
-- DMA DiskIO 仅在本任务中同步等待；中断不能直接调用 FatFs、`Platform_SD_CompleteTransfer()` 或访问 DMA 缓冲区；
-- 格式化是破坏性操作，只允许本任务并在卡 READY 时执行；
-- 不直接调用 `HAL_SD_*`、`BSP_SD_*` 或访问 `hsd1`。
+- 索引 `0` 属于本 Module：GPIO EXTI 增加通知计数，任务在 30 ms 静默期结束后调用 `Platform_SD_Process()`。
+- 索引 `1` 不由本任务主循环消费。它属于 Filesystem Service 的同步 SDMMC DMA 执行器；执行器在同一个 Storage Task 上下文、于 FatFs 读写期间等待它。
+- APP 不注册 SDMMC 传输回调，不使用 `BSP_SD_*`、不调用 `HAL_SD_*`，也不访问 `hsd1` 或 DMA bounce buffer。
+- 插卡只有在 Platform SD 报告 `READY` 后才挂载；拔卡先注销 FatFs 卷。格式化始终是要求卡 `READY` 的显式破坏性请求。
 
 ## 命名
 
-本 Module 的内部 Interface 使用 `storage_sd_*`，Task 入口使用 `storage_task()`。
+Task 内部 Implementation 使用 `storage_*`；任务入口保持 `storage_task()`；跨层调用使用 `Platform_SD_*`、`Filesystem_*` 与 `LogService_*`。
