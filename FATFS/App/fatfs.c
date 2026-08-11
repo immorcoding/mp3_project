@@ -14,9 +14,40 @@
   ******************************************************************************
   */
 /* USER CODE END Header */
-
 #include "fatfs.h"
 
+uint8_t retSD;    /* Return value for SD */
+char SDPath[4];   /* SD logical drive path */
+FATFS SDFatFS;    /* File system object for SD logical drive */
+FIL SDFile;       /* File object for SD */
+uint8_t retUSER;    /* Return value for USER */
+char USERPath[4];   /* USER logical drive path */
+FATFS USERFatFS;    /* File system object for USER logical drive */
+FIL USERFile;       /* File object for USER */
+
+/* USER CODE BEGIN Variables */
+
+/* USER CODE END Variables */
+
+void MX_FATFS_Init(void)
+{
+  /*## FatFS: Link the SD driver ###########################*/
+  retSD = FATFS_LinkDriver(&SD_Driver, SDPath);
+  /*## FatFS: Link the USER driver ###########################*/
+  retUSER = FATFS_LinkDriver(&USER_Driver, USERPath);
+
+  /* USER CODE BEGIN Init */
+  /* additional user code for init */
+  /* USER CODE END Init */
+}
+
+/* USER CODE BEGIN Application */
+
+/*
+ * CubeMX 的 FatFs C 模板没有 Includes/Variables 用户区。自维护的 DMA Bridge
+ * 因而全部放入该模板明确保留的 Application 区，避免下次代码生成覆盖依赖、
+ * 宏和静态对象。预处理器指令与文件作用域 static 声明可合法地出现在此位置。
+ */
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -26,17 +57,6 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 #include "Platform/sd/platform_sd.h"
 #include "stm32h7xx_hal.h"
-
-uint8_t retSD;    /* Return value for SD */
-char SDPath[4];   /* SD logical drive path */
-FATFS SDFatFS;    /* File system object for SD logical drive */
-FIL SDFile;       /* File object for SD */
-uint8_t retUSER;  /* Return value for USER */
-char USERPath[4]; /* USER logical drive path */
-FATFS USERFatFS;  /* File system object for USER logical drive */
-FIL USERFile;     /* File object for USER */
-
-/* USER CODE BEGIN Variables */
 
 /** @brief 一个 FatFs 逻辑扇区与 SD 卡逻辑块的固定字节数。 */
 #define FATFS_SD_BLOCK_SIZE                  512U
@@ -69,22 +89,6 @@ static TaskHandle_t hfatfs_sd_owner_task;
   */
 static uint8_t fatfs_sd_dma_buffer[FATFS_SD_BLOCK_SIZE * FATFS_SD_DMA_BLOCK_COUNT]
     __attribute__((aligned(FATFS_SD_DMA_CACHE_LINE_SIZE), section(".sd_dma_buffer")));
-
-/* USER CODE END Variables */
-
-void MX_FATFS_Init(void)
-{
-  /*## FatFS: Link the SD driver ###########################*/
-  retSD = FATFS_LinkDriver(&SD_Driver, SDPath);
-  /*## FatFS: Link the USER driver ###########################*/
-  retUSER = FATFS_LinkDriver(&USER_Driver, USERPath);
-
-  /* USER CODE BEGIN Init */
-  /* additional user code for init */
-  /* USER CODE END Init */
-}
-
-/* USER CODE BEGIN Application */
 
 /**
   * @brief  绑定首次进入 Filesystem Service 的 Storage Task。

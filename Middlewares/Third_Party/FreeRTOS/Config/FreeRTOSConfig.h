@@ -68,9 +68,18 @@
 #define configUSE_SB_COMPLETED_CALLBACK                             0
 
 /* 运行时间统计和任务状态查询支持。 */
-#define configGENERATE_RUN_TIME_STATS                               0
 #define configUSE_TRACE_FACILITY                                    1
 #define configUSE_STATS_FORMATTING_FUNCTIONS                        1
+
+/* debug期间保留即可 */
+#define configRECORD_STACK_HIGH_ADDRESS                             1
+#define configGENERATE_RUN_TIME_STATS                               1
+
+void RuntimeStatsTimer_Start(void);
+uint32_t RuntimeStatsTimer_GetCount(void);
+
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS()                    RuntimeStatsTimer_Start()
+#define portGET_RUN_TIME_COUNTER_VALUE()                            RuntimeStatsTimer_GetCount()
 
 /* 已弃用的 Co-routine 功能；新代码使用普通 Task。 */
 #define configUSE_CO_ROUTINES                                       0

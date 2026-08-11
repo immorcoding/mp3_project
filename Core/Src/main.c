@@ -21,6 +21,7 @@
 #include "fatfs.h"
 #include "i2s.h"
 #include "memorymap.h"
+#include "tim.h"
 #include "usb_device.h"
 #include "gpio.h"
 
@@ -93,6 +94,7 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_I2S2_Init();
   MX_FATFS_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   app_init();
   /* USER CODE END 2 */

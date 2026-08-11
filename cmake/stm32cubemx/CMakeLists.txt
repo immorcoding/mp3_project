@@ -34,6 +34,7 @@ target_sources(stm32cubemx INTERFACE
     ../../Core/Src/i2s.c
     ../../Core/Src/memorymap.c
     ../../Core/Src/sdmmc.c
+    ../../Core/Src/tim.c
     ../../Core/Src/stm32h7xx_it.c
     ../../Core/Src/stm32h7xx_hal_msp.c
     ../../Core/Src/stm32h7xx_hal_timebase_tim.c
