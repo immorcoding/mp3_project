@@ -100,12 +100,20 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
 }
 
 /* USER CODE BEGIN 1 */
+/**
+  * @brief  Start the runtime stats timer (TIM5).
+  * @retval None
+  */
 void RuntimeStatsTimer_Start(void)
 {
     __HAL_TIM_SET_COUNTER(&htim5, 0U);
     (void)HAL_TIM_Base_Start(&htim5);
 }
 
+/**
+  * @brief  Get the current count of the runtime stats timer.
+  * @retval uint32_t: Current counter value of TIM5.
+  */
 uint32_t RuntimeStatsTimer_GetCount(void)
 {
     return (uint32_t)__HAL_TIM_GET_COUNTER(&htim5);
