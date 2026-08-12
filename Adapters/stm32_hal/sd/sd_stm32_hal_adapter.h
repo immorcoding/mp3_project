@@ -25,10 +25,15 @@
   */
 typedef struct
 {
-    SD_HandleTypeDef *Handle;   /**< CubeMX 生成的具体 SDMMC HAL Handle。 */
-    GPIO_TypeDef *DetectPort;   /**< 卡检测输入所在的 GPIO 端口。 */
-    uint16_t DetectPin;         /**< 卡检测输入对应的 GPIO_Pin 位掩码。 */
-    GPIO_PinState PresentState; /**< 表示“已插卡”的有效电平。 */
+    SD_HandleTypeDef *Handle;    /**< CubeMX 生成的具体 SDMMC HAL Handle。 */
+    GPIO_TypeDef *DetectPort;    /**< 卡检测输入所在的 GPIO 端口。 */
+    uint16_t DetectPin;          /**< 卡检测输入对应的 GPIO_Pin 位掩码。 */
+    GPIO_PinState PresentState;  /**< 表示“已插卡”的有效电平。 */
+
+    /* 以下字段仅由本 Adapter 的 DMA 实现读写，Platform 不得修改。 */
+    uint8_t *DMABuffer;          /**< 当前 DMA 缓冲区；NULL 表示没有待完成传输。 */
+    uint32_t DMAByteCount;       /**< 当前 DMA 缓冲区的有效字节数。 */
+    bool DMAReadPending;         /**< true 表示当前传输方向为卡到 RAM。 */
 } SDCard_STM32HALAdapterTypeDef;
 
 SDCard_StatusTypeDef SDCard_STM32HALAdapter_Bind(

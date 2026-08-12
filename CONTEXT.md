@@ -42,9 +42,9 @@
 
 ## AXP2101 I2C 适配器（AXP2101 I2C Adapter）
 
-**AXP2101 I2C 适配器**是 AXP2101 Device 与具体 I2C 后端之间的适配边界。
+**AXP2101 I2C 适配器**是 AXP2101 Device 与具体 I2C 后端之间的 Adapter。当前实现位于 `Adapters/bridge/`，是 SoftI2C Component 到 AXP2101 Bus Ops 的跨 Component Bridge；未来可替换为硬件 I2C 或测试 Adapter。
 
-它把具体后端的 Context、寄存器读写和状态码转换成 AXP2101 Device 的 Bus Ops。Adapter 不拥有板级引脚和 I2C 实例，实例由 Platform 注入。
+它把具体后端的 Context、寄存器读写和状态码转换成 AXP2101 Device 的 Bus Ops。Bridge 不依赖 HAL、CMSIS 或 FreeRTOS，也不拥有板级引脚和 I2C 实例；实例始终由 Platform 注入。
 
 相关术语：**AXP2101 设备**、**归一化传输状态**。
 
@@ -78,6 +78,18 @@
 示例：
 
 > `RELEASED` 在 STM32 开漏输出上表现为写入 SET，但其真实高电平仍由外部上拉产生。
+
+## Cortex-M7 Cache 适配器（Cortex-M7 Cache Adapter）
+
+**Cortex-M7 Cache 适配器**封装 DMA 缓冲区与 Cortex-M7 D-Cache 之间的一致性维护。它是无状态 Adapter：DMA 读开始前执行 Clean + Invalidate、读完成后执行 Invalidate、DMA 写开始前执行 Clean。
+
+它不拥有外设 Handle、DMA 等待、FreeRTOS 通知或中转缓冲区。具体外设 Adapter 在普通任务上下文调用它；调用者仍需保证缓冲区可被 DMA 访问、首地址与长度按 32 字节 Cache line 对齐，并且传输期间 CPU 不并发读写该缓冲区。
+
+相关术语：**SD 卡端口**、**文件系统 Module**。
+
+示例：
+
+> SDMMC Adapter 在启动读 DMA 前维护 Cache，DMA 完成后由任务上下文的 `Sync()` 再使 CPU 读取 RAM 中的新数据。
 
 ## 平台电源启动配置（Platform power boot profile）
 
@@ -143,7 +155,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **平台 SD**表示本 PCB 上唯一的可移除 SD 卡槽及其平台行为。
 
-它组合通用 SD Card Device、当前 Port、卡检测事件和 SDMMC DMA 完成事件，并向播放器应用报告稳定的插入或拔出。GPIO EXTI 边沿和 SDMMC 完成 IRQ 都只作为轻量通知；Storage Task 决定消抖和卷生命周期，Filesystem Module 在该任务上下文中决定 DMA 等待与后续文件系统时序，机械触点产生了多少次边沿不属于播放器业务语义。
+它组合通用 SD Card Device、当前 Port、卡检测事件和 SDMMC DMA 完成事件，并向播放器应用报告稳定的插入或拔出。GPIO EXTI 边沿和 SDMMC 完成 IRQ 都只作为轻量通知；Platform 只把 DMA 事件转交给其唯一订阅者。Storage Task 决定消抖和卷生命周期，Filesystem Module 在该任务上下文中决定 DMA 等待与后续文件系统时序，机械触点产生了多少次边沿不属于播放器业务语义。
 
 相关术语：**SD 卡设备**、**SD 卡端口**、**STM32 HAL GPIO EXTI 适配器**、**STM32 SDMMC IRQ 适配器**。
 
@@ -189,9 +201,9 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 文件系统 Module（Filesystem Module）
 
-**文件系统 Module**封装当前 FatFs 逻辑卷的驱动就绪检查、挂载、注销和显式格式化。它只在存储任务已经取得 SD 独占权且平台 SD 已处于可访问状态时调用 FatFs，不负责卡检测、消抖或 SDMMC 初始化。
+**文件系统 Module**封装当前 FatFs 逻辑卷的驱动就绪检查、挂载、注销和显式格式化，并持有 FatFs 所需的同步 DMA 执行器。它只在存储任务已经取得 SD 独占权且平台 SD 已处于可访问状态时调用 FatFs，不负责卡检测、消抖或 SDMMC 初始化。
 
-该 Module 的工作缓冲区属于静态存储期，以避免长文件名和格式化工作区挤占任务栈。它返回 FatFs 的 `FRESULT`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果。
+该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和 4 KiB DMA 中转区挤占任务栈。它通过 `BSP_SD_*` Override Seam 让 FatFs DiskIO 间接使用 Platform SD；DMA 完成事件使用 Storage Task 的索引 `1` 等待，Cache 一致性由 SD Adapter 调用 Cortex-M7 Cache Adapter 维护。它返回 FatFs 的 `FRESULT`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果。
 
 相关术语：**存储任务**、**平台 SD**、**SD 卡设备**。
 

@@ -18,9 +18,9 @@
 
 #include <stddef.h>
 
-#include "Adapters/irq/stm32_gpio_exti_irq.h"
-#include "Adapters/irq/stm32_sdmmc_irq.h"
-#include "Adapters/sd/sd_stm32_hal_adapter.h"
+#include "Adapters/stm32_hal/irq/stm32_gpio_exti_irq.h"
+#include "Adapters/stm32_hal/irq/stm32_sdmmc_irq.h"
+#include "Adapters/stm32_hal/sd/sd_stm32_hal_adapter.h"
 #include "Components/sd/sd.h"
 #include "main.h"
 #include "sdmmc.h"

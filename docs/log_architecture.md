@@ -17,7 +17,7 @@ Service/log + Log Task
        -> LogService_Consume -> LOG_Printf / LOG_Process
 Components/log
        -> LOG_OutputOpsTypeDef
-Adapters/log_usb_cdc
+Adapters/stm32_hal/log_usb_cdc
        -> CDC_Transmit_FS / CDC_IsReady_FS / HAL_GetTick
 Platform/log
        -> 持有 Adapter 实例并完成 Bind + LOG_Init
@@ -30,7 +30,7 @@ Platform/log
 | `Components/log/log_internal.h` | 私有 Handle、消息槽位和队列结构。 |
 | `Components/log/log_config.h` | 日志等级、消息长度和队列深度。 |
 | `Components/log/log.c` | 格式化、过滤、RAM 队列和消费调度。 |
-| `Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.*` | USB 就绪判断、异步缓冲、ANSI 颜色和 HAL 时间源。 |
+| `Adapters/stm32_hal/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.*` | USB 就绪判断、异步缓冲、ANSI 颜色和 HAL 时间源。 |
 | `Platform/log/platform_log.*` | 持有具体 Adapter，并调用 Bind 和 `LOG_Init()`。 |
 | `Service/log/log_service.*` | FreeRTOS 静态消息块池、free/ready queue，以及任务间日志投递 Interface。 |
 | `APP/tasks/log/log_task.*` | 唯一调用 `LogService_Consume()` 的 Log Task。 |
@@ -193,7 +193,7 @@ Adapter 在 `TxBuffer` 中拼接颜色前缀和复位序列，不修改日志核
 
 以 UART 为例：
 
-1. 新建 `Adapters/log_uart/`；
+1. 新建 `Adapters/stm32_hal/log_uart/`；
 2. 实现 `LOG_OutputOpsTypeDef::TryWrite`；
 3. 定义 UART Context 和持久发送缓冲；
 4. 在 Adapter Bind 中生成 `LOG_OutputTypeDef`；
@@ -208,7 +208,7 @@ Adapter 在 `TxBuffer` 中拼接颜色前缀和复位序列，不修改日志核
 - [`../Components/log/log.h`](../Components/log/log.h)
 - [`../Components/log/log_adapter.h`](../Components/log/log_adapter.h)
 - [`../Components/log/log.c`](../Components/log/log.c)
-- [`../Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.c`](../Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.c)
+- [`../Adapters/stm32_hal/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.c`](../Adapters/stm32_hal/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.c)
 - [`../Platform/log/platform_log.c`](../Platform/log/platform_log.c)
 - [`../Service/log/log_service.h`](../Service/log/log_service.h)
 - [`../Service/log/log_service.c`](../Service/log/log_service.c)

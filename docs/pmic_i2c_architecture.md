@@ -46,12 +46,14 @@ Components/
     axp2101_regs.h
 
 Adapters/
-  soft_i2c/
-    soft_i2c_stm32_hal_adapter.c
-    soft_i2c_stm32_hal_adapter.h
-  axp2101_soft_i2c/
-    axp2101_soft_i2c_adapter.c
-    axp2101_soft_i2c_adapter.h
+  bridge/
+    axp2101_soft_i2c/
+      axp2101_soft_i2c_adapter.c
+      axp2101_soft_i2c_adapter.h
+  stm32_hal/
+    soft_i2c/
+      soft_i2c_stm32_hal_adapter.c
+      soft_i2c_stm32_hal_adapter.h
 
 Platform/
   power/
@@ -69,6 +71,8 @@ Platform/
 
 `axp2101_regs.h` 属于芯片驱动，不能放在 Adapter。Adapter 替换后，芯片寄存器定义
 仍然有效；这正是判断所有权的简单方法。
+
+AXP2101 SoftI2C Adapter 位于 `Adapters/bridge/`：它只连接两个 Component Interface，不依赖 STM32 HAL、CMSIS 或 FreeRTOS。STM32 GPIO Adapter 位于 `Adapters/stm32_hal/`：它才是具体 MCU 后端实现。目录按这种依赖性质分组，而不是按调用链顺序分组。
 
 ## 3. 上电调用链
 
@@ -243,7 +247,7 @@ AXP2101_SetALDO2Enabled(&device, true);
 
 ## 9. 切换为硬件 I2C
 
-新增 `Adapters/axp2101_hal_i2c/axp2101_hal_i2c_adapter.c/.h`，实现同一组 Bus Ops：
+新增 `Adapters/stm32_hal/axp2101_i2c/axp2101_stm32_hal_i2c_adapter.c/.h`，实现同一组 Bus Ops：
 
 1. Context 使用 `I2C_HandleTypeDef *`；
 2. `Prepare` 检查 HAL I2C Handle 是否可用；
@@ -304,7 +308,7 @@ Middlewares/Third_Party/FreeRTOS/Config/*.c
 
 ```c
 #include "Components/axp2101/axp2101.h"
-#include "Adapters/axp2101_soft_i2c/axp2101_soft_i2c_adapter.h"
+#include "Adapters/bridge/axp2101_soft_i2c/axp2101_soft_i2c_adapter.h"
 #include "Platform/power/platform_power.h"
 ```
 
@@ -334,6 +338,6 @@ Power_GetBatteryStatus(...)
 - AXP2101 驱动：[`../Components/axp2101/axp2101.c`](../Components/axp2101/axp2101.c)
 - AXP2101 接口：[`../Components/axp2101/axp2101.h`](../Components/axp2101/axp2101.h)
 - 寄存器定义：[`../Components/axp2101/axp2101_regs.h`](../Components/axp2101/axp2101_regs.h)
-- SoftI2C Adapter：[`../Adapters/axp2101_soft_i2c/axp2101_soft_i2c_adapter.c`](../Adapters/axp2101_soft_i2c/axp2101_soft_i2c_adapter.c)
+- SoftI2C 到 AXP2101 Bridge：[`../Adapters/bridge/axp2101_soft_i2c/axp2101_soft_i2c_adapter.c`](../Adapters/bridge/axp2101_soft_i2c/axp2101_soft_i2c_adapter.c)
 - SoftI2C Component：[`../Components/soft_i2c/soft_i2c.c`](../Components/soft_i2c/soft_i2c.c)
-- STM32 GPIO Adapter：[`../Adapters/soft_i2c/soft_i2c_stm32_hal_adapter.c`](../Adapters/soft_i2c/soft_i2c_stm32_hal_adapter.c)
+- STM32 GPIO Adapter：[`../Adapters/stm32_hal/soft_i2c/soft_i2c_stm32_hal_adapter.c`](../Adapters/stm32_hal/soft_i2c/soft_i2c_stm32_hal_adapter.c)

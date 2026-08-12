@@ -8,8 +8,17 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#include "Adapters/cortex/cache/cortex_m7_dcache_adapter.h"
+
 /**
-  * @brief Platform 层函数使用的统一状态码。
+ * @brief 当前 STM32H743 产品目标的 DMA 缓冲区最低对齐要求，单位为字节。
+ * @note  该值由 Cortex-M7 D-Cache Adapter 的 Cache line 大小导出。所有需要由
+ *        CPU 与 DMA 共享的数据缓冲区都应满足此要求，避免 Cache 维护影响相邻数据。
+ */
+#define PLATFORM_DMA_BUFFER_ALIGNMENT  CORTEX_M7_DCACHE_LINE_SIZE
+
+/**
+ * @brief Platform 层函数使用的统一状态码。
   * @note  具体设备的持续状态和详细错误由各 Platform Module 单独提供。
   */
 typedef enum

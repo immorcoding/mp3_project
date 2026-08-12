@@ -7,7 +7,7 @@
 
 #include "Platform/log/platform_log.h"
 
-#include "Adapters/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.h"
+#include "Adapters/stm32_hal/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.h"
 #include "Components/log/log_adapter.h"
 
 /**

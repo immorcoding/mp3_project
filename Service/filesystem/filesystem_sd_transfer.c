@@ -4,9 +4,10 @@
   * @brief   在异步 SDMMC DMA 之上执行同步 FatFs 块读写。
   *
   * @details
-  *          本 Module 由 Filesystem Service 持有，只能在 Storage Task 中进入。
-  *          它把 Storage Task 句柄、索引通知、DMA 可访问的 bounce buffer、Cortex-M7
-  *          D-Cache 维护、分块和 Platform SD 状态提交隐藏在同步块读写 Interface 后。
+ *          本 Module 由 Filesystem Service 持有，只能在 Storage Task 中进入。
+ *          它把 Storage Task 句柄、索引通知、DMA 可访问的 bounce buffer、分块和
+ *          Platform SD 状态提交隐藏在同步块读写 Interface 后。Cortex-M7 D-Cache
+ *          维护属于 SD STM32 HAL Adapter 的后端 Implementation。
   ******************************************************************************
   */
 
@@ -18,21 +19,25 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 #include "Platform/sd/platform_sd.h"
-#include "stm32h7xx_hal.h"
 
+/** @brief FATFS 与当前 SD Card Device 使用的单个逻辑块大小，单位为字节。 */
 #define FILESYSTEM_SD_BLOCK_SIZE             512U
-#define FILESYSTEM_SD_DMA_BLOCK_COUNT        8U
-#define FILESYSTEM_SD_DMA_CACHE_LINE_SIZE    32U
 
-#if ((FILESYSTEM_SD_BLOCK_SIZE % FILESYSTEM_SD_DMA_CACHE_LINE_SIZE) != 0U)
-#error "SD logical block size must cover an integral number of D-Cache lines."
+/** @brief 单次 SDMMC DMA 最多合并的逻辑块数；8 块即 4 KiB 中转缓冲区。 */
+#define FILESYSTEM_SD_DMA_BLOCK_COUNT        8U
+
+/** @brief 当前产品所有 CPU/DMA 共享缓冲区必须满足的最小对齐，单位为字节。 */
+#define FILESYSTEM_SD_DMA_BUFFER_ALIGNMENT   PLATFORM_DMA_BUFFER_ALIGNMENT
+
+#if ((FILESYSTEM_SD_BLOCK_SIZE % FILESYSTEM_SD_DMA_BUFFER_ALIGNMENT) != 0U)
+#error "SD logical block size must satisfy the SD DMA buffer alignment contract."
 #endif
 
 static TaskHandle_t filesystem_sd_transfer_owner_task;
 
 static uint8_t filesystem_sd_dma_buffer[
     FILESYSTEM_SD_BLOCK_SIZE * FILESYSTEM_SD_DMA_BLOCK_COUNT]
-    __attribute__((aligned(FILESYSTEM_SD_DMA_CACHE_LINE_SIZE), section(".sd_dma_buffer")));
+    __attribute__((aligned(FILESYSTEM_SD_DMA_BUFFER_ALIGNMENT), section(".sd_dma_buffer")));
 
 /**
   * @brief  向 Storage Task 发布一个 SDMMC 传输事件。
@@ -59,46 +64,6 @@ static void filesystem_sd_transfer_irq_callback(
                                     eSetValueWithOverwrite,
                                     &higher_priority_task_woken);
     portYIELD_FROM_ISR(higher_priority_task_woken);
-}
-
-/**
-  * @brief  在卡到 RAM 的读取前 Clean 并 Invalidate DMA 目标区。
-  * @param  byte_count 下一次 DMA 操作覆盖的字节数。
-  * @details
-  *          Clean 先将旧的脏 Cache line 写回 AXI SRAM；若跳过这一步，后续 Cache
-  *          替换可能把旧数据写回 RAM，覆盖 SDMMC IDMA 已写入的字节。Invalidate
-  *          则防止 CPU 在 DMA 进行期间仍保留旧的缓存副本。
-  */
-static void filesystem_sd_transfer_prepare_read(uint32_t byte_count)
-{
-    SCB_CleanInvalidateDCache_by_Addr((uint32_t *)filesystem_sd_dma_buffer,
-                                      (int32_t)byte_count);
-    __DSB();
-}
-
-/**
-  * @brief  CPU 复制写数据后 Clean DMA 源区。
-  * @param  byte_count 下一次 DMA 操作读取的字节数。
-  * @details
-  *          SDMMC IDMA 读取 AXI SRAM 而不是 CPU D-Cache。Clean 使 CPU 写入的
-  *          bounce buffer 内容在传输启动前对 DMA 引擎可见。
-  */
-static void filesystem_sd_transfer_prepare_write(uint32_t byte_count)
-{
-    SCB_CleanDCache_by_Addr((uint32_t *)filesystem_sd_dma_buffer, (int32_t)byte_count);
-    __DSB();
-}
-
-/**
-  * @brief  卡到 RAM 的读取成功后 Invalidate DMA 目标区。
-  * @param  byte_count 已完成 DMA 操作写入的字节数。
-  * @note   本函数只能在收到匹配完成事件后调用；Invalidate 本身不会等待 DMA 完成。
-  */
-static void filesystem_sd_transfer_finish_read(uint32_t byte_count)
-{
-    SCB_InvalidateDCache_by_Addr((uint32_t *)filesystem_sd_dma_buffer,
-                                 (int32_t)byte_count);
-    __DSB();
 }
 
 /**
@@ -248,7 +213,6 @@ bool filesystem_sd_transfer_read_blocks(uint8_t *destination,
             return false;
         }
 
-        filesystem_sd_transfer_prepare_read(byte_count);
         if (Platform_SD_StartReadBlocks(filesystem_sd_dma_buffer,
                                         current_block,
                                         chunk_blocks) != PLATFORM_OK)
@@ -262,7 +226,6 @@ bool filesystem_sd_transfer_read_blocks(uint8_t *destination,
             return false;
         }
 
-        filesystem_sd_transfer_finish_read(byte_count);
         (void)memcpy(destination, filesystem_sd_dma_buffer, byte_count);
         destination += byte_count;
         current_block += chunk_blocks;
@@ -311,7 +274,6 @@ bool filesystem_sd_transfer_write_blocks(const uint8_t *source,
             return false;
         }
 
-        filesystem_sd_transfer_prepare_write(byte_count);
         if (Platform_SD_StartWriteBlocks(filesystem_sd_dma_buffer,
                                          current_block,
                                          chunk_blocks) != PLATFORM_OK)

@@ -8,7 +8,7 @@
 
 - AXP2101 电源管理；
 - PCM5102A I2S 音频输出；
-- SDMMC SD 卡访问、热插拔与 Storage Task 内的同步 DMA FatFs Bridge；
+- SDMMC SD 卡访问、热插拔，以及由 Filesystem Service 持有、在 Storage Task 上下文执行的同步 DMA FatFs Bridge；
 - USB CDC 日志；
 - FreeRTOS；
 - FatFs 文件系统的挂载、卸载和显式格式化；
@@ -58,4 +58,4 @@ APP
 
 ### Domain docs
 
-项目领域上下文以根目录 `CONTEXT.md` 为唯一入口；架构决策记录放在 `docs/adr/`。具体读取规则见 `docs/agents/domain.md`。
+项目领域上下文以根目录 `CONTEXT.md` 为唯一入口；如需记录非显然、会长期约束后续重构的架构决策，则在 `docs/adr/` 新建 ADR。具体读取规则见 `docs/agents/domain.md`。

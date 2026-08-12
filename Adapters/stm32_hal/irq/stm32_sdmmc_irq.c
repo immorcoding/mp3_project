@@ -10,7 +10,7 @@
   ******************************************************************************
   */
 
-#include "Adapters/irq/stm32_sdmmc_irq.h"
+#include "Adapters/stm32_hal/irq/stm32_sdmmc_irq.h"
 
 #include <stdbool.h>
 #include <stddef.h>

@@ -5,7 +5,7 @@
   ******************************************************************************
   */
 
-#include "Adapters/soft_i2c/soft_i2c_stm32_hal_adapter.h"
+#include "Adapters/stm32_hal/soft_i2c/soft_i2c_stm32_hal_adapter.h"
 
 #include <stddef.h>
 

@@ -14,8 +14,8 @@
 
 #include <stddef.h>
 
-#include "Adapters/axp2101_soft_i2c/axp2101_soft_i2c_adapter.h"
-#include "Adapters/soft_i2c/soft_i2c_stm32_hal_adapter.h"
+#include "Adapters/bridge/axp2101_soft_i2c/axp2101_soft_i2c_adapter.h"
+#include "Adapters/stm32_hal/soft_i2c/soft_i2c_stm32_hal_adapter.h"
 #include "Components/axp2101/axp2101.h"
 #include "main.h"
 

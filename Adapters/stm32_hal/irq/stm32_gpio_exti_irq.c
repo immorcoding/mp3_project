@@ -14,7 +14,7 @@
   ******************************************************************************
   */
 
-#include "Adapters/irq/stm32_gpio_exti_irq.h"
+#include "Adapters/stm32_hal/irq/stm32_gpio_exti_irq.h"
 
 #include <stddef.h>
 

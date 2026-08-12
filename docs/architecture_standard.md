@@ -22,13 +22,27 @@ Service
 APP
 ```
 
-图中箭头表示运行时调用方向。编译期为了实现依赖倒置，接口所有权更准确地表示为：
+图中箭头表示功能抽象和职责所有权从底层向上提升，不表示 C 头文件依赖或一次普通请求的调用方向。普通请求通常由上向下进入硬件：
+
+```text
+APP -> Service -> Platform -> Components -> Adapters -> Vendor / HAL
+```
+
+硬件事件则由底层向已注册的上层回调发布，例如：
+
+```text
+Vendor IRQ -> Adapter -> Platform 持有的转发回调 -> Service 持有的回调 -> Task
+```
+
+编译期为了实现依赖倒置，Interface 所有权更准确地表示为：
 
 ```text
 Component 定义 Ops Interface
         ↑                 ↑
 Adapter 实现 Interface    Platform 绑定 Ops + Context
 ```
+
+因此 Adapter `.c` 包含 Component 头文件以实现其 Interface 是正常的；Platform `.c` 包含 Adapter 头文件以完成装配也是正常的。禁止的是 Component 反向包含 Adapter 头文件，或低层模块包含 `Service` / `APP` 头文件并主动调用产品业务。
 
 核心原则：
 
@@ -47,7 +61,8 @@ APP/                         产品入口、顶层启动和任务入口
 Service/                     产品级流程 Module
 Platform/                    本板实例装配和产品可见硬件能力
 Components/                  可复用、与具体 MCU 无关的组件
-Adapters/                    HAL、USB 和具体硬件实现
+Adapters/                    STM32 HAL、Cortex-M 与跨 Component Bridge 的具体实现
+FATFS/                       CubeMX 生成的 FatFs 卷对象与 DiskIO Glue
 Core/                        CubeMX 生成的 MCU 初始化代码
 Drivers/                     ST HAL/CMSIS 等 Vendor 代码
 Middlewares/                 ST/第三方中间件及其项目级配置接缝
@@ -124,13 +139,16 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 
 | 目录 | 职责 |
 | --- | --- |
-| `Adapters/axp2101_soft_i2c` | SoftI2C API 到 AXP2101 Bus Ops。 |
-| `Adapters/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
-| `Adapters/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops。 |
-| `Adapters/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
-| `Adapters/irq/stm32_gpio_exti_irq` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
-| `Adapters/irq/stm32_sdmmc_irq` | 按 `SD_HandleTypeDef` 注册 HAL SD 完成、错误和中止回调，并发布强类型传输事件。 |
-| `Adapters/log_usb_cdc` | USB CDC 非阻塞输出和 HAL 毫秒时间源。 |
+| `Adapters/bridge/axp2101_soft_i2c` | SoftI2C Component 到 AXP2101 Bus Ops 的跨 Component Bridge。 |
+| `Adapters/cortex/cache` | Cortex-M7 DMA 缓冲区的 D-Cache 一致性维护。 |
+| `Adapters/stm32_hal/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
+| `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |
+| `Adapters/stm32_hal/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
+| `Adapters/stm32_hal/irq/stm32_gpio_exti_irq` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
+| `Adapters/stm32_hal/irq/stm32_sdmmc_irq` | 按 `SD_HandleTypeDef` 注册 HAL SD 完成、错误和中止回调，并发布强类型传输事件。 |
+| `Adapters/stm32_hal/log_usb_cdc` | USB CDC 非阻塞输出和 HAL 毫秒时间源。 |
+
+`bridge/` 只转换两个 Component Interface，不引入具体 MCU 依赖；`cortex/` 只封装 Cortex-M 架构能力，不持有外设或任务状态；`stm32_hal/` 则集中所有必须认识 STM32 HAL、CubeMX Handle 或 HAL 全局回调的实现。
 
 FreeRTOS 内核源码、项目配置与 Hook 的边界为：
 
@@ -300,7 +318,7 @@ Platform_Power_Init
 Components/log
   格式化、等级过滤、RAM 队列、非阻塞消费
 
-Adapters/log_usb_cdc
+Adapters/stm32_hal/log_usb_cdc
   CDC 就绪判断、异步 TxBuffer、ANSI 颜色、HAL tick
 
 Platform/log
@@ -358,13 +376,14 @@ SDMMC DMA 的当前路径为：
 SDMMC1_IRQHandler()
   -> HAL_SD_IRQHandler(&hsd1)
   -> STM32 SDMMC IRQ Adapter（按 Handle 匹配）
-  -> Platform SD 注入的传输 callback
+  -> Platform SD 私有转发
+  -> Filesystem Service 注册的传输 callback
   -> Storage Task 的通知索引 1
   -> FatFs 同步桥接等待返回后调用 Platform_SD_CompleteTransfer()
 ```
 
 卡检测边沿保留通知索引 0，DMA 完成使用索引 1；两类事件的含义、消抖规则和等待方式不同，
-不得共用同一个无类型通知。`Adapters/irq` 只集中 HAL 全局回调的唯一所有权，GPIO EXTI 和
+不得共用同一个无类型通知。`Adapters/stm32_hal/irq` 只集中 HAL 全局回调的唯一所有权，GPIO EXTI 和
 SDMMC 仍保留各自的强类型 Interface，不能收敛为 `IRQ_ID + void *` 的通用分发器。
 
 ISR 禁止：
@@ -415,11 +434,13 @@ USB_DEVICE/App/*.c
 USB_DEVICE/Target/*.c
 ```
 
+`FATFS/App/fatfs.c` 与 `FATFS/Target/*.c` 由 `cmake/stm32cubemx/CMakeLists.txt` 显式加入；其中生成的 DiskIO Glue 通过 `BSP_SD_*` Override Seam 调用 `Service/filesystem` 的强定义，不将 DMA 等待或任务通知写回生成目录。
+
 工程根目录是项目自维护代码的统一 include 根，因此使用：
 
 ```c
 #include "Components/axp2101/axp2101.h"
-#include "Adapters/axp2101_soft_i2c/axp2101_soft_i2c_adapter.h"
+#include "Adapters/bridge/axp2101_soft_i2c/axp2101_soft_i2c_adapter.h"
 #include "Platform/power/platform_power.h"
 ```
 

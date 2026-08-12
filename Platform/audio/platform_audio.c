@@ -7,7 +7,7 @@
 
 #include "Platform/platform.h"
 #include "Components/audio/audio.h"
-#include "Adapters/audio_i2s/audio_i2s_stm32_hal_adapter.h"
+#include "Adapters/stm32_hal/audio_i2s/audio_i2s_stm32_hal_adapter.h"
 #include "Components/log/log.h"
 #include "i2s.h"
 #include "main.h"

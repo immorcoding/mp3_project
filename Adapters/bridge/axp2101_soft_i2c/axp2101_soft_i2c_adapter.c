@@ -9,7 +9,7 @@
   ******************************************************************************
   */
 
-#include "Adapters/axp2101_soft_i2c/axp2101_soft_i2c_adapter.h"
+#include "Adapters/bridge/axp2101_soft_i2c/axp2101_soft_i2c_adapter.h"
 #include <stddef.h>
 
 /**

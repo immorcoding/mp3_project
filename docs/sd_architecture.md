@@ -16,7 +16,7 @@
 - 一个可复用、面向逻辑块的 SD Card Device；
 - 一个绑定 STM32H743 SDMMC1 的具体 Port；
 - 一个代表本板唯一物理卡槽的 Platform 接口；
-- `Adapters/irq` 下两个源特定的 STM32 IRQ Adapter：GPIO EXTI 的 PinMask 回调分发，以及 SDMMC 的传输完成/错误分发；
+- `Adapters/stm32_hal/irq` 下两个源特定的 STM32 IRQ Adapter：GPIO EXTI 的 PinMask 回调分发，以及 SDMMC 的传输完成/错误分发；
 - 一个独占 SD 初始化、消抖、FatFs 卷生命周期和介质事件日志的 Storage Task；
 - 一个封装 FatFs 逻辑卷操作、同步 DMA 执行器和 Cube BSP Override Adapter 的 Filesystem Module。
 
@@ -32,11 +32,14 @@ Components/sd/
   sd.h                          可复用 Device 公共类型和接口
   sd.c                          状态机、参数校验、块访问和错误处理
 
-Adapters/sd/
-  sd_stm32_hal_adapter.h        STM32 HAL SDMMC Adapter 绑定接口
-  sd_stm32_hal_adapter.c        STM32 HAL SD/GPIO 调用和状态转换
+Adapters/cortex/cache/
+  cortex_m7_dcache_adapter.h/.c Cortex-M7 DMA 缓冲区的 D-Cache 一致性维护
 
-Adapters/irq/
+Adapters/stm32_hal/sd/
+  sd_stm32_hal_adapter.h        STM32 HAL SDMMC Adapter 绑定接口
+  sd_stm32_hal_adapter.c        STM32 HAL SD/GPIO、DMA 启动和 Cache Adapter 调用
+
+Adapters/stm32_hal/irq/
   stm32_gpio_exti_irq.h/.c     GPIO EXTI 回调节点、注册接口和 PinMask 链表分发
   stm32_sdmmc_irq.h/.c         SDMMC Handle 回调节点、HAL 回调注册和传输事件分发
 
@@ -49,10 +52,15 @@ APP/tasks/storage/
   storage_sd.h/.c               Platform SD 生命周期、FatFs 卷管理和介质日志
 
 Service/filesystem/
-  filesystem_service.c          FatFs 路径转换、挂载、卸载和格式化 Service 入口
+  filesystem_service.h/.c       FatFs 路径转换、挂载、卸载和格式化 Service Interface
+  filesystem_sd_transfer.h/.c   Storage Task 独占的同步 DMA 执行器与中转缓冲区
+  filesystem_fatfs_bsp.c        BSP_SD_* 强定义，连接 Cube DiskIO Override Seam
 
 FATFS/App/
-  fatfs.c                       CubeMX Driver Link 与 BSP_SD_* 到 Platform SD 的桥接
+  fatfs.c                       CubeMX 逻辑卷对象与 Driver Link
+
+FATFS/Target/
+  sd_diskio.c                   Cube DiskIO Glue；经 BSP_SD_* Override Seam 到达 Filesystem
 
 Core/Inc/sdmmc.h
 Core/Src/sdmmc.c                CubeMX 管理的 hsd1 和 HAL MSP 初始化/反初始化
@@ -77,28 +85,29 @@ app_init()
 
 Storage Task
   -> storage_task()
-     -> xTaskGetCurrentTaskHandle()
-     -> storage_sd_init(task_handle)
-        -> Platform_SD_Init(storage_sd_detect_callback, task_handle)
-        -> SDCard_STM32HALAdapter_Bind(&Device, &Adapter)
-        -> GPIOEXTI_STM32HALAdapter_Register(
-               &DetectIRQCallback,
-               SD_CD_Pin,
-               platform_sd_detect_irq_cb,
-               &hplatform_sd)
-        -> SDCard_Init(&Device)
-        -> Filesystem_Init()
-           -> filesystem_sd_transfer_init()
-           -> Platform_SD_SetTransferCallback(
-                  filesystem_sd_transfer_irq_callback, ...)
-           -> STM32SDMMCIRQ_Register(&TransferIRQCallback, &hsd1, ...)
-           -> Port.IsPresent(PC7)
-           -> Port.Init(&hsd1)
-              -> HAL_SD_Init(&hsd1)
-                 -> CubeMX 生成的 HAL_SD_MspInit()
-           -> Port.GetInfo(&hsd1)
-           -> 缓存归一化逻辑块信息
-           -> State = READY
+      -> xTaskGetCurrentTaskHandle()
+      -> storage_sd_init(task_handle)
+         -> Platform_SD_Init(storage_sd_detect_callback, task_handle)
+            -> SDCard_STM32HALAdapter_Bind(&Device, &Adapter)
+            -> GPIOEXTI_STM32HALAdapter_Register(
+                   &DetectIRQCallback,
+                   SD_CD_Pin,
+                   platform_sd_detect_irq_cb,
+                   &hplatform_sd)
+            -> SDCard_Init(&Device)
+               -> Port.IsPresent(PC7)
+               -> Port.Init(&hsd1)
+                  -> HAL_SD_Init(&hsd1)
+                     -> CubeMX 生成的 HAL_SD_MspInit()
+               -> Port.GetInfo(&hsd1)
+                  -> 缓存归一化逻辑块信息
+               -> State = READY
+          -> Filesystem_Init()
+             -> filesystem_sd_transfer_init()
+            -> Platform_SD_SetTransferCallback(
+                   filesystem_sd_transfer_irq_callback, ...)
+            -> Platform 私有地 STM32SDMMCIRQ_Register(
+                   &TransferIRQCallback, &hsd1, ...)
 ```
 
 初始化成功后，Storage Task 通过 `Platform_SD_GetInfo()` 取得副本并记录容量日志，不直接接触私有 Device 句柄或 `hsd1`。
@@ -128,12 +137,12 @@ FatFs disk_read / disk_write
   -> Service/filesystem/filesystem_fatfs_bsp.c 的 BSP_SD_ReadBlocks / BSP_SD_WriteBlocks
   -> Service/filesystem/filesystem_sd_transfer.c
   -> 复制到 4 KiB、32 字节对齐的 AXI SRAM 中转缓冲区
-  -> 按方向 Clean 或 Clean+Invalidate D-Cache
+  -> STM32 HAL SD Adapter 按方向委托 Cortex-M7 Cache Adapter 执行 Clean 或 Clean+Invalidate
   -> Platform_SD_StartReadBlocks / Platform_SD_StartWriteBlocks
   -> SDCard_Start*()：State = BUSY，只启动 HAL_SD_*Blocks_DMA()
   -> Storage Task 在通知索引 1 阻塞等待 SDMMC IRQ
   -> Platform_SD_CompleteTransfer()：检查卡状态并使 Device 回到 READY 或 ERROR
-  -> 读取方向 Invalidate 缓冲区，再 memcpy 到 FatFs 原始缓冲区
+  -> 读取方向由 SD Adapter 委托 Cache Adapter Invalidate 缓冲区，再 memcpy 到 FatFs 原始缓冲区
 ```
 
 写入的数据阶段完成后，SD 卡内部仍可能处于编程状态，因此 `CompleteTransfer()` 的同步尤其重要：只有卡回到 `TRANSFER` 才能安全接受下一条命令。
@@ -196,7 +205,7 @@ SDMMC1_IRQHandler()
   -> HAL_SD_IRQHandler(&hsd1)
   -> HAL 按 hsd1 注册的 Rx / Tx / Error / Abort callback
   -> STM32SDMMCIRQAdapter（按 SD_HandleTypeDef 匹配）
-  -> Platform SD 的传输 callback
+  -> Platform SD 私有转发 callback
   -> filesystem_sd_transfer_irq_callback()
      -> xTaskNotifyIndexedFromISR(index = 1, event, eSetValueWithOverwrite)
 
