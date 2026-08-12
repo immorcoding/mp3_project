@@ -11,6 +11,7 @@
   */
 
 #include "APP/tasks/storage/storage_sd.h"
+#include "APP/tasks/storage/storage_sd_benchmark.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -99,17 +100,18 @@ static FRESULT storage_sd_prepare_filesystem(void)
 
 /**
   * @brief  挂载当前已经由 Platform SD 初始化完成的 FAT 卷。
-  * @note   未格式化或文件系统类型不受支持的卡会返回 FR_NO_FILESYSTEM，这不表示
-  *         SDMMC 通信链路失败。
-  */
-static void storage_sd_mount(void)
+ * @retval FR_OK 当前卷已挂载。
+ * @retval 其他值 挂载失败；未格式化或文件系统类型不受支持的卡通常返回
+ *         FR_NO_FILESYSTEM，这不表示 SDMMC 通信链路失败。
+ */
+static FRESULT storage_sd_mount(void)
 {
     FRESULT result;
 
     result = storage_sd_prepare_filesystem();
     if (result != FR_OK)
     {
-        return;
+        return result;
     }
 
     result = Filesystem_MountSD();
@@ -129,6 +131,8 @@ static void storage_sd_mount(void)
                                STORAGE_SD_LOG_TAG,
                                "Filesystem mount failed.");
     }
+
+    return result;
 }
 
 /**
@@ -219,7 +223,10 @@ void storage_sd_init(TaskHandle_t task_handle)
     else if (state == PLATFORM_SD_STATE_READY)
     {
         storage_sd_log_card_ready("Card ready");
-        storage_sd_mount();
+        if (storage_sd_mount() == FR_OK)
+        {
+            (void)storage_sd_benchmark_run();
+        }
     }
     else
     {
@@ -247,7 +254,7 @@ void storage_sd_process(void)
     if (event == PLATFORM_SD_EVENT_INSERTED)
     {
         storage_sd_log_card_ready("Card inserted");
-        storage_sd_mount();
+        (void)storage_sd_mount();
     }
     else if (event == PLATFORM_SD_EVENT_REMOVED)
     {
@@ -299,5 +306,5 @@ void storage_sd_format_and_mount(void)
     }
 
     (void)LogService_Post(LOG_LEVEL_INFO, STORAGE_SD_LOG_TAG, "Filesystem formatted.");
-    storage_sd_mount();
+    (void)storage_sd_mount();
 }
