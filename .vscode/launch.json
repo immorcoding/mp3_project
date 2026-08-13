@@ -9,7 +9,7 @@
             "runEntry": "main",
             "imagesAndSymbols": [
                 {
-                    "imageFileName": "${workspaceFolder}/build/Release/mp3_project.elf"
+                    "imageFileName": "${workspaceFolder}/build/Debug/mp3_project.elf"
                 }
             ],
             "verbose": false
