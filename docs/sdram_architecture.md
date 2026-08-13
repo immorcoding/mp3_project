@@ -32,6 +32,10 @@ FMC/HAL 细节仍属于 Platform。顺序为：
 写入测速包含 Clean，因此统计的是 CPU 数据提交到外部 SDRAM 的时间；读取前失效 D-Cache，防止
 Cache 命中被错误当成 SDRAM 带宽。DWT 运行在 480 MHz Cortex-M7 核心时钟，而不是 120 MHz SDRAM 时钟。
 
+上述 D-Cache 操作统一通过 `Adapters/cortex/cache` 的通用维护 Interface 执行。Platform SDRAM
+不直接调用 CMSIS 的 `SCB_*DCache_by_Addr()`；DMA Adapter 与 SDRAM 诊断只是在不同资源语义下复用
+同一份 Clean、Invalidate 和 Clean + Invalidate Implementation。
+
 该诊断会覆写完整 SDRAM，必须在任何外部堆、LVGL 帧缓冲、音频缓存或 DMA 缓冲使用前完成。启用开关
 位于 `APP/tasks/storage/storage_sdram_diagnostic_config.h`；后续把业务对象放进 SDRAM 前，应默认关闭。
 

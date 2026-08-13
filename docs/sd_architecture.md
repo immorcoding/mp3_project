@@ -35,7 +35,7 @@ Components/sd/
   sd.c                          状态机、参数校验、块访问和错误处理
 
 Adapters/cortex/cache/
-  cortex_m7_dcache_adapter.h/.c Cortex-M7 DMA 缓冲区的 D-Cache 一致性维护
+  cortex_m7_dcache_adapter.h/.c Cortex-M7 Cacheable 内存范围的 D-Cache 维护
 
 Adapters/stm32_hal/sd/
   sd_stm32_hal_adapter.h        STM32 HAL SDMMC Adapter 绑定接口

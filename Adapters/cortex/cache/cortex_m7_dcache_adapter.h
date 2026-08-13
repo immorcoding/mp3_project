@@ -1,12 +1,12 @@
 /**
   ******************************************************************************
   * @file    cortex_m7_dcache_adapter.h
-  * @brief   Cortex-M7 D-Cache 与 DMA 缓冲区一致性的公共 Adapter Interface。
+ * @brief   Cortex-M7 D-Cache 按范围维护的公共 Adapter Interface。
   *
   * @details
-  *          本 Module 只维护调用者给定内存范围的 D-Cache 一致性，不持有 DMA、
-  *          外设 Handle、传输状态或缓冲区所有权。SDMMC、SPI、I2S 等具体 Adapter
-  *          负责在合适的传输开始/结束时机调用本 Interface。
+ *          本 Module 只维护调用者给定内存范围的 D-Cache，不持有 DMA、外设 Handle、
+ *          传输状态或缓冲区所有权。DMA Adapter、SDRAM 诊断等调用者按自身时机选择
+ *          Clean、Invalidate 或 Clean + Invalidate。
   ******************************************************************************
   */
 
@@ -23,8 +23,9 @@
  */
 #define CORTEX_M7_DCACHE_LINE_SIZE  32U
 
-bool CortexM7DCache_PrepareDMARx(void *buffer, uint32_t byte_count);
-bool CortexM7DCache_CompleteDMARx(void *buffer, uint32_t byte_count);
-bool CortexM7DCache_PrepareDMATx(const void *buffer, uint32_t byte_count);
+bool CortexM7DCache_CleanRange(const void *buffer, uint32_t byte_count);
+bool CortexM7DCache_InvalidateRange(const void *buffer, uint32_t byte_count);
+bool CortexM7DCache_CleanInvalidateRange(const void *buffer,
+                                          uint32_t byte_count);
 
 #endif /* CORTEX_M7_DCACHE_ADAPTER_H */

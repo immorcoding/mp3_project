@@ -81,9 +81,9 @@
 
 ## Cortex-M7 Cache 适配器（Cortex-M7 Cache Adapter）
 
-**Cortex-M7 Cache 适配器**封装 DMA 缓冲区与 Cortex-M7 D-Cache 之间的一致性维护。它是无状态 Adapter：DMA 读开始前执行 Clean + Invalidate、读完成后执行 Invalidate、DMA 写开始前执行 Clean。
+**Cortex-M7 Cache 适配器**封装 Cacheable 内存范围的 Cortex-M7 D-Cache 维护。它是无状态 Adapter，提供 Clean、Invalidate 与 Clean + Invalidate 三项通用 Interface；DMA Adapter 按传输方向组合调用，Platform SDRAM 诊断也通过同一 Interface 强制提交或重新读取外部存储器。
 
-它不拥有外设 Handle、DMA 等待、FreeRTOS 通知或中转缓冲区。具体外设 Adapter 在普通任务上下文调用它；调用者仍需保证缓冲区可被 DMA 访问、首地址与长度按 32 字节 Cache line 对齐，并且传输期间 CPU 不并发读写该缓冲区。
+它不拥有外设 Handle、DMA 等待、FreeRTOS 通知或中转缓冲区。调用者在普通任务上下文使用它，并保证首地址与长度按 32 字节 Cache line 对齐、维护范围覆盖的 Cache line 均归自己所有；用于 DMA 时还需保证缓冲区可被 DMA 访问，且传输期间 CPU 不并发读写该缓冲区。
 
 相关术语：**SD 卡端口**、**文件系统 Module**。
 

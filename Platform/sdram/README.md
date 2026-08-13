@@ -12,7 +12,8 @@ FMC 控制器配置完成后执行 JEDEC 上电序列，并提供启动阶段的
 ## 编译期依赖
 
 - CubeMX `Core/Inc/fmc.h` 的 `hsdram1` 和 HAL SDRAM Command Interface；
-- CMSIS D-Cache、DWT 和 `SystemCoreClock`。
+- `Adapters/cortex/cache` 的 D-Cache 维护 Interface；
+- CMSIS DWT 和 `SystemCoreClock`。
 
 ## 运行时请求与事件路径
 

@@ -151,7 +151,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | 目录 | 职责 |
 | --- | --- |
 | `Adapters/bridge/axp2101_soft_i2c` | SoftI2C Component 到 AXP2101 Bus Ops 的跨 Component Bridge。 |
-| `Adapters/cortex/cache` | Cortex-M7 DMA 缓冲区的 D-Cache 一致性维护。 |
+| `Adapters/cortex/cache` | Cortex-M7 Cacheable 内存范围的 D-Cache 维护；DMA Adapter 和外部存储器诊断按需复用。 |
 | `Adapters/stm32_hal/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
 | `Adapters/stm32_hal/st7789_spi` | STM32 HAL SPI/GPIO 到 ST7789 PortOps。 |
 | `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |

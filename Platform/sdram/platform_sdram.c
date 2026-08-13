@@ -55,23 +55,21 @@ static void platform_sdram_commit_word(const volatile uint16_t *address)
     const uintptr_t cache_line_address =
         ((uintptr_t)address) & ~((uintptr_t)CORTEX_M7_DCACHE_LINE_SIZE - 1U);
 
-    SCB_CleanInvalidateDCache_by_Addr((uint32_t *)cache_line_address,
-                                      (int32_t)CORTEX_M7_DCACHE_LINE_SIZE);
-    __DSB();
-    __ISB();
+    (void)CortexM7DCache_CleanInvalidateRange(
+        (const void *)cache_line_address,
+        CORTEX_M7_DCACHE_LINE_SIZE);
 }
 
 /**
   * @brief  对整块 SDRAM 执行 D-Cache Clean，确保 CPU 写入真正到达外部存储器。
-  * @note   SDRAM 基地址和容量均为 32 字节整数倍，满足 CMSIS 按 Cache line
-  *         维护的范围约束。
+ * @note   SDRAM 基地址和容量均为 32 字节整数倍，满足 Cortex-M7 Cache Adapter
+ *         按完整 Cache line 维护范围的约束。
   */
 static void platform_sdram_clean_all(void)
 {
-    SCB_CleanDCache_by_Addr((uint32_t *)PLATFORM_SDRAM_BASE_ADDRESS,
-                            (int32_t)PLATFORM_SDRAM_CAPACITY_BYTES);
-    __DSB();
-    __ISB();
+    (void)CortexM7DCache_CleanRange(
+        (const void *)PLATFORM_SDRAM_BASE_ADDRESS,
+        PLATFORM_SDRAM_CAPACITY_BYTES);
 }
 
 /**
@@ -79,10 +77,9 @@ static void platform_sdram_clean_all(void)
   */
 static void platform_sdram_invalidate_all(void)
 {
-    SCB_InvalidateDCache_by_Addr((uint32_t *)PLATFORM_SDRAM_BASE_ADDRESS,
-                                 (int32_t)PLATFORM_SDRAM_CAPACITY_BYTES);
-    __DSB();
-    __ISB();
+    (void)CortexM7DCache_InvalidateRange(
+        (const void *)PLATFORM_SDRAM_BASE_ADDRESS,
+        PLATFORM_SDRAM_CAPACITY_BYTES);
 }
 
 /**
