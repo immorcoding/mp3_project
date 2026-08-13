@@ -64,6 +64,8 @@ Reset_Handler:
   bl  ExitRun0Mode
 /* Call the clock system initialization function.*/
   bl  SystemInit
+/* Early SDRAM initialization */
+  bl  SDRAM_EarlyInit
 
 /* Copy the data segment initializers from flash to SRAM */
   ldr r0, =_sdata
@@ -748,5 +750,3 @@ g_pfnVectors:
 
    .weak      WAKEUP_PIN_IRQHandler
    .thumb_set WAKEUP_PIN_IRQHandler,Default_Handler
-
-

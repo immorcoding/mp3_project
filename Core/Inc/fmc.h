@@ -28,7 +28,7 @@
 #include "main.h"
 
 /* USER CODE BEGIN Includes */
-
+void SDRAM_EarlyInit(void);
 /* USER CODE END Includes */
 
 extern SDRAM_HandleTypeDef hsdram1;

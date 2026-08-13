@@ -22,7 +22,177 @@
 #include "fmc.h"
 
 /* USER CODE BEGIN 0 */
+void SDRAM_EarlyInit(void)
+{
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOE_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
 
+	//在main之前初始化SDRAM，只能使用局部变量！
+	//先初始化GPIO、RCC
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+
+  /** Initializes the peripherals clock
+  */
+	PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC;
+	PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_D1HCLK;
+	HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
+
+  /* Peripheral clock enable */
+  __HAL_RCC_FMC_CLK_ENABLE();
+
+  //FMC GPIO Configuration
+  /* GPIO_InitStruct */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3
+                          |GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_11|GPIO_PIN_12
+                          |GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
+
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
+  /* GPIO_InitStruct */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_2|GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
+
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /* GPIO_InitStruct */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_4
+                          |GPIO_PIN_5|GPIO_PIN_8|GPIO_PIN_15;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
+
+  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+
+  /* GPIO_InitStruct */
+  GPIO_InitStruct.Pin = GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10
+                          |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
+                          |GPIO_PIN_15|GPIO_PIN_0|GPIO_PIN_1;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
+
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  /* GPIO_InitStruct */
+  GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_14
+                          |GPIO_PIN_15|GPIO_PIN_0|GPIO_PIN_1;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF12_FMC;
+
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+	
+	
+	SDRAM_HandleTypeDef hsdram1_tmp = {0};
+	FMC_SDRAM_TimingTypeDef SdramTiming = {0};
+
+  /** Perform the SDRAM1 memory initialization sequence
+  */
+  hsdram1_tmp.Instance = FMC_SDRAM_DEVICE;
+  /* hsdram1.Init */
+  hsdram1_tmp.Init.SDBank = FMC_SDRAM_BANK1;
+  hsdram1_tmp.Init.ColumnBitsNumber = FMC_SDRAM_COLUMN_BITS_NUM_9;
+  hsdram1_tmp.Init.RowBitsNumber = FMC_SDRAM_ROW_BITS_NUM_13;
+  hsdram1_tmp.Init.MemoryDataWidth = FMC_SDRAM_MEM_BUS_WIDTH_16;
+  hsdram1_tmp.Init.InternalBankNumber = FMC_SDRAM_INTERN_BANKS_NUM_4;
+  hsdram1_tmp.Init.CASLatency = FMC_SDRAM_CAS_LATENCY_3;
+  hsdram1_tmp.Init.WriteProtection = FMC_SDRAM_WRITE_PROTECTION_DISABLE;
+  hsdram1_tmp.Init.SDClockPeriod = FMC_SDRAM_CLOCK_PERIOD_2;
+  hsdram1_tmp.Init.ReadBurst = FMC_SDRAM_RBURST_ENABLE;
+  hsdram1_tmp.Init.ReadPipeDelay = FMC_SDRAM_RPIPE_DELAY_1;
+  /* SdramTiming */
+  SdramTiming.LoadToActiveDelay = 2;
+  SdramTiming.ExitSelfRefreshDelay = 3;
+  SdramTiming.SelfRefreshTime = 2;
+  SdramTiming.RowCycleDelay = 2;
+  SdramTiming.WriteRecoveryTime = 2;
+  SdramTiming.RPDelay = 2;
+  SdramTiming.RCDDelay = 2;
+
+
+	/*********把HAL的SDRAM_Init搬出来了，因为其中有静态全局变量*************/
+  if (hsdram1_tmp.State == HAL_SDRAM_STATE_RESET)
+  {
+    /* Allocate lock resource and initialize it */
+    hsdram1_tmp.Lock = HAL_UNLOCKED;
+	}
+	hsdram1_tmp.State = HAL_SDRAM_STATE_BUSY;
+
+  /* Initialize SDRAM control Interface */
+  (void)FMC_SDRAM_Init(hsdram1_tmp.Instance, &(hsdram1_tmp.Init));
+
+  /* Initialize SDRAM timing Interface */
+  (void)FMC_SDRAM_Timing_Init(hsdram1_tmp.Instance, &SdramTiming, hsdram1_tmp.Init.SDBank);
+
+  /* Enable FMC Peripheral */
+  __FMC_ENABLE();
+  /* Update the SDRAM controller state */
+  hsdram1_tmp.State = HAL_SDRAM_STATE_READY;
+	
+	//sdram CLK enable
+	FMC_SDRAM_CommandTypeDef sdram_command;
+	sdram_command.CommandMode = FMC_SDRAM_CMD_CLK_ENABLE;
+	sdram_command.AutoRefreshNumber = 1;
+	sdram_command.CommandTarget = FMC_SDRAM_CMD_TARGET_BANK1;
+	sdram_command.ModeRegisterDefinition = 0;
+	
+	HAL_SDRAM_SendCommand(&hsdram1_tmp, &sdram_command, 1000);
+	
+	for(uint16_t i = 0; i < 10000; i++) __NOP();
+
+	//sdram precharge all banks
+	sdram_command.CommandMode = FMC_SDRAM_CMD_PALL;
+	sdram_command.AutoRefreshNumber = 1;
+	sdram_command.CommandTarget = FMC_SDRAM_CMD_TARGET_BANK1;
+	sdram_command.ModeRegisterDefinition = 0;
+	
+	HAL_SDRAM_SendCommand(&hsdram1_tmp, &sdram_command, 1000);
+
+
+	//sdram Auto Refresh cycles
+	sdram_command.CommandMode = FMC_SDRAM_CMD_AUTOREFRESH_MODE;
+	sdram_command.AutoRefreshNumber = 8;
+	sdram_command.CommandTarget = FMC_SDRAM_CMD_TARGET_BANK1;
+	sdram_command.ModeRegisterDefinition = 0;
+	
+	HAL_SDRAM_SendCommand(&hsdram1_tmp, &sdram_command, 1000);
+	
+	
+	//Configue sdram Mode Register
+	const uint32_t mr_value = 0x0232u;
+  //Burst Length = 4, Burst Type = Sequential, CAS Latency = 3, Operating Mode = Standard, Write Burst Mode = Single Location Access
+	
+	sdram_command.CommandMode = FMC_SDRAM_CMD_LOAD_MODE;
+	sdram_command.AutoRefreshNumber = 1;
+	sdram_command.CommandTarget = FMC_SDRAM_CMD_TARGET_BANK1;
+	sdram_command.ModeRegisterDefinition = mr_value;
+	
+	HAL_SDRAM_SendCommand(&hsdram1_tmp, &sdram_command, 1000);
+	
+	//sdram Auto Refresh cycles
+	sdram_command.CommandMode = FMC_SDRAM_CMD_AUTOREFRESH_MODE;
+	sdram_command.AutoRefreshNumber = 8;
+	sdram_command.CommandTarget = FMC_SDRAM_CMD_TARGET_BANK1;
+	sdram_command.ModeRegisterDefinition = 0;
+	
+	HAL_SDRAM_SendCommand(&hsdram1_tmp, &sdram_command, 1000);
+	
+	HAL_SDRAM_ProgramRefreshRate(&hsdram1_tmp, 230);	//32MHz from 64 MHz sysclk in SystemInit 
+}
 /* USER CODE END 0 */
 
 SDRAM_HandleTypeDef hsdram1;
