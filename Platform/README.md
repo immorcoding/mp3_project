@@ -5,7 +5,7 @@ Platform 是当前 PCB 的对象装配 Module。它长期持有 Component Handle
 ## 公开 Interface
 
 - `Platform_Init()`：整机强依赖硬件初始化；
-- `Platform_Audio_*`、`Platform_LCD_*`、`Platform_Log_Init()`、`Platform_Power_*`、`Platform_SD_*`：当前板级能力。
+- `Platform_Audio_*`、`Platform_LCD_*`、`Platform_Log_Init()`、`Platform_Power_*`、`Platform_SD_*`、`Platform_SDRAM_*`：当前板级能力。
 
 ## 编译期依赖与装配
 

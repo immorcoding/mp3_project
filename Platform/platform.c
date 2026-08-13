@@ -9,6 +9,7 @@
 
 #include "Platform/audio/platform_audio.h"
 #include "Platform/power/platform_power.h"
+#include "Platform/sdram/platform_sdram.h"
 
 #include "stm32h7xx_hal.h"
 
@@ -20,6 +21,12 @@
   */
 Platform_StatusTypeDef Platform_Init(void)
 {
+    /* CubeMX 已配置 FMC；此处把 SDRAM 从上电未知状态推进到可访问状态。 */
+    if (Platform_SDRAM_Init() != PLATFORM_SDRAM_OK)
+    {
+        return PLATFORM_SDRAM_ERROR;
+    }
+
     /* 初始化本板电源管理和 AXP2101 启动策略。 */
     if (Platform_Power_Init() != PLATFORM_OK)
     {

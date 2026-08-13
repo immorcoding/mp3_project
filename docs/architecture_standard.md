@@ -195,6 +195,10 @@ Component 是可复用核心。它可以是算法、芯片驱动、状态机或�
 
 Platform 表示当前产品板卡向上提供的稳定硬件能力，也是唯一的对象装配层。
 
+`Platform/sdram` 是本板外部存储器 Module：它可包含 CubeMX FMC Handle 并执行 SDRAM
+JEDEC 初始化序列，但不拥有链接器段、外部堆、帧缓冲或任务策略；这些使用策略仍由后续
+APP/Service 决定。
+
 它负责：
 
 - 持有当前 PCB 的 Component Handle 和 Adapter Context；

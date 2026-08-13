@@ -105,12 +105,12 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_FMC_Init();
   MX_USB_DEVICE_Init();
   MX_I2S2_Init();
   MX_FATFS_Init();
   MX_TIM5_Init();
   MX_SPI1_Init();
-  MX_FMC_Init();
   /* USER CODE BEGIN 2 */
   app_init();
   /* USER CODE END 2 */

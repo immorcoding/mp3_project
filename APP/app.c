@@ -84,6 +84,13 @@ void app_init(void)
             break;
         }
 
+        case PLATFORM_SDRAM_ERROR:
+            (void)LOG_Printf(LOG_LEVEL_ERROR,
+                             "SDRAM",
+                             "JEDEC initialization failed.");
+            Error_Handler();
+            break;
+
         default:
             (void)LOG_Printf(LOG_LEVEL_ERROR, "PLATFORM", "Initialization failed.");
             Error_Handler();
