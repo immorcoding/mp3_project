@@ -8,11 +8,15 @@
 - `Platform_Power_SetAudio()`、`Platform_Power_SetLCD()`；
 - `Platform_Power_GetDiagnostics()`。
 
-## 调用的 Interface
+## 编译期依赖与装配
 
 - `AXP2101_*`、`SoftI2C_*`；
 - 相应 Adapter Bind Interface；
 - CubeMX 的软 I2C GPIO 定义。
+
+## 运行时请求与事件路径
+
+上层经 `Platform_Power_*` 请求产品电源语义；本 Module 调用 AXP2101 Device，Device 经已绑定 Bridge 与 GPIO Adapter 访问总线。当前为同步阻塞路径，PMIC IRQ 尚未接入。
 
 ## 约束
 

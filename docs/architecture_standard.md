@@ -4,45 +4,55 @@
 > 状态：当前工程的规范性架构文档  
 > 目的：避免同一类模块在后续扩展时使用不同的分层、命名和装配方式
 
-## 1. 总体规则
+## 1. 总体规则：必须区分三张图
 
-工程从底层到上层分为：
+工程分层同时存在**功能/抽象所有权**、**编译期依赖**和**运行时路径**三种关系。它们回答的问题不同，禁止从任意一张图直接推导另一张。
 
-```text
-Vendor / HAL
-      ↑
-Adapters
-      ↑
-Components
-      ↑
-Platform
-      ↑
-Service
-      ↑
-APP
-```
+### 1.1 功能/抽象所有权
 
-图中箭头表示功能抽象和职责所有权从底层向上提升，不表示 C 头文件依赖或一次普通请求的调用方向。普通请求通常由上向下进入硬件：
+从底层到上层的职责提升为：
 
 ```text
-APP -> Service -> Platform -> Components -> Adapters -> Vendor / HAL
+Vendor / HAL  →  Adapters  →  Components  →  Platform  →  Service  →  APP
 ```
 
-硬件事件则由底层向已注册的上层回调发布，例如：
+此图只表示“谁向上一层提供什么能力、谁拥有更高层语义”。例如，Adapter 拥有具体 SDK 语义，Component 拥有可复用设备协议，Platform 拥有当前 PCB 的装配与产品硬件能力。它**不表示** C 头文件方向，也不要求一次请求经过全部层级。
+
+### 1.2 编译期依赖与装配
+
+`#include`、链接和实现依赖按 Interface 的所有权及装配需要确定，而不是按上一图机械推导：
 
 ```text
-Vendor IRQ -> Adapter -> Platform 持有的转发回调 -> Service 持有的回调 -> Task
+Component owns Ops Interface
+        ↑                    ↑
+Adapter implements Ops       Platform binds Ops + Context
 ```
 
-编译期为了实现依赖倒置，Interface 所有权更准确地表示为：
+因此 Adapter 的 `.c` 包含目标 Component 头文件、以实现该 Component 所拥有的 Ops，是正常的依赖倒置；Platform 的 `.c` 包含 Component、Adapter 和 CubeMX 头文件，以完成本板装配，也是正常的。Component 反向包含 Adapter 私有头、Adapter/Component 包含 `Service` 或 `APP` 头并主动调用产品业务，才是禁止的反向依赖。
+
+### 1.3 运行时请求、事件与第三方接缝
+
+普通请求通常由调用者向下到达所需能力，但可跳过不参与该请求的层：
 
 ```text
-Component 定义 Ops Interface
-        ↑                 ↑
-Adapter 实现 Interface    Platform 绑定 Ops + Context
+APP / Service  →  Platform  →  Component  →  Adapter  →  Vendor / HAL
 ```
 
-因此 Adapter `.c` 包含 Component 头文件以实现其 Interface 是正常的；Platform `.c` 包含 Adapter 头文件以完成装配也是正常的。禁止的是 Component 反向包含 Adapter 头文件，或低层模块包含 `Service` / `APP` 头文件并主动调用产品业务。
+硬件事件反向沿着**已经注册**的回调发布；中断只通知，实际业务在任务上下文完成：
+
+```text
+Vendor IRQ  →  Adapter  →  Platform / Service 持有的回调  →  Task
+```
+
+Platform 的 `Bind()`、Context 初始化和实例持有属于装配期，不是每次运行时请求的必经路径。
+
+第三方或生成代码还可能通过声明的入站接缝在运行时进入自维护代码。例如：
+
+```text
+FatFs disk_*  →  BSP_SD_* Override Seam  →  Service/filesystem
+```
+
+这只是 FatFs 消费一个外部契约的运行时路径；它不表示 `Service` 反向包含或依赖生成的 DiskIO Implementation，也不改变功能/抽象所有权。未来 LVGL flush、USB 完成回调等遵循同一规则。
 
 核心原则：
 
@@ -51,7 +61,7 @@ Adapter 实现 Interface    Platform 绑定 Ops + Context
 3. 本 PCB 的实例、引脚、供电轨映射和启动策略属于 `Platform`；
 4. 跨多个 Platform 能力的产品流程属于 `Service`；
 5. `APP` 只决定启动顺序、顶层策略和任务入口，不直接装配底层 Handle；
-6. Ops Interface 由使用它的 Component 拥有，而不是由 Adapter 自己发明；
+6. Ops Interface 由需要该外部能力、并通过 Ops 发起调用的 Component 拥有，而不是由 Adapter 自己发明；
 7. Ops 与 Context 必须成对绑定，且 Context 生命周期必须覆盖全部调用期。
 
 ## 2. 顶层目录
@@ -80,6 +90,7 @@ Components/
   log/
   sd/
   soft_i2c/
+  st7789/
 ```
 
 这些模块虽然用途不同，但在架构上都是可独立复用的 Component。只有目录规模显著
@@ -142,6 +153,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/bridge/axp2101_soft_i2c` | SoftI2C Component 到 AXP2101 Bus Ops 的跨 Component Bridge。 |
 | `Adapters/cortex/cache` | Cortex-M7 DMA 缓冲区的 D-Cache 一致性维护。 |
 | `Adapters/stm32_hal/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
+| `Adapters/stm32_hal/st7789_spi` | STM32 HAL SPI/GPIO 到 ST7789 PortOps。 |
 | `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |
 | `Adapters/stm32_hal/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
 | `Adapters/stm32_hal/irq/stm32_gpio_exti_irq` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
@@ -209,7 +221,7 @@ Service 表达跨模块产品流程，例如：
 - 未来的 Storage Module：跨任务存储命令、文件打开状态和 USB MSC 所有权仲裁；
 - Media Library：扫描、索引和曲目元数据。
 
-Service 可以依赖 Platform 和 Components，但不直接依赖 HAL。
+Service 可以在编译期依赖 Platform、Component 和必要 Middleware 的公开 Interface，但不直接依赖 HAL。它在运行时编排产品流程；进入硬件通常经 Platform，外部事件只能经 Platform 声明的回调接缝到达其持有的任务逻辑。
 
 当前的 `Service/log` 负责 RTOS 日志消息块的投递与消费，`Service/filesystem`
 负责 Storage Task 独占期间的 FatFs 操作。SD 生命周期、热插拔消抖与卷调用时序目前
@@ -461,11 +473,11 @@ USB_DEVICE/Target/*.c
 3. 是否描述本 PCB 的引脚、实例、供电轨或启动顺序？是：Platform；
 4. 是否组织多个硬件能力形成播放器产品流程？是：Service；
 5. 是否只负责顶层启动、任务创建和产品策略？是：APP；
-6. 接口由谁消费？Ops 应由消费方 Component 定义；
+6. 谁需要某项外部能力并经 Ops 调用它？该 Component 应拥有相应 Ops Interface；
 7. 对象由谁拥有？具体实例通常由 Platform 持有并装配。
 
-每个自维护目录还必须提供 README，写明 Module 职责、资源所有权、公开 Interface、
-允许调用的 Interface、禁止依赖及任务/ISR 约束。README 用于缩短理解路径；它不能
+每个自维护目录还必须提供 README，写明 Module 职责、资源与抽象所有权、公开 Interface、
+编译期依赖、运行时请求路径、事件/ISR 路径、禁止依赖及生命周期约束。README 用于缩短理解路径；它不能
 替代本文件的全局规则。
 
 无法清楚回答时，不要急着新建目录，先在本文中补充边界决定。

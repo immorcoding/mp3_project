@@ -5,13 +5,23 @@ Platform 是当前 PCB 的对象装配 Module。它长期持有 Component Handle
 ## 公开 Interface
 
 - `Platform_Init()`：整机强依赖硬件初始化；
-- `Platform_Audio_*`、`Platform_Log_Init()`、`Platform_Power_*`、`Platform_SD_*`：当前板级能力。
+- `Platform_Audio_*`、`Platform_LCD_*`、`Platform_Log_Init()`、`Platform_Power_*`、`Platform_SD_*`：当前板级能力。
 
-## 调用的 Interface
+## 编译期依赖与装配
 
 - `Components` 的公开 Interface；
 - `Adapters` 的 Bind、注册等装配 Interface；
 - CubeMX 的 `h*` Handle 和 `main.h` GPIO 定义。
+
+Platform 的 `.c` 可以包含 Component、Adapter 与 CubeMX 的公开/装配头，以持有长期实例并执行 Bind；这种编译期依赖不等于上层业务调用 Platform。
+
+## 运行时请求路径
+
+Platform 对 APP 和 Service 提供 `Platform_*` 产品能力；它在内部向下调用 Component，Component 再通过已绑定 Adapter 到达具体后端。Platform 装配实例不是每次请求的必经步骤。
+
+## 事件/ISR 路径
+
+Platform 可以长期持有 Adapter 回调节点，并把源特定硬件事件转发给已注册上层回调。它不解释任务通知索引，不调用 FreeRTOS、FatFs 或产品业务；事件语义与任务处理权属于订阅者。
 
 ## 禁止依赖
 

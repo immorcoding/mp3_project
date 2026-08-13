@@ -74,7 +74,7 @@ Platform/
 
 AXP2101 SoftI2C Adapter 位于 `Adapters/bridge/`：它只连接两个 Component Interface，不依赖 STM32 HAL、CMSIS 或 FreeRTOS。STM32 GPIO Adapter 位于 `Adapters/stm32_hal/`：它才是具体 MCU 后端实现。目录按这种依赖性质分组，而不是按调用链顺序分组。
 
-## 3. 上电调用链
+## 3. 上电运行时请求路径
 
 ```text
 Platform_Init()
@@ -103,6 +103,8 @@ Platform_Init()
 
 两个绑定函数都只安装 Ops、Context 和静态配置，不产生 I2C 波形。GPIO 模式仍由
 CubeMX 初始化；真正访问总线从 `AXP2101_Init()` 调用 `Prepare()` 开始。
+
+本节是运行时请求路径，不表示头文件依赖方向。AXP2101 Device 拥有 Bus Ops，Bridge 和 STM32 GPIO Adapter 分别实现所需 Interface，Platform Power 在装配期持有并绑定实例；完整规则见 [architecture_standard.md](architecture_standard.md)。
 
 ## 4. C 语言对象模型
 

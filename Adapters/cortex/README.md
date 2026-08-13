@@ -7,10 +7,14 @@
 - 对上提供架构能力的窄 Interface，例如 DMA 缓冲区的 Cache 一致性维护；
 - 公开的参数和类型不得携带具体 STM32 外设 Handle。
 
-## 调用的 Interface
+## 编译期依赖
 
 - CMSIS Core Interface，例如 `SCB_CleanDCache_by_Addr()`、`SCB_InvalidateDCache_by_Addr()` 与 `__DSB()`；
 - 同目录内的私有辅助函数。
+
+## 运行时请求与事件路径
+
+具体外设 Adapter 在普通上下文调用 Cortex Adapter 维护 Cache；本目录不启动 DMA、不接收 IRQ，也不拥有任务事件。
 
 ## 约束
 

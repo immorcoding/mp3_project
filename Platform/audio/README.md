@@ -8,10 +8,14 @@
 - `Platform_Audio_Transmit()`；
 - `Platform_Audio_SetMute()`。
 
-## 调用的 Interface
+## 编译期依赖与装配
 
 - `Audio_*` 和 `AudioI2S_STM32HALAdapter_Bind()`；
 - CubeMX `hi2s2`、PCM 静音 GPIO 定义。
+
+## 运行时请求与事件路径
+
+上层经 `Platform_Audio_*` 请求当前板的音频能力；本 Module 调用 Audio Component，Component 再经已绑定 I2S Adapter 到达 HAL。当前为阻塞发送，尚无音频 DMA/IRQ 事件路径。
 
 ## 约束
 

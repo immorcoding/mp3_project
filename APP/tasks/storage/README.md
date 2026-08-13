@@ -8,12 +8,16 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 - `storage_sd_*()`：本 Task Module 的内部调度 Interface，不是面向其他任务的通用文件访问 Interface。
 - `storage_sd_benchmark_run()`：仅读写测试分支使用的内部诊断入口；成功挂载后由 `storage_sd_init()` 调用，不向其他任务公开。
 
-## 调用的 Interface
+## 编译期依赖
 
 - Platform SD 卡检测生命周期 Interface。
 - Filesystem Service 的初始化、挂载、卸载和格式化 Interface。
 - Log Service 投递 Interface。
 - 仅用于卡检测消抖的原生 FreeRTOS 索引任务通知 Interface。
+
+## 运行时请求与事件路径
+
+卡检测 GPIO EXTI 经 Adapter、Platform SD 回调通知本 Task 的索引 0；Filesytem 私有 DMA 执行器在同一 Task 上下文等待索引 1。正常存储流程由本 Task 向下调用 Platform SD 与 Filesystem，ISR 不执行 FatFs 或挂载策略。
 
 ## 约束
 

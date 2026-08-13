@@ -57,6 +57,11 @@ static UBaseType_t monitor_get_task_stack_words(const char *task_name)
         return APP_MONITOR_TASK_STACK_WORDS;
     }
 
+    if (strcmp(task_name, "LCD Task") == 0)
+    {
+        return APP_LCD_TASK_STACK_WORDS;
+    }
+
     if (strcmp(task_name, "IDLE") == 0)
     {
         return configMINIMAL_STACK_SIZE;

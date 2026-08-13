@@ -5,7 +5,7 @@
 ## 入口
 
 - [../CONTEXT.md](../CONTEXT.md)：稳定领域术语、产品语义和职责归属；
-- [architecture_standard.md](architecture_standard.md)：分层、依赖、装配和中断规则；
+- [architecture_standard.md](architecture_standard.md)：功能/抽象所有权、编译期依赖、运行时请求/事件路径、装配和中断规则的唯一总则；
 - [coding_standard.md](coding_standard.md)：命名、Doxygen 与行内注释规则；
 - [sd_architecture.md](sd_architecture.md)：SD、热插拔与 FatFs 接缝；
 - [log_architecture.md](log_architecture.md)：日志核心、USB Adapter 与任务化约束；

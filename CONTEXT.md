@@ -2,7 +2,7 @@
 
 本文档统一记录工程中的稳定术语、职责边界和产品语义。具体文件路径、字段、调用链和硬件参数由 `docs/` 下的技术文档维护，避免同一实现事实被重复记录后逐渐不一致。
 
-本文档不是目录导航：根目录与各源码目录的 `README.md` 说明 Module 的位置、公开 Interface 和调用约束；本文档只定义这些 Module 之间反复使用的领域词汇。新增 Module、改变职责归属或改变产品语义时，必须同步核对本文档与对应技术文档。
+本文档不是目录导航：根目录与各源码目录的 `README.md` 说明 Module 的位置、公开 Interface 和局部约束；`docs/architecture_standard.md` 是功能/抽象所有权、编译期依赖与运行时路径的唯一总则；本文档只定义这些 Module 之间反复使用的领域词汇。新增 Module、改变职责归属或改变产品语义时，必须同步核对本文档与对应技术文档。
 
 ## 播放器应用（Player application）
 
@@ -102,6 +102,33 @@
 示例：
 
 > 关闭某一路 LDO 的启动使能，不代表应同时清除它的电压预设。
+
+## 平台 LCD（Platform LCD）
+
+**平台 LCD**表示当前 PCB 上唯一的 ST7789V 显示模组及其可见显示能力。
+
+它负责组合 LCD 电源轨、SPI1、CS、D/C、RESET 等板级资源，并向上层提供不泄漏
+HAL Handle 和 GPIO 细节的显示诊断或绘制语义。当前阶段只完成硬件复位和 `RDDID`
+读取，尚不代表显示初始化、背光控制、DMA 刷新或 LVGL 已接入。
+
+相关术语：**ST7789 设备**、**STM32 HAL ST7789 SPI 适配器**、**平台电源**。
+
+示例：
+
+> LCD Task 请求读取显示 ID 时，只调用平台 LCD；SPI1 和三根控制线的具体时序仍由下层承担。
+
+## ST7789 设备（ST7789 Device）
+
+**ST7789 设备**是面向 ST7789 显示控制器的可复用协议 Device。
+
+它只定义复位、命令/数据选择和串行读写等控制器语义，并通过 PortOps 使用外部能力；
+它不拥有屏幕电源、SPI 实例、GPIO、帧缓冲、DMA 或 UI 状态。
+
+相关术语：**平台 LCD**、**STM32 HAL ST7789 SPI 适配器**。
+
+示例：
+
+> 更换 MCU 时，ST7789 设备可以不修改，只需重新实现它的 PortOps。
 
 ## 归一化传输状态（Normalized transport status）
 
@@ -203,7 +230,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **文件系统 Module**封装当前 FatFs 逻辑卷的驱动就绪检查、挂载、注销和显式格式化，并持有 FatFs 所需的同步 DMA 执行器。它只在存储任务已经取得 SD 独占权且平台 SD 已处于可访问状态时调用 FatFs，不负责卡检测、消抖或 SDMMC 初始化。
 
-该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和 4 KiB DMA 中转区挤占任务栈。它通过 `BSP_SD_*` Override Seam 让 FatFs DiskIO 间接使用 Platform SD；DMA 完成事件使用 Storage Task 的索引 `1` 等待，Cache 一致性由 SD Adapter 调用 Cortex-M7 Cache Adapter 维护。它返回 FatFs 的 `FRESULT`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果。
+该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和大块中转区挤占任务栈。它经 FatFs 声明的 `BSP_SD_*` Override Seam 间接使用 Platform SD；DMA 等待与 Cache 一致性细节见 `docs/sd_architecture.md`。它返回 FatFs 的 `FRESULT`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果。
 
 相关术语：**存储任务**、**平台 SD**、**SD 卡设备**。
 

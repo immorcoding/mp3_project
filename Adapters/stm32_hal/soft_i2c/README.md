@@ -7,10 +7,14 @@
 - `SoftI2C_STM32HALAdapter_Bind()`；
 - `SoftI2C_STM32HALAdapterTypeDef`。
 
-## 调用的 Interface
+## 编译期依赖
 
 - `SoftI2C_*` GPIO Ops；
 - `HAL_GPIO_WritePin()`、`HAL_GPIO_ReadPin()`。
+
+## 运行时请求与事件路径
+
+SoftI2C Component 经已绑定 GPIO Ops 请求引脚操作时，本 Adapter 调用 HAL GPIO；无独立 ISR 或 Task 路径。
 
 ## 约束
 

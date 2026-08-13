@@ -7,9 +7,13 @@ Audio Component 定义 PCM 发送和静音所需的 Bus/Ops 语义，不认识 S
 - `Audio_Init()`、`Audio_Transmit()`、`Audio_Mute()`；
 - `Audio_HandleTypeDef`、`Audio_BusOpsTypeDef` 及其归一化状态。
 
-## 调用的 Interface
+## 编译期依赖
 
-- Platform 注入的 Audio Bus 与 Mute Ops。
+- 自身拥有的 Audio Bus 与 Mute Ops 类型。
+
+## 运行时请求与事件路径
+
+Audio Component 经 Ops 调用已绑定后端；Platform 负责绑定 Context。当前没有 Audio DMA 完成或播放 Task 事件路径。
 
 ## 约束
 

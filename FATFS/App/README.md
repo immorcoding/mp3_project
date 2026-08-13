@@ -6,12 +6,12 @@
 
 - `MX_FATFS_Init()` 与 `fatfs.h` 声明的生成逻辑卷对象。
 
-## 调用的 Interface
+## 编译期依赖
 
 - CubeMX 生成的 FatFs Driver Link Interface。
 
-## 约束
+## 运行时接缝与约束
 
 - 不在此处放入 Storage Task 所有权、FreeRTOS 通知处理、SDMMC DMA 或 D-Cache 维护。
-- Cube/FatFs 块访问通过 `FATFS/Target/bsp_driver_sd.h` 声明的外部 Override Seam 到达项目的 `BSP_SD_*` 强定义；其 Implementation 位于 `Service/filesystem/filesystem_fatfs_bsp.c`。
+- Cube/FatFs 块访问通过 `FATFS/Target/bsp_driver_sd.h` 声明的外部 Override Seam 到达项目的 `BSP_SD_*` 强定义；其实现是 `Service/filesystem/filesystem_fatfs_bsp.c` 的 Service-owned FatFs DiskIO bridge。这是运行时入站 Seam，不要求 Service 反向包含本目录的生成 Implementation。
 - 自定义内容必须保留在 CubeMX USER CODE 区中，保证重新生成后仍存在。

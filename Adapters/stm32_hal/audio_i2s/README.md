@@ -7,10 +7,14 @@
 - `AudioI2S_STM32HALAdapter_Bind()`；
 - `AudioI2S_STM32HALAdapterTypeDef`。
 
-## 调用的 Interface
+## 编译期依赖
 
 - `Audio_*` 类型；
 - `HAL_I2S_*`、`HAL_GPIO_*`。
+
+## 运行时请求与事件路径
+
+Audio Component 经已绑定 Bus/Mute Ops 发起请求时，本 Adapter 调用 HAL；当前没有 DMA 完成或播放 Task 事件路径。
 
 ## 约束
 

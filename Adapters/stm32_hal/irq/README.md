@@ -9,11 +9,15 @@
 
 两个 Interface 保持源特定、强类型；不得为了统一形式创建 `IRQ_ID + void *` 的泛化回调，也不得让 GPIO 调用者包含 SDMMC 类型。
 
-## 调用的 Interface
+## 编译期依赖
 
 - STM32 HAL GPIO EXTI 与 SD 回调注册 Interface；
 - CMSIS `PRIMASK` 临界区原语；
 - 调用者持有的回调函数。
+
+## 运行时事件路径
+
+CubeMX 向量函数先进入相应 `HAL_*_IRQHandler()`；本目录随后从 HAL 全局回调或 Handle 回调接收事件，匹配源特定节点并调用调用者持有的轻量回调。此路径不是通用 NVIC 分发，也不允许 Adapter 直接知道 Task 或产品业务。
 
 ## 约束
 

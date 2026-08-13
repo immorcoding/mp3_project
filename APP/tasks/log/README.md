@@ -6,10 +6,14 @@ Log task 是 `LogService` 的唯一消费者。它以短周期推进 `Components
 
 - `log_task(void *handle)`：仅由 `APP/tasks/app_tasks.c` 创建。
 
-## 调用的 Interface
+## 编译期依赖
 
 - `LogService_Consume()`；
 - FreeRTOS 的延时 Interface。
+
+## 运行时请求与事件路径
+
+任务周期性调用 `LogService_Consume()`，由 Service 向下推进 Log Component 与已绑定输出 Adapter；没有硬件 ISR 直接进入本 Task。
 
 ## 资源与约束
 

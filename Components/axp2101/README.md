@@ -7,9 +7,13 @@ AXP2101 Component 实现芯片识别、寄存器协议、供电轨控制和器�
 - `AXP2101_Init()`、`AXP2101_ApplyConfiguration()`；
 - 各供电轨控制 Interface、Handle、Bus Ops 与归一化错误状态。
 
-## 调用的 Interface
+## 编译期依赖
 
-- Platform 注入的 AXP2101 Bus Ops。
+- 自身拥有的 AXP2101 Bus Ops 类型。
+
+## 运行时请求与事件路径
+
+Device 经自身拥有的 Bus Ops 请求外部总线；Bridge 或其他 Adapter 实现 Ops，Platform 负责绑定 Context。当前无 AXP2101 ISR 业务路径。
 
 ## 约束
 

@@ -34,6 +34,7 @@ target_sources(stm32cubemx INTERFACE
     ../../Core/Src/i2s.c
     ../../Core/Src/memorymap.c
     ../../Core/Src/sdmmc.c
+    ../../Core/Src/spi.c
     ../../Core/Src/tim.c
     ../../Core/Src/stm32h7xx_it.c
     ../../Core/Src/stm32h7xx_hal_msp.c
@@ -75,6 +76,8 @@ target_sources(stm32cubemx INTERFACE
     ../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_sd_ex.c
     ../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_mmc.c
     ../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_mmc_ex.c
+    ../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi.c
+    ../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi_ex.c
     ../../Core/Src/system_stm32h7xx.c
     ../../Middlewares/Third_Party/FatFs/src/diskio.c
     ../../Middlewares/Third_Party/FatFs/src/ff.c

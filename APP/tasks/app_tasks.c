@@ -5,14 +5,15 @@
   *
   * @details
   *          Create Task 先建立 Log Service 的静态消息池与 FreeRTOS 队列，再创建
-  *          消费日志的 Log Task、独占 SD 热插拔普通上下文的 Storage Task，以及
-  *          其他应用任务。所有任务创建成功后 Create Task 自删。
+  *          消费日志的 Log Task、独占 SD 热插拔普通上下文的 Storage Task、
+  *          LCD 最小诊断 Task 以及监控 Task。所有任务创建成功后 Create Task 自删。
   ******************************************************************************
   */
 
 #include "APP/tasks/app_tasks.h"
 
 #include "APP/tasks/log/log_task.h"
+#include "APP/tasks/lcd/lcd_task.h"
 #include "APP/tasks/monitor/monitor_task.h"
 #include "APP/tasks/storage/storage_task.h"
 #include "Service/log/log_service.h"
@@ -26,7 +27,8 @@
   * @param  handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
   * @note   LogService 必须先于任意可能调用 LogService_Post() 的任务创建。
   *         Storage Task 优先级高于 Log Task；它完成短暂初始化后会阻塞等待 SD
-  *         检测通知，不会长期占用 CPU。
+  *         检测通知，不会长期占用 CPU。LCD Task 当前只运行一次诊断事务，随后
+  *         进入低频阻塞，因而与 Log/Monitor Task 同优先级即可。
   */
 static void create_task(void *handle)
 {
@@ -54,13 +56,17 @@ static void create_task(void *handle)
                      APP_MONITOR_TASK_STACK_WORDS,
                      NULL,
                      APP_MONITOR_TASK_PRIORITY,
+                     NULL) != pdPASS) ||
+        (xTaskCreate(lcd_task,
+                     "LCD Task",
+                     APP_LCD_TASK_STACK_WORDS,
+                     NULL,
+                     APP_LCD_TASK_PRIORITY,
                      NULL) != pdPASS))
     {
-        /* Log Task 可能尚未得到调度，不通过日志服务报告致命创建失败。 */
         Error_Handler();
     }
 
-    (void)LogService_Post(LOG_LEVEL_INFO, "RTOS", "All task created.");
     vTaskDelete(NULL);
 }
 

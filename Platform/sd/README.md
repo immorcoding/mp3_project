@@ -10,11 +10,15 @@
 - `Platform_SD_CompleteTransfer()`：在任务上下文提交已完成、失败或中止的 Device 传输。
 - `Platform_SD_GetState()`、`Platform_SD_IsPresent()`、`Platform_SD_GetInfo()`、`Platform_SD_GetDiagnostics()`：提供稳定的板级状态观察。
 
-## 调用的 Interface
+## 编译期依赖与装配
 
 - `Components/sd` 的逻辑块 Device Interface。
 - STM32 SDMMC Port Adapter 以及 GPIO EXTI / SDMMC IRQ Adapter 的注册 Interface。
 - CubeMX 持有的 `hsd1`、`SD_CD_GPIO_Port`、`SD_CD_Pin` 和卡检测极性。
+
+## 运行时请求与事件路径
+
+上层通过 `Platform_SD_*` 请求卡槽能力；本 Module 再调用 SD Card Device，后者经已绑定 Adapter 访问硬件。GPIO EXTI 和 SDMMC IRQ 分别由 Adapter 以源特定回调进入本 Module；本 Module 只转发卡检测或传输事件给已注册上层，不解释 FreeRTOS 通知索引或业务策略。
 
 ## 约束
 

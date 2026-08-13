@@ -6,11 +6,15 @@ Monitor task 记录各任务栈高水位线，并翻转诊断 LED。它不参与
 
 - `monitor_task(void *handle)`：仅由 `APP/tasks/app_tasks.c` 创建。
 
-## 调用的 Interface
+## 编译期依赖
 
 - FreeRTOS `uxTaskGetSystemState()`、堆分配与延时 Interface；
 - `LogService_Post()`；
 - CubeMX 诊断 LED GPIO Interface。
+
+## 运行时请求与事件路径
+
+任务按周期采样 FreeRTOS 诊断并投递日志、翻转 LED；当前没有硬件事件订阅或 ISR 入口。
 
 ## 资源与约束
 

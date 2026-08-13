@@ -7,10 +7,14 @@
 - `LOG_UsbCDC_STM32HALAdapter_Bind()`；
 - USB CDC Adapter Context。
 
-## 调用的 Interface
+## 编译期依赖
 
 - `CDC_Transmit_FS()`、`CDC_IsReady_FS()`、`HAL_GetTick()`；
 - Log Component 的输出 Ops 与时间源类型。
+
+## 运行时请求与事件路径
+
+Log Component 经已绑定 Ops 请求输出时，本 Adapter 调用 CDC；USB 就绪或忙状态只返回归一化结果，Log task 随后重试。Adapter 不直接调用 LogService 或任务。
 
 ## 资源与约束
 

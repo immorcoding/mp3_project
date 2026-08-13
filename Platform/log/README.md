@@ -6,10 +6,14 @@
 
 - `Platform_Log_Init()`：绑定输出与时间源，并初始化 `Components/log`。
 
-## 调用的 Interface
+## 编译期依赖与装配
 
 - `LOG_Init()`；
 - `LOG_UsbCDC_STM32HALAdapter_Bind()`。
+
+## 运行时请求与事件路径
+
+APP 在启动阶段经 `Platform_Log_Init()` 完成装配；后续 LogService/Log task 调用 Log Component，Component 经已绑定 USB Adapter 请求输出。USB 就绪与发送忙只由 Adapter 返回状态，不直接唤醒或调用业务 Task。
 
 ## 约束
 

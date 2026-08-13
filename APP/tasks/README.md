@@ -5,13 +5,17 @@
 ## 公开 Interface
 
 - `app_task_start()`：创建 bootstrap task 并启动调度器；
-- `log_task()`、`storage_task()`、`monitor_task()`：仅作为 FreeRTOS `TaskFunction_t` 交给创建器。
+- `log_task()`、`storage_task()`、`monitor_task()`、`lcd_task()`：仅作为 FreeRTOS `TaskFunction_t` 交给创建器。
 
-## 调用的 Interface
+## 编译期依赖
 
 - 同目录任务配置宏；
 - `Service`、`Platform` 的公开 Interface；
 - FreeRTOS Task、通知和诊断 Interface。
+
+## 运行时请求与事件路径
+
+Task 是 APP 创建后的运行时执行上下文：任务通过 Service/Platform 的公开 Interface 发起请求，硬件 ISR 只经已注册回调或 FromISR 原语唤醒对应任务。任务目录不拥有 HAL ISR 入口。
 
 ## 约束
 

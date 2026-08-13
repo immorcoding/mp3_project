@@ -7,13 +7,23 @@ Adapters 是满足既有 Interface 的具体实现，按后端性质分为三类
 - 各目录的 `*_Bind()`、`*_Register()`、`*_Unregister()` 等后端装配或回调注册 Interface；
 - Adapter Context 类型，仅供 Platform 在装配时创建和长期持有；
 - `stm32_hal/irq/` 中按硬件源划分的 GPIO EXTI、SDMMC 回调分发 Interface。
-- `bridge/` 中由上游 Component 定义、供另一 Component 使用的转换 Interface。
+- `bridge/` 中实现目标 Component Ops、并调用源 Component 公开 Interface 的转换 Module。
 
-## 调用的 Interface
+## 编译期依赖
 
 - 对应 Component 所声明的 Ops 和状态类型；
 - 所属类别允许的 STM32 HAL、USB Device 或 CMSIS Interface；
 - 同一 Adapter 目录内的私有辅助实现。
+
+Adapter 的 `.c` 包含目标 Component 头以实现其 Ops，是依赖倒置的正常形式；`*_Bind()` 和 Context 类型是 Platform 用于装配的 Adapter Interface。
+
+## 运行时请求路径
+
+Adapter 只在已绑定的 Component Ops 被调用时，把稳定请求翻译为 HAL、CMSIS、USB Device 或另一个 Component 的调用；它不决定何时发起产品请求。
+
+## 事件/ISR 路径
+
+IRQ Adapter 可以独占 HAL 全局回调入口，按具体硬件源将轻量事件发布给调用者持有的回调节点。Adapter 不认识 Service Task，不直接调用产品业务或 FreeRTOS 通知。
 
 ## 禁止依赖与约束
 

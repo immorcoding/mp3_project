@@ -9,9 +9,13 @@
 - `CortexM7DCache_PrepareDMATx()`：RAM 数据交给外设读取前执行 Clean；
 - `CORTEX_M7_DCACHE_LINE_SIZE`：Cortex-M7 D-Cache line 大小。
 
-## 调用的 Interface
+## 编译期依赖
 
 - CMSIS Core 的 `SCB_*DCache_by_Addr()` 和 `__DSB()`。
+
+## 运行时请求与事件路径
+
+外设 Adapter 在 DMA 启动前或任务上下文确认完成后调用本 Module；它不拥有 DMA、IRQ 回调或 FreeRTOS 通知。
 
 ## 约束
 

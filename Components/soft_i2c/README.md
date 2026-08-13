@@ -7,9 +7,13 @@ SoftI2C Component 实现开漏 I2C 时序、ACK、读写和总线恢复。它只
 - `SoftI2C_Init()`、设备就绪、主发送/接收、寄存器读写 Interface；
 - `SoftI2C_HandleTypeDef`、GPIO Ops、线路和状态类型。
 
-## 调用的 Interface
+## 编译期依赖
 
-- Platform 注入的 GPIO Ops 与 Context。
+- 自身拥有的 GPIO Ops 与 Context 类型。
+
+## 运行时请求与事件路径
+
+SoftI2C 经 GPIO Ops 产生总线时序；STM32 GPIO Adapter 实现 Ops，Platform 负责绑定具体引脚。当前为同步阻塞算法，没有 ISR 路径。
 
 ## 约束
 

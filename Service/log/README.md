@@ -8,10 +8,14 @@ LogService 将多个普通任务的短日志文本汇集到静态消息块池，
 - `LogService_Post()`：非阻塞投递一条已格式化的文本；
 - `LogService_Consume()`：由 Log task 推进输出，并至多转交一个 ready 消息。
 
-## 调用的 Interface
+## 编译期依赖
 
 - `LOG_Process()`、`LOG_Printf()`、`LOG_GetStats()`；
 - FreeRTOS queue Interface。
+
+## 运行时请求与事件路径
+
+普通 Task 经 `LogService_Post()` 投递，Log task 经 `LogService_Consume()` 向下调用日志核心。当前没有硬件 ISR 直接进入本 Module；ISR 如需日志只能先通知普通任务。
 
 ## 资源与约束
 

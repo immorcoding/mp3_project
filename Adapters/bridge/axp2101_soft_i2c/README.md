@@ -7,7 +7,7 @@
 - `AXP2101_SoftI2CAdapter_Bind()`；
 - 对应 Adapter Context 类型。
 
-## 调用的 Interface
+## 编译期依赖
 
 - `AXP2101_*` Bus Ops；
 - `SoftI2C_*` Interface。

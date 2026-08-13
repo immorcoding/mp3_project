@@ -7,7 +7,9 @@
 - 各子目录声明的 `*_STM32HALAdapter_Bind()`、`*_Register()`、`*_Unregister()` 等装配或回调分发 Interface；
 - 仅供 Platform 长期持有的 Adapter Context 类型。
 
-## 调用的 Interface
+当前 `st7789_spi/` 将 SPI 阻塞收发、CS/D-C/RESET GPIO 和 HAL 时基装配为 ST7789 Device 的 PortOps；它不包含显示初始化表、DMA 或 LVGL。
+
+## 编译期依赖
 
 - Component 定义的 Ops、状态和事件类型；
 - STM32 HAL、CubeMX 生成的外设 Handle 与 HAL 回调约定；

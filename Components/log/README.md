@@ -8,9 +8,13 @@ Log Component 提供等级过滤、格式化、固定 RAM 环形队列和非阻�
 - `LOG_SetLevel()`、`LOG_GetStats()` 等查询 Interface；
 - 输出 Ops 与时间源绑定类型。
 
-## 调用的 Interface
+## 编译期依赖
 
-- Platform 注入的输出 Ops 与时间源回调。
+- 自身拥有的输出 Ops 与时间源回调类型。
+
+## 运行时请求与事件路径
+
+日志核心经输出 Ops 推进已绑定后端；Platform 负责绑定，LogService/Log task 决定 RTOS 投递与消费时序。USB 完成状态由 Adapter 消化为可重试输出结果，不直接调用日志核心。
 
 ## 约束
 

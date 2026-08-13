@@ -22,6 +22,8 @@
 
 当前不抽象通用 `BlockDevice`。SD 是现阶段唯一的块设备；等 QSPI Flash 成为第二个真实实现，并明确其擦除、对齐和写入规则后，再从两个具体需求中提取公共接口更稳妥。
 
+除第 2 节的目录/所有权说明外，本文的调用图均为**运行时请求或事件路径**，不表示 C 头文件依赖。功能/抽象所有权、编译期依赖与装配规则以 [architecture_standard.md](architecture_standard.md) 为准。
+
 ## 2. 目录与职责
 
 ```text
@@ -71,7 +73,7 @@ Core/Src/sdmmc.c                CubeMX 管理的 hsd1 和 HAL MSP 初始化/反�
 `SDCard_STM32HALAdapterTypeDef` 装配 `hsd1`、SD_CD GPIO 和低有效电平，
 并私有持有 Device 句柄，上层不能直接修改其状态。
 
-## 3. 启动调用链
+## 3. 启动运行时路径
 
 ### 3.1 插卡启动
 
@@ -136,7 +138,7 @@ FatFs 当前使用同步 DMA Bridge：对 DiskIO 来说调用仍同步返回，�
 FatFs disk_read / disk_write
   -> Service/filesystem/filesystem_fatfs_bsp.c 的 BSP_SD_ReadBlocks / BSP_SD_WriteBlocks
   -> Service/filesystem/filesystem_sd_transfer.c
-  -> 复制到 4 KiB、32 字节对齐的 AXI SRAM 中转缓冲区
+  -> 复制到 32 KiB、32 字节对齐的 AXI SRAM 中转缓冲区
   -> STM32 HAL SD Adapter 按方向委托 Cortex-M7 Cache Adapter 执行 Clean 或 Clean+Invalidate
   -> Platform_SD_StartReadBlocks / Platform_SD_StartWriteBlocks
   -> SDCard_Start*()：State = BUSY，只启动 HAL_SD_*Blocks_DMA()
@@ -149,7 +151,7 @@ FatFs disk_read / disk_write
 
 中转而不是直接 DMA 到 FatFs 提供的指针有两个目的：FatFs 的指针不保证 32 字节对齐，也不保证它所在的 RAM 对 SDMMC DMA 可见；并且中转区把 Cache 操作精确限制在专用缓冲区，避免对相邻变量造成影响。
 
-## 5. 热插拔调用链
+## 5. 热插拔事件路径
 
 ```text
 EXTI9_5_IRQHandler()
@@ -307,6 +309,8 @@ CubeMX 继续管理：
 `sd_diskio.c` 通过 Filesystem Module 和 Platform SD 访问介质，而不是直接使用 `hsd1`。`fatfs.c`
 仅保留逻辑卷对象和 Driver Link。映射关系为：
 
+`disk_* → BSP_SD_*` 是 FatFs 经外部契约进入 Service-owned FatFs DiskIO bridge 的运行时入站 Seam；它不表示 `Service/filesystem` 反向包含 `FATFS/Target/sd_diskio.c`，也不改变本工程的功能/抽象所有权。
+
 | FatFs DiskIO 操作 | Platform SD 接口 |
 | --- | --- |
 | `disk_initialize` | 检查已由 Storage Task 初始化完成的 `Platform_SD_GetState()` |
@@ -327,7 +331,7 @@ Storage Task 的 Platform SD 生命周期实现。
 ## 11. 当前限制
 
 1. Filesystem DMA executor 只允许 Storage Task 作为唯一调用者；尚未实现 Mutex、多任务文件系统服务或 USB MSC 所有权切换；
-2. 当前使用固定的 4 KiB、32 字节对齐 AXI SRAM 中转缓冲区。它每次传输最多 8 个逻辑块，大请求会串行分块；
+2. 当前使用固定的 32 KiB、32 字节对齐 AXI SRAM 中转缓冲区。它每次传输最多 64 个逻辑块，大请求会串行分块；
 3. Cache 操作仅覆盖该专用缓冲区。未来若直接 DMA 到其他缓冲区，必须重新满足 AXI SRAM 可访问性、32 字节对齐和 Clean/Invalidate 规则；
 4. DMA 等待超时、错误或中止会使 Device 进入 `ERROR`；当前恢复策略是由后续卡检测/重新初始化恢复，尚未实现传输中的 HAL Abort 与原地重试；
 5. 当前热插拔路径依赖 FreeRTOS Storage Task；若要回到裸机，应在应用层提供轮询通知和消抖策略，而不是把 FreeRTOS 依赖加入 Platform；
@@ -341,7 +345,7 @@ Storage Task 的 Platform SD 生命周期实现。
 架构变化时，应同时更新本文和根目录的 `CONTEXT.md`，重点核对：
 
 - 实际目录；
-- 启动与热插拔调用链；
+- 启动与热插拔运行时路径；
 - 状态机；
 - 错误和诊断边界；
 - FreeRTOS 替换接缝；

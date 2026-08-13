@@ -7,11 +7,15 @@
 - 各子目录声明的 `*_Bind()` Interface；
 - 仅由 Platform 持有、用于连接两个 Component Handle 的 Adapter Context。
 
-## 调用的 Interface
+## 编译期依赖
 
 - 上游 Component 提供的操作和状态类型；
 - 下游 Component 定义的 Ops Interface；
 - 同一 Bridge Module 的私有状态转换辅助函数。
+
+## 运行时请求与事件路径
+
+Bridge 在目标 Component 经其 Ops 发起调用时，转而调用源 Component 的公开 Interface；Platform 只在装配期注入两个长期 Handle。Bridge 不拥有硬件 ISR 或任务事件。
 
 ## 约束
 

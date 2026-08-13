@@ -6,7 +6,7 @@
 >
 > 当前模型：日志核心固定深度 RAM 队列、LogService 静态消息块池、普通任务非阻塞投递、Log Task 单消费者、Platform 装配输出 Adapter
 
-## 1. 分层
+## 1. Module 所有权与装配
 
 ```text
 APP 启动阶段 / Platform 启动路径
@@ -37,7 +37,9 @@ Platform/log
 
 日志核心不包含 USB、HAL 或 CubeMX 头文件。USB Adapter 不访问日志内部 Handle。
 
-## 2. 初始化调用链
+上图列出 Module 角色与装配关系，不表示统一的 `#include` 或单一路径。日志的编译期依赖遵循 [architecture_standard.md](architecture_standard.md)：Log Component 拥有输出 Ops，USB Adapter 实现 Ops，Platform 持有并绑定 Adapter Context，Service/APP 只使用各自公开 Interface。
+
+## 2. 初始化运行时路径
 
 ```text
 app_init

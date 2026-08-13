@@ -11,7 +11,7 @@
 ## 2. 文件、目录与 Module
 
 - 目录、C 源文件、私有头文件使用小写 `snake_case`；例如 `monitor_task.c`、`filesystem_service.c`。
-- 一个目录应对应一个清晰 Module；其中的 README 说明职责、资源所有权、公开 Interface、允许调用的 Interface、禁止依赖与任务/ISR 约束。
+- 一个目录应对应一个清晰 Module；其中的 README 说明职责、资源与抽象所有权、公开 Interface、编译期依赖、运行时请求路径、事件/ISR 路径、禁止依赖与生命周期约束。不得把这些内容笼统写成“调用的 Interface”。
 - 任务入口文件使用 `<responsibility>_task.c`，入口函数同名；例如 `storage_task()`、`monitor_task()`。
 - CubeMX 或第三方目录不修改既有文件名；自维护代码只能使用其明确的 USER CODE 或桥接接缝。
 
@@ -53,4 +53,4 @@
 3. 私有符号是否已经保持在本文件/本 Module，维持 Locality？
 4. 名称是否保留了必要的 Adapter、资源和并发语义，同时删除了重复层名？
 5. Doxygen 是否只位于定义处，且复杂流程是否解释了关键约束？
-
+6. README 是否已经区分功能/抽象所有权、编译期依赖和运行时请求/事件路径？

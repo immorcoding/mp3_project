@@ -9,12 +9,16 @@ SD Card Component 是面向逻辑块的可复用介质状态机。它维护生�
 - `SDCard_StartReadBlocks()`、`SDCard_StartWriteBlocks()`：只启动 DMA，并进入 `BUSY`；
 - `SDCard_CompleteTransfer()`、`SDCard_FailTransfer()`：由普通上下文在传输事件后推进状态；
 - `SDCard_GetInfo()`、`SDCard_GetState()`、`SDCard_GetDiagnostics()`；
-- `SDCard_PortOpsTypeDef`：由消费方定义、由具体 Adapter 实现的端口契约。
+- `SDCard_PortOpsTypeDef`：由需要块介质能力的 SD Card Component 定义、由具体 Adapter 实现的端口契约。
 
-## 调用的 Interface
+## 编译期依赖
 
 - 调用注入的 `SDCard_PortOpsTypeDef`；
 - 仅使用 ISO C，不包含 HAL、Adapter、RTOS 或 FatFs Interface。
+
+## 运行时请求与事件路径
+
+SD Card Device 经自身拥有的 `SDCard_PortOpsTypeDef` 发起介质请求；Adapter 实现 PortOps，Platform 装配 Context。DMA 完成事件由上层普通上下文调用 `SDCard_CompleteTransfer()` 或 `SDCard_FailTransfer()` 推进，ISR 不直接进入 Device。
 
 ## 约束
 
