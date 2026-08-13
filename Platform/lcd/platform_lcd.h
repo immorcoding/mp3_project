@@ -22,5 +22,14 @@ typedef struct
 
 Platform_StatusTypeDef Platform_LCD_Init(void);
 Platform_StatusTypeDef Platform_LCD_ReadID(Platform_LCD_IDTypeDef *id);
+Platform_StatusTypeDef Platform_LCD_DrawPixel(uint16_t x,
+                                              uint16_t y,
+                                              uint16_t color);
+Platform_StatusTypeDef Platform_LCD_FillRect(uint16_t x_start,
+                                             uint16_t y_start,
+                                             uint16_t x_end,
+                                             uint16_t y_end,
+                                             uint16_t color);
+Platform_StatusTypeDef Platform_LCD_FillScreen(uint16_t color);
 
 #endif /* PLATFORM_LCD_H */

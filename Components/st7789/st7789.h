@@ -45,8 +45,15 @@ typedef enum
     ST7789_ERROR_NOT_READY,     /**< 当前生命周期状态不允许操作。 */
     ST7789_ERROR_RESET,         /**< 硬件复位前后的端口操作失败。 */
     ST7789_ERROR_WRITE_COMMAND, /**< 写入命令字节失败。 */
+    ST7789_ERROR_WRITE_DATA,    /**< 写入命令参数或像素数据失败。 */
     ST7789_ERROR_READ_ID        /**< 读取 RDDID 返回位流失败。 */
 } ST7789_ErrorTypeDef;
+
+/** @brief 当前 ST7789 模组可见区域的水平像素数。 */
+#define ST7789_WIDTH   240u
+
+/** @brief 当前 ST7789 模组可见区域的垂直像素数。 */
+#define ST7789_HEIGHT  320u
 
 /** @brief ST7789 的 24 位 RDDID 解码结果。 */
 typedef struct
@@ -102,5 +109,16 @@ typedef struct
 ST7789_StatusTypeDef ST7789_Init(ST7789_HandleTypeDef *hst7789);
 ST7789_StatusTypeDef ST7789_ReadID(ST7789_HandleTypeDef *hst7789,
                                    ST7789_IDTypeDef *id);
+ST7789_StatusTypeDef ST7789_DisplayInit(ST7789_HandleTypeDef *hst7789);
+ST7789_StatusTypeDef ST7789_DrawPixel(ST7789_HandleTypeDef *hst7789,
+                                      uint16_t x,
+                                      uint16_t y,
+                                      uint16_t color);
+ST7789_StatusTypeDef ST7789_FillRect(ST7789_HandleTypeDef *hst7789,
+                                     uint16_t x_start,
+                                     uint16_t y_start,
+                                     uint16_t x_end,
+                                     uint16_t y_end,
+                                     uint16_t color);
 
 #endif /* ST7789_H */

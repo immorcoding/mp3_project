@@ -11,15 +11,13 @@
   */
 
 #include "APP/tasks/storage/storage_task.h"
+#include "APP/tasks/storage/storage_task_config.h"
 #include "APP/tasks/storage/storage_sd.h"
 
 #include <stdint.h>
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
-
-/** @brief SD 卡检测输入在最后一个边沿后的最短稳定时间。 */
-#define STORAGE_SD_DEBOUNCE_MS 30U
 
 /**
   * @brief  运行 Storage Task 的 SD 卡热插拔调度循环。

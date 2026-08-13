@@ -11,6 +11,7 @@
   */
 
 #include "APP/tasks/monitor/monitor_task.h"
+#include "APP/tasks/monitor/monitor_task_config.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -25,10 +26,6 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
 #include "main.h"
-
-#define MONITOR_TASK_PERIOD_MS           500U
-#define MONITOR_SNAPSHOT_INTERVAL         10U
-#define MONITOR_LOG_MESSAGE_LENGTH        64U
 
 /**
   * @brief  返回由 App 创建或 FreeRTOS 内核创建的任务总栈深度。

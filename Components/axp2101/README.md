@@ -19,4 +19,4 @@ Device 经自身拥有的 Bus Ops 请求外部总线；Bridge 或其他 Adapter 
 
 - 不包含 SoftI2C、HAL 或 GPIO 头；
 - 不新增虚假的“通用 PMIC”抽象；
-- 寄存器常量保留在 `axp2101_regs.h`，不能泄漏到上层产品流程。
+- `axp2101_config.h` 集中保存默认地址、寄存器地址和 ALDO 使能位掩码等私有固定定义；上层不能直接依赖其中的寄存器语义或绕过 Device Interface。

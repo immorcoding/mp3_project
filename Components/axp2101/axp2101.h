@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "Components/axp2101/axp2101_regs.h"
+#include "Components/axp2101/axp2101_config.h"
 
 #ifdef __cplusplus
 extern "C" {

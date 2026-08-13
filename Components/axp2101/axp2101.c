@@ -13,13 +13,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "Components/axp2101/axp2101.h"
 #include <stddef.h>
-#include "Components/axp2101/axp2101_regs.h"
-
-/* Private defines -----------------------------------------------------------*/
-/** @brief REG90H bit0：ALDO1 输出使能位，1 为开启，0 为关闭。 */
-#define AXP2101_LDO_CTRL0_ALDO1_ENABLE_MASK  (1u << 0)
-/** @brief REG90H bit1：ALDO2 输出使能位，1 为开启，0 为关闭。 */
-#define AXP2101_LDO_CTRL0_ALDO2_ENABLE_MASK  (1u << 1)
+#include "Components/axp2101/axp2101_config.h"
 
 /* Private functions ---------------------------------------------------------*/
 /**

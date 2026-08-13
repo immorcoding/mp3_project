@@ -43,7 +43,7 @@ Components/
   axp2101/
     axp2101.c
     axp2101.h
-    axp2101_regs.h
+    axp2101_config.h
 
 Adapters/
   bridge/
@@ -69,7 +69,7 @@ Platform/
 | AXP2101 SoftI2C Adapter | Bus Ops 表、SoftI2C 到 AXP2101 状态的转换 | SoftI2C 实例、引脚、启动配置 |
 | Platform Power | 本板唯一实例、引脚、时序参数、启动配置、Audio/LCD 电源映射 | SoftI2C 位操作、应用日志和产品流程 |
 
-`axp2101_regs.h` 属于芯片驱动，不能放在 Adapter。Adapter 替换后，芯片寄存器定义
+`axp2101_config.h` 属于芯片驱动，不能放在 Adapter。Adapter 替换后，芯片寄存器定义
 仍然有效；这正是判断所有权的简单方法。
 
 AXP2101 SoftI2C Adapter 位于 `Adapters/bridge/`：它只连接两个 Component Interface，不依赖 STM32 HAL、CMSIS 或 FreeRTOS。STM32 GPIO Adapter 位于 `Adapters/stm32_hal/`：它才是具体 MCU 后端实现。目录按这种依赖性质分组，而不是按调用链顺序分组。
@@ -339,7 +339,7 @@ Power_GetBatteryStatus(...)
 - 板级电源接口：[`../Platform/power/platform_power.h`](../Platform/power/platform_power.h)
 - AXP2101 驱动：[`../Components/axp2101/axp2101.c`](../Components/axp2101/axp2101.c)
 - AXP2101 接口：[`../Components/axp2101/axp2101.h`](../Components/axp2101/axp2101.h)
-- 寄存器定义：[`../Components/axp2101/axp2101_regs.h`](../Components/axp2101/axp2101_regs.h)
+- 固定定义：[`../Components/axp2101/axp2101_config.h`](../Components/axp2101/axp2101_config.h)
 - SoftI2C 到 AXP2101 Bridge：[`../Adapters/bridge/axp2101_soft_i2c/axp2101_soft_i2c_adapter.c`](../Adapters/bridge/axp2101_soft_i2c/axp2101_soft_i2c_adapter.c)
 - SoftI2C Component：[`../Components/soft_i2c/soft_i2c.c`](../Components/soft_i2c/soft_i2c.c)
 - STM32 GPIO Adapter：[`../Adapters/stm32_hal/soft_i2c/soft_i2c_stm32_hal_adapter.c`](../Adapters/stm32_hal/soft_i2c/soft_i2c_stm32_hal_adapter.c)

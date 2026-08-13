@@ -12,15 +12,10 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "Components/sd/sd.h"
+#include "Components/sd/sd_config.h"
 
 #include <stddef.h>
 #include <string.h>
-
-/* Private defines -----------------------------------------------------------*/
-/** @brief 单次阻塞块传输允许的默认时间。 */
-#define SDCARD_TRANSFER_TIMEOUT_MS  1000u
-/** @brief 等待卡完成内部编程并回到 TRANSFER 状态的默认时间。 */
-#define SDCARD_SYNC_TIMEOUT_MS      1000u
 
 /* Private functions ---------------------------------------------------------*/
 /**

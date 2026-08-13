@@ -12,6 +12,7 @@
   */
 
 #include "Service/filesystem/filesystem_sd_transfer.h"
+#include "Service/filesystem/filesystem_config.h"
 
 #include <limits.h>
 #include <string.h>
@@ -19,15 +20,6 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 #include "Platform/sd/platform_sd.h"
-
-/** @brief FATFS 与当前 SD Card Device 使用的单个逻辑块大小，单位为字节。 */
-#define FILESYSTEM_SD_BLOCK_SIZE             512U
-
-/** @brief 单次 SDMMC DMA 最多合并的逻辑块数；8 块即 4 KiB 中转缓冲区。 */
-#define FILESYSTEM_SD_DMA_BLOCK_COUNT        64U
-
-/** @brief 当前产品所有 CPU/DMA 共享缓冲区必须满足的最小对齐，单位为字节。 */
-#define FILESYSTEM_SD_DMA_BUFFER_ALIGNMENT   PLATFORM_DMA_BUFFER_ALIGNMENT
 
 #if ((FILESYSTEM_SD_BLOCK_SIZE % FILESYSTEM_SD_DMA_BUFFER_ALIGNMENT) != 0U)
 #error "SD logical block size must satisfy the SD DMA buffer alignment contract."

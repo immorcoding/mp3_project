@@ -16,6 +16,10 @@ SD Card Component 是面向逻辑块的可复用介质状态机。它维护生�
 - 调用注入的 `SDCard_PortOpsTypeDef`；
 - 仅使用 ISO C，不包含 HAL、Adapter、RTOS 或 FatFs Interface。
 
+## 私有配置
+
+- `sd_config.h` 集中保存阻塞块传输和介质同步的默认超时；仅本 Component 的 Implementation 可包含它，Adapter 与上层不可据此决定超时策略。
+
 ## 运行时请求与事件路径
 
 SD Card Device 经自身拥有的 `SDCard_PortOpsTypeDef` 发起介质请求；Adapter 实现 PortOps，Platform 装配 Context。DMA 完成事件由上层普通上下文调用 `SDCard_CompleteTransfer()` 或 `SDCard_FailTransfer()` 推进，ISR 不直接进入 Device。

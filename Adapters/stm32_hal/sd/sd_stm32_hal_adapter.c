@@ -12,14 +12,12 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "Adapters/stm32_hal/sd/sd_stm32_hal_adapter.h"
+#include "Adapters/stm32_hal/sd/sd_stm32_hal_adapter_config.h"
 #include "Adapters/cortex/cache/cortex_m7_dcache_adapter.h"
 #include "stm32h7xx_hal_sd.h"
 
 #include <stddef.h>
 #include <stdint.h>
-
-/** @brief SDMMC HAL DMA 使用的固定逻辑块大小，单位为字节。 */
-#define SD_STM32_HAL_DMA_LOGICAL_BLOCK_SIZE  512U
 
 /* Private functions ---------------------------------------------------------*/
 /**

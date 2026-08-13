@@ -14,6 +14,7 @@
 #if STORAGE_SD_BENCHMARK_ENABLE
 /* Includes ------------------------------------------------------------------*/
 #include "APP/tasks/storage/storage_sd_benchmark.h"
+#include "APP/tasks/storage/storage_sd_benchmark_config.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -22,19 +23,6 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 #include "Service/log/log_service.h"
-
-/** @brief 测试文件写入的总有效载荷，64 MiB 足以稀释文件创建和关闭的固定开销。 */
-#define STORAGE_SD_BENCHMARK_TOTAL_BYTES       (64U * 1024U * 1024U)
-
-/** @brief 单次 FatFs f_write() 的应用层缓冲区长度，单位为字节。 */
-#define STORAGE_SD_BENCHMARK_CHUNK_BYTES       (32U * 1024U)
-
-/** @brief 总有效载荷按固定应用层缓冲区分割后的块数。 */
-#define STORAGE_SD_BENCHMARK_CHUNK_COUNT       \
-    (STORAGE_SD_BENCHMARK_TOTAL_BYTES / STORAGE_SD_BENCHMARK_CHUNK_BYTES)
-
-/** @brief 每个应用层缓冲区头部用于标记写入顺序的字节数。 */
-#define STORAGE_SD_BENCHMARK_SEQUENCE_BYTES    4U
 
 /** @brief 测试使用的 FAT 文件路径；完整性校验通过后会删除该文件。 */
 static const TCHAR storage_sd_benchmark_path[] = {

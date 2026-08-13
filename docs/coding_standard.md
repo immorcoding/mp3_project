@@ -12,6 +12,8 @@
 
 - 目录、C 源文件、私有头文件使用小写 `snake_case`；例如 `monitor_task.c`、`filesystem_service.c`。
 - 一个目录应对应一个清晰 Module；其中的 README 说明职责、资源与抽象所有权、公开 Interface、编译期依赖、运行时请求路径、事件/ISR 路径、禁止依赖与生命周期约束。不得把这些内容笼统写成“调用的 Interface”。
+- 固定参数不应长期散落在 `.c` 顶部：同一 Module 的可调时序、缓冲区大小、测试规模、板级极性和策略位应放入本目录私有的 `<module>_config.h`。该头不是公开 Interface，其他 Module 不得包含它；只有调用者必须理解的稳定能力、尺寸或类型才留在公开 `.h`。
+- 同一 Module 的固定定义统一归入 `<module>_config.h`：除可调时序和缓冲区大小外，也包含芯片默认地址、寄存器地址和位掩码等协议常量。它们不能泄漏为 Platform、Service 或 APP 的直接依赖。
 - 任务入口文件使用 `<responsibility>_task.c`，入口函数同名；例如 `storage_task()`、`monitor_task()`。
 - CubeMX 或第三方目录不修改既有文件名；自维护代码只能使用其明确的 USER CODE 或桥接接缝。
 

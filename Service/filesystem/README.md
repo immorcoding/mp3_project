@@ -31,6 +31,7 @@ Filesystem 在 Storage Task 独占期向下调用 `Platform_SD_*` 与 FatFs `f_*
 - 从 FatFs 的视角，`BSP_SD_ReadBlocks()` 与 `BSP_SD_WriteBlocks()` 仍是同步的：只有 DMA 完成、Cache 维护完成并提交 Platform SD 状态后才返回。
 - 私有的 32 字节对齐 AXI SRAM bounce buffer 向 FatFs 调用者隐藏 DMA 可达性、对齐和 D-Cache 规则。不使用 `volatile`；数据可见性由 Cache 维护保证。
 - ISR 仅发布事件。FatFs 调用、Cache 维护、缓冲区复制和 `Platform_SD_CompleteTransfer()` 都在任务上下文执行。
+- `filesystem_config.h` 集中保存卷路径长度、格式化工作区、32 KiB DMA 中转块和同步等待超时；它仅供本 Service 的 Implementation 使用，调用者不能借此访问 bounce buffer 或改变 DMA 生命周期。
 
 ## 命名
 

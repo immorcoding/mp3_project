@@ -24,6 +24,10 @@
 - 不向上公开 AXP2101 寄存器或 I2C Context；
 - 不在 ISR 或任务中隐式重做启动配置。
 
+## 私有配置
+
+`platform_power_config.h` 保存本板 SoftI2C 时序以及 AXP2101 `COMMON_CONFIG` 的启动目标位。它代表 PCB 供电策略，不是公开的 PMIC 寄存器 Interface；修改时必须执行原理图、数据手册和实测复核。
+
 ## 命名
 
 公开能力使用 `Platform_Power_*`；私有 Implementation 使用 `platform_power_*`。

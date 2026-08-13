@@ -23,3 +23,4 @@ SD Card Device 经已绑定 PortOps 发起块访问时，本 Adapter 调用 HAL 
 - 不固定使用 `hsd1`，不注册 EXTI，也不执行 FatFs 操作；
 - `ReadBlocks()` / `WriteBlocks()` 保留阻塞轮询路径；`StartReadBlocks()` / `StartWriteBlocks()` 只启动 DMA，`Sync()` 在任务上下文确认传输结果并完成读取方向的 Cache 维护；
 - 不拥有 DMA 等待、任务通知、超时策略或中转缓冲区；这些属于 Filesystem Service。
+- `sd_stm32_hal_adapter_config.h` 只保存 HAL DMA 字节数换算所用的固定逻辑块大小；它是本 Adapter 私有实现参数，不是 Component 的块设备契约。

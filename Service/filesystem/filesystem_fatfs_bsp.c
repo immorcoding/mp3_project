@@ -11,13 +11,12 @@
   */
 
 #include "FATFS/Target/bsp_driver_sd.h"
+#include "Service/filesystem/filesystem_config.h"
 
 #include <string.h>
 
 #include "Platform/sd/platform_sd.h"
 #include "Service/filesystem/filesystem_sd_transfer.h"
-
-#define FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS 30000U
 
 /**
   * @brief  根据 Platform SD 状态实现 FatFs BSP 初始化钩子。

@@ -11,18 +11,13 @@
   */
 
 #include "Service/filesystem/filesystem_service.h"
+#include "Service/filesystem/filesystem_config.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "FATFS/App/fatfs.h"
 #include "Service/filesystem/filesystem_sd_transfer.h"
-
-/** @brief CubeMX 生成的逻辑卷路径固定为 "N:/" 加结尾 '\0'。 */
-#define FILESYSTEM_DRIVE_PATH_LENGTH        4U
-
-/** @brief 当前 FatFs 配置使用 512 B 扇区，格式化工作区无需占用任务栈。 */
-#define FILESYSTEM_MKFS_WORK_BUFFER_SIZE    512U
 
 /** @brief 格式化期间使用的 Service 私有静态工作区。 */
 static uint8_t filesystem_mkfs_work_buffer[FILESYSTEM_MKFS_WORK_BUFFER_SIZE];

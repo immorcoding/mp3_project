@@ -1,12 +1,13 @@
 /**
   ******************************************************************************
-  * @file    axp2101_regs.h
-  * @brief   AXP2101 默认地址、芯片 ID 和寄存器地址定义。
+  * @file    axp2101_config.h
+  * @brief   AXP2101 Component 的私有固定定义。
   *
   * @details
-  *          本文件只描述芯片寄存器映射，不执行任何总线访问。寄存器名称和
-  *          地址依据 AXP2101 Datasheet V1.4。位级配置应在设备驱动中使用
-  *          语义明确的掩码完成，避免在应用层直接写入裸寄存器值。
+  *          本文件集中保存 AXP2101 的默认地址、芯片 ID、寄存器映射和固定
+  *          位掩码，不执行任何总线访问。寄存器名称和地址依据 AXP2101
+  *          Datasheet V1.4；位级配置应在 Device Implementation 中使用语义
+  *          明确的掩码完成，避免在应用层直接写入裸寄存器值。
   *
   * @note    这里多数宏只定义“寄存器地址”，不等于该寄存器可安全整字节
   *          覆盖。保留位、写 1 清零位和动作位必须按数据手册采用读改写或
@@ -14,8 +15,8 @@
   ******************************************************************************
   */
 
-#ifndef AXP2101_REGS_H
-#define AXP2101_REGS_H
+#ifndef AXP2101_CONFIG_H
+#define AXP2101_CONFIG_H
 
 /* Device identification ----------------------------------------------------*/
 /** @brief AXP2101 默认 7 位 I2C 地址，不包含读写位。 */
@@ -96,6 +97,12 @@
 #define XPOWERS_AXP2101_INTSTS3                          (0x4A)
 #define XPOWERS_AXP2101_INTSTS_CNT                       (3)
 
+/* LDO control register bit definitions -------------------------------------*/
+/** @brief REG90H bit0：ALDO1 输出使能位，1 为开启，0 为关闭。 */
+#define AXP2101_LDO_CTRL0_ALDO1_ENABLE_MASK              (1u << 0)
+/** @brief REG90H bit1：ALDO2 输出使能位，1 为开启，0 为关闭。 */
+#define AXP2101_LDO_CTRL0_ALDO2_ENABLE_MASK              (1u << 1)
+
 /* Battery temperature sensing registers ------------------------------------*/
 #define XPOWERS_AXP2101_TS_PIN_CTRL                      (0x50)
 #define XPOWERS_AXP2101_TS_HYSL2H_SET                    (0x52)
@@ -169,4 +176,4 @@
 #define XPOWERS_AXP2101_BAT_PERCENT_DATA                 (0xA4)
 
 
-#endif
+#endif /* AXP2101_CONFIG_H */
