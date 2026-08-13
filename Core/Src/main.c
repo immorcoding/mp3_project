@@ -25,6 +25,7 @@
 #include "tim.h"
 #include "usb_device.h"
 #include "gpio.h"
+#include "fmc.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -109,6 +110,7 @@ int main(void)
   MX_FATFS_Init();
   MX_TIM5_Init();
   MX_SPI1_Init();
+  MX_FMC_Init();
   /* USER CODE BEGIN 2 */
   app_init();
   /* USER CODE END 2 */
