@@ -11,13 +11,18 @@ FMC 内核时钟来自 PLL2，为 270 MHz；`SDClockPeriod = 2`，故 SDRAM 时�
 
 ## 所有权与初始化
 
-`Core/Src/fmc.c` 是 CubeMX 所有的 FMC 控制器和引脚配置。`Platform/sdram` 借用其 `hsdram1`，在
-`Platform_Init()` 的最开始执行：CLK ENABLE → 等待 1 ms → PRECHARGE ALL → 8 次 AUTO REFRESH →
-LOAD MODE REGISTER → Program Refresh Rate。
+`Core/Src/fmc.c` 是 CubeMX 所有的 FMC 控制器和引脚配置。其 USER CODE 区的
+`SDRAM_EarlyInit()` 是一个启动接缝：启动文件在 `SystemInit()` 后、`.data/.bss` 启动循环前调用它。
+该函数只使用局部状态，以 D1HCLK 建立约 32 MHz 的临时 SDRAM 配置并发送 JEDEC 命令，保证早期外部
+存储段具备可访问性。
 
-这不是 `sdram_early_init()`：后者仅适用于启动代码需要在 `main()` 前读写 SDRAM，例如把 `.data`、
-`.bss` 或早期堆放入该区域。当前工程尚未将任何链接器段放入 `0xC0000000`，故常规 Platform 初始化
-既更安全也能避免启动期重复配置。
+进入 `main()` 后，CubeMX 的 `MX_FMC_Init()` 切换 FMC 到 PLL2；随后 `Platform/sdram` 借用
+`hsdram1`，在 `Platform_Init()` 的最开始按最终 135 MHz 参数执行：CLK ENABLE → 等待 1 ms →
+PRECHARGE ALL → 8 次 AUTO REFRESH → LOAD MODE REGISTER → Program Refresh Rate。早期与正式
+初始化之间的 SDRAM 内容不作为有效数据，因此 `NOLOAD` 缓冲区必须由其拥有者在正式初始化后主动填充。
+
+链接脚本当前预留 `0xC0000000` 的 `.sdram_framebuffer (NOLOAD)` 段，首尾按 32 字节对齐。它不从
+Flash 加载、也不由启动代码清零；这样可避免启动期搬运大帧缓冲，但首次显示或 DMA 前必须完整写入。
 
 ## 诊断与测速
 

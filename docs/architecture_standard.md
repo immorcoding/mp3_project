@@ -120,6 +120,9 @@ Service 目录中的 Module 可以组织多个 Component 和 Platform 能力，�
 
 - 公开厂商规定的 Handle、状态码和回调；
 - 在生成器允许的 `USER CODE` 区调用自维护入口。
+- 当链接脚本已声明必须在 C 运行库前访问的外部存储段时，可在 `fmc.c` 的 `USER CODE`
+  区实现早期外部存储初始化。该启动接缝只可使用局部状态和 Vendor/HAL 能力，不能进入
+  APP、Service、Platform 或 FreeRTOS，也不构成对上公开的产品 Interface。
 
 禁止：
 

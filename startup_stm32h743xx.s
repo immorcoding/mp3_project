@@ -64,7 +64,7 @@ Reset_Handler:
   bl  ExitRun0Mode
 /* Call the clock system initialization function.*/
   bl  SystemInit
-/* Early SDRAM initialization */
+/* 外部 SDRAM 的早期初始化：必须在 .data/.bss 启动循环之前完成。 */
   bl  SDRAM_EarlyInit
 
 /* Copy the data segment initializers from flash to SRAM */

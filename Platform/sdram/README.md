@@ -25,7 +25,12 @@ Interface 请求 Platform SDRAM；SDRAM 没有中断或任务通知路径。
 - 基地址为 `0xC0000000`，容量固定为 32 MiB；
 - `Platform_SDRAM_RunDiagnostic()` 会覆盖整个容量，不能与 LVGL 帧缓冲、堆或任何业务数据并发；
 - 本 Module 不负责链接器段放置。只有验证通过并单独审查启动时序后，才可把 `.bss`、堆或帧缓冲放入 SDRAM；
-- `sdram_early_init()` 一类 main 前初始化仅在启动代码已经需要访问 SDRAM 时才需要；当前工程未放置这类段，故不使用它。
+- `Core/Src/fmc.c` 的 `SDRAM_EarlyInit()` 是启动接缝，不属于本 Module 的公开
+  Interface。它在 `.data/.bss` 启动循环前使用临时约 32 MHz 时序使 SDRAM 可访问，
+  随后 CubeMX 和本 Module 仍会按最终 135 MHz 参数完成正式初始化；两阶段之间的
+  SDRAM 内容不应被依赖；
+- 链接脚本当前预留 `.sdram_framebuffer (NOLOAD)`。该段不加载、也不自动清零；其
+  未来拥有者必须在正式 SDRAM 初始化后、首次交给 LCD/DMA 之前完整写入缓冲区。
 
 ## 禁止依赖
 

@@ -24,8 +24,6 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
-// uint16_t frame_buffer[200] __attribute__((section(".sdram_data")));	//test only, for SDRAM test, not used in LCD task
-
 /** @brief 一项 LCD 全屏纯色测试的颜色值和可读名称。 */
 typedef struct
 {
