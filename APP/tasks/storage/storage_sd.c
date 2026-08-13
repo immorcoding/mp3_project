@@ -12,6 +12,7 @@
 
 #include "APP/tasks/storage/storage_sd.h"
 #include "APP/tasks/storage/storage_sd_benchmark.h"
+#include "APP/app_config.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -225,7 +226,9 @@ void storage_sd_init(TaskHandle_t task_handle)
         storage_sd_log_card_ready("Card ready");
         if (storage_sd_mount() == FR_OK)
         {
+#if STORAGE_SD_BENCHMARK_ENABLE //sd read/write benchmark
             (void)storage_sd_benchmark_run();
+#endif
         }
     }
     else

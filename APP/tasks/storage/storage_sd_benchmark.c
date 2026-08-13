@@ -10,7 +10,8 @@
   *          吞吐量测试完成后另行读取并校验数据，避免 CPU 校验工作影响读速结果。
   ******************************************************************************
   */
-
+#include "APP/app_config.h"
+#if STORAGE_SD_BENCHMARK_ENABLE
 /* Includes ------------------------------------------------------------------*/
 #include "APP/tasks/storage/storage_sd_benchmark.h"
 
@@ -488,3 +489,4 @@ exit:
     storage_sd_benchmark_running = false;
     return success;
 }
+#endif /* STORAGE_SD_BENCHMARK_ENABLE */

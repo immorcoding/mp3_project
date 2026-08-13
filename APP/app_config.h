@@ -12,9 +12,16 @@
   *          增加宏，避免预先维护没有实际使用者的占位配置。
   ******************************************************************************
   */
+#pragma once
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
 
+// #if defined(DEBUG) && (DEBUG == 1)
+// #define STORAGE_SD_BENCHMARK_ENABLE 1
+// #else
+// #define STORAGE_SD_BENCHMARK_ENABLE 0 
+// #endif /* DEBUG */
 
+#define STORAGE_SD_BENCHMARK_ENABLE 0
 
 #endif /* APP_CONFIG_H */
