@@ -9,6 +9,10 @@
 
 当前 `st7789_spi/` 将 SPI 阻塞收发、CS/D-C/RESET GPIO 和 HAL 时基装配为 ST7789 Device 的 PortOps；它不包含显示初始化表、DMA 或 LVGL。
 
+`temp/` 则直接封装 ADC3 内部 Temperature Sensor、VREFINT 与芯片工厂标定数据，供
+Platform 取得 MCU 结温。当前它只有一个 STM32H7 后端，不为尚不存在的第二种实现
+预先构造 Component Ops。
+
 ## 编译期依赖
 
 - Component 定义的 Ops、状态和事件类型；

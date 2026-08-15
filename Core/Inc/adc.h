@@ -1,9 +1,9 @@
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * File Name          : FMC.h
-  * Description        : This file provides code for the configuration
-  *                      of the FMC peripheral.
+  * @file    adc.h
+  * @brief   This file contains all the function prototypes for
+  *          the adc.c file
   ******************************************************************************
   * @attention
   *
@@ -18,28 +18,27 @@
   */
 /* USER CODE END Header */
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __FMC_H
-#define __FMC_H
+#ifndef __ADC_H__
+#define __ADC_H__
+
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
 /* USER CODE BEGIN Includes */
-void SDRAM_EarlyInit(void);
+
 /* USER CODE END Includes */
 
-extern SDRAM_HandleTypeDef hsdram1;
+extern ADC_HandleTypeDef hadc3;
 
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
 
-void MX_FMC_Init(void);
-void HAL_SDRAM_MspInit(SDRAM_HandleTypeDef* hsdram);
-void HAL_SDRAM_MspDeInit(SDRAM_HandleTypeDef* hsdram);
+void MX_ADC3_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
@@ -48,12 +47,6 @@ void HAL_SDRAM_MspDeInit(SDRAM_HandleTypeDef* hsdram);
 #ifdef __cplusplus
 }
 #endif
-#endif /*__FMC_H */
 
-/**
-  * @}
-  */
+#endif /* __ADC_H__ */
 
-/**
-  * @}
-  */

@@ -6,7 +6,8 @@
 
 - `main.c`：调用 `app_init()`；
 - `stm32h7xx_it.c`：将外设中断交给相应 `HAL_*_IRQHandler()`；
-- `gpio.c`、`sdmmc.c`、`i2s.c`：提供 CubeMX 的全局 Handle 与引脚配置。
+- `gpio.c`、`sdmmc.c`、`i2s.c`、`adc.c`：提供 CubeMX 的全局 Handle 与引脚配置；
+  `adc.c` 中的 `hadc3` 为内部温度传感器和 VREFINT 的 ADC3 Regular Sequence。
 - `fmc.c` 的 `SDRAM_EarlyInit()`：在 `SystemInit()` 后、`.data/.bss` 启动循环前
   临时初始化外部 SDRAM，使链接器已声明的早期外部存储段可安全访问；它只使用局部
   状态，不能进入 APP、Service、Platform 或 FreeRTOS。

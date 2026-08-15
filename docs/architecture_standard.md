@@ -159,6 +159,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/stm32_hal/st7789_spi` | STM32 HAL SPI/GPIO 到 ST7789 PortOps。 |
 | `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |
 | `Adapters/stm32_hal/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
+| `Adapters/stm32_hal/temp` | STM32H7 ADC3 内部温度传感器与 VREFINT 的校准、采样和工厂标定换算。 |
 | `Adapters/stm32_hal/irq/stm32_gpio_exti_irq` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
 | `Adapters/stm32_hal/irq/stm32_sdmmc_irq` | 按 `SD_HandleTypeDef` 注册 HAL SD 完成、错误和中止回调，并发布强类型传输事件。 |
 | `Adapters/stm32_hal/log_usb_cdc` | USB CDC 非阻塞输出和 HAL 毫秒时间源。 |
@@ -208,7 +209,7 @@ APP/Service 决定。
 - 注入 CubeMX Handle、GPIO、极性、总线参数；
 - 执行 `Adapter_Bind()`；
 - 初始化 Component；
-- 把芯片能力映射成 Audio、LCD、SD、Power 等产品语义；
+- 把芯片能力映射成 Audio、LCD、SD、Power、Temp 等产品语义；
 - 为板级设备持有并注册 GPIO EXTI 回调对象，并向上层发布轻量检测通知；
 - 选择日志输出 Adapter。
 
