@@ -13,6 +13,8 @@ Adapters/     STM32 HAL、Cortex-M 与跨 Component Bridge 的具体实现
 FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 Service/filesystem 实现
 ```
 
+当前显示硬件的最小验证由 LCD Task 完成：它通过 `Platform_LCD_*` 初始化 ST7789，并通过 `Platform_Touch_*` 复位 FT6X36、读取 Chip ID。触摸坐标、LVGL 输入回调、TP IRQ 订阅和低功耗唤醒尚未接入。
+
 完整分层与依赖规则见 [docs/architecture_standard.md](docs/architecture_standard.md)，命名与注释规则见 [docs/coding_standard.md](docs/coding_standard.md)，稳定领域术语见 [CONTEXT.md](CONTEXT.md)。`Core`、`Drivers`、`Middlewares`、`USB_DEVICE` 和 `FATFS/` 主要由 CubeMX 或第三方维护；不要把产品策略直接写入其中。FatFs 的 `BSP_SD_*` 强定义是外部 Override Seam，其实现放在 `Service/filesystem`，不修改生成的 DiskIO Glue。
 
 阅读分层时必须区分三件事：`Vendor → Adapters → Components → Platform → Service → APP` 表示功能/抽象所有权；编译期 `#include` 按 Interface 所有权和装配需要决定；运行时请求通常向下、硬件事件经已注册回调向上。第三方回调或 Override Seam（例如 FatFs `disk_* → BSP_SD_*`）是运行时入站接缝，不表示反向头文件依赖。

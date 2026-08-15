@@ -8,6 +8,7 @@ Adapters 是满足既有 Interface 的具体实现，按后端性质分为三类
 - Adapter Context 类型，仅供 Platform 在装配时创建和长期持有；
 - `stm32_hal/irq/` 中按硬件源划分的 GPIO EXTI、SDMMC 回调分发 Interface。
 - `stm32_hal/temp/` 中读取 STM32H7 内部温度传感器的结温采样 Interface；
+- `stm32_hal/ft6x36_i2c/` 中 FT6X36 的 I2C、RESET 和延时 PortOps 装配 Interface；
 - `bridge/` 中实现目标 Component Ops、并调用源 Component 公开 Interface 的转换 Module。
 
 ## 编译期依赖

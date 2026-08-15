@@ -13,6 +13,9 @@
 Platform 取得 MCU 结温。当前它只有一个 STM32H7 后端，不为尚不存在的第二种实现
 预先构造 Component Ops。
 
+`ft6x36_i2c/` 则把 HAL I2C 存储器读取、设备地址探测、TP_RST GPIO 和 HAL 时基实现为
+FT6X36 Device 的 PortOps；它不注册 TP_IRQ，也不包含 LVGL 输入逻辑。
+
 ## 编译期依赖
 
 - Component 定义的 Ops、状态和事件类型；

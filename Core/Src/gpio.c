@@ -65,6 +65,9 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, LCD_BL_Pin|PCM_XSMT_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(TP_RST_GPIO_Port, TP_RST_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, AXP2101_SDA_Pin|AXP2101_SCL_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin : USER_LED_Pin */
@@ -108,6 +111,19 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(SD_CD_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : TP_IRQ_Pin */
+  GPIO_InitStruct.Pin = TP_IRQ_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(TP_IRQ_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : TP_RST_Pin */
+  GPIO_InitStruct.Pin = TP_RST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(TP_RST_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : AXP2101_IRQ_Pin */
   GPIO_InitStruct.Pin = AXP2101_IRQ_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
@@ -122,6 +138,9 @@ void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI3_IRQn, 10, 0);
+  HAL_NVIC_EnableIRQ(EXTI3_IRQn);
+
   HAL_NVIC_SetPriority(EXTI9_5_IRQn, 10, 0);
   HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 

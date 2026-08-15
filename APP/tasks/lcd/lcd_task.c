@@ -5,8 +5,10 @@
   *
   * @details
  *          当前 Task 执行一次 LCD 电源、控制器初始化和 RDDID 读取，随后依次
- *          全屏显示红、绿、蓝、白，用于验证 RGB565、地址窗口和背光链路。它
- *          不接入 DMA、帧缓冲或 LVGL；后续显示循环将在这个成功基线之上扩展。
+ *          全屏显示红、绿、蓝、白，用于验证 RGB565、地址窗口和背光链路。LCD
+ *          成功初始化后，本 Task 还会复位触摸控制器并读取 Chip ID，验证 I2C2
+ *          与 TP_RST 的最小通信链路。它不接入 DMA、帧缓冲或 LVGL；后续显示
+ *          循环将在这个成功基线之上扩展。
   ******************************************************************************
   */
 
@@ -19,6 +21,7 @@
 
 #include "Components/log/log.h"
 #include "Platform/lcd/platform_lcd.h"
+#include "Platform/touch/platform_touch.h"
 #include "Service/log/log_service.h"
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
@@ -72,7 +75,37 @@ static bool lcd_task_run_color_test(void)
 }
 
 /**
- * @brief  开启 LCD、读取 ST7789 RDDID 并执行 RGB565 亮屏测试。
+ * @brief  复位当前触摸控制器并读取、记录其原始 Chip ID。
+ * @retval true I2C 地址探测和寄存器 0xA3 读取均成功。
+ * @retval false 触摸初始化或 Chip ID 读取失败。
+ * @note   当前仅验证 FT6X36 最小硬件通信链路，不解释触点坐标、不调用 LVGL，
+ *         也不使用 TP_IRQ。后续 LVGL 输入回调将在同一 LCD Task 中扩展轮询读取。
+ */
+static bool lcd_task_run_touch_id_test(void)
+{
+    uint8_t chip_id;
+    char message[LCD_TASK_LOG_MESSAGE_LENGTH];
+
+    if (Platform_Touch_Init() != PLATFORM_OK)
+    {
+        (void)LogService_Post(LOG_LEVEL_ERROR, "TOUCH", "Initialization failed.");
+        return false;
+    }
+
+    if (Platform_Touch_ReadID(&chip_id) != PLATFORM_OK)
+    {
+        (void)LogService_Post(LOG_LEVEL_ERROR, "TOUCH", "Chip ID read failed.");
+        return false;
+    }
+
+    (void)snprintf(message, sizeof(message), "Chip ID: 0x%02X.",
+                   (unsigned int)chip_id);
+    (void)LogService_Post(LOG_LEVEL_INFO, "TOUCH", message);
+    return true;
+}
+
+/**
+ * @brief  开启 LCD、验证触摸 Chip ID 并执行 RGB565 亮屏测试。
   * @param  handle 未使用，保留以满足 FreeRTOS TaskFunction_t。
   * @note   LCD Task 不直接包含 HAL SPI/GPIO 头文件。具体 GPIO、SPI1 和电源
  *         装配由 Platform LCD 完成；本 Task 只解释产品级成功或失败、调用纯色
@@ -105,6 +138,8 @@ void lcd_task(void *handle)
                        (unsigned int)id.ID2,
                        (unsigned int)id.ID3);
         (void)LogService_Post(LOG_LEVEL_INFO, "LCD", message);
+
+        // (void)lcd_task_run_touch_id_test();
 
         if (lcd_task_run_color_test())
         {
