@@ -5,7 +5,7 @@
 ## 公开 Interface
 
 - `ST7789_Init()`：按数据手册执行硬件复位时序；
-- `ST7789_DisplayInit()`：退出休眠、配置 RGB565 与扫描方向并打开显示输出；
+- `ST7789_DisplayInit()`：退出休眠、配置 RGB565、扫描方向和约 40 Hz 的正常模式帧率，并打开显示输出；
 - `ST7789_ReadID()`：读取并处理一个 dummy clock 后的 24 位 RDDID 返回值；
 - `ST7789_DrawPixel()`、`ST7789_FillRect()`：写入单点或包含边界的 RGB565 矩形；内部私有地使用 CASET、RASET 与 RAMWR；
 - `ST7789_PortOpsTypeDef`：由具体 Adapter 实现的串行传输、控制引脚和延时 Interface。

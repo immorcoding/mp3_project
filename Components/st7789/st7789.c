@@ -357,6 +357,7 @@ ST7789_StatusTypeDef ST7789_DisplayInit(ST7789_HandleTypeDef *hst7789)
 {
     const uint8_t color_mode = ST7789_COLMOD_RGB565;
     const uint8_t memory_access_control = ST7789_MADCTL_RGB_TOP_LEFT;
+    const uint8_t frame_rate_control = ST7789_FRCTRL2_40HZ;
     ST7789_ErrorTypeDef error = ST7789_ERROR_NONE;
     ST7789_PortStatusTypeDef port_status;
 
@@ -405,6 +406,15 @@ ST7789_StatusTypeDef ST7789_DisplayInit(ST7789_HandleTypeDef *hst7789)
         port_status = st7789_write_command_with_data(hst7789,
                                                        ST7789_COMMAND_MADCTL,
                                                        &memory_access_control,
+                                                       1u,
+                                                       &error);
+    }
+
+    if (port_status == ST7789_PORT_OK)
+    {
+        port_status = st7789_write_command_with_data(hst7789,
+                                                       ST7789_COMMAND_FRCTRL2,
+                                                       &frame_rate_control,
                                                        1u,
                                                        &error);
     }

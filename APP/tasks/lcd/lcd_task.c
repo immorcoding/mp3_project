@@ -125,21 +125,27 @@ void lcd_task(void *handle)
                                "LCD",
                                "Initialization or reset failed.");
     }
-    else if (Platform_LCD_ReadID(&id) != PLATFORM_OK)
-    {
-        (void)LogService_Post(LOG_LEVEL_ERROR, "LCD", "RDDID read failed.");
-    }
-    else
-    {
-        (void)snprintf(message,
-                       sizeof(message),
-                       "RDDID: %02X %02X %02X.",
-                       (unsigned int)id.ID1,
-                       (unsigned int)id.ID2,
-                       (unsigned int)id.ID3);
-        (void)LogService_Post(LOG_LEVEL_INFO, "LCD", message);
+    // else if (Platform_LCD_ReadID(&id) != PLATFORM_OK)
+    // {
+    //     (void)LogService_Post(LOG_LEVEL_ERROR, "LCD", "RDDID read failed.");
+    // }
+    // else
+    // {
+    //     (void)snprintf(message,
+    //                    sizeof(message),
+    //                    "RDDID: %02X %02X %02X.",
+    //                    (unsigned int)id.ID1,
+    //                    (unsigned int)id.ID2,
+    //                    (unsigned int)id.ID3);
+    //     (void)LogService_Post(LOG_LEVEL_INFO, "LCD", message);
+    // }
+    
+    (void)lcd_task_run_touch_id_test();
 
-        // (void)lcd_task_run_touch_id_test();
+    for (;;)
+    {
+        /* 持续刷屏测试。 */
+        vTaskDelay(pdMS_TO_TICKS(LCD_TASK_REFRESH_PERIOD_MS));
 
         if (lcd_task_run_color_test())
         {
@@ -151,11 +157,5 @@ void lcd_task(void *handle)
         {
             (void)LogService_Post(LOG_LEVEL_ERROR, "LCD", "Color test failed.");
         }
-    }
-
-    for (;;)
-    {
-        /* 保留 Task 实例供后续显示状态机接管，当前诊断完成后不占用 CPU。 */
-        vTaskDelay(pdMS_TO_TICKS(LCD_TASK_IDLE_PERIOD_MS));
     }
 }

@@ -14,8 +14,9 @@
 
 /** @brief 红、绿、蓝、白每种纯色在屏幕上保持的时间，单位为毫秒。 */
 #define LCD_TASK_COLOR_HOLD_PERIOD_MS     1000u
-/** @brief LCD 诊断完成后的低频空闲周期，单位为毫秒。 */
-#define LCD_TASK_IDLE_PERIOD_MS           1000u
+// /** @brief LCD 诊断完成后的低频空闲周期，单位为毫秒。 */
+// #define LCD_TASK_IDLE_PERIOD_MS           1000u
+#define LCD_TASK_REFRESH_PERIOD_MS           15u
 /** @brief 单条 LCD 诊断日志的本地格式化缓冲区长度。 */
 #define LCD_TASK_LOG_MESSAGE_LENGTH       64u
 /** @brief RGB565 纯红色。 */

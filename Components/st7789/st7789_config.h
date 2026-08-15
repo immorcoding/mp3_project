@@ -33,6 +33,8 @@
 #define ST7789_COMMAND_MADCTL                0x36u
 /** @brief 设置 MCU 接口写入像素格式。 */
 #define ST7789_COMMAND_COLMOD                0x3Au
+/** @brief 设置正常显示模式下的面板扫描帧率。 */
+#define ST7789_COMMAND_FRCTRL2               0xC6u
 
 /** @brief 退出休眠后等待内部模拟电路稳定的时间，单位为毫秒。 */
 #define ST7789_SLEEP_OUT_DELAY_MS             120u
@@ -49,6 +51,13 @@
 #define ST7789_COLMOD_RGB565                  0x55u
 /** @brief 左上为原点、从左到右和从上到下、RGB 像素顺序的 MADCTL 参数。 */
 #define ST7789_MADCTL_RGB_TOP_LEFT            0x00u
+/**
+ * @brief 正常显示模式约 40 Hz 的 FRCTRL2 参数。
+ * @details 保持点反转（NLA = 0），将 RTNA 设为 0x1E。
+ *          该数值按数据手册默认前后 porch 参数对应约 40 Hz，用于为整帧
+ *          SPI 写入保留更多时间余量，降低未接 TE/FMARK 时的撕裂可见度。
+ */
+#define ST7789_FRCTRL2_40HZ                   0x1Eu
 /** @brief 每次 SPI 阻塞写入的纯色像素数量。 */
 #define ST7789_FILL_BUFFER_PIXELS              128u
 /** @brief RDDID 的 24 位返回数据需要额外产生的完整串行字节数。 */
