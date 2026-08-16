@@ -25,6 +25,12 @@
 /** @brief 本板唯一的 ST7789 Device 实例。 */
 static ST7789_HandleTypeDef hplatform_lcd;
 
+/** @brief LCD Task 注册的最终 DMA 事件订阅者，仅在 SPI ISR 中调用。 */
+static Platform_LCD_TransferCallback_t hplatform_lcd_transfer_callback;
+
+/** @brief LCD Task 注册的最终 DMA 事件不透明上下文。 */
+static void *hplatform_lcd_transfer_context;
+
 /**
   * @brief 本板 ST7789 使用的 SPI1 和 GPIO Adapter Context。
   * @note  该对象只借用 CubeMX 生成的 hspi1 与 GPIO 定义；CS、命令 D/C 和
@@ -43,6 +49,30 @@ static ST7789_SPI_STM32HALAdapterTypeDef hplatform_lcd_adapter = {
     .ResetAssertState = GPIO_PIN_RESET,
     .TimeoutMs = PLATFORM_LCD_SPI_TIMEOUT_MS
 };
+
+/**
+ * @brief  把 ST7789 Device 的 DMA 最终结果转换为 Platform LCD 事件。
+ * @param  status ST7789 Device 已归一化的异步操作状态。
+ * @param  context 当前未使用；回调已绑定到本板唯一 LCD Device。
+ * @note   本函数由 SPI HAL 回调链在 ISR 上下文调用。它不访问 FreeRTOS、
+ *         不记录日志，只把结果交给上层先前注册的轻量回调。
+ */
+static void platform_lcd_transfer_complete(ST7789_StatusTypeDef status,
+                                           void *context)
+{
+    Platform_LCD_TransferCallback_t callback = hplatform_lcd_transfer_callback;
+    void *callback_context = hplatform_lcd_transfer_context;
+
+    (void)context;
+
+    if (callback != NULL)
+    {
+        callback((status == ST7789_OK)
+                     ? PLATFORM_LCD_TRANSFER_COMPLETE
+                     : PLATFORM_LCD_TRANSFER_ERROR,
+                 callback_context);
+    }
+}
 
 /**
  * @brief  开启 LCD 电源、装配 SPI/GPIO Adapter 并进入可见 RGB565 显示状态。
@@ -88,6 +118,19 @@ Platform_StatusTypeDef Platform_LCD_Init(void)
         (void)LOG_Printf(LOG_LEVEL_ERROR,
                          "LCD",
                          "display init failed: error=%u, port=%u.",
+                         (unsigned int)hplatform_lcd.ErrorCode,
+                         (unsigned int)hplatform_lcd.LastPortStatus);
+        return PLATFORM_LCD_ERROR;
+    }
+
+    /* 在调度器启动前安装一次 HAL SPI 回调归属；后续每一帧均复用该绑定。 */
+    if (ST7789_SetTransferCallback(&hplatform_lcd,
+                                   platform_lcd_transfer_complete,
+                                   NULL) != ST7789_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                         "LCD",
+                         "DMA callback bind failed: error=%u, port=%u.",
                          (unsigned int)hplatform_lcd.ErrorCode,
                          (unsigned int)hplatform_lcd.LastPortStatus);
         return PLATFORM_LCD_ERROR;
@@ -205,4 +248,74 @@ Platform_StatusTypeDef Platform_LCD_FillScreen(uint16_t color)
                                  (uint16_t)(ST7789_WIDTH - 1u),
                                  (uint16_t)(ST7789_HEIGHT - 1u),
                                  color);
+}
+
+/**
+ * @brief  注册 LCD 异步像素传输最终完成或失败时调用的唯一上层回调。
+ * @param  callback 运行于 SPI ISR 上下文的轻量回调，不能为空。
+ * @param  context 原样传递给 callback 的调用者上下文，可为 NULL。
+ * @retval PLATFORM_OK 回调已保存，下一笔 DMA 传输将使用它。
+ * @retval PLATFORM_BUSY 当前仍有 LCD SPI DMA 事务在飞，不能替换订阅者。
+ * @retval PLATFORM_LCD_ERROR 参数或 LCD 初始化状态无效。
+ * @note   回调只应发布任务通知；不得记录日志、调用 LVGL 或再次调用任何
+ *         Platform LCD 绘制 Interface。
+ */
+Platform_StatusTypeDef Platform_LCD_SetTransferCallback(
+    Platform_LCD_TransferCallback_t callback,
+    void *context)
+{
+    if ((callback == NULL) || (hplatform_lcd.State == ST7789_STATE_RESET) ||
+        (hplatform_lcd.State == ST7789_STATE_ERROR))
+    {
+        return PLATFORM_LCD_ERROR;
+    }
+
+    if (hplatform_lcd.State == ST7789_STATE_BUSY)
+    {
+        return PLATFORM_BUSY;
+    }
+
+    hplatform_lcd_transfer_callback = callback;
+    hplatform_lcd_transfer_context = context;
+    return PLATFORM_OK;
+}
+
+/**
+ * @brief  异步发送一个已完整填充的 RGB565 矩形像素缓冲区到本板 LCD。
+ * @param  x_start 矩形左边界。
+ * @param  y_start 矩形上边界。
+ * @param  x_end 矩形右边界，包含该像素。
+ * @param  y_end 矩形下边界，包含该像素。
+ * @param  pixels RGB565 像素首地址；当前 D-Cache Adapter 要求首地址按 32 B
+ *         对齐，且本次矩形的总字节数为 32 B 的整数倍。调用者还必须在最终
+ *         回调到达前保持该范围有效且不改写。
+ * @retval PLATFORM_OK 首块 SPI DMA 已启动，最终结果见已注册回调。
+ * @retval PLATFORM_BUSY 先前 DMA 传输尚未完成。
+ * @retval PLATFORM_LCD_ERROR LCD 未初始化、回调未注册或 DMA 无法启动。
+ */
+Platform_StatusTypeDef Platform_LCD_StartWrite(uint16_t x_start,
+                                                uint16_t y_start,
+                                                uint16_t x_end,
+                                                uint16_t y_end,
+                                                const uint16_t *pixels)
+{
+    ST7789_StatusTypeDef status;
+
+    if (hplatform_lcd_transfer_callback == NULL)
+    {
+        return PLATFORM_LCD_ERROR;
+    }
+
+    status = ST7789_StartWrite(&hplatform_lcd,
+                                x_start,
+                                y_start,
+                                x_end,
+                                y_end,
+                                pixels);
+    if (status == ST7789_OK)
+    {
+        return PLATFORM_OK;
+    }
+
+    return (status == ST7789_BUSY) ? PLATFORM_BUSY : PLATFORM_LCD_ERROR;
 }

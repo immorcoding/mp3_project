@@ -157,7 +157,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/bridge/axp2101_soft_i2c` | SoftI2C Component 到 AXP2101 Bus Ops 的跨 Component Bridge。 |
 | `Adapters/cortex/cache` | Cortex-M7 Cacheable 内存范围的 D-Cache 维护；DMA Adapter 和外部存储器诊断按需复用。 |
 | `Adapters/stm32_hal/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
-| `Adapters/stm32_hal/st7789_spi` | STM32 HAL SPI/GPIO 到 ST7789 PortOps。 |
+| `Adapters/stm32_hal/st7789_spi` | STM32 HAL SPI/GPIO、SPI TX DMA、D-Cache Clean 与注册式 HAL SPI 回调到 ST7789 PortOps；私有续传每块 DMA。 |
 | `Adapters/stm32_hal/ft6x36_i2c` | STM32 HAL I2C/GPIO 到 FT6X36 PortOps；启动初始化时收敛 TP_RST 时序。 |
 | `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |
 | `Adapters/stm32_hal/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
@@ -408,6 +408,28 @@ SDMMC1_IRQHandler()
 卡检测边沿保留通知索引 0，DMA 完成使用索引 1；两类事件的含义、消抖规则和等待方式不同，
 不得共用同一个无类型通知。`Adapters/stm32_hal/irq` 只集中 HAL 全局回调的唯一所有权，GPIO EXTI 和
 SDMMC 仍保留各自的强类型 Interface，不能收敛为 `IRQ_ID + void *` 的通用分发器。
+
+SPI LCD DMA 的当前路径为：
+
+```text
+LCD Task 填充其拥有的 SDRAM 缓冲区
+  -> Platform_LCD_StartWrite()
+  -> ST7789 Device (CASET/RASET/RAMWR，保持 CS)
+  -> STM32 HAL ST7789 SPI Adapter (Clean Cache、DMA 分块)
+  -> DMA1 Stream0 IRQ -> HAL_DMA_IRQHandler()
+  -> SPI1 EOT IRQ -> HAL_SPI_IRQHandler()
+  -> 已注册 HAL Tx complete / error callback
+  -> Adapter 续发下一块或发布最终结果
+  -> ST7789 Device (释放 CS、恢复 READY)
+  -> Platform LCD 转发强类型事件
+  -> LCD Task callback (FromISR 任务通知)
+  -> LCD Task 普通上下文处理结果
+```
+
+DMA Stream TC 只表示 DMA 已把数据交给 SPI FIFO，不能作为本次 RAMWR 的最终完成；必须等待
+SPI EOT，才可安全续发下一块或释放 CS。当前只有一个 SPI1 异步使用者，STM32 HAL ST7789 SPI
+Adapter 可直接注册该 Handle 的回调；第二个真实异步使用者出现后，才按 Handle 提取强类型 SPI
+IRQ 分发 Module。任务通知索引属于每个 Task，LCD Task 可独立复用索引 0，不与 Storage Task 冲突。
 
 ISR 禁止：
 

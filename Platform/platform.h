@@ -31,7 +31,8 @@ typedef enum
     PLATFORM_SD_ERROR,     /**< SD 操作失败。 */
     PLATFORM_TEMP_ERROR,   /**< MCU 内部温度采样失败。 */
     PLATFORM_SDRAM_ERROR,  /**< SDRAM 初始化失败。 */
-    PLATFORM_TOUCH_ERROR   /**< 触摸控制器初始化或访问失败。 */
+    PLATFORM_TOUCH_ERROR,  /**< 触摸控制器初始化或访问失败。 */
+    PLATFORM_BUSY          /**< 当前产品能力正执行异步操作。 */
 } Platform_StatusTypeDef;
 
 Platform_StatusTypeDef Platform_Init(void);

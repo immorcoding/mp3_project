@@ -53,6 +53,19 @@ static bool st7789_is_port_bound(const ST7789_HandleTypeDef *hst7789)
 }
 
 /**
+ * @brief  判断当前 Handle 是否已安装异步像素传输所需的 PortOps。
+ * @param  hst7789 待检查的 ST7789 Handle。
+ * @retval true 同步基础 PortOps 与异步写入/回调 PortOps 均有效。
+ * @retval false 绑定不完整，不能启动 DMA 像素写入。
+ */
+static bool st7789_is_async_port_bound(const ST7789_HandleTypeDef *hst7789)
+{
+    return st7789_is_port_bound(hst7789) &&
+           (hst7789->PortOps->StartWrite != NULL) &&
+           (hst7789->PortOps->SetTransferCallback != NULL);
+}
+
+/**
   * @brief  统一保存失败阶段、端口原因和后续 Device 状态。
   * @param  hst7789 已完成空指针检查的 ST7789 Handle。
   * @param  error 本次失败所处的 Device 语义阶段。
@@ -73,6 +86,53 @@ static ST7789_StatusTypeDef st7789_fail(
 }
 
 /**
+ * @brief  接收 Adapter 从 ISR 发布的异步像素传输最终结果。
+ * @param  port_status Adapter 归一化后的最终传输结果。
+ * @param  context 注册时绑定的 ST7789 Handle。
+ * @note   本函数运行于 Adapter 的 HAL SPI 回调上下文。它只结束本次 ST7789
+ *         事务、恢复 Device 状态并转交调用者的轻量回调；不得在此处添加日志、
+ *         延时或任何 GUI 业务。
+ */
+static void st7789_transfer_complete(ST7789_PortStatusTypeDef port_status,
+                                     void *context)
+{
+    ST7789_HandleTypeDef *hst7789 = (ST7789_HandleTypeDef *)context;
+    ST7789_TransferCallback_t callback;
+    void *callback_context;
+    ST7789_StatusTypeDef status;
+
+    if ((hst7789 == NULL) || (hst7789->PortOps == NULL))
+    {
+        return;
+    }
+
+    /* RAMWR 数据事务跨越全部 DMA 分块，只有最终 EOT 后才能释放 CS。 */
+    hst7789->PortOps->SetChipSelect(hst7789->PortContext, false);
+    callback = hst7789->TransferCallback;
+    callback_context = hst7789->TransferContext;
+
+    if (port_status == ST7789_PORT_OK)
+    {
+        hst7789->ErrorCode = ST7789_ERROR_NONE;
+        hst7789->LastPortStatus = ST7789_PORT_OK;
+        hst7789->State = ST7789_STATE_READY;
+        status = ST7789_OK;
+    }
+    else
+    {
+        hst7789->ErrorCode = ST7789_ERROR_WRITE_DATA;
+        hst7789->LastPortStatus = port_status;
+        hst7789->State = ST7789_STATE_ERROR;
+        status = ST7789_ERROR;
+    }
+
+    if (callback != NULL)
+    {
+        callback(status, callback_context);
+    }
+}
+
+/**
  * @brief  在保持 CS 有效的事务中写入一字节 ST7789 命令。
  * @param  hst7789 已绑定且已由调用者选中的 Device Handle。
  * @param  command 待写入的命令字节。
@@ -87,9 +147,9 @@ static ST7789_PortStatusTypeDef st7789_write_command(
 }
 
 /**
- * @brief  在保持 CS 有效的事务中写入 ST7789 命令参数或像素数据。
+ * @brief  在保持 CS 有效的事务中写入 ST7789 命令参数字节。
  * @param  hst7789 已绑定且已由调用者选中的 Device Handle。
- * @param  data 待写入的参数或像素数据。
+ * @param  data 待写入的命令参数字节。
  * @param  length 数据长度，单位为字节。
  * @retval ST7789_PortStatusTypeDef Adapter 的写入结果。
  */
@@ -596,4 +656,178 @@ ST7789_StatusTypeDef ST7789_DrawPixel(ST7789_HandleTypeDef *hst7789,
                                       uint16_t color)
 {
     return ST7789_FillRect(hst7789, x, y, x, y, color);
+}
+
+/**
+ * @brief  设置 ST7789 异步像素传输完成时调用的唯一订阅者。
+ * @param  hst7789 已绑定的 ST7789 Handle。
+ * @param  callback 在 Adapter ISR 上下文调用的轻量回调，不能为空。
+ * @param  context 原样传给 callback 的调用者上下文，可为 NULL。
+ * @retval ST7789_OK 回调已同时安装到 Device 与已绑定 Adapter。
+ * @retval ST7789_BUSY Device 正在传输，不能替换订阅者。
+ * @retval ST7789_ERROR 参数、PortOps 或 HAL 回调注册失败。
+ * @note   回调只能发布任务通知或执行其他常数时间操作。它不应直接调用 LVGL、
+ *         记录日志或启动下一帧绘制。
+ */
+ST7789_StatusTypeDef ST7789_SetTransferCallback(
+    ST7789_HandleTypeDef *hst7789,
+    ST7789_TransferCallback_t callback,
+    void *context)
+{
+    ST7789_PortStatusTypeDef port_status;
+
+    if ((hst7789 == NULL) || (callback == NULL))
+    {
+        return ST7789_ERROR;
+    }
+
+    if (!st7789_is_async_port_bound(hst7789))
+    {
+        return st7789_fail(hst7789,
+                           ST7789_ERROR_TRANSFER_CALLBACK,
+                           ST7789_PORT_ERROR,
+                           ST7789_STATE_ERROR);
+    }
+
+    if (hst7789->State == ST7789_STATE_BUSY)
+    {
+        return ST7789_BUSY;
+    }
+
+    port_status = hst7789->PortOps->SetTransferCallback(
+        hst7789->PortContext,
+        st7789_transfer_complete,
+        hst7789);
+    if (port_status != ST7789_PORT_OK)
+    {
+        return st7789_fail(hst7789,
+                           ST7789_ERROR_TRANSFER_CALLBACK,
+                           port_status,
+                           (port_status == ST7789_PORT_BUSY)
+                               ? ST7789_STATE_READY
+                               : ST7789_STATE_ERROR);
+    }
+
+    hst7789->TransferCallback = callback;
+    hst7789->TransferContext = context;
+    return ST7789_OK;
+}
+
+/**
+ * @brief  设置一个 ST7789 地址窗口并异步写入其完整 RGB565 像素数据。
+ * @param  hst7789 已完成显示初始化且已注册传输回调的 ST7789 Handle。
+ * @param  x_start 矩形左边界，范围为 `0` 至 `ST7789_WIDTH - 1`。
+ * @param  y_start 矩形上边界，范围为 `0` 至 `ST7789_HEIGHT - 1`。
+ * @param  x_end 矩形右边界，包含该像素。
+ * @param  y_end 矩形下边界，包含该像素。
+ * @param  pixels 按 RGB565 连续存放的调用者像素缓冲区。
+ * @retval ST7789_OK CASET、RASET、RAMWR 已完成，像素 DMA 已开始。
+ * @retval ST7789_BUSY 仍有先前异步像素传输在飞。
+ * @retval ST7789_ERROR 参数、状态、命令事务或 DMA 启动失败。
+ * @note   成功返回不表示像素已全部移出 MOSI；调用者必须等待
+ *         `ST7789_SetTransferCallback()` 设置的完成回调。pixels 在回调到达前
+ *         必须保持有效且不可修改。
+ */
+ST7789_StatusTypeDef ST7789_StartWrite(ST7789_HandleTypeDef *hst7789,
+                                       uint16_t x_start,
+                                       uint16_t y_start,
+                                       uint16_t x_end,
+                                       uint16_t y_end,
+                                       const uint16_t *pixels)
+{
+    ST7789_ErrorTypeDef error = ST7789_ERROR_NONE;
+    ST7789_PortStatusTypeDef port_status;
+    uint32_t pixel_count;
+    uint32_t byte_count;
+
+    if ((hst7789 == NULL) || (pixels == NULL))
+    {
+        return ST7789_ERROR;
+    }
+
+    if (!st7789_is_async_port_bound(hst7789))
+    {
+        return st7789_fail(hst7789,
+                           ST7789_ERROR_PORT_NOT_BOUND,
+                           ST7789_PORT_ERROR,
+                           ST7789_STATE_ERROR);
+    }
+
+    if (hst7789->State == ST7789_STATE_BUSY)
+    {
+        return ST7789_BUSY;
+    }
+
+    if (hst7789->State != ST7789_STATE_READY)
+    {
+        return st7789_fail(hst7789,
+                           ST7789_ERROR_NOT_READY,
+                           ST7789_PORT_OK,
+                           hst7789->State);
+    }
+
+    if (!st7789_is_valid_rect(x_start, y_start, x_end, y_end))
+    {
+        return st7789_fail(hst7789,
+                           ST7789_ERROR_INVALID_PARAM,
+                           ST7789_PORT_OK,
+                           ST7789_STATE_READY);
+    }
+
+    if (hst7789->TransferCallback == NULL)
+    {
+        return st7789_fail(hst7789,
+                           ST7789_ERROR_TRANSFER_CALLBACK,
+                           ST7789_PORT_ERROR,
+                           ST7789_STATE_READY);
+    }
+
+    pixel_count = ((uint32_t)x_end - x_start + 1u) *
+                  ((uint32_t)y_end - y_start + 1u);
+    byte_count = pixel_count * sizeof(*pixels);
+
+    st7789_clear_error(hst7789);
+    hst7789->State = ST7789_STATE_BUSY;
+    hst7789->PortOps->SetChipSelect(hst7789->PortContext, true);
+
+    port_status = st7789_set_address_window(hst7789,
+                                             x_start,
+                                             y_start,
+                                             x_end,
+                                             y_end,
+                                             &error);
+    if (port_status == ST7789_PORT_OK)
+    {
+        port_status = st7789_write_command(hst7789, ST7789_COMMAND_RAMWR);
+        if (port_status != ST7789_PORT_OK)
+        {
+            error = ST7789_ERROR_WRITE_COMMAND;
+        }
+    }
+
+    if (port_status == ST7789_PORT_OK)
+    {
+        hst7789->PortOps->SetDataMode(hst7789->PortContext, true);
+        port_status = hst7789->PortOps->StartWrite(
+            hst7789->PortContext,
+            (const uint8_t *)pixels,
+            byte_count);
+        if (port_status != ST7789_PORT_OK)
+        {
+            error = ST7789_ERROR_START_TRANSFER;
+        }
+    }
+
+    if (port_status != ST7789_PORT_OK)
+    {
+        hst7789->PortOps->SetChipSelect(hst7789->PortContext, false);
+        return st7789_fail(hst7789,
+                           error,
+                           port_status,
+                           (port_status == ST7789_PORT_BUSY)
+                               ? ST7789_STATE_READY
+                               : ST7789_STATE_ERROR);
+    }
+
+    return ST7789_OK;
 }

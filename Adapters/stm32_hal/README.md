@@ -7,7 +7,7 @@
 - 各子目录声明的 `*_STM32HALAdapter_Bind()`、`*_Register()`、`*_Unregister()` 等装配或回调分发 Interface；
 - 仅供 Platform 长期持有的 Adapter Context 类型。
 
-当前 `st7789_spi/` 将 SPI 阻塞收发、CS/D-C/RESET GPIO 和 HAL 时基装配为 ST7789 Device 的 PortOps；它不包含显示初始化表、DMA 或 LVGL。
+当前 `st7789_spi/` 将 SPI 阻塞收发、SPI TX DMA、CS/D-C/RESET GPIO、HAL 时基和注册式 SPI 完成/错误回调装配为 ST7789 Device 的 PortOps；它不包含显示初始化表、帧缓冲、LVGL 或 FreeRTOS 通知。
 
 `temp/` 则直接封装 ADC3 内部 Temperature Sensor、VREFINT 与芯片工厂标定数据，供
 Platform 取得 MCU 结温。当前它只有一个 STM32H7 后端，不为尚不存在的第二种实现

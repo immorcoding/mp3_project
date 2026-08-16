@@ -30,12 +30,13 @@
 #define configTASK_NOTIFICATION_ARRAY_ENTRIES                       3
 
 /*
- * 任务通知索引是项目运行时资源：索引 0 用于 Storage 的卡检测消抖，索引 1 用于
- * Storage 的 DMA 传输完成；两者独立，避免 DMA 完成被误解释为热插拔边沿。 
+ * 任务通知索引是“每个任务各自拥有”的资源，不同任务可复用同一索引值。
+ * Storage 的索引 0 用于卡检测消抖，索引 1 用于 SD DMA 完成；两者独立，避免
+ * DMA 完成被误解释为热插拔边沿。LCD Task 的索引 0 是其独立的 SPI DMA 结果。
  */
- //存储任务消息队列
 #define FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT                     0U
 #define FREERTOS_NOTIFY_INDEX_STORAGE_SD_TRANSFER                   1U
+#define FREERTOS_NOTIFY_INDEX_LCD_TRANSFER                          0U
 
 #define configUSE_MUTEXES                                           1
 #define configUSE_RECURSIVE_MUTEXES                                 0

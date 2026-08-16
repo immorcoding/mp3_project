@@ -15,7 +15,8 @@
 typedef enum
 {
     ST7789_OK = 0, /**< 本次操作成功。 */
-    ST7789_ERROR   /**< 本次操作失败，详细原因保存在 Handle 中。 */
+    ST7789_ERROR,  /**< 本次操作失败，详细原因保存在 Handle 中。 */
+    ST7789_BUSY    /**< Device 正在执行异步像素传输。 */
 } ST7789_StatusTypeDef;
 
 /** @brief ST7789 Device 的持续生命周期状态。 */
@@ -46,7 +47,9 @@ typedef enum
     ST7789_ERROR_RESET,         /**< 硬件复位前后的端口操作失败。 */
     ST7789_ERROR_WRITE_COMMAND, /**< 写入命令字节失败。 */
     ST7789_ERROR_WRITE_DATA,    /**< 写入命令参数或像素数据失败。 */
-    ST7789_ERROR_READ_ID        /**< 读取 RDDID 返回位流失败。 */
+    ST7789_ERROR_READ_ID,       /**< 读取 RDDID 返回位流失败。 */
+    ST7789_ERROR_TRANSFER_CALLBACK, /**< 异步传输完成回调未绑定或注册失败。 */
+    ST7789_ERROR_START_TRANSFER /**< 像素 DMA 传输未能启动。 */
 } ST7789_ErrorTypeDef;
 
 /** @brief 当前 ST7789 模组可见区域的水平像素数。 */
@@ -82,8 +85,28 @@ typedef ST7789_PortStatusTypeDef (*ST7789_PortTransferFunc)(
     uint8_t *receive_data,
     uint32_t length);
 
+/** @brief Adapter 在 ISR 中发布异步像素传输结果的端口回调类型。 */
+typedef void (*ST7789_PortTransferCallback_t)(ST7789_PortStatusTypeDef status,
+                                               void *context);
+
+/** @brief 启动异步连续像素写入的端口函数类型。 */
+typedef ST7789_PortStatusTypeDef (*ST7789_PortStartWriteFunc)(
+    void *context,
+    const uint8_t *data,
+    uint32_t length);
+
+/** @brief 注册异步像素传输结果回调的端口函数类型。 */
+typedef ST7789_PortStatusTypeDef (*ST7789_PortSetTransferCallbackFunc)(
+    void *context,
+    ST7789_PortTransferCallback_t callback,
+    void *callback_context);
+
 /** @brief 等待毫秒级硬件稳定时间的端口函数类型。 */
 typedef void (*ST7789_PortDelayMsFunc)(void *context, uint32_t delay_ms);
+
+/** @brief ST7789 Device 在异步像素传输结束时向调用者发布的回调类型。 */
+typedef void (*ST7789_TransferCallback_t)(ST7789_StatusTypeDef status,
+                                           void *context);
 
 /** @brief ST7789 Device 使用的串行与控制信号操作表。 */
 typedef struct
@@ -93,6 +116,8 @@ typedef struct
     ST7789_PortSetSignalFunc SetReset;      /**< true 表示复位有效。 */
     ST7789_PortWriteFunc Write;             /**< 同步写命令或数据。 */
     ST7789_PortTransferFunc Transfer;       /**< 同步产生读时钟并接收数据。 */
+    ST7789_PortStartWriteFunc StartWrite;    /**< 异步启动连续像素数据写入。 */
+    ST7789_PortSetTransferCallbackFunc SetTransferCallback; /**< 安装异步完成回调。 */
     ST7789_PortDelayMsFunc DelayMs;         /**< 硬件上电、复位等待。 */
 } ST7789_PortOpsTypeDef;
 
@@ -104,6 +129,8 @@ typedef struct
     volatile ST7789_StateTypeDef State;   /**< 当前持续生命周期状态。 */
     volatile ST7789_ErrorTypeDef ErrorCode; /**< 最近一次 Device 层错误阶段。 */
     volatile ST7789_PortStatusTypeDef LastPortStatus; /**< 最近一次端口结果。 */
+    ST7789_TransferCallback_t TransferCallback; /**< 异步像素传输结束时的调用者回调。 */
+    void *TransferContext; /**< 异步像素传输回调的不透明调用者上下文。 */
 } ST7789_HandleTypeDef;
 
 ST7789_StatusTypeDef ST7789_Init(ST7789_HandleTypeDef *hst7789);
@@ -120,5 +147,15 @@ ST7789_StatusTypeDef ST7789_FillRect(ST7789_HandleTypeDef *hst7789,
                                      uint16_t x_end,
                                      uint16_t y_end,
                                      uint16_t color);
+ST7789_StatusTypeDef ST7789_SetTransferCallback(
+    ST7789_HandleTypeDef *hst7789,
+    ST7789_TransferCallback_t callback,
+    void *context);
+ST7789_StatusTypeDef ST7789_StartWrite(ST7789_HandleTypeDef *hst7789,
+                                       uint16_t x_start,
+                                       uint16_t y_start,
+                                       uint16_t x_end,
+                                       uint16_t y_end,
+                                       const uint16_t *pixels);
 
 #endif /* ST7789_H */
