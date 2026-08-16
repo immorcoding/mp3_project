@@ -158,7 +158,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/cortex/cache` | Cortex-M7 Cacheable 内存范围的 D-Cache 维护；DMA Adapter 和外部存储器诊断按需复用。 |
 | `Adapters/stm32_hal/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
 | `Adapters/stm32_hal/st7789_spi` | STM32 HAL SPI/GPIO 到 ST7789 PortOps。 |
-| `Adapters/stm32_hal/ft6x36_i2c` | STM32 HAL I2C/GPIO 到 FT6X36 PortOps。 |
+| `Adapters/stm32_hal/ft6x36_i2c` | STM32 HAL I2C/GPIO 到 FT6X36 PortOps；启动初始化时收敛 TP_RST 时序。 |
 | `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |
 | `Adapters/stm32_hal/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
 | `Adapters/stm32_hal/temp` | STM32H7 ADC3 内部温度传感器与 VREFINT 的校准、采样和工厂标定换算。 |
@@ -211,6 +211,7 @@ APP/Service 决定。
 - 注入 CubeMX Handle、GPIO、极性、总线参数；
 - 执行 `Adapter_Bind()`；
 - 初始化 Component；
+- 收敛当前 PCB 强依赖设备的启动顺序和硬件稳定等待；
 - 把芯片能力映射成 Audio、LCD、SD、Power、Temp、Touch 等产品语义；
 - 为板级设备持有并注册 GPIO EXTI 回调对象，并向上层发布轻量检测通知；
 - 选择日志输出 Adapter。

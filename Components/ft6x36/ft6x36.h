@@ -8,7 +8,6 @@
 #ifndef FT6X36_H
 #define FT6X36_H
 
-#include <stdbool.h>
 #include <stdint.h>
 
 typedef enum
@@ -38,13 +37,13 @@ typedef enum
     FT6X36_ERROR_NONE = 0,
     FT6X36_ERROR_INVALID_PARAM,
     FT6X36_ERROR_PORT_NOT_BOUND,
+    FT6X36_ERROR_INITIALIZE,
     FT6X36_ERROR_NOT_READY,
     FT6X36_ERROR_PROBE,
     FT6X36_ERROR_READ_CHIP_ID
 } FT6X36_ErrorTypeDef;
 
-typedef void (*FT6X36_PortSetResetFunc)(void *context, bool asserted);
-typedef void (*FT6X36_PortDelayMsFunc)(void *context, uint32_t delay_ms);
+typedef FT6X36_PortStatusTypeDef (*FT6X36_PortInitializeFunc)(void *context);
 typedef FT6X36_PortStatusTypeDef (*FT6X36_PortIsReadyFunc)(
     void *context,
     uint8_t address_7bit);
@@ -57,8 +56,7 @@ typedef FT6X36_PortStatusTypeDef (*FT6X36_PortMemReadFunc)(
 
 typedef struct
 {
-    FT6X36_PortSetResetFunc SetReset;
-    FT6X36_PortDelayMsFunc DelayMs;
+    FT6X36_PortInitializeFunc Initialize;
     FT6X36_PortIsReadyFunc IsReady;
     FT6X36_PortMemReadFunc MemRead;
 } FT6X36_PortOpsTypeDef;

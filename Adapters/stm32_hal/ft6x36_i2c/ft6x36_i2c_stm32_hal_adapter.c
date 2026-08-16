@@ -4,14 +4,16 @@
   * @brief   STM32 HAL I2C 与 GPIO 到 FT6X36 PortOps 的 Adapter 实现。
   *
   * @details
-  *          本 Module 将 HAL I2C 从机探测、8-bit 寄存器读、触摸复位 GPIO 和
-  *          毫秒延时转换为 FT6X36 Device 所拥有的 PortOps。它不选择 I2C2、
+  *          本 Module 将 HAL I2C 从机探测、8-bit 寄存器读和触摸复位 GPIO
+  *          转换为 FT6X36 Device 所拥有的 PortOps。它不选择 I2C2、
   *          TP_RST 引脚或设备地址；这些板级对象由 Platform Touch 注入。
   ******************************************************************************
   */
 
 #include "Adapters/stm32_hal/ft6x36_i2c/ft6x36_i2c_stm32_hal_adapter.h"
+#include "Adapters/stm32_hal/ft6x36_i2c/ft6x36_i2c_stm32_hal_adapter_config.h"
 
+#include <stdbool.h>
 #include <limits.h>
 #include <stddef.h>
 
@@ -41,36 +43,57 @@ static FT6X36_PortStatusTypeDef ft6x36_i2c_stm32_hal_map_status(
 
 /**
   * @brief  驱动或释放 FT6X36 的硬件复位 GPIO。
-  * @param  context 指向 Platform 长期持有的 Adapter Context。
+  * @param  adapter 指向 Platform 长期持有的 Adapter Context。
   * @param  asserted true 表示使复位信号有效，false 表示释放复位。
   * @note   Adapter 只按 Context 中的有效电平翻译逻辑复位状态，不假设本板复位
   *         引脚一定低有效。
   */
-static void ft6x36_i2c_stm32_hal_set_reset(void *context, bool asserted)
+static bool ft6x36_i2c_stm32_hal_write_reset(
+    FT6X36_I2C_STM32HALAdapterTypeDef *adapter,
+    bool asserted)
 {
-    FT6X36_I2C_STM32HALAdapterTypeDef *adapter = context;
     GPIO_PinState pin_state;
 
     if ((adapter == NULL) || (adapter->ResetPort == NULL))
     {
-        return;
+        return false;
     }
 
     pin_state = asserted ? adapter->ResetAssertState :
                 ((adapter->ResetAssertState == GPIO_PIN_RESET) ?
                  GPIO_PIN_SET : GPIO_PIN_RESET);
     HAL_GPIO_WritePin(adapter->ResetPort, adapter->ResetPin, pin_state);
+    return true;
 }
 
 /**
-  * @brief  使用 STM32 HAL 时基等待触摸控制器的复位稳定时间。
-  * @param  context 未使用，保留以匹配 FT6X36 PortOps。
-  * @param  delay_ms 等待时长，单位为毫秒。
+  * @brief  在 FreeRTOS 调度器启动前复位并稳定当前触摸控制器。
+  * @param  context 指向 Platform 长期持有的 Adapter Context。
+  * @retval FT6X36_PORT_OK 初始化时序完成。
+  * @retval FT6X36_PORT_ERROR Context 或复位 GPIO 无效。
+  * @note   该实现只允许由 app_init() 经 Platform_Init() 在调度器启动前调用，
+  *         因此 HAL_Delay() 不会在普通 FreeRTOS Task 中忙等待。复位的逻辑
+  *         断言/释放与低有效或高有效的物理极性仍由 Adapter Context 转换，
+  *         FT6X36 Device 不感知 GPIO 电平。
   */
-static void ft6x36_i2c_stm32_hal_delay_ms(void *context, uint32_t delay_ms)
+static FT6X36_PortStatusTypeDef ft6x36_i2c_stm32_hal_initialize(void *context)
 {
-    (void)context;
-    HAL_Delay(delay_ms);
+    FT6X36_I2C_STM32HALAdapterTypeDef *adapter = context;
+
+    if (!ft6x36_i2c_stm32_hal_write_reset(adapter, true))
+    {
+        return FT6X36_PORT_ERROR;
+    }
+
+    HAL_Delay(FT6X36_I2C_STM32HAL_RESET_ASSERT_DELAY_MS);
+
+    if (!ft6x36_i2c_stm32_hal_write_reset(adapter, false))
+    {
+        return FT6X36_PORT_ERROR;
+    }
+
+    HAL_Delay(FT6X36_I2C_STM32HAL_RESET_RELEASE_DELAY_MS);
+    return FT6X36_PORT_OK;
 }
 
 /**
@@ -144,8 +167,7 @@ static FT6X36_PortStatusTypeDef ft6x36_i2c_stm32_hal_mem_read(
 
 /** @brief FT6X36 Device 使用的 STM32 HAL I2C PortOps 表。 */
 static const FT6X36_PortOpsTypeDef ft6x36_i2c_stm32_hal_ops = {
-    .SetReset = ft6x36_i2c_stm32_hal_set_reset,
-    .DelayMs = ft6x36_i2c_stm32_hal_delay_ms,
+    .Initialize = ft6x36_i2c_stm32_hal_initialize,
     .IsReady = ft6x36_i2c_stm32_hal_is_ready,
     .MemRead = ft6x36_i2c_stm32_hal_mem_read
 };

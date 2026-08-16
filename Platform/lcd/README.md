@@ -4,7 +4,7 @@
 
 ## 公开 Interface
 
-- `Platform_LCD_Init()`：开启 LCD 电源，完成 SPI/GPIO Adapter 绑定、ST7789 RGB565 显示初始化并打开背光；
+- `Platform_LCD_Init()`：开启 LCD 电源，完成 SPI/GPIO Adapter 绑定、ST7789 RGB565 显示初始化并打开背光；当前由 `Platform_Init()` 在调度器启动前调用一次；
 - `Platform_LCD_ReadID()`：读取 RDDID 并返回与 Component 类型解耦的 `Platform_LCD_IDTypeDef`。
 - `Platform_LCD_DrawPixel()`、`Platform_LCD_FillRect()`、`Platform_LCD_FillScreen()`：对上提供 RGB565 绘制能力，不泄漏 ST7789 命令与 SPI 细节。
 

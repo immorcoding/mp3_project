@@ -39,11 +39,13 @@ static FT6X36_I2C_STM32HALAdapterTypeDef hplatform_touch_adapter = {
 };
 
 /**
-  * @brief  复位当前 PCB 的 FT6X36 并确认 I2C2 通信可用。
-  * @retval PLATFORM_OK 触摸控制器已复位且可读取寄存器。
-  * @retval PLATFORM_TOUCH_ERROR Adapter 绑定、复位或 I2C 地址探测失败。
+  * @brief  初始化当前 PCB 的 FT6X36 并确认 I2C2 通信可用。
+  * @retval PLATFORM_OK 触摸控制器已完成启动初始化且可读取寄存器。
+  * @retval PLATFORM_TOUCH_ERROR Adapter 绑定、初始化或 I2C 地址探测失败。
   * @note   本 Module 不设置 LCD 电源轨；调用者必须先完成当前显示模组所需的
-  *         供电与初始化。这样触摸的供电策略仍由 Platform LCD/Power 单独拥有。
+  *         供电。当前实现只允许由 app_init() 经 Platform_Init() 在 FreeRTOS
+  *         调度器启动前调用，这样触摸的供电策略仍由 Platform LCD/Power 单独
+  *         拥有。
   */
 Platform_StatusTypeDef Platform_Touch_Init(void)
 {

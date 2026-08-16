@@ -11,8 +11,8 @@
   *
   *          当前初始化依赖顺序为：
   *          Platform_Log_Init() -> 启动日志入队 -> Platform_Init() -> app_task_start()。
-  *          Platform_Init() 内部初始化 GPIO EXTI Adapter、PMIC、音频电源和
-  *          Audio Device；Storage Task 在 Log Service 就绪后处理可选 SD 卡。
+  *          Platform_Init() 内部初始化 GPIO EXTI Adapter、PMIC、音频、LCD 和
+  *          Touch；Storage Task 在 Log Service 就绪后处理可选 SD 卡。
   *          启动日志先保存在 Components/log 环形队列，调度器启动后由 Log Task
   *          与 Log Service 逐步排空。
   ******************************************************************************
@@ -89,6 +89,20 @@ void app_init(void)
                              "SDRAM",
                              "JEDEC initialization failed.");
             Error_Handler();
+            break;
+
+        case PLATFORM_LCD_ERROR:
+            (void)LOG_Printf(LOG_LEVEL_ERROR,
+                             "LCD",
+                             "Initialization failed.");
+            Error_Handler();
+            break;
+
+        case PLATFORM_TOUCH_ERROR:
+            /* 触摸尚未进入产品交互链路；故障只禁用当前诊断，不阻止播放器启动。 */
+            (void)LOG_Printf(LOG_LEVEL_ERROR,
+                             "TOUCH",
+                             "Initialization failed; touch input disabled.");
             break;
 
         default:

@@ -4,9 +4,9 @@
   * @brief   FT6X36 电容触摸控制器 Device 实现。
   *
   * @details
-  *          本 Module 封装 FT6X36 的复位时序、I2C 就绪检查和芯片标识寄存器
-  *          读取。它不认识 HAL I2C、具体 GPIO、FreeRTOS 或 LCD/LVGL；这些
-  *          外部能力均通过 PortOps 由 Platform 绑定。
+  *          本 Module 封装 FT6X36 的初始化完成语义、I2C 就绪检查和芯片标识
+  *          寄存器读取。它不认识 HAL I2C、具体 GPIO、FreeRTOS 或 LCD/LVGL；
+  *          这些外部能力均通过 PortOps 由 Platform 绑定。
   ******************************************************************************
   */
 
@@ -22,8 +22,8 @@
   * @param  port_status Adapter 返回的归一化底层状态。
   * @param  register_address 失败关联的寄存器；没有寄存器时传入 0。
   * @retval FT6X36_ERROR。
-  * @note   错误状态要求调用者重新执行 FT6X36_Init()，避免在未确认复位和 I2C
-  *         状态的情况下继续读取寄存器。
+  * @note   错误状态要求调用者重新执行 FT6X36_Init()，避免在未确认初始化和
+  *         I2C 状态的情况下继续读取寄存器。
   */
 static FT6X36_StatusTypeDef ft6x36_record_port_failure(
     FT6X36_HandleTypeDef *hft6x36,
@@ -40,12 +40,13 @@ static FT6X36_StatusTypeDef ft6x36_record_port_failure(
 }
 
 /**
-  * @brief  执行 FT6X36 硬件复位并确认目标 I2C 地址可应答。
+  * @brief  初始化 FT6X36 并确认目标 I2C 地址可应答。
   * @param  hft6x36 已由 Platform 绑定 PortOps、Context 和 7-bit 地址的 Handle。
-  * @retval FT6X36_OK 控制器已完成复位且 I2C 可访问。
-  * @retval FT6X36_ERROR 参数、绑定、复位后的 I2C 探测失败。
-  * @note   复位低电平保持和释放后的稳定时间属于 FT6X36 器件协议，而不是
-  *         当前 PCB 的策略。调用成功后才允许读取控制器寄存器。
+  * @retval FT6X36_OK 控制器已完成初始化且 I2C 可访问。
+  * @retval FT6X36_ERROR 参数、绑定、底层初始化或 I2C 探测失败。
+  * @note   本函数只定义“初始化完成后控制器必须可应答”的器件语义。当前
+  *         STM32 HAL Adapter 将 TP_RST 的物理电平与启动时序收敛为一次
+  *         Initialize() 操作；这样 Device 不暴露单独的复位、延时 Interface。
   */
 FT6X36_StatusTypeDef FT6X36_Init(FT6X36_HandleTypeDef *hft6x36)
 {
@@ -58,8 +59,7 @@ FT6X36_StatusTypeDef FT6X36_Init(FT6X36_HandleTypeDef *hft6x36)
 
     if ((hft6x36->PortOps == NULL) ||
         (hft6x36->PortContext == NULL) ||
-        (hft6x36->PortOps->SetReset == NULL) ||
-        (hft6x36->PortOps->DelayMs == NULL) ||
+        (hft6x36->PortOps->Initialize == NULL) ||
         (hft6x36->PortOps->IsReady == NULL))
     {
         hft6x36->ErrorCode = FT6X36_ERROR_PORT_NOT_BOUND;
@@ -79,12 +79,14 @@ FT6X36_StatusTypeDef FT6X36_Init(FT6X36_HandleTypeDef *hft6x36)
     hft6x36->LastPortStatus = FT6X36_PORT_OK;
     hft6x36->LastFailedRegister = 0u;
 
-    hft6x36->PortOps->SetReset(hft6x36->PortContext, true);
-    hft6x36->PortOps->DelayMs(hft6x36->PortContext,
-                              FT6X36_RESET_ASSERT_DELAY_MS);
-    hft6x36->PortOps->SetReset(hft6x36->PortContext, false);
-    hft6x36->PortOps->DelayMs(hft6x36->PortContext,
-                              FT6X36_RESET_RELEASE_DELAY_MS);
+    port_status = hft6x36->PortOps->Initialize(hft6x36->PortContext);
+    if (port_status != FT6X36_PORT_OK)
+    {
+        return ft6x36_record_port_failure(hft6x36,
+                                           FT6X36_ERROR_INITIALIZE,
+                                           port_status,
+                                           0u);
+    }
 
     port_status = hft6x36->PortOps->IsReady(hft6x36->PortContext,
                                             hft6x36->Address7Bit);

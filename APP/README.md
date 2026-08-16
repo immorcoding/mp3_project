@@ -1,6 +1,6 @@
 # APP
 
-`APP` 是固件的顶层编排 Module：决定初始化顺序、创建 FreeRTOS 任务并启动调度器。它不保存 HAL Handle、不构造 Adapter Ops，也不直接操作寄存器。
+`APP` 是固件的顶层编排 Module：调用 `Platform_Init()`、决定其失败是否致命、创建 FreeRTOS 任务并启动调度器。它不保存 HAL Handle、不构造 Adapter Ops，也不直接操作寄存器。LCD 与触摸控制器的启动初始化属于 `Platform_Init()` 的内部顺序；因此底层 HAL 延时不会阻塞普通任务。
 
 ## 公开 Interface
 

@@ -1,6 +1,6 @@
 # LCD Task
 
-本 Task 是当前 LCD 产品流程的暂时入口。任务启动时调用 `Platform_LCD_Init()` 与 `Platform_LCD_ReadID()`，再通过 `Platform_Touch_Init()`、`Platform_Touch_ReadID()` 验证 I2C2、TP_RST 与触摸 Chip ID，随后顺序全屏显示红、绿、蓝、白，以验证 RGB565、地址窗口、SPI 和背光；不接入 DMA 或 LVGL。
+本 Task 是当前 LCD 产品流程的暂时入口。LCD 与触摸已由 `Platform_Init()` 完成硬件初始化；任务通过 `Platform_Touch_ReadID()` 读取 Chip ID，随后顺序全屏显示红、绿、蓝、白，以验证 RGB565、地址窗口、SPI 和背光；不接入 DMA 或 LVGL。
 
 ## 公开 Interface
 
@@ -8,13 +8,13 @@
 
 ## 编译期依赖
 
-- `Platform_LCD_Init()`、`Platform_LCD_ReadID()`；
-- `Platform_Touch_Init()`、`Platform_Touch_ReadID()`；
+- `Platform_LCD_DrawPixel()`、`Platform_LCD_FillScreen()`；
+- `Platform_Touch_ReadID()`；
 - `LogService_Post()`。
 
 ## 运行时请求与事件路径
 
-任务启动后先调用 Platform LCD 的阻塞诊断，再复位并读取触摸控制器 Chip ID，最后执行纯色填屏，并经 LogService 投递结果；当前不存在 LCD/Touch ISR、DMA 或 LVGL flush 事件。TP_IRQ 仅由 CubeMX 配置，尚未注册调用者回调。
+任务启动后先读取已完成启动初始化的触摸控制器 Chip ID，再执行纯色填屏，并经 LogService 投递结果；当前不存在 LCD/Touch ISR、DMA 或 LVGL flush 事件。TP_IRQ 仅由 CubeMX 配置，尚未注册调用者回调。
 
 ## 禁止依赖
 
