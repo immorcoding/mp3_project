@@ -12,7 +12,7 @@ target_sources(freertos_kernel PRIVATE
     Source/stream_buffer.c
 
     # STM32H743：Cortex-M7 r0p1 GCC 移植层
-    Source/portable/GCC/ARM_CM7/r0p1/port.c
+    Source/portable/GCC/ARM_CM4F/port.c
 
     # 动态内存分配方案
     Source/portable/MemMang/heap_4.c
@@ -24,7 +24,7 @@ target_include_directories(freertos_kernel PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/Config
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/Source/include
-    ${CMAKE_CURRENT_LIST_DIR}/Source/portable/GCC/ARM_CM7/r0p1
+    ${CMAKE_CURRENT_LIST_DIR}/Source/portable/GCC/ARM_CM4F
 )
 
 # 让 FreeRTOS 编译时继承 STM32H743 的芯片宏、CMSIS 和 HAL 头文件路径
