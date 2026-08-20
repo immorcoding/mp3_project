@@ -80,7 +80,7 @@ void app_init(void)
                     (unsigned int)diagnostics.FailedRegister);
             }
 
-            Error_Handler();
+            // Error_Handler();
             break;
         }
 

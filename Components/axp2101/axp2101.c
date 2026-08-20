@@ -311,7 +311,7 @@ AXP2101_StatusTypeDef AXP2101_Init(AXP2101_HandleTypeDef *haxp2101)
         return AXP2101_ERROR;
     }
     /* 总线成功但 ID 错误属于 Device 层错误，不携带底层总线错误码。 */
-    if (chip_id != XPOWERS_AXP2101_CHIP_ID)
+    if ((chip_id != XPOWERS_AXP2101_CHIP_ID1) && (chip_id != XPOWERS_AXP2101_CHIP_ID2))
     {
         return axp2101_fail(haxp2101,
                             AXP2101_ERROR_WRONG_CHIP_ID,

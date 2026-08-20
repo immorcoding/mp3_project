@@ -23,7 +23,8 @@
 #define AXP2101_SLAVE_ADDRESS                            (0x34)
 
 /** @brief REG03H 应返回的 AXP2101 芯片 ID。 */
-#define XPOWERS_AXP2101_CHIP_ID                          (0x47)
+#define XPOWERS_AXP2101_CHIP_ID1                         (0x47)
+#define XPOWERS_AXP2101_CHIP_ID2                         (0x4A)
 
 /* Status and data buffer registers -----------------------------------------*/
 /** @note 状态寄存器反映电源输入、充电和工作状态；读取不会修改配置。 */
