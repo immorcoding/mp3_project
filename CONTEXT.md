@@ -349,13 +349,13 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **文件系统 Module**封装当前 FatFs 逻辑卷的驱动就绪检查、挂载、注销和显式格式化，并持有 FatFs 所需的同步 DMA 执行器。它只在存储任务已经取得 SD 独占权且平台 SD 已处于可访问状态时调用 FatFs，不负责卡检测、消抖或 SDMMC 初始化。
 
-该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和大块中转区挤占任务栈。它经 FatFs 声明的 `BSP_SD_*` Override Seam 间接使用 Platform SD；DMA 等待与 Cache 一致性细节见 `docs/sd_architecture.md`。它返回 FatFs 的 `FRESULT`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果。
+该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和大块中转区挤占任务栈。它经 FatFs 声明的 `BSP_SD_*` Override Seam 间接使用 Platform SD；DMA 等待与 Cache 一致性细节见 `docs/sd_architecture.md`。它向上返回 `Service_StatusTypeDef`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果，同时不泄漏 FatFs 原始类型。
 
 相关术语：**存储任务**、**平台 SD**、**SD 卡设备**。
 
 示例：
 
-> 插入一张未格式化卡时，平台 SD 仍可 READY；随后文件系统 Module 返回 `FR_NO_FILESYSTEM`，由存储任务决定是否响应明确的格式化请求。
+> 插入一张未格式化卡时，平台 SD 仍可 READY；随后文件系统 Module 返回 `SERVICE_NO_FILESYSTEM`，由存储任务决定是否响应明确的格式化请求。
 
 ## STM32 HAL GPIO EXTI 适配器（STM32 HAL GPIO EXTI adapter）
 

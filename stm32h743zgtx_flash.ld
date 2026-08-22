@@ -100,6 +100,20 @@ SECTIONS
   } >FLASH
 
   /* Constant data goes into FLASH */
+  /* SquareLine 图片与自定义字体的只读资源。在匹配到下面的.rodata之前先取走。 */
+  .gui_assets :
+  {
+    . = ALIGN(4);
+
+    *(.rodata.ui_img_*)
+    *(.rodata.glyph_*)
+    *(.rodata.cmaps)
+    *(.rodata.kern_*)
+    *(.rodata.ui_font_Number)
+
+    . = ALIGN(4);
+  } >FLASH2
+
   .rodata :
   {
     . = ALIGN(4);

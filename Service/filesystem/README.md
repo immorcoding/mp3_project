@@ -8,6 +8,9 @@
 - `Service_Filesystem_MountSD()`、`Service_Filesystem_UnmountSD()`：挂载或注销 FatFs 卷。
 - `Service_Filesystem_FormatSD()`：使用 Service 私有静态工作区执行显式 FAT32 格式化。
 
+全部公开函数返回 `Service_StatusTypeDef`。`SERVICE_NO_FILESYSTEM` 表示 SD 介质已经
+就绪，但没有可挂载的 FAT 文件系统；FatFs 的 `FRESULT` 仅在本 Module 内部使用。
+
 ## 内部 Interface
 
 - `filesystem_sd_transfer.h` 仅限本目录使用；它只向 FatFs BSP Adapter 提供同步逻辑块读写。

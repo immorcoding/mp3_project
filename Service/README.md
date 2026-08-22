@@ -4,6 +4,7 @@
 
 ## 公开 Interface
 
+- `service.h`：Service 对上层公开的通用操作结果；
 - `Service_Log_*`：普通任务上下文的异步日志投递与消费；
 - `Service_Filesystem_*`：Storage Task 独占期间的 FatFs 初始化、挂载、卸载和格式化。
 
@@ -26,6 +27,12 @@ Service 可以向 Platform 注册其声明的强类型回调。回调只唤醒�
 - 不包含 Adapter 私有头、HAL Handle 或直接操作 PCB GPIO；
 - 不在 ISR 中执行流程逻辑；
 - 不向其他任务泄漏 FatFs 对象、队列句柄或静态消息块地址。
+
+## 状态约定
+
+Service 的公开函数统一返回 `Service_StatusTypeDef`。`SERVICE_OK` 表示成功；其余
+枚举只保留调用者需要的流程语义，例如未就绪、忙、超时或未格式化的文件系统。
+Platform、Component 与 Middlewares 的原始状态值不得出现在 Service 的公开头文件中。
 
 ## 命名
 

@@ -8,11 +8,11 @@
 #ifndef FILESYSTEM_SERVICE_H
 #define FILESYSTEM_SERVICE_H
 
-#include "Middlewares/Third_Party/FatFs/src/ff.h"
+#include "Service/service.h"
 
-FRESULT Service_Filesystem_Init(void);
-FRESULT Service_Filesystem_FormatSD(void);
-FRESULT Service_Filesystem_MountSD(void);
-FRESULT Service_Filesystem_UnmountSD(void);
+Service_StatusTypeDef Service_Filesystem_Init(void);
+Service_StatusTypeDef Service_Filesystem_FormatSD(void);
+Service_StatusTypeDef Service_Filesystem_MountSD(void);
+Service_StatusTypeDef Service_Filesystem_UnmountSD(void);
 
 #endif /* FILESYSTEM_SERVICE_H */

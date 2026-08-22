@@ -19,7 +19,6 @@
 #include <string.h>
 
 #include "APP/tasks/app_tasks.h"
-#include "Components/log/log.h"
 #include "Platform/led/platform_led.h"
 #include "Platform/temp/platform_temp.h"
 #include "Service/log/log_service.h"
@@ -55,10 +54,10 @@ static UBaseType_t monitor_get_task_stack_words(const char *task_name)
         return APP_MONITOR_TASK_STACK_WORDS;
     }
 
-    // if (strcmp(task_name, "LCD Task") == 0)
-    // {
-    //     return APP_LCD_TASK_STACK_WORDS;
-    // }
+    if (strcmp(task_name, "GUI Task") == 0)
+    {
+        return APP_GUI_TASK_STACK_WORDS;
+    }
 
     if (strcmp(task_name, "IDLE") == 0)
     {
@@ -118,7 +117,7 @@ static void monitor_log_stack_snapshot(void)
                        peak_x10 / 10UL,
                        peak_x10 % 10UL);
 
-        (void)Service_Log_Post(LOG_LEVEL_INFO, "MONITOR", message);
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "MONITOR", message);
     }
 
     vPortFree(task_snapshot);
@@ -142,7 +141,7 @@ static void monitor_log_temperature(void)
     {
         if (!monitor_temperature_error_reported)
         {
-            (void)Service_Log_Post(LOG_LEVEL_ERROR,
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                   "MONITOR",
                                   "MCU temperature unavailable.");
             monitor_temperature_error_reported = true;
@@ -163,7 +162,7 @@ static void monitor_log_temperature(void)
                    sign,
                    (unsigned long)(magnitude_mC / 1000U),
                    (unsigned long)(magnitude_mC % 1000U));
-    (void)Service_Log_Post(LOG_LEVEL_INFO, "MONITOR", message);
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "MONITOR", message);
 }
 
 /**

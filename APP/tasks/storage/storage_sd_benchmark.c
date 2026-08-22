@@ -375,7 +375,7 @@ bool storage_sd_benchmark_run(void)
 
     storage_sd_benchmark_running = true;
 
-    (void)Service_Log_Post(LOG_LEVEL_INFO,
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO,
                            "SD",
                            "Bench start: read/write 64 MiB, chunk 32 KiB.");
 
@@ -386,7 +386,7 @@ bool storage_sd_benchmark_run(void)
                        sizeof(storage_sd_benchmark_log_text),
                        "Bench cleanup failed: fresult=%d.",
                        (int)result);
-        (void)Service_Log_Post(LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
         goto exit;
     }
 
@@ -398,7 +398,7 @@ bool storage_sd_benchmark_run(void)
                        sizeof(storage_sd_benchmark_log_text),
                        "Bench write failed: fresult=%d.",
                        (int)result);
-        (void)Service_Log_Post(LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
         goto exit;
     }
 
@@ -412,7 +412,7 @@ bool storage_sd_benchmark_run(void)
                    (unsigned long)elapsed_ms,
                    (unsigned long)(speed_x100 / 100U),
                    (unsigned long)(speed_x100 % 100U));
-    (void)Service_Log_Post(LOG_LEVEL_INFO, "SD", storage_sd_benchmark_log_text);
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "SD", storage_sd_benchmark_log_text);
 
     result = storage_sd_benchmark_read_file(&elapsed_ticks);
     if (result != FR_OK)
@@ -421,7 +421,7 @@ bool storage_sd_benchmark_run(void)
                        sizeof(storage_sd_benchmark_log_text),
                        "Bench read failed: fresult=%d.",
                        (int)result);
-        (void)Service_Log_Post(LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
         goto exit;
     }
 
@@ -435,7 +435,7 @@ bool storage_sd_benchmark_run(void)
                    (unsigned long)elapsed_ms,
                    (unsigned long)(speed_x100 / 100U),
                    (unsigned long)(speed_x100 % 100U));
-    (void)Service_Log_Post(LOG_LEVEL_INFO, "SD", storage_sd_benchmark_log_text);
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "SD", storage_sd_benchmark_log_text);
 
     result = storage_sd_benchmark_verify_file(&data_matched);
     if (result != FR_OK)
@@ -444,19 +444,19 @@ bool storage_sd_benchmark_run(void)
                        sizeof(storage_sd_benchmark_log_text),
                        "Bench verify read failed: fresult=%d.",
                        (int)result);
-        (void)Service_Log_Post(LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
         goto exit;
     }
 
     if (!data_matched)
     {
-        (void)Service_Log_Post(LOG_LEVEL_ERROR,
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                "SD",
                                "Bench verify failed: data mismatch.");
         goto exit;
     }
 
-    (void)Service_Log_Post(LOG_LEVEL_INFO, "SD", "Bench verify: 64 MiB passed.");
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "SD", "Bench verify: 64 MiB passed.");
 
     result = storage_sd_benchmark_remove_previous_file();
     if (result != FR_OK)
@@ -465,13 +465,13 @@ bool storage_sd_benchmark_run(void)
                        sizeof(storage_sd_benchmark_log_text),
                        "Bench final cleanup failed: fresult=%d.",
                        (int)result);
-        (void)Service_Log_Post(LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
         goto exit;
     }
 
     storage_sd_benchmark_completed = true;
     success = true;
-    (void)Service_Log_Post(LOG_LEVEL_INFO, "SD", "Bench complete.");
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "SD", "Bench complete.");
 
 exit:
     storage_sd_benchmark_running = false;

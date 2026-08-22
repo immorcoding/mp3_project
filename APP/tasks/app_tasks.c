@@ -13,7 +13,6 @@
 #include "APP/tasks/app_tasks.h"
 
 #include "APP/tasks/log/log_task.h"
-// #include "APP/tasks/lcd/lcd_task.h"
 #include "APP/tasks/monitor/monitor_task.h"
 #include "APP/tasks/storage/storage_task.h"
 #include "APP/tasks/gui/gui_task.h"
@@ -36,7 +35,7 @@ static void create_task(void *handle)
 {
     (void)handle;
 
-    if (Service_Log_Init() != LOG_OK)
+    if (Service_Log_Init() != SERVICE_OK)
     {
         Error_Handler();
     }
@@ -59,12 +58,6 @@ static void create_task(void *handle)
                      NULL,
                      APP_MONITOR_TASK_PRIORITY,
                      NULL) != pdPASS) ||
-        // (xTaskCreate(lcd_task,
-        //              "LCD Task",
-        //              APP_LCD_TASK_STACK_WORDS,
-        //              NULL,
-        //              APP_LCD_TASK_PRIORITY,
-        //              NULL) != pdPASS)
         (xTaskCreate(gui_task,
                      "GUI Task",
                      APP_GUI_TASK_STACK_WORDS,

@@ -8,6 +8,9 @@ Service_Log 将多个普通任务的短日志文本汇集到静态消息块池�
 - `Service_Log_Post()`：非阻塞投递一条已格式化的文本；
 - `Service_Log_Consume()`：由 Log task 推进输出，并至多转交一个 ready 消息。
 
+所有公开函数返回 `Service_StatusTypeDef`；`Service_Log_Post()` 的日志等级使用
+`Service_Log_LevelTypeDef`，不向调用者泄漏 `Components/log` 的类型。
+
 ## 编译期依赖
 
 - `LOG_Process()`、`LOG_Printf()`、`LOG_GetStats()`；
