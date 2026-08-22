@@ -52,12 +52,12 @@
 /** @brief 左上为原点、从左到右和从上到下、RGB 像素顺序的 MADCTL 参数。 */
 #define ST7789_MADCTL_RGB_TOP_LEFT            0x00u
 /**
- * @brief 正常显示模式约 40 Hz 的 FRCTRL2 参数。
+ * @brief 正常显示模式约 FRCTRL2 参数。
  * @details 保持点反转（NLA = 0），将 RTNA 设为 0x1E。
- *          该数值按数据手册默认前后 porch 参数对应约 40 Hz，用于为整帧
- *          SPI 写入保留更多时间余量，降低未接 TE/FMARK 时的撕裂可见度。
+ *          该数值按数据手册默认前后 porch 参数对应约 40 Hz / 60 Hz。
  */
 #define ST7789_FRCTRL2_40HZ                   0x1Eu
+#define ST7789_FRCTRL2_60HZ                   0x0Fu
 /** @brief 每次 SPI 阻塞写入的纯色像素数量。 */
 #define ST7789_FILL_BUFFER_PIXELS              128u
 /** @brief RDDID 的 24 位返回数据需要额外产生的完整串行字节数。 */

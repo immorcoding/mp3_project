@@ -5,12 +5,13 @@
 #include "lvgl.h"
 
 #include "Platform/lcd/platform_lcd.h"
+#include "Platform/touch/platform_touch.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
 #include "GUI/ui.h"
 
-#define SERVICE_GUI_DRAW_BUFFER_LINES  40U
+#define SERVICE_GUI_DRAW_BUFFER_LINES  320U
 
 static uint8_t service_gui_draw_buffer_1[
     PLATFORM_LCD_WIDTH * SERVICE_GUI_DRAW_BUFFER_LINES * sizeof(lv_color_t)]
@@ -27,6 +28,44 @@ static lv_display_t *service_gui_display;
 static uint32_t service_gui_get_tick_ms(void)
 {
     return (uint32_t)xTaskGetTickCount() * portTICK_PERIOD_MS;
+}
+
+/**
+  * @brief  向 LVGL 提供当前触摸状态。
+  * @param  indev 当前 LVGL Pointer 输入设备。
+  * @param  data LVGL 提供的输入采样输出。
+  * @note   回调由 GUI Task 内的 LVGL 定时器调用。I2C 读取失败时主动报告释放，
+  *         防止暂态通信错误使 LVGL 永久保留上一次按下状态。坐标当前直接使用
+  *         控制器原始 X/Y；后续校准仅修改本函数，不向 Platform 下沉 UI 方向。
+  */
+static void service_gui_touch_read_callback(
+    lv_indev_t *indev,
+    lv_indev_data_t *data)
+{
+    Platform_Touch_RawPointTypeDef raw_point;
+
+    (void)indev;
+    data->state = LV_INDEV_STATE_RELEASED;
+
+    if (Platform_Touch_ReadRawPoint(&raw_point) != PLATFORM_OK)
+    {
+        return;
+    }
+
+    if (!raw_point.IsPressed)
+    {
+        return;
+    }
+
+    if ((raw_point.X >= PLATFORM_LCD_WIDTH) ||
+        (raw_point.Y >= PLATFORM_LCD_HEIGHT))
+    {
+        return;
+    }
+
+    data->point.x = (lv_coord_t)raw_point.X;
+    data->point.y = (lv_coord_t)raw_point.Y;
+    data->state = LV_INDEV_STATE_PRESSED;
 }
 
 static void service_gui_lcd_transfer_callback(
@@ -83,6 +122,8 @@ static void service_gui_flush_wait_callback(lv_display_t *display)
 
 Service_StatusTypeDef Service_GUI_Init(void)
 {
+    lv_indev_t *touch_indev;
+
     if (service_gui_display != NULL)
     {
         return SERVICE_BUSY;
@@ -126,6 +167,17 @@ Service_StatusTypeDef Service_GUI_Init(void)
     lv_display_set_flush_wait_cb(
         service_gui_display,
         service_gui_flush_wait_callback);
+
+    touch_indev = lv_indev_create();
+    if (touch_indev == NULL)
+    {
+        return SERVICE_ERROR;
+    }
+
+    lv_indev_set_type(touch_indev, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_display(touch_indev, service_gui_display);
+    lv_indev_set_read_cb(touch_indev,
+                         service_gui_touch_read_callback);
 
     ui_init();
 

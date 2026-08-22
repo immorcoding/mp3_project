@@ -17,6 +17,6 @@ void gui_task(void *handle)
     while (1)
     {
         Service_GUI_Process();
-        vTaskDelay(pdMS_TO_TICKS(10));
+        // vTaskDelay(pdMS_TO_TICKS(7));
     }
 }

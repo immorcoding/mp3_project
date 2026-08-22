@@ -178,19 +178,19 @@ HAL Handle 和 GPIO 细节的显示诊断或绘制语义。当前阶段已完成
 
 它负责组合 FT6X36 Device、当前 I2C2/RESET Adapter 和本板 I2C 地址，并对上提供启动初始化、通信确认和触摸数据读取语义。它不等同于 LCD，不拥有 LVGL、GUI Task、坐标旋转、手势解释、TP IRQ 的任务通知或低功耗唤醒策略。
 
-当前最小实现只读取 Chip ID，用于确认触摸模组的实际控制器。后续 LVGL 输入回调可在同一 GUI Task 内经平台触摸轮询 `TD_STATUS` 和坐标寄存器；TP IRQ 仅在确有降低轮询或低功耗唤醒需求时才注册。
+当前实现读取 Chip ID，并由同一 GUI Task 中的 LVGL 输入回调经平台触摸轮询 `TD_STATUS` 和第一触点坐标。Platform 只发布原始按下状态和 X/Y；坐标方向由 GUI Service 按显示方向解释。TP IRQ 仅在确有降低轮询或低功耗唤醒需求时才注册。
 
 相关术语：**FT6X36 设备**、**STM32 HAL FT6X36 I2C 适配器**、**平台 LCD**。
 
 示例：
 
-> Platform Init 在调度器启动前按 LCD、Touch 顺序完成硬件初始化；LCD Task 不直接包含 `hi2c2` 或 TP_RST，只读取 Chip ID。
+> Platform Init 在调度器启动前按 LCD、Touch 顺序完成硬件初始化；GUI Service 不直接包含 `hi2c2` 或 TP_RST，只通过 Platform Touch 读取原始触点。
 
 ## FT6X36 设备（FT6X36 Device）
 
 **FT6X36 设备**是面向 FocalTech FT6X36 系列触摸控制器的可复用器件协议 Module。
 
-它负责初始化成功后应具备的 I2C 就绪语义、寄存器地址和未来触点帧的读取语义，并通过 PortOps 使用外部能力。它不拥有 I2C Handle、GPIO、具体地址选择、LVGL、触摸坐标变换或中断策略。当前不建立名为“通用 Touch”但实际泄漏 FT6X36 寄存器语义的虚假抽象。
+它负责初始化成功后应具备的 I2C 就绪语义、寄存器地址和第一触点帧的读取语义，并通过 PortOps 使用外部能力。它不拥有 I2C Handle、GPIO、具体地址选择、LVGL、触摸坐标变换或中断策略。当前不建立名为“通用 Touch”但实际泄漏 FT6X36 寄存器语义的虚假抽象。
 
 相关术语：**平台触摸**、**STM32 HAL FT6X36 I2C 适配器**。
 

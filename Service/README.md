@@ -7,6 +7,7 @@
 - `service.h`：Service 对上层公开的通用操作结果；
 - `Service_Log_*`：普通任务上下文的异步日志投递与消费；
 - `Service_Filesystem_*`：Storage Task 独占期间的 FatFs 初始化、挂载、卸载和格式化。
+- `Service_GUI_*`：GUI Task 内的 LVGL 生命周期推进、显示 DMA 刷新协调和触摸输入接入。
 
 ## 编译期依赖
 

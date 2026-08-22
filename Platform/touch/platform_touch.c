@@ -92,3 +92,38 @@ Platform_StatusTypeDef Platform_Touch_ReadID(uint8_t *chip_id)
 
     return PLATFORM_OK;
 }
+
+/**
+  * @brief  读取当前触摸控制器的第一触点原始状态和坐标。
+  * @param  point 接收原始按下状态与 X/Y 的有效地址。
+  * @retval PLATFORM_OK 触点帧读取成功；无触摸时 IsPressed 为 false。
+  * @retval PLATFORM_TOUCH_ERROR 参数无效、控制器未就绪或 I2C 读取失败。
+  * @note   本 Module 不转换坐标方向或解释多指手势；这些 UI 语义由调用者按
+  *         当前显示方向决定。当前实现只转发 FT6X36 的第一触点。
+  */
+Platform_StatusTypeDef Platform_Touch_ReadRawPoint(
+    Platform_Touch_RawPointTypeDef *point)
+{
+    FT6X36_RawPointTypeDef raw_point;
+
+    if (point == NULL)
+    {
+        return PLATFORM_TOUCH_ERROR;
+    }
+
+    if (FT6X36_ReadRawPoint(&hplatform_touch, &raw_point) != FT6X36_OK)
+    {
+        (void)LOG_Printf(LOG_LEVEL_ERROR,
+                         "TOUCH",
+                         "Touch point read failed: error=%u, port=%u, reg=0x%02X.",
+                         (unsigned int)hplatform_touch.ErrorCode,
+                         (unsigned int)hplatform_touch.LastPortStatus,
+                         (unsigned int)hplatform_touch.LastFailedRegister);
+        return PLATFORM_TOUCH_ERROR;
+    }
+
+    point->IsPressed = raw_point.IsPressed;
+    point->X = raw_point.X;
+    point->Y = raw_point.Y;
+    return PLATFORM_OK;
+}

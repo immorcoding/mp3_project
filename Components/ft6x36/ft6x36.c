@@ -157,3 +157,78 @@ FT6X36_StatusTypeDef FT6X36_ReadID(FT6X36_HandleTypeDef *hft6x36,
     hft6x36->State = FT6X36_STATE_READY;
     return FT6X36_OK;
 }
+
+/**
+  * @brief  读取 FT6X36 当前第一触点的原始状态和坐标。
+  * @param  hft6x36 已成功初始化的 FT6X36 Handle。
+  * @param  point 接收按下状态与第一触点 12 位原始 X/Y 的有效地址。
+  * @retval FT6X36_OK 触点帧读取成功；无触摸时 point->IsPressed 为 false。
+  * @retval FT6X36_ERROR 参数无效、Device 未就绪或 I2C 读取失败。
+  * @note   首版只消费 TD_STATUS 后紧随的第一触点。控制器报告多个触点时仍以
+  *         第一触点驱动单指 LVGL Pointer；手势与多指语义不属于本 Module。
+  */
+FT6X36_StatusTypeDef FT6X36_ReadRawPoint(
+    FT6X36_HandleTypeDef *hft6x36,
+    FT6X36_RawPointTypeDef *point)
+{
+    uint8_t frame[FT6X36_TOUCH_POINT_FRAME_SIZE];
+    FT6X36_PortStatusTypeDef port_status;
+
+    if ((hft6x36 == NULL) || (point == NULL))
+    {
+        return FT6X36_ERROR;
+    }
+
+    /* 失败或无触点时都不能把上一次按下状态泄漏给上层。 */
+    point->IsPressed = false;
+    point->X = 0u;
+    point->Y = 0u;
+
+    if ((hft6x36->PortOps == NULL) ||
+        (hft6x36->PortContext == NULL) ||
+        (hft6x36->PortOps->MemRead == NULL))
+    {
+        hft6x36->ErrorCode = FT6X36_ERROR_PORT_NOT_BOUND;
+        hft6x36->State = FT6X36_STATE_ERROR;
+        return FT6X36_ERROR;
+    }
+
+    if (hft6x36->State != FT6X36_STATE_READY)
+    {
+        hft6x36->ErrorCode = FT6X36_ERROR_NOT_READY;
+        return FT6X36_ERROR;
+    }
+
+    hft6x36->State = FT6X36_STATE_BUSY;
+    port_status = hft6x36->PortOps->MemRead(
+        hft6x36->PortContext,
+        hft6x36->Address7Bit,
+        FT6X36_REGISTER_TD_STATUS,
+        frame,
+        sizeof(frame));
+    if (port_status != FT6X36_PORT_OK)
+    {
+        return ft6x36_record_port_failure(
+            hft6x36,
+            FT6X36_ERROR_READ_TOUCH_POINT,
+            port_status,
+            FT6X36_REGISTER_TD_STATUS);
+    }
+
+    if ((frame[0] & FT6X36_TD_STATUS_TOUCH_COUNT_MASK) != 0u)
+    {
+        point->IsPressed = true;
+        point->X = (uint16_t)(
+            ((uint16_t)(frame[1] & FT6X36_TOUCH_COORDINATE_HIGH_MASK) << 8u) |
+            frame[2]);
+        point->Y = (uint16_t)(
+            ((uint16_t)(frame[3] & FT6X36_TOUCH_COORDINATE_HIGH_MASK) << 8u) |
+            frame[4]);
+    }
+
+    hft6x36->LastPortStatus = FT6X36_PORT_OK;
+    hft6x36->LastFailedRegister = 0u;
+    hft6x36->ErrorCode = FT6X36_ERROR_NONE;
+    hft6x36->State = FT6X36_STATE_READY;
+    return FT6X36_OK;
+}

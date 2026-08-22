@@ -1,11 +1,12 @@
 # Platform Touch
 
-本 Module 装配当前 PCB 唯一的 FT6X36 系列触摸控制器、CubeMX I2C2、`TP_RST` GPIO 和本板 7-bit I2C 地址。它对上隐藏 HAL Handle、复位电平和地址表示，当前只提供初始化与 Chip ID 读取能力。
+本 Module 装配当前 PCB 唯一的 FT6X36 系列触摸控制器、CubeMX I2C2、`TP_RST` GPIO 和本板 7-bit I2C 地址。它对上隐藏 HAL Handle、复位电平和地址表示，提供初始化、Chip ID 与第一触点原始坐标读取能力。
 
 ## 公开 Interface
 
 - `Platform_Touch_Init()`：绑定当前板的 I2C2/TP_RST Context，执行一次启动初始化并确认 I2C 可访问；
 - `Platform_Touch_ReadID()`：读取当前控制器的原始 Chip ID。
+- `Platform_Touch_ReadRawPoint()`：读取第一触点的按下状态和原始 X/Y；无触摸时返回 `PLATFORM_OK` 且 `IsPressed` 为 false。
 
 ## 编译期依赖与装配
 
@@ -15,11 +16,11 @@
 
 ## 运行时请求与事件路径
 
-`Platform_Init()` 在 LCD 初始化完成后、FreeRTOS 调度器启动前调用 `Platform_Touch_Init()`；Platform 向下调用 FT6X36 Device，Device 经已绑定 STM32 HAL Adapter 完成 TP_RST 时序和 I2C2 地址探测。LCD Task 只读取 Chip ID。`TP_IRQ` 只保留 CubeMX EXTI 配置，尚未注册回调；触点读取与 LVGL 输入将在后续由 GUI 任务轮询处理。
+`Platform_Init()` 在 LCD 初始化完成后、FreeRTOS 调度器启动前调用 `Platform_Touch_Init()`；Platform 向下调用 FT6X36 Device，Device 经已绑定 STM32 HAL Adapter 完成 TP_RST 时序和 I2C2 地址探测。运行阶段，GUI Service 的 LVGL 输入回调在 GUI Task 普通上下文调用 `Platform_Touch_ReadRawPoint()`。`TP_IRQ` 只保留 CubeMX EXTI 配置，当前不注册回调。
 
 ## 禁止依赖与约束
 
-- 不创建 FreeRTOS Task、不调用 LVGL、不解释触点坐标或手势；
+- 不创建 FreeRTOS Task、不调用 LVGL、不转换屏幕坐标或解释手势；
 - 不设置 LCD 电源轨；`Platform_Init()` 必须先完成 LCD 初始化以开启并稳定 ALDO2，再调用初始化；
 - 不直接向 APP 泄漏 `hi2c2`、GPIO、Adapter Context 或 HAL 状态。
 

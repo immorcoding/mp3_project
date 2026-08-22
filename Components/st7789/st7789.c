@@ -417,7 +417,7 @@ ST7789_StatusTypeDef ST7789_DisplayInit(ST7789_HandleTypeDef *hst7789)
 {
     const uint8_t color_mode = ST7789_COLMOD_RGB565;
     const uint8_t memory_access_control = ST7789_MADCTL_RGB_TOP_LEFT;
-    const uint8_t frame_rate_control = ST7789_FRCTRL2_40HZ;
+    const uint8_t frame_rate_control = ST7789_FRCTRL2_60HZ;
     ST7789_ErrorTypeDef error = ST7789_ERROR_NONE;
     ST7789_PortStatusTypeDef port_status;
 

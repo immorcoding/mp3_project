@@ -116,7 +116,7 @@ void SDRAM_EarlyInit(void)
   hsdram1_tmp.Init.SDClockPeriod = FMC_SDRAM_CLOCK_PERIOD_2;
   hsdram1_tmp.Init.ReadBurst = FMC_SDRAM_RBURST_ENABLE;
   hsdram1_tmp.Init.ReadPipeDelay = FMC_SDRAM_RPIPE_DELAY_1;
-  /* 时序均按 MT48LC16M16A2 在 32 MHz 下的最小要求向上取整。 */
+  /* 时序按 MT48LC16M16A2-6A 与 AS4C16M16SA-7TCN 的共同最小要求向上取整。 */
   SdramTiming.LoadToActiveDelay = 2;
   SdramTiming.ExitSelfRefreshDelay = 3;
   SdramTiming.SelfRefreshTime = 2;
@@ -149,7 +149,12 @@ void SDRAM_EarlyInit(void)
   sdram_command.ModeRegisterDefinition = 0;
   (void)HAL_SDRAM_SendCommand(&hsdram1_tmp, &sdram_command, 1000);
 
-  for (uint16_t index = 0u; index < 10000u; ++index)
+  /*
+   * AS4C16M16SA-7TCN 要求 CLK ENABLE 后至少稳定 200 us。复位阶段 D1HCLK 约为
+   * 64 MHz；12 800 条 NOP 本身正好覆盖 200 us，循环控制开销只会增加等待时间。
+   * 此处不能使用 HAL_Delay()，因为系统时基与 C 运行库尚未初始化。
+   */
+  for (uint16_t index = 0u; index < 12800u; ++index)
   {
     __NOP();
   }
