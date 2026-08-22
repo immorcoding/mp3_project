@@ -10,9 +10,9 @@
 
 #include "Middlewares/Third_Party/FatFs/src/ff.h"
 
-FRESULT Filesystem_Init(void);
-FRESULT Filesystem_FormatSD(void);
-FRESULT Filesystem_MountSD(void);
-FRESULT Filesystem_UnmountSD(void);
+FRESULT Service_Filesystem_Init(void);
+FRESULT Service_Filesystem_FormatSD(void);
+FRESULT Service_Filesystem_MountSD(void);
+FRESULT Service_Filesystem_UnmountSD(void);
 
 #endif /* FILESYSTEM_SERVICE_H */

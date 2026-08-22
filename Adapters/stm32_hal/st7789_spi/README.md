@@ -23,7 +23,7 @@
 
 ## 禁止依赖
 
-不得自行引用 `hspi1`、LCD 引脚宏、Platform Power、LogService、LVGL 或 FreeRTOS Task；这些具体装配、任务通知与产品流程分别由 Platform LCD 和 APP Task 持有。
+不得自行引用 `hspi1`、LCD 引脚宏、Platform Power、Service_Log、LVGL 或 FreeRTOS Task；这些具体装配、任务通知与产品流程分别由 Platform LCD 和 APP Task 持有。
 
 ## 命名
 

@@ -61,7 +61,7 @@ static bool filesystem_make_drive_path(
   * @retval FR_NOT_READY 驱动尚未链接或链接失败。
   * @note   本函数绝不再次调用 MX_FATFS_Init()，避免重复增加 FatFs 逻辑卷。
   */
-FRESULT Filesystem_Init(void)
+FRESULT Service_Filesystem_Init(void)
 {
     if ((retSD != 0U) || (SDPath[0] == '\0'))
     {
@@ -77,7 +77,7 @@ FRESULT Filesystem_Init(void)
   * @warning 格式化会销毁卷中现有文件；仅应在 Storage Service 已取得 SD 独占权
   *          且上层明确确认后调用。
   */
-FRESULT Filesystem_FormatSD(void)
+FRESULT Service_Filesystem_FormatSD(void)
 {
     TCHAR sd_drive_path[FILESYSTEM_DRIVE_PATH_LENGTH];
 
@@ -99,7 +99,7 @@ FRESULT Filesystem_FormatSD(void)
   * @note   本函数不初始化 Platform SD；调用者必须先经过 Storage Task 的卡检测、
   *         消抖和 Platform_SD_Init()/Process() 生命周期。
   */
-FRESULT Filesystem_MountSD(void)
+FRESULT Service_Filesystem_MountSD(void)
 {
     TCHAR sd_drive_path[FILESYSTEM_DRIVE_PATH_LENGTH];
 
@@ -117,7 +117,7 @@ FRESULT Filesystem_MountSD(void)
   * @note   调用 f_mount(NULL, ..., 0) 只解除逻辑卷与 FATFS 对象的关联；它不会
   *         对已经移除的 SD 卡发起块访问，因此可用于热拔出收尾。
   */
-FRESULT Filesystem_UnmountSD(void)
+FRESULT Service_Filesystem_UnmountSD(void)
 {
     TCHAR sd_drive_path[FILESYSTEM_DRIVE_PATH_LENGTH];
 

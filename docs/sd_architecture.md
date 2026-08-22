@@ -82,7 +82,7 @@ app_init()
   -> Platform_Init()                          初始化整机强依赖设备
   -> app_task_start()
      -> Create Task
-        -> LogService_Init()
+        -> Service_Log_Init()
         -> 创建 Log Task、Storage Task 与 Monitor Task
 
 Storage Task
@@ -104,7 +104,7 @@ Storage Task
                -> Port.GetInfo(&hsd1)
                   -> 缓存归一化逻辑块信息
                -> State = READY
-          -> Filesystem_Init()
+          -> Service_Filesystem_Init()
              -> filesystem_sd_transfer_init()
             -> Platform_SD_SetTransferCallback(
                    filesystem_sd_transfer_irq_callback, ...)

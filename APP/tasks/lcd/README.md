@@ -10,7 +10,7 @@
 
 - `Platform_LCD_DrawPixel()`、`Platform_LCD_SetTransferCallback()`、`Platform_LCD_StartWrite()`；
 - `Platform_Touch_ReadID()`；
-- `LogService_Post()`。
+- `Service_Log_Post()`。
 
 ## 运行时请求与事件路径
 

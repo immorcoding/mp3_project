@@ -181,7 +181,7 @@ static bool lcd_task_run_color_test(void)
                        sizeof(message),
                        "DMA color test: %s.",
                        lcd_task_color_tests[index].Name);
-        (void)LogService_Post(LOG_LEVEL_INFO, "LCD", message);
+        (void)Service_Log_Post(LOG_LEVEL_INFO, "LCD", message);
         vTaskDelay(pdMS_TO_TICKS(LCD_TASK_COLOR_HOLD_PERIOD_MS));
     }
 
@@ -201,7 +201,7 @@ static void lcd_task_log_touch_id(void)
 
     if (Platform_Touch_ReadID(&chip_id) != PLATFORM_OK)
     {
-        (void)LogService_Post(LOG_LEVEL_ERROR,
+        (void)Service_Log_Post(LOG_LEVEL_ERROR,
                               "TOUCH",
                               "Chip ID read failed after startup initialization.");
         return;
@@ -209,7 +209,7 @@ static void lcd_task_log_touch_id(void)
 
     (void)snprintf(message, sizeof(message), "Chip ID: 0x%02X.",
                    (unsigned int)chip_id);
-    (void)LogService_Post(LOG_LEVEL_INFO, "TOUCH", message);
+    (void)Service_Log_Post(LOG_LEVEL_INFO, "TOUCH", message);
 }
 
 /**
@@ -238,7 +238,7 @@ void lcd_task(void *handle)
     {
         if (!transfer_callback_registered)
         {
-            (void)LogService_Post(LOG_LEVEL_ERROR,
+            (void)Service_Log_Post(LOG_LEVEL_ERROR,
                                   "LCD",
                                   "DMA callback registration failed; retrying.");
             vTaskDelay(pdMS_TO_TICKS(LCD_TASK_CALLBACK_RETRY_PERIOD_MS));
@@ -253,13 +253,13 @@ void lcd_task(void *handle)
 
         if (lcd_task_run_color_test())
         {
-            (void)LogService_Post(LOG_LEVEL_INFO,
+            (void)Service_Log_Post(LOG_LEVEL_INFO,
                                    "LCD",
                                    "DMA color test completed; final screen is white.");
         }
         else
         {
-            (void)LogService_Post(LOG_LEVEL_ERROR, "LCD", "DMA color test failed.");
+            (void)Service_Log_Post(LOG_LEVEL_ERROR, "LCD", "DMA color test failed.");
         }
     }
 }

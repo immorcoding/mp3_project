@@ -9,7 +9,7 @@ Monitor task 记录各任务栈高水位线，并翻转诊断 LED。它不参与
 ## 编译期依赖
 
 - FreeRTOS `uxTaskGetSystemState()`、堆分配与延时 Interface；
-- `LogService_Post()`；
+- `Service_Log_Post()`；
 - `Platform_Temp_Read()`；
 - `Platform_LED_Toggle(PLATFORM_LED_ID_STATUS)`。
 

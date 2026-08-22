@@ -285,11 +285,11 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 > USB 正忙属于可重试状态，日志核心应保留消息并稍后再次提交。
 
-## 日志投递（LogService）
+## 日志投递（Service Log）
 
 **日志投递**是 FreeRTOS 普通任务之间的异步日志转交 Module。它把固定数量的静态消息块在 `free queue`、生产者局部变量和 `ready queue` 之间转移；Log Task 是唯一消费者，负责把 ready 消息转交给日志核心。
 
-日志投递不拥有 USB 输出、ANSI 颜色或日志格式化策略；这些仍属于日志核心和 USB CDC 日志适配器。普通任务使用 `LogService_Post()` 发布已经形成的文本，不能在 ISR 中调用它。LogService 初始化必须早于所有可能投递日志的任务。
+日志投递不拥有 USB 输出、ANSI 颜色或日志格式化策略；这些仍属于日志核心和 USB CDC 日志适配器。普通任务使用 `Service_Log_Post()` 发布已经形成的文本，不能在 ISR 中调用它。`Service_Log_Init()` 必须早于所有可能投递日志的任务。
 
 相关术语：**延后启动日志**、**USB CDC 日志适配器**、**存储任务**。
 

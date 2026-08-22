@@ -2,10 +2,14 @@
 
 `APP` 是固件的顶层编排 Module：调用 `Platform_Init()`、决定其失败是否致命、创建 FreeRTOS 任务并启动调度器。它不保存 HAL Handle、不构造 Adapter Ops，也不直接操作寄存器。LCD、LED 与触摸控制器的启动初始化属于 `Platform_Init()` 的内部顺序；其中 LED 或触摸失败仅禁用对应诊断/输入能力，底层 HAL 延时不会阻塞普通任务。
 
-## 公开 Interface
+## Core 启动接缝
 
 - `app_init()`：由 `Core/Src/main.c` 的 USER CODE 接缝调用，初始化产品运行所需的 Module。
-- `app_task_start()`：创建 bootstrap task 并启动 FreeRTOS 调度器；正常情况下不返回。
+- `app_error()`：由 `Core/Src/main.c` 的 `Error_Handler()` USER CODE 接缝调用，保留应用级失效安全处理入口。
+
+## APP 内部 Interface
+
+- `app_task_start()`：由 `app_init()` 调用，创建 bootstrap task 并启动 FreeRTOS 调度器；正常情况下不返回。
 
 ## 编译期依赖
 
@@ -18,7 +22,7 @@
 
 APP 是启动与 Task 编排根。它通常发起 `APP → Service → Platform` 的产品请求，但不是每一笔请求的强制中转层；Task 内的后续流程由各自 Module 的公开 Interface 决定。
 
-`Core/Src/main.c` 通过 USER CODE boot seam 调用 `app_init()`，这是生成代码进入 APP 的运行时入口，不表示其他下层 Module 可以包含 APP。
+`Core/Src/main.c` 通过 USER CODE boot seam 调用 `app_init()` 和 `app_error()`；这是生成代码进入 APP 的运行时入口，不表示其他下层 Module 可以包含 APP。
 
 ## 事件/ISR 路径
 
@@ -32,4 +36,4 @@ APP Task 只消费 Service 或 Platform 经公开 Interface 发布的普通上�
 
 ## 命名
 
-顶层编排和 Task 入口使用 `snake_case`。仅向其他 Module 暴露的能力使用本工程的 Pascal 分段规则；详情见 [../docs/coding_standard.md](../docs/coding_standard.md)。
+`APP` 是一个完整顶层 Module，`APP/tasks` 只是其私有 Implementation 分区。`app_init()`、`app_error()` 是 Core 进入 APP 的启动接缝，`app_task_start()` 与各 Task 入口仅在 APP 内调用；它们都使用 `snake_case`。下层 Module 不得包含 APP 头文件或调用其函数；需要被多处复用的产品能力应下沉为 Service Interface。详情见 [../docs/coding_standard.md](../docs/coding_standard.md)。

@@ -4,8 +4,8 @@
 
 ## 公开 Interface
 
-- `LogService_*`：普通任务上下文的异步日志投递与消费；
-- `Filesystem_*`：Storage Task 独占期间的 FatFs 初始化、挂载、卸载和格式化。
+- `Service_Log_*`：普通任务上下文的异步日志投递与消费；
+- `Service_Filesystem_*`：Storage Task 独占期间的 FatFs 初始化、挂载、卸载和格式化。
 
 ## 编译期依赖
 
@@ -29,4 +29,4 @@ Service 可以向 Platform 注册其声明的强类型回调。回调只唤醒�
 
 ## 命名
 
-跨 Module 的公开 Interface 使用 Pascal 分段命名，例如 `LogService_Post()`；目录内 Implementation 使用 `snake_case`。
+跨 Module 的公开 Interface 固定使用 `Service_<Capability>_<Verb>`，例如 `Service_Log_Post()`、`Service_Filesystem_MountSD()`；目录内 Implementation 使用 `snake_case`。

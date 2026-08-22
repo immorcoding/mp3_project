@@ -14,7 +14,7 @@
 
 ## 运行时请求与事件路径
 
-Log Component 经已绑定 Ops 请求输出时，本 Adapter 调用 CDC；USB 就绪或忙状态只返回归一化结果，Log task 随后重试。Adapter 不直接调用 LogService 或任务。
+Log Component 经已绑定 Ops 请求输出时，本 Adapter 调用 CDC；USB 就绪或忙状态只返回归一化结果，Log task 随后重试。Adapter 不直接调用 Service_Log 或任务。
 
 ## 资源与约束
 

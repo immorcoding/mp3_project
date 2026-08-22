@@ -118,7 +118,7 @@ static void monitor_log_stack_snapshot(void)
                        peak_x10 / 10UL,
                        peak_x10 % 10UL);
 
-        (void)LogService_Post(LOG_LEVEL_INFO, "MONITOR", message);
+        (void)Service_Log_Post(LOG_LEVEL_INFO, "MONITOR", message);
     }
 
     vPortFree(task_snapshot);
@@ -142,7 +142,7 @@ static void monitor_log_temperature(void)
     {
         if (!monitor_temperature_error_reported)
         {
-            (void)LogService_Post(LOG_LEVEL_ERROR,
+            (void)Service_Log_Post(LOG_LEVEL_ERROR,
                                   "MONITOR",
                                   "MCU temperature unavailable.");
             monitor_temperature_error_reported = true;
@@ -163,14 +163,14 @@ static void monitor_log_temperature(void)
                    sign,
                    (unsigned long)(magnitude_mC / 1000U),
                    (unsigned long)(magnitude_mC % 1000U));
-    (void)LogService_Post(LOG_LEVEL_INFO, "MONITOR", message);
+    (void)Service_Log_Post(LOG_LEVEL_INFO, "MONITOR", message);
 }
 
 /**
   * @brief  周期性记录任务栈历史峰值并翻转诊断 LED。
   * @param  handle 未使用，保留以满足 FreeRTOS TaskFunction_t。
   * @note   监控周期为 500 ms；每 10 个周期采集一次快照，避免监控日志本身持续
-  *         占用 LogService 队列和其他任务的 CPU 时间。
+  *         占用 Service_Log 队列和其他任务的 CPU 时间。
   */
 void monitor_task(void *handle)
 {

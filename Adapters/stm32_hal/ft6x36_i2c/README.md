@@ -19,7 +19,7 @@ FT6X36 Device 经已绑定 PortOps 请求一次初始化、I2C 探测或寄存�
 ## 禁止依赖与约束
 
 - 不硬编码 `hi2c2`、TP_RST、I2C 地址或有效极性；这些对象全部由 Platform Touch 注入；
-- 不包含或调用 APP、Service、LogService、LVGL；
+- 不包含或调用 APP、Service、Service_Log、LVGL；
 - 不在 HAL I2C 中断或 GPIO EXTI 中读取触摸寄存器。
 - 不得在 FreeRTOS 普通 Task 中调用 `FT6X36_Init()`；本板的初始化只由 `app_init()` 在调度器启动前触发。
 

@@ -23,18 +23,20 @@
 | --- | --- | --- | --- |
 | 文件内私有函数、局部变量、私有静态对象 | `snake_case` | `storage_sd_mount()`、`message_ready_queue` | 必须为 `static`，不得伪装成公开 Interface。 |
 | 同一 Module 的私有跨文件 Interface | `snake_case` | `storage_sd_process()` | 仅供同一目录/Module 内部使用；不作为上层依赖。 |
-| 跨 Module 的项目公开 Interface | Pascal 分段 + `_` | `Platform_SD_Process()`、`SDCard_ReadBlocks()`、`LogService_Post()` | 前缀是拥有该 Interface 的 Module 名称；每个非缩写单词首字母大写。 |
+| 跨 Module 的项目公开 Interface | Pascal 分段 + `_` | `Platform_SD_Process()`、`SDCard_ReadBlocks()`、`Service_Log_Post()` | 前缀是拥有该 Interface 的 Module 名称；每个非缩写单词首字母大写。 |
 | Platform 的产品能力 | `Platform_<Capability>_<Verb>` | `Platform_SD_GetInfo()` | 面向上层表达产品能力，不泄漏 HAL Handle、GPIO 或寄存器。 |
+| Service 的产品流程能力 | `Service_<Capability>_<Verb>` | `Service_Filesystem_MountSD()`、`Service_Log_Post()` | `Service` 前缀明确表示该 Interface 属于产品流程层，不能为缩短而省略。 |
 | Component 的可复用能力 | `<Module>_<Verb>` | `AXP2101_Init()`、`SoftI2C_MemRead()` | Module 名称按既有稳定拼写保留，例如 `SDCard`、`SoftI2C`。 |
 | Adapter 的装配 Interface | `<Module>_<Target>Adapter_<Verb>` | `SDCard_STM32HALAdapter_Bind()` | `STM32HALAdapter` 是有效的 Implementation 身份，不能仅为缩短而删除。 |
 | FreeRTOS Task 入口 | `snake_case` | `log_task()` | 满足 `TaskFunction_t` 的 C 函数；任务显示名使用可读字符串。 |
+| APP 的启动接缝与内部任务调度 | `snake_case` | `app_init()`、`app_error()`、`app_task_start()` | `APP` 是一个顶层 Module；`APP/tasks` 只是其私有 Implementation 分区，不对其他层发布 Interface。 |
 | 类型 | 已发布 Module 前缀 + `TypeDef` | `Platform_SD_InfoTypeDef` | 回调使用 `*_Callback_t` 或既有 `*Func`；操作表使用 `*_OpsTypeDef`。 |
 | 宏、枚举值与编译期开关 | 大写 + Module 前缀 | `APP_BOOT_TASK_STACK_WORDS` | 不使用无前缀的通用宏。 |
 
 ### 3.1 缩短规则
 
-- 删除只复述目录层次、却不增加语义的信息，例如 `Filesystem_Service_*` 可收敛为 `Filesystem_*`。
-- 不删除区分两个真实 Module 的词，例如 `LOG_*`（日志核心）与 `LogService_*`（RTOS 投递/消费 Module）。
+- Service 的公开 Interface 必须保留 `Service` 层名前缀，例如 `Service_Filesystem_MountSD()`；该前缀表达产品流程 Seam，不能为了缩短而删除。
+- 不删除区分两个真实 Module 的词，例如 `LOG_*`（日志核心）与 `Service_Log_*`（RTOS 投递/消费 Module）。
 - 不删除决定替换方式的 Adapter 身份，例如 `STM32HALAdapter`。
 - 公开 Interface 的重命名必须单独列出调用点，完成构建与板上回归；不与无关功能改动混在一起。
 

@@ -40,7 +40,7 @@ void storage_sdram_diagnostic_run(void)
                        (unsigned long)diagnostics.FailureAddress,
                        (unsigned int)diagnostics.ExpectedValue,
                        (unsigned int)diagnostics.ActualValue);
-        (void)LogService_Post(LOG_LEVEL_ERROR, storage_sdram_log_tag, text);
+        (void)Service_Log_Post(LOG_LEVEL_ERROR, storage_sdram_log_tag, text);
         return;
     }
 
@@ -48,7 +48,7 @@ void storage_sdram_diagnostic_run(void)
                    sizeof(text),
                    "Test passed: data bus, address bus, %lu MiB pattern.",
                    (unsigned long)(diagnostics.CapacityBytes / (1024UL * 1024UL)));
-    (void)LogService_Post(LOG_LEVEL_INFO, storage_sdram_log_tag, text);
+    (void)Service_Log_Post(LOG_LEVEL_INFO, storage_sdram_log_tag, text);
 
     (void)snprintf(text,
                    sizeof(text),
@@ -57,7 +57,7 @@ void storage_sdram_diagnostic_run(void)
                    (unsigned long)diagnostics.WriteElapsedMilliseconds,
                    (unsigned long)(diagnostics.WriteSpeedMiBPerSecondX100 / 100UL),
                    (unsigned long)(diagnostics.WriteSpeedMiBPerSecondX100 % 100UL));
-    (void)LogService_Post(LOG_LEVEL_INFO, storage_sdram_log_tag, text);
+    (void)Service_Log_Post(LOG_LEVEL_INFO, storage_sdram_log_tag, text);
 
     (void)snprintf(text,
                    sizeof(text),
@@ -66,5 +66,5 @@ void storage_sdram_diagnostic_run(void)
                    (unsigned long)diagnostics.ReadElapsedMilliseconds,
                    (unsigned long)(diagnostics.ReadSpeedMiBPerSecondX100 / 100UL),
                    (unsigned long)(diagnostics.ReadSpeedMiBPerSecondX100 % 100UL));
-    (void)LogService_Post(LOG_LEVEL_INFO, storage_sdram_log_tag, text);
+    (void)Service_Log_Post(LOG_LEVEL_INFO, storage_sdram_log_tag, text);
 }

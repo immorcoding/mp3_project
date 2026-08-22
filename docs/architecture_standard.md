@@ -455,8 +455,12 @@ ISR 禁止：
 
 - 文件内和同 Module 的私有 Implementation 使用 `snake_case`；
 - 跨 Module 的公开 Interface 使用 Pascal 分段命名，例如 `Platform_SD_GetInfo()`、
-  `SDCard_ReadBlocks()` 与 `LogService_Post()`；
-- FreeRTOS Task 入口保留 `storage_task()` 这类 `snake_case`；
+  `SDCard_ReadBlocks()` 与 `Service_Log_Post()`；
+- Service 公开 Interface 固定使用 `Service_<Capability>_<Verb>`，例如
+  `Service_Filesystem_MountSD()`；
+- APP 的 `app_init()`、`app_error()` 启动接缝以及 `app_task_start()` 和
+  `storage_task()` 等内部 Task 入口保留 `snake_case`；`APP/tasks` 只是 APP 的私有
+  Implementation 分区，不向其他 Module 发布 Interface；
 - 不删除能表达 Adapter 后端或资源语义的名称，仅移除重复的层级词；
 - 不再新增 `Board_*`、`BSP/*`、`*_port` 作为模糊层级名称。已有 Component 内部的
   `PortOps` 表示稳定的设备端口 Interface，不等同于目录层级。

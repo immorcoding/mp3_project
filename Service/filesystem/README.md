@@ -4,9 +4,9 @@
 
 ## 公开 Interface
 
-- `Filesystem_Init()`：校验 CubeMX Driver Link，绑定当前 Storage Task 为唯一 DMA 执行者，并订阅 Platform SD 传输事件。
-- `Filesystem_MountSD()`、`Filesystem_UnmountSD()`：挂载或注销 FatFs 卷。
-- `Filesystem_FormatSD()`：使用 Service 私有静态工作区执行显式 FAT32 格式化。
+- `Service_Filesystem_Init()`：校验 CubeMX Driver Link，绑定当前 Storage Task 为唯一 DMA 执行者，并订阅 Platform SD 传输事件。
+- `Service_Filesystem_MountSD()`、`Service_Filesystem_UnmountSD()`：挂载或注销 FatFs 卷。
+- `Service_Filesystem_FormatSD()`：使用 Service 私有静态工作区执行显式 FAT32 格式化。
 
 ## 内部 Interface
 
@@ -26,7 +26,7 @@ Filesystem 在 Storage Task 独占期向下调用 `Platform_SD_*` 与 FatFs `f_*
 
 ## 约束
 
-- 第一次成功的 `Filesystem_Init()` 把执行器绑定到当前 Storage Task；其他任务不能消费其传输通知或使用其 bounce buffer。
+- 第一次成功的 `Service_Filesystem_Init()` 把执行器绑定到当前 Storage Task；其他任务不能消费其传输通知或使用其 bounce buffer。
 - 同时最多一笔 SD DMA 在飞。索引 `1` 表示该传输的一个带类型完成/错误/中止事件；索引 `0` 仍保留给卡检测消抖。
 - 从 FatFs 的视角，`BSP_SD_ReadBlocks()` 与 `BSP_SD_WriteBlocks()` 仍是同步的：只有 DMA 完成、Cache 维护完成并提交 Platform SD 状态后才返回。
 - 私有的 32 字节对齐 AXI SRAM bounce buffer 向 FatFs 调用者隐藏 DMA 可达性、对齐和 D-Cache 规则。不使用 `volatile`；数据可见性由 Cache 维护保证。
@@ -35,4 +35,4 @@ Filesystem 在 Storage Task 独占期向下调用 `Platform_SD_*` 与 FatFs `f_*
 
 ## 命名
 
-跨层 Interface 使用 `Filesystem_*`；Implementation 与目录内部 Interface 使用 `filesystem_*`。
+跨层 Interface 使用 `Service_Filesystem_*`；Implementation 与目录内部 Interface 使用 `filesystem_*`。

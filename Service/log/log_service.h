@@ -12,8 +12,8 @@
 
 #define LOG_SERVICE_QUEUE_LENGTH 16U
 
-LOG_StatusTypeDef LogService_Init(void);
-LOG_StatusTypeDef LogService_Post(LOG_LevelTypeDef level, const char *tag, const char *text);
-LOG_StatusTypeDef LogService_Consume(void);
+LOG_StatusTypeDef Service_Log_Init(void);
+LOG_StatusTypeDef Service_Log_Post(LOG_LevelTypeDef level, const char *tag, const char *text);
+LOG_StatusTypeDef Service_Log_Consume(void);
 
 #endif /* LOG_SERVICE_H */

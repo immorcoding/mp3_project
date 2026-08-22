@@ -41,9 +41,9 @@ static QueueHandle_t message_ready_queue;
   * @brief  创建静态消息块池及 free/ready queue。
   * @retval LOG_OK 两个队列已创建，且每个消息块都位于 free queue。
   * @retval LOG_ERROR 队列创建或初始块入队失败。
-  * @note   必须在任何调用 LogService_Post() 的任务开始运行前调用一次；不支持 ISR。
+  * @note   必须在任何调用 Service_Log_Post() 的任务开始运行前调用一次；不支持 ISR。
   */
-LOG_StatusTypeDef LogService_Init(void)
+LOG_StatusTypeDef Service_Log_Init(void)
 {
     message_free_queue = xQueueCreate(LOG_SERVICE_QUEUE_LENGTH,
                                       sizeof(log_service_message_t *));
@@ -80,7 +80,7 @@ LOG_StatusTypeDef LogService_Init(void)
   * @retval LOG_ERROR 参数无效、没有空闲块、文本过长或队列转移失败。
   * @note   本函数从不等待空闲块；队列满时丢弃当前消息，避免业务任务因日志阻塞。
   */
-LOG_StatusTypeDef LogService_Post(LOG_LevelTypeDef level, const char *tag, const char *text)
+LOG_StatusTypeDef Service_Log_Post(LOG_LevelTypeDef level, const char *tag, const char *text)
 {
     log_service_message_t *message;
     size_t text_length;
@@ -124,7 +124,7 @@ LOG_StatusTypeDef LogService_Post(LOG_LevelTypeDef level, const char *tag, const
   *         从而避免因队列满而丢弃 ready 消息。消息一旦转交给 LOG_Printf()，无论
   *         其输出结果如何，均视为本次消费完成并归还静态消息块。
   */
-LOG_StatusTypeDef LogService_Consume(void)
+LOG_StatusTypeDef Service_Log_Consume(void)
 {
     LOG_StatsTypeDef stats;
     LOG_StatusTypeDef status;

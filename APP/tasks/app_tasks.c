@@ -25,7 +25,7 @@
 /**
   * @brief  创建应用运行所需的全部任务，然后删除自身。
   * @param  handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
-  * @note   LogService 必须先于任意可能调用 LogService_Post() 的任务创建。
+  * @note   Service_Log 必须先于任意可能调用 Service_Log_Post() 的任务创建。
   *         Storage Task 优先级高于 Log Task；它完成短暂初始化后会阻塞等待 SD
   *         检测通知，不会长期占用 CPU。LCD Task 当前只运行一次诊断事务，随后
   *         进入低频阻塞，因而与 Log/Monitor Task 同优先级即可。
@@ -34,7 +34,7 @@ static void create_task(void *handle)
 {
     (void)handle;
 
-    if (LogService_Init() != LOG_OK)
+    if (Service_Log_Init() != LOG_OK)
     {
         Error_Handler();
     }

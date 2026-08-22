@@ -1,12 +1,12 @@
-# LogService
+# Service_Log
 
-LogService 将多个普通任务的短日志文本汇集到静态消息块池，并由 Log task 顺序转交给 `Components/log`。它解决多任务生产与单一输出消费者之间的同步，不取代日志核心的格式化和 USB 输出能力。
+Service_Log 将多个普通任务的短日志文本汇集到静态消息块池，并由 Log task 顺序转交给 `Components/log`。它解决多任务生产与单一输出消费者之间的同步，不取代日志核心的格式化和 USB 输出能力。
 
 ## 公开 Interface
 
-- `LogService_Init()`：创建 free queue、ready queue 并归入全部静态消息块；
-- `LogService_Post()`：非阻塞投递一条已格式化的文本；
-- `LogService_Consume()`：由 Log task 推进输出，并至多转交一个 ready 消息。
+- `Service_Log_Init()`：创建 free queue、ready queue 并归入全部静态消息块；
+- `Service_Log_Post()`：非阻塞投递一条已格式化的文本；
+- `Service_Log_Consume()`：由 Log task 推进输出，并至多转交一个 ready 消息。
 
 ## 编译期依赖
 
@@ -15,7 +15,7 @@ LogService 将多个普通任务的短日志文本汇集到静态消息块池，
 
 ## 运行时请求与事件路径
 
-普通 Task 经 `LogService_Post()` 投递，Log task 经 `LogService_Consume()` 向下调用日志核心。当前没有硬件 ISR 直接进入本 Module；ISR 如需日志只能先通知普通任务。
+普通 Task 经 `Service_Log_Post()` 投递，Log task 经 `Service_Log_Consume()` 向下调用日志核心。当前没有硬件 ISR 直接进入本 Module；ISR 如需日志只能先通知普通任务。
 
 ## 资源与约束
 
@@ -26,4 +26,4 @@ LogService 将多个普通任务的短日志文本汇集到静态消息块池，
 
 ## 命名
 
-公开 Interface 使用 `LogService_*`；私有类型、静态对象和局部变量使用 `snake_case`。
+公开 Interface 使用 `Service_Log_*`；私有类型、静态对象和局部变量使用 `snake_case`。
