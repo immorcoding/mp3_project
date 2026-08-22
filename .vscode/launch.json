@@ -1,15 +1,15 @@
 {
     "configurations": [
         {
-            "name": "mp3_project_debug_config1",
+            "name": "mp3_project (当前 CMake 预设)",
             "type": "stlinkgdbtarget",
             "request": "launch",
             "cwd": "${workspaceFolder}",
-            "preBuild": "${command:st-stm32-ide-debug-launch.build}",
+            "preLaunchTask": "CMake: Build active preset",
             "runEntry": "main",
             "imagesAndSymbols": [
                 {
-                    "imageFileName": "${workspaceFolder}/build/Debug/mp3_project.elf"
+                    "imageFileName": "${command:cmake.getLaunchTargetPath}"
                 }
             ],
             "verbose": false

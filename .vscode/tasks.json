@@ -2,16 +2,24 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "DFU 烧录 HEX",
-      "type": "shell",
+      "type": "cmake",
+      "label": "CMake: Build active preset",
+      "command": "build",
+      "preset": "${command:cmake.activeBuildPresetName}",
+      "problemMatcher": []
+    },
+    {
+      "label": "DFU 烧录当前预设",
+      "type": "process",
       "command": "D:\\stm32cubeprogrammer\\bin\\STM32_Programmer_CLI.exe",
       "args": [
         "-c",
         "port=usb1",
         "-w",
-        "${workspaceFolder}\\build\\Debug\\mp3_project.hex",
+        "${command:cmake.buildDirectory}\\mp3_project.hex",
         "-v"
       ],
+      "dependsOn": "CMake: Build active preset",
       "problemMatcher": []
     }
   ]

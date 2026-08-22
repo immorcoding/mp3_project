@@ -207,8 +207,8 @@ void PeriphCommonClock_Config(void)
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC|RCC_PERIPHCLK_ADC
                               |RCC_PERIPHCLK_SPI2|RCC_PERIPHCLK_SPI1;
   PeriphClkInitStruct.PLL2.PLL2M = 5;
-  PeriphClkInitStruct.PLL2.PLL2N = 104;
-  PeriphClkInitStruct.PLL2.PLL2P = 52;
+  PeriphClkInitStruct.PLL2.PLL2N = 108;
+  PeriphClkInitStruct.PLL2.PLL2P = 54;
   PeriphClkInitStruct.PLL2.PLL2Q = 2;
   PeriphClkInitStruct.PLL2.PLL2R = 2;
   PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
