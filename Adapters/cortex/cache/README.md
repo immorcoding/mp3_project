@@ -4,9 +4,10 @@
 
 ## 公开 Interface
 
-- `CortexM7DCache_CleanRange()`：提交指定 Cacheable 范围中的脏数据；
-- `CortexM7DCache_InvalidateRange()`：使指定范围的 CPU Cache 副本失效；
-- `CortexM7DCache_CleanInvalidateRange()`：先提交脏数据，再使指定范围失效；
+- `CortexM7DCache_Clean_Aligned()`：严格按完整 Cache line 提交脏数据；
+- `CortexM7DCache_Invalidate_Aligned()`：严格按完整 Cache line 使 CPU Cache 副本失效；
+- `CortexM7DCache_CleanInvalidate_Aligned()`：严格按完整 Cache line 先提交脏数据，再使副本失效；
+- `CortexM7DCache_Clean_Rounded()`：首地址对齐时向后覆盖至 Cache line 末尾后提交脏数据；
 - `CORTEX_M7_DCACHE_LINE_SIZE`：Cortex-M7 D-Cache line 大小。
 
 ## 编译期依赖
@@ -21,5 +22,7 @@
 ## 约束
 
 - 仅限普通任务上下文调用；
-- 调用方必须传入非空、长度非零、首地址和长度均按 Cache line 对齐的 Cacheable 内存范围，并拥有该范围覆盖的全部 Cache line；
+- `*_Aligned()` 要求传入非空、长度非零、首地址和长度均按 Cache line 对齐的 Cacheable 内存范围，并拥有该范围覆盖的全部 Cache line；
+- `Clean_Rounded()` 仅允许用于 Clean：首地址必须按 Cache line 对齐，长度可不对齐；调用方必须拥有从首地址到向上补齐后末尾的完整范围；
+- 不提供尾部补齐的 Invalidate 或 Clean + Invalidate，避免扩展 Cache line 时丢弃相邻脏数据；
 - 不执行 DMA 启动、等待、完成回调注册或 FreeRTOS 通知。

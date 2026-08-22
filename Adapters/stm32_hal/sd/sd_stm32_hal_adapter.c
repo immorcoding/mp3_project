@@ -73,8 +73,8 @@ static bool sd_stm32_hal_finish_dma_read(SDCard_STM32HALAdapterTypeDef *adapter)
         return true;
     }
 
-    return CortexM7DCache_InvalidateRange(adapter->DMABuffer,
-                                           adapter->DMAByteCount);
+    return CortexM7DCache_Invalidate_Aligned(adapter->DMABuffer,
+                                              adapter->DMAByteCount);
 }
 
 /**
@@ -376,7 +376,7 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_read_blocks_dma(
         return SDCARD_PORT_NOT_PRESENT;
     }
 
-    if (!CortexM7DCache_CleanInvalidateRange(data, byte_count))
+    if (!CortexM7DCache_CleanInvalidate_Aligned(data, byte_count))
     {
         return SDCARD_PORT_ERROR;
     }
@@ -440,7 +440,7 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_write_blocks_dma(
         return SDCARD_PORT_NOT_PRESENT;
     }
 
-    if (!CortexM7DCache_CleanRange(data, byte_count))
+    if (!CortexM7DCache_Clean_Aligned(data, byte_count))
     {
         return SDCARD_PORT_ERROR;
     }

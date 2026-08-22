@@ -286,9 +286,9 @@ Platform_StatusTypeDef Platform_LCD_SetTransferCallback(
  * @param  y_start 矩形上边界。
  * @param  x_end 矩形右边界，包含该像素。
  * @param  y_end 矩形下边界，包含该像素。
- * @param  pixels RGB565 像素首地址；当前 D-Cache Adapter 要求首地址按 32 B
- *         对齐，且本次矩形的总字节数为 32 B 的整数倍。调用者还必须在最终
- *         回调到达前保持该范围有效且不改写。
+ * @param  pixels RGB565 像素首地址，必须按 32 B 对齐。D-Cache Clean 会向后
+ *         覆盖至完整 Cache line，调用者必须拥有补齐后的范围，并在最终回调到达前
+ *         保持该范围有效且不改写。
  * @retval PLATFORM_OK 首块 SPI DMA 已启动，最终结果见已注册回调。
  * @retval PLATFORM_BUSY 先前 DMA 传输尚未完成。
  * @retval PLATFORM_LCD_ERROR LCD 未初始化、回调未注册或 DMA 无法启动。

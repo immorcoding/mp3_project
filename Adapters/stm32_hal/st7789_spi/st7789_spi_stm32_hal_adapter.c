@@ -446,14 +446,15 @@ static ST7789_PortStatusTypeDef st7789_spi_stm32_hal_set_transfer_callback(
  * @brief  切换到 16-bit 串行帧后启动自动分块续传的 RGB565 SPI DMA 写入。
  * @param  context 必须指向 ST7789_SPI_STM32HALAdapterTypeDef。
  * @param  data 已完整写入、32 字节对齐的 RGB565 像素数据首地址。
- * @param  length 像素数据总字节数，必须为 32 字节和 RGB565 像素大小的整数倍。
+ * @param  length 像素数据总字节数，必须为 RGB565 像素大小的整数倍。
  * @retval ST7789_PORT_OK 首块 DMA 已启动。
  * @retval ST7789_PORT_BUSY 已有 ST7789 SPI DMA 事务在飞。
  * @retval ST7789_PORT_ERROR 参数、Cache 维护或 HAL DMA 启动失败。
  * @note   发送方向只需要 Clean；DMA 读取内存而不会向该缓冲区写入，因此完成后
  *         不应 Invalidate。成功切换到 16-bit 后不会在完成时自动恢复；下一次
  *         命令、命令参数或读操作会在其入口恢复 8-bit。直到最终回调前，调用者
- *         不得修改该内存范围。
+ *         不得修改该内存范围。Cache Clean 会向后补齐至完整 Cache line，调用者
+ *         必须拥有补齐后的范围。
  */
 static ST7789_PortStatusTypeDef st7789_spi_stm32_hal_start_write(
     void *context,
@@ -492,7 +493,7 @@ static ST7789_PortStatusTypeDef st7789_spi_stm32_hal_start_write(
         return ST7789_PORT_ERROR;
     }
 
-    if (!CortexM7DCache_CleanRange(data, length))
+    if (!CortexM7DCache_Clean_Rounded(data, length))
     {
         return ST7789_PORT_ERROR;
     }

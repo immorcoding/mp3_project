@@ -56,7 +56,7 @@ static void platform_sdram_commit_word(const volatile uint16_t *address)
     const uintptr_t cache_line_address =
         ((uintptr_t)address) & ~((uintptr_t)CORTEX_M7_DCACHE_LINE_SIZE - 1U);
 
-    (void)CortexM7DCache_CleanInvalidateRange(
+    (void)CortexM7DCache_CleanInvalidate_Aligned(
         (const void *)cache_line_address,
         CORTEX_M7_DCACHE_LINE_SIZE);
 }
@@ -68,7 +68,7 @@ static void platform_sdram_commit_word(const volatile uint16_t *address)
   */
 static void platform_sdram_clean_all(void)
 {
-    (void)CortexM7DCache_CleanRange(
+    (void)CortexM7DCache_Clean_Aligned(
         (const void *)PLATFORM_SDRAM_BASE_ADDRESS,
         PLATFORM_SDRAM_CAPACITY_BYTES);
 }
@@ -78,7 +78,7 @@ static void platform_sdram_clean_all(void)
   */
 static void platform_sdram_invalidate_all(void)
 {
-    (void)CortexM7DCache_InvalidateRange(
+    (void)CortexM7DCache_Invalidate_Aligned(
         (const void *)PLATFORM_SDRAM_BASE_ADDRESS,
         PLATFORM_SDRAM_CAPACITY_BYTES);
 }

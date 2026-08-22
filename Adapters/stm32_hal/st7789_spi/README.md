@@ -13,7 +13,7 @@
 
 - `Components/st7789` 的 `ST7789_PortOpsTypeDef`；
 - STM32 HAL 的 `HAL_SPI_Transmit()`、`HAL_SPI_TransmitReceive()`、`HAL_SPI_Transmit_DMA()`、`HAL_SPI_RegisterCallback()`、GPIO 与 Delay Interface；
-- `Adapters/cortex/cache` 的 `CortexM7DCache_CleanRange()`，仅用于 Memory-to-SPI DMA 启动前同步 CPU 脏 Cache line。
+- `Adapters/cortex/cache` 的 `CortexM7DCache_Clean_Rounded()`，仅用于 Memory-to-SPI DMA 启动前同步 CPU 脏 Cache line；像素缓冲首地址必须按 Cache line 对齐，且 Adapter 必须拥有向后补齐后的范围。
 
 ## 运行时请求与事件路径
 
