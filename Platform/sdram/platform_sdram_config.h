@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    platform_sdram_config.h
-  * @brief   当前 PCB 的 MT48LC16M16A2 SDRAM 固定配置。
+  * @brief   MT48LC16M16A2-6A 与 AS4C16M16SA-7TCN 共用的 SDRAM 固定配置。
   ******************************************************************************
   */
 
@@ -11,7 +11,7 @@
 /** @brief FMC SDRAM Bank1 的 Cortex-M 可访问基地址。 */
 #define PLATFORM_SDRAM_BASE_ADDRESS                (0xC0000000UL)
 
-/** @brief MT48LC16M16A2 的可用总容量，单位为字节。 */
+/** @brief 两种兼容 4 Meg × 16 × 4 Bank SDRAM 的可用总容量，单位为字节。 */
 #define PLATFORM_SDRAM_CAPACITY_BYTES              (32UL * 1024UL * 1024UL)
 
 /** @brief SDRAM 的物理数据总线宽度，单位为字节。 */

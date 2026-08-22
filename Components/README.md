@@ -4,7 +4,7 @@
 
 ## 公开 Interface
 
-- `audio`、`axp2101`、`ft6x36`、`log`、`sd`、`soft_i2c`、`st7789` 各自的公开类型、状态和函数；
+- `audio`、`axp2101`、`ft6x36`、`led`、`log`、`sd`、`soft_i2c`、`st7789` 各自的公开类型、状态和函数；
 - 每个 Module 自己定义的 `*_OpsTypeDef` 或回调类型。
 
 ## 编译期依赖

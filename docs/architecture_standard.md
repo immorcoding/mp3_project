@@ -79,7 +79,12 @@ Middlewares/                 ST/第三方中间件及其项目级配置接缝
 USB_DEVICE/                  CubeMX 生成的 USB Device glue
 cmake/                       工具链与 CubeMX 生成的构建描述
 docs/                        中文技术文档和本规范
+Tests/                       不链接进目标固件的主机行为测试
 ```
+
+`Tests/` 中的每个 Module 独立持有主机 CMake 入口，只编译待测 Component 与 Fake
+Adapter。目标固件的根构建不会递归收集其中源码，因而测试不能把 STM32 HAL、FreeRTOS 或
+具体板级资源反向引入 Component。
 
 `Components` 当前保持扁平，不再人为分成 `Bus`、`Devices`、`Libraries`：
 
@@ -88,6 +93,7 @@ Components/
   axp2101/
   audio/
   ft6x36/
+  led/
   log/
   sd/
   soft_i2c/
@@ -156,9 +162,11 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | --- | --- |
 | `Adapters/bridge/axp2101_soft_i2c` | SoftI2C Component 到 AXP2101 Bus Ops 的跨 Component Bridge。 |
 | `Adapters/cortex/cache` | Cortex-M7 Cacheable 内存范围的 D-Cache 维护；DMA Adapter 和外部存储器诊断按需复用。 |
+| `Adapters/cortex/cycle_counter` | Cortex-M7 DWT 周期计数器与核心频率读取；性能诊断按需复用。 |
 | `Adapters/stm32_hal/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
 | `Adapters/stm32_hal/st7789_spi` | STM32 HAL SPI/GPIO、SPI TX DMA、D-Cache Clean 与注册式 HAL SPI 回调到 ST7789 PortOps；私有续传每块 DMA。 |
 | `Adapters/stm32_hal/ft6x36_i2c` | STM32 HAL I2C/GPIO 到 FT6X36 PortOps；启动初始化时收敛 TP_RST 时序。 |
+| `Adapters/stm32_hal/led_gpio` | STM32 HAL GPIO 到 LED Device PortOps；逻辑 ON 电平由 Platform 注入。 |
 | `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |
 | `Adapters/stm32_hal/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
 | `Adapters/stm32_hal/temp` | STM32H7 ADC3 内部温度传感器与 VREFINT 的校准、采样和工厂标定换算。 |
@@ -212,7 +220,7 @@ APP/Service 决定。
 - 执行 `Adapter_Bind()`；
 - 初始化 Component；
 - 收敛当前 PCB 强依赖设备的启动顺序和硬件稳定等待；
-- 把芯片能力映射成 Audio、LCD、SD、Power、Temp、Touch 等产品语义；
+- 把芯片能力映射成 Audio、LCD、LED、SD、Power、Temp、Touch 等产品语义；
 - 为板级设备持有并注册 GPIO EXTI 回调对象，并向上层发布轻量检测通知；
 - 选择日志输出 Adapter。
 

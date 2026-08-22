@@ -91,6 +91,60 @@
 
 > SDMMC Adapter 在启动读 DMA 前维护 Cache，DMA 完成后由任务上下文的 `Sync()` 再使 CPU 读取 RAM 中的新数据。
 
+## Cortex-M7 周期计数器适配器（Cortex-M7 Cycle Counter Adapter）
+
+**Cortex-M7 周期计数器适配器**封装 CoreDebug 与 DWT `CYCCNT`，向性能诊断提供核心周期
+数与当前核心频率。它把周期计数器使能、复位、寄存器访问与必要执行屏障收敛在一个
+无状态 Adapter 中，使 Platform 不需要认识 Cortex-M 核心寄存器。
+
+`CYCCNT` 是全局 32 位硬件资源：测量者必须在普通上下文串行使用，且在完整回绕前完成
+单次测量。它不拥有 SDRAM、DMA、任务、缓冲区或任何板级策略。
+
+相关术语：**平台 SDRAM**、**Cortex-M7 Cache 适配器**。
+
+示例：
+
+> 平台 SDRAM 在写入和冷读测速前复位周期计数器，随后只使用周期差和核心频率换算吞吐。
+
+## 平台 LED（Platform LED）
+
+**平台 LED**表示当前 PCB 上一个或多个可供上层使用的板级诊断 LED。它长期持有 LED Device 和
+Adapter Context，并通过稳定逻辑编号装配当前 LED 后端；闪烁周期、任务调度和产品状态机仍由调用者决定。
+
+当前 `STATUS` LED 使用 GPIO；逻辑 ON/OFF 与物理高低电平的映射属于 Adapter Context。未来新增
+I2C、PWM 或扩展 IO LED 时，Platform 只增加编号与实例装配，上层调用方式不变。
+
+相关术语：**LED 设备**、**STM32 HAL GPIO LED 适配器**、**播放器应用**。
+
+示例：
+
+> Monitor Task 每个监控周期请求 `Platform_LED_Toggle(PLATFORM_LED_ID_STATUS)`，但无需包含 `main.h` 或 STM32 HAL。
+
+## LED 设备（LED Device）
+
+**LED 设备**是可复用的逻辑亮灭 Device Module。它通过 PortOps 初始化并请求 ON/OFF，维护最后一次
+成功提交的逻辑状态；它不认识 GPIO 电平、I2C 地址、PWM、具体芯片寄存器或板级编号。
+
+`Toggle` 由设备根据最后一次成功的逻辑状态调用 `Set` 实现。Port 失败时设备保留旧状态，允许调用者
+在瞬态后端故障后重试；多灯的编号、实例表与启动失败策略均不属于该 Device。
+
+相关术语：**平台 LED**、**STM32 HAL GPIO LED 适配器**。
+
+示例：
+
+> 低有效 GPIO LED 和高有效 GPIO LED 都接收相同的逻辑 ON 请求，由各自 Adapter Context 决定输出电平。
+
+## STM32 HAL GPIO LED 适配器（STM32 HAL GPIO LED Adapter）
+
+**STM32 HAL GPIO LED 适配器**把 LED Device 的逻辑 ON/OFF PortOps 映射到 STM32 HAL GPIO 写操作。
+它认识 `GPIO_TypeDef`、Pin 和 ON 对应电平，但不选择当前 PCB 的引脚、LED 编号、任务周期或启动策略。
+
+相关术语：**LED 设备**、**平台 LED**。
+
+示例：
+
+> 低有效 LED 只需把 Adapter Context 的 `OnState` 配置为 RESET，Device 与 Monitor Task 都无需修改。
+
 ## 平台电源启动配置（Platform power boot profile）
 
 **平台电源启动配置**是 AXP2101 完成器件识别后，由 Platform Power 按顺序应用的一组 PCB 供电策略。
@@ -158,7 +212,8 @@ HAL Handle 和 GPIO 细节的显示诊断或绘制语义。当前阶段已完成
 
 ## 平台 SDRAM（Platform SDRAM）
 
-**平台 SDRAM**表示当前 PCB 上的 MT48LC16M16A2 外部同步动态随机存储器及其 FMC 初始化状态。
+**平台 SDRAM**表示当前 PCB 上兼容 `MT48LC16M16A2-6A` 与 `AS4C16M16SA-7TCN` 的 32 MiB x16
+外部同步动态随机存储器及其 FMC 初始化状态。
 
 它负责把 CubeMX 已配置的 FMC 控制器推进到可访问状态，并在启动阶段提供破坏性硬件诊断；它不拥有链接器段、动态堆、LVGL 帧缓冲、DMA 传输或任务策略。
 

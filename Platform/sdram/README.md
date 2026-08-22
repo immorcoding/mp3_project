@@ -1,7 +1,8 @@
 # Platform SDRAM
 
-该 Module 表示当前 PCB 上的 MT48LC16M16A2 SDRAM。它持有 CubeMX 的 `hsdram1`，在
-FMC 控制器配置完成后执行 JEDEC 上电序列，并提供启动阶段的破坏性硬件诊断。
+该 Module 表示当前 PCB 上兼容 `MT48LC16M16A2-6A` 与 `AS4C16M16SA-7TCN` 的 32 MiB x16
+SDRAM。它持有 CubeMX 的 `hsdram1`，在 FMC 控制器配置完成后执行二者共用的 JEDEC 上电序列，
+并提供启动阶段的破坏性硬件诊断。
 
 ## 公开 Interface
 
@@ -13,7 +14,7 @@ FMC 控制器配置完成后执行 JEDEC 上电序列，并提供启动阶段的
 
 - CubeMX `Core/Inc/fmc.h` 的 `hsdram1` 和 HAL SDRAM Command Interface；
 - `Adapters/cortex/cache` 的 D-Cache 维护 Interface；
-- CMSIS DWT 和 `SystemCoreClock`。
+- `Adapters/cortex/cycle_counter` 的 Cortex-M7 周期计数 Interface。
 
 ## 运行时请求与事件路径
 
@@ -27,6 +28,7 @@ Interface 请求 Platform SDRAM；SDRAM 没有中断或任务通知路径。
 - 本 Module 不负责链接器段放置。只有验证通过并单独审查启动时序后，才可把 `.bss`、堆或帧缓冲放入 SDRAM；
 - `Core/Src/fmc.c` 的 `SDRAM_EarlyInit()` 是启动接缝，不属于本 Module 的公开
   Interface。它在 `.data/.bss` 启动循环前使用临时约 32 MHz 时序使 SDRAM 可访问，
+  并按 AS4 的较长要求等待至少 200 µs；
   随后 CubeMX 和本 Module 仍会按最终 135 MHz 参数完成正式初始化；两阶段之间的
   SDRAM 内容不应被依赖；
 - 链接脚本当前预留 `.sdram_framebuffer (NOLOAD)`。该段不加载、也不自动清零；其

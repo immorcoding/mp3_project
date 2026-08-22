@@ -16,6 +16,9 @@ Platform 取得 MCU 结温。当前它只有一个 STM32H7 后端，不为尚不
 `ft6x36_i2c/` 则把 HAL I2C 存储器读取、设备地址探测和 TP_RST 启动初始化实现为
 FT6X36 Device 的 PortOps；其中 HAL 时基只在调度器启动前使用。它不注册 TP_IRQ，也不包含 LVGL 输入逻辑。
 
+`led_gpio/` 把 LED Device 的逻辑 ON/OFF 映射为当前 GPIO 的输出电平。逻辑 ON 对应的物理
+高低电平由 Platform 注入，因此 LED Device 和上层不需要知道本板 LED 的有效极性。
+
 ## 编译期依赖
 
 - Component 定义的 Ops、状态和事件类型；

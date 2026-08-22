@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    platform_sdram.c
-  * @brief   当前板载 MT48LC16M16A2 SDRAM 的初始化和硬件诊断实现。
+  * @brief   当前板载 32 MiB x16 SDRAM 的初始化和硬件诊断实现。
   ******************************************************************************
   */
 
@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "Adapters/cortex/cache/cortex_m7_dcache_adapter.h"
+#include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
 #include "Platform/sdram/platform_sdram_config.h"
 
 #include "Core/Inc/fmc.h"
@@ -219,34 +220,20 @@ static bool platform_sdram_test_address_bus(Platform_SDRAM_DiagnosticsTypeDef *d
 }
 
 /**
-  * @brief  启用并复位 Cortex-M DWT 周期计数器。
-  * @retval true 周期计数器已可用。
-  * @retval false 当前调试/追踪单元不支持或未接受使能请求。
-  */
-static bool platform_sdram_dwt_reset(void)
-{
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-    DWT->CYCCNT = 0U;
-    __DSB();
-    __ISB();
-
-    return (DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk) != 0U;
-}
-
-/**
-  * @brief  把 DWT 周期数换算为毫秒。
+  * @brief  把 Cortex-M7 周期数换算为毫秒。
   * @param  cycles 已采样的 Cortex-M7 核心周期数。
   * @retval 向下取整后的毫秒数；时钟信息不可用时返回 0。
   */
 static uint32_t platform_sdram_cycles_to_milliseconds(uint32_t cycles)
 {
-    if (SystemCoreClock == 0U)
+    const uint32_t core_frequency_hz = CortexM7CycleCounter_GetFrequencyHz();
+
+    if (core_frequency_hz == 0U)
     {
         return 0U;
     }
 
-    return (uint32_t)(((uint64_t)cycles * 1000ULL) / SystemCoreClock);
+    return (uint32_t)(((uint64_t)cycles * 1000ULL) / core_frequency_hz);
 }
 
 /**
@@ -256,15 +243,17 @@ static uint32_t platform_sdram_cycles_to_milliseconds(uint32_t cycles)
   * @retval 吞吐率乘以 100；周期数或时钟信息不可用时返回 0。
   */
 static uint32_t platform_sdram_cycles_to_mib_per_second_x100(uint32_t byte_count,
-                                                              uint32_t cycles)
+                                                               uint32_t cycles)
 {
-    if ((cycles == 0U) || (SystemCoreClock == 0U))
+    const uint32_t core_frequency_hz = CortexM7CycleCounter_GetFrequencyHz();
+
+    if ((cycles == 0U) || (core_frequency_hz == 0U))
     {
         return 0U;
     }
 
-    return (uint32_t)(((uint64_t)byte_count * SystemCoreClock * 100ULL) /
-                      ((uint64_t)cycles * 1024ULL * 1024ULL));
+    return (uint32_t)(((uint64_t)byte_count * core_frequency_hz * 100ULL) /
+                       ((uint64_t)cycles * 1024ULL * 1024ULL));
 }
 
 /**
@@ -282,8 +271,8 @@ static bool platform_sdram_test_full_pattern(Platform_SDRAM_DiagnosticsTypeDef *
         PLATFORM_SDRAM_CAPACITY_BYTES / PLATFORM_SDRAM_DATA_WIDTH_BYTES;
     uint32_t cycles;
 
-    (void)platform_sdram_dwt_reset();
-    const uint32_t write_start = DWT->CYCCNT;
+    (void)CortexM7CycleCounter_Start();
+    const uint32_t write_start = CortexM7CycleCounter_Read();
 
     for (uint32_t index = 0U; index < word_count; ++index)
     {
@@ -291,14 +280,14 @@ static bool platform_sdram_test_full_pattern(Platform_SDRAM_DiagnosticsTypeDef *
     }
 
     platform_sdram_clean_all();
-    cycles = DWT->CYCCNT - write_start;
+    cycles = CortexM7CycleCounter_Read() - write_start;
     diagnostics->WriteElapsedMilliseconds = platform_sdram_cycles_to_milliseconds(cycles);
     diagnostics->WriteSpeedMiBPerSecondX100 =
         platform_sdram_cycles_to_mib_per_second_x100(PLATFORM_SDRAM_CAPACITY_BYTES, cycles);
 
     platform_sdram_invalidate_all();
-    (void)platform_sdram_dwt_reset();
-    const uint32_t read_start = DWT->CYCCNT;
+    (void)CortexM7CycleCounter_Start();
+    const uint32_t read_start = CortexM7CycleCounter_Read();
 
     for (uint32_t index = 0U; index < word_count; ++index)
     {
@@ -317,7 +306,7 @@ static bool platform_sdram_test_full_pattern(Platform_SDRAM_DiagnosticsTypeDef *
         }
     }
 
-    cycles = DWT->CYCCNT - read_start;
+    cycles = CortexM7CycleCounter_Read() - read_start;
     diagnostics->ReadElapsedMilliseconds = platform_sdram_cycles_to_milliseconds(cycles);
     diagnostics->ReadSpeedMiBPerSecondX100 =
         platform_sdram_cycles_to_mib_per_second_x100(PLATFORM_SDRAM_CAPACITY_BYTES, cycles);
@@ -327,11 +316,13 @@ static bool platform_sdram_test_full_pattern(Platform_SDRAM_DiagnosticsTypeDef *
 
 /* Exported functions --------------------------------------------------------*/
 /**
-  * @brief  执行 MT48LC16M16A2 所需的 JEDEC 上电初始化序列。
+  * @brief  执行兼容 MT48LC16M16A2-6A 与 AS4C16M16SA-7TCN 的 JEDEC 上电初始化序列。
   * @retval PLATFORM_SDRAM_OK 初始化完成或此前已经完成。
   * @retval PLATFORM_SDRAM_HAL_ERROR FMC 命令或刷新率配置失败。
-  * @note   CubeMX 的 MX_FMC_Init() 只配置 FMC 控制器和引脚；本函数负责使
-  *         SDRAM 离开上电未知状态。它在 Platform_Init() 中、任务创建前调用。
+  * @note   两种器件均为 4 Meg × 16 × 4 Bank、8192 行/64 ms 的 SDR SDRAM；当前
+  *         135 MHz、CAS 3、Burst 4 的共用时序已按较慢的 AS4 -7 等级留出裕量。
+  *         CubeMX 的 MX_FMC_Init() 只配置 FMC 控制器和引脚；本函数负责使 SDRAM
+  *         离开上电未知状态。它在 Platform_Init() 中、任务创建前调用。
   */
 Platform_SDRAM_StatusTypeDef Platform_SDRAM_Init(void)
 {
@@ -390,7 +381,7 @@ Platform_SDRAM_StatusTypeDef Platform_SDRAM_RunDiagnostic(
         return PLATFORM_SDRAM_NOT_READY;
     }
 
-    if (!platform_sdram_dwt_reset())
+    if (!CortexM7CycleCounter_Start())
     {
         diagnostics->FailedStage = PLATFORM_SDRAM_DIAGNOSTIC_STAGE_CYCLE_COUNTER;
         return PLATFORM_SDRAM_DIAGNOSTIC_FAILED;

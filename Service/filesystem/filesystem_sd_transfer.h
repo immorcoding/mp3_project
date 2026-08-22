@@ -1,3 +1,14 @@
+/**
+  ******************************************************************************
+  * @file    filesystem_sd_transfer.h
+  * @brief   Filesystem Service 私有 SDMMC 同步 DMA 执行器 Interface。
+  *
+  * @details
+  *          该头仅供 Service/filesystem 内部的 FatFs BSP Bridge 使用；它不属于
+  *          跨 Module 的公开 Interface，也不向调用者泄漏任务通知或 Cache 细节。
+  ******************************************************************************
+  */
+
 #ifndef FILESYSTEM_SD_TRANSFER_H
 #define FILESYSTEM_SD_TRANSFER_H
 

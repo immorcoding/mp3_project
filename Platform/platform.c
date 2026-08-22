@@ -9,6 +9,7 @@
 
 #include "Platform/audio/platform_audio.h"
 #include "Platform/lcd/platform_lcd.h"
+#include "Platform/led/platform_led.h"
 #include "Platform/power/platform_power.h"
 #include "Platform/sdram/platform_sdram.h"
 #include "Platform/touch/platform_touch.h"
@@ -21,6 +22,7 @@
   * @retval PLATFORM_PMIC_ERROR  PMIC 初始化失败。
   * @retval PLATFORM_AUDIO_ERROR 音频供电或音频设备初始化失败。
   * @retval PLATFORM_LCD_ERROR   LCD 电源或显示控制器初始化失败。
+  * @retval PLATFORM_LED_ERROR   诊断 LED 初始化失败；由 APP 记录后继续启动。
   * @retval PLATFORM_TOUCH_ERROR 触摸控制器初始化失败。
   * @note   LCD 和 Touch 共用 ALDO2；因此必须先初始化 LCD，再复位并探测触摸
   *         控制器。整个函数由 app_init() 在 FreeRTOS 调度器启动前调用，内部
@@ -61,11 +63,14 @@ Platform_StatusTypeDef Platform_Init(void)
         return PLATFORM_LCD_ERROR;
     }
 
+    /* LED 属于可选诊断能力；即使失败，也继续完成触摸初始化。 */
+    Platform_StatusTypeDef led_status = Platform_LED_Init();
+
     /* 触摸模组由同一 ALDO2 供电，必须在 LCD 电源已稳定后复位和探测。 */
     if (Platform_Touch_Init() != PLATFORM_OK)
     {
         return PLATFORM_TOUCH_ERROR;
     }
 
-    return PLATFORM_OK;
+    return led_status;
 }

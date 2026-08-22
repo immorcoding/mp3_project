@@ -4,9 +4,11 @@
  * @brief   Cortex-M7 D-Cache 按范围维护的具体实现。
   *
   * @details
- *          对齐校验、CMSIS Cache 操作和数据同步屏障集中在此处，避免每个调用者
- *          各自复制易错的 Clean/Invalidate 顺序。DMA Adapter 可以据传输方向组合
- *          本 Module 的操作；SDRAM 诊断也可以使用相同 Interface 强制访问外部存储器。
+  *          对齐校验与 CMSIS Cache 操作集中在此处，避免每个调用者各自复制易错的
+  *          Clean/Invalidate 顺序。当前 CMSIS 按地址 Cache Interface 已在内部执行
+  *          所需的 DSB/ISB，因此本 Module 不额外叠加冗余屏障。DMA Adapter 可以据
+  *          传输方向组合本 Module 的操作；SDRAM 诊断也可以使用相同 Interface 强制
+  *          访问外部存储器。
   ******************************************************************************
   */
 
@@ -65,7 +67,6 @@ bool CortexM7DCache_CleanRange(const void *buffer, uint32_t byte_count)
     }
 
     SCB_CleanDCache_by_Addr((uint32_t *)(uintptr_t)buffer, (int32_t)byte_count);
-    __DSB();
     return true;
 }
 
@@ -86,8 +87,7 @@ bool CortexM7DCache_InvalidateRange(const void *buffer, uint32_t byte_count)
     }
 
     SCB_InvalidateDCache_by_Addr((uint32_t *)(uintptr_t)buffer,
-                                 (int32_t)byte_count);
-    __DSB();
+                                  (int32_t)byte_count);
     return true;
 }
 
@@ -110,7 +110,6 @@ bool CortexM7DCache_CleanInvalidateRange(const void *buffer,
     }
 
     SCB_CleanInvalidateDCache_by_Addr((uint32_t *)(uintptr_t)buffer,
-                                      (int32_t)byte_count);
-    __DSB();
+                                       (int32_t)byte_count);
     return true;
 }

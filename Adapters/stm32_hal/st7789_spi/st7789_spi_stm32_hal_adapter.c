@@ -492,7 +492,7 @@ static ST7789_PortStatusTypeDef st7789_spi_stm32_hal_start_write(
         return ST7789_PORT_ERROR;
     }
 
-    if (!CortexM7DCache_CleanInvalidateRange(data, length))
+    if (!CortexM7DCache_CleanRange(data, length))
     {
         return ST7789_PORT_ERROR;
     }

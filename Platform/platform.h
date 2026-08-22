@@ -8,14 +8,13 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-#include "Adapters/cortex/cache/cortex_m7_dcache_adapter.h"
-
 /**
- * @brief 当前 STM32H743 产品目标的 DMA 缓冲区最低对齐要求，单位为字节。
- * @note  该值由 Cortex-M7 D-Cache Adapter 的 Cache line 大小导出。所有需要由
- *        CPU 与 DMA 共享的数据缓冲区都应满足此要求，避免 Cache 维护影响相邻数据。
- */
-#define PLATFORM_DMA_BUFFER_ALIGNMENT  CORTEX_M7_DCACHE_LINE_SIZE
+  * @brief 当前 STM32H743 产品目标的 DMA 缓冲区最低对齐要求，单位为字节。
+  * @note  当前 Cortex-M7 的 D-Cache line 固定为 32 字节。所有需要由 CPU 与 DMA
+  *        共享的数据缓冲区都应满足此要求，避免 Cache 维护影响相邻数据；其具体维护
+  *        实现仍隐藏在 Cortex Adapter 中。
+  */
+#define PLATFORM_DMA_BUFFER_ALIGNMENT  32U
 
 /**
  * @brief Platform 层函数使用的统一状态码。
@@ -28,6 +27,7 @@ typedef enum
     PLATFORM_PMIC_ERROR,   /**< PMIC 操作失败。 */
     PLATFORM_AUDIO_ERROR,  /**< Audio 操作失败。 */
     PLATFORM_LCD_ERROR,    /**< LCD 操作失败。 */
+    PLATFORM_LED_ERROR,    /**< LED 初始化或控制失败。 */
     PLATFORM_SD_ERROR,     /**< SD 操作失败。 */
     PLATFORM_TEMP_ERROR,   /**< MCU 内部温度采样失败。 */
     PLATFORM_SDRAM_ERROR,  /**< SDRAM 初始化失败。 */

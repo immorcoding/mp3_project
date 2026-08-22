@@ -10,7 +10,8 @@
   `adc.c` 中的 `hadc3` 为内部温度传感器和 VREFINT 的 ADC3 Regular Sequence。
 - `fmc.c` 的 `SDRAM_EarlyInit()`：在 `SystemInit()` 后、`.data/.bss` 启动循环前
   临时初始化外部 SDRAM，使链接器已声明的早期外部存储段可安全访问；它只使用局部
-  状态，不能进入 APP、Service、Platform 或 FreeRTOS。
+  状态，不能进入 APP、Service、Platform 或 FreeRTOS。当前临时时序同时兼容
+  `MT48LC16M16A2-6A` 与 `AS4C16M16SA-7TCN`，CLK ENABLE 后按较长要求等待至少 200 µs。
 
 `Core` 是生成代码的出站/入站接缝：它在 USER CODE 处进入 APP，IRQ 向量则把硬件事件交给 HAL。该运行时关系是明确例外，不允许据此让自维护低层普遍包含 APP。
 

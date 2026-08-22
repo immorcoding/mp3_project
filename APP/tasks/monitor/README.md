@@ -11,11 +11,11 @@ Monitor task 记录各任务栈高水位线，并翻转诊断 LED。它不参与
 - FreeRTOS `uxTaskGetSystemState()`、堆分配与延时 Interface；
 - `LogService_Post()`；
 - `Platform_Temp_Read()`；
-- CubeMX 诊断 LED GPIO Interface。
+- `Platform_LED_Toggle(PLATFORM_LED_ID_STATUS)`。
 
 ## 运行时请求与事件路径
 
-任务启动时校准一次 ADC3 温度采样通道，随后按周期采样 FreeRTOS 栈诊断和 MCU 结温并投递日志、翻转 LED；当前没有硬件事件订阅或 ISR 入口。
+任务启动时校准一次 ADC3 温度采样通道，随后按周期采样 FreeRTOS 栈诊断和 MCU 结温并投递日志、经 Platform 翻转诊断 LED；当前没有硬件事件订阅或 ISR 入口。
 
 ## 资源与约束
 

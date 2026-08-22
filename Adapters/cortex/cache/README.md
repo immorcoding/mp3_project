@@ -11,7 +11,8 @@
 
 ## 编译期依赖
 
-- CMSIS Core 的 `SCB_*DCache_by_Addr()` 和 `__DSB()`。
+- CMSIS Core 的 `SCB_*DCache_by_Addr()`；当前 CMSIS 实现已在操作内部完成必要的
+  `__DSB()` 和 `__ISB()`，本 Module 不额外重复插入屏障。
 
 ## 运行时请求与事件路径
 

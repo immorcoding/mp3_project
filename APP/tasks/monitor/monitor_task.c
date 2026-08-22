@@ -20,14 +20,13 @@
 
 #include "APP/tasks/app_tasks.h"
 #include "Components/log/log.h"
+#include "Platform/led/platform_led.h"
 #include "Platform/temp/platform_temp.h"
 #include "Service/log/log_service.h"
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/portable.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
-
-#include "main.h"
 
 /**
   * @brief  返回由 App 创建或 FreeRTOS 内核创建的任务总栈深度。
@@ -192,6 +191,6 @@ void monitor_task(void *handle)
             monitor_log_temperature();
         }
 
-        HAL_GPIO_TogglePin(USER_LED_GPIO_Port, USER_LED_Pin); //测试指示灯闪烁
+        (void)Platform_LED_Toggle(PLATFORM_LED_ID_STATUS);
     }
 }

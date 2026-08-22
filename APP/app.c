@@ -11,8 +11,8 @@
   *
   *          当前初始化依赖顺序为：
   *          Platform_Log_Init() -> 启动日志入队 -> Platform_Init() -> app_task_start()。
-  *          Platform_Init() 内部初始化 GPIO EXTI Adapter、PMIC、音频、LCD 和
-  *          Touch；Storage Task 在 Log Service 就绪后处理可选 SD 卡。
+  *          Platform_Init() 内部初始化 GPIO EXTI Adapter、PMIC、音频、LCD、LED
+  *          和 Touch；Storage Task 在 Log Service 就绪后处理可选 SD 卡。
   *          启动日志先保存在 Components/log 环形队列，调度器启动后由 Log Task
   *          与 Log Service 逐步排空。
   ******************************************************************************
@@ -80,7 +80,7 @@ void app_init(void)
                     (unsigned int)diagnostics.FailedRegister);
             }
 
-            // Error_Handler();
+            Error_Handler();
             break;
         }
 
@@ -103,6 +103,13 @@ void app_init(void)
             (void)LOG_Printf(LOG_LEVEL_ERROR,
                              "TOUCH",
                              "Initialization failed; touch input disabled.");
+            break;
+
+        case PLATFORM_LED_ERROR:
+            /* LED 仅承担心跳诊断；故障不应阻止播放器核心能力启动。 */
+            (void)LOG_Printf(LOG_LEVEL_ERROR,
+                             "LED",
+                             "Initialization failed; diagnostic LED disabled.");
             break;
 
         default:
