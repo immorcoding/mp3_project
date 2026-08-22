@@ -94,7 +94,7 @@ Platform_StatusTypeDef Platform_LCD_Init(void)
         return PLATFORM_LCD_ERROR;
     }
 
-    HAL_Delay(PLATFORM_LCD_POWER_SETTLE_DELAY_MS);
+    HAL_Delay(PLATFORM_LCD_POWER_SETTLE_DELAY_MS); //不符合分层，但是暂时没必要严格遵守，确保 LCD 电源稳定
 
     if (ST7789_SPI_STM32HALAdapter_Bind(&hplatform_lcd,
                                          &hplatform_lcd_adapter) != ST7789_OK)

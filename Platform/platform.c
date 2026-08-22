@@ -49,7 +49,7 @@ Platform_StatusTypeDef Platform_Init(void)
     }
 
     /* 等待音频电源轨和 PCM5102A 模拟部分稳定。 */
-    HAL_Delay(500);
+    HAL_Delay(500);//不符合分层，但是暂时没必要严格遵守，确保音频电源和模拟部分稳定
 
     /* 初始化 Audio */
     if (Platform_Audio_Init() != PLATFORM_OK)
