@@ -24,7 +24,7 @@
 #define PLATFORM_SDRAM_INITIAL_AUTO_REFRESH_COUNT  (8UL)
 
 /** @brief FMC 刷新计数：135 MHz SDRAM 时钟对应 64 ms / 8192 行刷新要求。 */
-#define PLATFORM_SDRAM_REFRESH_RATE                (1034UL)
+#define PLATFORM_SDRAM_REFRESH_RATE                (995UL)
 
 /** @brief 模式寄存器：Burst 4、顺序寻址、CAS 3、单位置写突发。 */
 #define PLATFORM_SDRAM_MODE_REGISTER_VALUE         (0x232UL)
