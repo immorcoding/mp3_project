@@ -35,9 +35,11 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 # 创建最终生成 ELF 固件的可执行目标
 add_executable(${CMAKE_PROJECT_NAME})
 
-# 加入 STM32CubeMX 生成代码和 FreeRTOS 内核子目录
+# 加入 STM32CubeMX 生成代码、FreeRTOS 内核和第三方图形库子目录
 add_subdirectory(cmake/stm32cubemx)
 add_subdirectory(Middlewares/Third_Party/FreeRTOS)
+add_subdirectory(Middlewares/Third_Party/LVGL)
+add_subdirectory(GUI)
 
 # 配置链接器搜索库文件的目录
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -129,6 +131,8 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     stm32cubemx
     # 在此添加用户自定义的库目标
     freertos_kernel
+    lvgl
+    ui
 )
 
 # 链接完成后，将 ELF 转换为常见烧录方式使用的文件格式：

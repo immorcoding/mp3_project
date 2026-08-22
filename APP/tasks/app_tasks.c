@@ -13,9 +13,11 @@
 #include "APP/tasks/app_tasks.h"
 
 #include "APP/tasks/log/log_task.h"
-#include "APP/tasks/lcd/lcd_task.h"
+// #include "APP/tasks/lcd/lcd_task.h"
 #include "APP/tasks/monitor/monitor_task.h"
 #include "APP/tasks/storage/storage_task.h"
+#include "APP/tasks/gui/gui_task.h"
+
 #include "Service/log/log_service.h"
 #include "main.h"
 
@@ -57,11 +59,17 @@ static void create_task(void *handle)
                      NULL,
                      APP_MONITOR_TASK_PRIORITY,
                      NULL) != pdPASS) ||
-        (xTaskCreate(lcd_task,
-                     "LCD Task",
-                     APP_LCD_TASK_STACK_WORDS,
+        // (xTaskCreate(lcd_task,
+        //              "LCD Task",
+        //              APP_LCD_TASK_STACK_WORDS,
+        //              NULL,
+        //              APP_LCD_TASK_PRIORITY,
+        //              NULL) != pdPASS)
+        (xTaskCreate(gui_task,
+                     "GUI Task",
+                     APP_GUI_TASK_STACK_WORDS,
                      NULL,
-                     APP_LCD_TASK_PRIORITY,
+                     APP_GUI_TASK_PRIORITY,
                      NULL) != pdPASS))
     {
         Error_Handler();
