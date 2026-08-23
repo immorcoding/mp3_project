@@ -679,7 +679,12 @@ LV_STM32_DMA2D_STATIC void _lv_gpu_stm32_dma2d_await_dma_transfer_finish(lv_disp
 
     if(isDma2dInProgess) {
         // invalidate output buffer cached memory ONLY after DMA2D transfer
-        //__lv_gpu_stm32_dma2d_invalidate_cache(DMA2D->OMAR, DMA2D->OOR, (DMA2D->NLR & DMA2D_NLR_PL_Msk) >> DMA2D_NLR_PL_Pos, (DMA2D->NLR & DMA2D_NLR_NL_Msk) >> DMA2D_NLR_NL_Pos, sizeof(lv_color_t));
+        // __lv_gpu_stm32_dma2d_invalidate_cache(
+        //     DMA2D->OMAR,
+        //     DMA2D->OOR,
+        //     (DMA2D->NLR & DMA2D_NLR_PL_Msk) >> DMA2D_NLR_PL_Pos,
+        //     (DMA2D->NLR & DMA2D_NLR_NL_Msk) >> DMA2D_NLR_NL_Pos,
+        //     sizeof(lv_color_t));
         isDma2dInProgess = false;
     }
 }

@@ -194,6 +194,14 @@ SECTIONS
     . = ALIGN(32);
   } >RAM
 
+  /* LVGL 大数组内存池可被 DMA2D 用作文字遮罩等源数据，必须位于 AXI RAM。 */
+  .lvgl_large_ram_array (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.lvgl_large_ram_array)
+    . = ALIGN(32);
+  } >RAM
+
   /* SDRAM 帧缓冲区域：不加载、不自动清零，由拥有者在首次使用前完整写入。 */
   .sdram_framebuffer (NOLOAD) :
   {

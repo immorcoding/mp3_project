@@ -1,11 +1,11 @@
-# LVGL v9.2.2 静态库。
+# LVGL v8.3.11
 #
 # LVGL 作为第三方 Middleware 只提供图形核心；显示刷新、输入设备和任务调度
 # 由上层 Platform/APP 通过 LVGL 的公开 API 装配。本文件不引入 HAL 或具体板级对象。
 
 add_library(lvgl STATIC)
 
-# 当前 lv_conf.h 使用软件渲染，并禁用了 ThorVG 等 C++ 后端；只编译 LVGL C 源。
+# 当前 lv_conf.h 禁用了 ThorVG 等 C++ 后端；只编译 LVGL C 源。
 # CONFIGURE_DEPENDS 使新增或删除 LVGL C 源时自动触发 CMake 重新配置。
 file(GLOB_RECURSE LVGL_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_LIST_DIR}/src/*.c"
@@ -23,8 +23,19 @@ target_include_directories(lvgl PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/src
 )
 
+# DMA2D 后端直接使用 STM32H743 的 CMSIS 寄存器定义；
+# 不依赖 HAL_DMA2D，也不引入任何板级对象。
+target_include_directories(lvgl PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/../../../Drivers/CMSIS/Device/ST/STM32H7xx/Include
+    ${CMAKE_CURRENT_LIST_DIR}/../../../Drivers/CMSIS/Include
+)
+
 target_compile_definitions(lvgl PUBLIC
     LV_CONF_INCLUDE_SIMPLE
+)
+
+target_compile_definitions(lvgl PRIVATE
+    STM32H743xx
 )
 
 # 当前 LV_USE_OS 为 LV_OS_NONE；仍声明内核依赖，以便后续切换到

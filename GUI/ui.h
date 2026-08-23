@@ -19,6 +19,7 @@ extern "C" {
 ///////////////////// SCREENS ////////////////////
 
 #include "screens/ui_Screen1.h"
+#include "screens/ui_Screen2.h"
 
 ///////////////////// VARIABLES ////////////////////
 
