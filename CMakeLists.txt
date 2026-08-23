@@ -126,6 +126,9 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # 在此添加用户自定义的编译宏
 )
 
+# 将 UI 库与 LVGL 进行链接，使得 UI 可以使用 LVGL 提供的功能。
+target_link_libraries(ui PUBLIC lvgl)
+
 # 链接最终固件所依赖的库目标
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     stm32cubemx
