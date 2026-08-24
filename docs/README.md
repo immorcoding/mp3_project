@@ -13,6 +13,7 @@
 - [sdram_architecture.md](sdram_architecture.md)：FMC SDRAM 的初始化、诊断与后续使用约束；
 - [temperature_architecture.md](temperature_architecture.md)：MCU 内部结温采样、工厂标定与 Platform 边界；
 - [touch_architecture.md](touch_architecture.md)：FT6X36、I2C2、TP_RST、轮询式输入与后续 TP_IRQ 演进；
+- [gui_ui_design.md](gui_ui_design.md)：240 x 320 GUI 原型的视觉规范、页面层级与交互边界；
 - [error_model.md](error_model.md)：状态、错误和诊断语义。
 
 根目录与源码目录的 README 负责导航、局部职责和调用约束；`CONTEXT.md` 负责稳定领域术语；本目录负责跨 Module 的技术事实。发生影响多个 Module 的行为、Interface 或职责归属的调整时，必须同步更新相应技术文档并核对 `CONTEXT.md`。
