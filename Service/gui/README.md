@@ -9,7 +9,8 @@
 - `Service_GUI_Init()`：仅由 GUI Task 调用一次。初始化 LVGL，注册 v8 显示驱动与 Pointer 输入驱动，绑定 LCD DMA 最终回调，并调用 SquareLine 的 `ui_init()`。
 - `Service_GUI_Process()`：仅在同一 GUI Task 上下文周期调用。按 FreeRTOS Tick 推进 LVGL 时间，并调用 `lv_timer_handler()` 处理刷新、动画和输入。
 
-重复调用 `Service_GUI_Init()` 返回 `SERVICE_BUSY`。初始化失败后由 APP 决定停机或恢复策略。
+重复调用 `Service_GUI_Init()` 返回 `SERVICE_BUSY`。当前 GUI Task 将初始化失败视为致命并调用
+`Error_Handler()`；GUI Service 尚未提供部分初始化后的回滚或重试 Interface。
 
 ## 编译期依赖
 

@@ -148,6 +148,14 @@ static void service_gui_flush_wait_callback(
         portMAX_DELAY);
 }
 
+/**
+ * @brief  初始化 GUI Task 独占的 LVGL、显示、触摸与启动视觉序列。
+ * @retval SERVICE_OK 全部 LVGL Driver、LCD 最终回调、Pointer 输入和 Boot 资源已就绪。
+ * @retval SERVICE_BUSY GUI 已初始化，或 Platform LCD 正在使用其唯一最终回调。
+ * @retval SERVICE_ERROR 显示、输入或启动视觉资源的注册/生成失败。
+ * @note   只能由 GUI Task 调用一次。当前 GUI Task 将任何非 SERVICE_OK 视为致命
+ *         初始化故障并进入 Error_Handler()；本 Module 尚未提供失败后的回滚或重试。
+ */
 Service_StatusTypeDef Service_GUI_Init(void)
 {
     Platform_StatusTypeDef lcd_status;
@@ -224,6 +232,11 @@ Service_StatusTypeDef Service_GUI_Init(void)
     return SERVICE_OK;
 }
 
+/**
+ * @brief  推进 GUI Task 的 LVGL Tick、输入、动画与刷新处理。
+ * @note   只能由完成 Service_GUI_Init() 的同一 GUI Task 周期调用。LCD DMA 传输
+ *         期间，LVGL 通过本 Module 的 wait callback 阻塞等待最终 ISR 事件。
+ */
 void Service_GUI_Process(void)
 {
     const TickType_t current_tick = xTaskGetTickCount();

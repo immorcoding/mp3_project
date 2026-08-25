@@ -258,8 +258,10 @@ Platform_StatusTypeDef Platform_LCD_FillScreen(uint16_t color)
  * @retval PLATFORM_OK 回调已保存，下一笔 DMA 传输将使用它。
  * @retval PLATFORM_BUSY 当前仍有 LCD SPI DMA 事务在飞，不能替换订阅者。
  * @retval PLATFORM_LCD_ERROR 参数或 LCD 初始化状态无效。
- * @note   回调只应发布任务通知；不得记录日志、调用 LVGL 或再次调用任何
- *         Platform LCD 绘制 Interface。
+ * @note   回调不得记录日志、再次调用任何 Platform LCD 绘制 Interface，或执行
+ *         一般 LVGL 操作。当前 GUI Service 仅以此回调在 ISR 中调用
+ *         lv_disp_flush_ready() 归还已完成的 flush 缓冲；这是显示刷新链路的
+ *         专用收尾例外，随后只发送 FromISR 通知。
  */
 Platform_StatusTypeDef Platform_LCD_SetTransferCallback(
     Platform_LCD_TransferCallback_t callback,

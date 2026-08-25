@@ -90,6 +90,11 @@ GUI Task
 
 其中 `0x38` 始终是 Device/Platform 中表达的 7-bit 地址。只有 STM32 HAL Adapter 调用 `HAL_I2C_IsDeviceReady()` 或 `HAL_I2C_Mem_Read()` 前才执行左移一位转换。I2C 读取失败时 GUI Service 向 LVGL 报告释放，避免界面永久保留上一次按下状态；Component 同时记录失败语义，需在下一次系统初始化时重新建立通信。
 
+当前 `Platform_Touch_Init()` 失败虽然不会阻止 APP 启动，但 GUI Service 仍会注册 Pointer 输入并继续轮询
+`Platform_Touch_ReadRawPoint()`；因此它不是一个已完成的“禁用输入”能力状态。触摸模组缺失或 I2C
+持续故障时，轮询和错误日志仍会发生。将此状态收敛为 Platform Touch 的稳定可用性 Interface 是后续
+代码审查项；在此之前，不应把启动日志中的“touch input disabled”理解为已停止 I2C 访问。
+
 ## 4. TP_IRQ 的当前状态与后续演进
 
 CubeMX 已将 `TP_IRQ` 配为 EXTI 下降沿，但当前不注册 GPIO EXTI 回调；常规触点采样已由 GUI Task 中的 LVGL `read_cb` 轮询完成。

@@ -99,7 +99,7 @@ void app_init(void)
             break;
 
         case PLATFORM_TOUCH_ERROR:
-            /* 触摸尚未进入产品交互链路；故障只禁用当前诊断，不阻止播放器启动。 */
+            /* 触摸初始化失败当前只作为非致命启动故障处理；读取失败时 GUI 会报告释放。 */
             (void)LOG_Printf(LOG_LEVEL_ERROR,
                              "TOUCH",
                              "Initialization failed; touch input disabled.");

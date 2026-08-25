@@ -31,7 +31,7 @@
 
 ## 禁止依赖
 
-不允许 APP 直接读取 `hspi1` 或 LCD GPIO，也不在本 Module 中创建 FreeRTOS Task、调用 LVGL、申请帧缓冲，或在 ISR 回调内执行业务。DMA 的 HAL 启动与分块属于 Adapter；双绘制缓冲和 `lv_disp_flush_ready()` 属于未来 GUI/LVGL Task。
+不允许 APP 直接读取 `hspi1` 或 LCD GPIO，也不在本 Module 中创建 FreeRTOS Task、调用 LVGL、申请帧缓冲，或在 ISR 回调内执行业务。DMA 的 HAL 启动与分块属于 Adapter；双绘制缓冲属于 `Service/gui`。Platform 本身不调用 LVGL，只有 GUI Service 注册的最终 ISR 回调可调用 `lv_disp_flush_ready()` 归还已完成的 flush 缓冲，随后只发送 FromISR 通知。
 
 ## 命名
 

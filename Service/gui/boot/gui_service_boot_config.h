@@ -34,9 +34,9 @@
 #define SERVICE_GUI_BOOT_WALLPAPER_BLUR_RADIUS  (12U)
 
 /** @brief 清晰壁纸在 BootReveal 中保持可见的时间，单位为毫秒。 */
-#define SERVICE_GUI_BOOT_REVEAL_HOLD_TIME_MS    (400U)
+#define SERVICE_GUI_BOOT_REVEAL_HOLD_TIME_MS    (200U)
 
 /** @brief BootReveal 异步切入 Lock 时的 Fade 时长，单位为毫秒。 */
-#define SERVICE_GUI_BOOT_LOCK_FADE_TIME_MS      (800U)
+#define SERVICE_GUI_BOOT_LOCK_FADE_TIME_MS      (600U)
 
 #endif /* GUI_SERVICE_BOOT_CONFIG_H */

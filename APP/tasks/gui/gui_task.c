@@ -18,6 +18,13 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
+/**
+ * @brief  初始化 GUI Service 并持续推进唯一的 LVGL 执行上下文。
+ * @param  handle 未使用；保留以符合 FreeRTOS TaskFunction_t 签名。
+ * @note   GUI 初始化失败被当前产品定义为致命错误，任务会进入 Error_Handler()。
+ *         正常路径不返回，所有 LVGL API（LCD 最终 ISR 的 flush ready 例外除外）
+ *         均由本 Task 调用。
+ */
 void gui_task(void *handle)
 {
     (void)handle;
