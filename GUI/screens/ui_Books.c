@@ -14,6 +14,8 @@ void ui_Books_screen_init(void)
 {
     ui_Books = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_Books, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_color(ui_Books, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_Books, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_img_src(ui_Books, &ui_img_wallpaper_indigo_mist_soft_dark_png, LV_PART_MAIN | LV_STATE_DEFAULT);
 
 }

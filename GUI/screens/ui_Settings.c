@@ -14,6 +14,8 @@ void ui_Settings_screen_init(void)
 {
     ui_Settings = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_Settings, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_color(ui_Settings, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_Settings, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_img_src(ui_Settings, &ui_img_wallpaper_indigo_mist_soft_dark_png, LV_PART_MAIN | LV_STATE_DEFAULT);
 
 }

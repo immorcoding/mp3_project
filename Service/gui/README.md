@@ -53,6 +53,45 @@ LVGL Pointer read_cb
 - Platform LCD 同时只允许一笔异步传输，GUI Service 通过 LVGL `wait_cb` 等待该传输的最终事件；
 - GUI Task 不得在 LCD DMA 正在读取的绘制缓冲上进行 CPU 写入。
 
-## 私有配置
+## 私有 Modules 与配置
 
-`gui_service_config.h` 保存绘制缓冲行数。改变该值会同时影响 SDRAM 占用、SPI 刷新分块数量和 LVGL 的双缓冲等待行为，必须结合显示帧率与 D-Cache 约束验证。
+对外仍只有 `Service_GUI_Init()` 与 `Service_GUI_Process()` 两个 Interface；
+以下是 `Service/gui` 内部的实现拆分，不得被 APP 或其他 Service 直接包含或调用。
+SquareLine 生成代码唯一允许的例外是由 `GUI/ui_events.h` 声明、GUI Service 实现的
+`Service_GUI_Boot_RequestLock()`：它是 BootReveal 的窄事件交接点，不属于供上层调用的
+公开 Service Interface，也不要求 `GUI/` 包含任何 Service 头文件。
+
+```text
+Service/gui/
+├─ gui_service.c / .h / _config.h    GUI Task 生命周期、显示/触摸和 DMA 桥接
+├─ boot/                             仅属于启动视觉序列
+│  ├─ gui_service_boot.c / .h
+│  └─ gui_service_boot_config.h
+└─ canvas/                           可复用的 Canvas 离屏处理
+   └─ gui_service_canvas.c / .h
+```
+
+- `gui_service.c`：GUI Task 生命周期、LVGL 显示/输入驱动注册，以及 LCD DMA
+  刷新桥接。它只编排内部 Module，不持有离屏 Canvas 工作区或启动动画细节。
+- `boot/gui_service_boot.c`：启动视觉序列 Module。它在 `ui_init()` 后调用通用 Canvas
+  Module 生成并绑定 Boot 的模糊背景，再显式启动 Arc 相位动画。BootReveal 的
+  `SCREEN_LOADED` 事件调用 `Service_GUI_Boot_RequestLock()` 时，本 Module 以
+  `lv_async_call()` 延后一轮 LVGL 调度，再发起到 Lock 的 Fade；因此不会重入尚未收尾的
+  前一次 Screen 切换。
+- `canvas/gui_service_canvas.c`：通用 Canvas Module。它独占可复用的 SDRAM 工作区，接收
+  调用方给定的图片和模糊半径，返回模糊图像描述符；目前被 Boot 使用，后续也可复用到
+  壁纸更新和 Settings 局部毛玻璃生成。其隐藏 Canvas 对象挂在 display top layer，因而不
+  随短生命周期的 Boot Screen 销毁。
+
+`gui_service_config.h` 保存绘制缓冲行数。改变该值会同时影响 SDRAM 占用、SPI
+刷新分块数量和 LVGL 的双缓冲等待行为，必须结合显示帧率与 D-Cache 约束验证。
+
+`boot/gui_service_boot_config.h` 保存启动 Arc 的统一周期、伸缩范围、起始偏移、Boot
+背景模糊半径，以及 BootReveal 停留/Fade 时间，允许在不改动画流程的前提下根据真机
+观感调节。通用 Canvas Module 不持有 Boot 专属的参数。
+
+## SquareLine 生成目录
+
+`GUI/` 由 SquareLine Studio 1.6.1 生成，是 GUI Service 的只读输入；本 Module
+只通过 `GUI/ui.h` 公开的 Screen 和资源符号绑定运行时样式，绝不修改生成的 `.c`、
+`.h`、CMake 或资源数组。用户在 SquareLine 完成设计并导出后，再由本 Module 适配。

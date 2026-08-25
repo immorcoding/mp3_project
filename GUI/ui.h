@@ -14,10 +14,14 @@ extern "C" {
 
 #include "ui_helpers.h"
 #include "ui_events.h"
+#include "ui_theme_manager.h"
+#include "ui_themes.h"
 
 
 ///////////////////// SCREENS ////////////////////
 
+#include "screens/ui_Boot.h"
+#include "screens/ui_BootReveal.h"
 #include "screens/ui_Lock.h"
 #include "screens/ui_Music.h"
 #include "screens/ui_Books.h"
@@ -25,6 +29,7 @@ extern "C" {
 
 ///////////////////// VARIABLES ////////////////////
 
+extern lv_anim_t * LockUnlockGroupBreath_Animation(lv_obj_t * TargetObject, int delay);
 
 // EVENTS
 

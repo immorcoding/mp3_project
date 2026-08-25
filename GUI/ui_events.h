@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+void Service_GUI_Boot_RequestLock(lv_event_t * e);
+
 #ifdef __cplusplus
 } /*extern "C"*/
 #endif

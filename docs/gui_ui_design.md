@@ -245,9 +245,167 @@ Settings 使用 2 x 2 方形卡片，而不是长列表：
 
 为隔离 Image Dither，用户已将该资源的 `Filter Strength` 临时设为 `0`、重新 Export UI Files，助手使用同一条 `cmake --build --preset Debug` 构建环复验；资源仍导出为相同的 v9 描述符并在相同行失败。因此排除抖动功能、原 PNG、RGB565 与 Alpha。随后用户以 **SquareLine Studio 1.6.1** 导出同一工程，生成的图片资源可正常通过现有 LVGL v8.3.11 工程编译，完成版本回归验证。最终结论：**SquareLine Studio 1.6.2 在此 LVGL v8.3.11 项目的图片 C 源导出存在兼容性回归；1.6.1 是当前已验证可用的 GUI 导出工具版本。** 后续本项目固定使用 1.6.1 导出 `GUI/`，不手改生成文件；只有在新版本经同样的“含 PNG 资源的导出 + 固件编译”验证通过后，才允许升级。
 
-初始布局采用相对约束，而非固定像素坐标：日期位于屏幕上半部、时间正上方附近；大时间位于日期下方并作为全页视觉焦点；电量提示在时间下方保留一段明显留白。三者均水平居中，直接作为 `Lock` 的子对象，不额外包裹会抢占手势的容器。
+初始布局采用相对约束，而非固定像素坐标：大时间位于屏幕上半部并作为全页视觉焦点；日期直接位于时间下方；电量提示与日期共同构成次级信息，位于日期下方并保留一段较短留白。时间和日期直接作为 `Lock` 的子对象；电池图标与百分比使用一个仅包围二者的小型 `BatteryGroup` 透明 Container，保证整组始终水平居中。该 Container 不承载业务事件，也不需要滚动。此前“Container 会吃掉手势”的判断已被实测推翻：锁屏滑动不灵敏的根因是触摸采样率过高，调整后已恢复正常，因此普通布局 Container 不需要为规避手势额外开启 Gesture Bubble。屏幕下半部预留给后续的 Mini Player 与 `Swipe up to unlock`，因此首版不把电量放到底部。
 
-日期使用约 `14–18 px` 的次级文字色 `#AAB8D4`；大时间使用当前 SquareLine 可选的最大或接近最大的英文字体，建议约 `42–52 px`，主文字色 `#F1F6FF`；电量提示使用约 `12–14 px` 的强调色 `#29C9FF`。以 SquareLine 模拟器的视觉平衡为最终依据，优先调整信息层的相对间距与留白，不因本文档强行固定坐标。若导出后固件缺少对应字体，再单独评审并由用户手动调整 `lv_conf.h`，助手不修改生成目录。
+日期固定使用三字母星期与月份缩写，例如 `SUN · AUG 24`，避免 `THURSDAY, NOVEMBER 28` 一类文本在 240 px 屏幕上溢出。日期使用约 `14–18 px` 的次级文字色 `#AAB8D4`；大时间使用当前 SquareLine 可选的最大或接近最大的英文字体，建议约 `42–52 px`，主文字色 `#F1F6FF`。
+
+电量提示由一个简洁的 `LockBatteryBar` 与 `82%` 短文本组成，二者置于 `BatteryGroup` 中，以 Row 布局作为同一行视觉组水平居中，位于日期下方；`LockBatteryBar` 使用 SquareLine 的 LVGL Bar 控件绘制细轮廓与容量填充，而非导入 SVG 或使用 LVGL 字符图标。首版不使用电池正极突起：在当前屏幕尺寸上，额外的窄 Panel 会削弱图标的简洁性，保留圆角轮廓和容量填充即可。
+
+`BatteryGroup` 背景、边框与阴影均透明，Padding 仅保留电量条和文字之间的窄间距。电量条轮廓使用次级文字色 `#AAB8D4`，填充与百分比使用强调色 `#29C9FF`，文字字号约 `12–14 px`；固定假数据时，Bar 的填充值必须与显示百分比一致，例如 `84%` 对应值 `84`。首版不表现实时电量、充电状态或低电量告警。以 SquareLine 模拟器的视觉平衡为最终依据，优先调整信息层的相对间距与留白，不因本文档强行固定坐标。若导出后固件缺少对应字体，再单独评审并由用户手动调整 `lv_conf.h`，助手不修改生成目录。
+
+锁屏静态主视觉的下一项是底部解锁提示，采用 iPhone 风格的“文字 + Home indicator”：`LockUnlockHint` 显示 `Swipe up to unlock`，其下方为短圆角横条 `LockHomeIndicator`；二者水平居中并靠近屏幕底部安全区。首版不使用箭头、不使用可见容器、不添加滚动或解锁事件。二者与上部的时间/日期/电量信息保持足够大留白，Mini Player 仍留待后续单独设计与接入。
+
+`LockUnlockHint` 使用主文字色的低亮度版本，不创建文字阴影、发光副本或预渲染模糊资源。240 x 320 的 RGB565 屏幕以文字本身的轻微透明度变化维持简洁与可读性，避免伪阴影产生脏边或使层级过多。
+
+提示文字和 Home indicator 放入透明的 `LockUnlockGroup`，仅用于统一设置透明度动画，不绘制背景、边框或阴影，也不承担事件。该 Group 以低频呼吸提示手势：从低可见度平滑变亮，再平滑变暗，往返周期约 `1.5–2.0 s`，无限循环；避免位移、闪烁或高频动画。文字与横条随 Group 同步呼吸，以保持 iPhone 式的单一底部手势锚点。
+
+呼吸动画由 `Lock` Screen 的 `Screen loaded` 事件以零延迟执行 `Play Animation` 启动，目标为 `LockUnlockGroup`。这是当前“每次进入锁屏都从头开始呼吸”的设计选择，包含默认首屏首次加载与后续从其他页面重新进入 Lock。事件不得挂在 `LockUnlockGroup` 上，避免让纯视觉提示拥有业务交互职责。
+
+SquareLine 的 `Initial actions` 同样可以启动初始动画，但它更适合希望动画跨 Screen 持续运行、而不是每次进入 Screen 都重启的情况；当前不得与 `Screen loaded → Play Animation` 同时启动同一个无限动画，以免重复创建或累积。若后续真机验证发现默认首屏不派发 `Screen loaded`，再以 `Initial actions` 作为单独的替代方案，而不是与本事件并存。
+
+### 10.3 开机动画视觉与实现边界
+
+本节记录开机视觉从候选到实现的过程。**以 10.3.1 为当前有效设计**；其后的候选
+方案和资源模型保留为历史决策背景或后续功能规划，不能反向覆盖当前导出的 UI。
+所有 Screen、样式、事件和资源仍只允许用户在 SquareLine 中创建和导出；不得手改
+`GUI/` 生成代码。
+
+#### 10.3.1 当前有效设计与运行时调用链
+
+当前开机页采用已选定的 **Orbital loader**，最终由 `Boot`、`BootReveal` 两张
+SquareLine Screen 组成。此前为排查切屏问题曾临时删除 `BootReveal`；用户现已确认恢复它，
+所以下一次 SquareLine 导出前的“`Boot` 直接切到 `Lock`”仅是过渡状态，不能作为最终实现：
+
+    Boot
+      └─ BootOrbitGroup（透明布局 Group）
+          ├─ BootOrbitRing（普通 LVGL Arc：MAIN 为完整暗色轨道）
+          │   ├─ INDICATOR 为内缩的青色活动弧
+          │   └─ KNOB 透明
+          └─ BootOrbitLabel（“LOADING”）
+
+    BootReveal
+      └─ 同一张清晰壁纸的根 Background image
+
+`BootOrbitRing` 是普通 Arc，不是 Spinner。运行时保持 MAIN 完整轨道不变，以一条
+`1400 ms` 的线性相位动画同时计算 INDICATOR 两端：活动弧在 `30°` 到 `210°` 间
+缓入缓出地伸缩；伸长时前端加速前进，缩短时后端追赶前端，因此两个端点均不会倒退。
+周期末的活动弧位置和长度与下一周期起点一致，不产生跳变。当前统一起始偏移为
+`255°`，用于使动态轨迹相对静态预览逆时针偏移。该效果由 Service 运行时实现，SquareLine
+只负责静态预览。当前导出的对象名为
+`ui_BootOrbitRing`、`ui_BootOrbitGroup` 和 `ui_BootOrbitLabel`，后续若用户在 SquareLine 重命名，必须先导出，再同步适配实现
+与本文档。
+
+开机链路固定为：
+
+```text
+Boot --（SquareLine：SCREEN_LOADED → Change Screen）--> BootReveal
+BootReveal --（SquareLine：SCREEN_LOADED → Call function）--> GUI Service
+GUI Service --（lv_async_call 延后一轮 LVGL 调度）--> Lock
+```
+
+`Boot → BootReveal` 保留 SquareLine 的普通切屏事件；当前 SquareLine 导出的视觉基准为约 `2500 ms` 停留后
+以 `300 ms` `FADE_OUT` 切入。各 Screen 根背景色 Alpha 均为 `0`，仅由根 Background
+image 显示壁纸，避免 Screen Fade 中混入默认黑色或白色底。
+
+`BootReveal` 的 `SCREEN_LOADED` **不得**直接再添加 `Change Screen → Lock`。在 LVGL v8
+中，前一个 Screen Fade 的 `SCREEN_LOADED` 回调仍处于前一次切屏的收尾过程；此时嵌套调用
+下一次 `lv_scr_load_anim()` 会强制完成或取消旧动画，表现为 Lock 突然出现，且后一次的
+延迟参数看似失效。
+
+取而代之，`BootReveal` 仅配置 `SCREEN_LOADED → Call function`，函数名暂定为
+`Service_GUI_Boot_RequestLock`。该函数已由 GUI Service 实现，作用仅是请求一次异步交接：
+它使用 `lv_async_call()` 让当前 LVGL 事件和前一段切屏完整返回后，再由 GUI Task 发起
+`BootReveal → Lock` 的 Fade。当前私有配置为 Reveal 保持 `400 ms`、随后 `800 ms`
+`FADE_OUT`；这两个参数位于 `Service/gui/boot/gui_service_boot_config.h`，不再作为
+SquareLine 中的第二个直接切屏事件存在。后续如按真机观感调整，必须先同步本文档。
+
+这种回调是运行时生命周期衔接，SquareLine 模拟器没有 GUI Service 的实际实现时可以停在
+`BootReveal`；静态布局和前一段 `Boot → BootReveal` 仍可在模拟器检查，完整链路以导出后
+的真机 Release 构建为准。任何情况下均不手改 `GUI/` 生成文件。
+
+`ui_init()` 内部会加载 `Boot`，所以这次首次 `SCREEN_LOADED` 已发生在 GUI Service
+获得控制权之前。为避免依赖一个已经错过的事件，`gui_service.c` 在 `ui_init()` 后：
+
+1. 调用私有 `canvas/gui_service_canvas` Module，以 SDRAM Canvas 工作区生成当前默认壁纸的
+   模糊副本并绑定为 `Boot` 的根背景；
+2. 显式调用私有 `service_gui_boot_start()`。
+
+后者现在会创建一组无限 LVGL 相位动画，并在每次回调中同时设置 INDICATOR 的
+start/end angle，实现无前端回退的伸缩。动画以 `ui_BootOrbitRing` 为对象；当 Screen
+销毁该对象时，LVGL 自动删除其动画。`BootReveal → Lock` 的异步交接由同一 `boot/`
+Module 实现：只允许 GUI Task 中的 LVGL `lv_async_call()` 回调调用切屏 API，
+不得以 FreeRTOS Timer 或 ISR 直接操作 LVGL。该 Module 不修改 SquareLine 生成文件，
+也不得在 ISR 中调用。
+
+可复用 Canvas 离屏处理已迁入 `Service/gui/canvas/`。它提供“源图片 + 调用方指定半径
+→ 模糊描述符”的通用能力；Canvas 工作对象挂在 display top layer，不再作为 `Boot` 的
+子对象，因此 Boot 作为临时 Screen 销毁后，后续壁纸切换或 Settings 局部毛玻璃仍可安全
+复用同一 SDRAM 工作区。现有大数组保留 `service_gui_effect_canvas_buffer` 名称，表示它是
+通用视觉效果的 Canvas 缓冲，而不是某张启动页壁纸的专属存储。
+
+#### 10.3.2 历史候选与后续资源模型
+
+以下内容是早期方案选择和资源规划的记录，不是当前实现指令；当前 UI、时序和
+运行时调用链只以 10.3.1 为准。
+
+1. **Orbital ignition（历史首选）**：近黑靛蓝底上由两段错位的细圆弧与一个小核心光点组成抽象“轨道标记”；对象按短时间差依次上浮淡入、短暂停留，再整体淡出并让 Lock 的烟雾壁纸淡入。它不依赖未确定的品牌文字或 Logo，具有更强识别度，同时只使用 Arc、Panel 与透明度/位移动画，绘制负担仍很低。
+2. **Minimal wordmark**：近黑靛蓝底上仅出现产品字标或单字母标记，短暂停留后淡出，再进入 Lock。层级最克制，但需要先确定项目的显示名称或 Logo。
+3. **Music signal**：近黑底上以三到五根细竖条完成一次简短的“由静到动再归零”的节奏动画，随后切入 Lock。产品属性最直观，但会更偏播放器/科技感。
+
+三种方案共用约束：新增独立 `Boot` Screen 作为导出顺序中的首屏；总停留时间约 `1.0–1.5 s`，不循环；结束后使用短淡入切换到 `Lock`。Boot 是一次性开机序列，其动画由 SquareLine 的 `Initial actions` 启动，而不是由 `SCREEN_LOADED` 触发；产品正常流程不得重新进入 Boot。Lock 的底部解锁呼吸提示只应在切换完成后启动。原型阶段优先在 SquareLine 模拟器中分别验证，确认后才导出和真机测试；未选中的 Boot 组件、动画和事件必须在定稿后删除。
+
+参考评估：高质感移动端 Splash 常将单个抽象标记置于深色留白中心，避免在启动阶段堆叠播放器内容、均衡器或 Loading 文案。此前的 LVGL v9 SquareLine `Smart_Gadget` 示例也采用同一节奏结构：Logo 与两行文本按 `100 / 200 / 300 ms` 错峰上移淡入，并在约 `1.4 s` 后用短 Fade 切入主 Screen。当前 `Orbital ignition` 借用其“错峰显现 + 快速淡入切屏”的结构，不复制其白底、Logo 或文字视觉。首轮验证先只做该方案；若用户认为抽象标记不够像播放器，再回退比较 Music signal 方案。
+
+用户提出的增强分镜作为 `Orbital ignition` 的当前候选，尚待资源容量确认：
+
+```text
+Boot（预模糊、偏暗的同款壁纸）
+  └─ 背光由低亮度升至目标亮度（后续硬件钩子，当前留空）
+     └─ 轨道标记依次显现并短暂停留
+        └─ Boot → BootReveal：约 120–180 ms，预模糊壁纸快速过渡为清晰壁纸
+           └─ BootReveal → Lock：约 160–220 ms，Lock 信息层淡入
+```
+
+壁纸可由用户更换，故不得为每张候选壁纸都随固件静态保存一张模糊副本，也不得仅以深色遮罩冒充模糊。最终方案为**运行时生成、按壁纸缓存**：解码后的当前壁纸先保留为清晰 RGB565 帧，再通过图像处理生成对应的模糊 RGB565 帧；`Boot` 显示模糊帧，`BootReveal` 显示清晰帧，两个短 Fade 共同模拟“背景由模糊变清晰、随后 Lock 出现”。
+
+H743 的 DMA2D 可协助像素格式转换、拷贝、填充和 Alpha 混合，但没有卷积/高斯模糊功能。LVGL v8.3 的 Canvas 提供 `lv_canvas_blur_hor()` 与 `lv_canvas_blur_ver()`；因此首版应优先使用位于 SDRAM 的 Canvas，依次执行横向、纵向模糊（必要时多轮较小半径），而非一开始手写模糊算法。SquareLine Studio 不提供可直接拖拽的 Canvas 控件，Canvas 对象由后续 GUI Service 在运行时创建和销毁，不修改生成目录中的任何文件。其大像素缓冲由 GUI Service 在 SDRAM 静态持有，并定义为可复用的“视觉效果工作区”，不以 `Boot` 命名或限定用途；GUI Task 一次只允许一个离屏效果任务占用该工作区。该路径仍是 CPU 软件处理，DMA2D 仅可用于输入/输出格式处理、拷贝、遮罩和过渡混合，不承担模糊卷积本身。若 Canvas 的视觉效果或性能实测不满足要求，再回退至滑动窗口多次 Box Blur 方案。
+
+默认处理策略不是每次开机重复计算：当用户首次导入或切换某张壁纸时，在 SDRAM 中生成其模糊帧，并按壁纸内容版本写入外部 SPI Flash 或文件系统缓存；后续启动优先直接读取匹配缓存。缓存缺失或校验不匹配时，设备在低背光、Boot 尚未显示有效内容的阶段运行一次生成任务，再异步补写缓存。这样仍完整支持任意可换壁纸，同时避免为每张壁纸占用内部 Flash，也避免每次开机重复消耗 CPU。后续正式缓存格式暂定为全不透明 `240 x 320 RGB565`，清晰帧与模糊帧各约 `150 KiB`；生成阶段需要位于 SDRAM 的工作缓冲，后续结合实际算法与缓存策略单独评审峰值容量和 D-Cache 一致性。
+
+运行时模糊的待实现数据流为：
+
+```text
+壁纸源（内部 Flash / SPI Flash / 文件系统）
+  → 解码或预转换为 SDRAM 中的 Clear RGB565 帧
+  → 检查 {内容校验值、尺寸、格式、算法版本、半径} 对应的 Blur Cache
+  ├─ 命中：读取 Blur RGB565 帧至 SDRAM
+  └─ 未命中：GUI Service 创建离屏 Canvas，执行水平/垂直 Canvas Blur，输出 Blur RGB565 帧
+                → 写入外部缓存
+  → 将 Blur / Clear 描述符分别绑定至 Boot / BootReveal、Lock 的根背景
+```
+
+第一轮 Canvas 验证直接复用当前 SquareLine 导出的 `LV_IMG_CF_TRUE_COLOR_ALPHA` 默认壁纸：按源描述符的 `data_size` 复制到同格式 Canvas，再调用 `lv_canvas_blur_hor(canvas, NULL, radius)` 与 `lv_canvas_blur_ver(canvas, NULL, radius)`；该 Canvas 缓冲约 `225 KiB`。这是为了以最少的格式转换证明视觉链路，Canvas 的实现可处理 Alpha。正式可换壁纸缓存再统一为已预合成、全不透明 RGB565：将清晰壁纸复制到 RGB565 Canvas 后执行同一组调用，必要时以较小半径重复一到两轮，使视觉更接近高斯模糊。Canvas 只解决“怎样算出模糊帧”，并不替代按壁纸内容缓存结果的机制。
+
+正式 RGB565 路径至少保留 Clear 与 Blur Canvas 两个 `240 x 320 RGB565` SDRAM 缓冲，合计约 `300 KiB`；若 Canvas 实现或后续手写 Box Blur 回退方案需要乒乓缓冲，再增加第三个缓冲，总计约 `450 KiB`。首轮 Alpha 资源验证仅额外持有一块约 `225 KiB` 的通用视觉效果 Canvas 工作缓冲，清晰源继续位于内部 Flash。Canvas 对象本身可由 LVGL 小堆动态创建，但当前 LVGL 堆仅 `48 KiB`、FreeRTOS 堆仅 `32 KiB`，不得用 `lv_mem_alloc()`、`pvPortMalloc()` 或未审计的 `malloc()` 分配此大像素缓冲。所有 Canvas 缓冲禁止放入 DTCM。由 DMA 写入的壁纸源在 CPU 读取前需要失效对应 D-Cache 区间；CPU 生成的 Blur 帧在被 DMA2D 或外设 DMA 读取前需要清理对应 D-Cache 区间。若最终由 LVGL 软件渲染直接读取该帧，则同一 CPU 缓存域内不额外做无意义的清理。具体缓冲符号、Cache API 和 Service 接口名称留待实现评审确定。
+
+### 10.4 Settings 局部毛玻璃资源模型（已验证）
+
+Settings 的目标效果是：卡片外的壁纸保持清晰；每张圆角卡片区域显示与其屏幕坐标连续对应的模糊壁纸，卡片再叠加半透明色层、边框和正文。该效果不能用同一块会被覆写的 Canvas 缓冲分别绑定给多张卡片。
+
+已用可删除的 `.scratch/settings_backdrop_prototype` 状态原型验证 `Boot → Lock → Settings → 更换壁纸` 的资源所有权，结论如下：
+
+1. GUI Service 长期持有一块通用全屏离屏效果工作区。它只在生成全屏模糊壁纸、重组背景等短任务期间独占，GUI Task 同一时刻只能运行一个此类任务。
+2. Settings 显示时额外长期持有一张完整的“局部毛玻璃合成背景”：先复制清晰壁纸，再只把所有卡片的圆角区域替换为同位置的模糊壁纸。Settings 根背景绑定此合成帧，卡片自身仅绘制透明染色、边框和内容。
+3. 不为每张卡片建立长期 Canvas 或整屏副本；卡片数量只增加一次合成中的裁剪次数，不线性增加常驻像素缓冲。
+4. 壁纸、卡片位置、尺寸或圆角变化时重新生成 Settings 合成背景；页面静止显示、文字变化或卡片内容更新时不重复模糊计算。
+
+当前 Alpha 原型中，通用工作区和 Settings 合成背景各为 `240 x 320 x 3 B = 230400 B`，并存峰值约 `450 KiB`；统一为不透明 RGB565 后约 `300 KiB`。该模型适合 H743 的计算能力与现有 32 MiB SDRAM，但最终模糊半径、圆角裁剪算法、生成耗时和 SPI 全屏刷新成本必须在真机测量后定稿。
+
+`Boot` / `BootReveal` 与现有根页面一样，将壁纸作为各自 Screen 根对象的 Background image，而不是额外放置全屏 Image。后续 Service 在不修改生成代码的前提下，通过公开的 Screen 对象设置运行时背景图片样式：`Boot` 绑定模糊帧，`BootReveal` 与 `Lock` 绑定同一清晰帧。根背景图更符合“系统壁纸”语义，减少一个全屏对象，也使 Screen Fade 直接参与背景过渡。此运行时资源绑定、缓存键、失效规则与 Service / Platform API 均属于后续实现任务，必须先经用户审校。
+
+第一个 SquareLine 原型步骤只创建页面和必要的视觉层：新增 `Boot` 与 `BootReveal` 两张 Screen，并将 `Boot` 放在导出顺序第一位，使其成为启动页；`BootReveal` 位于 `Boot` 与 `Lock` 之间。三张 Screen 都关闭 Scrollable、四边 Padding 为 `0`。`Boot` 的根背景临时设为近黑靛蓝，并仅在其上放置半透明深色 `BootDimLayer`；`BootReveal` 暂不添加子对象或固定背景资源。原型阶段可以沿用当前根背景图机制观察 Screen 的全屏裁切，但不得为模糊效果导入或导出新的静态图片。最终由运行时分别绑定模糊帧与清晰帧。
+
+真实背光渐亮不属于 SquareLine 原型：后续由 GUI Service 调用 Platform 暴露的 LCD/PWM 亮度接口实现，Boot 仅预留时序位置，当前不创建空的生成代码回调。`BootReveal` 是仅用于视觉过渡的短生命周期 Screen，不提供输入或业务控件；原型结束后，若能将清晰壁纸与 Lock 的信息层拆分到同一受控层级，可再评审是否删除该中间 Screen。
 
 ## 11. 原型验收标准
 

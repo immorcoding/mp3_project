@@ -14,6 +14,8 @@ void ui_Music_screen_init(void)
 {
     ui_Music = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_Music, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_color(ui_Music, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_Music, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_img_src(ui_Music, &ui_img_wallpaper_indigo_mist_soft_dark_png, LV_PART_MAIN | LV_STATE_DEFAULT);
 
 }

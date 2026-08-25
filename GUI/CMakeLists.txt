@@ -1,7 +1,11 @@
-SET(SOURCES screens/ui_Lock.c
+SET(SOURCES screens/ui_Boot.c
+    screens/ui_BootReveal.c
+    screens/ui_Lock.c
     screens/ui_Music.c
     screens/ui_Books.c
     screens/ui_Settings.c
+    ui_theme_manager.c
+    ui_themes.c
     ui.c
     components/ui_comp_hook.c
     ui_helpers.c

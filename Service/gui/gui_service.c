@@ -12,6 +12,7 @@
   */
 
 #include "Service/gui/gui_service.h"
+#include "Service/gui/boot/gui_service_boot.h"
 #include "Service/gui/gui_service_config.h"
 
 #include <stdint.h>
@@ -26,7 +27,7 @@
 #include "GUI/ui.h"
 
 /**
- * @brief LVGL v8 仅保存这些对象的指针，故其存储期必须覆盖显示驱动的整个生命周期。
+ * @brief LVGL v8 仅保存这些对象的指针，故其存储期必须覆盖显示驱动的整个生命周期，双缓冲区绘制。
  */
 static lv_color_t service_gui_draw_buffer_1[
     PLATFORM_LCD_WIDTH * SERVICE_GUI_DRAW_BUFFER_LINES]
@@ -150,6 +151,7 @@ static void service_gui_flush_wait_callback(
 Service_StatusTypeDef Service_GUI_Init(void)
 {
     Platform_StatusTypeDef lcd_status;
+    Service_StatusTypeDef gui_status;
 
     if (service_gui_display != NULL)
     {
@@ -204,6 +206,20 @@ Service_StatusTypeDef Service_GUI_Init(void)
 
     service_gui_last_tick = xTaskGetTickCount();
     ui_init();
+
+    gui_status = service_gui_boot_prepare_background(
+        &ui_img_wallpaper_indigo_mist_soft_dark_png);
+
+    if (gui_status != SERVICE_OK)
+    {
+        return gui_status;
+    }
+
+    /*
+     * ui_init() 内部已经加载 Boot Screen，不能再依赖其 SCREEN_LOADED 事件来启动
+     * Service 持有的动画。后续动画在此处显式启动，确保背景资源已完成运行时绑定。
+     */
+    service_gui_boot_start();
 
     return SERVICE_OK;
 }

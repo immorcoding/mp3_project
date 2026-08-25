@@ -6,7 +6,32 @@
 #include "../ui.h"
 
 lv_obj_t * ui_Lock = NULL;
+lv_obj_t * ui_LockDateLabel = NULL;
+lv_obj_t * ui_LockTimeLabel = NULL;
+lv_obj_t * ui_LockBatteryContainer = NULL;
+lv_obj_t * ui_LockBatteryBar = NULL;
+lv_obj_t * ui_LockBatteryLabel = NULL;
+lv_obj_t * ui_LockUnlockGroup = NULL;
+lv_obj_t * ui_LockUnlockHint = NULL;
+lv_obj_t * ui_LockHomeIndicator = NULL;
 // event funtions
+void ui_event_Lock(lv_event_t * e)
+{
+    lv_event_code_t event_code = lv_event_get_code(e);
+
+    if(event_code == LV_EVENT_SCREEN_LOADED) {
+        LockUnlockGroupBreath_Animation(ui_LockUnlockGroup, 0);
+    }
+}
+
+void ui_event_LockUnlockGroup(lv_event_t * e)
+{
+    lv_event_code_t event_code = lv_event_get_code(e);
+
+    if(event_code == LV_EVENT_SCREEN_LOADED) {
+        LockUnlockGroupBreath_Animation(ui_LockUnlockGroup, 0);
+    }
+}
 
 // build funtions
 
@@ -14,7 +39,114 @@ void ui_Lock_screen_init(void)
 {
     ui_Lock = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_Lock, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_color(ui_Lock, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_Lock, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_img_src(ui_Lock, &ui_img_wallpaper_indigo_mist_soft_dark_png, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_LockDateLabel = lv_label_create(ui_Lock);
+    lv_obj_set_width(ui_LockDateLabel, LV_SIZE_CONTENT);   /// 216
+    lv_obj_set_height(ui_LockDateLabel, LV_SIZE_CONTENT);    /// 20
+    lv_obj_set_x(ui_LockDateLabel, 0);
+    lv_obj_set_y(ui_LockDateLabel, lv_pct(-5));
+    lv_obj_set_align(ui_LockDateLabel, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_LockDateLabel, "SUN, AUG 24");
+    lv_obj_clear_flag(ui_LockDateLabel, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_text_color(ui_LockDateLabel, lv_color_hex(0xD0D0FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_LockDateLabel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_LockDateLabel, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_LockTimeLabel = lv_label_create(ui_Lock);
+    lv_obj_set_width(ui_LockTimeLabel, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_LockTimeLabel, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_LockTimeLabel, 0);
+    lv_obj_set_y(ui_LockTimeLabel, lv_pct(-20));
+    lv_obj_set_align(ui_LockTimeLabel, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_LockTimeLabel, "10:42");
+    lv_obj_clear_flag(ui_LockTimeLabel, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_text_color(ui_LockTimeLabel, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_LockTimeLabel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_LockTimeLabel, &lv_font_montserrat_48, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_LockBatteryContainer = lv_obj_create(ui_Lock);
+    lv_obj_remove_style_all(ui_LockBatteryContainer);
+    lv_obj_set_width(ui_LockBatteryContainer, lv_pct(23));
+    lv_obj_set_height(ui_LockBatteryContainer, lv_pct(4));
+    lv_obj_set_x(ui_LockBatteryContainer, lv_pct(0));
+    lv_obj_set_y(ui_LockBatteryContainer, lv_pct(4));
+    lv_obj_set_align(ui_LockBatteryContainer, LV_ALIGN_CENTER);
+    lv_obj_set_flex_flow(ui_LockBatteryContainer, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(ui_LockBatteryContainer, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(ui_LockBatteryContainer, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_pad_left(ui_LockBatteryContainer, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_right(ui_LockBatteryContainer, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_top(ui_LockBatteryContainer, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_bottom(ui_LockBatteryContainer, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_LockBatteryBar = lv_bar_create(ui_LockBatteryContainer);
+    lv_bar_set_value(ui_LockBatteryBar, 84, LV_ANIM_OFF);
+    lv_bar_set_start_value(ui_LockBatteryBar, 0, LV_ANIM_OFF);
+    lv_obj_set_width(ui_LockBatteryBar, lv_pct(40));
+    lv_obj_set_height(ui_LockBatteryBar, lv_pct(90));
+    lv_obj_set_x(ui_LockBatteryBar, lv_pct(-30));
+    lv_obj_set_y(ui_LockBatteryBar, lv_pct(-61));
+    lv_obj_set_align(ui_LockBatteryBar, LV_ALIGN_CENTER);
+    lv_obj_clear_flag(ui_LockBatteryBar, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_radius(ui_LockBatteryBar, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_color(ui_LockBatteryBar, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_opa(ui_LockBatteryBar, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_width(ui_LockBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_pad(ui_LockBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_left(ui_LockBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_right(ui_LockBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_top(ui_LockBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_bottom(ui_LockBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_set_style_radius(ui_LockBatteryBar, 2, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_LockBatteryBar, lv_color_hex(0x18C904), LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_LockBatteryBar, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+
+    ui_LockBatteryLabel = lv_label_create(ui_LockBatteryContainer);
+    lv_obj_set_width(ui_LockBatteryLabel, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_LockBatteryLabel, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_LockBatteryLabel, 44);
+    lv_obj_set_y(ui_LockBatteryLabel, 16);
+    lv_obj_set_align(ui_LockBatteryLabel, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_LockBatteryLabel, "84%");
+    lv_obj_clear_flag(ui_LockBatteryLabel, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_text_color(ui_LockBatteryLabel, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_LockBatteryLabel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_LockBatteryLabel, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_LockUnlockGroup = lv_obj_create(ui_Lock);
+    lv_obj_remove_style_all(ui_LockUnlockGroup);
+    lv_obj_set_width(ui_LockUnlockGroup, lv_pct(100));
+    lv_obj_set_height(ui_LockUnlockGroup, lv_pct(9));
+    lv_obj_set_align(ui_LockUnlockGroup, LV_ALIGN_BOTTOM_MID);
+    lv_obj_clear_flag(ui_LockUnlockGroup, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+
+    ui_LockUnlockHint = lv_label_create(ui_LockUnlockGroup);
+    lv_obj_set_width(ui_LockUnlockHint, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_LockUnlockHint, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_align(ui_LockUnlockHint, LV_ALIGN_TOP_MID);
+    lv_label_set_text(ui_LockUnlockHint, "Swipe up to unlock");
+    lv_obj_set_style_text_color(ui_LockUnlockHint, lv_color_hex(0xD0D0FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_LockUnlockHint, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_LockUnlockHint, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_LockHomeIndicator = lv_obj_create(ui_LockUnlockGroup);
+    lv_obj_set_width(ui_LockHomeIndicator, lv_pct(16));
+    lv_obj_set_height(ui_LockHomeIndicator, lv_pct(10));
+    lv_obj_set_x(ui_LockHomeIndicator, 0);
+    lv_obj_set_y(ui_LockHomeIndicator, lv_pct(-25));
+    lv_obj_set_align(ui_LockHomeIndicator, LV_ALIGN_BOTTOM_MID);
+    lv_obj_clear_flag(ui_LockHomeIndicator, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_radius(ui_LockHomeIndicator, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_LockHomeIndicator, lv_color_hex(0xD0D0FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_LockHomeIndicator, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(ui_LockHomeIndicator, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_add_event_cb(ui_LockUnlockGroup, ui_event_LockUnlockGroup, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_Lock, ui_event_Lock, LV_EVENT_ALL, NULL);
 
 }
 
@@ -24,5 +156,13 @@ void ui_Lock_screen_destroy(void)
 
     // NULL screen variables
     ui_Lock = NULL;
+    ui_LockDateLabel = NULL;
+    ui_LockTimeLabel = NULL;
+    ui_LockBatteryContainer = NULL;
+    ui_LockBatteryBar = NULL;
+    ui_LockBatteryLabel = NULL;
+    ui_LockUnlockGroup = NULL;
+    ui_LockUnlockHint = NULL;
+    ui_LockHomeIndicator = NULL;
 
 }

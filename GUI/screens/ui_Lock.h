@@ -13,7 +13,17 @@ extern "C" {
 // SCREEN: ui_Lock
 extern void ui_Lock_screen_init(void);
 extern void ui_Lock_screen_destroy(void);
+extern void ui_event_Lock(lv_event_t * e);
 extern lv_obj_t * ui_Lock;
+extern lv_obj_t * ui_LockDateLabel;
+extern lv_obj_t * ui_LockTimeLabel;
+extern lv_obj_t * ui_LockBatteryContainer;
+extern lv_obj_t * ui_LockBatteryBar;
+extern lv_obj_t * ui_LockBatteryLabel;
+extern void ui_event_LockUnlockGroup(lv_event_t * e);
+extern lv_obj_t * ui_LockUnlockGroup;
+extern lv_obj_t * ui_LockUnlockHint;
+extern lv_obj_t * ui_LockHomeIndicator;
 // CUSTOM VARIABLES
 
 #ifdef __cplusplus
