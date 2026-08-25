@@ -3,15 +3,22 @@
 // LVGL version: 8.3.11
 // Project name: mp3_gui
 
-#ifndef _UI_EVENTS_H
-#define _UI_EVENTS_H
+#ifndef UI_LOCK_H
+#define UI_LOCK_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// SCREEN: ui_Lock
+extern void ui_Lock_screen_init(void);
+extern void ui_Lock_screen_destroy(void);
+extern lv_obj_t * ui_Lock;
+// CUSTOM VARIABLES
 
 #ifdef __cplusplus
 } /*extern "C"*/
 #endif
 
 #endif
+

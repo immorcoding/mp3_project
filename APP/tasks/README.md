@@ -5,7 +5,7 @@
 ## APP 内部 Interface
 
 - `app_task_start()`：由 `APP/app.c` 创建 bootstrap task 并启动调度器；
-- `log_task()`、`storage_task()`、`monitor_task()`、`lcd_task()`：仅作为 FreeRTOS `TaskFunction_t` 交给创建器。
+- `log_task()`、`storage_task()`、`monitor_task()`、`gui_task()`：仅作为 FreeRTOS `TaskFunction_t` 交给创建器。
 
 本目录不是独立的跨 Module Interface；其头文件和任务入口只服务于顶层 `APP` Module，其他层不得包含或调用。
 

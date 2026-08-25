@@ -16,4 +16,4 @@
 bool Temp_STM32HAL_Calibrate(ADC_HandleTypeDef *hadc);
 bool Temp_STM32HAL_Read(ADC_HandleTypeDef *hadc, int32_t *temperature_mC);
 
-#endif // TEMP_STM32_HAL_ADAPTER_H
+#endif /* TEMP_STM32_HAL_ADAPTER_H */

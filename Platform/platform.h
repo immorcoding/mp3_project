@@ -37,4 +37,4 @@ typedef enum
 
 Platform_StatusTypeDef Platform_Init(void);
 
-#endif // PLATFORM_H
+#endif /* PLATFORM_H */

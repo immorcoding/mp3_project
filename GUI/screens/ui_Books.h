@@ -3,15 +3,22 @@
 // LVGL version: 8.3.11
 // Project name: mp3_gui
 
-#ifndef _UI_EVENTS_H
-#define _UI_EVENTS_H
+#ifndef UI_BOOKS_H
+#define UI_BOOKS_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// SCREEN: ui_Books
+extern void ui_Books_screen_init(void);
+extern void ui_Books_screen_destroy(void);
+extern lv_obj_t * ui_Books;
+// CUSTOM VARIABLES
 
 #ifdef __cplusplus
 } /*extern "C"*/
 #endif
 
 #endif
+

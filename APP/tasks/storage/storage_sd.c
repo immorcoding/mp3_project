@@ -226,7 +226,7 @@ void storage_sd_init(TaskHandle_t task_handle)
         storage_sd_log_card_ready("Card ready");
         if (storage_sd_mount() == SERVICE_OK)
         {
-#if STORAGE_SD_BENCHMARK_ENABLE //sd read/write benchmark
+#if STORAGE_SD_BENCHMARK_ENABLE /* SD 读写基准测试。 */
             (void)storage_sd_benchmark_run();
 #endif
         }

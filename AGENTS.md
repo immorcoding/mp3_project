@@ -12,9 +12,17 @@
 - USB CDC 日志；
 - FreeRTOS；
 - FatFs 文件系统的挂载、卸载和显式格式化；
-- 后续将加入音频解码、LVGL、LCD、QSPI Flash 和 USB MSC 所有权切换。
+- 32 MiB 外部 SDRAM；
+- ST7789 LCD、FT6X36 触摸与 LVGL v8.3.11 GUI 原型；
+- 后续将加入音频解码、QSPI Flash 和 USB MSC 所有权切换。
 
 技术文档和代码注释统一使用中文。
+
+## GUI 与 SquareLine 规则
+
+`GUI/` 是 SquareLine Studio 的生成目录，SquareLine 工程与其模拟器是 GUI 原型的唯一事实来源。除非用户明确撤销此约束，禁止直接修改其中的生成代码、生成配置或资源清单；助手只能给出 SquareLine 编辑器中的组件、布局、样式和事件配置步骤，由用户编辑、验证并导出。
+
+GUI 设计每推进一步，必须先同步更新 `docs/gui_ui_design.md`，再开始下一步 SquareLine 操作。页面、组件层级、坐标、视觉规范、手势或事件归属、动画、状态切换和原型范围的任何确认或修订都属于一次设计推进；待验证方案必须在文档中明确标记，模拟器或硬件验证推翻既有决定时也必须先修正文档。
 
 ## 开始工作前
 

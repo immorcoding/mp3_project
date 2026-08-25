@@ -18,4 +18,4 @@
 /** @brief 摄氏度转换为毫摄氏度的倍率。 */
 #define TEMP_STM32HAL_MILLICELSIUS_PER_CELSIUS         1000LL
 
-#endif // TEMP_STM32_HAL_ADAPTER_CONFIG_H
+#endif /* TEMP_STM32_HAL_ADAPTER_CONFIG_H */

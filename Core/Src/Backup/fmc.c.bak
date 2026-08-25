@@ -29,7 +29,7 @@
   *          通过二分频得到约 32 MHz 的临时 SDRAM 时钟，并完成必要的 JEDEC 命令。
   *
   *          随后 MX_FMC_Init() 会切换 FMC 至 PLL2，Platform_SDRAM_Init() 再按
-  *          最终 135 MHz 参数执行正式初始化。两阶段之间的 SDRAM 内容不应被依赖。
+  *          最终 130 MHz 参数执行正式初始化。两阶段之间的 SDRAM 内容不应被依赖。
   * @note   只能使用自动存储期的局部变量，不能读取全局或 static 状态；也不能调用
   *         HAL_Init()、HAL_Delay()、FreeRTOS 或任何依赖已初始化时基的函数。
   */

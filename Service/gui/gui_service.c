@@ -1,3 +1,16 @@
+/**
+  ******************************************************************************
+  * @file    gui_service.c
+  * @brief   LVGL v8 显示、触摸与 SPI DMA 刷新的 Service 装配实现。
+  *
+  * @details
+  *          本 Module 在唯一 GUI Task 中持有 LVGL 显示/输入驱动和两块 SDRAM
+  *          绘制缓冲。它把 LVGL flush/wait callback 映射为 Platform LCD 异步
+  *          写入与 FreeRTOS 任务通知，并把 Platform Touch 原始触点提供给
+  *          LVGL Pointer 输入驱动。
+  ******************************************************************************
+  */
+
 #include "Service/gui/gui_service.h"
 #include "Service/gui/gui_service_config.h"
 

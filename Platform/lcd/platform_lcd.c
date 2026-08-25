@@ -25,10 +25,10 @@
 /** @brief 本板唯一的 ST7789 Device 实例。 */
 static ST7789_HandleTypeDef hplatform_lcd;
 
-/** @brief LCD Task 注册的最终 DMA 事件订阅者，仅在 SPI ISR 中调用。 */
+/** @brief GUI Service 注册的最终 DMA 事件订阅者，仅在 SPI ISR 中调用。 */
 static Platform_LCD_TransferCallback_t hplatform_lcd_transfer_callback;
 
-/** @brief LCD Task 注册的最终 DMA 事件不透明上下文。 */
+/** @brief GUI Service 注册的最终 DMA 事件不透明上下文。 */
 static void *hplatform_lcd_transfer_context;
 
 /**
@@ -94,7 +94,8 @@ Platform_StatusTypeDef Platform_LCD_Init(void)
         return PLATFORM_LCD_ERROR;
     }
 
-    HAL_Delay(PLATFORM_LCD_POWER_SETTLE_DELAY_MS); //不符合分层，但是暂时没必要严格遵守，确保 LCD 电源稳定
+    /* LCD 电源打开后的启动稳定等待属于 Platform 的板级时序职责。 */
+    HAL_Delay(PLATFORM_LCD_POWER_SETTLE_DELAY_MS);
 
     if (ST7789_SPI_STM32HALAdapter_Bind(&hplatform_lcd,
                                          &hplatform_lcd_adapter) != ST7789_OK)

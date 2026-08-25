@@ -20,3 +20,30 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 阅读分层时必须区分三件事：`Vendor → Adapters → Components → Platform → Service → APP` 表示功能/抽象所有权；编译期 `#include` 按 Interface 所有权和装配需要决定；运行时请求通常向下、硬件事件经已注册回调向上。第三方回调或 Override Seam（例如 FatFs `disk_* → BSP_SD_*`）是运行时入站接缝，不表示反向头文件依赖。
 
 `README.md` 用于导航和局部工作入口；`CONTEXT.md` 用于领域术语和产品职责；`docs/` 用于跨 Module 的技术事实。三者互相链接，不重复维护同一份调用链或实现细节。
+
+## 当前状态
+
+- 已接入 LVGL v8.3.11、SquareLine Studio 1.6.1 导出的 GUI 原型、ST7789 SPI DMA 刷新和 FT6X36 单指触摸；
+- GUI 的运行时入口为 `APP/tasks/gui/gui_task.c`，其显示与输入装配由 `Service/gui` 持有；
+- `GUI/` 是 SquareLine 的生成目录。应在 SquareLine 编辑器中修改页面、资源和交互，再导出；不要直接手改其中的 C 源或资源清单；
+- 外部 SDRAM 当前以 130 MHz 配置，LVGL 双绘制缓冲位于 `.sdram_framebuffer (NOLOAD)` 段。
+
+## 构建
+
+构建环境需要 CMake、Ninja 与可从命令行找到的 Arm GNU Toolchain（`arm-none-eabi-*`）。在工程根目录执行：
+
+```text
+cmake --preset Debug
+cmake --build --preset Debug
+```
+
+Release 构建可将两个 `Debug` 替换为 `Release`。生成的 ELF、HEX、BIN 位于对应的 `build/<preset>/` 目录。
+
+## 交流与审阅重点
+
+本仓库目前主要用于嵌入式课程交流与架构审阅。特别欢迎针对以下方面提出建议：
+
+- Module 所有权、Interface 和 Adapter 接缝是否足够清晰；
+- FreeRTOS 任务、ISR 回调、DMA 与 Cache 一致性的运行时路径是否合理；
+- 后续音频解码、外部 Flash、USB MSC 与 GUI 功能继续接入时的演进方式；
+- 注释、文档、命名和可复现构建体验中的不足。

@@ -6,7 +6,8 @@
   * @details
   *          Create Task 先建立 Log Service 的静态消息池与 FreeRTOS 队列，再创建
   *          消费日志的 Log Task、独占 SD 热插拔普通上下文的 Storage Task、
-  *          LCD 最小诊断 Task 以及监控 Task。所有任务创建成功后 Create Task 自删。
+  *          独占 LVGL 执行上下文的 GUI Task 以及监控 Task。所有任务创建成功后
+  *          Create Task 自删。
   ******************************************************************************
   */
 
@@ -28,8 +29,9 @@
   * @param  handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
   * @note   Service_Log 必须先于任意可能调用 Service_Log_Post() 的任务创建。
   *         Storage Task 优先级高于 Log Task；它完成短暂初始化后会阻塞等待 SD
-  *         检测通知，不会长期占用 CPU。LCD Task 当前只运行一次诊断事务，随后
-  *         进入低频阻塞，因而与 Log/Monitor Task 同优先级即可。
+  *         检测通知，不会长期占用 CPU。GUI Task 持续推进 LVGL；SPI DMA 刷新时
+  *         会由 GUI Service 的 wait callback 阻塞等待传输完成。当前 GUI、Log 与
+  *         Monitor Task 的优先级均由 app_tasks.h 集中配置。
   */
 static void create_task(void *handle)
 {

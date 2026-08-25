@@ -129,5 +129,5 @@ void app_init(void)
   */
 void app_error(void)
 {
-    /* Reserved for future application-specific fail-safe handling. */
+    /* 预留应用层故障安全处理扩展点。 */
 }

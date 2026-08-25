@@ -29,7 +29,7 @@ Interface 请求 Platform SDRAM；SDRAM 没有中断或任务通知路径。
 - `Core/Src/fmc.c` 的 `SDRAM_EarlyInit()` 是启动接缝，不属于本 Module 的公开
   Interface。它在 `.data/.bss` 启动循环前使用临时约 32 MHz 时序使 SDRAM 可访问，
   并按 AS4 的较长要求等待至少 200 µs；
-  随后 CubeMX 和本 Module 仍会按最终 135 MHz 参数完成正式初始化；两阶段之间的
+   随后 CubeMX 和本 Module 仍会按最终 130 MHz 参数完成正式初始化；两阶段之间的
   SDRAM 内容不应被依赖；
 - 链接脚本当前预留 `.sdram_framebuffer (NOLOAD)`。该段不加载、也不自动清零；其
   未来拥有者必须在正式 SDRAM 初始化后、首次交给 LCD/DMA 之前完整写入缓冲区。

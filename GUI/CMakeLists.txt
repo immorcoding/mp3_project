@@ -1,7 +1,10 @@
-SET(SOURCES screens/ui_Screen1.c
-    screens/ui_Screen2.c
+SET(SOURCES screens/ui_Lock.c
+    screens/ui_Music.c
+    screens/ui_Books.c
+    screens/ui_Settings.c
     ui.c
     components/ui_comp_hook.c
-    ui_helpers.c)
+    ui_helpers.c
+    images/ui_img_wallpaper_indigo_mist_soft_dark_png.c)
 
 add_library(ui ${SOURCES})

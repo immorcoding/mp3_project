@@ -18,4 +18,4 @@ Platform_StatusTypeDef Platform_Audio_Transmit(const uint16_t *data, uint16_t si
 
 Platform_StatusTypeDef Platform_Audio_Init(void);
 
-#endif // PLATFORM_AUDIO_H
+#endif /* PLATFORM_AUDIO_H */

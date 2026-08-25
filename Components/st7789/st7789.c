@@ -17,7 +17,7 @@
 
 /**
  * @brief ST7789 纯色填充使用的静态 RGB565 串行数据块。
- * @note  位于静态存储期，避免在 LCD Task 的有限栈中创建大数组。当前 Device
+ * @note  位于静态存储期，避免在 GUI Task 的有限栈中创建大数组。当前 Device
  *        不提供多任务并发保护；同一实例由 Platform LCD 的单一调用上下文串行使用。
  */
 static uint8_t st7789_fill_buffer[ST7789_FILL_BUFFER_PIXELS * 2u];

@@ -170,7 +170,7 @@ HAL Handle 和 GPIO 细节的显示诊断或绘制语义。当前阶段已完成
 
 示例：
 
-> LCD Task 请求读取显示 ID 时，只调用平台 LCD；SPI1 和三根控制线的具体时序仍由下层承担。
+> GUI Service 请求读取显示 ID 时，只调用平台 LCD；SPI1 和三根控制线的具体时序仍由下层承担。
 
 ## 平台触摸（Platform Touch）
 

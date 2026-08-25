@@ -15,4 +15,4 @@
 Platform_StatusTypeDef Platform_Temp_Init(void);
 Platform_StatusTypeDef Platform_Temp_Read(int32_t *temperature_mC);
 
-#endif // PLATFORM_TEMP_H
+#endif /* PLATFORM_TEMP_H */

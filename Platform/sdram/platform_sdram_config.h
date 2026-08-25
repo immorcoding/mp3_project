@@ -23,7 +23,7 @@
 /** @brief JEDEC 初始化阶段执行的 AUTO REFRESH 次数。 */
 #define PLATFORM_SDRAM_INITIAL_AUTO_REFRESH_COUNT  (8UL)
 
-/** @brief FMC 刷新计数：135 MHz SDRAM 时钟对应 64 ms / 8192 行刷新要求。 */
+/** @brief FMC 刷新计数：130 MHz SDRAM 时钟对应 64 ms / 8192 行刷新要求。 */
 #define PLATFORM_SDRAM_REFRESH_RATE                (995UL)
 
 /** @brief 模式寄存器：Burst 4、顺序寻址、CAS 3、单位置写突发。 */

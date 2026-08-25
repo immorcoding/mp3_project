@@ -1,6 +1,6 @@
 # 工程分层、依赖与装配标准
 
-> 适用工程：`version0.2.3` 及后续版本
+> 适用工程：`version0.3.1` 及后续版本
 > 状态：当前工程的规范性架构文档  
 > 目的：避免同一类模块在后续扩展时使用不同的分层、命名和装配方式
 
@@ -420,8 +420,9 @@ SDMMC 仍保留各自的强类型 Interface，不能收敛为 `IRQ_ID + void *` 
 SPI LCD DMA 的当前路径为：
 
 ```text
-LCD Task 填充其拥有的 SDRAM 缓冲区
-  -> Platform_LCD_StartWrite()
+GUI Task 调用 Service_GUI_Process()
+  -> LVGL v8 渲染到 GUI Service 持有的 SDRAM 双绘制缓冲
+  -> GUI Service flush callback 调用 Platform_LCD_StartWrite()
   -> ST7789 Device (CASET/RASET/RAMWR，保持 CS)
   -> STM32 HAL ST7789 SPI Adapter (Clean Cache、DMA 分块)
   -> DMA1 Stream0 IRQ -> HAL_DMA_IRQHandler()
@@ -430,14 +431,14 @@ LCD Task 填充其拥有的 SDRAM 缓冲区
   -> Adapter 续发下一块或发布最终结果
   -> ST7789 Device (释放 CS、恢复 READY)
   -> Platform LCD 转发强类型事件
-  -> LCD Task callback (FromISR 任务通知)
-  -> LCD Task 普通上下文处理结果
+  -> GUI Service callback（FromISR：lv_disp_flush_ready() + 任务通知）
+  -> GUI Task 中 LVGL wait callback 结束等待并继续处理
 ```
 
 DMA Stream TC 只表示 DMA 已把数据交给 SPI FIFO，不能作为本次 RAMWR 的最终完成；必须等待
 SPI EOT，才可安全续发下一块或释放 CS。当前只有一个 SPI1 异步使用者，STM32 HAL ST7789 SPI
 Adapter 可直接注册该 Handle 的回调；第二个真实异步使用者出现后，才按 Handle 提取强类型 SPI
-IRQ 分发 Module。任务通知索引属于每个 Task，LCD Task 可独立复用索引 0，不与 Storage Task 冲突。
+IRQ 分发 Module。任务通知索引属于每个 Task，GUI Task 可独立复用索引 0，不与 Storage Task 冲突。
 
 ISR 禁止：
 

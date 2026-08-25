@@ -35,7 +35,6 @@ void storage_task(void *handle)
     (void)handle;
     task_handle = xTaskGetCurrentTaskHandle();
     storage_sd_init(task_handle);
-    // storage_sd_format_and_mount();
 
 #if STORAGE_SDRAM_DIAGNOSTIC_ENABLE
     storage_sdram_diagnostic_run();

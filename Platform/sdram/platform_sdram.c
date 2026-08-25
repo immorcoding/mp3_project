@@ -320,7 +320,7 @@ static bool platform_sdram_test_full_pattern(Platform_SDRAM_DiagnosticsTypeDef *
   * @retval PLATFORM_SDRAM_OK 初始化完成或此前已经完成。
   * @retval PLATFORM_SDRAM_HAL_ERROR FMC 命令或刷新率配置失败。
   * @note   两种器件均为 4 Meg × 16 × 4 Bank、8192 行/64 ms 的 SDR SDRAM；当前
-  *         135 MHz、CAS 3、Burst 4 的共用时序已按较慢的 AS4 -7 等级留出裕量。
+  *         130 MHz、CAS 3、Burst 4 的共用时序已按较慢的 AS4 -7 等级留出裕量。
   *         CubeMX 的 MX_FMC_Init() 只配置 FMC 控制器和引脚；本函数负责使 SDRAM
   *         离开上电未知状态。它在 Platform_Init() 中、任务创建前调用。
   */

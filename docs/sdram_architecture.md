@@ -10,8 +10,9 @@ CubeMX 的 FMC SDRAM Bank1 参数为：16-bit、4 Bank、Row 13、Column 9、CAS
 Read Burst 开启、Read Pipe Delay 1，以及 `2/10/6/9/3/3/3` 的时序字段。该组合按 AS4 -7
 较慢时序等级取整，同时满足 MT48 -6A 的要求。
 
-FMC 内核时钟来自 PLL2，为 270 MHz；`SDClockPeriod = 2`，故 SDRAM 时钟为 135 MHz。
-初始化刷新计数使用 1034，对应 64 ms 内 8192 行刷新。
+FMC 内核时钟来自 PLL2：`25 MHz / 5 × 104 / 2 = 260 MHz`；`SDClockPeriod = 2`，故
+SDRAM 时钟为 130 MHz。初始化刷新计数为 995，即
+`floor(130 MHz × 64 ms / 8192) - 20`，满足 64 ms 内 8192 行刷新要求并预留控制器裕量。
 
 ## 所有权与初始化
 
@@ -22,7 +23,7 @@ FMC 内核时钟来自 PLL2，为 270 MHz；`SDClockPeriod = 2`，故 SDRAM 时�
 时，NOP 本身已覆盖 200 µs，循环开销只会增加等待时间，满足两种器件中 AS4 所需的较长稳定时间。
 
 进入 `main()` 后，CubeMX 的 `MX_FMC_Init()` 切换 FMC 到 PLL2；随后 `Platform/sdram` 借用
-`hsdram1`，在 `Platform_Init()` 的最开始按最终 135 MHz 参数执行：CLK ENABLE → 等待 1 ms →
+`hsdram1`，在 `Platform_Init()` 的最开始按最终 130 MHz 参数执行：CLK ENABLE → 等待 1 ms →
 PRECHARGE ALL → 8 次 AUTO REFRESH → LOAD MODE REGISTER → Program Refresh Rate。早期与正式
 初始化之间的 SDRAM 内容不作为有效数据，因此 `NOLOAD` 缓冲区必须由其拥有者在正式初始化后主动填充。
 
@@ -40,7 +41,7 @@ FMC/HAL 细节仍属于 Platform。顺序为：
 4. 使用 Cortex-M7 周期计数器 Adapter 统计写入提交和冷读校验吞吐。
 
 写入测速包含 Clean，因此统计的是 CPU 数据提交到外部 SDRAM 的时间；读取前失效 D-Cache，防止
-Cache 命中被错误当成 SDRAM 带宽。DWT 运行在 480 MHz Cortex-M7 核心时钟，而不是 135 MHz SDRAM 时钟。
+Cache 命中被错误当成 SDRAM 带宽。DWT 运行在 480 MHz Cortex-M7 核心时钟，而不是 130 MHz SDRAM 时钟。
 
 上述 D-Cache 操作统一通过 `Adapters/cortex/cache` 的通用维护 Interface 执行；DWT 周期数和
 `SystemCoreClock` 统一通过 `Adapters/cortex/cycle_counter` 读取。Platform SDRAM 不直接调用 CMSIS
