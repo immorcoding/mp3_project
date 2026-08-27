@@ -190,9 +190,9 @@ void ui_Main_screen_init(void)
     lv_obj_set_align(ui_MusicModeTabs, LV_ALIGN_TOP_MID);
     lv_obj_clear_flag(ui_MusicModeTabs, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_radius(ui_MusicModeTabs, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_MusicModeTabs, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_MusicModeTabs, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_MusicModeTabs, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_color(ui_MusicModeTabs, lv_color_hex(0x888888), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_color(ui_MusicModeTabs, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_opa(ui_MusicModeTabs, 20, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(ui_MusicModeTabs, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_side(ui_MusicModeTabs, LV_BORDER_SIDE_FULL, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -201,9 +201,9 @@ void ui_Main_screen_init(void)
                                            LV_STYLE_TEXT_COLOR, _ui_theme_color_White1);
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_MAIN | LV_STATE_DEFAULT,
                                            LV_STYLE_TEXT_OPA, _ui_theme_alpha_White1);
-    lv_obj_set_style_bg_color(lv_tabview_get_tab_btns(ui_MusicModeTabs), lv_color_hex(0xFFFFFF),
+    lv_obj_set_style_bg_color(lv_tabview_get_tab_btns(ui_MusicModeTabs), lv_color_hex(0xE7E7E7),
                               LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(lv_tabview_get_tab_btns(ui_MusicModeTabs), 0,  LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(lv_tabview_get_tab_btns(ui_MusicModeTabs), 20,  LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_ITEMS | LV_STATE_DEFAULT,
                                            LV_STYLE_TEXT_COLOR, _ui_theme_color_White1);
@@ -268,13 +268,13 @@ void ui_Main_screen_init(void)
     if(lv_slider_get_mode(ui_MusicPlayingSlider) == LV_SLIDER_MODE_RANGE) lv_slider_set_left_value(ui_MusicPlayingSlider, 0,
                                                                                                        LV_ANIM_OFF);
     lv_obj_set_width(ui_MusicPlayingSlider, lv_pct(90));
-    lv_obj_set_height(ui_MusicPlayingSlider, lv_pct(4));
+    lv_obj_set_height(ui_MusicPlayingSlider, lv_pct(7));
     lv_obj_set_x(ui_MusicPlayingSlider, lv_pct(0));
     lv_obj_set_y(ui_MusicPlayingSlider, lv_pct(10));
     lv_obj_set_align(ui_MusicPlayingSlider, LV_ALIGN_TOP_MID);
     lv_obj_set_style_radius(ui_MusicPlayingSlider, 10000, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_MusicPlayingSlider, lv_color_hex(0x404040), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_MusicPlayingSlider, 50, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_MusicPlayingSlider, 70, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_set_style_radius(ui_MusicPlayingSlider, 1000, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(ui_MusicPlayingSlider, LV_PART_INDICATOR | LV_STATE_DEFAULT, LV_STYLE_BG_COLOR,
@@ -285,19 +285,15 @@ void ui_Main_screen_init(void)
     lv_obj_set_style_radius(ui_MusicPlayingSlider, 1000, LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_MusicPlayingSlider, lv_color_hex(0x00B0DE), LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_MusicPlayingSlider, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_left(ui_MusicPlayingSlider, 2, LV_PART_KNOB | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_right(ui_MusicPlayingSlider, 2, LV_PART_KNOB | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_top(ui_MusicPlayingSlider, 2, LV_PART_KNOB | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_bottom(ui_MusicPlayingSlider, 2, LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(ui_MusicPlayingSlider, 1000, LV_PART_KNOB | LV_STATE_PRESSED);
     ui_object_set_themeable_style_property(ui_MusicPlayingSlider, LV_PART_KNOB | LV_STATE_PRESSED, LV_STYLE_BG_COLOR,
                                            _ui_theme_color_Blue1);
     ui_object_set_themeable_style_property(ui_MusicPlayingSlider, LV_PART_KNOB | LV_STATE_PRESSED, LV_STYLE_BG_OPA,
                                            _ui_theme_alpha_Blue1);
-    lv_obj_set_style_pad_left(ui_MusicPlayingSlider, 2, LV_PART_KNOB | LV_STATE_PRESSED);
-    lv_obj_set_style_pad_right(ui_MusicPlayingSlider, 2, LV_PART_KNOB | LV_STATE_PRESSED);
-    lv_obj_set_style_pad_top(ui_MusicPlayingSlider, 2, LV_PART_KNOB | LV_STATE_PRESSED);
-    lv_obj_set_style_pad_bottom(ui_MusicPlayingSlider, 2, LV_PART_KNOB | LV_STATE_PRESSED);
+    lv_obj_set_style_pad_left(ui_MusicPlayingSlider, 4, LV_PART_KNOB | LV_STATE_PRESSED);
+    lv_obj_set_style_pad_right(ui_MusicPlayingSlider, 4, LV_PART_KNOB | LV_STATE_PRESSED);
+    lv_obj_set_style_pad_top(ui_MusicPlayingSlider, 4, LV_PART_KNOB | LV_STATE_PRESSED);
+    lv_obj_set_style_pad_bottom(ui_MusicPlayingSlider, 4, LV_PART_KNOB | LV_STATE_PRESSED);
 
     ui_MusicPreviousButton = lv_btn_create(ui_MusicPlayerControlContainer);
     lv_obj_set_width(ui_MusicPreviousButton, 35);
@@ -308,11 +304,11 @@ void ui_Main_screen_init(void)
     lv_obj_add_flag(ui_MusicPreviousButton, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
     lv_obj_clear_flag(ui_MusicPreviousButton, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_radius(ui_MusicPreviousButton, 10000, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_MusicPreviousButton, lv_color_hex(0x404040), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_MusicPreviousButton, 20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_MusicPreviousButton, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_MusicPreviousButton, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_transform_zoom(ui_MusicPreviousButton, 256, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_MusicPreviousButton, lv_color_hex(0x404040), LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(ui_MusicPreviousButton, 30, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(ui_MusicPreviousButton, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(ui_MusicPreviousButton, 80, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_transform_zoom(ui_MusicPreviousButton, 256, LV_PART_MAIN | LV_STATE_PRESSED);
 
     ui_MusicPreviousIcon = lv_label_create(ui_MusicPreviousButton);
@@ -336,11 +332,11 @@ void ui_Main_screen_init(void)
     lv_obj_add_flag(ui_MusicNextButton, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
     lv_obj_clear_flag(ui_MusicNextButton, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_radius(ui_MusicNextButton, 10000, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_MusicNextButton, lv_color_hex(0x404040), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_MusicNextButton, 20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_MusicNextButton, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_MusicNextButton, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_transform_zoom(ui_MusicNextButton, 256, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_MusicNextButton, lv_color_hex(0x404040), LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(ui_MusicNextButton, 30, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(ui_MusicNextButton, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(ui_MusicNextButton, 80, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_transform_zoom(ui_MusicNextButton, 256, LV_PART_MAIN | LV_STATE_PRESSED);
 
     ui_MusicNextIcon = lv_label_create(ui_MusicNextButton);
@@ -364,11 +360,11 @@ void ui_Main_screen_init(void)
     lv_obj_add_flag(ui_MusicPlayPauseButton, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
     lv_obj_clear_flag(ui_MusicPlayPauseButton, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_radius(ui_MusicPlayPauseButton, 10000, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_MusicPlayPauseButton, lv_color_hex(0x404040), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_MusicPlayPauseButton, 20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_MusicPlayPauseButton, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_MusicPlayPauseButton, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_transform_zoom(ui_MusicPlayPauseButton, 256, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_MusicPlayPauseButton, lv_color_hex(0x404040), LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(ui_MusicPlayPauseButton, 30, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(ui_MusicPlayPauseButton, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(ui_MusicPlayPauseButton, 80, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_transform_zoom(ui_MusicPlayPauseButton, 256, LV_PART_MAIN | LV_STATE_PRESSED);
 
     ui_MusicPlayPauseIcon = lv_label_create(ui_MusicPlayPauseButton);

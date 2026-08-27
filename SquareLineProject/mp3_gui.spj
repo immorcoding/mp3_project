@@ -5445,9 +5445,9 @@
                                     "flags": 4096,
                                     "strtype": "_style/Bg_Color",
                                     "intarray": [
-                                      255,
-                                      255,
-                                      255,
+                                      231,
+                                      231,
+                                      231,
                                       0
                                     ],
                                     "InheritedType": 7
@@ -5457,9 +5457,9 @@
                                     "flags": 4096,
                                     "strtype": "_style/Border_Color",
                                     "intarray": [
-                                      136,
-                                      136,
-                                      136,
+                                      231,
+                                      231,
+                                      231,
                                       20
                                     ],
                                     "InheritedType": 7
@@ -5512,10 +5512,10 @@
                                     "flags": 4096,
                                     "strtype": "_style/Bg_Color",
                                     "intarray": [
-                                      255,
-                                      255,
-                                      255,
-                                      0
+                                      231,
+                                      231,
+                                      231,
+                                      20
                                     ],
                                     "InheritedType": 7
                                   }
@@ -5691,7 +5691,7 @@
                                 "strtype": "OBJECT/Size",
                                 "intarray": [
                                   90,
-                                  4
+                                  7
                                 ],
                                 "InheritedType": 7
                               },
@@ -5801,7 +5801,7 @@
                                           64,
                                           64,
                                           64,
-                                          50
+                                          70
                                         ],
                                         "InheritedType": 7
                                       }
@@ -5876,18 +5876,6 @@
                                           0
                                         ],
                                         "InheritedType": 7
-                                      },
-                                      {
-                                        "nid": 11110,
-                                        "flags": 4096,
-                                        "strtype": "_style/Padding",
-                                        "intarray": [
-                                          2,
-                                          2,
-                                          2,
-                                          2
-                                        ],
-                                        "InheritedType": 7
                                       }
                                     ],
                                     "InheritedType": 1
@@ -5922,10 +5910,10 @@
                                         "flags": 4096,
                                         "strtype": "_style/Padding",
                                         "intarray": [
-                                          2,
-                                          2,
-                                          2,
-                                          2
+                                          4,
+                                          4,
+                                          4,
+                                          4
                                         ],
                                         "InheritedType": 7
                                       }
@@ -6247,10 +6235,10 @@
                                         "flags": 4096,
                                         "strtype": "_style/Bg_Color",
                                         "intarray": [
-                                          64,
-                                          64,
-                                          64,
-                                          20
+                                          231,
+                                          231,
+                                          231,
+                                          40
                                         ],
                                         "InheritedType": 7
                                       },
@@ -6273,10 +6261,10 @@
                                         "flags": 4096,
                                         "strtype": "_style/Bg_Color",
                                         "intarray": [
-                                          64,
-                                          64,
-                                          64,
-                                          30
+                                          231,
+                                          231,
+                                          231,
+                                          80
                                         ],
                                         "InheritedType": 7
                                       },
@@ -6603,10 +6591,10 @@
                                         "flags": 4096,
                                         "strtype": "_style/Bg_Color",
                                         "intarray": [
-                                          64,
-                                          64,
-                                          64,
-                                          20
+                                          231,
+                                          231,
+                                          231,
+                                          40
                                         ],
                                         "InheritedType": 7
                                       },
@@ -6629,10 +6617,10 @@
                                         "flags": 4096,
                                         "strtype": "_style/Bg_Color",
                                         "intarray": [
-                                          64,
-                                          64,
-                                          64,
-                                          30
+                                          231,
+                                          231,
+                                          231,
+                                          80
                                         ],
                                         "InheritedType": 7
                                       },
@@ -6960,10 +6948,10 @@
                                         "flags": 4096,
                                         "strtype": "_style/Bg_Color",
                                         "intarray": [
-                                          64,
-                                          64,
-                                          64,
-                                          20
+                                          231,
+                                          231,
+                                          231,
+                                          40
                                         ],
                                         "InheritedType": 7
                                       },
@@ -6986,10 +6974,10 @@
                                         "flags": 4096,
                                         "strtype": "_style/Bg_Color",
                                         "intarray": [
-                                          64,
-                                          64,
-                                          64,
-                                          30
+                                          231,
+                                          231,
+                                          231,
+                                          80
                                         ],
                                         "InheritedType": 7
                                       },
@@ -8714,7 +8702,7 @@
     "separate_screen_save": false,
     "hierarchy_state_save": false,
     "reverse_event_order": false,
-    "backup_cnt": 502,
+    "backup_cnt": 530,
     "autosave_cnt": 0,
     "group_color_cnt": 0,
     "imagebytearrayprefix": "",
