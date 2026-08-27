@@ -5,8 +5,9 @@
 ## 公开 Interface
 
 - `Platform_Touch_Init()`：绑定当前板的 I2C2/TP_RST Context，执行一次启动初始化并确认 I2C 可访问；
+- `Platform_Touch_IsAvailable()`：查询触摸是否仍可读取；该查询不会访问 I2C；
 - `Platform_Touch_ReadID()`：读取当前控制器的原始 Chip ID。
-- `Platform_Touch_ReadRawPoint()`：读取第一触点的按下状态和原始 X/Y；无触摸时返回 `PLATFORM_OK` 且 `IsPressed` 为 false。
+- `Platform_Touch_ReadRawPoint()`：读取第一触点的按下状态和原始 X/Y；无触摸时返回 `PLATFORM_OK` 且 `IsPressed` 为 false。初始化失败或此前读点失败时立即返回 `PLATFORM_TOUCH_ERROR`，不再访问 I2C。
 
 ## 编译期依赖与装配
 
@@ -16,7 +17,7 @@
 
 ## 运行时请求与事件路径
 
-`Platform_Init()` 在 LCD 初始化完成后、FreeRTOS 调度器启动前调用 `Platform_Touch_Init()`；Platform 向下调用 FT6X36 Device，Device 经已绑定 STM32 HAL Adapter 完成 TP_RST 时序和 I2C2 地址探测。运行阶段，GUI Service 的 LVGL 输入回调在 GUI Task 普通上下文调用 `Platform_Touch_ReadRawPoint()`。`TP_IRQ` 只保留 CubeMX EXTI 配置，当前不注册回调。
+`Platform_Init()` 在 LCD 初始化完成后、FreeRTOS 调度器启动前调用 `Platform_Touch_Init()`；Platform 向下调用 FT6X36 Device，Device 经已绑定 STM32 HAL Adapter 完成 TP_RST 时序和 I2C2 地址探测。运行阶段，GUI Service 的 LVGL 输入回调先检查 `Platform_Touch_IsAvailable()`，仅在可用时才调用 `Platform_Touch_ReadRawPoint()`。首次读取失败后 Platform 把能力切为不可用；后续 GUI 采样只报告释放、不再触发 I2C 访问。`TP_IRQ` 只保留 CubeMX EXTI 配置，当前不注册回调。
 
 ## 禁止依赖与约束
 

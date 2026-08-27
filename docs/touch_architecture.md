@@ -83,17 +83,16 @@ GUI Task
   → Service_GUI_Process()
   → lv_timer_handler()
   → LVGL Pointer read_cb
-  → Platform_Touch_ReadRawPoint()
-  → FT6X36_ReadRawPoint()
-  → MemRead(0x38, 0x02, 5 bytes)
+  → Platform_Touch_IsAvailable()
+  ├─ false：向 LVGL 报告 RELEASED，不访问 I2C
+  └─ true：Platform_Touch_ReadRawPoint()
+             → FT6X36_ReadRawPoint()
+             → MemRead(0x38, 0x02, 5 bytes)
 ```
 
 其中 `0x38` 始终是 Device/Platform 中表达的 7-bit 地址。只有 STM32 HAL Adapter 调用 `HAL_I2C_IsDeviceReady()` 或 `HAL_I2C_Mem_Read()` 前才执行左移一位转换。I2C 读取失败时 GUI Service 向 LVGL 报告释放，避免界面永久保留上一次按下状态；Component 同时记录失败语义，需在下一次系统初始化时重新建立通信。
 
-当前 `Platform_Touch_Init()` 失败虽然不会阻止 APP 启动，但 GUI Service 仍会注册 Pointer 输入并继续轮询
-`Platform_Touch_ReadRawPoint()`；因此它不是一个已完成的“禁用输入”能力状态。触摸模组缺失或 I2C
-持续故障时，轮询和错误日志仍会发生。将此状态收敛为 Platform Touch 的稳定可用性 Interface 是后续
-代码审查项；在此之前，不应把启动日志中的“touch input disabled”理解为已停止 I2C 访问。
+`Platform_Touch_IsAvailable()` 是 Platform Touch 的稳定可用性 Interface：启动初始化成功后为 true；初始化失败或一次实际读点失败后为 false。该查询本身不访问 I2C。GUI Service 的 Pointer 回调每次先查询它；不可用时持续向 LVGL 报告释放，不再调用 `Platform_Touch_ReadRawPoint()`。Platform 的读点 Interface 也会在不可用时短路返回，作为第二层保护，确保任意上层调用者不会在触摸缺失或通信故障后反复占用 I2C 或重复记录同一错误。
 
 ## 4. TP_IRQ 的当前状态与后续演进
 

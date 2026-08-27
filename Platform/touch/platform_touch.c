@@ -38,6 +38,9 @@ static FT6X36_I2C_STM32HALAdapterTypeDef hplatform_touch_adapter = {
     .TimeoutMs = PLATFORM_TOUCH_I2C_TIMEOUT_MS
 };
 
+/* 仅在启动与 GUI Task 中读写；false 表示不得再进入触摸 I2C 访问路径。 */
+static bool platform_touch_available;
+
 /**
   * @brief  初始化当前 PCB 的 FT6X36 并确认 I2C2 通信可用。
   * @retval PLATFORM_OK 触摸控制器已完成启动初始化且可读取寄存器。
@@ -49,6 +52,9 @@ static FT6X36_I2C_STM32HALAdapterTypeDef hplatform_touch_adapter = {
   */
 Platform_StatusTypeDef Platform_Touch_Init(void)
 {
+    /* 重新初始化失败时，不能泄漏上一次成功初始化留下的可用状态。 */
+    platform_touch_available = false;
+
     if (FT6X36_I2C_STM32HALAdapter_Bind(&hplatform_touch,
                                          &hplatform_touch_adapter) != FT6X36_OK)
     {
@@ -66,7 +72,20 @@ Platform_StatusTypeDef Platform_Touch_Init(void)
         return PLATFORM_TOUCH_ERROR;
     }
 
+    platform_touch_available = true;
     return PLATFORM_OK;
+}
+
+/**
+  * @brief  查询当前触摸硬件是否仍可供上层读取。
+  * @retval true 最近一次初始化成功且未发生读取失败。
+  * @retval false 初始化失败，或读取触点时已经发生通信失败。
+  * @note   该查询不访问 I2C。当前只由启动阶段和唯一 GUI Task 使用，故无需额外
+  *         同步；未来若由多个 Task 共享触摸能力，应重新定义状态并发规则。
+  */
+bool Platform_Touch_IsAvailable(void)
+{
+    return platform_touch_available;
 }
 
 /**
@@ -111,8 +130,15 @@ Platform_StatusTypeDef Platform_Touch_ReadRawPoint(
         return PLATFORM_TOUCH_ERROR;
     }
 
+    if (!platform_touch_available)
+    {
+        return PLATFORM_TOUCH_ERROR;
+    }
+
     if (FT6X36_ReadRawPoint(&hplatform_touch, &raw_point) != FT6X36_OK)
     {
+        /* 失败后的 Device 已不再 READY，后续轮询既无意义也会反复占用 I2C。 */
+        platform_touch_available = false;
         (void)LOG_Printf(LOG_LEVEL_ERROR,
                          "TOUCH",
                          "Touch point read failed: error=%u, port=%u, reg=0x%02X.",

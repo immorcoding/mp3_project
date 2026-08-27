@@ -62,6 +62,12 @@ static void service_gui_touch_read_callback(
     (void)indev_drv;
     data->state = LV_INDEV_STATE_RELEASED;
 
+    /* 触摸初始化或上一次读取失败后，不再触发 I2C 轮询。 */
+    if (!Platform_Touch_IsAvailable())
+    {
+        return;
+    }
+
     if (Platform_Touch_ReadRawPoint(&raw_point) != PLATFORM_OK)
     {
         return;

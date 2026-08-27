@@ -22,6 +22,7 @@ typedef struct
 } Platform_Touch_RawPointTypeDef;
 
 Platform_StatusTypeDef Platform_Touch_Init(void);
+bool Platform_Touch_IsAvailable(void);
 Platform_StatusTypeDef Platform_Touch_ReadID(uint8_t *chip_id);
 Platform_StatusTypeDef Platform_Touch_ReadRawPoint(
     Platform_Touch_RawPointTypeDef *point);

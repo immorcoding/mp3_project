@@ -41,8 +41,10 @@ GUI Task
 
 ```text
 LVGL Pointer read_cb
-  -> Platform_Touch_ReadRawPoint()
-  -> FT6X36 Device / I2C Adapter
+  -> Platform_Touch_IsAvailable()
+  -> 可用：Platform_Touch_ReadRawPoint()
+       -> FT6X36 Device / I2C Adapter
+  -> 不可用：向 LVGL 报告 RELEASED，不访问 I2C
 ```
 
 触摸方向、镜像或校准属于 GUI 语义，只能在本 Module 的 `read_cb` 中处理，不能下沉到 Platform Touch。
