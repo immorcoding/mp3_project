@@ -14,6 +14,7 @@
 #include "Service/gui/gui_service.h"
 #include "Service/gui/boot/gui_service_boot.h"
 #include "Service/gui/gui_service_config.h"
+#include "Service/gui/main/gui_service_main.h"
 
 #include <stdint.h>
 
@@ -159,6 +160,8 @@ static void service_gui_flush_wait_callback(
  * @retval SERVICE_OK 全部 LVGL Driver、LCD 最终回调、Pointer 输入和 Boot 资源已就绪。
  * @retval SERVICE_BUSY GUI 已初始化，或 Platform LCD 正在使用其唯一最终回调。
  * @retval SERVICE_ERROR 显示、输入或启动视觉资源的注册/生成失败。
+ * @retval SERVICE_INVALID_PARAM 壁纸资源不满足当前 Canvas 视觉处理约束。
+ * @retval SERVICE_NOT_READY GUI 生成对象或内部 Canvas 尚未就绪。
  * @note   只能由 GUI Task 调用一次。当前 GUI Task 将任何非 SERVICE_OK 视为致命
  *         初始化故障并进入 Error_Handler()；本 Module 尚未提供失败后的回滚或重试。
  */
@@ -220,6 +223,14 @@ Service_StatusTypeDef Service_GUI_Init(void)
 
     service_gui_last_tick = xTaskGetTickCount();
     ui_init();
+
+    gui_status = service_gui_main_prepare_background(
+        &ui_img_wallpaper_indigo_mist_soft_dark_png);
+
+    if (gui_status != SERVICE_OK)
+    {
+        return gui_status;
+    }
 
     gui_status = service_gui_boot_prepare_background(
         &ui_img_wallpaper_indigo_mist_soft_dark_png);

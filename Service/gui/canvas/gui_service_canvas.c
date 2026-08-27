@@ -36,10 +36,18 @@ static uint8_t service_gui_effect_canvas_buffer[
 static lv_obj_t *service_gui_canvas;
 
 /**
+ * @brief 面向调用方的完整模糊图描述符。
+ * @note LVGL v8 的 lv_canvas_set_buffer() 不会维护 Canvas 内部描述符的
+ *       data_size。此处从 Canvas 描述符复制格式、尺寸和数据地址后补齐该
+ *       字段，保证它可作为普通 lv_img_dsc_t 传递给局部合成器。
+ */
+static lv_img_dsc_t service_gui_effect_blurred_image;
+
+/**
  * @brief 使用共享 Canvas 生成一张全屏图片的模糊副本。
  * @param source 需要模糊的全屏真彩图片描述符。
  * @param blur_radius 横向和纵向模糊半径，必须非零。
- * @param blurred_image 返回共享 Canvas 的图片描述符。
+ * @param blurred_image 返回带完整元数据的共享 Canvas 图片描述符。
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_INVALID_PARAM 图片尺寸、格式或数据大小不满足当前原型约束。
  * @retval SERVICE_NOT_READY LVGL Canvas 对象尚不可用。
@@ -115,7 +123,10 @@ Service_StatusTypeDef service_gui_canvas_blur_image(
         NULL,
         blur_radius);
 
-    *blurred_image = lv_canvas_get_img(service_gui_canvas);
+    service_gui_effect_blurred_image = *lv_canvas_get_img(service_gui_canvas);
+    service_gui_effect_blurred_image.data_size = required_bytes;
+
+    *blurred_image = &service_gui_effect_blurred_image;
     lv_img_cache_invalidate_src(*blurred_image);
 
     return SERVICE_OK;

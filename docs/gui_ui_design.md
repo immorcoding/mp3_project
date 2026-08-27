@@ -87,7 +87,7 @@ Lock Screen
 
 首版正式采用**系统级静态壁纸图**：壁纸目标规格为 `240 x 320` 的全屏资源，先在图像工具中以深蓝到靛紫底色叠加三处大范围、低对比的蓝紫模糊光团，再导入 SquareLine。当前选中的 `Indigo Mist Soft Dark` 含少量半透明像素，因此导出为带 Alpha 的资源；其余技术细节和后续不透明化条件见第 10 节。Image Dither 是否启用及其强度以 RGB565 真机观感为准。壁纸图只承担背景雾感，不烘焙固定信息卡；卡片仍由 SquareLine 组件叠加，以便页面内容和布局独立调整。
 
-普通应用内容页卡片的“毛玻璃”只模拟为半透明深色底、弱描边与上/左侧更亮的细边，不使用运行时背景模糊。这样可保留玻璃质感，同时避免 RGB565 色带、运行时软件模糊和固定背景与组件位置耦合的问题。`Boot` 的全屏壁纸模糊是第 10.3 节定义的独立启动视觉效果，不属于普通卡片样式。
+普通应用内容页的大型卡片首版仍只模拟为半透明深色底、弱描边与上/左侧更亮的细边，不使用运行时背景模糊。`MusicModeTabs` 的标题栏和完整播放器的圆形控制按钮是已确认的例外：它们使用第 10.5.1 节定义的运行时局部毛玻璃。这样把软件模糊限制在少量小区域，既保留玻璃质感，也避免将整页所有卡片都变为高成本动态模糊。`Boot` 的全屏壁纸模糊是第 10.3 节定义的独立启动视觉效果，不属于普通卡片样式。
 
 壁纸是系统级外观：Lock Screen 与 Main Screen 使用同一个当前选中壁纸；MusicPage、BooksPage、SettingsPage 通过透明背景露出 Main 的壁纸。首版不做随机壁纸、动态壁纸或每帧变化的渐变。
 
@@ -429,7 +429,7 @@ Main
 └─ MainPagerDots          固定的位置提示；各 Page 预留其显示区域
 ```
 
-壁纸只绑定到 `Main` 根对象。`MainPageContainer`、`MainPager`、Tabview 内容区和三张 Page 的背景、边框、阴影均保持透明，使滑动时始终露出同一张固定系统壁纸；不得为 MusicPage、BooksPage、SettingsPage 分别再设置壁纸。层级顺序为 Main 背景 → MainPageContainer / MainPager → MainPagerDots → StatusBar，确保两项固定视觉信息位于内容页上方。
+壁纸只绑定到 `Main` 根对象。`MainPageContainer`、`MainPager`、Tabview 内容区和三张 Page 的背景、边框、阴影均保持透明，使滑动时始终露出同一张固定系统壁纸；不得为 MusicPage、BooksPage、SettingsPage 分别再设置壁纸。层级顺序为 Main 背景 → MainPageContainer / MainPager → MainPagerDots → StatusBar，确保两项固定视觉信息位于内容页上方。这里的“保持透明”必须由 SquareLine 导出的 Style 实现，不能依赖 Service 在运行时删除这些导出对象的 Style。
 
 `StatusBar` 为透明的横向 Container，位于 Main 最顶端，高度约为全局规范中的 `22 px`。左侧为短时间文本；中间或偏左位置可放简短日期提示；右侧为电池轮廓与百分比。它不绘制独立卡片底色、不承载点击事件，也不与 Lock Screen 复用对象：Lock 的大时间、电量信息仍是独立的居中信息层。首版所有数值均为固定假数据。
 
@@ -442,6 +442,42 @@ Main
 `MainPagerDots` 用三颗小圆点表示 `Music / Bookshelf / Settings` 三张内容页；它是 Main 的固定子对象，位于 `MusicPlayerCard` 的上方、水平居中，而不是屏幕最底部，避免与完整播放器的控制区重叠。BooksPage 和 SettingsPage 也为这一区域预留留白，避免内容与圆点重叠。当前第一颗使用强调色，其余使用低透明次级色。实际横滑切换与圆点状态联动留待三张内容页都完成骨架后统一实现。
 
 本步骤完成后，BooksPage 和 SettingsPage 直接共用 Main 的 StatusBar 与 MainPagerDots，并复用 MusicPage 的卡片视觉语言；这两者都是实际共享的单一对象，而不是跨 Screen 的重复组件。
+
+#### 10.5.1 Music 局部毛玻璃（已实现，待真机验收）
+
+`MusicModeTabs` 和后续完整播放器的圆形控制按钮需要真实局部毛玻璃：目标区域内显示与 Main 根壁纸相同屏幕坐标的模糊像素，区域外壁纸保持清晰。该效果不能直接赋给 SquareLine 组件的背景色，也不为每个组件建立独立 Canvas。
+
+运行时实现由 `Service/gui/canvas/` 与 `Service/gui/main/` 共同负责，不修改 `GUI/`：
+
+1. 在 `Main` 的布局已计算后，从当前清晰壁纸生成一次全屏 Blur 帧。复用现有 `service_gui_effect_canvas_buffer` 与隐藏 Canvas 工作对象；该 Blur 描述符只在本次合成期间有效。
+2. `main/gui_service_main` 在 SDRAM 中长期持有一张与壁纸格式相同的 `Main` 合成背景。先完整复制清晰壁纸，再将每个玻璃区域从全屏 Blur 帧按相同屏幕坐标裁剪并覆写到该合成背景；`canvas/gui_service_canvas_compositor` 已实现矩形、圆角矩形和圆形裁剪，圆角外像素保持清晰，避免在组件圆角外留下方形模糊块。
+3. 将 `ui_Main` 根对象的 Background image 在运行时绑定为该长期合成背景。所有 SquareLine Page、Tabview 和目标控件继续保持透明或只叠加低 Alpha 的 `Gray1` 染色、`White1` 弱描边；隐藏 Canvas 始终不参与可见层级。
+
+`MusicModeTabs` 的整个可见区域（标签栏与当前 Tabpage 内容区）都是一块连续的圆角玻璃区域，不只处理标题栏。当前 `Service_GUI_Init()` 在 `ui_init()` 后调用 `service_gui_main_prepare_background()`：它先对 `ui_Main` 调用 `lv_obj_update_layout()`，再读取 `ui_MusicModeTabs` 的实际屏幕坐标及 MAIN Radius；随后以 `ui_Main` 左上角为合成背景原点换算为壁纸内坐标。三个播放器按钮也以各自导出的对象坐标建立圆形区域描述符。这样不把 SquareLine 中的相对尺寸、位置或对象名称复制成 Service 内的固定像素常量。
+
+`MusicModeTabs` 与 `MainPager` 的 LVGL 内部 Content container 不由 SquareLine 直接暴露，`main/` Module 仅将这些内部对象的背景、背景图、边框、轮廓和阴影设为透明，以消除 Simplified Theme 产生的白色内容底。`ui_Main` 的运行时 Background image 是唯一允许 Service 替换的 SquareLine 导出对象 Style，因为它承载本 Module 生成的合成壁纸。除该背景源外，所有 SquareLine 导出对象（包括 Tabview 本体、Tabpage、Button）的 Border、Shadow、Radius、背景和文字样式必须只在 SquareLine 中配置，Service 不得覆盖。
+
+为避免 Tabpage 的主题默认白底重新出现，用户必须在 SquareLine 中为 `MusicPage`、`NowPlayingTab`、`QueueTab`、`LibraryTab`、`BooksPage` 和 `SettingsPage` 的 `STYLE (MAIN)` 设置透明背景；若该对象不承担独立卡片视觉，还应将 Border、Outline 和 Shadow 设为零。`MusicModeTabs` 本体和三个播放器 Button 不在此清单内：它们应保留各自设计需要的半透明染色、弱描边、圆角或阴影，Service 会原样保留。此项配置改动后必须由用户重新导出 `GUI/`，不得手改生成代码。
+
+在实现 Music 局部毛玻璃前，用户先在 `NowPlayingTab` 中导出如下静态控制骨架：
+
+```text
+NowPlayingTab
+├─ MusicProgressSlider          透明轨道、Blue1 进度、圆形 Knob
+└─ MusicPlayerControlGroup      透明、水平布局、不滚动
+   ├─ MusicPreviousButton       圆形玻璃按钮
+   │  └─ MusicPreviousIcon      上一首符号 Label
+   ├─ MusicPlayPauseButton      圆形玻璃按钮，视觉略强
+   │  └─ MusicPlayPauseIcon     初始播放符号 Label
+   └─ MusicNextButton           圆形玻璃按钮
+      └─ MusicNextIcon          下一首符号 Label
+```
+
+`MusicProgressSlider` 位于控制按钮上方，轨道保持透明或低 Alpha `Gray1`，Indicator 使用 `Blue1`，Knob 使用圆角 `White1`。LVGL v8 的 Slider Knob 默认边长等于 Slider 较短边；SquareLine 中应通过 `STYLE (KNOB) → Paddings` 调整其大小，而非修改 Slider 本体的宽高。三个 Button 的背景使用低 Alpha `Gray1` 染色、弱 `White1` 轮廓，图标使用 `White1`；不在 SquareLine 中添加播放事件。每个图标均由 Button 的独立 Label 子对象承载并居中对齐，以便后续 Service 将 `MusicPlayPauseIcon` 的播放符号替换为暂停符号；不得用 ImageButton 或导入图标图片。`MusicPlayPauseButton` 可以相对略大或使用 `Blue1` 的弱轮廓，但不采用整块 `Blue1` 填充。项目已启用的 `lv_font_montserrat_16` 包含 LVGL 的 `PREV`、`PLAY`、`PAUSE` 与 `NEXT` 符号；用户优先从 SquareLine 的符号选择器使用它们，不新增图标图片资源。局部玻璃合成时，三个 Button 本体各自是圆角裁剪区域，外层 `MusicPlayerControlGroup` 不是毛玻璃区域。
+
+当前导出的壁纸为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，一张全屏帧约 `230400 B`。Music 合成时会同时持有共享 Canvas 工作区和一张长期 Main 合成背景，峰值约 `450 KiB`，但不随玻璃区域数量线性增长。壁纸切换、目标对象位置/尺寸/圆角改变时才重建合成背景；静态显示、文字更新和每次 `Service_GUI_Process()` 都不得重复执行模糊。未来切换到 RGB565 缓存资源后，这两帧合计约 `300 KiB`。
+
+多个 Main Page 的玻璃区域不能共用一张固定合成背景而不加管理：当前只在 Music 页面实施；BooksPage、SettingsPage 后续需要各自的合成描述符或在 MainPager 切页前重建。本阶段不在 MainPager 的滑动回调中同步重算，以免把软件模糊放入动画路径。当前可复用的私有 Canvas Interface 接收清晰图、模糊图、区域数组和调用方持有的输出缓冲；未来页面可复用裁剪算法，但仍必须各自持有页面级背景与决定重建时机。新增页面级玻璃区域前必须先经用户审校。
 
 ## 11. 原型验收标准
 

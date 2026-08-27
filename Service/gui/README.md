@@ -70,8 +70,12 @@ Service/gui/
 ├─ boot/                             仅属于启动视觉序列
 │  ├─ gui_service_boot.c / .h
 │  └─ gui_service_boot_config.h
+├─ main/                             Main Screen 的运行时视觉补充
+│  ├─ gui_service_main.c / .h / _config.h
+│  └─ README.md
 └─ canvas/                           可复用的 Canvas 离屏处理
-   └─ gui_service_canvas.c / .h
+   ├─ gui_service_canvas.c / .h
+   └─ gui_service_canvas_compositor.c / .h
 ```
 
 - `gui_service.c`：GUI Task 生命周期、LVGL 显示/输入驱动注册，以及 LCD DMA
@@ -82,9 +86,15 @@ Service/gui/
   `lv_async_call()` 延后一轮 LVGL 调度，再发起到 Lock 的 Fade；因此不会重入尚未收尾的
   前一次 Screen 切换。
 - `canvas/gui_service_canvas.c`：通用 Canvas Module。它独占可复用的 SDRAM 工作区，接收
-  调用方给定的图片和模糊半径，返回模糊图像描述符；目前被 Boot 使用，后续也可复用到
-  壁纸更新和 Settings 局部毛玻璃生成。其隐藏 Canvas 对象挂在 display top layer，因而不
-  随短生命周期的 Boot Screen 销毁。
+  调用方给定的图片和模糊半径，返回模糊图像描述符；目前被 Boot 全屏模糊与 Main 局部毛玻璃
+  依次复用，后续也可用于壁纸更新和 Settings 局部毛玻璃生成。其隐藏 Canvas 对象挂在 display
+  top layer，因而不随短生命周期的 Boot Screen 销毁。`gui_service_canvas_compositor.c` 在调用方提供的长期
+  缓冲中执行清晰/模糊帧的矩形、圆角矩形和圆形区域合成；Canvas 不拥有页面级背景。
+- `main/gui_service_main.c`：Main Screen 运行时视觉 Module。它仅补齐 SquareLine 未暴露的
+  Tabview 内部 Content container 透明 Style，读取布局后的 `MusicModeTabs` 与三颗按钮坐标，
+  并持有 Main 的长期 SDRAM 合成背景。它只为显示合成结果而替换 `ui_Main` 的运行时
+  Background image；SquareLine 导出对象的 Border、Shadow、Radius 与其他视觉 Style 不由本
+  Module 覆盖，它也不在 GUI Task 的逐帧处理路径中重新模糊或合成。
 
 `gui_service_config.h` 保存绘制缓冲行数。改变该值会同时影响 SDRAM 占用、SPI
 刷新分块数量和 LVGL 的双缓冲等待行为，必须结合显示帧率与 D-Cache 约束验证。

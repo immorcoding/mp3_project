@@ -6,6 +6,7 @@
             "request": "launch",
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "CMake: Build active preset",
+            "serverPort": "61250",
             "runEntry": "main",
             "imagesAndSymbols": [
                 {

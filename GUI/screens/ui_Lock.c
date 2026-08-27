@@ -22,6 +22,10 @@ void ui_event_Lock(lv_event_t * e)
     if(event_code == LV_EVENT_SCREEN_LOADED) {
         LockUnlockGroupBreath_Animation(ui_LockUnlockGroup, 0);
     }
+    if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP) {
+        lv_indev_wait_release(lv_indev_get_act());
+        _ui_screen_change(&ui_Main, LV_SCR_LOAD_ANIM_FADE_OUT, 800, 100, &ui_Main_screen_init);
+    }
 }
 
 void ui_event_LockUnlockGroup(lv_event_t * e)
@@ -96,6 +100,8 @@ void ui_Lock_screen_init(void)
     lv_obj_set_align(ui_LockBatteryBar, LV_ALIGN_CENTER);
     lv_obj_clear_flag(ui_LockBatteryBar, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_radius(ui_LockBatteryBar, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_LockBatteryBar, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_LockBatteryBar, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(ui_LockBatteryBar, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_OUTLINE_COLOR,
                                            _ui_theme_color_White1);
     ui_object_set_themeable_style_property(ui_LockBatteryBar, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_OUTLINE_OPA,
