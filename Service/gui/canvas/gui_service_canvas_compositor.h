@@ -33,6 +33,25 @@ typedef struct
 } Service_GUI_CanvasBlurRegionTypeDef;
 
 /**
+ * @brief 从一张完整图片中提取连续存储的矩形子图。
+ * @param source_image 输入完整图片；当前原型只支持 LV_IMG_CF_TRUE_COLOR_ALPHA。
+ * @param source_area 以 source_image 左上角为原点的闭区间裁剪区域。
+ * @param cropped_buffer 调用方持有的连续输出像素缓冲。
+ * @param cropped_buffer_size 输出缓冲大小，单位为字节。
+ * @param cropped_image 返回绑定 cropped_buffer 的子图描述符。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_INVALID_PARAM 图片、区域或输出缓冲不满足约束。
+ * @note 输出子图尺寸与 source_area 完全一致，可直接作为 LVGL 对象的
+ *       Background image；对象移动时，该图片会随对象一起绘制。
+ */
+Service_StatusTypeDef service_gui_canvas_extract_image_region(
+    const lv_img_dsc_t *source_image,
+    const lv_area_t *source_area,
+    uint8_t *cropped_buffer,
+    uint32_t cropped_buffer_size,
+    lv_img_dsc_t *cropped_image);
+
+/**
  * @brief 将清晰全屏图片和同格式模糊帧合成为长期背景图片。
  * @param clear_image 清晰图片；当前原型只支持 LV_IMG_CF_TRUE_COLOR_ALPHA。
  * @param blurred_image 同尺寸、同格式、包含完整 data_size 的模糊图片。

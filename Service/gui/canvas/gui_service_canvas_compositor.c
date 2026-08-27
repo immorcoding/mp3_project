@@ -75,6 +75,83 @@ static void service_gui_canvas_copy_rectangular_region(
 }
 
 /**
+ * @brief 从完整图片复制一个连续存储的矩形子图。
+ * @param source_image 输入完整图片。
+ * @param source_area 以输入图片左上角为原点的闭区间裁剪区域。
+ * @param cropped_buffer 调用方持有的连续输出像素缓冲。
+ * @param cropped_buffer_size 输出缓冲大小，单位为字节。
+ * @param cropped_image 返回绑定输出缓冲的子图描述符。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_INVALID_PARAM 图片、区域或输出缓冲不满足约束。
+ * @note 输出缓冲不得与输入图片像素缓冲重叠。当前调用方分别持有 Canvas 工作帧
+ *       和页面级背景，满足该约束。
+ */
+Service_StatusTypeDef service_gui_canvas_extract_image_region(
+    const lv_img_dsc_t *source_image,
+    const lv_area_t *source_area,
+    uint8_t *cropped_buffer,
+    uint32_t cropped_buffer_size,
+    lv_img_dsc_t *cropped_image)
+{
+    uint32_t pixel_size_bytes;
+    uint32_t cropped_width;
+    uint32_t cropped_height;
+    uint32_t cropped_data_size;
+    uint32_t row_index;
+
+    if (!service_gui_canvas_is_supported_image(source_image) ||
+        (source_area == NULL) ||
+        (cropped_buffer == NULL) ||
+        (cropped_image == NULL) ||
+        (source_area->x1 < 0) ||
+        (source_area->y1 < 0) ||
+        (source_area->x2 < source_area->x1) ||
+        (source_area->y2 < source_area->y1) ||
+        (source_area->x2 >= source_image->header.w) ||
+        (source_area->y2 >= source_image->header.h))
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    pixel_size_bytes =
+        (uint32_t)lv_img_cf_get_px_size(source_image->header.cf) / 8U;
+    cropped_width =
+        (uint32_t)source_area->x2 - (uint32_t)source_area->x1 + 1U;
+    cropped_height =
+        (uint32_t)source_area->y2 - (uint32_t)source_area->y1 + 1U;
+    cropped_data_size = cropped_width * cropped_height * pixel_size_bytes;
+
+    if (cropped_buffer_size < cropped_data_size)
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    for (row_index = 0U; row_index < cropped_height; row_index++)
+    {
+        const uint32_t source_offset =
+            ((((uint32_t)source_area->y1 + row_index) *
+              (uint32_t)source_image->header.w) +
+             (uint32_t)source_area->x1) *
+            pixel_size_bytes;
+        const uint32_t cropped_offset =
+            (row_index * cropped_width) * pixel_size_bytes;
+
+        memcpy(
+            &cropped_buffer[cropped_offset],
+            &source_image->data[source_offset],
+            cropped_width * pixel_size_bytes);
+    }
+
+    *cropped_image = *source_image;
+    cropped_image->header.w = cropped_width;
+    cropped_image->header.h = cropped_height;
+    cropped_image->data_size = cropped_data_size;
+    cropped_image->data = cropped_buffer;
+
+    return SERVICE_OK;
+}
+
+/**
  * @brief 判断一个像素是否处于区域短边决定直径的内接圆内。
  * @param region 圆形区域描述。
  * @param x 待判断像素的 X 坐标。

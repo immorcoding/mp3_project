@@ -91,9 +91,9 @@ Service/gui/
   top layer，因而不随短生命周期的 Boot Screen 销毁。`gui_service_canvas_compositor.c` 在调用方提供的长期
   缓冲中执行清晰/模糊帧的矩形、圆角矩形和圆形区域合成；Canvas 不拥有页面级背景。
 - `main/gui_service_main.c`：Main Screen 运行时视觉 Module。它仅补齐 SquareLine 未暴露的
-  Tabview 内部 Content container 透明 Style，读取布局后的 `MusicModeTabs` 与三颗按钮坐标，
-  并持有 Main 的长期 SDRAM 合成背景。它只为显示合成结果而替换 `ui_Main` 的运行时
-  Background image；SquareLine 导出对象的 Border、Shadow、Radius 与其他视觉 Style 不由本
+  Tabview 内部 Content container 透明 Style，读取布局后的 `MusicModeTabs` 坐标，并持有其
+  长期 SDRAM 裁剪背景。它只为显示局部毛玻璃而绑定 `ui_MusicModeTabs` 的运行时 Background
+  image；该图片会随对象平移。SquareLine 导出对象的 Border、Shadow、Radius 与其他视觉 Style 不由本
   Module 覆盖，它也不在 GUI Task 的逐帧处理路径中重新模糊或合成。
 
 `gui_service_config.h` 保存绘制缓冲行数。改变该值会同时影响 SDRAM 占用、SPI

@@ -230,6 +230,52 @@ static void test_rounded_rectangle_preserves_its_corner_pixels(void)
                   TEST_PIXEL_SIZE_BYTES) == 0);
 }
 
+static void test_extract_region_returns_contiguous_object_sized_image(void)
+{
+    const lv_area_t source_area = {
+        .x1 = 1,
+        .y1 = 1,
+        .x2 = 3,
+        .y2 = 2,
+    };
+    uint8_t cropped_pixels[3U * 2U * TEST_PIXEL_SIZE_BYTES];
+    lv_img_dsc_t cropped_image;
+    uint32_t x;
+    uint32_t y;
+
+    test_fill_source_images();
+    memset(cropped_pixels, 0, sizeof(cropped_pixels));
+
+    assert(service_gui_canvas_extract_image_region(
+               &test_blurred_image,
+               &source_area,
+               cropped_pixels,
+               sizeof(cropped_pixels),
+               &cropped_image) == SERVICE_OK);
+
+    assert(cropped_image.header.w == 3U);
+    assert(cropped_image.header.h == 2U);
+    assert(cropped_image.header.cf == LV_IMG_CF_TRUE_COLOR_ALPHA);
+    assert(cropped_image.data_size == sizeof(cropped_pixels));
+    assert(cropped_image.data == cropped_pixels);
+
+    for (y = 0U; y < cropped_image.header.h; y++)
+    {
+        for (x = 0U; x < cropped_image.header.w; x++)
+        {
+            const uint8_t *const expected = test_get_pixel(
+                test_blurred_pixels,
+                x + (uint32_t)source_area.x1,
+                y + (uint32_t)source_area.y1);
+            const uint8_t *const actual = &cropped_pixels[
+                ((y * (uint32_t)cropped_image.header.w) + x) *
+                TEST_PIXEL_SIZE_BYTES];
+
+            assert(memcmp(actual, expected, TEST_PIXEL_SIZE_BYTES) == 0);
+        }
+    }
+}
+
 static void test_out_of_bounds_region_is_rejected(void)
 {
     const Service_GUI_CanvasBlurRegionTypeDef region = {
@@ -261,6 +307,7 @@ int main(void)
     test_rectangular_region_replaces_only_its_pixels();
     test_circular_region_preserves_its_corner_pixels();
     test_rounded_rectangle_preserves_its_corner_pixels();
+    test_extract_region_returns_contiguous_object_sized_image();
     test_out_of_bounds_region_is_rejected();
 
     puts("GUI Canvas compositor tests passed.");
