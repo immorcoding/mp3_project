@@ -12,7 +12,7 @@
 #include <string.h>
 
 /**
- * @brief 判断当前首轮合成路径支持的图片描述符是否有效。
+ * @brief 判断当前 Canvas 合成与裁剪路径支持的图片描述符是否有效。
  * @param image 待校验的真彩带 Alpha 图片。
  * @return 图片可安全按像素复制时返回 true。
  */

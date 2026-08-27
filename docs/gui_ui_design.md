@@ -465,17 +465,17 @@ Main
 NowPlayingTab
 ├─ MusicProgressSlider          透明轨道、Blue1 进度、圆形 Knob
 └─ MusicPlayerControlGroup      透明、水平布局、不滚动
-   ├─ MusicPreviousButton       圆形玻璃按钮
+   ├─ MusicPreviousButton       圆形半透明控制按钮
    │  └─ MusicPreviousIcon      上一首符号 Label
-   ├─ MusicPlayPauseButton      圆形玻璃按钮，视觉略强
+   ├─ MusicPlayPauseButton      圆形半透明控制按钮，视觉略强
    │  └─ MusicPlayPauseIcon     初始播放符号 Label
-   └─ MusicNextButton           圆形玻璃按钮
+   └─ MusicNextButton           圆形半透明控制按钮
       └─ MusicNextIcon          下一首符号 Label
 ```
 
 `MusicProgressSlider` 位于控制按钮上方，轨道保持透明或低 Alpha `Gray1`，Indicator 使用 `Blue1`，Knob 使用圆角 `White1`。LVGL v8 的 Slider Knob 默认边长等于 Slider 较短边；SquareLine 中应通过 `STYLE (KNOB) → Paddings` 调整其大小，而非修改 Slider 本体的宽高。三个 Button 的背景使用低 Alpha `Gray1` 染色、弱 `White1` 轮廓，图标使用 `White1`；不在 SquareLine 中添加播放事件。每个图标均由 Button 的独立 Label 子对象承载并居中对齐，以便后续 Service 将 `MusicPlayPauseIcon` 的播放符号替换为暂停符号；不得用 ImageButton 或导入图标图片。`MusicPlayPauseButton` 可以相对略大或使用 `Blue1` 的弱轮廓，但不采用整块 `Blue1` 填充。项目已启用的 `lv_font_montserrat_16` 包含 LVGL 的 `PREV`、`PLAY`、`PAUSE` 与 `NEXT` 符号；用户优先从 SquareLine 的符号选择器使用它们，不新增图标图片资源。三个按钮与外层 `MusicPlayerControlGroup` 均不是毛玻璃区域。
 
-当前导出的壁纸为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，一张全屏帧约 `230400 B`。Music 运行时会同时持有共享 Canvas 工作区、一张 Main 长期全屏 Blur 壁纸和一张最大 `240 x 192` 的 MusicModeTabs 裁剪背景，三者峰值上限约 `585 KiB`；实际 Tabview 比该上限更小，但静态缓冲按安全上限预留。壁纸切换、目标对象位置/尺寸改变时才重新执行全屏模糊；静态显示、文字更新和每次 `Service_GUI_Process()` 都不得重复模糊。MainPager 横滑的 `LV_EVENT_SCROLL` 只更新局部裁剪图。若 SquareLine 将 MusicModeTabs 高度扩展到屏幕的 60% 以上，必须先审校并提高 `main/gui_service_main_config.h` 中的上限。未来切换到 RGB565 缓存资源后，三帧合计约 `390 KiB`。
+当前导出的壁纸为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，一张全屏帧约 `230400 B`。Music 运行时会同时持有共享 Canvas 工作区、一张 Main 长期全屏 Blur 壁纸和一张最大 `240 x 192` 的 MusicModeTabs 裁剪背景，三者峰值上限约 `585 KiB`；实际 Tabview 比该上限更小，但静态缓冲按安全上限预留。壁纸切换时才重新执行全屏模糊；静态显示、文字更新和每次 `Service_GUI_Process()` 都不得重复模糊。MainPager 横滑的 `LV_EVENT_SCROLL` 只更新局部裁剪图；SquareLine 重新导出导致对象尺寸或位置改变后，会在下一次初始化按新布局重新建立首帧裁剪。若 SquareLine 将 MusicModeTabs 高度扩展到屏幕的 60% 以上，必须先审校并提高 `main/gui_service_main_config.h` 中的上限。未来切换到 RGB565 缓存资源后，三帧合计约 `390 KiB`。
 
 多个 Main Page 的玻璃区域不能共用一张固定局部裁剪图而不加管理：当前只在 Music 页面实施；BooksPage、SettingsPage 后续需要各自的裁剪图与更新时机。MainPager 的滑动回调只会更新 MusicModeTabs，且只做从长期模糊壁纸到局部输出缓冲的像素复制，不将软件模糊放入动画路径。当前可复用的私有 Canvas Interface 接收完整模糊图、对象区域和调用方持有的输出缓冲；未来页面可复用裁剪算法，但仍必须各自持有页面级背景与决定重建时机。新增页面级玻璃区域前必须先经用户审校。
 

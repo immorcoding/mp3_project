@@ -10,8 +10,8 @@ Content container 的默认白底置为透明，并根据目标控件的真实�
 持有的裁剪帧；MainPager 横滑时，Module 从当前屏幕坐标对应的模糊壁纸区域重裁剪该帧，
 使玻璃内容持续对应其下方背景，而非带着一张静态贴图移动。除此以外，只修改 SquareLine
 无法访问的内部 Content container 的运行时 LVGL Style。除 `ui_MusicModeTabs` 的运行时
-Background image 外，SquareLine 导出对象的背景、
-边框、阴影、圆角和文字样式始终由 SquareLine 决定。
+Background image 外，SquareLine 导出对象的背景、边框、阴影、圆角和文字样式始终由
+SquareLine 决定。
 
 ## 编译期依赖
 
@@ -22,7 +22,8 @@ Background image 外，SquareLine 导出对象的背景、
 
 `gui_service_main_config.h` 保存全屏壁纸模糊半径以及 MusicModeTabs 局部背景的容量上限。
 调整模糊半径会影响初始化耗时与毛玻璃观感；若在 SquareLine 中扩大 Tabview 尺寸导致超过
-容量上限，初始化会安全返回 `SERVICE_INVALID_PARAM`，必须经审校后同步调整该配置。
+容量上限，初始化或后续滚动裁剪会安全返回 `SERVICE_INVALID_PARAM`，必须经审校后同步
+调整该配置。
 
 ## 运行时路径
 

@@ -95,8 +95,8 @@ Service/gui/
   Tabview 内部 Content container 透明 Style，长期持有全屏模糊壁纸和 `MusicModeTabs` 的 SDRAM
   裁剪背景。它只为显示局部毛玻璃而绑定 `ui_MusicModeTabs` 的运行时 Background image，并监听
   MainPager 内部 Content 的滚动事件，以目标控件当前坐标重裁剪该背景。SquareLine 导出对象的
-  Border、Shadow、Radius 与其他视觉 Style 不由本 Module 覆盖；滚动事件只做局部复制，不在 GUI
-  Task 的逐帧处理路径中重新模糊或合成整张壁纸。
+  Border、Shadow、Radius 与其他视觉 Style 不由本 Module 覆盖；滚动事件只做局部复制，不在
+  GUI Task 的逐帧处理路径中重新模糊或合成整张壁纸。
 
 `gui_service_config.h` 保存绘制缓冲行数。改变该值会同时影响 SDRAM 占用、SPI
 刷新分块数量和 LVGL 的双缓冲等待行为，必须结合显示帧率与 D-Cache 约束验证。

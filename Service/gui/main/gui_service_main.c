@@ -4,8 +4,8 @@
   * @brief   Main Screen 运行时局部毛玻璃与 Tabview 内部 Content 兼容实现。
   *
   * @details
-  *          本 Module 不修改 SquareLine 导出的视觉设计。它在布局完成后读取导出
-  *          对象的实际屏幕坐标，以 Main Screen 为原点换算为壁纸图坐标；随后
+ *          本 Module 不修改 SquareLine 导出的视觉设计。它在布局完成后读取导出
+ *          对象的实际屏幕坐标，以 Main Screen 为原点换算为壁纸图坐标；随后
  *          从长期持有的全屏模糊帧裁剪出与 MusicModeTabs 完全等大的局部背景，并
  *          仅将该运行时 Background image 绑定到 ui_MusicModeTabs。MainPager
  *          滚动期间会按控件当帧坐标重裁剪，确保玻璃区域始终采样其下方的壁纸；
@@ -126,14 +126,15 @@ static Service_StatusTypeDef service_gui_main_make_tabview_content_transparent(
 }
 
 /**
- * @brief 按 Main Screen 原点将对象坐标转换为壁纸内裁剪区域。
+ * @brief 按 Main Screen 原点将对象坐标转换为壁纸坐标区域。
  * @param object SquareLine 导出的目标对象。
  * @param main_area Main Screen 的实际屏幕区域。
  * @param image_area 返回的壁纸内闭区间裁剪区域。
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_NOT_READY 对象或输出区域为空。
  * @note 坐标来自布局后的对象实际区域，故 SquareLine 中调整相对位置、百分比尺寸
- *       或 MAIN Radius 后，无需同步维护任何 Service 内像素常量。输出区域的尺寸
+ *       或 MAIN Radius 后，无需同步维护任何 Service 内像素常量。横滑时返回区域
+ *       可以部分越出壁纸；调用方使用带透明越界填充的裁剪 Interface。输出尺寸仍
  *       必须不超过 gui_service_main_config.h 中的局部背景容量上限。
  */
 static Service_StatusTypeDef service_gui_main_get_object_image_area(
