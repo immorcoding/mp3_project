@@ -23,9 +23,7 @@ extern "C" {
 #include "screens/ui_Boot.h"
 #include "screens/ui_BootReveal.h"
 #include "screens/ui_Lock.h"
-#include "screens/ui_Music.h"
-#include "screens/ui_Books.h"
-#include "screens/ui_Settings.h"
+#include "screens/ui_Main.h"
 
 ///////////////////// VARIABLES ////////////////////
 

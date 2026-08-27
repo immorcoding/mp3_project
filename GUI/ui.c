@@ -61,9 +61,7 @@ void ui_init(void)
     ui_Boot_screen_init();
     ui_BootReveal_screen_init();
     ui_Lock_screen_init();
-    ui_Music_screen_init();
-    ui_Books_screen_init();
-    ui_Settings_screen_init();
+    ui_Main_screen_init();
     ui____initial_actions0 = lv_obj_create(NULL);
     lv_disp_load_scr(ui_Boot);
 }
@@ -73,7 +71,5 @@ void ui_destroy(void)
     ui_Boot_screen_destroy();
     ui_BootReveal_screen_destroy();
     ui_Lock_screen_destroy();
-    ui_Music_screen_destroy();
-    ui_Books_screen_destroy();
-    ui_Settings_screen_destroy();
+    ui_Main_screen_destroy();
 }
