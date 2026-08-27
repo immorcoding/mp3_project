@@ -89,12 +89,14 @@ Service/gui/
   调用方给定的图片和模糊半径，返回模糊图像描述符；目前被 Boot 全屏模糊与 Main 局部毛玻璃
   依次复用，后续也可用于壁纸更新和 Settings 局部毛玻璃生成。其隐藏 Canvas 对象挂在 display
   top layer，因而不随短生命周期的 Boot Screen 销毁。`gui_service_canvas_compositor.c` 在调用方提供的长期
-  缓冲中执行清晰/模糊帧的矩形、圆角矩形和圆形区域合成；Canvas 不拥有页面级背景。
+  缓冲中执行清晰/模糊帧的矩形、圆角矩形和圆形区域合成，也提供严格或带透明越界填充的连续
+  图片裁剪；Canvas 不拥有页面级背景。
 - `main/gui_service_main.c`：Main Screen 运行时视觉 Module。它仅补齐 SquareLine 未暴露的
-  Tabview 内部 Content container 透明 Style，读取布局后的 `MusicModeTabs` 坐标，并持有其
-  长期 SDRAM 裁剪背景。它只为显示局部毛玻璃而绑定 `ui_MusicModeTabs` 的运行时 Background
-  image；该图片会随对象平移。SquareLine 导出对象的 Border、Shadow、Radius 与其他视觉 Style 不由本
-  Module 覆盖，它也不在 GUI Task 的逐帧处理路径中重新模糊或合成。
+  Tabview 内部 Content container 透明 Style，长期持有全屏模糊壁纸和 `MusicModeTabs` 的 SDRAM
+  裁剪背景。它只为显示局部毛玻璃而绑定 `ui_MusicModeTabs` 的运行时 Background image，并监听
+  MainPager 内部 Content 的滚动事件，以目标控件当前坐标重裁剪该背景。SquareLine 导出对象的
+  Border、Shadow、Radius 与其他视觉 Style 不由本 Module 覆盖；滚动事件只做局部复制，不在 GUI
+  Task 的逐帧处理路径中重新模糊或合成整张壁纸。
 
 `gui_service_config.h` 保存绘制缓冲行数。改变该值会同时影响 SDRAM 占用、SPI
 刷新分块数量和 LVGL 的双缓冲等待行为，必须结合显示帧率与 D-Cache 约束验证。

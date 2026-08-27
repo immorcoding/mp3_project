@@ -152,6 +152,115 @@ Service_StatusTypeDef service_gui_canvas_extract_image_region(
 }
 
 /**
+ * @brief 从完整图片复制带透明越界填充的连续矩形子图。
+ * @param source_image 输入完整图片。
+ * @param source_area 以输入图片左上角为原点的闭区间裁剪区域，可越界。
+ * @param cropped_buffer 调用方持有的连续输出像素缓冲。
+ * @param cropped_buffer_size 输出缓冲大小，单位为字节。
+ * @param cropped_image 返回绑定输出缓冲的子图描述符。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_INVALID_PARAM 图片、区域或输出缓冲不满足约束。
+ * @note 先将整个输出区域清零，再仅复制与输入图片相交的像素。因此对象横滑至
+ *       屏幕边缘时，其可见部分仍对应全局背景坐标，越出壁纸的部分保持透明。
+ */
+Service_StatusTypeDef service_gui_canvas_extract_image_region_padded(
+    const lv_img_dsc_t *source_image,
+    const lv_area_t *source_area,
+    uint8_t *cropped_buffer,
+    uint32_t cropped_buffer_size,
+    lv_img_dsc_t *cropped_image)
+{
+    uint32_t pixel_size_bytes;
+    uint32_t cropped_width;
+    uint32_t cropped_height;
+    uint32_t cropped_data_size;
+    int32_t intersection_x1;
+    int32_t intersection_y1;
+    int32_t intersection_x2;
+    int32_t intersection_y2;
+    int32_t y;
+
+    if (!service_gui_canvas_is_supported_image(source_image) ||
+        (source_area == NULL) ||
+        (cropped_buffer == NULL) ||
+        (cropped_image == NULL) ||
+        (source_area->x2 < source_area->x1) ||
+        (source_area->y2 < source_area->y1))
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    pixel_size_bytes =
+        (uint32_t)lv_img_cf_get_px_size(source_image->header.cf) / 8U;
+    cropped_width =
+        (uint32_t)((int32_t)source_area->x2 - (int32_t)source_area->x1 + 1);
+    cropped_height =
+        (uint32_t)((int32_t)source_area->y2 - (int32_t)source_area->y1 + 1);
+
+    if ((cropped_width > UINT16_MAX) ||
+        (cropped_height > UINT16_MAX) ||
+        (cropped_width > (UINT32_MAX / pixel_size_bytes)) ||
+        (cropped_height >
+         (UINT32_MAX / (cropped_width * pixel_size_bytes))))
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    cropped_data_size = cropped_width * cropped_height * pixel_size_bytes;
+
+    if (cropped_buffer_size < cropped_data_size)
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    memset(cropped_buffer, 0, cropped_data_size);
+
+    intersection_x1 = (source_area->x1 > 0) ? source_area->x1 : 0;
+    intersection_y1 = (source_area->y1 > 0) ? source_area->y1 : 0;
+    intersection_x2 = ((int32_t)source_area->x2 <
+                       ((int32_t)source_image->header.w - 1))
+                          ? source_area->x2
+                          : ((int32_t)source_image->header.w - 1);
+    intersection_y2 = ((int32_t)source_area->y2 <
+                       ((int32_t)source_image->header.h - 1))
+                          ? source_area->y2
+                          : ((int32_t)source_image->header.h - 1);
+
+    if ((intersection_x1 <= intersection_x2) &&
+        (intersection_y1 <= intersection_y2))
+    {
+        const uint32_t copied_width =
+            (uint32_t)(intersection_x2 - intersection_x1 + 1);
+        const uint32_t copied_row_size = copied_width * pixel_size_bytes;
+
+        for (y = intersection_y1; y <= intersection_y2; y++)
+        {
+            const uint32_t source_offset =
+                ((((uint32_t)y * (uint32_t)source_image->header.w) +
+                  (uint32_t)intersection_x1) *
+                 pixel_size_bytes);
+            const uint32_t cropped_offset =
+                ((((uint32_t)(y - (int32_t)source_area->y1) * cropped_width) +
+                  (uint32_t)(intersection_x1 - (int32_t)source_area->x1)) *
+                 pixel_size_bytes);
+
+            memcpy(
+                &cropped_buffer[cropped_offset],
+                &source_image->data[source_offset],
+                copied_row_size);
+        }
+    }
+
+    *cropped_image = *source_image;
+    cropped_image->header.w = cropped_width;
+    cropped_image->header.h = cropped_height;
+    cropped_image->data_size = cropped_data_size;
+    cropped_image->data = cropped_buffer;
+
+    return SERVICE_OK;
+}
+
+/**
  * @brief 判断一个像素是否处于区域短边决定直径的内接圆内。
  * @param region 圆形区域描述。
  * @param x 待判断像素的 X 坐标。

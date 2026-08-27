@@ -276,6 +276,57 @@ static void test_extract_region_returns_contiguous_object_sized_image(void)
     }
 }
 
+static void test_padded_region_keeps_global_coordinates_when_partly_outside(void)
+{
+    const lv_area_t source_area = {
+        .x1 = -1,
+        .y1 = 1,
+        .x2 = 1,
+        .y2 = 2,
+    };
+    uint8_t cropped_pixels[3U * 2U * TEST_PIXEL_SIZE_BYTES];
+    lv_img_dsc_t cropped_image;
+    uint32_t y;
+
+    test_fill_source_images();
+    memset(cropped_pixels, 0x5AU, sizeof(cropped_pixels));
+
+    assert(service_gui_canvas_extract_image_region_padded(
+               &test_blurred_image,
+               &source_area,
+               cropped_pixels,
+               sizeof(cropped_pixels),
+               &cropped_image) == SERVICE_OK);
+
+    assert(cropped_image.header.w == 3U);
+    assert(cropped_image.header.h == 2U);
+    assert(cropped_image.data_size == sizeof(cropped_pixels));
+
+    for (y = 0U; y < cropped_image.header.h; y++)
+    {
+        const uint8_t *const transparent_pixel = &cropped_pixels[
+            (y * (uint32_t)cropped_image.header.w) * TEST_PIXEL_SIZE_BYTES];
+        const uint8_t *const source_x0_pixel = &cropped_pixels[
+            ((y * (uint32_t)cropped_image.header.w) + 1U) *
+            TEST_PIXEL_SIZE_BYTES];
+        const uint8_t *const source_x1_pixel = &cropped_pixels[
+            ((y * (uint32_t)cropped_image.header.w) + 2U) *
+            TEST_PIXEL_SIZE_BYTES];
+
+        assert(transparent_pixel[0] == 0U);
+        assert(transparent_pixel[1] == 0U);
+        assert(transparent_pixel[2] == 0U);
+        assert(memcmp(
+                   source_x0_pixel,
+                   test_get_pixel(test_blurred_pixels, 0U, y + 1U),
+                   TEST_PIXEL_SIZE_BYTES) == 0);
+        assert(memcmp(
+                   source_x1_pixel,
+                   test_get_pixel(test_blurred_pixels, 1U, y + 1U),
+                   TEST_PIXEL_SIZE_BYTES) == 0);
+    }
+}
+
 static void test_out_of_bounds_region_is_rejected(void)
 {
     const Service_GUI_CanvasBlurRegionTypeDef region = {
@@ -308,6 +359,7 @@ int main(void)
     test_circular_region_preserves_its_corner_pixels();
     test_rounded_rectangle_preserves_its_corner_pixels();
     test_extract_region_returns_contiguous_object_sized_image();
+    test_padded_region_keeps_global_coordinates_when_partly_outside();
     test_out_of_bounds_region_is_rejected();
 
     puts("GUI Canvas compositor tests passed.");

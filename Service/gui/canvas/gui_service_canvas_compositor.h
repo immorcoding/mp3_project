@@ -52,6 +52,26 @@ Service_StatusTypeDef service_gui_canvas_extract_image_region(
     lv_img_dsc_t *cropped_image);
 
 /**
+ * @brief 从完整图片提取带透明越界填充的连续矩形子图。
+ * @param source_image 输入完整图片；当前原型只支持 LV_IMG_CF_TRUE_COLOR_ALPHA。
+ * @param source_area 以 source_image 左上角为原点的闭区间裁剪区域，可部分或全部越界。
+ * @param cropped_buffer 调用方持有的连续输出像素缓冲。
+ * @param cropped_buffer_size 输出缓冲大小，单位为字节。
+ * @param cropped_image 返回绑定 cropped_buffer 的子图描述符。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_INVALID_PARAM 图片、区域或输出缓冲不满足约束。
+ * @note 输出尺寸始终与 source_area 完全一致。落在 source_image 外的像素以零
+ *       填充，因此对真彩带 Alpha 图片表现为完全透明；适用于对象横滑时仍需保持
+ *       与全局背景坐标一致的局部 Background image。
+ */
+Service_StatusTypeDef service_gui_canvas_extract_image_region_padded(
+    const lv_img_dsc_t *source_image,
+    const lv_area_t *source_area,
+    uint8_t *cropped_buffer,
+    uint32_t cropped_buffer_size,
+    lv_img_dsc_t *cropped_image);
+
+/**
  * @brief 将清晰全屏图片和同格式模糊帧合成为长期背景图片。
  * @param clear_image 清晰图片；当前原型只支持 LV_IMG_CF_TRUE_COLOR_ALPHA。
  * @param blurred_image 同尺寸、同格式、包含完整 data_size 的模糊图片。

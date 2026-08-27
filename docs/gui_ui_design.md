@@ -445,15 +445,15 @@ Main
 
 #### 10.5.1 Music 局部毛玻璃（已实现，待真机验收）
 
-`MusicModeTabs` 需要真实局部毛玻璃：目标区域内显示从系统壁纸同一初始屏幕坐标裁剪出的模糊像素，区域外壁纸保持清晰。播放器的圆形控制按钮不使用毛玻璃：在 240 px 宽屏上的可见收益不足以抵消额外缓冲与裁剪复杂度，仍使用 SquareLine 的半透明染色、弱描边和图标。该效果不能直接赋给 SquareLine 组件的背景色，也不为每个组件建立独立 Canvas。
+`MusicModeTabs` 需要真实局部毛玻璃：目标区域内显示从系统壁纸**当前屏幕坐标**裁剪出的模糊像素，区域外壁纸保持清晰。播放器的圆形控制按钮不使用毛玻璃：在 240 px 宽屏上的可见收益不足以抵消额外缓冲与裁剪复杂度，仍使用 SquareLine 的半透明染色、弱描边和图标。该效果不能直接赋给 SquareLine 组件的背景色，也不为每个组件建立独立 Canvas。
 
 运行时实现由 `Service/gui/canvas/` 与 `Service/gui/main/` 共同负责，不修改 `GUI/`：
 
-1. 在 `Main` 的布局已计算后，从当前清晰壁纸生成一次全屏 Blur 帧。复用现有 `service_gui_effect_canvas_buffer` 与隐藏 Canvas 工作对象；该 Blur 描述符只在本次合成期间有效。
-2. `main/gui_service_main` 在 SDRAM 中长期持有一张与 `MusicModeTabs` 同尺寸的裁剪图。它从全屏 Blur 帧按 Tabview 相对 `ui_Main` 的实际坐标提取连续像素；`canvas/gui_service_canvas_compositor` 已实现该通用矩形裁剪 Interface。裁剪图尺寸与目标对象相同，LVGL 会在对象区域内居中绘制它。
-3. 将裁剪图在运行时绑定为 `ui_MusicModeTabs` 的 Background image，并保持 `ui_Main` 的清晰 SquareLine 壁纸不变。背景图随 MusicModeTabs 和 MainPager 平移，因此滑动内容页时不会把模糊块遗留在初始屏幕坐标。隐藏 Canvas 始终不参与可见层级。
+1. 在 `Main` 的布局已计算后，从当前清晰壁纸生成一次全屏 Blur 工作帧。复用现有 `service_gui_effect_canvas_buffer` 与隐藏 Canvas 工作对象；随后立即复制到 `main/` 自己长期持有的全屏模糊壁纸，以免 Boot 或其他离屏效果复用 Canvas 工作区后覆盖数据。
+2. `main/gui_service_main` 在 SDRAM 中长期持有一张与 `MusicModeTabs` 同尺寸的裁剪图。它从长期全屏 Blur 壁纸按 Tabview 相对 `ui_Main` 的实际坐标提取连续像素；`canvas/gui_service_canvas_compositor` 提供通用矩形裁剪 Interface。裁剪图尺寸与目标对象相同，LVGL 会在对象区域内绘制它。
+3. 将裁剪图在运行时绑定为 `ui_MusicModeTabs` 的 Background image，并保持 `ui_Main` 的清晰 SquareLine 壁纸不变。`main/` 监听 MainPager 的 LVGL 内部 Content container 的 `LV_EVENT_SCROLL`；每次横滑都读取 MusicModeTabs 的实际坐标，并从长期 Blur 壁纸重新裁剪同一张输出图。这样玻璃区域始终采样其当前下方背景，而不是带着初始位置的静态模糊贴图移动。隐藏 Canvas 始终不参与可见层级。
 
-`MusicModeTabs` 的整个可见区域（标签栏与当前 Tabpage 内容区）都是一块连续的圆角玻璃区域，不只处理标题栏。当前 `Service_GUI_Init()` 在 `ui_init()` 后调用 `service_gui_main_prepare_background()`：它先对 `ui_Main` 调用 `lv_obj_update_layout()`，再读取 `ui_MusicModeTabs` 的实际屏幕坐标；随后以 `ui_Main` 左上角为裁剪图原点换算为壁纸内坐标。这样不把 SquareLine 中的相对尺寸、位置或对象名称复制成 Service 内的固定像素常量。裁剪图与 Tabview 尺寸相同，LVGL 对该对象执行圆角 Background image 绘制，因此圆角外不会留下方形模糊块。
+`MusicModeTabs` 的整个可见区域（标签栏与当前 Tabpage 内容区）都是一块连续的圆角玻璃区域，不只处理标题栏。当前 `Service_GUI_Init()` 在 `ui_init()` 后调用 `service_gui_main_prepare_background()`：它先对 `ui_Main` 调用 `lv_obj_update_layout()`，再读取 `ui_MusicModeTabs` 的实际屏幕坐标；随后以 `ui_Main` 左上角为裁剪图原点换算为壁纸内坐标。MainPager 横滑期间重复同一坐标换算，越出壁纸边界的输出像素写为透明，保证对象半离屏时仍不读越界。这样不把 SquareLine 中的相对尺寸、位置或对象名称复制成 Service 内的固定像素常量。裁剪图与 Tabview 尺寸相同，LVGL 对该对象执行圆角 Background image 绘制，因此圆角外不会留下方形模糊块。
 
 `MusicModeTabs` 与 `MainPager` 的 LVGL 内部 Content container 不由 SquareLine 直接暴露，`main/` Module 仅将这些内部对象的背景、背景图、边框、轮廓和阴影设为透明，以消除 Simplified Theme 产生的白色内容底。`ui_MusicModeTabs` 的运行时 Background image 是唯一允许 Service 替换的 SquareLine 导出对象 Style，因为它承载本 Module 生成的裁剪模糊图；`ui_Main` 的 Background image 仍由 SquareLine 的清晰系统壁纸负责。除该背景源外，所有 SquareLine 导出对象（包括 Tabview 本体、Tabpage、Button）的 Border、Shadow、Radius、背景和文字样式必须只在 SquareLine 中配置，Service 不得覆盖。
 
@@ -475,9 +475,9 @@ NowPlayingTab
 
 `MusicProgressSlider` 位于控制按钮上方，轨道保持透明或低 Alpha `Gray1`，Indicator 使用 `Blue1`，Knob 使用圆角 `White1`。LVGL v8 的 Slider Knob 默认边长等于 Slider 较短边；SquareLine 中应通过 `STYLE (KNOB) → Paddings` 调整其大小，而非修改 Slider 本体的宽高。三个 Button 的背景使用低 Alpha `Gray1` 染色、弱 `White1` 轮廓，图标使用 `White1`；不在 SquareLine 中添加播放事件。每个图标均由 Button 的独立 Label 子对象承载并居中对齐，以便后续 Service 将 `MusicPlayPauseIcon` 的播放符号替换为暂停符号；不得用 ImageButton 或导入图标图片。`MusicPlayPauseButton` 可以相对略大或使用 `Blue1` 的弱轮廓，但不采用整块 `Blue1` 填充。项目已启用的 `lv_font_montserrat_16` 包含 LVGL 的 `PREV`、`PLAY`、`PAUSE` 与 `NEXT` 符号；用户优先从 SquareLine 的符号选择器使用它们，不新增图标图片资源。三个按钮与外层 `MusicPlayerControlGroup` 均不是毛玻璃区域。
 
-当前导出的壁纸为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，一张全屏帧约 `230400 B`。Music 运行时会同时持有共享 Canvas 工作区和一张最大 `240 x 192` 的 MusicModeTabs 裁剪背景，峰值上限约 `360 KiB`；实际 Tabview 比该上限更小，但静态缓冲按安全上限预留。壁纸切换、目标对象位置/尺寸改变时才重建裁剪图；静态显示、文字更新和每次 `Service_GUI_Process()` 都不得重复执行模糊。若 SquareLine 将 MusicModeTabs 高度扩展到屏幕的 60% 以上，必须先审校并提高 `main/gui_service_main_config.h` 中的上限。未来切换到 RGB565 缓存资源后，两帧合计约 `240 KiB`。
+当前导出的壁纸为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，一张全屏帧约 `230400 B`。Music 运行时会同时持有共享 Canvas 工作区、一张 Main 长期全屏 Blur 壁纸和一张最大 `240 x 192` 的 MusicModeTabs 裁剪背景，三者峰值上限约 `585 KiB`；实际 Tabview 比该上限更小，但静态缓冲按安全上限预留。壁纸切换、目标对象位置/尺寸改变时才重新执行全屏模糊；静态显示、文字更新和每次 `Service_GUI_Process()` 都不得重复模糊。MainPager 横滑的 `LV_EVENT_SCROLL` 只更新局部裁剪图。若 SquareLine 将 MusicModeTabs 高度扩展到屏幕的 60% 以上，必须先审校并提高 `main/gui_service_main_config.h` 中的上限。未来切换到 RGB565 缓存资源后，三帧合计约 `390 KiB`。
 
-多个 Main Page 的玻璃区域不能共用一张固定背景而不加管理：当前只在 Music 页面实施；BooksPage、SettingsPage 后续需要各自的裁剪图与重建时机。本阶段不在 MainPager 的滑动回调中同步重算，以免把软件模糊放入动画路径。当前可复用的私有 Canvas Interface 接收完整模糊图、对象区域和调用方持有的输出缓冲；未来页面可复用裁剪算法，但仍必须各自持有页面级背景与决定重建时机。新增页面级玻璃区域前必须先经用户审校。
+多个 Main Page 的玻璃区域不能共用一张固定局部裁剪图而不加管理：当前只在 Music 页面实施；BooksPage、SettingsPage 后续需要各自的裁剪图与更新时机。MainPager 的滑动回调只会更新 MusicModeTabs，且只做从长期模糊壁纸到局部输出缓冲的像素复制，不将软件模糊放入动画路径。当前可复用的私有 Canvas Interface 接收完整模糊图、对象区域和调用方持有的输出缓冲；未来页面可复用裁剪算法，但仍必须各自持有页面级背景与决定重建时机。新增页面级玻璃区域前必须先经用户审校。
 
 ## 11. 原型验收标准
 
