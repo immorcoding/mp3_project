@@ -45,23 +45,22 @@ Lock Screen
     └─ 向上解锁
        └─ Main Screen
           ├─ StatusBarContainer（固定，不参与页面横滑）
-          ├─ MainPageContainer（透明内容区域）
-          │  └─ MainPager（仅内容区域横滑）
-          │     ├─ MusicPage
-          │     │  ├─ MusicModeTabs
-          │     │  │  ├─ NowPlayingTab
-          │     │  │  ├─ QueueTab
-          │     │  │  └─ LibraryTab
-          │     │  └─ MusicPlayerControlContainer
-          │     │     ├─ MusicPlayingSlider
-          │     │     ├─ MusicPreviousButton
-          │     │     ├─ MusicPlayPauseButton
-          │     │     └─ MusicNextButton
-          │     ├─ BooksPage（当前仅为空白占位页）
-          │     └─ SettingsPage（当前仅为空白占位页）
+          ├─ MainPageContainer（透明内容区域、循环分页视口）
+          │  ├─ SettingsPageContainer
+          │  ├─ MusicPageContainer
+          │  │  ├─ MusicModeTabs
+          │  │  │  ├─ NowPlayingTab
+          │  │  │  ├─ QueueTab
+          │  │  │  └─ LibraryTab
+          │  │  └─ MusicPlayerControlContainer
+          │  │     ├─ MusicPlayingSlider
+          │  │     ├─ MusicPreviousButton
+          │  │     ├─ MusicPlayPauseButton
+          │  │     └─ MusicNextButton
+          │  └─ BooksPageContainer（当前仅为空白占位页）
 ```
 
-`Main` 是解锁后唯一的普通根 Screen。当前导出中，`StatusBarContainer` 与 `MainPageContainer` 是它的直接子对象；`MainPager` 位于透明的 `MainPageContainer` 内。StatusBar 固定在 Main 层，只有 MainPager 的三张内容页会左右移动。`Music`、`Bookshelf` 和 `Settings` 不再是独立加载的 LVGL Screen，而是 MainPager 内的同级 Page。`Lock Screen` 是待机视觉页，首版不提供安全认证。`MainPagerDots`、Album Detail、Mini Player、Reader 和各 Settings 子页尚未创建；开始这些设计前必须先更新本文档。
+`Main` 是解锁后唯一的普通根 Screen。`StatusBarContainer` 与 `MainPageContainer` 是它的直接子对象；后者本身就是透明、横向可滚动的循环分页视口。StatusBar 固定在 Main 层，只有 MainPageContainer 内的三张内容页会左右移动。`Music`、`Bookshelf` 和 `Settings` 不再是独立加载的 LVGL Screen，而是其中的同级 Page。`Lock Screen` 是待机视觉页，首版不提供安全认证。`MainPagerDots`、Album Detail、Mini Player、Reader 和各 Settings 子页尚未创建；开始这些设计前必须先更新本文档。
 
 ## 4. 全局视觉规范
 
@@ -84,7 +83,7 @@ Lock Screen
 
 首版正式采用**系统级静态壁纸图**：壁纸目标规格为 `240 x 320` 的全屏资源，先在图像工具中以深蓝到靛紫底色叠加三处大范围、低对比的蓝紫模糊光团，再导入 SquareLine。当前选中的 `Indigo Mist Soft Dark` 含少量半透明像素，因此导出为带 Alpha 的资源；其余技术细节和后续不透明化条件见第 10 节。Image Dither 是否启用及其强度以 RGB565 真机观感为准。壁纸图只承担背景雾感，不烘焙固定信息卡；卡片仍由 SquareLine 组件叠加，以便页面内容和布局独立调整。
 
-普通应用内容页的大型卡片首版仍只模拟为半透明深色底、弱描边与上/左侧更亮的细边，不使用运行时背景模糊。`MusicModeTabs` 是已确认的例外：它使用第 10.5.1 节定义的运行时局部毛玻璃。这样把软件模糊限制在单一主要视觉区域，既保留玻璃质感，也避免将整页所有卡片都变为高成本动态模糊。`Boot` 的全屏壁纸模糊是第 10.3 节定义的独立启动视觉效果，不属于普通卡片样式。
+普通应用内容页的大型卡片首版仍只模拟为半透明深色底、弱描边与上/左侧更亮的细边，不使用运行时背景模糊。`MusicModeTabs` 是已确认的例外：它使用第 10.5.2 节定义的运行时局部毛玻璃。这样把软件模糊限制在单一主要视觉区域，既保留玻璃质感，也避免将整页所有卡片都变为高成本动态模糊。`Boot` 的全屏壁纸模糊是第 10.3 节定义的独立启动视觉效果，不属于普通卡片样式。
 
 壁纸是系统级外观：Lock Screen 与 Main Screen 使用同一个当前选中壁纸；MusicPage、BooksPage、SettingsPage 通过透明背景露出 Main 的壁纸。首版不做随机壁纸、动态壁纸或每帧变化的渐变。
 
@@ -100,7 +99,7 @@ Lock Screen
 
 ### 4.3 顶部状态栏
 
-普通应用界面由 Main 持有唯一一个约 `22 px` 高的 `StatusBar`，显示简短时间、日期提示和电量图标。它固定在顶部、不随 MainPager 内容横滑，也不承载关键操作。MainPager 的内容区域从 StatusBar 下方开始；每张内容页不得各自再创建一套状态栏。
+普通应用界面由 Main 持有唯一一个约 `22 px` 高的 `StatusBar`，显示简短时间、日期提示和电量图标。它固定在顶部、不随 MainPageContainer 内容横滑，也不承载关键操作。MainPageContainer 的内容区域从 StatusBar 下方开始；每张内容页不得各自再创建一套状态栏。
 
 阅读页的状态栏属于阅读工具栏的一部分：沉浸阅读时隐藏，用户点击屏幕中央后与上下工具栏一起显示。
 
@@ -108,25 +107,25 @@ Lock Screen
 
 | 页面 | 左右滑动 | 垂直滑动 | 点击 |
 | --- | --- | --- | --- |
-| MusicPage / BooksPage / SettingsPage | MainPager 切换内容页 | 页面内部列表或书架可滚动 | 控件、卡片、标签。 |
+| MusicPage / BooksPage / SettingsPage | MainPageContainer 循环切换内容页 | 页面内部列表或书架可滚动 | 控件、卡片、标签。 |
 | Music 的 Now Playing / Queue / Library | 不使用左右滑动切换模式 | Queue、Library 内容可滚动 | 点击顶部标签切换模式。 |
-| Album Detail | 保留 MainPager 左右切换 | 曲目列表滚动 | 返回、曲目、Mini Player。 |
+| Album Detail | 保留 MainPageContainer 左右切换 | 曲目列表滚动 | 返回、曲目、Mini Player。 |
 | Reader | 翻页 | 不作为常规滚动 | 中央切换阅读工具栏。 |
 | Lock Screen | 不使用 | 向上解锁 | 歌曲迷你控制。 |
 
-Music 内部不采用横滑切换 `Now Playing / Queue / Library`，避免和 MainPager 的全局左右滑动竞争。阅读器的横滑是核心功能，因此仅在 `Reader` 中禁用 MainPager 的横向切换。
+Music 内部不采用横滑切换 `Now Playing / Queue / Library`，避免和 MainPageContainer 的全局左右滑动竞争。阅读器的横滑是核心功能，因此仅在 `Reader` 中禁用 MainPageContainer 的横向切换。
 
 ## 6. 音乐页面
 
 ### 6.1 MusicPage
 
-MusicPage 每次作为 MainPager 内容页显示时默认展示 `Now Playing`。页面顶部、状态栏下方放置可点击标签：
+MusicPage 每次作为 MainPageContainer 内容页显示时默认展示 `Now Playing`。页面顶部、状态栏下方放置可点击标签：
 
 ```text
 [ Now Playing ] [ Queue ] [ Library ]
 ```
 
-标签只改变页面内容区，不移动 MainPager。页面下方始终保留完整播放器区域，包含当前曲名、进度条和上一首/播放暂停/下一首控制。
+标签只改变页面内容区，不移动 MainPageContainer。页面下方始终保留完整播放器区域，包含当前曲名、进度条和上一首/播放暂停/下一首控制。
 
 推荐初始坐标分配：
 
@@ -141,7 +140,7 @@ MusicPage 每次作为 MainPager 内容页显示时默认展示 `Now Playing`。
 
 ### 6.2 专辑详情
 
-从 `Library` 点击专辑后进入 `Album Detail`。它不是新的 MainPager 内容页，因此顶端不再保留三标签；原标签位置转换为返回和专辑标题。
+从 `Library` 点击专辑后进入 `Album Detail`。它不是新的 MainPageContainer 内容页，因此顶端不再保留三标签；原标签位置转换为返回和专辑标题。
 
 进入动画：`Library` 标签向左移动，左侧淡入返回箭头；`Now Playing` 与 `Queue` 淡出；专辑标题从右侧滑入，曲目列表随后淡入并轻微上移。总时长约 `160 ms`，使用 ease-out。返回时执行反向动画。
 
@@ -163,7 +162,7 @@ Mini Player            x = 8,  y = 260, w = 224, h = 52
 
 ### 7.1 书架
 
-Bookshelf 是 MainPager 的 BooksPage。使用两列书籍卡片展示封面、书名和阅读进度；首版的书籍和封面均为假数据。点击书籍进入 `Reader`。
+Bookshelf 是 MainPageContainer 的 BooksPage。使用两列书籍卡片展示封面、书名和阅读进度；首版的书籍和封面均为假数据。点击书籍进入 `Reader`。
 
 ### 7.2 沉浸阅读
 
@@ -215,7 +214,7 @@ Settings 使用 2 x 2 方形卡片，而不是长列表：
 ## 10. SquareLine 实施顺序
 
 1. 建立全局背景、状态栏、卡片样式、颜色和字体层级；
-2. 建立 Main 固定 Shell、三张 MainPager 内容页与顶部状态栏；
+2. 建立 Main 固定 Shell、三张 MainPageContainer 内容页与顶部状态栏；
 3. 完成 Music 的三标签、播放器控制骨架、Library 和 Album Detail；
 4. 完成 Bookshelf、Reader 工具栏和假翻页；
 5. 完成 Settings 的 2 x 2 卡片与四张假子页；
@@ -226,7 +225,7 @@ Settings 使用 2 x 2 方形卡片，而不是长列表：
 
 本节记录早期的四张独立 Screen 骨架：`Lock`、`Music`、`Books`、`Settings`。当时 `ui_init()` 按该顺序初始化并默认加载 `ui_Lock`，四张 Screen 均关闭 Scrollable、四边 Padding 为 `0`。
 
-该结构无法让顶部信息栏在根页面横滑时保持固定，现已被第 10.5 节的 Main 架构正式替代。迁移时已从当前 SquareLine 导出中移除独立的 `Music`、`Books`、`Settings` Screen；后续正式 UI 只能在 `MainPager` 内的 Page 上扩展。
+该结构无法让顶部信息栏在根页面横滑时保持固定，现已被第 10.5 节的 Main 架构正式替代。迁移时已从当前 SquareLine 导出中移除独立的 `Music`、`Books`、`Settings` Screen；后续正式 UI 只能在 `MainPageContainer` 内的 Page 上扩展。
 
 ### 10.2 第二步：Lock 的主视觉
 
@@ -343,7 +342,7 @@ Module 实现：只允许 GUI Task 中的 LVGL `lv_async_call()` 回调调用切
 子对象，因此 Boot 作为临时 Screen 销毁后，后续壁纸切换或 Settings 局部毛玻璃仍可安全
 复用同一 SDRAM 工作区。Canvas 输出只在下一次模糊调用前有效：Main 会立即复制为自己的
 长期全屏背景，而 Boot 在启动阶段直接绑定这份共享输出，因而 Boot 显示期间不得再发起
-Canvas 模糊。MainPager 的局部毛玻璃滚动只裁剪 Main 的长期副本，不会改写共享工作区。
+Canvas 模糊。MainPageContainer 的局部毛玻璃滚动只裁剪 Main 的长期副本，不会改写共享工作区。
 现有大数组保留 `service_gui_effect_canvas_buffer` 名称，表示它是通用视觉效果的 Canvas
 缓冲，而不是某张启动页壁纸的专属存储。
 
@@ -413,44 +412,65 @@ Settings 的目标效果是：卡片外的壁纸保持清晰；每张圆角卡�
 
 ### 10.5 Main 固定 Shell 与 Music 页面骨架（当前实现）
 
-锁屏与开机视觉已完成首轮原型后，当前导出已建立解锁后的 `Main` 固定 Shell 及 MainPager 的第一页 `MusicPage`。本步骤不创建真实播放逻辑、歌曲数据或 Music 业务回调；Lock 到 Main 的基础解锁跳转已由 Lock Screen 的向上手势实现。
+锁屏与开机视觉已完成首轮原型后，当前导出已建立解锁后的 `Main` 固定 Shell 及 MusicPage 的首轮视觉骨架。外层 MainPager 已替换为 MainPageContainer 的普通 Container 循环分页结构；本步骤不创建真实播放逻辑、歌曲数据或 Music 业务回调。Lock 到 Main 的基础解锁跳转已由 Lock Screen 的向上手势实现。
 
-`Main` 是普通应用界面的唯一根 Screen，继续使用当前系统壁纸、关闭 Scrollable、四边 Padding 为 `0`。它的对象层级固定为：
+`Main` 是普通应用界面的唯一根 Screen，继续使用当前系统壁纸、关闭 Scrollable、四边 Padding 为 `0`。外层分页已从 SquareLine 的 Tabview 改为普通 Container；MainPageContainer 本身承担视口和滚动职责，不额外创建嵌套 Viewport。任何情况下均不得手改 `GUI/` 生成代码。
 
 ```text
 Main
-├─ StatusBar              固定顶部信息栏
-├─ MainPageContainer      透明内容区域
-│  └─ MainPager           仅状态栏下方的横滑内容区
-│     ├─ MusicPage
-│     │  ├─ MusicModeTabs    [ Now Playing ] [ Queue ] [ Library ]
-│     │  │  ├─ NowPlayingTab
-│     │  │  ├─ QueueTab
-│     │  │  └─ LibraryTab
-│     │  └─ MusicPlayerControlContainer
-│     │     ├─ MusicPlayingSlider
-│     │     ├─ MusicPreviousButton
-│     │     ├─ MusicPlayPauseButton
-│     │     └─ MusicNextButton
-│     ├─ BooksPage          当前仅为空白占位页
-│     └─ SettingsPage       当前仅为空白占位页
+├─ StatusBarContainer      固定顶部信息栏，屏幕高度的 5%
+├─ MainPageContainer       透明横滑视口，屏幕高度的 85%
+│  ├─ SettingsPageContainer  当前仅为空白占位页，初始位于前一槽位
+│  ├─ MusicPageContainer
+│  │  ├─ MusicModeTabs      [ Now Playing ] [ Queue ] [ Library ]
+│  │  │  ├─ NowPlayingTab
+│  │  │  ├─ QueueTab
+│  │  │  └─ LibraryTab
+│  │  └─ MusicPlayerControlContainer
+│  │     ├─ MusicPlayingSlider
+│  │     ├─ MusicPreviousButton
+│  │     ├─ MusicPlayPauseButton
+│  │     └─ MusicNextButton
+│  └─ BooksPageContainer     当前仅为空白占位页，初始位于后一槽位
+└─ DotPanelContainer        固定分页指示区，屏幕高度的 10%
+   ├─ DotSettings
+   ├─ DotMusic
+   └─ DotBooks
 ```
 
-壁纸只绑定到 `Main` 根对象。`MainPageContainer`、`MainPager`、三张 Page 及 SquareLine 可配置的 Tabview 对象背景、边框、阴影均保持透明，使滑动时始终露出同一张固定系统壁纸；不得为 MusicPage、BooksPage、SettingsPage 分别再设置壁纸。SquareLine 无法公开的 MainPager 与 MusicModeTabs 内部 Content container 是唯一例外：`Service/gui/main` 在运行时将其背景、背景图、边框、轮廓和阴影置为透明，以消除 LVGL Simplified Theme 默认白底。除这两个内部对象与 `ui_MusicModeTabs` 的运行时裁剪背景源外，Service 不得覆盖任何 SquareLine 导出对象的视觉 Style。
+壁纸只绑定到 `Main` 根对象。`MainPageContainer` 与三张 Page Container 的背景、边框、阴影均保持透明，使滑动时始终露出同一张固定系统壁纸；不得为 MusicPage、BooksPage、SettingsPage 分别再设置壁纸。`MusicModeTabs` 的内部 Content container 是唯一无法由 SquareLine 直接公开的对象：`Service/gui/main` 在运行时将其背景、背景图、边框、轮廓和阴影置为透明，以消除 LVGL Simplified Theme 默认白底。除该内部对象与 `ui_MusicModeTabs` 的运行时裁剪背景源外，Service 不得覆盖任何 SquareLine 导出对象的视觉 Style。
 
 `StatusBar` 为透明的横向 Container，位于 Main 最顶端，当前高度采用屏幕高度的较小比例。左侧为短时间文本；中间为简短日期提示；右侧为电池轮廓与百分比。它不绘制独立卡片底色、不承载点击事件，也不与 Lock Screen 复用对象：Lock 的大时间、电量信息仍是独立的居中信息层。首版所有数值均为固定假数据。
 
-`MainPager` 使用 SquareLine 的 `Tabview` 承担横滑内容区；其默认 Tab 按钮栏不作为正式视觉元素。已在 SquareLine 中验证，将该控件的 `Tab Size` 设为 `0` 即可隐藏默认按钮栏，同时保留内容页横滑；正式模式标签由 MusicPage 自己的 `MusicModeTabs` 承担。不得隐藏整个 `MainPager`，也不以手改 `GUI/` 生成代码绕过。
+Main 的纵向固定分区为：顶部 `StatusBarContainer` 占屏幕高度 `5%`，中部 `MainPageContainer` 占 `85%`，底部 `DotPanelContainer` 占 `10%`。`MainPageContainer` 使用 SquareLine 的普通 `Container` 承担横滑内容区，不使用 Tabview 或隐藏的 Tab 按钮栏。它是 Main 中唯一允许横向滚动的普通视口：透明、无边框、无阴影、关闭 Scrollbar，四边 Padding 为 `0`，不启用 Flex 或 Grid 布局；其可视范围裁剪子对象，子 Page 不得溢出可视范围绘制。三张 Page 均填满 Viewport 的宽高。
 
-`MusicModeTabs` 位于 MusicPage 顶部，使用 MusicPage 内嵌的 Tabview 实现，默认 Tab 按钮栏高度以实际观感为准。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `White1` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Blue1` 文字，并仅在底边显示一条细 `Blue1` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Now Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPager 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
+三张 Page Container 自身保持不可滚动，但都必须开启 **Horizontal Scroll Chain**：LVGL 命中一个不可滚动的子 Page 后，只有该 Flag 才会继续向父级寻找可横滑的 `MainPageContainer`。`MainPageContainer` 自身保持关闭 Scroll Chain，防止全局分页继续传递给 `Main`。同时，`MainPageContainer` 必须保留 **Clickable** 与 **Scrollable** Flag：在 LVGL v8 中，指针命中测试只会把 Clickable 对象作为活动对象；若关闭 Clickable，即使对象开启 Scrollable，触摸也不会选中该视口，横向滚动无法开始。该 Flag 仅表示可接收指针命中，不会把视口变成视觉上的按钮。不得手改 `GUI/` 生成代码绕过这一结构。
+
+#### 10.5.1 MainPageContainer 循环分页（当前 SquareLine 骨架已导出）
+
+Viewport 内始终只保留同一组三张 Page 实例，不复制首尾页。初始槽位从左到右为：`SettingsPage` 位于 `0%`、`MusicPage` 位于 `100%`、`BooksPage` 位于 `200%`；每张 Page 的宽高均填满 Viewport。GUI Service 在对象布局完成后无动画滚动到一个 Viewport 宽度，因此真机初始可见的是位于中间槽位的 MusicPage。SquareLine 模拟器默认从滚动起点显示 SettingsPage 属于预期限制；完整初始定位以导出后的 GUI Service 为准。
+
+横向手势结束后，不通过 Tabview 索引切换，而是计算当前水平滚动位置相对中间槽位的偏移 `delta`：
+
+1. `delta` 未达到翻页阈值时，动画回到中间槽位；
+2. `delta` 超过正阈值时，完成向后一页的短滚动；超过负阈值时，完成向前一页的短滚动；
+3. 完成切页后，Service 只重新排列三张既有 Page 到“前一页 / 当前页 / 后一页”的 `0% / 100% / 200%` 槽位，并立即无动画回到中间槽位；用户视觉上连续循环，且不会看到页面重排。
+
+首轮阈值暂定为一个 Viewport 宽度的约 `60%`，同一手势最多切换一页。Viewport 关闭 Scroll Momentum 和 Scroll Elastic，使短距离快速拖动不会被惯性推进到下一页；日后若实测手感需要“短而快的甩动翻页”，必须将速度判定、阈值和验证结果一并补充到本文档后再启用。Service 必须以私有状态防止程序化回中触发第二次翻页判定。
+
+`LV_EVENT_SCROLL` 只承担 MusicModeTabs 局部毛玻璃的实时坐标更新；翻页判定只在 `LV_EVENT_SCROLL_END` 执行。Slider 横向拖动需要优先于全局分页：MusicPlayingSlider 收到 `PRESSED` 时临时关闭 MainPageContainer 的 Scrollable Flag，收到 `RELEASED` 或 `PRESS_LOST` 时恢复；因此调节进度不会拖动页面。播放器按钮维持 LVGL 原生点击语义，不为它们创建额外的全局手势屏蔽层。
+
+`MusicModeTabs` 位于 MusicPage 顶部，使用 MusicPage 内嵌的 Tabview 实现，默认 Tab 按钮栏高度以实际观感为准。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `White1` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Blue1` 文字，并仅在底边显示一条细 `Blue1` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Now Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPageContainer 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
 
 当前 `NowPlayingTab`、`QueueTab` 与 `LibraryTab` 仅保留空白内容区，不急于加入封面、队列或专辑网格。`MusicPlayerControlContainer` 是 `MusicPage` 的直接子对象，位于 MusicModeTabs 下方，承载一条假进度条与上一首/播放暂停/下一首三个静态控件；当前尚未创建 `MusicPlayerCard`、假曲名或专辑封面。
 
-`MainPagerDots` 尚未创建。若后续采用三颗小圆点表示 `Music / Bookshelf / Settings` 三张内容页，必须作为 Main 的固定子对象并先在本文档补充其与播放器控制区的避让关系；圆点状态与 MainPager 横滑的联动也属于后续单独设计。
+`DotPanelContainer` 是 `Main` 的固定底部子对象，使用居中的 Flex Row 布局，列间距为 `5 px`，自身不接受点击或滚动。它包含按页面物理顺序创建的 `DotSettings`、`DotMusic` 与 `DotBooks`。非当前页圆点为 `5 x 5 px`、圆角 `3 px`、`White1` 且背景透明度 `180`；当前页指示器为 `14 x 5 px` 的水平胶囊、同一 `White1` 且背景透明度 `220`。初始当前页是 Music，因此初态由 `DotMusic` 显示胶囊。
+
+分页控制器确认切页后，旧当前页指示器动画收缩为圆点（宽度 `14 → 5`、透明度 `220 → 180`），新当前页圆点同时伸展为胶囊（宽度 `5 → 14`、透明度 `180 → 220`）；高度始终为 `5 px`。该动画与页面吸附同步，首轮时长约 `160 ms`、使用 ease-out；手势未达到翻页阈值而回到原页时，不触发圆点状态切换动画。
 
 BooksPage 和 SettingsPage 已直接共用 Main 的单一 StatusBar；它们后续复用 MusicPage 的卡片视觉语言时，仍不得复制新的状态栏对象或单独设置系统壁纸。
 
-#### 10.5.1 Music 局部毛玻璃（已实现，待真机验收）
+#### 10.5.2 Music 局部毛玻璃（已实现，待真机验收）
 
 `MusicModeTabs` 需要真实局部毛玻璃：目标区域内显示从系统壁纸**当前屏幕坐标**裁剪出的模糊像素，区域外壁纸保持清晰。播放器的圆形控制按钮不使用毛玻璃：在 240 px 宽屏上的可见收益不足以抵消额外缓冲与裁剪复杂度，仍使用 SquareLine 的半透明染色、弱描边和图标。该效果不能直接赋给 SquareLine 组件的背景色，也不为每个组件建立独立 Canvas。
 
@@ -458,11 +478,11 @@ BooksPage 和 SettingsPage 已直接共用 Main 的单一 StatusBar；它们后�
 
 1. 在 `Main` 的布局已计算后，从当前清晰壁纸生成一次全屏 Blur 工作帧。复用现有 `service_gui_effect_canvas_buffer` 与隐藏 Canvas 工作对象；随后立即复制到 `main/` 自己长期持有的全屏模糊壁纸，以免 Boot 或其他离屏效果复用 Canvas 工作区后覆盖数据。
 2. `main/gui_service_main` 在 SDRAM 中长期持有一张与 `MusicModeTabs` 同尺寸的裁剪图。它从长期全屏 Blur 壁纸按 Tabview 相对 `ui_Main` 的实际坐标提取连续像素；`canvas/gui_service_canvas_compositor` 提供通用矩形裁剪 Interface。裁剪图尺寸与目标对象相同，LVGL 会在对象区域内绘制它。
-3. 将裁剪图在运行时绑定为 `ui_MusicModeTabs` 的 Background image，并保持 `ui_Main` 的清晰 SquareLine 壁纸不变。`main/` 监听 MainPager 的 LVGL 内部 Content container 的 `LV_EVENT_SCROLL`；每次横滑都读取 MusicModeTabs 的实际坐标，并从长期 Blur 壁纸重新裁剪同一张输出图。这样玻璃区域始终采样其当前下方背景，而不是带着初始位置的静态模糊贴图移动。隐藏 Canvas 始终不参与可见层级。
+3. 将裁剪图在运行时绑定为 `ui_MusicModeTabs` 的 Background image，并保持 `ui_Main` 的清晰 SquareLine 壁纸不变。`main/` 监听 MainPageContainer 的 `LV_EVENT_SCROLL`；每次横滑都读取 MusicModeTabs 的实际坐标，并从长期 Blur 壁纸重新裁剪同一张输出图。这样玻璃区域始终采样其当前下方背景，而不是带着初始位置的静态模糊贴图移动。隐藏 Canvas 始终不参与可见层级。
 
-`MusicModeTabs` 的整个可见区域（标签栏与当前 Tabpage 内容区）都是一块连续的圆角玻璃区域，不只处理标题栏。当前 `Service_GUI_Init()` 在 `ui_init()` 后调用 `service_gui_main_prepare_background()`：它先对 `ui_Main` 调用 `lv_obj_update_layout()`，再读取 `ui_MusicModeTabs` 的实际屏幕坐标；随后以 `ui_Main` 左上角为裁剪图原点换算为壁纸内坐标。MainPager 横滑期间重复同一坐标换算，越出壁纸边界的输出像素写为透明，保证对象半离屏时仍不读越界。这样不把 SquareLine 中的相对尺寸、位置或对象名称复制成 Service 内的固定像素常量。裁剪图与 Tabview 尺寸相同，LVGL 对该对象执行圆角 Background image 绘制，因此圆角外不会留下方形模糊块。
+`MusicModeTabs` 的整个可见区域（标签栏与当前 Tabpage 内容区）都是一块连续的圆角玻璃区域，不只处理标题栏。当前 `Service_GUI_Init()` 在 `ui_init()` 后调用 `service_gui_main_prepare_background()`：它先对 `ui_Main` 调用 `lv_obj_update_layout()`，再读取 `ui_MusicModeTabs` 的实际屏幕坐标；随后以 `ui_Main` 左上角为裁剪图原点换算为壁纸内坐标。MainPageContainer 横滑期间重复同一坐标换算，越出壁纸边界的输出像素写为透明，保证对象半离屏时仍不读越界。这样不把 SquareLine 中的相对尺寸、位置或对象名称复制成 Service 内的固定像素常量。裁剪图与 Tabview 尺寸相同，LVGL 对该对象执行圆角 Background image 绘制，因此圆角外不会留下方形模糊块。
 
-`MusicModeTabs` 与 `MainPager` 的 LVGL 内部 Content container 不由 SquareLine 直接暴露，`main/` Module 仅将这些内部对象的背景、背景图、边框、轮廓和阴影设为透明，以消除 Simplified Theme 产生的白色内容底。`ui_MusicModeTabs` 的运行时 Background image 是唯一允许 Service 替换的 SquareLine 导出对象 Style，因为它承载本 Module 生成的裁剪模糊图；`ui_Main` 的 Background image 仍由 SquareLine 的清晰系统壁纸负责。除该背景源外，所有 SquareLine 导出对象（包括 Tabview 本体、Tabpage、Button）的 Border、Shadow、Radius、背景和文字样式必须只在 SquareLine 中配置，Service 不得覆盖。
+`MusicModeTabs` 的 LVGL 内部 Content container 不由 SquareLine 直接暴露，`main/` Module 仅将该内部对象的背景、背景图、边框、轮廓和阴影设为透明，以消除 Simplified Theme 产生的白色内容底。`ui_MusicModeTabs` 的运行时 Background image 是唯一允许 Service 替换的 SquareLine 导出对象 Style，因为它承载本 Module 生成的裁剪模糊图；`ui_Main` 的 Background image 仍由 SquareLine 的清晰系统壁纸负责。除该背景源外，所有 SquareLine 导出对象（包括 MusicModeTabs 本体、Tabpage、Button）的 Border、Shadow、Radius、背景和文字样式必须只在 SquareLine 中配置，Service 不得覆盖。
 
 为避免 Tabpage 的主题默认白底重新出现，用户必须在 SquareLine 中为 `MusicPage`、`NowPlayingTab`、`QueueTab`、`LibraryTab`、`BooksPage` 和 `SettingsPage` 的 `STYLE (MAIN)` 设置透明背景；若该对象不承担独立卡片视觉，还应将 Border、Outline 和 Shadow 设为零。`MusicModeTabs` 本体和三个播放器 Button 不在此清单内：它们应保留各自设计需要的半透明染色、弱描边、圆角或阴影，Service 会原样保留。此项配置改动后必须由用户重新导出 `GUI/`，不得手改生成代码。
 
@@ -484,14 +504,14 @@ MusicPage
 
 `MusicPlayingSlider` 位于控制按钮上方。当前导出中，主轨道为低 Alpha `Gray1`，Indicator 使用 `Blue1`；`DEFAULT` 状态的 Knob 透明，`PRESSED` 状态才显示 `Blue1` Knob，并通过 `STYLE (KNOB) → Paddings` 增大。LVGL v8 的 Slider Knob 默认边长等于 Slider 较短边，因此若将来改为常显 Knob，仍应通过 Padding 调整其大小，而非修改 Slider 本体的宽高。三个 Button 当前使用 `WhiteMask1` 的低 Alpha 填充，按下态提高 Alpha；不设置独立边框，图标使用 `White1`。当前不在 SquareLine 中添加播放事件。每个图标均由 Button 的独立 Label 子对象承载并居中对齐，以便后续 Service 将 `MusicPlayPauseIcon` 的播放符号替换为暂停符号；不得用 ImageButton 或导入图标图片资源。项目已启用的 `lv_font_montserrat_16` 包含 LVGL 的 `PREV`、`PLAY`、`PAUSE` 与 `NEXT` 符号；用户优先从 SquareLine 的符号选择器使用它们，不新增图标图片资源。三个按钮与外层 `MusicPlayerControlContainer` 均不是毛玻璃区域。
 
-当前导出的壁纸为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，一张全屏帧约 `230400 B`。Music 运行时会同时持有共享 Canvas 工作区、一张 Main 长期全屏 Blur 壁纸和一张最大 `240 x 192` 的 MusicModeTabs 裁剪背景，三者峰值上限约 `585 KiB`；实际 Tabview 比该上限更小，但静态缓冲按安全上限预留。壁纸切换时才重新执行全屏模糊；静态显示、文字更新和每次 `Service_GUI_Process()` 都不得重复模糊。MainPager 横滑的 `LV_EVENT_SCROLL` 只更新局部裁剪图；SquareLine 重新导出导致对象尺寸或位置改变后，会在下一次初始化按新布局重新建立首帧裁剪。若 SquareLine 将 MusicModeTabs 高度扩展到屏幕的 60% 以上，必须先审校并提高 `main/gui_service_main_config.h` 中的上限。未来切换到 RGB565 缓存资源后，三帧合计约 `390 KiB`。
+当前导出的壁纸为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，一张全屏帧约 `230400 B`。Music 运行时会同时持有共享 Canvas 工作区、一张 Main 长期全屏 Blur 壁纸和一张最大 `240 x 192` 的 MusicModeTabs 裁剪背景，三者峰值上限约 `585 KiB`；实际 MusicModeTabs 比该上限更小，但静态缓冲按安全上限预留。壁纸切换时才重新执行全屏模糊；静态显示、文字更新和每次 `Service_GUI_Process()` 都不得重复模糊。MainPageContainer 横滑的 `LV_EVENT_SCROLL` 只更新局部裁剪图；SquareLine 重新导出导致对象尺寸或位置改变后，会在下一次初始化按新布局重新建立首帧裁剪。若 SquareLine 将 MusicModeTabs 高度扩展到屏幕的 60% 以上，必须先审校并提高 `main/gui_service_main_config.h` 中的上限。未来切换到 RGB565 缓存资源后，三帧合计约 `390 KiB`。
 
-多个 Main Page 的玻璃区域不能共用一张固定局部裁剪图而不加管理：当前只在 Music 页面实施；BooksPage、SettingsPage 后续需要各自的裁剪图与更新时机。MainPager 的滑动回调只会更新 MusicModeTabs，且只做从长期模糊壁纸到局部输出缓冲的像素复制，不将软件模糊放入动画路径。当前可复用的私有 Canvas Interface 接收完整模糊图、对象区域和调用方持有的输出缓冲；未来页面可复用裁剪算法，但仍必须各自持有页面级背景与决定重建时机。新增页面级玻璃区域前必须先经用户审校。
+多个 Main Page 的玻璃区域不能共用一张固定局部裁剪图而不加管理：当前只在 Music 页面实施；BooksPage、SettingsPage 后续需要各自的裁剪图与更新时机。MainPageContainer 的滑动回调只会更新 MusicModeTabs，且只做从长期模糊壁纸到局部输出缓冲的像素复制，不将软件模糊放入动画路径。当前可复用的私有 Canvas Interface 接收完整模糊图、对象区域和调用方持有的输出缓冲；未来页面可复用裁剪算法，但仍必须各自持有页面级背景与决定重建时机。新增页面级玻璃区域前必须先经用户审校。
 
 ## 11. 原型验收标准
 
-- 用户可在三张 MainPager 内容页间稳定左右切换，且 StatusBar 保持固定；
-- Music 内部标签只能通过点击顶部标签切换；在其内容区左右滑动时，手势只交给 MainPager；
+- 用户可在三张 MainPageContainer 内容页间稳定循环左右切换，且 StatusBar 保持固定；
+- Music 内部标签只能通过点击顶部标签切换；在其内容区左右滑动时，手势只交给 MainPageContainer；
 - MusicPlayingSlider 与三个静态控制按钮的默认、按下视觉状态正确；
 - BooksPage、SettingsPage 当前保持空白占位，不误表现为已实现的阅读器、专辑详情或设置子页；
 - 后续新增 Album Detail、Mini Player、Reader、MainPagerDots 或 Settings 子页前，先同步本文档再在 SquareLine 中实现；

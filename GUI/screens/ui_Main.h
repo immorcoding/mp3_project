@@ -24,8 +24,7 @@ extern lv_obj_t * ui_StatusBarBatteryBarLabelContainer;
 extern lv_obj_t * ui_StatusBarBatteryBar;
 extern lv_obj_t * ui_StatusBarBatteryLabel;
 extern lv_obj_t * ui_MainPageContainer;
-extern lv_obj_t * ui_MainPager;
-extern lv_obj_t * ui_MusicPage;
+extern lv_obj_t * ui_MusicPageContainer;
 extern lv_obj_t * ui_MusicModeTabs;
 extern lv_obj_t * ui_NowPlayingTab;
 extern lv_obj_t * ui_QueueTab;
@@ -38,8 +37,12 @@ extern lv_obj_t * ui_MusicNextButton;
 extern lv_obj_t * ui_MusicNextIcon;
 extern lv_obj_t * ui_MusicPlayPauseButton;
 extern lv_obj_t * ui_MusicPlayPauseIcon;
-extern lv_obj_t * ui_BooksPage;
-extern lv_obj_t * ui_SettingsPage;
+extern lv_obj_t * ui_BooksPageContainer;
+extern lv_obj_t * ui_SettingsPageContainer;
+extern lv_obj_t * ui_DotPanelContainer;
+extern lv_obj_t * ui_DotSettings;
+extern lv_obj_t * ui_DotMusic;
+extern lv_obj_t * ui_DotBooks;
 // CUSTOM VARIABLES
 
 #ifdef __cplusplus

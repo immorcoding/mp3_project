@@ -16,8 +16,7 @@ lv_obj_t * ui_StatusBarBatteryBarLabelContainer = NULL;
 lv_obj_t * ui_StatusBarBatteryBar = NULL;
 lv_obj_t * ui_StatusBarBatteryLabel = NULL;
 lv_obj_t * ui_MainPageContainer = NULL;
-lv_obj_t * ui_MainPager = NULL;
-lv_obj_t * ui_MusicPage = NULL;
+lv_obj_t * ui_MusicPageContainer = NULL;
 lv_obj_t * ui_MusicModeTabs = NULL;
 lv_obj_t * ui_NowPlayingTab = NULL;
 lv_obj_t * ui_QueueTab = NULL;
@@ -30,8 +29,12 @@ lv_obj_t * ui_MusicNextButton = NULL;
 lv_obj_t * ui_MusicNextIcon = NULL;
 lv_obj_t * ui_MusicPlayPauseButton = NULL;
 lv_obj_t * ui_MusicPlayPauseIcon = NULL;
-lv_obj_t * ui_BooksPage = NULL;
-lv_obj_t * ui_SettingsPage = NULL;
+lv_obj_t * ui_BooksPageContainer = NULL;
+lv_obj_t * ui_SettingsPageContainer = NULL;
+lv_obj_t * ui_DotPanelContainer = NULL;
+lv_obj_t * ui_DotSettings = NULL;
+lv_obj_t * ui_DotMusic = NULL;
+lv_obj_t * ui_DotBooks = NULL;
 // event funtions
 
 // build funtions
@@ -151,42 +154,30 @@ void ui_Main_screen_init(void)
     ui_MainPageContainer = lv_obj_create(ui_Main);
     lv_obj_remove_style_all(ui_MainPageContainer);
     lv_obj_set_width(ui_MainPageContainer, lv_pct(100));
-    lv_obj_set_height(ui_MainPageContainer, lv_pct(95));
+    lv_obj_set_height(ui_MainPageContainer, lv_pct(85));
     lv_obj_set_x(ui_MainPageContainer, lv_pct(0));
     lv_obj_set_y(ui_MainPageContainer, lv_pct(5));
     lv_obj_set_align(ui_MainPageContainer, LV_ALIGN_TOP_MID);
-    lv_obj_clear_flag(ui_MainPageContainer, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_clear_flag(ui_MainPageContainer,
+                      LV_OBJ_FLAG_SCROLL_ELASTIC | LV_OBJ_FLAG_SCROLL_MOMENTUM | LV_OBJ_FLAG_SCROLL_CHAIN);     /// Flags
+    lv_obj_set_scrollbar_mode(ui_MainPageContainer, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_scroll_dir(ui_MainPageContainer, LV_DIR_HOR);
     lv_obj_set_style_bg_color(ui_MainPageContainer, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_MainPageContainer, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_MainPager = lv_tabview_create(ui_MainPageContainer, LV_DIR_TOP, 0);
-    lv_obj_set_width(ui_MainPager, lv_pct(100));
-    lv_obj_set_height(ui_MainPager, lv_pct(100));
-    lv_obj_set_align(ui_MainPager, LV_ALIGN_CENTER);
-    lv_obj_clear_flag(ui_MainPager, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    lv_obj_set_style_bg_color(ui_MainPager, lv_color_hex(0xF80A15), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_MainPager, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_MusicPageContainer = lv_obj_create(ui_MainPageContainer);
+    lv_obj_remove_style_all(ui_MusicPageContainer);
+    lv_obj_set_width(ui_MusicPageContainer, lv_pct(100));
+    lv_obj_set_height(ui_MusicPageContainer, lv_pct(100));
+    lv_obj_set_y(ui_MusicPageContainer, 0);
+    lv_obj_set_x(ui_MusicPageContainer, lv_pct(100));
+    lv_obj_set_align(ui_MusicPageContainer, LV_ALIGN_TOP_MID);
+    lv_obj_clear_flag(ui_MusicPageContainer, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_scroll_dir(ui_MusicPageContainer, LV_DIR_HOR);
 
-    lv_obj_set_style_bg_color(lv_tabview_get_tab_btns(ui_MainPager), lv_color_hex(0xFF0000),
-                              LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(lv_tabview_get_tab_btns(ui_MainPager), 0,  LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    lv_obj_set_style_bg_color(lv_tabview_get_tab_btns(ui_MainPager), lv_color_hex(0xFFFFFF),
-                              LV_PART_ITEMS | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(lv_tabview_get_tab_btns(ui_MainPager), 0,  LV_PART_ITEMS | LV_STATE_DEFAULT);
-
-    ui_MusicPage = lv_tabview_add_tab(ui_MainPager, "MusicPage");
-    lv_obj_clear_flag(ui_MusicPage, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    lv_obj_set_style_bg_color(ui_MusicPage, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_MusicPage, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_left(ui_MusicPage, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_right(ui_MusicPage, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_top(ui_MusicPage, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_bottom(ui_MusicPage, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    ui_MusicModeTabs = lv_tabview_create(ui_MusicPage, LV_DIR_TOP, 20);
+    ui_MusicModeTabs = lv_tabview_create(ui_MusicPageContainer, LV_DIR_TOP, 20);
     lv_obj_set_width(ui_MusicModeTabs, lv_pct(90));
-    lv_obj_set_height(ui_MusicModeTabs, lv_pct(55));
+    lv_obj_set_height(ui_MusicModeTabs, lv_pct(68));
     lv_obj_set_align(ui_MusicModeTabs, LV_ALIGN_TOP_MID);
     lv_obj_clear_flag(ui_MusicModeTabs, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_radius(ui_MusicModeTabs, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -254,14 +245,16 @@ void ui_Main_screen_init(void)
     lv_obj_set_style_bg_color(ui_LibraryTab, lv_color_hex(0xFFFFFF), LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_LibraryTab, 0, LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
 
-    ui_MusicPlayerControlContainer = lv_obj_create(ui_MusicPage);
+    ui_MusicPlayerControlContainer = lv_obj_create(ui_MusicPageContainer);
     lv_obj_remove_style_all(ui_MusicPlayerControlContainer);
     lv_obj_set_width(ui_MusicPlayerControlContainer, lv_pct(90));
-    lv_obj_set_height(ui_MusicPlayerControlContainer, lv_pct(25));
-    lv_obj_set_x(ui_MusicPlayerControlContainer, 0);
-    lv_obj_set_y(ui_MusicPlayerControlContainer, lv_pct(-8));
+    lv_obj_set_height(ui_MusicPlayerControlContainer, lv_pct(29));
     lv_obj_set_align(ui_MusicPlayerControlContainer, LV_ALIGN_BOTTOM_MID);
     lv_obj_clear_flag(ui_MusicPlayerControlContainer, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_pad_left(ui_MusicPlayerControlContainer, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_right(ui_MusicPlayerControlContainer, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_top(ui_MusicPlayerControlContainer, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_bottom(ui_MusicPlayerControlContainer, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_MusicPlayingSlider = lv_slider_create(ui_MusicPlayerControlContainer);
     lv_slider_set_value(ui_MusicPlayingSlider, 0, LV_ANIM_OFF);
@@ -270,7 +263,7 @@ void ui_Main_screen_init(void)
     lv_obj_set_width(ui_MusicPlayingSlider, lv_pct(90));
     lv_obj_set_height(ui_MusicPlayingSlider, lv_pct(7));
     lv_obj_set_x(ui_MusicPlayingSlider, lv_pct(0));
-    lv_obj_set_y(ui_MusicPlayingSlider, lv_pct(10));
+    lv_obj_set_y(ui_MusicPlayingSlider, lv_pct(6));
     lv_obj_set_align(ui_MusicPlayingSlider, LV_ALIGN_TOP_MID);
     lv_obj_set_style_radius(ui_MusicPlayingSlider, 10000, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_MusicPlayingSlider, lv_color_hex(0x404040), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -379,13 +372,67 @@ void ui_Main_screen_init(void)
     ui_object_set_themeable_style_property(ui_MusicPlayPauseIcon, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
                                            _ui_theme_alpha_White1);
 
-    ui_BooksPage = lv_tabview_add_tab(ui_MainPager, "BooksPage");
-    lv_obj_set_style_bg_color(ui_BooksPage, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_BooksPage, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_BooksPageContainer = lv_obj_create(ui_MainPageContainer);
+    lv_obj_remove_style_all(ui_BooksPageContainer);
+    lv_obj_set_width(ui_BooksPageContainer, lv_pct(100));
+    lv_obj_set_height(ui_BooksPageContainer, lv_pct(100));
+    lv_obj_set_y(ui_BooksPageContainer, 0);
+    lv_obj_set_x(ui_BooksPageContainer, lv_pct(200));
+    lv_obj_set_align(ui_BooksPageContainer, LV_ALIGN_TOP_MID);
+    lv_obj_clear_flag(ui_BooksPageContainer, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_scroll_dir(ui_BooksPageContainer, LV_DIR_HOR);
 
-    ui_SettingsPage = lv_tabview_add_tab(ui_MainPager, "SettingsPage");
-    lv_obj_set_style_bg_color(ui_SettingsPage, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_SettingsPage, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_SettingsPageContainer = lv_obj_create(ui_MainPageContainer);
+    lv_obj_remove_style_all(ui_SettingsPageContainer);
+    lv_obj_set_width(ui_SettingsPageContainer, lv_pct(100));
+    lv_obj_set_height(ui_SettingsPageContainer, lv_pct(100));
+    lv_obj_set_align(ui_SettingsPageContainer, LV_ALIGN_TOP_MID);
+    lv_obj_clear_flag(ui_SettingsPageContainer, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_scroll_dir(ui_SettingsPageContainer, LV_DIR_HOR);
+
+    ui_DotPanelContainer = lv_obj_create(ui_Main);
+    lv_obj_remove_style_all(ui_DotPanelContainer);
+    lv_obj_set_width(ui_DotPanelContainer, lv_pct(100));
+    lv_obj_set_height(ui_DotPanelContainer, lv_pct(10));
+    lv_obj_set_align(ui_DotPanelContainer, LV_ALIGN_BOTTOM_MID);
+    lv_obj_set_flex_flow(ui_DotPanelContainer, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(ui_DotPanelContainer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(ui_DotPanelContainer, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_pad_row(ui_DotPanelContainer, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_column(ui_DotPanelContainer, 5, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_DotSettings = lv_obj_create(ui_DotPanelContainer);
+    lv_obj_set_width(ui_DotSettings, 5);
+    lv_obj_set_height(ui_DotSettings, 5);
+    lv_obj_set_x(ui_DotSettings, -41);
+    lv_obj_set_y(ui_DotSettings, 137);
+    lv_obj_set_align(ui_DotSettings, LV_ALIGN_CENTER);
+    lv_obj_clear_flag(ui_DotSettings, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_radius(ui_DotSettings, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_DotSettings, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_DotSettings, 180, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_DotMusic = lv_obj_create(ui_DotPanelContainer);
+    lv_obj_set_width(ui_DotMusic, 14);
+    lv_obj_set_height(ui_DotMusic, 5);
+    lv_obj_set_x(ui_DotMusic, -41);
+    lv_obj_set_y(ui_DotMusic, 137);
+    lv_obj_set_align(ui_DotMusic, LV_ALIGN_CENTER);
+    lv_obj_clear_flag(ui_DotMusic, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_radius(ui_DotMusic, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_DotMusic, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_DotMusic, 220, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_DotBooks = lv_obj_create(ui_DotPanelContainer);
+    lv_obj_set_width(ui_DotBooks, 5);
+    lv_obj_set_height(ui_DotBooks, 5);
+    lv_obj_set_x(ui_DotBooks, -41);
+    lv_obj_set_y(ui_DotBooks, 137);
+    lv_obj_set_align(ui_DotBooks, LV_ALIGN_CENTER);
+    lv_obj_clear_flag(ui_DotBooks, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_radius(ui_DotBooks, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_DotBooks, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_DotBooks, 180, LV_PART_MAIN | LV_STATE_DEFAULT);
 
 }
 
@@ -405,8 +452,7 @@ void ui_Main_screen_destroy(void)
     ui_StatusBarBatteryBar = NULL;
     ui_StatusBarBatteryLabel = NULL;
     ui_MainPageContainer = NULL;
-    ui_MainPager = NULL;
-    ui_MusicPage = NULL;
+    ui_MusicPageContainer = NULL;
     ui_MusicModeTabs = NULL;
     ui_NowPlayingTab = NULL;
     ui_QueueTab = NULL;
@@ -419,7 +465,11 @@ void ui_Main_screen_destroy(void)
     ui_MusicNextIcon = NULL;
     ui_MusicPlayPauseButton = NULL;
     ui_MusicPlayPauseIcon = NULL;
-    ui_BooksPage = NULL;
-    ui_SettingsPage = NULL;
+    ui_BooksPageContainer = NULL;
+    ui_SettingsPageContainer = NULL;
+    ui_DotPanelContainer = NULL;
+    ui_DotSettings = NULL;
+    ui_DotMusic = NULL;
+    ui_DotBooks = NULL;
 
 }

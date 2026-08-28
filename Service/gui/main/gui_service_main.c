@@ -7,7 +7,7 @@
  *          本 Module 不修改 SquareLine 导出的视觉设计。它在布局完成后读取导出
  *          对象的实际屏幕坐标，以 Main Screen 为原点换算为壁纸图坐标；随后
  *          从长期持有的全屏模糊帧裁剪出与 MusicModeTabs 完全等大的局部背景，并
- *          仅将该运行时 Background image 绑定到 ui_MusicModeTabs。MainPager
+ *          仅将该运行时 Background image 绑定到 ui_MusicModeTabs。MainPageContainer
  *          滚动期间会按控件当帧坐标重裁剪，确保玻璃区域始终采样其下方的壁纸；
  *          除此以外，本 Module 只处理 SquareLine 无法访问的 Tabview 内部
  *          Content container，且绝不在滚动回调中重复执行全屏软件模糊。
@@ -59,8 +59,8 @@ static lv_img_dsc_t service_gui_main_blurred_wallpaper;
 /** @brief 当前长期模糊壁纸是否已成功构建。 */
 static bool service_gui_main_blurred_wallpaper_ready;
 
-/** @brief 已绑定滚动事件的 MainPager 内部 Content container。 */
-static lv_obj_t *service_gui_main_pager_content;
+/** @brief 已绑定滚动事件的 SquareLine MainPageContainer。 */
+static lv_obj_t *service_gui_main_page_container;
 
 /**
  * @brief 清除 LVGL 内部 Content container 的默认视觉层。
@@ -132,7 +132,7 @@ static Service_StatusTypeDef service_gui_main_make_tabview_content_transparent(
  * @retval SERVICE_NOT_READY Tabview 或其内部 Content container 尚未创建。
  * @note 仅用于 MusicModeTabs。顶部 Tab Button 仍通过 lv_tabview_set_act() 切换页面；
  *       禁用内部 Content 的 Scrollable Flag 后，内容区的左右拖动不再切换模式，
- *       从而让父级 MainPager 独占全局页面横滑手势。
+ *       从而让父级 MainPageContainer 独占全局页面横滑手势。
  */
 static Service_StatusTypeDef service_gui_main_disable_tabview_content_scroll(
     lv_obj_t *tabview)
@@ -196,7 +196,7 @@ static Service_StatusTypeDef service_gui_main_get_object_image_area(
  * @retval SERVICE_NOT_READY Main、目标控件或长期模糊壁纸尚未就绪。
  * @retval SERVICE_INVALID_PARAM 当前对象尺寸超过预留裁剪缓冲，或图片描述符无效。
  * @note 该函数只从长期模糊壁纸复制局部像素，不做软件模糊。裁剪允许越出壁纸
- *       边界，越界部分透明，以支持 MainPager 横滑过程中的半离屏状态。
+ *       边界，越界部分透明，以支持 MainPageContainer 横滑过程中的半离屏状态。
  */
 static Service_StatusTypeDef service_gui_main_refresh_tabs_background(void)
 {
@@ -242,12 +242,12 @@ static Service_StatusTypeDef service_gui_main_refresh_tabs_background(void)
 }
 
 /**
- * @brief 在 MainPager 横滑时重新裁剪 MusicModeTabs 下方的模糊壁纸。
+ * @brief 在 MainPageContainer 横滑时重新裁剪 MusicModeTabs 下方的模糊壁纸。
  * @param event LVGL 发送的滚动事件。
- * @note 回调只绑定到 MainPager 的内部 Content container。SquareLine 无法公开该
- *       对象，但它才是实际被横向滚动的容器；MainPager 根对象本身不移动。
+ * @note 回调直接绑定到 SquareLine 导出的 MainPageContainer。该普通 Container
+ *       本身就是实际横向滚动的 Viewport，不存在需额外取得的内部 Content container。
  */
-static void service_gui_main_pager_scroll_event(lv_event_t *event)
+static void service_gui_main_page_scroll_event(lv_event_t *event)
 {
     if ((event == NULL) || (lv_event_get_code(event) != LV_EVENT_SCROLL))
     {
@@ -258,37 +258,60 @@ static void service_gui_main_pager_scroll_event(lv_event_t *event)
 }
 
 /**
- * @brief 为 MainPager 内部 Content container 安装局部背景同步回调。
+ * @brief 为 MainPageContainer 安装局部背景同步回调。
  * @retval SERVICE_OK 成功。
- * @retval SERVICE_NOT_READY MainPager 或其内部 Content container 尚未创建。
- * @note 同一 Content container 只注册一次。若未来重建 ui_Main，则会识别新的
- *       内部对象并重新注册；旧 Screen 删除时 LVGL 会一并销毁其事件描述符。
+ * @retval SERVICE_NOT_READY MainPageContainer 尚未创建。
+ * @note 同一导出 Viewport 只注册一次。若未来重建 ui_Main，则会识别新的对象并
+ *       重新注册；旧 Screen 删除时 LVGL 会一并销毁其事件描述符。
  */
-static Service_StatusTypeDef service_gui_main_bind_pager_scroll_event(void)
+static Service_StatusTypeDef service_gui_main_bind_page_scroll_event(void)
 {
-    lv_obj_t *content;
-
-    if (ui_MainPager == NULL)
+    if (ui_MainPageContainer == NULL)
     {
         return SERVICE_NOT_READY;
     }
 
-    content = lv_tabview_get_content(ui_MainPager);
-
-    if (content == NULL)
-    {
-        return SERVICE_NOT_READY;
-    }
-
-    if (content != service_gui_main_pager_content)
+    if (ui_MainPageContainer != service_gui_main_page_container)
     {
         lv_obj_add_event_cb(
-            content,
-            service_gui_main_pager_scroll_event,
+            ui_MainPageContainer,
+            service_gui_main_page_scroll_event,
             LV_EVENT_SCROLL,
             NULL);
-        service_gui_main_pager_content = content;
+        service_gui_main_page_container = ui_MainPageContainer;
     }
+
+    return SERVICE_OK;
+}
+
+/**
+ * @brief 无动画定位 MainPageContainer 到中间的 MusicPage 槽位。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_NOT_READY MainPageContainer 尚未创建或布局宽度无效。
+ * @note SquareLine 中 Settings、Music、Books 三页依次位于 Viewport 的 0%、100%、
+ *       200% 物理槽位。以一个 Viewport 宽度作为水平滚动位置即可显示中间的 Music
+ *       Page。本函数只建立开机初始位置，不承担松手吸附、翻页阈值或循环重排逻辑。
+ */
+static Service_StatusTypeDef service_gui_main_center_music_page(void)
+{
+    lv_coord_t viewport_width;
+
+    if (ui_MainPageContainer == NULL)
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    viewport_width = lv_obj_get_width(ui_MainPageContainer);
+
+    if (viewport_width <= 0)
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    lv_obj_scroll_to_x(
+        ui_MainPageContainer,
+        viewport_width,
+        LV_ANIM_OFF);
 
     return SERVICE_OK;
 }
@@ -310,17 +333,10 @@ Service_StatusTypeDef service_gui_main_prepare_background(
     lv_area_t full_wallpaper_area;
 
     if ((ui_Main == NULL) ||
-        (ui_MainPager == NULL) ||
+        (ui_MainPageContainer == NULL) ||
         (ui_MusicModeTabs == NULL))
     {
         return SERVICE_NOT_READY;
-    }
-
-    status = service_gui_main_make_tabview_content_transparent(ui_MainPager);
-
-    if (status != SERVICE_OK)
-    {
-        return status;
     }
 
     status = service_gui_main_make_tabview_content_transparent(ui_MusicModeTabs);
@@ -339,6 +355,13 @@ Service_StatusTypeDef service_gui_main_prepare_background(
 
     /* 先触发布局，确保百分比尺寸与 Flex 布局均已解析为实际坐标。 */
     lv_obj_update_layout(ui_Main);
+
+    status = service_gui_main_center_music_page();
+
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
 
     status = service_gui_canvas_blur_image(
         clear_wallpaper,
@@ -385,5 +408,5 @@ Service_StatusTypeDef service_gui_main_prepare_background(
         LV_OPA_COVER,
         LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    return service_gui_main_bind_pager_scroll_event();
+    return service_gui_main_bind_page_scroll_event();
 }
