@@ -1,6 +1,7 @@
 # AXP2101 与板级电源架构
 
-> 适用工程：`version0.3.1`
+> 适用工程：`version0.3.1` 及后续版本
+> 相关 ADR：[ADR-0003：AXP2101、SoftI2C 与 Platform Power 的职责划分](adr/0003-pmic-softi2c-bridge.md)
 >
 > 当前器件：AXP2101
 >

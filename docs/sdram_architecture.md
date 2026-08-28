@@ -1,5 +1,7 @@
 # SDRAM 架构
 
+> 相关 ADR：[ADR-0006：Cortex-M7 D-Cache 范围与 DMA 缓冲所有权](adr/0006-cache-range-ownership.md)、[ADR-0008：SDRAM 早期初始化与 NOLOAD 缓冲区所有权](adr/0008-sdram-early-init-and-noload-ownership.md)
+
 ## 硬件与 FMC 配置
 
 当前 Platform SDRAM 同时兼容 `MT48LC16M16A2-6A` 与 `AS4C16M16SA-7TCN`。两者组织均为

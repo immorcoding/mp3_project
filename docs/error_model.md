@@ -1,6 +1,8 @@
 # 设备错误模型
 
-> 适用工程：`version0.3.1`
+> 相关 ADR：[ADR-0002：分层关系分离与 Interface 所有权](adr/0002-layering-and-interface-ownership.md)
+
+> 适用工程：`version0.3.1` 及后续版本
 >
 > 覆盖模块：Audio、AXP2101、SD Card Device
 >

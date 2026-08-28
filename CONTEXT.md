@@ -2,7 +2,9 @@
 
 本文档统一记录工程中的稳定术语、职责边界和产品语义。具体文件路径、字段、调用链和硬件参数由 `docs/` 下的技术文档维护，避免同一实现事实被重复记录后逐渐不一致。
 
-本文档不是目录导航：根目录与各源码目录的 `README.md` 说明 Module 的位置、公开 Interface 和局部约束；`docs/architecture_standard.md` 是功能/抽象所有权、编译期依赖与运行时路径的唯一总则；本文档只定义这些 Module 之间反复使用的领域词汇。新增 Module、改变职责归属或改变产品语义时，必须同步核对本文档与对应技术文档。
+本文档不是目录导航：根目录与各源码目录的 `README.md` 说明 Module 的位置、公开 Interface 和局部约束；`docs/architecture_standard.md` 是功能/抽象所有权、编译期依赖与运行时路径的唯一总则；`docs/adr/` 记录已经接受且会长期影响架构边界的取舍及其理由；本文档只定义这些 Module 之间反复使用的领域词汇。ADR 不重复记录可随实现变化的参数、调用链或配置事实。
+
+新增 Module、改变职责归属或改变产品语义时，必须同步核对本文档与对应技术文档；若同时形成可复用的长期架构取舍，还必须新增或更新对应 ADR。
 
 ## 播放器应用（Player application）
 
@@ -380,3 +382,27 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 示例：
 
 > SDMMC1 的读 DMA 完成后，Adapter 发布“读完成”；Filesystem Module 的私有执行器在 Storage Task 上下文收到通知后才调用 Platform SD，使 SD Card Device 从 `BUSY` 回到 `READY`。
+
+## W25Qxx 设备（W25Qxx Device）
+
+**W25Qxx 设备**是预留的、面向 Winbond W25Q 系列串行 NOR Flash 的可复用芯片协议 Module。它未来负责芯片识别、原始读取、页编程、擦除和稳定的设备状态；它不拥有 STM32 QSPI Handle、板级引脚、FTL 映射、FatFs、USB MSC 或媒体业务。
+
+它通过自身拥有的 `W25Qxx_BusOps` 使用具体总线后端；STM32 HAL QSPI 后端属于 `Adapters/stm32_hal/w25qxx_qspi`，具体实例由平台 Flash 注入。
+
+相关术语：**Flash FTL**、**平台 Flash**。
+
+## Flash FTL（Flash Translation Layer）
+
+**Flash FTL**是预留的逻辑扇区 Module，用于把原始 NOR Flash 的页编程、擦除块、同步与掉电恢复规则隐藏在稳定的逻辑存储语义之后。它拥有 `FlashFTL_RawOps`，但不认识 W25Qxx、STM32 HAL、Platform、FatFs、USB MSC 或媒体业务。
+
+W25Qxx 到 Flash FTL 的具体转换由 `Adapters/bridge/flash_ftl_w25qxx` 实现。只有 FTL 的擦写和掉电策略完成验证后，才可讨论由文件系统或 USB MSC 消费其逻辑扇区。
+
+相关术语：**W25Qxx 设备**、**平台 Flash**。
+
+## 平台 Flash（Platform Flash）
+
+**平台 Flash**是预留的、代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。它未来长期持有 W25Qxx Handle、QSPI Adapter Context 与 Flash FTL Handle，完成两个 Adapter 的 Bind 和本 PCB QSPI 资源配置。
+
+它不实现芯片协议、FTL 映射、FatFs 挂载、USB MSC 所有权或媒体扫描。当前仅确定目录与架构接缝，尚未配置或初始化 QSPI。
+
+相关术语：**W25Qxx 设备**、**Flash FTL**。

@@ -1,5 +1,7 @@
 # FT6X36 触摸架构
 
+> 相关 ADR：[ADR-0007：GUI 运行时所有权与 SquareLine 生成边界](adr/0007-gui-runtime-and-squareline-boundary.md)
+
 ## 1. 当前范围
 
 本阶段建立触摸控制器的轮询式单指输入链路：复位触摸模组、探测 I2C 地址、读取 Chip ID 寄存器 `0xA3`，并把第一触点交给 LVGL Pointer 输入设备。

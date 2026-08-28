@@ -1,6 +1,6 @@
 # SD 卡子系统架构
 
-> 适用工程：`version0.3.1`
+> 适用工程：`version0.3.1` 及后续版本
 >
 > 当前后端：STM32H743 SDMMC1，4 位总线
 >
@@ -8,6 +8,8 @@
 >
 > 当前范围：逻辑块访问、热插拔、同步 DMA FatFs DiskIO Bridge，以及由 Storage Task
 > 串行执行的 FAT32 挂载、卸载与显式格式化。
+>
+> 相关 ADR：[ADR-0005：SD、FatFs 与 Storage Task 的所有权](adr/0005-sd-filesystem-task-ownership.md)、[ADR-0006：Cortex-M7 D-Cache 范围与 DMA 缓冲所有权](adr/0006-cache-range-ownership.md)
 
 ## 1. 设计目的
 

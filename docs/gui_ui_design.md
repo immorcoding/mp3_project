@@ -1,5 +1,7 @@
 # GUI 原型设计
 
+> 相关 ADR：[ADR-0007：GUI 运行时所有权与 SquareLine 生成边界](adr/0007-gui-runtime-and-squareline-boundary.md)
+
 ## 1. 目的与当前范围
 
 本文定义便携式媒体播放器第一版 GUI 的视觉语言、页面层级和交互边界，作为 SquareLine Studio 原型的实施依据。目标是先验证 240 x 320 竖屏上的布局、切换和触摸体验；页面中的歌曲、专辑、书籍、时间、电量和亮度均可使用固定假数据。

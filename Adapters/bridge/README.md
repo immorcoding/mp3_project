@@ -5,7 +5,7 @@
 ## 公开 Interface
 
 - 各子目录声明的 `*_Bind()` Interface；
-- 仅由 Platform 持有、用于连接两个 Component Handle 的 Adapter Context。
+- 需要时由 Platform 长期持有、用于连接两个 Component Handle 的 Adapter Context；若 Bridge 不需要额外状态，则源 Component Handle 本身就是回调 Context。
 
 ## 编译期依赖
 

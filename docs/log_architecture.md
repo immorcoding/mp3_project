@@ -1,10 +1,12 @@
 # 日志组件架构
 
-> 适用工程：`version0.3.1`
+> 适用工程：`version0.3.1` 及后续版本
 >
 > 当前输出：USB CDC
 >
 > 当前模型：日志核心固定深度 RAM 队列、Service_Log 静态消息块池、普通任务非阻塞投递、Log Task 单消费者、Platform 装配输出 Adapter
+>
+> 相关 ADR：[ADR-0004：日志核心单消费者与可替换输出 Adapter](adr/0004-log-single-consumer-and-output-adapter.md)
 
 ## 1. Module 所有权与装配
 

@@ -3,6 +3,11 @@
 > 适用工程：`version0.3.1` 及后续版本
 > 状态：当前工程的规范性架构文档  
 > 目的：避免同一类模块在后续扩展时使用不同的分层、命名和装配方式
+> 相关 ADR：[ADR-0002：分层关系分离与 Interface 所有权](adr/0002-layering-and-interface-ownership.md)
+
+## 0. 与 ADR 和技术文档的关系
+
+本文定义全工程的规范性规则；[adr/](adr/README.md) 记录某次真实方案选择的背景、替代方案与后果；各 `*_architecture.md` 记录当前实现事实。ADR 不得绕过本文随意建立新的层级规则；若新的已接受 ADR 必须调整本标准，应在同一次修改中同步改写本文，不能保留相互冲突的要求。
 
 ## 1. 总体规则：必须区分三张图
 
@@ -93,11 +98,13 @@ Components/
   axp2101/
   audio/
   ft6x36/
+  flash_ftl/                  # 预留，尚未实现
   led/
   log/
   sd/
   soft_i2c/
   st7789/
+  w25qxx/                     # 预留，尚未实现
 ```
 
 这些模块虽然用途不同，但在架构上都是可独立复用的 Component。只有目录规模显著
@@ -156,11 +163,12 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 - 让 Component 反向包含 Adapter 头文件；
 - 在 Adapter 内偷偷绑定 `hi2s2`、`hsd1` 等全局对象。
 
-当前 Adapter：
+当前 Adapter 与已预留的 Adapter 接缝：
 
 | 目录 | 职责 |
 | --- | --- |
 | `Adapters/bridge/axp2101_soft_i2c` | SoftI2C Component 到 AXP2101 Bus Ops 的跨 Component Bridge。 |
+| `Adapters/bridge/flash_ftl_w25qxx` | 预留、尚未实现；W25Qxx Component 公开 Interface 到 Flash FTL Raw Ops 的跨 Component Bridge。 |
 | `Adapters/cortex/cache` | Cortex-M7 Cacheable 内存范围的 D-Cache 维护；DMA Adapter 和外部存储器诊断按需复用。 |
 | `Adapters/cortex/cycle_counter` | Cortex-M7 DWT 周期计数器与核心频率读取；性能诊断按需复用。 |
 | `Adapters/stm32_hal/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
@@ -169,12 +177,15 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/stm32_hal/led_gpio` | STM32 HAL GPIO 到 LED Device PortOps；逻辑 ON 电平由 Platform 注入。 |
 | `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |
 | `Adapters/stm32_hal/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
+| `Adapters/stm32_hal/w25qxx_qspi` | 预留、尚未实现；STM32 HAL QSPI 到 W25Qxx Bus Ops。 |
 | `Adapters/stm32_hal/temp` | STM32H7 ADC3 内部温度传感器与 VREFINT 的校准、采样和工厂标定换算。 |
 | `Adapters/stm32_hal/irq/stm32_gpio_exti_irq` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
 | `Adapters/stm32_hal/irq/stm32_sdmmc_irq` | 按 `SD_HandleTypeDef` 注册 HAL SD 完成、错误和中止回调，并发布强类型传输事件。 |
 | `Adapters/stm32_hal/log_usb_cdc` | USB CDC 非阻塞输出和 HAL 毫秒时间源。 |
 
 `bridge/` 只转换两个 Component Interface，不引入具体 MCU 依赖；`cortex/` 只封装 Cortex-M 架构能力，不持有外设或任务状态；`stm32_hal/` 则集中所有必须认识 STM32 HAL、CubeMX Handle 或 HAL 全局回调的实现。
+
+已预留的 W25Qxx/Flash FTL Module 尚无源代码、CubeMX QSPI 配置或对上公开的 Platform Interface；其目录与接缝决定见 [w25q256_architecture.md](w25q256_architecture.md)。在原始 NOR 的擦除、对齐、写入和掉电策略经过验证前，不得把它接入 FatFs、USB MSC 或创建通用逻辑块抽象。
 
 FreeRTOS 内核源码、项目配置与 Hook 的边界为：
 

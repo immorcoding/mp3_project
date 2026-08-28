@@ -1,0 +1,16 @@
+# Architecture Decision Records
+
+本目录记录会长期约束 Module 所有权、Interface 接缝或演进路线的架构决定。ADR 不是实现进度记录；实现细节、调用链、配置参数和测试结果应留在对应技术文档与 Module README。
+
+ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后会影响什么”；技术文档说明“当前实际如何工作”。发生冲突时，不允许保留两份互相矛盾的事实：应在同一次修改中更新受影响的技术文档，并由最新已接受 ADR 记录该次取舍。
+
+## 当前记录
+
+- [0001-w25q256-component-seams.md](0001-w25q256-component-seams.md)：W25Q256、Flash FTL、Bridge、STM32 HAL Adapter 与 Platform 的职责划分。
+- [0002-layering-and-interface-ownership.md](0002-layering-and-interface-ownership.md)：三类关系、Ops Interface 所有权与装配规则。
+- [0003-pmic-softi2c-bridge.md](0003-pmic-softi2c-bridge.md)：AXP2101、SoftI2C、Bridge 与 Platform Power 的边界。
+- [0004-log-single-consumer-and-output-adapter.md](0004-log-single-consumer-and-output-adapter.md)：日志单消费者、静态消息池与可替换输出后端。
+- [0005-sd-filesystem-task-ownership.md](0005-sd-filesystem-task-ownership.md)：SD、FatFs、DMA 与 Storage Task 的所有权。
+- [0006-cache-range-ownership.md](0006-cache-range-ownership.md)：Cortex-M7 D-Cache 范围与 DMA 缓冲区约束。
+- [0007-gui-runtime-and-squareline-boundary.md](0007-gui-runtime-and-squareline-boundary.md)：GUI Task、GUI Service 与 SquareLine 生成边界。
+- [0008-sdram-early-init-and-noload-ownership.md](0008-sdram-early-init-and-noload-ownership.md)：SDRAM 早期初始化、正式初始化与 NOLOAD 缓冲责任。
