@@ -1,57 +1,54 @@
-# Main GUI 运行时视觉 Module
+# Main GUI 运行时 Module
 
-本 Module 只负责 Main Screen 的运行时视觉补充：将 SquareLine 未暴露的 Tabview 内部
-Content container 的默认白底置为透明，并根据目标控件的真实布局从长期保存的全屏模糊壁纸
-中裁剪出 MusicModeTabs 局部背景图。
+`main/` 是 Main Screen 的私有运行时编排 Module。它只向 `Service/gui` 发布
+`service_gui_main_prepare()`：在 SquareLine 的 `ui_init()` 完成后，按稳定顺序准备
+Main 的循环分页与局部毛玻璃。APP、其他 Service 和 `GUI/` 生成代码不得包含或调用
+本目录中的任何头文件。
 
-它不创建、删除或修改 `GUI/` 的生成文件，也不维护播放状态、歌曲数据、原始触摸采样或任何
-硬件资源。对象名称和层级由 SquareLine 导出；本 Module 只在 `ui_init()` 后读取其公开对象
-指针。为显示局部毛玻璃，它会将 `ui_MusicModeTabs` 的运行时 Background image 绑定为自己
-持有的裁剪帧；MainPageContainer 横滑时，Module 从当前屏幕坐标对应的模糊壁纸区域重裁剪该帧，
-使玻璃内容持续对应其下方背景，而非带着一张静态贴图移动。除此以外，只修改 SquareLine
-无法访问的内部 Content container 的运行时 LVGL Style。它还会禁用 `MusicModeTabs` 内部
-Content container 的手势滚动，使顶部 Tab Button 独占模式切换、`MainPageContainer` 独占全局左右
-翻页手势。除 `ui_MusicModeTabs` 的运行时
-Background image 外，SquareLine 导出对象的背景、边框、阴影、圆角和文字样式始终由
-SquareLine 决定。
+它不创建、删除或修改 SquareLine 导出的文件，也不维护歌曲、阅读器、设置页等产品业务。
+这些功能出现稳定职责后，才按实际边界新增各自的 Main 子 Module；不得为未来功能预建空
+目录或空 Interface。
+
+## 子 Module 与资源所有权
+
+~~~text
+main/
+├─ gui_service_main.c / .h      仅编排初始化顺序的私有入口
+├─ pager/                       Page 槽位、吸附、循环重排、分页指示器动画
+└─ background/                  壁纸模糊、局部裁剪、Tabview 内部 Content 兼容
+~~~
+
+- `pager/` 不依赖 Canvas、Platform LCD 或壁纸图像；它只读取 SquareLine 公开对象并维护
+  三个既有 Page 的物理槽位与逻辑圆点状态。
+- `background/` 不维护当前页、吸附阈值、循环映射或圆点动画；它长期持有页面级 SDRAM
+  图像缓冲，并在 MainPageContainer 滚动时更新 MusicModeTabs 的局部背景。
+- 两个子 Module 可以向同一个 `MainPageContainer` 注册不同 LVGL 事件，但不共享私有状态：
+  Pager 处理 `LV_EVENT_SCROLL_END`，Background 处理 `LV_EVENT_SCROLL`。
 
 ## 编译期依赖
 
-- `GUI/ui.h`：读取 SquareLine 导出的 Main、MainPageContainer、Tabview、Tabpage 和播放器 Button 对象；
-- `canvas/` 私有 Interface：生成全屏模糊帧并执行带透明越界填充的局部裁剪；
-- `Platform/lcd`：取得当前显示分辨率与 SDRAM 缓冲对齐要求；
-- `lvgl.h`：布局、Tabview 内部对象与背景 Style Interface。
-
-`gui_service_main_config.h` 保存全屏壁纸模糊半径以及 MusicModeTabs 局部背景的容量上限。
-调整模糊半径会影响初始化耗时与毛玻璃观感；若在 SquareLine 中扩大 Tabview 尺寸导致超过
-容量上限，初始化或后续滚动裁剪会安全返回 `SERVICE_INVALID_PARAM`，必须经审校后同步
-调整该配置。
+- `GUI/ui.h` 只由具体子 Module 的 Implementation 包含，用于读取 SquareLine 导出的对象；
+- `background/` 依赖 `canvas/` 和 `Platform/lcd` 的公开 Interface；
+- `pager/` 只依赖 LVGL 与 `GUI/ui.h`；
+- 根 `gui_service_main.c` 只依赖两个子 Module 的私有 Interface，不直接访问 UI 对象或
+  离屏缓冲。
 
 ## 运行时路径
 
-```text
+~~~text
 GUI Task
   -> Service_GUI_Init()
   -> ui_init()
-  -> service_gui_main_prepare_background()
-       -> 读取 Main / Music 控件真实布局
-       -> Canvas 生成全屏模糊工作帧
-       -> 复制为 Main 长期全屏模糊壁纸
-       -> Canvas 裁剪 MusicModeTabs 初始区域
-       -> 绑定 MusicModeTabs 的 Background image
-       -> 禁用 MusicModeTabs 内部 Content 的手势滚动
-       -> 为 MainPageContainer 注册 LV_EVENT_SCROLL
+  -> service_gui_main_prepare(clear_wallpaper)
+       -> pager/service_gui_main_pager_prepare()
+            -> 解析布局、绑定三页、无动画居中 Music
+            -> 注册吸附、循环重排和圆点动画
+       -> background/service_gui_main_background_prepare(clear_wallpaper)
+            -> 使 Tabview 内部 Content 透明并禁用其横滑
+            -> Canvas 生成全屏模糊工作帧
+            -> 复制为 Main 长期模糊壁纸
+            -> 裁剪 MusicModeTabs 首帧并注册滚动同步
+~~~
 
-MainPageContainer 滚动
-  -> 读取 MusicModeTabs 当前屏幕坐标
-  -> 从长期全屏模糊壁纸裁剪带透明越界填充的局部背景
-  -> 失效 MusicModeTabs，交由 LVGL 重绘
-```
-
-`MusicModeTabs` 的内部 Content 不接受左右手势滚动，三个模式页仅由 SquareLine 导出的顶部
-Tab Button 选择。该设置不影响后续 Queue、Library 在各自 Tabpage 内实现独立的竖向列表滚动。
-
-全屏软件模糊只在初始化、未来的壁纸切换或相关布局变化后执行。`Service_GUI_Process()`
-不做该处理；MainPageContainer 滑动期间只复制当前局部区域，不再模糊整张图片。局部裁剪允许部分
-越出壁纸边界，越界像素为透明，故横滑至屏幕边缘时仍能保持背景坐标正确。Settings、Books
-将来各自提供背景与生命周期，不能复用 Music 的裁剪图或滚动事件。
+Pager 必须先完成初始居中；Background 随后读取的 MusicModeTabs 坐标才是实际显示位置。
+此顺序由根入口封装，调用者不得绕过。

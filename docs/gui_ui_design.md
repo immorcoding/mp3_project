@@ -442,7 +442,7 @@ Main
 
 `StatusBar` 为透明的横向 Container，位于 Main 最顶端，当前高度采用屏幕高度的较小比例。左侧为短时间文本；中间为简短日期提示；右侧为电池轮廓与百分比。它不绘制独立卡片底色、不承载点击事件，也不与 Lock Screen 复用对象：Lock 的大时间、电量信息仍是独立的居中信息层。首版所有数值均为固定假数据。
 
-Main 的纵向固定分区为：顶部 `StatusBarContainer` 占屏幕高度 `5%`，中部 `MainPageContainer` 占 `85%`，底部 `DotPanelContainer` 占 `10%`。`MainPageContainer` 使用 SquareLine 的普通 `Container` 承担横滑内容区，不使用 Tabview 或隐藏的 Tab 按钮栏。它是 Main 中唯一允许横向滚动的普通视口：透明、无边框、无阴影、关闭 Scrollbar，四边 Padding 为 `0`，不启用 Flex 或 Grid 布局；其可视范围裁剪子对象，子 Page 不得溢出可视范围绘制。三张 Page 均填满 Viewport 的宽高。
+Main 的纵向固定分区为：顶部 `StatusBarContainer` 占屏幕高度 `5%`，中部 `MainPageContainer` 占 `85%`，底部 `DotPanelContainer` 占 `10%`。`MainPageContainer` 使用 SquareLine 的普通 `Container` 承担横滑内容区，不使用 Tabview 或隐藏的 Tab 按钮栏。它是 Main 中唯一允许横向滚动的普通视口：透明、无边框、无阴影、关闭 Scrollbar，不启用 Flex 或 Grid 布局；左、右、下 Padding 为 `0 px`，顶部保留 `3 px` 的轻微留白，使内容页与 StatusBar 视觉分离。其可视范围裁剪子对象，子 Page 不得溢出可视范围绘制。三张 Page 均填满 Viewport 的有效内容宽高。
 
 三张 Page Container 自身保持不可滚动，但都必须开启 **Horizontal Scroll Chain**：LVGL 命中一个不可滚动的子 Page 后，只有该 Flag 才会继续向父级寻找可横滑的 `MainPageContainer`。`MainPageContainer` 自身保持关闭 Scroll Chain，防止全局分页继续传递给 `Main`。同时，`MainPageContainer` 必须保留 **Clickable** 与 **Scrollable** Flag：在 LVGL v8 中，指针命中测试只会把 Clickable 对象作为活动对象；若关闭 Clickable，即使对象开启 Scrollable，触摸也不会选中该视口，横向滚动无法开始。该 Flag 仅表示可接收指针命中，不会把视口变成视觉上的按钮。不得手改 `GUI/` 生成代码绕过这一结构。
 
@@ -450,23 +450,25 @@ Main 的纵向固定分区为：顶部 `StatusBarContainer` 占屏幕高度 `5%`
 
 Viewport 内始终只保留同一组三张 Page 实例，不复制首尾页。初始槽位从左到右为：`SettingsPage` 位于 `0%`、`MusicPage` 位于 `100%`、`BooksPage` 位于 `200%`；每张 Page 的宽高均填满 Viewport。GUI Service 在对象布局完成后无动画滚动到一个 Viewport 宽度，因此真机初始可见的是位于中间槽位的 MusicPage。SquareLine 模拟器默认从滚动起点显示 SettingsPage 属于预期限制；完整初始定位以导出后的 GUI Service 为准。
 
-横向手势结束后，不通过 Tabview 索引切换，而是计算当前水平滚动位置相对中间槽位的偏移 `delta`：
+横向手势结束后，不通过 Tabview 索引切换，而是计算当前水平滚动位置相对当前物理槽位的偏移 `delta`：
 
-1. `delta` 未达到翻页阈值时，动画回到中间槽位；
+1. `delta` 未达到翻页阈值时，动画回到当前物理槽位；
 2. `delta` 超过正阈值时，完成向后一页的短滚动；超过负阈值时，完成向前一页的短滚动；
 3. 完成切页后，Service 只重新排列三张既有 Page 到“前一页 / 当前页 / 后一页”的 `0% / 100% / 200%` 槽位，并立即无动画回到中间槽位；用户视觉上连续循环，且不会看到页面重排。
 
-首轮阈值暂定为一个 Viewport 宽度的约 `60%`，同一手势最多切换一页。Viewport 关闭 Scroll Momentum 和 Scroll Elastic，使短距离快速拖动不会被惯性推进到下一页；日后若实测手感需要“短而快的甩动翻页”，必须将速度判定、阈值和验证结果一并补充到本文档后再启用。Service 必须以私有状态防止程序化回中触发第二次翻页判定。
+首轮阈值当前为一个 Viewport 宽度的 `50%`，同一手势最多切换一页。Service 记录当前物理槽位，在 `LV_EVENT_SCROLL_END` 中按阈值决定“原页或相邻页”，并动画滚动至对应的 `0%`、`100%` 或 `200%` 槽位。若活动页到达左端或右端，Service 随即在同一 GUI 任务中循环轮换三个既有 Page 指针、重新写入 `0% / 100% / 200%` 位置，并无动画回到中间槽位；屏幕只在下一次刷新时呈现重排后的稳定画面，因此用户视觉上连续循环。当前仍不更新圆点。Viewport 关闭 Scroll Momentum 和 Scroll Elastic，使短距离快速拖动不会被惯性推进到下一页；日后若实测手感需要“短而快的甩动翻页”，必须将速度判定、阈值和验证结果一并补充到本文档后再启用。Service 必须以私有状态防止程序化吸附和回中产生的 `LV_EVENT_SCROLL_END` 被再次判定为新手势。
 
-`LV_EVENT_SCROLL` 只承担 MusicModeTabs 局部毛玻璃的实时坐标更新；翻页判定只在 `LV_EVENT_SCROLL_END` 执行。Slider 横向拖动需要优先于全局分页：MusicPlayingSlider 收到 `PRESSED` 时临时关闭 MainPageContainer 的 Scrollable Flag，收到 `RELEASED` 或 `PRESS_LOST` 时恢复；因此调节进度不会拖动页面。播放器按钮维持 LVGL 原生点击语义，不为它们创建额外的全局手势屏蔽层。
+`LV_EVENT_SCROLL` 只承担 MusicModeTabs 局部毛玻璃的实时坐标更新；翻页判定只在 `LV_EVENT_SCROLL_END` 执行。当前 `MusicPlayingSlider` 依赖 LVGL 原生命中与拖动行为，真机验证中不会触发 MainPageContainer 翻页，因此不额外创建手势仲裁回调或临时修改外层 Scrollable Flag。若未来出现可复现的 Slider 与全局分页竞争，再以实测问题为依据单独诊断。播放器按钮维持 LVGL 原生点击语义，不为它们创建额外的全局手势屏蔽层。
 
-`MusicModeTabs` 位于 MusicPage 顶部，使用 MusicPage 内嵌的 Tabview 实现，默认 Tab 按钮栏高度以实际观感为准。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `White1` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Blue1` 文字，并仅在底边显示一条细 `Blue1` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Now Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPageContainer 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
+`MusicModeTabs` 位于 MusicPage 顶部，使用 MusicPage 内嵌的 Tabview 实现，当前宽度为页面的 `90%`、高度为有效页面高度的 `66%`，默认 Tab 按钮栏高度以实际观感为准。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `White1` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Blue1` 文字，并仅在底边显示一条细 `Blue1` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Now Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPageContainer 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
 
-当前 `NowPlayingTab`、`QueueTab` 与 `LibraryTab` 仅保留空白内容区，不急于加入封面、队列或专辑网格。`MusicPlayerControlContainer` 是 `MusicPage` 的直接子对象，位于 MusicModeTabs 下方，承载一条假进度条与上一首/播放暂停/下一首三个静态控件；当前尚未创建 `MusicPlayerCard`、假曲名或专辑封面。
+当前 `NowPlayingTab`、`QueueTab` 与 `LibraryTab` 仅保留空白内容区，不急于加入封面、队列或专辑网格。`MusicPlayerControlContainer` 是 `MusicPage` 的直接子对象，位于 MusicModeTabs 下方，当前宽度为页面的 `90%`、高度为 `28%`，上、下 Padding 均为 `2 px`；它承载一条假进度条与上一首/播放暂停/下一首三个静态控件。`MusicPlayingSlider` 宽度为播放器区的 `90%`、高度 `7%`，相对顶部下移 `5%`。当前尚未创建 `MusicPlayerCard`、假曲名或专辑封面。
 
 `DotPanelContainer` 是 `Main` 的固定底部子对象，使用居中的 Flex Row 布局，列间距为 `5 px`，自身不接受点击或滚动。它包含按页面物理顺序创建的 `DotSettings`、`DotMusic` 与 `DotBooks`。非当前页圆点为 `5 x 5 px`、圆角 `3 px`、`White1` 且背景透明度 `180`；当前页指示器为 `14 x 5 px` 的水平胶囊、同一 `White1` 且背景透明度 `220`。初始当前页是 Music，因此初态由 `DotMusic` 显示胶囊。
 
-分页控制器确认切页后，旧当前页指示器动画收缩为圆点（宽度 `14 → 5`、透明度 `220 → 180`），新当前页圆点同时伸展为胶囊（宽度 `5 → 14`、透明度 `180 → 220`）；高度始终为 `5 px`。该动画与页面吸附同步，首轮时长约 `160 ms`、使用 ease-out；手势未达到翻页阈值而回到原页时，不触发圆点状态切换动画。
+分页控制器确认切页后，旧当前页指示器动画收缩为圆点（宽度 `14 → 5`、透明度 `220 → 180`），新当前页圆点同时伸展为胶囊（宽度 `5 → 14`、透明度 `180 → 220`）；高度始终为 `5 px`。该动画与页面吸附同步，首轮时长为 `160 ms`、使用 ease-out；手势未达到翻页阈值而回到原页时，不触发圆点状态切换动画。SquareLine 仍是圆点的唯一静态样式来源：`Service/gui/main` 初始化时从 `DotSettings` 和 `DotMusic` 读取非活动与活动的实际宽度、透明度基线，切页时只对 `DotSettings`、`DotMusic`、`DotBooks` 执行这两项运行时动画，不覆盖其颜色、圆角或布局。快速连续切页会取消同一圆点的旧动画，并从当前已绘制状态继续过渡。
+
+分页控制、局部毛玻璃和 Main 初始化在当前原型阶段继续保留于 `Service/gui/main/` 的同一 Module：它们共用 SquareLine 对象绑定、物理槽位映射与滚动事件时序，暂不为了目录形式拆成多个浅 Module。待循环分页与圆点动画均完成并通过真机验证后，再审视是否按职责拆出 `main/pager/`（吸附、循环、圆点）与 `main/background/`（壁纸与局部毛玻璃）；届时 Interface 必须隐藏 LVGL 回调顺序和对象映射细节，确保拆分能够提升 Locality 与 Leverage，而非只移动文件。
 
 BooksPage 和 SettingsPage 已直接共用 Main 的单一 StatusBar；它们后续复用 MusicPage 的卡片视觉语言时，仍不得复制新的状态栏对象或单独设置系统壁纸。
 

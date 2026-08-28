@@ -64,7 +64,7 @@ Canvas 工作缓冲按当前 `240 x 320` 显示规格分配，约为 `225 KiB`�
 ```text
 Service_GUI_Init()
   -> ui_init()
-  -> main/service_gui_main_prepare_background()
+  -> main/service_gui_main_prepare()
        -> Canvas 模糊当前壁纸
        -> Main 复制长期全屏模糊帧并建立 MusicModeTabs 首帧裁剪
   -> boot/gui_service_boot_prepare_background()

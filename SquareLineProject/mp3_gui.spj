@@ -5338,7 +5338,7 @@
                         "strtype": "OBJECT/Size",
                         "intarray": [
                           90,
-                          68
+                          66
                         ],
                         "InheritedType": 7
                       },
@@ -5678,7 +5678,7 @@
                             "strtype": "OBJECT/Position",
                             "intarray": [
                               0,
-                              6
+                              5
                             ],
                             "InheritedType": 7
                           },
@@ -7043,7 +7043,7 @@
                         "strtype": "OBJECT/Size",
                         "intarray": [
                           90,
-                          29
+                          28
                         ],
                         "InheritedType": 7
                       },
@@ -7127,8 +7127,8 @@
                                 "intarray": [
                                   0,
                                   0,
-                                  4,
-                                  4
+                                  2,
+                                  2
                                 ],
                                 "InheritedType": 7
                               }
@@ -7719,6 +7719,18 @@
                           255,
                           255,
                           255,
+                          0
+                        ],
+                        "InheritedType": 7
+                      },
+                      {
+                        "nid": 11110,
+                        "flags": 4096,
+                        "strtype": "_style/Padding",
+                        "intarray": [
+                          0,
+                          0,
+                          3,
                           0
                         ],
                         "InheritedType": 7
@@ -14320,7 +14332,7 @@
     "separate_screen_save": false,
     "hierarchy_state_save": false,
     "reverse_event_order": false,
-    "backup_cnt": 590,
+    "backup_cnt": 596,
     "autosave_cnt": 0,
     "group_color_cnt": 0,
     "imagebytearrayprefix": "",

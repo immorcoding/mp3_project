@@ -27,7 +27,7 @@ Interface，也不要求 `GUI/` 包含任何 Service 头文件。
 
 ```text
 ui_init()
-  -> main/service_gui_main_prepare_background()
+  -> main/service_gui_main_prepare()
        Main 复制自己的长期全屏模糊壁纸
   -> service_gui_boot_prepare_background()
        Boot 直接绑定共享 Canvas 工作帧

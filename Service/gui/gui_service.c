@@ -224,7 +224,7 @@ Service_StatusTypeDef Service_GUI_Init(void)
     service_gui_last_tick = xTaskGetTickCount();
     ui_init();
 
-    gui_status = service_gui_main_prepare_background(
+    gui_status = service_gui_main_prepare(
         &ui_img_wallpaper_indigo_mist_soft_dark_png);
 
     if (gui_status != SERVICE_OK)

@@ -71,8 +71,10 @@ Service/gui/
 │  ├─ gui_service_boot.c / .h
 │  ├─ gui_service_boot_config.h
 │  └─ README.md
-├─ main/                             Main Screen 的运行时视觉补充
-│  ├─ gui_service_main.c / .h / _config.h
+├─ main/                             Main Screen 的运行时编排
+│  ├─ gui_service_main.c / .h
+│  ├─ pager/                         循环分页、吸附、重排与圆点动画
+│  ├─ background/                    壁纸模糊、局部裁剪与 Tabview 兼容
 │  └─ README.md
 └─ canvas/                           可复用的 Canvas 离屏处理
    ├─ gui_service_canvas.c / .h
@@ -95,12 +97,16 @@ Service/gui/
   top layer，因而不随短生命周期的 Boot Screen 销毁。`gui_service_canvas_compositor.c` 在调用方提供的长期
   缓冲中执行清晰/模糊帧的矩形、圆角矩形和圆形区域合成，也提供严格或带透明越界填充的连续
   图片裁剪；Canvas 不拥有页面级背景。
-- `main/gui_service_main.c`：Main Screen 运行时视觉 Module。它仅补齐 SquareLine 未暴露的
-  Tabview 内部 Content container 透明 Style，长期持有全屏模糊壁纸和 `MusicModeTabs` 的 SDRAM
-  裁剪背景。它只为显示局部毛玻璃而绑定 `ui_MusicModeTabs` 的运行时 Background image，并监听
-  MainPager 内部 Content 的滚动事件，以目标控件当前坐标重裁剪该背景。SquareLine 导出对象的
-  Border、Shadow、Radius 与其他视觉 Style 不由本 Module 覆盖；滚动事件只做局部复制，不在
-  GUI Task 的逐帧处理路径中重新模糊或合成整张壁纸。
+- `main/gui_service_main.c`：Main Screen 的私有编排入口。它先调用 Pager Module 解析布局、
+  定位 MusicPage 至中间物理槽位并绑定循环分页，再调用 Background Module 建立局部毛玻璃；
+  入口本身不持有 UI 状态或离屏图像。
+- `main/pager/`：只持有三张 Main Page 的物理槽位、程序化吸附状态和逻辑圆点状态。它监听
+  `MainPageContainer` 的 `LV_EVENT_SCROLL_END`，以 50% 阈值吸附至相邻槽位，并在两端轮换既有
+  Page 后无动画回中实现循环。它不依赖 Canvas、Platform LCD 或壁纸资源。
+- `main/background/`：只持有 Main 的长期模糊壁纸和 `MusicModeTabs` SDRAM 裁剪背景。它使
+  SquareLine 未公开的 Tabview 内部 Content 透明、禁用其横滑，并监听 `MainPageContainer` 的
+  `LV_EVENT_SCROLL`，按目标控件当前坐标重裁剪背景。它不维护分页槽位、吸附或圆点状态。除
+  `ui_MusicModeTabs` 的运行时 Background image 外，不覆盖 SquareLine 导出对象的视觉 Style。
 
 `gui_service_config.h` 保存绘制缓冲行数。改变该值会同时影响 SDRAM 占用、SPI
 刷新分块数量和 LVGL 的双缓冲等待行为，必须结合显示帧率与 D-Cache 约束验证。
