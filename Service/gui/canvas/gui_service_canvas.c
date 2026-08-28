@@ -4,9 +4,11 @@
   * @brief   GUI Service 的共享 Canvas 离屏处理实现。
   *
   * @details
-  *          本 Module 持有唯一的全屏 Canvas 工作区。它将一张全屏 LVGL 真彩
-  *          图像复制至外部 SDRAM 后执行横向、纵向软件模糊，并将 Canvas 的
-  *          图像描述符返回给调用方绑定为运行时背景。
+ *          本 Module 持有唯一的全屏 Canvas 工作区。它将一张全屏 LVGL 真彩
+ *          图像复制至外部 SDRAM 后执行横向、纵向软件模糊，并将 Canvas 的
+ *          图像描述符返回给调用方。该描述符指向可复用工作区：短生命周期的
+ *          Boot 可直接绑定为运行时背景；Main 等跨事件使用者必须复制像素后再
+ *          长期绑定，不能把共享工作帧当作页面级资源。
   ******************************************************************************
   */
 
@@ -19,7 +21,8 @@
 /**
  * @brief GUI 离屏视觉效果的可复用 Canvas 像素工作区。
  * @note  当前按全屏真彩带 Alpha 图像的最大尺寸分配，位于外部 SDRAM。
- *        GUI Task 同一时刻只允许一个离屏效果占用该工作区。
+ *        GUI Task 同一时刻只允许一个离屏效果改写该工作区；新一次模糊会覆盖
+ *        上一次返回的像素。
  */
 static uint8_t service_gui_effect_canvas_buffer[
     LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(
@@ -51,8 +54,8 @@ static lv_img_dsc_t service_gui_effect_blurred_image;
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_INVALID_PARAM 图片尺寸、格式或数据大小不满足当前原型约束。
  * @retval SERVICE_NOT_READY LVGL Canvas 对象尚不可用。
- * @note 输出描述符及其像素数据在下次调用本函数前有效。
- *       当前只允许一项离屏视觉效果占用该共享 Canvas。
+ * @note 输出描述符及其像素数据在下次调用本函数前有效。当前只允许一项离屏视觉
+ *       效果改写该共享 Canvas；若调用方需长期保留结果，必须自行复制像素与描述符。
  */
 Service_StatusTypeDef service_gui_canvas_blur_image(
     const lv_img_dsc_t *source,

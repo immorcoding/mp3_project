@@ -152,8 +152,9 @@ static void service_gui_boot_set_arc_phase(void *target, int32_t value)
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_NOT_READY Boot Screen 或 Canvas 工作对象尚不可用。
  * @retval SERVICE_INVALID_PARAM 壁纸格式或尺寸不满足当前 Canvas 原型约束。
- * @note  该函数只绑定 Boot 的运行时背景；Canvas 工作区本身归 canvas Module
- *        持有，不依附于 Boot Screen，因而可被后续壁纸相关功能复用。
+ * @note  该函数直接绑定 Canvas 的共享工作帧；Canvas 工作区本身归 canvas Module
+ *        持有，不依附于 Boot Screen，因而可被后续壁纸相关功能复用。故 Boot
+ *        显示期间不能再次调用 Canvas 模糊 Interface，否则此处背景像素会被覆盖。
  */
 Service_StatusTypeDef service_gui_boot_prepare_background(
     const lv_img_dsc_t *clear_wallpaper)

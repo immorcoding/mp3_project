@@ -28,7 +28,7 @@
 #include "GUI/ui.h"
 
 /**
- * @brief LVGL v8 仅保存这些对象的指针，故其存储期必须覆盖显示驱动的整个生命周期，双缓冲区绘制。
+ * @brief LVGL v8 仅保存两块绘制缓冲的指针，故其存储期必须覆盖显示驱动的整个生命周期。
  */
 static lv_color_t service_gui_draw_buffer_1[
     PLATFORM_LCD_WIDTH * SERVICE_GUI_DRAW_BUFFER_LINES]

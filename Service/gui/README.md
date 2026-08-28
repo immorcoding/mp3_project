@@ -69,13 +69,15 @@ Service/gui/
 ├─ gui_service.c / .h / _config.h    GUI Task 生命周期、显示/触摸和 DMA 桥接
 ├─ boot/                             仅属于启动视觉序列
 │  ├─ gui_service_boot.c / .h
-│  └─ gui_service_boot_config.h
+│  ├─ gui_service_boot_config.h
+│  └─ README.md
 ├─ main/                             Main Screen 的运行时视觉补充
 │  ├─ gui_service_main.c / .h / _config.h
 │  └─ README.md
 └─ canvas/                           可复用的 Canvas 离屏处理
    ├─ gui_service_canvas.c / .h
-   └─ gui_service_canvas_compositor.c / .h
+   ├─ gui_service_canvas_compositor.c / .h
+   └─ README.md
 ```
 
 - `gui_service.c`：GUI Task 生命周期、LVGL 显示/输入驱动注册，以及 LCD DMA
@@ -84,7 +86,9 @@ Service/gui/
   Module 生成并绑定 Boot 的模糊背景，再显式启动 Arc 相位动画。BootReveal 的
   `SCREEN_LOADED` 事件调用 `Service_GUI_Boot_RequestLock()` 时，本 Module 以
   `lv_async_call()` 延后一轮 LVGL 调度，再发起到 Lock 的 Fade；因此不会重入尚未收尾的
-  前一次 Screen 切换。
+  前一次 Screen 切换。Boot 直接使用共享 Canvas 工作帧作为背景，故启动期间不得再次
+  执行 Canvas 模糊；GUI Service 先调用 Main Module 复制其长期模糊壁纸，再调用本
+  Module 占用共享工作帧，MainPager 的滚动更新只读取 Main 自己的副本，不会改写 Boot。
 - `canvas/gui_service_canvas.c`：通用 Canvas Module。它独占可复用的 SDRAM 工作区，接收
   调用方给定的图片和模糊半径，返回模糊图像描述符；目前被 Boot 全屏模糊与 Main 局部毛玻璃
   依次复用，后续也可用于壁纸更新和 Settings 局部毛玻璃生成。其隐藏 Canvas 对象挂在 display
