@@ -442,7 +442,7 @@ Main
 
 `MainPager` 使用 SquareLine 的 `Tabview` 承担横滑内容区；其默认 Tab 按钮栏不作为正式视觉元素。已在 SquareLine 中验证，将该控件的 `Tab Size` 设为 `0` 即可隐藏默认按钮栏，同时保留内容页横滑；正式模式标签由 MusicPage 自己的 `MusicModeTabs` 承担。不得隐藏整个 `MainPager`，也不以手改 `GUI/` 生成代码绕过。
 
-`MusicModeTabs` 位于 MusicPage 顶部，使用 MusicPage 内嵌的 Tabview 实现，默认 Tab 按钮栏高度以实际观感为准。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `White1` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Blue1` 文字，并仅在底边显示一条细 `Blue1` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Now Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。首轮只验证 Tabview 原生点击和横滑切页；不添加额外业务事件、动画或手工状态同步逻辑。
+`MusicModeTabs` 位于 MusicPage 顶部，使用 MusicPage 内嵌的 Tabview 实现，默认 Tab 按钮栏高度以实际观感为准。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `White1` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Blue1` 文字，并仅在底边显示一条细 `Blue1` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Now Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPager 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
 
 当前 `NowPlayingTab`、`QueueTab` 与 `LibraryTab` 仅保留空白内容区，不急于加入封面、队列或专辑网格。`MusicPlayerControlContainer` 是 `MusicPage` 的直接子对象，位于 MusicModeTabs 下方，承载一条假进度条与上一首/播放暂停/下一首三个静态控件；当前尚未创建 `MusicPlayerCard`、假曲名或专辑封面。
 
@@ -491,7 +491,7 @@ MusicPage
 ## 11. 原型验收标准
 
 - 用户可在三张 MainPager 内容页间稳定左右切换，且 StatusBar 保持固定；
-- Music 内部标签可通过原生点击或横滑切换，且不干扰 MainPager 横滑；
+- Music 内部标签只能通过点击顶部标签切换；在其内容区左右滑动时，手势只交给 MainPager；
 - MusicPlayingSlider 与三个静态控制按钮的默认、按下视觉状态正确；
 - BooksPage、SettingsPage 当前保持空白占位，不误表现为已实现的阅读器、专辑详情或设置子页；
 - 后续新增 Album Detail、Mini Player、Reader、MainPagerDots 或 Settings 子页前，先同步本文档再在 SquareLine 中实现；

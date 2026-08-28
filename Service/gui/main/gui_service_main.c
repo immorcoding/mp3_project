@@ -126,6 +126,37 @@ static Service_StatusTypeDef service_gui_main_make_tabview_content_transparent(
 }
 
 /**
+ * @brief 禁用一个 SquareLine Tabview 内部 Content container 的手势滚动。
+ * @param tabview SquareLine 导出的 Tabview 对象。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_NOT_READY Tabview 或其内部 Content container 尚未创建。
+ * @note 仅用于 MusicModeTabs。顶部 Tab Button 仍通过 lv_tabview_set_act() 切换页面；
+ *       禁用内部 Content 的 Scrollable Flag 后，内容区的左右拖动不再切换模式，
+ *       从而让父级 MainPager 独占全局页面横滑手势。
+ */
+static Service_StatusTypeDef service_gui_main_disable_tabview_content_scroll(
+    lv_obj_t *tabview)
+{
+    lv_obj_t *content;
+
+    if (tabview == NULL)
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    content = lv_tabview_get_content(tabview);
+
+    if (content == NULL)
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
+
+    return SERVICE_OK;
+}
+
+/**
  * @brief 按 Main Screen 原点将对象坐标转换为壁纸坐标区域。
  * @param object SquareLine 导出的目标对象。
  * @param main_area Main Screen 的实际屏幕区域。
@@ -263,7 +294,7 @@ static Service_StatusTypeDef service_gui_main_bind_pager_scroll_event(void)
 }
 
 /**
- * @brief 为 MusicModeTabs 构建实时局部毛玻璃数据源并消除主题默认白底。
+ * @brief 为 MusicModeTabs 构建实时局部毛玻璃数据源并限定其手势归属。
  * @param clear_wallpaper 当前清晰系统壁纸。
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_NOT_READY Main Screen、Tabview 或目标控件尚未就绪。
@@ -293,6 +324,13 @@ Service_StatusTypeDef service_gui_main_prepare_background(
     }
 
     status = service_gui_main_make_tabview_content_transparent(ui_MusicModeTabs);
+
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
+
+    status = service_gui_main_disable_tabview_content_scroll(ui_MusicModeTabs);
 
     if (status != SERVICE_OK)
     {
