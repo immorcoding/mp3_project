@@ -1,11 +1,12 @@
 # Platform Flash
 
-本 Module 装配当前 PCB 上的 W25Q256 外部 NOR Flash 与 CubeMX QSPI。当前已在启动阶段绑定 STM32 HAL QSPI Adapter，读取 JEDEC ID，并按本板配置校验 Winbond 厂商码 `EF` 与 256 Mbit 容量码 `19`；完整三字节 ID 仍会缓存并对上公开。Flash FTL、擦写、逻辑扇区、FatFs 和 USB MSC 均未接入。
+本 Module 装配当前 PCB 上的 W25Q256 外部 NOR Flash 与 CubeMX QSPI。当前已在启动阶段绑定 STM32 HAL QSPI Adapter，读取 JEDEC ID，并按本板配置校验 Winbond 厂商码 `EF` 与 256 Mbit 容量码 `19`；随后以 `0x5A` 校验 SFDP 签名，并确保 SR2.QE 已开启。它也可读取实时 SR1/SR2 快照并向上提供 WIP/WEL/QE。Flash FTL、页写、擦除、逻辑扇区、FatFs 和 USB MSC 均未接入。
 
 ## 预期公开 Interface
 
-- `Platform_Flash_Init()`：绑定 QSPI Adapter，同步读取并校验 JEDEC ID；
+- `Platform_Flash_Init()`：绑定 QSPI Adapter，同步校验 JEDEC ID 与 SFDP 签名；若 QE 为 0，则在启动期安全置位并回读核验；
 - `Platform_Flash_GetJedecID()`：取得初始化阶段缓存的三字节 ID，不重新访问 QSPI。
+- `Platform_Flash_ReadStatusRegisters()`：实时读取 SR1、SR2 与 WIP/WEL/QE；不返回缓存。
 
 ## 编译期依赖与装配
 
@@ -13,7 +14,7 @@
 - `Adapters/stm32_hal/w25qxx_qspi` 的 QSPI Bind Interface；
 - CubeMX 管理的 QSPI Handle、GPIO 与时钟配置。
 
-Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识和 QSPI Adapter Context，完成 HAL QSPI Adapter Bind 与 W25Qxx 初始化。`MemoryType`（例如 `40` 或 `70`）只保留为诊断信息，不影响 W25Q256 兼容性判定。FTL 实现后才会增加 Flash FTL Handle 与 Bridge Bind。
+Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识和 QSPI Adapter Context，完成 HAL QSPI Adapter Bind、W25Qxx 初始化、SFDP 校验和 QE 配置。`MemoryType`（例如 `40` 或 `70`）只保留为诊断信息，不影响 W25Q256 兼容性判定。QE 已开启时不写 Flash；QE 为 0 时的 SR2 配置最多阻塞 20 ms，且仅发生在调度器启动前。FTL 实现后才会增加 Flash FTL Handle 与 Bridge Bind。
 
 ## 运行时请求与约束
 

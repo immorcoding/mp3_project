@@ -65,6 +65,7 @@ void app_init(void)
         case PLATFORM_OK:
         {
             Platform_Flash_JedecIDTypeDef jedec_id;
+            Platform_Flash_StatusRegistersTypeDef status_registers;
 
             (void)LOG_Printf(LOG_LEVEL_INFO, "PLATFORM", "Initialization successful.");
 
@@ -82,6 +83,25 @@ void app_init(void)
                              (unsigned int)jedec_id.ManufacturerID,
                              (unsigned int)jedec_id.MemoryType,
                              (unsigned int)jedec_id.CapacityID);
+            (void)LOG_Printf(LOG_LEVEL_INFO, "FLASH", "SFDP signature verified.");
+
+            if (Platform_Flash_ReadStatusRegisters(&status_registers) != PLATFORM_OK)
+            {
+                (void)LOG_Printf(LOG_LEVEL_ERROR,
+                                 "FLASH",
+                                 "Status register read failed after initialization.");
+                Error_Handler();
+            }
+
+            (void)LOG_Printf(
+                LOG_LEVEL_INFO,
+                "FLASH",
+                "Status: SR1=0x%02X SR2=0x%02X WIP=%u WEL=%u QE=%u.",
+                (unsigned int)status_registers.StatusRegister1,
+                (unsigned int)status_registers.StatusRegister2,
+                (unsigned int)status_registers.IsWriteInProgress,
+                (unsigned int)status_registers.IsWriteEnabled,
+                (unsigned int)status_registers.IsQuadEnabled);
             break;
         }
 
@@ -115,7 +135,7 @@ void app_init(void)
         case PLATFORM_FLASH_ERROR:
             (void)LOG_Printf(LOG_LEVEL_ERROR,
                              "FLASH",
-                             "JEDEC identification failed.");
+                             "Startup identification failed.");
             Error_Handler();
             break;
 

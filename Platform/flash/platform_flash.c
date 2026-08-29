@@ -3,11 +3,11 @@
   * @file    platform_flash.c
   * @brief   当前 PCB W25Q256 与 CubeMX QSPI 的 Platform 装配实现。
   *
-  * @details
-  *          本 Module 长期持有 W25Qxx Device 和 STM32 HAL QSPI Adapter Context，
- *          并把 CubeMX 管理的 hqspi 和本板预期 JEDEC ID 注入其中。当前对上只
- *          公开启动校验后的 JEDEC ID；FTL、逻辑扇区、写入、擦除与内存映射均
- *          尚未接入。
+ * @details
+ *          本 Module 长期持有 W25Qxx Device 和 STM32 HAL QSPI Adapter Context，
+ *          并把 CubeMX 管理的 hqspi 和本板预期 JEDEC ID 注入其中。启动时还会
+ *          校验 SFDP 签名，并确保 QE 已开启；FTL、逻辑扇区、页写、擦除与内存
+ *          映射均尚未接入。
   ******************************************************************************
   */
 
@@ -42,12 +42,13 @@ static W25Qxx_QSPI_STM32HALAdapterTypeDef hplatform_flash_adapter = {
 };
 
 /**
- * @brief  绑定当前 PCB QSPI Adapter 并校验 W25Q256 的 JEDEC ID。
- * @retval PLATFORM_OK W25Qxx Device 已进入 READY，JEDEC ID 已校验并缓存。
+ * @brief  绑定当前 PCB QSPI Adapter 并配置 W25Q256 的最小可用读取能力。
+ * @retval PLATFORM_OK W25Qxx Device 已进入 READY，JEDEC ID、SFDP 与 QE 均已校验。
  * @retval PLATFORM_FLASH_ERROR Adapter 绑定或芯片识别失败。
  * @note   本函数仅用于启动阶段的一次同步硬件识别，必须在 CubeMX 已完成
- *         MX_QUADSPI_Init() 后调用。当前不注册 QSPI 完成回调，也不使用已启用
- *         的 QUADSPI IRQ；后续异步页编程与自动状态轮询会另行定义状态机。
+ *         MX_QUADSPI_Init() 后调用。QE=0 时会执行一次最多 20 ms 的 SR2 写入
+ *         轮询；当前不注册 QSPI 完成回调，也不使用已启用的 QUADSPI IRQ。后续
+ *         异步页编程与自动状态轮询会另行定义状态机。
  */
 Platform_StatusTypeDef Platform_Flash_Init(void)
 {
@@ -58,7 +59,17 @@ Platform_StatusTypeDef Platform_Flash_Init(void)
         return PLATFORM_FLASH_ERROR;
     }
 
-    return (W25Qxx_Init(&hplatform_flash) == W25QXX_OK) ?
+    if (W25Qxx_Init(&hplatform_flash) != W25QXX_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    if (W25Qxx_ProbeSFDP(&hplatform_flash) != W25QXX_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    return (W25Qxx_EnsureQuadEnabled(&hplatform_flash) == W25QXX_OK) ?
                PLATFORM_OK :
                PLATFORM_FLASH_ERROR;
 }
@@ -89,5 +100,38 @@ Platform_StatusTypeDef Platform_Flash_GetJedecID(
     jedec_id->ManufacturerID = device_id.ManufacturerID;
     jedec_id->MemoryType = device_id.MemoryType;
     jedec_id->CapacityID = device_id.CapacityID;
+    return PLATFORM_OK;
+}
+
+/**
+ * @brief  读取当前 PCB W25Q256 的实时状态寄存器。
+ * @param  status_registers 接收 SR1、SR2 及 WIP、WEL、QE 语义的有效地址。
+ * @retval PLATFORM_OK 已完成读取并复制当前状态。
+ * @retval PLATFORM_FLASH_ERROR 参数无效或 W25Qxx Device 未成功读取状态。
+ * @note   本函数不返回启动缓存，每次调用均访问 QSPI；WIP/WEL 是瞬态状态，调用者
+ *         不应把本次快照用于未来事务的并发判定。
+ */
+Platform_StatusTypeDef Platform_Flash_ReadStatusRegisters(
+    Platform_Flash_StatusRegistersTypeDef *status_registers)
+{
+    W25Qxx_StatusRegistersTypeDef device_status_registers;
+
+    if (status_registers == NULL)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    if (W25Qxx_ReadStatusRegisters(&hplatform_flash,
+                                   &device_status_registers) != W25QXX_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    status_registers->StatusRegister1 = device_status_registers.StatusRegister1;
+    status_registers->StatusRegister2 = device_status_registers.StatusRegister2;
+    status_registers->IsWriteInProgress =
+        device_status_registers.IsWriteInProgress;
+    status_registers->IsWriteEnabled = device_status_registers.IsWriteEnabled;
+    status_registers->IsQuadEnabled = device_status_registers.IsQuadEnabled;
     return PLATFORM_OK;
 }

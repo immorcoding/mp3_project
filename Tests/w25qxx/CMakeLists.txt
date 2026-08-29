@@ -14,6 +14,6 @@ target_include_directories(w25qxx_component_tests PRIVATE
 )
 
 add_test(
-    NAME w25qxx_init_validates_expected_jedec_id
+    NAME w25qxx_startup_identification_and_qe_configuration
     COMMAND w25qxx_component_tests
 )
