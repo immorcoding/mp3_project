@@ -13,8 +13,8 @@
 #include "APP/app_config.h"
 #if STORAGE_SD_BENCHMARK_ENABLE
 /* Includes ------------------------------------------------------------------*/
-#include "APP/tasks/storage/storage_sd_benchmark.h"
-#include "APP/tasks/storage/storage_sd_benchmark_config.h"
+#include "APP/tasks/storage/benchmark/storage_sd_benchmark.h"
+#include "APP/tasks/storage/benchmark/storage_sd_benchmark_config.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -477,5 +477,10 @@ exit:
     storage_sd_benchmark_running = false;
     return success;
 }
+#else
+
+/* 保持基准开关关闭时的翻译单元非空，不引入任何运行时代码。 */
+typedef int storage_sd_benchmark_disabled_translation_unit_t;
+
 #endif /* STORAGE_SD_BENCHMARK_ENABLE */
 

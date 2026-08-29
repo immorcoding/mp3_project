@@ -34,10 +34,17 @@ extern "C" {
 #define W25QXX_CAPACITY_ID_128MBIT           0x18u
 #define W25QXX_CAPACITY_ID_256MBIT           0x19u
 
+/* W25Qxx Quad Input Page Program 的单页最大数据量，单位为字节。 */
+#define W25QXX_PAGE_PROGRAM_MAX_SIZE_BYTES   256u
+
+/* 当前 W25Q256 的 0xEC Quad I/O Read 起始地址最低对齐要求，单位为字节。 */
+#define W25QXX_QUAD_READ_ADDRESS_ALIGNMENT_BYTES  4u
+
 /** @brief W25Qxx Device API 的立即返回状态。 */
 typedef enum
 {
     W25QXX_OK = 0,
+    W25QXX_BUSY,
     W25QXX_ERROR
 } W25Qxx_StatusTypeDef;
 
@@ -77,8 +84,49 @@ typedef enum
     W25QXX_ERROR_WRITE_ENABLE_NOT_LATCHED,
     W25QXX_ERROR_WRITE_STATUS_REGISTER_2,
     W25QXX_ERROR_STATUS_REGISTER_WRITE_TIMEOUT,
-    W25QXX_ERROR_QUAD_NOT_ENABLED
+    W25QXX_ERROR_QUAD_NOT_ENABLED,
+    W25QXX_ERROR_UNSUPPORTED_ARRAY_OPERATION,
+    W25QXX_ERROR_INVALID_ADDRESS,
+    W25QXX_ERROR_INVALID_READ_ADDRESS_ALIGNMENT,
+    W25QXX_ERROR_INVALID_DATA_LENGTH,
+    W25QXX_ERROR_PAGE_BOUNDARY,
+    W25QXX_ERROR_READ_ARRAY,
+    W25QXX_ERROR_PROGRAM_PAGE,
+    W25QXX_ERROR_PAGE_PROGRAM_TIMEOUT
 } W25Qxx_ErrorTypeDef;
+
+/** @brief W25Qxx 间接事务一个阶段使用的数据线数量。 */
+typedef enum
+{
+    W25QXX_BUS_LINES_1 = 1,
+    W25QXX_BUS_LINES_2 = 2,
+    W25QXX_BUS_LINES_4 = 4
+} W25Qxx_BusLineModeTypeDef;
+
+/**
+ * @brief 一条带地址 W25Qxx 间接事务的可移植阶段配置。
+ * @note  AddressLineMode 描述地址阶段，DataLineMode 描述数据阶段；两者可以
+ *        不同。HasAlternateByte 为 true 时，Adapter 必须在地址和 dummy 周期
+ *        之间发送一个 8-bit Alternate Byte。W25Q256 的 0xEC 使用该字段发送
+ *        连续读取模式字节 0xFF；SFDP 和 0x34 页编程均不使用它。
+ */
+typedef struct
+{
+    uint8_t AddressLength;
+    W25Qxx_BusLineModeTypeDef AddressLineMode;
+    W25Qxx_BusLineModeTypeDef DataLineMode;
+    bool HasAlternateByte;
+    uint8_t AlternateByte;
+    W25Qxx_BusLineModeTypeDef AlternateByteLineMode;
+    uint8_t DummyCycles;
+} W25Qxx_BusAddressedTransferConfigTypeDef;
+
+/** @brief W25Qxx Device 当前由 Component 管理的异步原始操作。 */
+typedef enum
+{
+    W25QXX_OPERATION_NONE = 0,
+    W25QXX_OPERATION_PAGE_PROGRAM
+} W25Qxx_OperationTypeDef;
 
 /** @brief JEDEC Read ID 命令返回的三字节芯片标识。 */
 typedef struct
@@ -127,16 +175,15 @@ typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusReadCommandFunc)(
 
 /**
  * @brief 以单字节命令读取 W25Qxx 中带地址返回数据的总线函数类型。
- * @note  address_length 与 dummy_cycles 都由 W25Qxx Device 的具体命令语义决定；
- *        Adapter 只把它们映射为当前 QSPI 外设参数。首版用于 SFDP 的 24-bit
- *        地址和 8 个 dummy cycle 读取。
+ * @note  transfer_config 由 W25Qxx Device 按具体命令填写；Adapter 只把其中的
+ *        地址、交替字节、dummy cycle 和数据阶段映射为当前 QSPI 外设参数。首版
+ *        用于 SFDP 的 24-bit 单线读取和 W25Q256 0xEC 的 32-bit Quad I/O 读取。
  */
 typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusReadAddressedCommandFunc)(
     void *context,
     uint8_t instruction,
     uint32_t address,
-    uint8_t address_length,
-    uint8_t dummy_cycles,
+    const W25Qxx_BusAddressedTransferConfigTypeDef *transfer_config,
     uint8_t *data,
     uint32_t data_length);
 
@@ -161,6 +208,20 @@ typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusWriteCommandFunc)(
     uint32_t data_length);
 
 /**
+ * @brief 以单字节命令向 W25Qxx 指定地址写入数据的总线函数类型。
+ * @note  transfer_config 由 Device 决定地址长度、各阶段线数和 dummy 语义；
+ *        Adapter 只映射事务。首版用于 W25Q256 0x34 的 32-bit 地址、单线地址
+ *        和四线页数据输入。
+ */
+typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusWriteAddressedCommandFunc)(
+    void *context,
+    uint8_t instruction,
+    uint32_t address,
+    const W25Qxx_BusAddressedTransferConfigTypeDef *transfer_config,
+    const uint8_t *data,
+    uint32_t data_length);
+
+/**
  * @brief 取得单调递增毫秒计数的总线时间源函数类型。
  * @note  该时间源只用于 Component 内部的有界启动期状态轮询；其溢出由无符号
  *        差值计算处理。它不构成通用延时 Interface，也不负责 RTOS 调度。
@@ -174,6 +235,7 @@ typedef struct
     W25Qxx_BusReadAddressedCommandFunc ReadAddressedCommand;
     W25Qxx_BusExecuteCommandFunc ExecuteCommand;
     W25Qxx_BusWriteCommandFunc WriteCommand;
+    W25Qxx_BusWriteAddressedCommandFunc WriteAddressedCommand;
     W25Qxx_BusGetTickMsFunc GetTickMs;
 } W25Qxx_BusOpsTypeDef;
 
@@ -187,6 +249,8 @@ typedef struct
     volatile W25Qxx_BusStatusTypeDef LastBusStatus;
     const W25Qxx_ExpectedJedecIDTypeDef *ExpectedJedecID;
     W25Qxx_JedecIDTypeDef JedecID;
+    volatile W25Qxx_OperationTypeDef ActiveOperation;
+    volatile uint32_t ActiveOperationStartTickMs;
 } W25Qxx_HandleTypeDef;
 
 W25Qxx_StatusTypeDef W25Qxx_Init(W25Qxx_HandleTypeDef *hflash);
@@ -199,6 +263,17 @@ W25Qxx_StatusTypeDef W25Qxx_ReadStatusRegisters(
     W25Qxx_StatusRegistersTypeDef *status_registers);
 W25Qxx_StatusTypeDef W25Qxx_EnsureQuadEnabled(
     W25Qxx_HandleTypeDef *hflash);
+W25Qxx_StatusTypeDef W25Qxx_Read(
+    W25Qxx_HandleTypeDef *hflash,
+    uint32_t address,
+    uint8_t *data,
+    uint32_t data_length);
+W25Qxx_StatusTypeDef W25Qxx_ProgramPageStart(
+    W25Qxx_HandleTypeDef *hflash,
+    uint32_t address,
+    const uint8_t *data,
+    uint32_t data_length);
+W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash);
 
 #ifdef __cplusplus
 }

@@ -11,7 +11,7 @@
   */
 
 #include "APP/tasks/storage/storage_sd.h"
-#include "APP/tasks/storage/storage_sd_benchmark.h"
+#include "APP/tasks/storage/benchmark/storage_sd_benchmark.h"
 #include "APP/app_config.h"
 
 #include <stdint.h>

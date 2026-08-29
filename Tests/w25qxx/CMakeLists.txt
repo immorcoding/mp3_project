@@ -14,6 +14,6 @@ target_include_directories(w25qxx_component_tests PRIVATE
 )
 
 add_test(
-    NAME w25qxx_startup_identification_and_qe_configuration
+    NAME w25qxx_identification_quad_configuration_and_array_io
     COMMAND w25qxx_component_tests
 )

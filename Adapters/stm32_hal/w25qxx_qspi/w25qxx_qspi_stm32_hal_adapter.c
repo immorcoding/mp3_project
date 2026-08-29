@@ -4,14 +4,16 @@
   * @brief   STM32 HAL QSPI 到 W25Qxx BusOps 的同步 Adapter 实现。
   *
   * @details
- *          本 Module 把 W25Qxx Device 发出的单线控制、读取和小数据写命令映射
- *          为 HAL QSPI 间接模式事务。当前服务 JEDEC ID、SFDP、状态寄存器与
- *          启动期 QE 配置，不使用 DMA、自动状态轮询、内存映射或 QSPI IRQ 回调。
+ *          本 Module 把 W25Qxx Device 发出的控制、读写命令映射为 HAL QSPI
+ *          间接模式事务。当前服务 JEDEC ID、SFDP、状态寄存器、启动期 QE 配置、
+ *          0xEC Quad I/O 读取和 0x34 Quad 页数据传输，不使用 DMA、自动状态
+ *          轮询、内存映射或 QSPI IRQ 回调。
   ******************************************************************************
   */
 
 #include "Adapters/stm32_hal/w25qxx_qspi/w25qxx_qspi_stm32_hal_adapter.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 
 /**
@@ -36,6 +38,121 @@ static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_map_status(
         default:
             return W25QXX_BUS_ERROR;
     }
+}
+
+/**
+ * @brief 把 Device 指定的带地址事务配置转换为 STM32 HAL QSPI 命令字段。
+ * @param command 待填写的 HAL QSPI 命令结构。
+ * @param instruction 当前 NOR Flash 命令。
+ * @param address 当前命令的物理地址。
+ * @param transfer_config 由 W25Qxx Device 指定的地址、交替字节和数据阶段配置。
+ * @param data_length 数据阶段的非零字节数。
+ * @retval true 转换成功。
+ * @retval false 配置中存在当前 Adapter 不支持的地址长度或线数。
+ * @note W25Qxx Device 决定协议；此处只进行 HAL 枚举映射。0xEC 的模式字节
+ *       必须作为 AlternateByte 发送，不能误并入 DummyCycles。
+ */
+static bool w25qxx_qspi_stm32_hal_build_addressed_command(
+    QSPI_CommandTypeDef *command,
+    uint8_t instruction,
+    uint32_t address,
+    const W25Qxx_BusAddressedTransferConfigTypeDef *transfer_config,
+    uint32_t data_length)
+{
+    if ((command == NULL) ||
+        (transfer_config == NULL) ||
+        (data_length == 0u))
+    {
+        return false;
+    }
+
+    command->Instruction = instruction;
+    command->InstructionMode = QSPI_INSTRUCTION_1_LINE;
+    command->Address = address;
+    switch (transfer_config->AddressLength)
+    {
+        case 3u:
+            command->AddressSize = QSPI_ADDRESS_24_BITS;
+            break;
+
+        case 4u:
+            command->AddressSize = QSPI_ADDRESS_32_BITS;
+            break;
+
+        default:
+            return false;
+    }
+
+    switch (transfer_config->AddressLineMode)
+    {
+        case W25QXX_BUS_LINES_1:
+            command->AddressMode = QSPI_ADDRESS_1_LINE;
+            break;
+
+        case W25QXX_BUS_LINES_2:
+            command->AddressMode = QSPI_ADDRESS_2_LINES;
+            break;
+
+        case W25QXX_BUS_LINES_4:
+            command->AddressMode = QSPI_ADDRESS_4_LINES;
+            break;
+
+        default:
+            return false;
+    }
+
+    switch (transfer_config->DataLineMode)
+    {
+        case W25QXX_BUS_LINES_1:
+            command->DataMode = QSPI_DATA_1_LINE;
+            break;
+
+        case W25QXX_BUS_LINES_2:
+            command->DataMode = QSPI_DATA_2_LINES;
+            break;
+
+        case W25QXX_BUS_LINES_4:
+            command->DataMode = QSPI_DATA_4_LINES;
+            break;
+
+        default:
+            return false;
+    }
+
+    if (transfer_config->HasAlternateByte)
+    {
+        switch (transfer_config->AlternateByteLineMode)
+        {
+            case W25QXX_BUS_LINES_1:
+                command->AlternateByteMode = QSPI_ALTERNATE_BYTES_1_LINE;
+                break;
+
+            case W25QXX_BUS_LINES_2:
+                command->AlternateByteMode = QSPI_ALTERNATE_BYTES_2_LINES;
+                break;
+
+            case W25QXX_BUS_LINES_4:
+                command->AlternateByteMode = QSPI_ALTERNATE_BYTES_4_LINES;
+                break;
+
+            default:
+                return false;
+        }
+
+        command->AlternateBytes = transfer_config->AlternateByte;
+        command->AlternateBytesSize = QSPI_ALTERNATE_BYTES_8_BITS;
+    }
+    else
+    {
+        command->AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
+    }
+
+    command->DummyCycles = transfer_config->DummyCycles;
+    command->NbData = data_length;
+    command->DdrMode = QSPI_DDR_MODE_DISABLE;
+    command->DdrHoldHalfCycle = QSPI_DDR_HHC_ANALOG_DELAY;
+    command->SIOOMode = QSPI_SIOO_INST_EVERY_CMD;
+    return true;
 }
 
 /**
@@ -90,24 +207,23 @@ static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_read_command(
 }
 
 /**
- * @brief 通过 HAL QSPI 间接模式执行一条带地址的单线读命令。
+ * @brief 通过 HAL QSPI 间接模式执行一条由 Device 描述的带地址读命令。
  * @param context 指向 Platform 长期持有的 QSPI Adapter Context。
  * @param instruction 由 W25Qxx Device 指定的 8-bit NOR Flash 命令。
- * @param address 以 address_length 字节表达的命令地址。
- * @param address_length 地址长度；当前 Adapter 只支持 SFDP 所需的 3 字节。
- * @param dummy_cycles 数据阶段前由 Device 指定的等待时钟个数。
+ * @param address 当前命令的物理地址。
+ * @param transfer_config 由 Device 指定的地址、交替字节、dummy 和数据阶段。
  * @param data 接收命令返回数据的有效缓冲区。
  * @param data_length 本次命令读取的字节数，必须非零。
  * @retval W25Qxx 归一化后的总线状态。
- * @note  命令、地址和数据均使用单线 SDR。当前仅由 SFDP 探测调用；原始 Flash
- *        读取的地址宽度、dummy cycle 与线数会在其独立垂直切片中明确建模。
+ * @note  指令始终用单线 SDR；地址、交替字节、数据线数及 dummy cycle 严格按
+ *        transfer_config 映射。当前支持 SFDP 的 1-1-1 和 W25Q256 0xEC 的
+ *        1-4-4 读取。
  */
 static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_read_addressed_command(
     void *context,
     uint8_t instruction,
     uint32_t address,
-    uint8_t address_length,
-    uint8_t dummy_cycles,
+    const W25Qxx_BusAddressedTransferConfigTypeDef *transfer_config,
     uint8_t *data,
     uint32_t data_length)
 {
@@ -117,26 +233,23 @@ static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_read_addressed_command(
 
     if ((adapter == NULL) ||
         (adapter->Handle == NULL) ||
+        (transfer_config == NULL) ||
         (data == NULL) ||
         (data_length == 0u) ||
-        (address_length != 3u) ||
         (adapter->TimeoutMs == 0u))
     {
         return W25QXX_BUS_ERROR;
     }
 
-    command.Instruction = instruction;
-    command.InstructionMode = QSPI_INSTRUCTION_1_LINE;
-    command.Address = address;
-    command.AddressMode = QSPI_ADDRESS_1_LINE;
-    command.AddressSize = QSPI_ADDRESS_24_BITS;
-    command.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
-    command.DummyCycles = dummy_cycles;
-    command.DataMode = QSPI_DATA_1_LINE;
-    command.NbData = data_length;
-    command.DdrMode = QSPI_DDR_MODE_DISABLE;
-    command.DdrHoldHalfCycle = QSPI_DDR_HHC_ANALOG_DELAY;
-    command.SIOOMode = QSPI_SIOO_INST_EVERY_CMD;
+    if (!w25qxx_qspi_stm32_hal_build_addressed_command(
+            &command,
+            instruction,
+            address,
+            transfer_config,
+            data_length))
+    {
+        return W25QXX_BUS_ERROR;
+    }
 
     hal_status = HAL_QSPI_Command(adapter->Handle, &command, adapter->TimeoutMs);
     if (hal_status != HAL_OK)
@@ -235,11 +348,66 @@ static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_write_command(
 }
 
 /**
- * @brief 提供 W25Qxx 启动期有界状态轮询所需的毫秒时间源。
+ * @brief 通过 HAL QSPI 间接模式执行一条由 Device 描述的带地址写命令。
+ * @param context 指向 Platform 长期持有的 QSPI Adapter Context。
+ * @param instruction 由 W25Qxx Device 指定的 8-bit NOR Flash 命令。
+ * @param address 当前命令的物理 Flash 地址。
+ * @param transfer_config 由 Device 指定的地址、交替字节、dummy 和数据阶段。
+ * @param data 待发送的有效数据缓冲区。
+ * @param data_length 本次命令写入的非零字节数。
+ * @retval W25Qxx 归一化后的总线状态。
+ * @note 指令始终用单线 SDR。当前供 W25Q256 0x34 使用，即固定 32-bit 单线
+ *       地址和四线数据；HAL_QSPI_Transmit() 的原型未标记 const，Adapter 在
+ *       唯一的边界处收敛该转换，不把 HAL 可变指针泄漏回 Component。
+ */
+static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_write_addressed_command(
+    void *context,
+    uint8_t instruction,
+    uint32_t address,
+    const W25Qxx_BusAddressedTransferConfigTypeDef *transfer_config,
+    const uint8_t *data,
+    uint32_t data_length)
+{
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter = context;
+    QSPI_CommandTypeDef command = {0};
+    HAL_StatusTypeDef hal_status;
+
+    if ((adapter == NULL) ||
+        (adapter->Handle == NULL) ||
+        (transfer_config == NULL) ||
+        (data == NULL) ||
+        (data_length == 0u) ||
+        (adapter->TimeoutMs == 0u))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    if (!w25qxx_qspi_stm32_hal_build_addressed_command(
+            &command,
+            instruction,
+            address,
+            transfer_config,
+            data_length))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    hal_status = HAL_QSPI_Command(adapter->Handle, &command, adapter->TimeoutMs);
+    if (hal_status != HAL_OK)
+    {
+        return w25qxx_qspi_stm32_hal_map_status(hal_status);
+    }
+
+    return w25qxx_qspi_stm32_hal_map_status(
+        HAL_QSPI_Transmit(adapter->Handle, (uint8_t *)data, adapter->TimeoutMs));
+}
+
+/**
+ * @brief 提供 W25Qxx 有界状态轮询所需的毫秒时间源。
  * @param context 未使用；保留以符合 W25Qxx BusOps 签名。
  * @retval HAL 基准毫秒计数。
- * @note  CubeMX 的 HAL Tick 在 Platform 初始化前已可用。该回调不是延时函数，
- *        不等待也不访问 QSPI。
+ * @note  CubeMX 的 HAL Tick 在 Platform 初始化前已可用。该回调供启动期 QE
+ *        轮询和运行期页编程超时判断共用；它不是延时函数，不等待也不访问 QSPI。
  */
 static uint32_t w25qxx_qspi_stm32_hal_get_tick_ms(void *context)
 {
@@ -253,6 +421,7 @@ static const W25Qxx_BusOpsTypeDef w25qxx_qspi_stm32_hal_ops = {
     .ReadAddressedCommand = w25qxx_qspi_stm32_hal_read_addressed_command,
     .ExecuteCommand = w25qxx_qspi_stm32_hal_execute_command,
     .WriteCommand = w25qxx_qspi_stm32_hal_write_command,
+    .WriteAddressedCommand = w25qxx_qspi_stm32_hal_write_addressed_command,
     .GetTickMs = w25qxx_qspi_stm32_hal_get_tick_ms
 };
 
@@ -283,5 +452,7 @@ W25Qxx_StatusTypeDef W25Qxx_QSPI_STM32HALAdapter_Bind(
     hflash->State = W25QXX_STATE_RESET;
     hflash->ErrorCode = W25QXX_ERROR_NONE;
     hflash->LastBusStatus = W25QXX_BUS_OK;
+    hflash->ActiveOperation = W25QXX_OPERATION_NONE;
+    hflash->ActiveOperationStartTickMs = 0u;
     return W25QXX_OK;
 }

@@ -51,7 +51,7 @@ Cache 命中被错误当成 SDRAM 带宽。DWT 运行在 480 MHz Cortex-M7 核�
 语义下复用同一份 Clean、Invalidate 和 Clean + Invalidate Implementation。
 
 该诊断会覆写完整 SDRAM，必须在任何外部堆、LVGL 帧缓冲、音频缓存或 DMA 缓冲使用前完成。启用开关
-位于 `APP/tasks/storage/storage_sdram_diagnostic_config.h`；后续把业务对象放进 SDRAM 前，应默认关闭。
+位于 `APP/tasks/storage/benchmark/storage_sdram_benchmark_config.h`；后续把业务对象放进 SDRAM 前，应默认关闭。
 
 ## 后续使用
 

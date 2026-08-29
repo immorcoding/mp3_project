@@ -6,8 +6,9 @@
  * @details
  *          本 Module 长期持有 W25Qxx Device 和 STM32 HAL QSPI Adapter Context，
  *          并把 CubeMX 管理的 hqspi 和本板预期 JEDEC ID 注入其中。启动时还会
- *          校验 SFDP 签名，并确保 QE 已开启；FTL、逻辑扇区、页写、擦除与内存
- *          映射均尚未接入。
+ *          校验 SFDP 签名、确保 QE 已开启，并以一次非破坏性的 Quad I/O 原始读
+ *          校验当前硬件的 0xEC 读取通路；FTL、逻辑扇区、页写、擦除与内存映射
+ *          均尚未接入。
   ******************************************************************************
   */
 
@@ -43,15 +44,20 @@ static W25Qxx_QSPI_STM32HALAdapterTypeDef hplatform_flash_adapter = {
 
 /**
  * @brief  绑定当前 PCB QSPI Adapter 并配置 W25Q256 的最小可用读取能力。
- * @retval PLATFORM_OK W25Qxx Device 已进入 READY，JEDEC ID、SFDP 与 QE 均已校验。
+ * @retval PLATFORM_OK W25Qxx Device 已进入 READY，JEDEC ID、SFDP、QE 与 0xEC
+ *         Quad I/O 读取通路均已校验。
  * @retval PLATFORM_FLASH_ERROR Adapter 绑定或芯片识别失败。
  * @note   本函数仅用于启动阶段的一次同步硬件识别，必须在 CubeMX 已完成
  *         MX_QUADSPI_Init() 后调用。QE=0 时会执行一次最多 20 ms 的 SR2 写入
  *         轮询；当前不注册 QSPI 完成回调，也不使用已启用的 QUADSPI IRQ。后续
- *         异步页编程与自动状态轮询会另行定义状态机。
+ *         异步页编程与自动状态轮询会另行定义状态机。末尾会从物理地址 0 读取
+ *         4 字节，但不解释其内容、不修改 Flash；该地址满足 0xEC 的 4-byte
+ *         起始地址对齐要求。
  */
 Platform_StatusTypeDef Platform_Flash_Init(void)
 {
+    uint8_t quad_read_probe[W25QXX_QUAD_READ_ADDRESS_ALIGNMENT_BYTES];
+
     if (W25Qxx_QSPI_STM32HALAdapter_Bind(
             &hplatform_flash,
             &hplatform_flash_adapter) != W25QXX_OK)
@@ -69,7 +75,15 @@ Platform_StatusTypeDef Platform_Flash_Init(void)
         return PLATFORM_FLASH_ERROR;
     }
 
-    return (W25Qxx_EnsureQuadEnabled(&hplatform_flash) == W25QXX_OK) ?
+    if (W25Qxx_EnsureQuadEnabled(&hplatform_flash) != W25QXX_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    return (W25Qxx_Read(&hplatform_flash,
+                         0u,
+                         quad_read_probe,
+                         sizeof(quad_read_probe)) == W25QXX_OK) ?
                PLATFORM_OK :
                PLATFORM_FLASH_ERROR;
 }
