@@ -29,6 +29,7 @@ typedef enum
     PLATFORM_LCD_ERROR,    /**< LCD 操作失败。 */
     PLATFORM_LED_ERROR,    /**< LED 初始化或控制失败。 */
     PLATFORM_SD_ERROR,     /**< SD 操作失败。 */
+    PLATFORM_FLASH_ERROR,  /**< W25Q256 外部 NOR Flash 操作失败。 */
     PLATFORM_TEMP_ERROR,   /**< MCU 内部温度采样失败。 */
     PLATFORM_SDRAM_ERROR,  /**< SDRAM 初始化失败。 */
     PLATFORM_TOUCH_ERROR,  /**< 触摸控制器初始化或访问失败。 */

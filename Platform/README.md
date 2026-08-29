@@ -4,8 +4,8 @@ Platform 是当前 PCB 的对象装配 Module。它长期持有 Component Handle
 
 ## 公开 Interface
 
-- `Platform_Init()`：整机硬件初始化；当前顺序为 SDRAM、PMIC、音频、LCD、LED、Touch，其中 LCD 与 Touch 共用 ALDO2，必须先 LCD 后 Touch；LED 失败只降级诊断能力；
-- `Platform_Audio_*`、`Platform_LCD_*`、`Platform_LED_*`、`Platform_Log_Init()`、`Platform_Power_*`、`Platform_SD_*`、`Platform_SDRAM_*`、`Platform_Temp_*`、`Platform_Touch_*`：当前板级能力。
+- `Platform_Init()`：整机硬件初始化；当前顺序为 SDRAM、PMIC、W25Q256 Flash、音频、LCD、LED、Touch，其中 LCD 与 Touch 共用 ALDO2，必须先 LCD 后 Touch；LED 失败只降级诊断能力；
+- `Platform_Audio_*`、`Platform_Flash_*`、`Platform_LCD_*`、`Platform_LED_*`、`Platform_Log_Init()`、`Platform_Power_*`、`Platform_SD_*`、`Platform_SDRAM_*`、`Platform_Temp_*`、`Platform_Touch_*`：当前板级能力。
 
 ## 编译期依赖与装配
 

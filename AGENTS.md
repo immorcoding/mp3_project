@@ -14,7 +14,8 @@
 - FatFs 文件系统的挂载、卸载和显式格式化；
 - 32 MiB 外部 SDRAM；
 - ST7789 LCD、FT6X36 触摸与 LVGL v8.3.11 GUI 原型；
-- 后续将加入音频解码、QSPI Flash 和 USB MSC 所有权切换。
+- W25Q256 QSPI Flash 的间接模式 JEDEC ID 启动识别；
+- 后续将加入音频解码、Flash 原始擦写/FTL 和 USB MSC 所有权切换。
 
 技术文档和代码注释统一使用中文。
 

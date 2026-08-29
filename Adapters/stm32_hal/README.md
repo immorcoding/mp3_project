@@ -19,6 +19,10 @@ FT6X36 Device 的 PortOps；其中 HAL 时基只在调度器启动前使用。�
 `led_gpio/` 把 LED Device 的逻辑 ON/OFF 映射为当前 GPIO 的输出电平。逻辑 ON 对应的物理
 高低电平由 Platform 注入，因此 LED Device 和上层不需要知道本板 LED 的有效极性。
 
+`w25qxx_qspi/` 把 STM32 HAL QSPI 间接模式的同步命令读取实现为 W25Qxx Device 的
+`W25Qxx_BusOps`。当前只支持启动 JEDEC ID 识别；DMA、自动状态轮询、内存映射与 QSPI
+IRQ 回调将在原始 NOR 擦写状态机设计完成后再接入。
+
 ## 编译期依赖
 
 - Component 定义的 Ops、状态和事件类型；

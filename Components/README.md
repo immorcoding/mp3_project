@@ -4,8 +4,8 @@
 
 ## 公开 Interface
 
-- `audio`、`axp2101`、`ft6x36`、`led`、`log`、`sd`、`soft_i2c`、`st7789` 各自的公开类型、状态和函数；
-- 已预留、尚未实现的 `w25qxx` 原始 NOR Device 与 `flash_ftl` 逻辑扇区 Component；两者的 Interface 所有权见 [../docs/w25q256_architecture.md](../docs/w25q256_architecture.md)。
+- `audio`、`axp2101`、`ft6x36`、`led`、`log`、`sd`、`soft_i2c`、`st7789`、`w25qxx` 各自的公开类型、状态和函数；
+- `w25qxx` 当前实现启动阶段 JEDEC ID 识别；`flash_ftl` 逻辑扇区 Component 仍为预留目录。两者的 Interface 所有权见 [../docs/w25q256_architecture.md](../docs/w25q256_architecture.md)。
 - 每个 Module 自己定义的 `*_OpsTypeDef` 或回调类型。
 
 ## 编译期依赖

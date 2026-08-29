@@ -11,8 +11,9 @@
   *
   *          当前初始化依赖顺序为：
   *          Platform_Log_Init() -> 启动日志入队 -> Platform_Init() -> app_task_start()。
-  *          Platform_Init() 内部初始化 GPIO EXTI Adapter、PMIC、音频、LCD、LED
-  *          和 Touch；Storage Task 在 Log Service 就绪后处理可选 SD 卡。
+   *          Platform_Init() 内部初始化 GPIO EXTI Adapter、PMIC、W25Q256 Flash、
+   *          音频、LCD、LED 和 Touch；Storage Task 在 Log Service 就绪后处理
+   *          可选 SD 卡。
   *          启动日志先保存在 Components/log 环形队列，调度器启动后由 Log Task
   *          与 Log Service 逐步排空。
   ******************************************************************************
@@ -27,6 +28,7 @@
 #include "main.h"
 
 #include "Platform/platform.h"
+#include "Platform/flash/platform_flash.h"
 #include "Platform/log/platform_log.h"
 #include "Platform/power/platform_power.h"
 #include "Components/log/log.h"
@@ -61,8 +63,27 @@ void app_init(void)
     switch (platform_status)
     {
         case PLATFORM_OK:
+        {
+            Platform_Flash_JedecIDTypeDef jedec_id;
+
             (void)LOG_Printf(LOG_LEVEL_INFO, "PLATFORM", "Initialization successful.");
+
+            if (Platform_Flash_GetJedecID(&jedec_id) != PLATFORM_OK)
+            {
+                (void)LOG_Printf(LOG_LEVEL_ERROR,
+                                 "FLASH",
+                                 "JEDEC ID cache unavailable after initialization.");
+                Error_Handler();
+            }
+
+            (void)LOG_Printf(LOG_LEVEL_INFO,
+                             "FLASH",
+                             "JEDEC ID: %02X %02X %02X.",
+                             (unsigned int)jedec_id.ManufacturerID,
+                             (unsigned int)jedec_id.MemoryType,
+                             (unsigned int)jedec_id.CapacityID);
             break;
+        }
 
         case PLATFORM_PMIC_ERROR:
         {
@@ -88,6 +109,13 @@ void app_init(void)
             (void)LOG_Printf(LOG_LEVEL_ERROR,
                              "SDRAM",
                              "JEDEC initialization failed.");
+            Error_Handler();
+            break;
+
+        case PLATFORM_FLASH_ERROR:
+            (void)LOG_Printf(LOG_LEVEL_ERROR,
+                             "FLASH",
+                             "JEDEC identification failed.");
             Error_Handler();
             break;
 

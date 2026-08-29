@@ -385,7 +385,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## W25Qxx 设备（W25Qxx Device）
 
-**W25Qxx 设备**是预留的、面向 Winbond W25Q 系列串行 NOR Flash 的可复用芯片协议 Module。它未来负责芯片识别、原始读取、页编程、擦除和稳定的设备状态；它不拥有 STM32 QSPI Handle、板级引脚、FTL 映射、FatFs、USB MSC 或媒体业务。
+**W25Qxx 设备**是面向 Winbond W25Q 系列串行 NOR Flash 的可复用芯片协议 Module。当前已负责启动阶段的 JEDEC ID 读取、缓存，以及由实例注入的厂商与容量兼容性校验；`MemoryType` 始终保留为诊断信息，不属于首版兼容性条件。后续扩展原始读取、页编程、擦除和稳定的设备状态。它不拥有 STM32 QSPI Handle、板级引脚、FTL 映射、FatFs、USB MSC 或媒体业务。
 
 它通过自身拥有的 `W25Qxx_BusOps` 使用具体总线后端；STM32 HAL QSPI 后端属于 `Adapters/stm32_hal/w25qxx_qspi`，具体实例由平台 Flash 注入。
 
@@ -395,14 +395,14 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **Flash FTL**是预留的逻辑扇区 Module，用于把原始 NOR Flash 的页编程、擦除块、同步与掉电恢复规则隐藏在稳定的逻辑存储语义之后。它拥有 `FlashFTL_RawOps`，但不认识 W25Qxx、STM32 HAL、Platform、FatFs、USB MSC 或媒体业务。
 
-W25Qxx 到 Flash FTL 的具体转换由 `Adapters/bridge/flash_ftl_w25qxx` 实现。只有 FTL 的擦写和掉电策略完成验证后，才可讨论由文件系统或 USB MSC 消费其逻辑扇区。
+W25Qxx 到 Flash FTL 的具体转换将由 `Adapters/bridge/flash_ftl_w25qxx` 实现。只有 FTL 的擦写和掉电策略完成验证后，才可讨论由文件系统或 USB MSC 消费其逻辑扇区。
 
 相关术语：**W25Qxx 设备**、**平台 Flash**。
 
 ## 平台 Flash（Platform Flash）
 
-**平台 Flash**是预留的、代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。它未来长期持有 W25Qxx Handle、QSPI Adapter Context 与 Flash FTL Handle，完成两个 Adapter 的 Bind 和本 PCB QSPI 资源配置。
+**平台 Flash**代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。当前它长期持有 W25Qxx Handle 与 QSPI Adapter Context，注入本板预期的 Winbond 厂商码和 256 Mbit 容量码，完成 HAL QSPI Adapter 的 Bind、启动 JEDEC ID 识别与校验，并对上公开缓存 ID；Flash FTL 实现后才会增加 FTL Handle 与跨 Component Bridge 的 Bind。
 
-它不实现芯片协议、FTL 映射、FatFs 挂载、USB MSC 所有权或媒体扫描。当前仅确定目录与架构接缝，尚未配置或初始化 QSPI。
+它不实现芯片协议、FTL 映射、FatFs 挂载、USB MSC 所有权或媒体扫描。CubeMX 管理实际 QSPI Handle、引脚、时钟和 IRQ，Platform 只注入借用的实例并决定本板启动识别策略。
 
 相关术语：**W25Qxx 设备**、**Flash FTL**。

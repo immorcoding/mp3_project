@@ -56,6 +56,7 @@ void DMA1_Stream0_IRQHandler(void);
 void EXTI9_5_IRQHandler(void);
 void SPI1_IRQHandler(void);
 void SDMMC1_IRQHandler(void);
+void QUADSPI_IRQHandler(void);
 void OTG_FS_IRQHandler(void);
 void TIM17_IRQHandler(void);
 /* USER CODE BEGIN EFP */

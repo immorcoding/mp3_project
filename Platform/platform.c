@@ -8,6 +8,7 @@
 #include "Platform/platform.h"
 
 #include "Platform/audio/platform_audio.h"
+#include "Platform/flash/platform_flash.h"
 #include "Platform/lcd/platform_lcd.h"
 #include "Platform/led/platform_led.h"
 #include "Platform/power/platform_power.h"
@@ -22,6 +23,8 @@
   * @retval PLATFORM_PMIC_ERROR  PMIC 初始化失败。
   * @retval PLATFORM_AUDIO_ERROR 音频供电或音频设备初始化失败。
   * @retval PLATFORM_LCD_ERROR   LCD 电源或显示控制器初始化失败。
+  * @retval PLATFORM_FLASH_ERROR W25Q256 Adapter 绑定、JEDEC ID 读取或芯片标识
+  *                               校验失败。
   * @retval PLATFORM_LED_ERROR   诊断 LED 初始化失败；由 APP 记录后继续启动。
   * @retval PLATFORM_TOUCH_ERROR 触摸控制器初始化失败。
   * @note   LCD 和 Touch 共用 ALDO2；因此必须先初始化 LCD，再复位并探测触摸
@@ -40,6 +43,12 @@ Platform_StatusTypeDef Platform_Init(void)
     if (Platform_Power_Init() != PLATFORM_OK)
     {
         return PLATFORM_PMIC_ERROR;
+    }
+
+    /* QSPI 已由 CubeMX 初始化；此处只装配并识别当前 PCB 的 W25Q256。 */
+    if (Platform_Flash_Init() != PLATFORM_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
     }
 
     /* AUDIO_POWER 由 AXP2101 ALDO1 供电，必须在音频设备初始化之前开启。 */

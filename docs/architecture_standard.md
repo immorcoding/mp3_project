@@ -104,7 +104,7 @@ Components/
   sd/
   soft_i2c/
   st7789/
-  w25qxx/                     # 预留，尚未实现
+  w25qxx/                     # W25Q 原始 NOR 协议与 JEDEC 启动识别
 ```
 
 这些模块虽然用途不同，但在架构上都是可独立复用的 Component。只有目录规模显著
@@ -177,7 +177,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/stm32_hal/led_gpio` | STM32 HAL GPIO 到 LED Device PortOps；逻辑 ON 电平由 Platform 注入。 |
 | `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |
 | `Adapters/stm32_hal/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
-| `Adapters/stm32_hal/w25qxx_qspi` | 预留、尚未实现；STM32 HAL QSPI 到 W25Qxx Bus Ops。 |
+| `Adapters/stm32_hal/w25qxx_qspi` | STM32 HAL QSPI 到 W25Qxx Bus Ops；当前实现同步间接模式 JEDEC ID 读取。 |
 | `Adapters/stm32_hal/temp` | STM32H7 ADC3 内部温度传感器与 VREFINT 的校准、采样和工厂标定换算。 |
 | `Adapters/stm32_hal/irq/stm32_gpio_exti_irq` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
 | `Adapters/stm32_hal/irq/stm32_sdmmc_irq` | 按 `SD_HandleTypeDef` 注册 HAL SD 完成、错误和中止回调，并发布强类型传输事件。 |
@@ -185,7 +185,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 
 `bridge/` 只转换两个 Component Interface，不引入具体 MCU 依赖；`cortex/` 只封装 Cortex-M 架构能力，不持有外设或任务状态；`stm32_hal/` 则集中所有必须认识 STM32 HAL、CubeMX Handle 或 HAL 全局回调的实现。
 
-已预留的 W25Qxx/Flash FTL Module 尚无源代码、CubeMX QSPI 配置或对上公开的 Platform Interface；其目录与接缝决定见 [w25q256_architecture.md](w25q256_architecture.md)。在原始 NOR 的擦除、对齐、写入和掉电策略经过验证前，不得把它接入 FatFs、USB MSC 或创建通用逻辑块抽象。
+W25Qxx、STM32 HAL QSPI Adapter 与 Platform Flash 当前已完成间接模式的启动 JEDEC ID 识别；Platform 注入本 PCB 的厂商和容量要求，Component 不把具体料号白名单写死。Flash FTL 与跨 Component Bridge 仍未实现。现状、目录与接缝决定见 [w25q256_architecture.md](w25q256_architecture.md)。在原始 NOR 的擦除、对齐、写入和掉电策略经过验证前，不得把它接入 FatFs、USB MSC 或创建通用逻辑块抽象。
 
 FreeRTOS 内核源码、项目配置与 Hook 的边界为：
 

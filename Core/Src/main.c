@@ -24,6 +24,7 @@
 #include "i2c.h"
 #include "i2s.h"
 #include "memorymap.h"
+#include "quadspi.h"
 #include "spi.h"
 #include "tim.h"
 #include "usb_device.h"
@@ -121,6 +122,7 @@ int main(void)
   MX_TIM5_Init();
   MX_SPI1_Init();
   MX_I2C2_Init();
+  MX_QUADSPI_Init();
   /* USER CODE BEGIN 2 */
   app_init();
   /* USER CODE END 2 */

@@ -27,7 +27,7 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 - GUI 的运行时入口为 `APP/tasks/gui/gui_task.c`，其显示与输入装配由 `Service/gui` 持有；
 - `GUI/` 是 SquareLine 的生成目录。应在 SquareLine 编辑器中修改页面、资源和交互，再导出；不要直接手改其中的 C 源或资源清单；
 - 外部 SDRAM 当前以 130 MHz 配置，LVGL 双绘制缓冲位于 `.sdram_framebuffer (NOLOAD)` 段。
-- 已为 W25Q256 建立 Component、Bridge、STM32 HAL Adapter 与 Platform 的目录接缝；尚未配置 QSPI 或添加实现，详见 [docs/w25q256_architecture.md](docs/w25q256_architecture.md)。
+- W25Q256 已完成 CubeMX QSPI 配置，以及 Component、STM32 HAL Adapter、Platform 的间接模式 JEDEC ID 启动识别与 `EF / 19` 厂商、容量校验；Flash FTL 与跨 Component Bridge 仍未实现，详见 [docs/w25q256_architecture.md](docs/w25q256_architecture.md)。
 
 ## 构建
 
