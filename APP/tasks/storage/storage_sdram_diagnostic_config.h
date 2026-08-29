@@ -13,6 +13,6 @@
  * @note  该测试完成后 SDRAM 内容无效。接入 LVGL 帧缓冲、外部堆或业务缓存后，
  *        必须改为 0，或在任何使用者开始前保证独占执行。
  */
-#define STORAGE_SDRAM_DIAGNOSTIC_ENABLE  1
+#define STORAGE_SDRAM_DIAGNOSTIC_ENABLE  0
 
 #endif /* STORAGE_SDRAM_DIAGNOSTIC_CONFIG_H */
