@@ -1,10 +1,11 @@
 # W25Qxx STM32 HAL QSPI Adapter
 
-本 Adapter 将 STM32H743 的 HAL QSPI 能力实现为 W25Qxx Component 所拥有的 `W25Qxx_BusOps`。当前已实现同步、间接模式事务：无地址单线读供 JEDEC ID 与 SR1/SR2 使用，SFDP 使用 24-bit `1-1-1` 读取，W25Q256 原始读使用 `0xEC` 的固定 32-bit `1-4-4`，页编程使用 `0x34` 的固定 32-bit `1-1-4`，4 KiB 擦除使用 `0x21` 的固定 32-bit `1-1` 无数据命令；无地址控制和无地址单字节写分别供 `0x06`、`0x31` 的启动期 QE 配置使用。DMA、自动状态轮询、内存映射和 QSPI IRQ 回调尚未接入。
+本 Adapter 将 STM32H743 的 HAL QSPI 能力实现为 W25Qxx Component 所拥有的 `W25Qxx_BusOps`。无地址单线读供 JEDEC ID 与 SR1/SR2 使用，SFDP 使用 24-bit `1-1-1` 读取；W25Q256 原始读使用 `0xEC` 的固定 32-bit `1-4-4`，既保留同步轮询路线，也可经 CubeMX 绑定的 `QUADSPI_FIFO_TH → MDMA` 启动非阻塞接收；页编程使用 `0x34` 的固定 32-bit `1-1-4`，4 KiB 擦除使用 `0x21` 的固定 32-bit `1-1` 无数据命令。无地址控制和无地址单字节写分别供 `0x06`、`0x31` 的启动期 QE 配置使用。自动状态轮询和内存映射尚未接入。
 
 ## 预期公开 Interface
 
 - `W25Qxx_QSPI_STM32HALAdapter_Bind()`；
+- `W25Qxx_QSPI_STM32HALAdapter_NotifyReadComplete()` / `NotifyReadError()`：仅由 Platform 经 QSPI IRQ Adapter 在 ISR 中更新当前 MDMA 读取结果；
 - 仅供 `Platform/flash` 长期持有的 QSPI Adapter Context。
 
 ## 编译期依赖
@@ -14,7 +15,7 @@
 
 ## 运行时请求路径
 
-W25Qxx Component 经已绑定的 Bus Ops 发起 JEDEC ID、SR1/SR2 无地址读取、SFDP 带地址读取和数组读写/擦除；本 Adapter 分别以 `HAL_QSPI_Command()` 后接 `HAL_QSPI_Receive()` 或 `HAL_QSPI_Transmit()` 完成同步间接传输，或仅提交无数据命令。`0xEC` 将模式字节 `0xFF` 映射为 HAL `AlternateBytes`（四线、8 bit），并把后续的 4 个时钟映射为 `DummyCycles`；模式字节不能误计入 dummy cycle。`0x21` 则使用单线 32-bit 地址和 `QSPI_DATA_NONE`，只提交擦除命令、不等待内部擦除。QE 为 0 时，Adapter 以只有 Command 阶段的 `0x06` 和 `HAL_QSPI_Command()` 后接 `HAL_QSPI_Transmit()` 的 `0x31` 完成配置；`HAL_GetTick()` 为 Component 的 20 ms 启动期 QE 轮询、5 ms 页编程和 500 ms 扇区擦除状态机提供时间源。后续使用 DMA 时，DMA 与 Cache 一致性仅在本 Adapter 的实现内收敛，完成事件仍通过已经注册的回调向上发布。
+W25Qxx Component 经已绑定的 Bus Ops 发起 JEDEC ID、SR1/SR2 无地址读取、SFDP 带地址读取和数组读写/擦除；本 Adapter 分别以 `HAL_QSPI_Command()` 后接 `HAL_QSPI_Receive()` 或 `HAL_QSPI_Transmit()` 完成同步间接传输，或仅提交无数据命令。非阻塞 `0xEC` 先以 `HAL_QSPI_Command()` 装载协议阶段，再以 `HAL_QSPI_Receive_DMA()` 把 QSPI FIFO 阈值请求交给 MDMA；它只保存 DMA 缓冲区元数据和 `BUSY` 状态。`STM32QSPIIRQ` 在 QSPI 完成、错误或中止 IRQ 中调用 Notify，普通任务经 `W25Qxx_Process()` 查询结果：成功时 Adapter 执行严格对齐的 D-Cache Invalidate，然后清理元数据。开始前使用 Clean+Invalidate，防止脏 Cache line 在 MDMA 后回写覆盖新数据。`0xEC` 将模式字节 `0xFF` 映射为 HAL `AlternateBytes`（四线、8 bit），后续 4 个时钟映射为 `DummyCycles`；两者不能混淆。`0x21` 使用单线 32-bit 地址和 `QSPI_DATA_NONE`，只提交擦除命令、不等待内部擦除。QE 为 0 时，Adapter 以只有 Command 阶段的 `0x06` 和 `HAL_QSPI_Command()` 后接 `HAL_QSPI_Transmit()` 的 `0x31` 完成配置；`HAL_GetTick()` 为 Component 的 20 ms 启动期 QE 轮询、100 ms 数组读、5 ms 页编程和 500 ms 扇区擦除状态机提供时间源。
 
 ## 约束
 

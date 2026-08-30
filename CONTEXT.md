@@ -337,7 +337,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 存储任务（Storage Task）
 
-**存储任务**是 SD 热插拔、SDMMC DMA 完成和当前 FatFs 卷生命周期的唯一执行上下文。它通过索引 0 接收 GPIO EXTI 的轻量事件并完成机械触点消抖、平台 SD 生命周期推进；Filesystem Module 在同一任务上下文中通过索引 1 等待 SDMMC DMA 结果，并在插卡时挂载、拔卡时注销文件系统卷。
+**存储任务**是 SD 热插拔、SDMMC DMA 完成和当前 FatFs 卷生命周期的唯一执行上下文。它通过索引 0 接收 GPIO EXTI 的轻量事件并完成机械触点消抖、平台 SD 生命周期推进；Filesystem Module 在同一任务上下文中通过索引 1 等待 SDMMC DMA 结果，并在插卡时挂载、拔卡时注销文件系统卷。启动 Flash 基准临时使用索引 2 等待 QSPI/MDMA 读取事件，收到事件后仍需在普通上下文调用平台 Flash 完成收尾。
 
 存储任务拥有 SD 卡与本地 FatFs 的访问时序，但不拥有 SDMMC、GPIO EXTI 或卡座引脚。中断回调只通知该任务，不能在 ISR 中执行消抖、FatFs、日志格式化或 SD 块访问。
 
@@ -383,9 +383,21 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 > SDMMC1 的读 DMA 完成后，Adapter 发布“读完成”；Filesystem Module 的私有执行器在 Storage Task 上下文收到通知后才调用 Platform SD，使 SD Card Device 从 `BUSY` 回到 `READY`。
 
+## STM32 QSPI IRQ 适配器（STM32 QSPI IRQ Adapter）
+
+**STM32 QSPI IRQ 适配器**占有某个 `QSPI_HandleTypeDef` 的 HAL QSPI 读完成、错误和中止回调注册，并按 Handle 把事件交给调用者长期持有的回调节点。
+
+它不认识 W25Qxx、平台 Flash、Storage Task、MDMA 缓冲区或 FreeRTOS。CubeMX 的 MDMA 中断只推进 HAL 的 MDMA 状态；随后 QSPI 向量调用 `HAL_QSPI_IRQHandler()`，适配器才把 QSPI 的最终接收生命周期翻译为强类型事件。ISR 只能发布轻量通知；Cache 维护和 Device 状态推进属于普通上下文。
+
+相关术语：**平台 Flash**、**W25Qxx 设备**、**Cortex-M7 Cache 适配器**。
+
+示例：
+
+> QSPI 接收完成后，平台 Flash 先让 QSPI Adapter 记录成功结果，再通知 Storage Task；任务被唤醒后调用 `Platform_Flash_ProcessTransfer()`，而不是在 IRQ 中读取缓冲区。
+
 ## W25Qxx 设备（W25Qxx Device）
 
-**W25Qxx 设备**是面向 Winbond W25Q 系列串行 NOR Flash 的可复用芯片协议 Module。当前已负责启动阶段的 JEDEC ID 读取、缓存、实例注入的厂商与容量兼容性校验、SFDP 头签名探测，以及 SR1/SR2 的同步读取与 WIP/WEL/QE 位解析。启动期若 QE 为 0，它会在 WIP=0 后执行 `0x06`、核验 WEL、以 `0x31` 写入保留原值的 `SR2 | QE`、最多 20 ms 轮询 WIP，并回读核验 QE；QE 已开启时不写 Flash。`MemoryType` 始终保留为诊断信息，不属于首版兼容性条件。当前 W25Q256 还以固定 4-byte 指令完成 `0xEC` 的 `1-4-4` 原始读取（含四线 `0xFF` 模式字节与 4 个 dummy clock）、`0x34` 的 `1-1-4` 非阻塞单页编程，以及 `0x21` 的 `1-1` 非阻塞 4 KiB 扇区擦除。两项破坏性操作启动后均由 `W25Qxx_Process()` 单次读取状态并返回 BUSY、完成或超时：页编程上限 5 ms，扇区擦除上限 500 ms，绝不等待 `tPP` 或 `tSE`。状态寄存器结果是瞬态快照，启动期 QE 轮询也不等同于后续擦写的自动状态轮询。FTL 映射、任意长度拆页、FatFs、USB MSC 和媒体业务均不属于它；它也不拥有 STM32 QSPI Handle 或板级引脚。
+**W25Qxx 设备**是面向 Winbond W25Q 系列串行 NOR Flash 的可复用芯片协议 Module。当前已负责启动阶段的 JEDEC ID 读取、缓存、实例注入的厂商与容量兼容性校验、SFDP 头签名探测，以及 SR1/SR2 的同步读取与 WIP/WEL/QE 位解析。启动期若 QE 为 0，它会在 WIP=0 后执行 `0x06`、核验 WEL、以 `0x31` 写入保留原值的 `SR2 | QE`、最多 20 ms 轮询 WIP，并回读核验 QE；QE 已开启时不写 Flash。`MemoryType` 始终保留为诊断信息，不属于首版兼容性条件。当前 W25Q256 还以固定 4-byte 指令完成 `0xEC` 的 `1-4-4` 同步或非阻塞原始读取（含四线 `0xFF` 模式字节与 4 个 dummy clock）、`0x34` 的 `1-1-4` 非阻塞单页编程，以及 `0x21` 的 `1-1` 非阻塞 4 KiB 扇区擦除。非阻塞数组读取由 BusOps Adapter 在 IRQ 后报告传输状态，`W25Qxx_Process()` 在普通上下文完成 Cache 收尾并在 100 ms 内返回 BUSY、完成或超时；页编程、扇区擦除仍通过 WIP 快照分别以 5 ms、500 ms 为上限推进，绝不等待 DMA、`tPP` 或 `tSE`。状态寄存器结果是瞬态快照，启动期 QE 轮询也不等同于后续擦写的自动状态轮询。FTL 映射、任意长度拆页、FatFs、USB MSC 和媒体业务均不属于它；它也不拥有 STM32 QSPI Handle 或板级引脚。
 
 它通过自身拥有的 `W25Qxx_BusOps` 使用具体总线后端；STM32 HAL QSPI 后端属于 `Adapters/stm32_hal/w25qxx_qspi`，具体实例由平台 Flash 注入。
 
@@ -401,7 +413,7 @@ W25Qxx 到 Flash FTL 的具体转换将由 `Adapters/bridge/flash_ftl_w25qxx` �
 
 ## 平台 Flash（Platform Flash）
 
-**平台 Flash**代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。当前它长期持有 W25Qxx Handle 与 QSPI Adapter Context，注入本板预期的 Winbond 厂商码和 256 Mbit 容量码，完成 HAL QSPI Adapter 的 Bind、启动 JEDEC ID 识别校验、SFDP 签名探测、QE 按需安全置位和一次从地址 0 读取 4 字节的非破坏性 `0xEC` 通路验证，并对上公开缓存 ID 与实时 SR1/SR2 快照。它还公开受限的 `Platform_Flash_RunDiagnostic()`：调用者提供一个 4 KiB 工作缓冲时，只能对 ADR-0009 保留的首尾自检扇区执行擦除、页写、读回和图样校验，返回 DWT 时序；该同步等待入口仅限启动诊断，不能作为 FTL 或 MSC 的通用擦写能力。Flash FTL 实现后才会增加 FTL Handle 与跨 Component Bridge 的 Bind。
+**平台 Flash**代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。当前它长期持有 W25Qxx Handle、QSPI Adapter Context 和 QSPI IRQ 回调节点，注入本板预期的 Winbond 厂商码和 256 Mbit 容量码，完成 HAL QSPI Adapter 的 Bind、启动 JEDEC ID 识别校验、SFDP 签名探测、QE 按需安全置位和一次从地址 0 读取 4 字节的非破坏性 `0xEC` 通路验证，并对上公开缓存 ID 与实时 SR1/SR2 快照。它保留同步物理读取，也以“设置唯一 IRQ 回调 → 启动 MDMA 读取 → 普通上下文处理完成”的接缝提供受限非阻塞读取；Platform 不拥有任务或 Cache 操作策略。它还公开受限的 `Platform_Flash_RunDiagnostic()`：调用者提供一个 4 KiB 工作缓冲时，只能对 ADR-0009 保留的首尾自检扇区执行一次擦除、页写和轮询读回图样校验，随后拥有同一 IRQ 订阅的任务可按“首/尾”区域语义分别请求 MDMA 读回，Platform 只比较私有图样而不等待通知或访问缓冲区。该自检接缝仅限启动诊断，不能作为 FTL 或 MSC 的通用擦写能力。Flash FTL 实现后才会增加 FTL Handle 与跨 Component Bridge 的 Bind。
 
 它不实现芯片协议、FTL 映射、FatFs 挂载、USB MSC 所有权或媒体扫描。CubeMX 管理实际 QSPI Handle、引脚、时钟和 IRQ，Platform 只注入借用的实例并决定本板启动识别策略。
 

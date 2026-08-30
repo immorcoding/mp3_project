@@ -126,7 +126,9 @@ Service_StatusTypeDef Service_Log_Init(void)
   * @retval SERVICE_NOT_READY 尚未调用 Service_Log_Init()。
   * @retval SERVICE_BUSY 当前没有空闲消息块。
   * @retval SERVICE_ERROR 队列转移失败。
-  * @note   本函数从不等待空闲块；队列满时丢弃当前消息，避免业务任务因日志阻塞。
+ * @note   本函数从不等待空闲块；队列满时丢弃当前消息，避免业务任务因日志阻塞。
+ *         时间戳由 Log task 稍后调用 LOG_Printf() 时生成，不能据此推断本函数的
+ *         实际投递时刻。
   */
 Service_StatusTypeDef Service_Log_Post(
     Service_Log_LevelTypeDef level,

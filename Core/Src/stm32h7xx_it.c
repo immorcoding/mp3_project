@@ -56,6 +56,7 @@
 
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
+extern MDMA_HandleTypeDef hmdma_quadspi_fifo_th;
 extern QSPI_HandleTypeDef hqspi;
 extern SD_HandleTypeDef hsd1;
 extern DMA_HandleTypeDef hdma_spi1_tx;
@@ -260,6 +261,20 @@ void TIM17_IRQHandler(void)
   /* USER CODE BEGIN TIM17_IRQn 1 */
 
   /* USER CODE END TIM17_IRQn 1 */
+}
+
+/**
+  * @brief This function handles MDMA global interrupt.
+  */
+void MDMA_IRQHandler(void)
+{
+  /* USER CODE BEGIN MDMA_IRQn 0 */
+
+  /* USER CODE END MDMA_IRQn 0 */
+  HAL_MDMA_IRQHandler(&hmdma_quadspi_fifo_th);
+  /* USER CODE BEGIN MDMA_IRQn 1 */
+
+  /* USER CODE END MDMA_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

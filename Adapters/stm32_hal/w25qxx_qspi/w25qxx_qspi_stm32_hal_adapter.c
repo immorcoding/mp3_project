@@ -1,17 +1,19 @@
 /**
   ******************************************************************************
   * @file    w25qxx_qspi_stm32_hal_adapter.c
-  * @brief   STM32 HAL QSPI 到 W25Qxx BusOps 的同步 Adapter 实现。
+ * @brief   STM32 HAL QSPI 到 W25Qxx BusOps 的 Adapter 实现。
   *
   * @details
  *          本 Module 把 W25Qxx Device 发出的控制、读写命令映射为 HAL QSPI
  *          间接模式事务。当前服务 JEDEC ID、SFDP、状态寄存器、启动期 QE 配置、
- *          0xEC Quad I/O 读取和 0x34 Quad 页数据传输，不使用 DMA、自动状态
- *          轮询、内存映射或 QSPI IRQ 回调。
+ *          0xEC Quad I/O 同步读取和 MDMA 非阻塞读取，以及 0x34 Quad 页数据
+ *          传输。Adapter 不持有 Task，QSPI IRQ 仅更新 DMA 结果；读取完成后
+ *          的 D-Cache 失效由 W25Qxx_Process() 所在普通上下文执行。
   ******************************************************************************
   */
 
 #include "Adapters/stm32_hal/w25qxx_qspi/w25qxx_qspi_stm32_hal_adapter.h"
+#include "Adapters/cortex/cache/cortex_m7_dcache_adapter.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -38,6 +40,44 @@ static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_map_status(
         default:
             return W25QXX_BUS_ERROR;
     }
+}
+
+/**
+ * @brief 清除当前 Adapter 保存的 MDMA 读取元数据。
+ * @param adapter 当前 STM32 HAL QSPI Adapter Context。
+ * @note  该元数据不表示 W25Qxx Device 状态；Device 的 BUSY/READY/ERROR 转换
+ *        仍完全由 Components/w25qxx 管理。
+ */
+static void w25qxx_qspi_stm32_hal_clear_dma_read_metadata(
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter)
+{
+    adapter->DMAReadBuffer = NULL;
+    adapter->DMAReadByteCount = 0u;
+    adapter->DMAReadPending = false;
+}
+
+/**
+ * @brief 在 MDMA 读取完成后使 CPU 重新从 AXI SRAM 读取新数据。
+ * @param adapter 保存本次读取 DMA 缓冲区和长度的 Adapter Context。
+ * @retval true 接收缓冲区 Cache 已成功失效，或当前没有待处理读取。
+ * @retval false 元数据不完整或 Cache line 约束不满足。
+ * @note 只能在普通任务上下文、确认 QSPI 接收阶段完成后调用；IRQ 不得调用。
+ */
+static bool w25qxx_qspi_stm32_hal_finish_dma_read(
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter)
+{
+    if (!adapter->DMAReadPending)
+    {
+        return true;
+    }
+
+    if ((adapter->DMAReadBuffer == NULL) || (adapter->DMAReadByteCount == 0u))
+    {
+        return false;
+    }
+
+    return CortexM7DCache_Invalidate_Aligned(adapter->DMAReadBuffer,
+                                              adapter->DMAReadByteCount);
 }
 
 /**
@@ -268,6 +308,128 @@ static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_read_addressed_command(
 }
 
 /**
+ * @brief 通过 HAL QSPI 间接模式和已绑定 MDMA 启动一条带地址非阻塞读取命令。
+ * @param context 指向 Platform 长期持有的 QSPI Adapter Context。
+ * @param instruction 由 W25Qxx Device 指定的 8-bit NOR Flash 命令。
+ * @param address 当前命令的物理地址。
+ * @param transfer_config 由 Device 指定的地址、交替字节、dummy 和数据阶段。
+ * @param data 接收 MDMA 数据的有效缓冲区。
+ * @param data_length 本次命令读取的字节数，必须非零。
+ * @retval W25Qxx 归一化后的立即启动状态。
+ * @note  当前 QSPI 的 `hmdma` 由 CubeMX 使用 `QUADSPI_FIFO_TH` 请求绑定。
+ *        读取前先 Clean+Invalidate 目标范围，防止写回脏 Cache line 覆盖 MDMA
+ *        新数据；读取后的 Invalidate 则延后到普通上下文的状态查询。缓冲区必须
+ *        32-byte 对齐且长度为完整 Cache line，否则 Cache Adapter 会拒绝启动。
+ */
+static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_start_read_addressed_command(
+    void *context,
+    uint8_t instruction,
+    uint32_t address,
+    const W25Qxx_BusAddressedTransferConfigTypeDef *transfer_config,
+    uint8_t *data,
+    uint32_t data_length)
+{
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter = context;
+    QSPI_CommandTypeDef command = {0};
+    HAL_StatusTypeDef hal_status;
+
+    if ((adapter == NULL) ||
+        (adapter->Handle == NULL) ||
+        (adapter->Handle->hmdma == NULL) ||
+        (transfer_config == NULL) ||
+        (data == NULL) ||
+        (data_length == 0u) ||
+        (adapter->TimeoutMs == 0u) ||
+        adapter->DMAReadPending)
+    {
+        return (adapter != NULL) && adapter->DMAReadPending ?
+                   W25QXX_BUS_BUSY :
+                   W25QXX_BUS_ERROR;
+    }
+
+    if (!w25qxx_qspi_stm32_hal_build_addressed_command(
+            &command,
+            instruction,
+            address,
+            transfer_config,
+            data_length))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    if (!CortexM7DCache_CleanInvalidate_Aligned(data, data_length))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    adapter->DMAReadBuffer = data;
+    adapter->DMAReadByteCount = data_length;
+    adapter->DMAReadPending = true;
+    adapter->DMAReadStatus = W25QXX_BUS_BUSY;
+    /* QSPI IRQ 可能在 HAL_QSPI_Receive_DMA() 返回前到达，先发布完整元数据。 */
+    __DMB();
+
+    hal_status = HAL_QSPI_Command(adapter->Handle, &command, adapter->TimeoutMs);
+    if (hal_status == HAL_OK)
+    {
+        hal_status = HAL_QSPI_Receive_DMA(adapter->Handle, data);
+    }
+
+    if (hal_status != HAL_OK)
+    {
+        w25qxx_qspi_stm32_hal_clear_dma_read_metadata(adapter);
+        adapter->DMAReadStatus = w25qxx_qspi_stm32_hal_map_status(hal_status);
+        __DMB();
+    }
+
+    return w25qxx_qspi_stm32_hal_map_status(hal_status);
+}
+
+/**
+ * @brief 查询当前 QSPI MDMA 带地址读取的完成状态并在完成后收尾 Cache。
+ * @param context 指向 Platform 长期持有的 QSPI Adapter Context。
+ * @retval W25QXX_BUS_BUSY 尚未收到 QSPI 完成或错误事件。
+ * @retval W25QXX_BUS_OK 已接收全部数据并完成 D-Cache Invalidate。
+ * @retval 其他值 IRQ 报错、元数据异常或 Cache 收尾失败。
+ * @note 本函数不等待；它应由接收完成任务通知唤醒的普通上下文调用。若调用时
+ *       尚未收到事件，直接返回 BUSY，供上层的有界超时状态机处理。
+ */
+static W25Qxx_BusStatusTypeDef
+    w25qxx_qspi_stm32_hal_get_read_addressed_command_status(void *context)
+{
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter = context;
+    W25Qxx_BusStatusTypeDef status;
+
+    if (adapter == NULL)
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    status = adapter->DMAReadStatus;
+    __DMB();
+    if (status == W25QXX_BUS_BUSY)
+    {
+        return W25QXX_BUS_BUSY;
+    }
+
+    if (status != W25QXX_BUS_OK)
+    {
+        w25qxx_qspi_stm32_hal_clear_dma_read_metadata(adapter);
+        return status;
+    }
+
+    if (!w25qxx_qspi_stm32_hal_finish_dma_read(adapter))
+    {
+        w25qxx_qspi_stm32_hal_clear_dma_read_metadata(adapter);
+        adapter->DMAReadStatus = W25QXX_BUS_ERROR;
+        return W25QXX_BUS_ERROR;
+    }
+
+    w25qxx_qspi_stm32_hal_clear_dma_read_metadata(adapter);
+    return W25QXX_BUS_OK;
+}
+
+/**
  * @brief 通过 HAL QSPI 间接模式执行一条无地址、无数据的单线命令。
  * @param context 指向 Platform 长期持有的 QSPI Adapter Context。
  * @param instruction 由 W25Qxx Device 指定的 8-bit NOR Flash 命令。
@@ -466,6 +628,9 @@ static uint32_t w25qxx_qspi_stm32_hal_get_tick_ms(void *context)
 static const W25Qxx_BusOpsTypeDef w25qxx_qspi_stm32_hal_ops = {
     .ReadCommand = w25qxx_qspi_stm32_hal_read_command,
     .ReadAddressedCommand = w25qxx_qspi_stm32_hal_read_addressed_command,
+    .StartReadAddressedCommand = w25qxx_qspi_stm32_hal_start_read_addressed_command,
+    .GetReadAddressedCommandStatus =
+        w25qxx_qspi_stm32_hal_get_read_addressed_command_status,
     .ExecuteCommand = w25qxx_qspi_stm32_hal_execute_command,
     .ExecuteAddressedCommand = w25qxx_qspi_stm32_hal_execute_addressed_command,
     .WriteCommand = w25qxx_qspi_stm32_hal_write_command,
@@ -502,5 +667,40 @@ W25Qxx_StatusTypeDef W25Qxx_QSPI_STM32HALAdapter_Bind(
     hflash->LastBusStatus = W25QXX_BUS_OK;
     hflash->ActiveOperation = W25QXX_OPERATION_NONE;
     hflash->ActiveOperationStartTickMs = 0u;
+    w25qxx_qspi_stm32_hal_clear_dma_read_metadata(adapter);
+    adapter->DMAReadStatus = W25QXX_BUS_OK;
     return W25QXX_OK;
+}
+
+/**
+ * @brief 记录 HAL QSPI 间接读取已完成。
+ * @param adapter 当前已绑定 QSPI Adapter Context。
+ * @note 由 Platform 在 QSPI IRQ 上下文调用。此处只写入 volatile 完成状态，不做
+ *        Cache 维护、日志、状态机推进或 RTOS 调用；普通上下文后续通过 BusOps
+ *        状态查询完成 D-Cache Invalidate。
+ */
+void W25Qxx_QSPI_STM32HALAdapter_NotifyReadComplete(
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter)
+{
+    if ((adapter != NULL) && adapter->DMAReadPending)
+    {
+        adapter->DMAReadStatus = W25QXX_BUS_OK;
+        __DMB();
+    }
+}
+
+/**
+ * @brief 记录 HAL QSPI 读取错误或中止。
+ * @param adapter 当前已绑定 QSPI Adapter Context。
+ * @note 由 Platform 在 QSPI IRQ 上下文调用。中止或错误数据不得交给 CPU 消费，
+ *        因而后续状态查询只清理元数据并返回错误，不会执行读取完成的 Cache 收尾。
+ */
+void W25Qxx_QSPI_STM32HALAdapter_NotifyReadError(
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter)
+{
+    if ((adapter != NULL) && adapter->DMAReadPending)
+    {
+        adapter->DMAReadStatus = W25QXX_BUS_ERROR;
+        __DMB();
+    }
 }

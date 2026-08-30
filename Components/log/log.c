@@ -375,7 +375,7 @@ LOG_StatusTypeDef LOG_Printf(LOG_LevelTypeDef MessageLevel,
         return LOG_ERROR;
     }
 
-    /* 时间戳记录消息产生时刻，而不是稍后 USB 真正提交的时刻。 */
+    /* 时间戳记录 LOG_Printf() 入队时刻，而不是稍后 USB 真正提交的时刻。 */
     timestamp_ms = hlog_default.TimeSource.GetTimeMs(hlog_default.TimeSource.Context);
 
     /* 先装配固定前缀，返回值是“不含 '\0' 的理论字符数”。 */

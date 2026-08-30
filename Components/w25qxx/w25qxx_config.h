@@ -31,6 +31,9 @@
 #define W25QXX_FAST_READ_QUAD_IO_MODE_BYTE       0xFFu
 #define W25QXX_FAST_READ_QUAD_IO_DUMMY_CYCLES    4u
 
+/* 4 KiB 0xEC 间接读取在 MDMA 路径中等待完成事件的有界上限。 */
+#define W25QXX_ARRAY_READ_TIMEOUT_MS             100u
+
 /* W25Q256JV 各数据手册修订版的 tPP 上限可达 4 ms；保留 1 ms 调度测量裕量。 */
 #define W25QXX_PAGE_PROGRAM_TIMEOUT_MS           5u
 

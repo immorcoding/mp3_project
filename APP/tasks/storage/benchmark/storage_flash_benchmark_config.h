@@ -18,7 +18,10 @@
 #define STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES       (1U * 1024U * 1024U)
 #define STORAGE_FLASH_BENCHMARK_READ_CHUNK_BYTES       (4U * 1024U)
 
-/* 允许 Platform 对首尾保留自检扇区执行擦除、页编程、读回校验和 DWT 测速。 */
+/* 单块 MDMA 读取等待 QSPI IRQ 的最大时长；到期后仅标记本次基准失败。 */
+#define STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS        100U
+
+/* 关闭 Platform 对首尾保留自检扇区执行擦除、页编程及双路径读回校验。 */
 #define STORAGE_FLASH_BENCHMARK_PROGRAM_ENABLE         1
 
 #if ((STORAGE_FLASH_BENCHMARK_READ_START_ADDRESS % 4U) != 0U)
@@ -35,6 +38,10 @@
 
 #if (STORAGE_FLASH_BENCHMARK_READ_CHUNK_BYTES != (4U * 1024U))
 #error "Flash benchmark work buffer must remain one 4 KiB sector."
+#endif
+
+#if (STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS == 0U)
+#error "Flash MDMA benchmark timeout must be non-zero."
 #endif
 
 #endif /* STORAGE_FLASH_BENCHMARK_CONFIG_H */

@@ -6,6 +6,7 @@
   */
 
 #include "Components/w25qxx/w25qxx.h"
+#include "Components/w25qxx/w25qxx_config.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -46,6 +47,12 @@ typedef struct
     W25Qxx_BusAddressedTransferConfigTypeDef ExpectedAddressedTransferConfig;
     uint8_t AddressedResponse[4];
     bool AddressedWasCalled;
+    uint8_t ExpectedAsyncAddressedInstruction;
+    uint32_t ExpectedAsyncAddress;
+    W25Qxx_BusAddressedTransferConfigTypeDef ExpectedAsyncAddressedTransferConfig;
+    uint32_t ExpectedAsyncAddressedDataLength;
+    bool AsyncAddressedWasCalled;
+    W25Qxx_BusStatusTypeDef AsyncAddressedStatus;
     uint8_t ExpectedAddressedWriteInstruction;
     uint32_t ExpectedAddressedWriteAddress;
     W25Qxx_BusAddressedTransferConfigTypeDef ExpectedAddressedWriteTransferConfig;
@@ -239,6 +246,52 @@ static W25Qxx_BusStatusTypeDef test_w25qxx_read_addressed_command(
     return W25QXX_BUS_OK;
 }
 
+static W25Qxx_BusStatusTypeDef test_w25qxx_start_read_addressed_command(
+    void *context,
+    uint8_t instruction,
+    uint32_t address,
+    const W25Qxx_BusAddressedTransferConfigTypeDef *transfer_config,
+    uint8_t *data,
+    uint32_t data_length)
+{
+    W25Qxx_FakeBusTypeDef *fake_bus = (W25Qxx_FakeBusTypeDef *)context;
+
+    if ((fake_bus == NULL) ||
+        (transfer_config == NULL) ||
+        (data == NULL) ||
+        (instruction != fake_bus->ExpectedAsyncAddressedInstruction) ||
+        (address != fake_bus->ExpectedAsyncAddress) ||
+        (transfer_config->AddressLength !=
+         fake_bus->ExpectedAsyncAddressedTransferConfig.AddressLength) ||
+        (transfer_config->AddressLineMode !=
+         fake_bus->ExpectedAsyncAddressedTransferConfig.AddressLineMode) ||
+        (transfer_config->DataLineMode !=
+         fake_bus->ExpectedAsyncAddressedTransferConfig.DataLineMode) ||
+        (transfer_config->HasAlternateByte !=
+         fake_bus->ExpectedAsyncAddressedTransferConfig.HasAlternateByte) ||
+        (transfer_config->AlternateByte !=
+         fake_bus->ExpectedAsyncAddressedTransferConfig.AlternateByte) ||
+        (transfer_config->AlternateByteLineMode !=
+         fake_bus->ExpectedAsyncAddressedTransferConfig.AlternateByteLineMode) ||
+        (transfer_config->DummyCycles !=
+         fake_bus->ExpectedAsyncAddressedTransferConfig.DummyCycles) ||
+        (data_length != fake_bus->ExpectedAsyncAddressedDataLength))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    fake_bus->AsyncAddressedWasCalled = true;
+    return W25QXX_BUS_OK;
+}
+
+static W25Qxx_BusStatusTypeDef test_w25qxx_get_read_addressed_command_status(
+    void *context)
+{
+    const W25Qxx_FakeBusTypeDef *fake_bus = context;
+
+    return (fake_bus != NULL) ? fake_bus->AsyncAddressedStatus : W25QXX_BUS_ERROR;
+}
+
 static W25Qxx_BusStatusTypeDef test_w25qxx_write_addressed_command(
     void *context,
     uint8_t instruction,
@@ -281,6 +334,9 @@ static W25Qxx_BusStatusTypeDef test_w25qxx_write_addressed_command(
 static const W25Qxx_BusOpsTypeDef test_w25qxx_fake_bus_ops = {
     .ReadCommand = test_w25qxx_read_command,
     .ReadAddressedCommand = test_w25qxx_read_addressed_command,
+    .StartReadAddressedCommand = test_w25qxx_start_read_addressed_command,
+    .GetReadAddressedCommandStatus =
+        test_w25qxx_get_read_addressed_command_status,
     .ExecuteCommand = test_w25qxx_execute_command,
     .ExecuteAddressedCommand = test_w25qxx_execute_addressed_command,
     .WriteCommand = test_w25qxx_write_command,
@@ -686,6 +742,96 @@ static void test_w25qxx_read_rejects_non_w25q256_fixed_4byte_operation(void)
     assert(hflash.ErrorCode == W25QXX_ERROR_UNSUPPORTED_ARRAY_OPERATION);
 }
 
+static void test_w25qxx_start_read_uses_quad_i_o_4byte_address_command(void)
+{
+    W25Qxx_FakeBusTypeDef fake_bus = {
+        .ExpectedInstruction = 0x9Fu,
+        .Response = {
+            .ManufacturerID = W25QXX_MANUFACTURER_ID_WINBOND,
+            .MemoryType = 0x40u,
+            .CapacityID = W25QXX_CAPACITY_ID_256MBIT
+        },
+        .ExpectedAsyncAddressedInstruction = 0xECu,
+        .ExpectedAsyncAddress = 0x00010200u,
+        .ExpectedAsyncAddressedTransferConfig = {
+            .AddressLength = 4u,
+            .AddressLineMode = W25QXX_BUS_LINES_4,
+            .DataLineMode = W25QXX_BUS_LINES_4,
+            .HasAlternateByte = true,
+            .AlternateByte = 0xFFu,
+            .AlternateByteLineMode = W25QXX_BUS_LINES_4,
+            .DummyCycles = 4u
+        },
+        .ExpectedAsyncAddressedDataLength = 4u,
+        .AsyncAddressedStatus = W25QXX_BUS_BUSY
+    };
+    W25Qxx_HandleTypeDef hflash = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &fake_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+    uint8_t read_buffer[4] = {0u};
+
+    assert(W25Qxx_Init(&hflash) == W25QXX_OK);
+    assert(W25Qxx_StartRead(&hflash,
+                             fake_bus.ExpectedAsyncAddress,
+                             read_buffer,
+                             sizeof(read_buffer)) == W25QXX_OK);
+    assert(fake_bus.AsyncAddressedWasCalled);
+    assert(hflash.State == W25QXX_STATE_BUSY);
+    assert(hflash.ActiveOperation == W25QXX_OPERATION_ARRAY_READ);
+    assert(W25Qxx_Process(&hflash) == W25QXX_BUSY);
+
+    fake_bus.AsyncAddressedStatus = W25QXX_BUS_OK;
+    assert(W25Qxx_Process(&hflash) == W25QXX_OK);
+    assert(hflash.State == W25QXX_STATE_READY);
+    assert(hflash.ActiveOperation == W25QXX_OPERATION_NONE);
+}
+
+static void test_w25qxx_process_times_out_stalled_async_read(void)
+{
+    W25Qxx_FakeBusTypeDef fake_bus = {
+        .ExpectedInstruction = 0x9Fu,
+        .Response = {
+            .ManufacturerID = W25QXX_MANUFACTURER_ID_WINBOND,
+            .MemoryType = 0x40u,
+            .CapacityID = W25QXX_CAPACITY_ID_256MBIT
+        },
+        .ExpectedAsyncAddressedInstruction = 0xECu,
+        .ExpectedAsyncAddress = 0x00010200u,
+        .ExpectedAsyncAddressedTransferConfig = {
+            .AddressLength = 4u,
+            .AddressLineMode = W25QXX_BUS_LINES_4,
+            .DataLineMode = W25QXX_BUS_LINES_4,
+            .HasAlternateByte = true,
+            .AlternateByte = 0xFFu,
+            .AlternateByteLineMode = W25QXX_BUS_LINES_4,
+            .DummyCycles = 4u
+        },
+        .ExpectedAsyncAddressedDataLength = 4u,
+        .AsyncAddressedStatus = W25QXX_BUS_BUSY
+    };
+    W25Qxx_HandleTypeDef hflash = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &fake_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+    uint8_t read_buffer[4] = {0u};
+
+    assert(W25Qxx_Init(&hflash) == W25QXX_OK);
+    assert(W25Qxx_StartRead(&hflash,
+                             fake_bus.ExpectedAsyncAddress,
+                             read_buffer,
+                             sizeof(read_buffer)) == W25QXX_OK);
+
+    fake_bus.TickMs = W25QXX_ARRAY_READ_TIMEOUT_MS;
+    assert(W25Qxx_Process(&hflash) == W25QXX_ERROR);
+    assert(hflash.State == W25QXX_STATE_ERROR);
+    assert(hflash.ActiveOperation == W25QXX_OPERATION_NONE);
+    assert(hflash.ErrorCode == W25QXX_ERROR_READ_ARRAY_TIMEOUT);
+    assert(hflash.LastBusStatus == W25QXX_BUS_TIMEOUT);
+}
+
 static void test_w25qxx_program_page_starts_quad_4byte_operation(void)
 {
     static const uint8_t expected_data[] = {0xAAu, 0x55u, 0x33u, 0xCCu};
@@ -980,6 +1126,8 @@ int main(void)
     test_w25qxx_read_uses_quad_i_o_4byte_address_command();
     test_w25qxx_read_rejects_unaligned_quad_i_o_address();
     test_w25qxx_read_rejects_non_w25q256_fixed_4byte_operation();
+    test_w25qxx_start_read_uses_quad_i_o_4byte_address_command();
+    test_w25qxx_process_times_out_stalled_async_read();
     test_w25qxx_program_page_starts_quad_4byte_operation();
     test_w25qxx_program_page_rejects_page_crossing_request();
     test_w25qxx_program_page_rejects_quad_disabled_flash();

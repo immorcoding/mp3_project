@@ -23,6 +23,7 @@
 #include "fatfs.h"
 #include "i2c.h"
 #include "i2s.h"
+#include "mdma.h"
 #include "memorymap.h"
 #include "quadspi.h"
 #include "spi.h"
@@ -114,6 +115,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
+  MX_MDMA_Init();
   MX_ADC3_Init();
   MX_FMC_Init();
   MX_USB_DEVICE_Init();
@@ -121,8 +123,8 @@ int main(void)
   MX_FATFS_Init();
   MX_TIM5_Init();
   MX_SPI1_Init();
-  MX_I2C2_Init();
   MX_QUADSPI_Init();
+  MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
   app_init();
   /* USER CODE END 2 */

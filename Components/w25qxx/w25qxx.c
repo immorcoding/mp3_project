@@ -7,8 +7,8 @@
  *          当前定义启动识别和 Quad 能力配置的最小语义：经已绑定的总线读取并
  *          缓存 JEDEC 三字节 ID、校验实例注入的厂商与容量、探测 SFDP 头签名，
  *          并在 QE 未开启时安全写入 SR2。当前还提供 W25Q256 固定 4-byte
- *          Quad I/O 读取、非阻塞 Quad 页编程和 4 KiB Sector Erase 启动/轮询；
- *          FTL、DMA、自动状态轮询和内存映射仍不属于本 Module 的实现范围。
+ *          Quad I/O 同步/非阻塞读取、非阻塞 Quad 页编程和 4 KiB Sector Erase
+ *          启动/轮询；FTL、自动状态轮询和内存映射仍不属于本 Module 的实现范围。
   ******************************************************************************
   */
 
@@ -660,6 +660,95 @@ W25Qxx_StatusTypeDef W25Qxx_Read(
 }
 
 /**
+ * @brief 启动一次 W25Q256 0xEC 固定 4-byte Quad I/O 非阻塞原始读取。
+ * @param hflash 已完成初始化和 QE 配置的 W25Qxx Device Handle。
+ * @param address 待读取首字节的物理 Flash 地址，必须 4-byte 对齐。
+ * @param data 接收 DMA 或等价异步总线搬运数据的有效缓冲区。
+ * @param data_length 待读取字节数，必须非零且完整落在当前识别容量内。
+ * @retval W25QXX_OK 底层已接受读取请求，Device 转入 BUSY；调用者应在完成通知
+ *         后于普通上下文调用 W25Qxx_Process() 收尾。
+ * @retval W25QXX_ERROR 参数、对齐或地址范围无效，Device 未就绪，异步总线接缝
+ *         未绑定，或底层拒绝启动。
+ * @note 与 W25Qxx_Read() 使用相同的 0xEC 协议和边界校验；区别仅在数据搬运的
+ *       生命周期。该函数不访问状态寄存器，因为数组读取不会改变 Flash 内部 WIP。
+ *       Adapter 必须在接收完成后才让状态查询返回 OK，并在普通上下文完成 Cache
+ *       失效，以保证调用者可安全读取 data。
+ */
+W25Qxx_StatusTypeDef W25Qxx_StartRead(
+    W25Qxx_HandleTypeDef *hflash,
+    uint32_t address,
+    uint8_t *data,
+    uint32_t data_length)
+{
+    W25Qxx_BusStatusTypeDef bus_status;
+
+    if ((hflash == NULL) || (data == NULL))
+    {
+        if (hflash != NULL)
+        {
+            hflash->ErrorCode = W25QXX_ERROR_INVALID_PARAM;
+        }
+
+        return W25QXX_ERROR;
+    }
+
+    if (hflash->State != W25QXX_STATE_READY)
+    {
+        hflash->ErrorCode = W25QXX_ERROR_NOT_READY;
+        return W25QXX_ERROR;
+    }
+
+    if (!w25qxx_validate_array_request(hflash, address, data_length))
+    {
+        return W25QXX_ERROR;
+    }
+
+    if (!w25qxx_supports_fixed_4byte_quad_operations(hflash))
+    {
+        return W25QXX_ERROR;
+    }
+
+    if ((address % W25QXX_QUAD_READ_ADDRESS_ALIGNMENT_BYTES) != 0u)
+    {
+        hflash->ErrorCode = W25QXX_ERROR_INVALID_READ_ADDRESS_ALIGNMENT;
+        return W25QXX_ERROR;
+    }
+
+    if ((hflash->BusOps == NULL) ||
+        (hflash->BusContext == NULL) ||
+        (hflash->BusOps->StartReadAddressedCommand == NULL) ||
+        (hflash->BusOps->GetReadAddressedCommandStatus == NULL) ||
+        (hflash->BusOps->GetTickMs == NULL))
+    {
+        return w25qxx_record_failure(hflash,
+                                     W25QXX_ERROR_BUS_NOT_BOUND,
+                                     W25QXX_BUS_ERROR);
+    }
+
+    hflash->State = W25QXX_STATE_BUSY;
+    bus_status = hflash->BusOps->StartReadAddressedCommand(
+        hflash->BusContext,
+        W25QXX_COMMAND_FAST_READ_QUAD_IO_4BYTE,
+        address,
+        &w25qxx_quad_io_read_transfer_config,
+        data,
+        data_length);
+    if (bus_status != W25QXX_BUS_OK)
+    {
+        return w25qxx_record_failure(hflash,
+                                     W25QXX_ERROR_READ_ARRAY,
+                                     bus_status);
+    }
+
+    hflash->ActiveOperation = W25QXX_OPERATION_ARRAY_READ;
+    hflash->ActiveOperationStartTickMs = hflash->BusOps->GetTickMs(
+        hflash->BusContext);
+    hflash->ErrorCode = W25QXX_ERROR_NONE;
+    hflash->LastBusStatus = W25QXX_BUS_OK;
+    return W25QXX_OK;
+}
+
+/**
  * @brief 启动一次 W25Q256 0x34 固定 4-byte Quad 页编程事务。
  * @param hflash 已完成初始化和 QE 配置的 W25Qxx Device Handle。
  * @param address 待写入首字节的物理 Flash 地址。
@@ -926,14 +1015,17 @@ W25Qxx_StatusTypeDef W25Qxx_SectorEraseStart(
 }
 
 /**
- * @brief 推进当前异步原始 Flash 操作一次，不阻塞等待 Flash 内部时序。
- * @param hflash 已由页编程或 4 KiB 扇区擦除启动函数置为 BUSY 的 Device Handle。
- * @retval W25QXX_BUSY 当前操作仍处于 WIP=1；调用者稍后应再次调用。
- * @retval W25QXX_OK 已观察到 WIP=0，当前操作已完成，Device 回到 READY。
- * @retval W25QXX_ERROR Handle/状态无效、状态读取失败，或当前操作超过有界时限。
- * @note 每次调用只执行一次 SR1/SR2 快照读取，不调用延时函数、不循环等待。未来
- *       Flash FTL 的后台任务应以合适节拍调用本函数；MSC 路径绝不能自行阻塞
- *       tPP 或 tSE。
+ * @brief 推进当前异步原始 Flash 操作一次，不阻塞等待总线或 Flash 内部时序。
+ * @param hflash 已由异步读取、页编程或 4 KiB 扇区擦除启动函数置为 BUSY 的
+ *        Device Handle。
+ * @retval W25QXX_BUSY 当前数组读取尚未收到完成事件，或页编程/擦除仍处于 WIP=1；
+ *         调用者稍后应再次调用。
+ * @retval W25QXX_OK 当前操作已完成，Device 回到 READY。
+ * @retval W25QXX_ERROR Handle/状态无效、总线状态查询失败，或当前操作超过有界时限。
+ * @note 数组读取只查询 Adapter 由 IRQ 更新的传输状态，并由 Adapter 在此普通
+ *       上下文执行 Cache 收尾；页编程和擦除每次调用只读取一次 SR1/SR2 快照。
+ *       本函数不调用延时函数、不循环等待。未来 Flash FTL 的后台任务应以合适
+ *       节拍调用本函数；MSC 路径绝不能自行阻塞 tPP、tSE 或 DMA 完成。
  */
 W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash)
 {
@@ -941,6 +1033,7 @@ W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash)
     uint32_t elapsed_ms;
     uint32_t timeout_ms;
     W25Qxx_ErrorTypeDef timeout_error;
+    W25Qxx_BusStatusTypeDef bus_status;
 
     if (hflash == NULL)
     {
@@ -955,6 +1048,11 @@ W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash)
 
     switch (hflash->ActiveOperation)
     {
+        case W25QXX_OPERATION_ARRAY_READ:
+            timeout_ms = W25QXX_ARRAY_READ_TIMEOUT_MS;
+            timeout_error = W25QXX_ERROR_READ_ARRAY_TIMEOUT;
+            break;
+
         case W25QXX_OPERATION_PAGE_PROGRAM:
             timeout_ms = W25QXX_PAGE_PROGRAM_TIMEOUT_MS;
             timeout_error = W25QXX_ERROR_PAGE_PROGRAM_TIMEOUT;
@@ -972,8 +1070,54 @@ W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash)
 
     if ((hflash->BusOps == NULL) ||
         (hflash->BusContext == NULL) ||
-        (hflash->BusOps->ReadCommand == NULL) ||
         (hflash->BusOps->GetTickMs == NULL))
+    {
+        return w25qxx_record_failure(hflash,
+                                     W25QXX_ERROR_BUS_NOT_BOUND,
+                                     W25QXX_BUS_ERROR);
+    }
+
+    if (hflash->ActiveOperation == W25QXX_OPERATION_ARRAY_READ)
+    {
+        if (hflash->BusOps->GetReadAddressedCommandStatus == NULL)
+        {
+            return w25qxx_record_failure(hflash,
+                                         W25QXX_ERROR_BUS_NOT_BOUND,
+                                         W25QXX_BUS_ERROR);
+        }
+
+        bus_status = hflash->BusOps->GetReadAddressedCommandStatus(
+            hflash->BusContext);
+        if (bus_status == W25QXX_BUS_BUSY)
+        {
+            elapsed_ms = hflash->BusOps->GetTickMs(hflash->BusContext) -
+                         hflash->ActiveOperationStartTickMs;
+            if (elapsed_ms >= timeout_ms)
+            {
+                return w25qxx_record_failure(hflash,
+                                             timeout_error,
+                                             W25QXX_BUS_TIMEOUT);
+            }
+
+            return W25QXX_BUSY;
+        }
+
+        if (bus_status != W25QXX_BUS_OK)
+        {
+            return w25qxx_record_failure(hflash,
+                                         W25QXX_ERROR_READ_ARRAY,
+                                         bus_status);
+        }
+
+        hflash->ActiveOperation = W25QXX_OPERATION_NONE;
+        hflash->ActiveOperationStartTickMs = 0u;
+        hflash->ErrorCode = W25QXX_ERROR_NONE;
+        hflash->LastBusStatus = W25QXX_BUS_OK;
+        hflash->State = W25QXX_STATE_READY;
+        return W25QXX_OK;
+    }
+
+    if (hflash->BusOps->ReadCommand == NULL)
     {
         return w25qxx_record_failure(hflash,
                                      W25QXX_ERROR_BUS_NOT_BOUND,

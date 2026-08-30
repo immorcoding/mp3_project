@@ -23,6 +23,11 @@ typedef enum
 } Service_Log_LevelTypeDef;
 
 Service_StatusTypeDef Service_Log_Init(void);
+/**
+ * @brief  将一条已格式化消息异步投递给 Log task。
+ * @note   本函数不生成最终输出时间戳；时间戳由 Log task 随后调用的
+ *         Components/log `LOG_Printf()` 生成，故输出时间可能晚于本次投递。
+ */
 Service_StatusTypeDef Service_Log_Post(
     Service_Log_LevelTypeDef level,
     const char *tag,

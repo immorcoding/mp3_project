@@ -95,6 +95,7 @@ typedef enum
     W25QXX_ERROR_PAGE_BOUNDARY,
     W25QXX_ERROR_SECTOR_BOUNDARY,
     W25QXX_ERROR_READ_ARRAY,
+    W25QXX_ERROR_READ_ARRAY_TIMEOUT,
     W25QXX_ERROR_PROGRAM_PAGE,
     W25QXX_ERROR_PAGE_PROGRAM_TIMEOUT,
     W25QXX_ERROR_ERASE_SECTOR,
@@ -131,6 +132,7 @@ typedef struct
 typedef enum
 {
     W25QXX_OPERATION_NONE = 0,
+    W25QXX_OPERATION_ARRAY_READ,
     W25QXX_OPERATION_PAGE_PROGRAM,
     W25QXX_OPERATION_SECTOR_ERASE
 } W25Qxx_OperationTypeDef;
@@ -195,6 +197,30 @@ typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusReadAddressedCommandFunc)(
     uint32_t data_length);
 
 /**
+ * @brief 启动一条由 W25Qxx 描述的非阻塞带地址读取命令的总线函数类型。
+ * @note  Device 决定命令、地址和传输阶段；Adapter 只开始底层数据搬运并立即
+ *        返回。完成结果必须由 GetReadAddressedCommandStatus 在普通上下文读取，
+ *        因而该接缝可由 STM32 MDMA、其他 DMA 或等价异步机制实现，而不向
+ *        Component 暴露 HAL 或中断细节。
+ */
+typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusStartReadAddressedCommandFunc)(
+    void *context,
+    uint8_t instruction,
+    uint32_t address,
+    const W25Qxx_BusAddressedTransferConfigTypeDef *transfer_config,
+    uint8_t *data,
+    uint32_t data_length);
+
+/**
+ * @brief 查询当前非阻塞带地址读取命令的完成状态的总线函数类型。
+ * @note  返回 BUSY 表示尚未收到下层完成或错误事件；返回 OK 时 Adapter 必须已
+ *        完成其读取后 Cache 收尾，data 才可由 CPU 消费。该函数只可由任务等
+ *        普通上下文调用，ISR 只负责更新 Adapter 私有完成状态。
+ */
+typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusGetReadAddressedCommandStatusFunc)(
+    void *context);
+
+/**
  * @brief 以单字节无数据命令控制 W25Qxx 的总线函数类型。
  * @note  Instruction 的协议语义仍由 W25Qxx Device 决定；Adapter 只负责发送
  *        不带地址和数据阶段的当前总线事务。首版用于 Write Enable（0x06）。
@@ -251,6 +277,8 @@ typedef struct
 {
     W25Qxx_BusReadCommandFunc ReadCommand;
     W25Qxx_BusReadAddressedCommandFunc ReadAddressedCommand;
+    W25Qxx_BusStartReadAddressedCommandFunc StartReadAddressedCommand;
+    W25Qxx_BusGetReadAddressedCommandStatusFunc GetReadAddressedCommandStatus;
     W25Qxx_BusExecuteCommandFunc ExecuteCommand;
     W25Qxx_BusExecuteAddressedCommandFunc ExecuteAddressedCommand;
     W25Qxx_BusWriteCommandFunc WriteCommand;
@@ -283,6 +311,11 @@ W25Qxx_StatusTypeDef W25Qxx_ReadStatusRegisters(
 W25Qxx_StatusTypeDef W25Qxx_EnsureQuadEnabled(
     W25Qxx_HandleTypeDef *hflash);
 W25Qxx_StatusTypeDef W25Qxx_Read(
+    W25Qxx_HandleTypeDef *hflash,
+    uint32_t address,
+    uint8_t *data,
+    uint32_t data_length);
+W25Qxx_StatusTypeDef W25Qxx_StartRead(
     W25Qxx_HandleTypeDef *hflash,
     uint32_t address,
     uint8_t *data,
