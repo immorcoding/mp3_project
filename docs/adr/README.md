@@ -14,3 +14,4 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 - [0006-cache-range-ownership.md](0006-cache-range-ownership.md)：Cortex-M7 D-Cache 范围与 DMA 缓冲区约束。
 - [0007-gui-runtime-and-squareline-boundary.md](0007-gui-runtime-and-squareline-boundary.md)：GUI Task、GUI Service 与 SquareLine 生成边界。
 - [0008-sdram-early-init-and-noload-ownership.md](0008-sdram-early-init-and-noload-ownership.md)：SDRAM 早期初始化、正式初始化与 NOLOAD 缓冲责任。
+- [0009-w25q256-firmware-slots-and-diagnostic-reservation.md](0009-w25q256-firmware-slots-and-diagnostic-reservation.md)：W25Q256 的 OTA 固件双槽、自检区、Resource Pack 与 FTL 物理边界。

@@ -8,6 +8,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 - `storage_sd_*()`：本 Task Module 的内部调度 Interface，不是面向其他任务的通用文件访问 Interface。
 - `storage_sd_benchmark_run()`：仅读写测试分支使用的内部诊断入口；成功挂载后由 `storage_sd_init()` 调用，不向其他任务公开。
 - `storage_sdram_benchmark_run()`：本 Task 启动阶段的内部 SDRAM 硬件诊断与基准入口；不向其他任务公开。
+- `storage_flash_benchmark_run()`：本 Task 启动阶段的 W25Q256 原始读取及可选双自检扇区破坏性基准入口；不向其他任务公开。
 
 ## 编译期依赖
 
@@ -16,6 +17,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 - Log Service 投递 Interface。
 - 仅用于卡检测消抖的原生 FreeRTOS 索引任务通知 Interface。
 - Platform SDRAM 的启动诊断 Interface。
+- Platform Flash 的受限原始数组读取与固定双自检扇区诊断 Interface。
 
 ## 运行时请求与事件路径
 
@@ -30,6 +32,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 - 读写测试分支在首次成功挂载后顺序写入 64 MiB、`f_sync()`、顺序读取 64 MiB，再进行不计时完整性校验；所有日志使用 `SD: Bench ...`，校验成功后删除 `0:/__sd_rw_bench.bin`，同一上电周期不重复执行。
 - `storage_task_config.h` 保存卡检测消抖静默窗口；`storage_sd_benchmark_config.h` 保存仅 APP 诊断使用的测速数据规模。两者均不是 Filesystem Service 的 DMA 参数或对其他 Task 的公开 Interface。
 - `storage_sdram_benchmark_config.h` 决定是否在启动阶段执行破坏性的全 SDRAM 诊断与基准；接入 SDRAM 业务数据后必须关闭，或在所有使用者前独占执行。
+- `APP/app_config.h` 的 `STORAGE_FLASH_BENCHMARK_ENABLE` 决定是否在启动阶段运行 Flash 基准；`storage_flash_benchmark_config.h` 保存固定读取范围、4 KiB 工作缓冲及破坏性自检开关。读取 1 MiB 不改变 Flash 内容；`STORAGE_FLASH_BENCHMARK_PROGRAM_ENABLE` 开启时，Platform 固定擦写 ADR-0009 的首尾两个 4 KiB 自检扇区，完成 8 KiB 的页编程、读回校验与 DWT 测速。该入口只可在 Storage Task 启动早期独占执行。
 
 ## 命名
 

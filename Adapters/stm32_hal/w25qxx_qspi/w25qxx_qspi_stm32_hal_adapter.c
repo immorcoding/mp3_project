@@ -46,7 +46,7 @@ static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_map_status(
  * @param instruction 当前 NOR Flash 命令。
  * @param address 当前命令的物理地址。
  * @param transfer_config 由 W25Qxx Device 指定的地址、交替字节和数据阶段配置。
- * @param data_length 数据阶段的非零字节数。
+ * @param data_length 数据阶段的字节数；零表示无数据阶段的带地址控制命令。
  * @retval true 转换成功。
  * @retval false 配置中存在当前 Adapter 不支持的地址长度或线数。
  * @note W25Qxx Device 决定协议；此处只进行 HAL 枚举映射。0xEC 的模式字节
@@ -60,8 +60,7 @@ static bool w25qxx_qspi_stm32_hal_build_addressed_command(
     uint32_t data_length)
 {
     if ((command == NULL) ||
-        (transfer_config == NULL) ||
-        (data_length == 0u))
+        (transfer_config == NULL))
     {
         return false;
     }
@@ -101,22 +100,29 @@ static bool w25qxx_qspi_stm32_hal_build_addressed_command(
             return false;
     }
 
-    switch (transfer_config->DataLineMode)
+    if (data_length == 0u)
     {
-        case W25QXX_BUS_LINES_1:
-            command->DataMode = QSPI_DATA_1_LINE;
-            break;
+        command->DataMode = QSPI_DATA_NONE;
+    }
+    else
+    {
+        switch (transfer_config->DataLineMode)
+        {
+            case W25QXX_BUS_LINES_1:
+                command->DataMode = QSPI_DATA_1_LINE;
+                break;
 
-        case W25QXX_BUS_LINES_2:
-            command->DataMode = QSPI_DATA_2_LINES;
-            break;
+            case W25QXX_BUS_LINES_2:
+                command->DataMode = QSPI_DATA_2_LINES;
+                break;
 
-        case W25QXX_BUS_LINES_4:
-            command->DataMode = QSPI_DATA_4_LINES;
-            break;
+            case W25QXX_BUS_LINES_4:
+                command->DataMode = QSPI_DATA_4_LINES;
+                break;
 
-        default:
-            return false;
+            default:
+                return false;
+        }
     }
 
     if (transfer_config->HasAlternateByte)
@@ -298,6 +304,47 @@ static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_execute_command(
 }
 
 /**
+ * @brief 通过 HAL QSPI 间接模式执行一条由 Device 描述的带地址、无数据命令。
+ * @param context 指向 Platform 长期持有的 QSPI Adapter Context。
+ * @param instruction 由 W25Qxx Device 指定的 8-bit NOR Flash 命令。
+ * @param address 当前命令的物理 Flash 地址。
+ * @param transfer_config 由 Device 指定的地址、交替字节和 dummy 配置。
+ * @retval W25Qxx 归一化后的总线状态。
+ * @note 当前供 W25Q256 0x21 Sector Erase 使用：指令和 32-bit 地址均为单线，
+ *       没有数据阶段。该函数只提交命令，不等待 Flash 内部擦除完成。
+ */
+static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_execute_addressed_command(
+    void *context,
+    uint8_t instruction,
+    uint32_t address,
+    const W25Qxx_BusAddressedTransferConfigTypeDef *transfer_config)
+{
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter = context;
+    QSPI_CommandTypeDef command = {0};
+
+    if ((adapter == NULL) ||
+        (adapter->Handle == NULL) ||
+        (transfer_config == NULL) ||
+        (adapter->TimeoutMs == 0u))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    if (!w25qxx_qspi_stm32_hal_build_addressed_command(
+            &command,
+            instruction,
+            address,
+            transfer_config,
+            0u))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    return w25qxx_qspi_stm32_hal_map_status(
+        HAL_QSPI_Command(adapter->Handle, &command, adapter->TimeoutMs));
+}
+
+/**
  * @brief 通过 HAL QSPI 间接模式执行一条无地址的单线写命令。
  * @param context 指向 Platform 长期持有的 QSPI Adapter Context。
  * @param instruction 由 W25Qxx Device 指定的 8-bit NOR Flash 命令。
@@ -420,6 +467,7 @@ static const W25Qxx_BusOpsTypeDef w25qxx_qspi_stm32_hal_ops = {
     .ReadCommand = w25qxx_qspi_stm32_hal_read_command,
     .ReadAddressedCommand = w25qxx_qspi_stm32_hal_read_addressed_command,
     .ExecuteCommand = w25qxx_qspi_stm32_hal_execute_command,
+    .ExecuteAddressedCommand = w25qxx_qspi_stm32_hal_execute_addressed_command,
     .WriteCommand = w25qxx_qspi_stm32_hal_write_command,
     .WriteAddressedCommand = w25qxx_qspi_stm32_hal_write_addressed_command,
     .GetTickMs = w25qxx_qspi_stm32_hal_get_tick_ms

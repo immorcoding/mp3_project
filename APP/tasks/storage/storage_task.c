@@ -13,8 +13,10 @@
 #include "APP/tasks/storage/storage_task.h"
 #include "APP/tasks/storage/storage_task_config.h"
 #include "APP/tasks/storage/storage_sd.h"
+#include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark.h"
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark_config.h"
+#include "APP/app_config.h"
 
 #include <stdint.h>
 
@@ -38,6 +40,10 @@ void storage_task(void *handle)
 
 #if STORAGE_SDRAM_BENCHMARK_ENABLE
     storage_sdram_benchmark_run();
+#endif
+
+#if STORAGE_FLASH_BENCHMARK_ENABLE
+    storage_flash_benchmark_run();
 #endif
 
     for (;;)

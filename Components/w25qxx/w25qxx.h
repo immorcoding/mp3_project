@@ -37,6 +37,9 @@ extern "C" {
 /* W25Qxx Quad Input Page Program 的单页最大数据量，单位为字节。 */
 #define W25QXX_PAGE_PROGRAM_MAX_SIZE_BYTES   256u
 
+/* W25Q256 4-byte Sector Erase 的固定扇区粒度，单位为字节。 */
+#define W25QXX_SECTOR_ERASE_SIZE_BYTES       (4u * 1024u)
+
 /* 当前 W25Q256 的 0xEC Quad I/O Read 起始地址最低对齐要求，单位为字节。 */
 #define W25QXX_QUAD_READ_ADDRESS_ALIGNMENT_BYTES  4u
 
@@ -90,9 +93,12 @@ typedef enum
     W25QXX_ERROR_INVALID_READ_ADDRESS_ALIGNMENT,
     W25QXX_ERROR_INVALID_DATA_LENGTH,
     W25QXX_ERROR_PAGE_BOUNDARY,
+    W25QXX_ERROR_SECTOR_BOUNDARY,
     W25QXX_ERROR_READ_ARRAY,
     W25QXX_ERROR_PROGRAM_PAGE,
-    W25QXX_ERROR_PAGE_PROGRAM_TIMEOUT
+    W25QXX_ERROR_PAGE_PROGRAM_TIMEOUT,
+    W25QXX_ERROR_ERASE_SECTOR,
+    W25QXX_ERROR_SECTOR_ERASE_TIMEOUT
 } W25Qxx_ErrorTypeDef;
 
 /** @brief W25Qxx 间接事务一个阶段使用的数据线数量。 */
@@ -125,7 +131,8 @@ typedef struct
 typedef enum
 {
     W25QXX_OPERATION_NONE = 0,
-    W25QXX_OPERATION_PAGE_PROGRAM
+    W25QXX_OPERATION_PAGE_PROGRAM,
+    W25QXX_OPERATION_SECTOR_ERASE
 } W25Qxx_OperationTypeDef;
 
 /** @brief JEDEC Read ID 命令返回的三字节芯片标识。 */
@@ -197,6 +204,17 @@ typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusExecuteCommandFunc)(
     uint8_t instruction);
 
 /**
+ * @brief 以单字节命令控制 W25Qxx 的带地址、无数据事务的总线函数类型。
+ * @note  Device 决定地址长度、地址线数和指令语义；Adapter 只映射事务。首版
+ *        用于 W25Q256 0x21 的 32-bit 单线 4 KiB Sector Erase。
+ */
+typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusExecuteAddressedCommandFunc)(
+    void *context,
+    uint8_t instruction,
+    uint32_t address,
+    const W25Qxx_BusAddressedTransferConfigTypeDef *transfer_config);
+
+/**
  * @brief 以单字节无地址命令向 W25Qxx 写入数据的总线函数类型。
  * @note  Device 决定 Instruction 与数据长度；Adapter 只映射为当前总线事务。
  *        首版用于 Write Status Register-2（0x31）的单字节 SR2 写入。
@@ -234,6 +252,7 @@ typedef struct
     W25Qxx_BusReadCommandFunc ReadCommand;
     W25Qxx_BusReadAddressedCommandFunc ReadAddressedCommand;
     W25Qxx_BusExecuteCommandFunc ExecuteCommand;
+    W25Qxx_BusExecuteAddressedCommandFunc ExecuteAddressedCommand;
     W25Qxx_BusWriteCommandFunc WriteCommand;
     W25Qxx_BusWriteAddressedCommandFunc WriteAddressedCommand;
     W25Qxx_BusGetTickMsFunc GetTickMs;
@@ -273,6 +292,9 @@ W25Qxx_StatusTypeDef W25Qxx_ProgramPageStart(
     uint32_t address,
     const uint8_t *data,
     uint32_t data_length);
+W25Qxx_StatusTypeDef W25Qxx_SectorEraseStart(
+    W25Qxx_HandleTypeDef *hflash,
+    uint32_t address);
 W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash);
 
 #ifdef __cplusplus

@@ -27,6 +27,6 @@
   * @note  队列主体约占 LOG_QUEUE_DEPTH * sizeof(LOG_MessageTypeDef)，当前
   *        每个槽位都拥有自己的完整文本副本。
   */
-#define LOG_QUEUE_DEPTH             8U
+#define LOG_QUEUE_DEPTH             15U
 
 #endif /* LOG_CONFIG_H */

@@ -7,8 +7,8 @@
  *          当前定义启动识别和 Quad 能力配置的最小语义：经已绑定的总线读取并
  *          缓存 JEDEC 三字节 ID、校验实例注入的厂商与容量、探测 SFDP 头签名，
  *          并在 QE 未开启时安全写入 SR2。当前还提供 W25Q256 固定 4-byte
- *          Quad I/O 读取及非阻塞 Quad 页编程启动/轮询；擦除、FTL、DMA、自动
- *          状态轮询和内存映射仍不属于本 Module 的实现范围。
+ *          Quad I/O 读取、非阻塞 Quad 页编程和 4 KiB Sector Erase 启动/轮询；
+ *          FTL、DMA、自动状态轮询和内存映射仍不属于本 Module 的实现范围。
   ******************************************************************************
   */
 
@@ -47,6 +47,18 @@ static const W25Qxx_BusAddressedTransferConfigTypeDef
         .AddressLength = W25QXX_ARRAY_ADDRESS_LENGTH,
         .AddressLineMode = W25QXX_BUS_LINES_1,
         .DataLineMode = W25QXX_BUS_LINES_4,
+        .HasAlternateByte = false,
+        .AlternateByte = 0u,
+        .AlternateByteLineMode = W25QXX_BUS_LINES_1,
+        .DummyCycles = 0u
+    };
+
+/** @brief W25Q256 0x21 的固定 4-byte 单线 4 KiB Sector Erase 阶段。 */
+static const W25Qxx_BusAddressedTransferConfigTypeDef
+    w25qxx_sector_erase_transfer_config = {
+        .AddressLength = W25QXX_ARRAY_ADDRESS_LENGTH,
+        .AddressLineMode = W25QXX_BUS_LINES_1,
+        .DataLineMode = W25QXX_BUS_LINES_1,
         .HasAlternateByte = false,
         .AlternateByte = 0u,
         .AlternateByteLineMode = W25QXX_BUS_LINES_1,
@@ -793,29 +805,169 @@ W25Qxx_StatusTypeDef W25Qxx_ProgramPageStart(
 }
 
 /**
- * @brief 推进当前异步原始 Flash 操作一次，不阻塞等待 Flash 内部时序。
- * @param hflash 已由 W25Qxx_ProgramPageStart() 启动页编程的 Device Handle。
- * @retval W25QXX_BUSY 当前页编程仍处于 WIP=1；调用者稍后应再次调用。
- * @retval W25QXX_OK 已观察到 WIP=0，页编程已完成，Device 回到 READY。
- * @retval W25QXX_ERROR Handle/状态无效、状态读取失败，或页编程超过有界时限。
- * @note 每次调用只执行一次 SR1/SR2 快照读取，不调用延时函数、不循环等待。未来
- *       Flash FTL 的后台任务应以合适节拍调用本函数；MSC 路径绝不能自行阻塞 tPP。
+ * @brief 启动一次 W25Q256 0x21 固定 4-byte 4 KiB Sector Erase 事务。
+ * @param hflash 已完成初始化的 W25Qxx Device Handle。
+ * @param address 待擦除 4 KiB 扇区的首地址，必须按 4 KiB 对齐。
+ * @retval W25QXX_OK 擦除命令已送入 Flash，Device 转入 BUSY；调用者必须周期性
+ *         调用 W25Qxx_Process() 直到其返回 W25QXX_OK 或 W25QXX_ERROR。
+ * @retval W25QXX_ERROR 参数、扇区边界或地址范围无效，Device 未就绪、Flash 已忙、
+ *         WEL 未锁存，或底层命令传输失败。
+ * @note 该函数不等待 tSE。0x21 使用独立 32-bit 地址，不依赖全局 4-byte Address
+ *       Mode；当前仅由 Platform 的显式自检区诊断使用，FTL 将来复用同一异步语义。
  */
-W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash)
+W25Qxx_StatusTypeDef W25Qxx_SectorEraseStart(
+    W25Qxx_HandleTypeDef *hflash,
+    uint32_t address)
 {
+    W25Qxx_BusStatusTypeDef bus_status;
     W25Qxx_StatusRegistersTypeDef status_registers;
-    uint32_t elapsed_ms;
 
     if (hflash == NULL)
     {
         return W25QXX_ERROR;
     }
 
-    if ((hflash->State != W25QXX_STATE_BUSY) ||
-        (hflash->ActiveOperation != W25QXX_OPERATION_PAGE_PROGRAM))
+    if (hflash->State != W25QXX_STATE_READY)
     {
         hflash->ErrorCode = W25QXX_ERROR_NOT_READY;
         return W25QXX_ERROR;
+    }
+
+    if (!w25qxx_validate_array_request(hflash,
+                                        address,
+                                        W25QXX_SECTOR_ERASE_SIZE_BYTES))
+    {
+        return W25QXX_ERROR;
+    }
+
+    if (!w25qxx_supports_fixed_4byte_quad_operations(hflash))
+    {
+        return W25QXX_ERROR;
+    }
+
+    if ((address % W25QXX_SECTOR_ERASE_SIZE_BYTES) != 0u)
+    {
+        hflash->ErrorCode = W25QXX_ERROR_SECTOR_BOUNDARY;
+        return W25QXX_ERROR;
+    }
+
+    if ((hflash->BusOps == NULL) ||
+        (hflash->BusContext == NULL) ||
+        (hflash->BusOps->ReadCommand == NULL) ||
+        (hflash->BusOps->ExecuteCommand == NULL) ||
+        (hflash->BusOps->ExecuteAddressedCommand == NULL) ||
+        (hflash->BusOps->GetTickMs == NULL))
+    {
+        return w25qxx_record_failure(hflash,
+                                     W25QXX_ERROR_BUS_NOT_BOUND,
+                                     W25QXX_BUS_ERROR);
+    }
+
+    if (W25Qxx_ReadStatusRegisters(hflash, &status_registers) != W25QXX_OK)
+    {
+        return W25QXX_ERROR;
+    }
+
+    if (status_registers.IsWriteInProgress)
+    {
+        hflash->ErrorCode = W25QXX_ERROR_FLASH_BUSY;
+        return W25QXX_ERROR;
+    }
+
+    hflash->State = W25QXX_STATE_BUSY;
+    bus_status = hflash->BusOps->ExecuteCommand(
+        hflash->BusContext,
+        W25QXX_COMMAND_WRITE_ENABLE);
+    if (bus_status != W25QXX_BUS_OK)
+    {
+        return w25qxx_record_failure(hflash,
+                                     W25QXX_ERROR_WRITE_ENABLE,
+                                     bus_status);
+    }
+
+    hflash->LastBusStatus = W25QXX_BUS_OK;
+    hflash->State = W25QXX_STATE_READY;
+    if (W25Qxx_ReadStatusRegisters(hflash, &status_registers) != W25QXX_OK)
+    {
+        return W25QXX_ERROR;
+    }
+
+    if (status_registers.IsWriteInProgress)
+    {
+        hflash->ErrorCode = W25QXX_ERROR_FLASH_BUSY;
+        return W25QXX_ERROR;
+    }
+
+    if (!status_registers.IsWriteEnabled)
+    {
+        hflash->ErrorCode = W25QXX_ERROR_WRITE_ENABLE_NOT_LATCHED;
+        return W25QXX_ERROR;
+    }
+
+    hflash->State = W25QXX_STATE_BUSY;
+    bus_status = hflash->BusOps->ExecuteAddressedCommand(
+        hflash->BusContext,
+        W25QXX_COMMAND_SECTOR_ERASE_4BYTE,
+        address,
+        &w25qxx_sector_erase_transfer_config);
+    if (bus_status != W25QXX_BUS_OK)
+    {
+        return w25qxx_record_failure(hflash,
+                                     W25QXX_ERROR_ERASE_SECTOR,
+                                     bus_status);
+    }
+
+    hflash->ActiveOperation = W25QXX_OPERATION_SECTOR_ERASE;
+    hflash->ActiveOperationStartTickMs = hflash->BusOps->GetTickMs(
+        hflash->BusContext);
+    hflash->ErrorCode = W25QXX_ERROR_NONE;
+    hflash->LastBusStatus = W25QXX_BUS_OK;
+    return W25QXX_OK;
+}
+
+/**
+ * @brief 推进当前异步原始 Flash 操作一次，不阻塞等待 Flash 内部时序。
+ * @param hflash 已由页编程或 4 KiB 扇区擦除启动函数置为 BUSY 的 Device Handle。
+ * @retval W25QXX_BUSY 当前操作仍处于 WIP=1；调用者稍后应再次调用。
+ * @retval W25QXX_OK 已观察到 WIP=0，当前操作已完成，Device 回到 READY。
+ * @retval W25QXX_ERROR Handle/状态无效、状态读取失败，或当前操作超过有界时限。
+ * @note 每次调用只执行一次 SR1/SR2 快照读取，不调用延时函数、不循环等待。未来
+ *       Flash FTL 的后台任务应以合适节拍调用本函数；MSC 路径绝不能自行阻塞
+ *       tPP 或 tSE。
+ */
+W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash)
+{
+    W25Qxx_StatusRegistersTypeDef status_registers;
+    uint32_t elapsed_ms;
+    uint32_t timeout_ms;
+    W25Qxx_ErrorTypeDef timeout_error;
+
+    if (hflash == NULL)
+    {
+        return W25QXX_ERROR;
+    }
+
+    if (hflash->State != W25QXX_STATE_BUSY)
+    {
+        hflash->ErrorCode = W25QXX_ERROR_NOT_READY;
+        return W25QXX_ERROR;
+    }
+
+    switch (hflash->ActiveOperation)
+    {
+        case W25QXX_OPERATION_PAGE_PROGRAM:
+            timeout_ms = W25QXX_PAGE_PROGRAM_TIMEOUT_MS;
+            timeout_error = W25QXX_ERROR_PAGE_PROGRAM_TIMEOUT;
+            break;
+
+        case W25QXX_OPERATION_SECTOR_ERASE:
+            timeout_ms = W25QXX_SECTOR_ERASE_TIMEOUT_MS;
+            timeout_error = W25QXX_ERROR_SECTOR_ERASE_TIMEOUT;
+            break;
+
+        default:
+            hflash->ErrorCode = W25QXX_ERROR_NOT_READY;
+            return W25QXX_ERROR;
     }
 
     if ((hflash->BusOps == NULL) ||
@@ -838,10 +990,10 @@ W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash)
     {
         elapsed_ms = hflash->BusOps->GetTickMs(hflash->BusContext) -
                      hflash->ActiveOperationStartTickMs;
-        if (elapsed_ms >= W25QXX_PAGE_PROGRAM_TIMEOUT_MS)
+        if (elapsed_ms >= timeout_ms)
         {
             return w25qxx_record_failure(hflash,
-                                         W25QXX_ERROR_PAGE_PROGRAM_TIMEOUT,
+                                         timeout_error,
                                          W25QXX_BUS_TIMEOUT);
         }
 

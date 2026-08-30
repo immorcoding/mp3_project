@@ -10,7 +10,7 @@
 
 #include "Service/service.h"
 
-#define LOG_SERVICE_QUEUE_LENGTH 16U
+#define LOG_SERVICE_QUEUE_LENGTH 30U
 
 /** @brief Service_Log 对上层公开的日志等级。 */
 typedef enum

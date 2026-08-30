@@ -194,6 +194,18 @@ SECTIONS
     . = ALIGN(32);
   } >RAM
 
+  /*
+   * W25Q256 显式自检及未来 QSPI DMA 共用的 4 KiB 临时缓冲区。
+   * 自检代码会在每次使用前填满或接收完整数据，故设为 NOLOAD；32 字节对齐
+   * 让未来 DMA 的 Cache 维护不会触及相邻普通变量。
+   */
+  .flash_write_buffer (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.flash_write_buffer)
+    . = ALIGN(32);
+  } >RAM
+
   /* LVGL 大数组内存池可被 DMA2D 用作文字遮罩等源数据，必须位于 AXI RAM。 */
   .lvgl_large_ram_array (NOLOAD) :
   {

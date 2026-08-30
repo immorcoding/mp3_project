@@ -23,15 +23,19 @@
 #define W25QXX_SFDP_SIGNATURE_BYTE_2          ((uint8_t)'D')
 #define W25QXX_SFDP_SIGNATURE_BYTE_3          ((uint8_t)'P')
 
-/* W25Q256JV 固定 4-byte 地址的 Quad I/O 读与 Quad 页编程命令。 */
+/* W25Q256JV 固定 4-byte 地址的数组读、页编程与 4 KiB 擦除命令。 */
 #define W25QXX_COMMAND_FAST_READ_QUAD_IO_4BYTE  0xECu
 #define W25QXX_COMMAND_QUAD_PAGE_PROGRAM_4BYTE  0x34u
+#define W25QXX_COMMAND_SECTOR_ERASE_4BYTE       0x21u
 #define W25QXX_ARRAY_ADDRESS_LENGTH              4u
 #define W25QXX_FAST_READ_QUAD_IO_MODE_BYTE       0xFFu
 #define W25QXX_FAST_READ_QUAD_IO_DUMMY_CYCLES    4u
 
 /* W25Q256JV 各数据手册修订版的 tPP 上限可达 4 ms；保留 1 ms 调度测量裕量。 */
 #define W25QXX_PAGE_PROGRAM_TIMEOUT_MS           5u
+
+/* W25Q256JV 4 KiB Sector Erase 的 tSE 最大值为 400 ms；保留 100 ms 裕量。 */
+#define W25QXX_SECTOR_ERASE_TIMEOUT_MS           500u
 
 /* 状态寄存器读取命令及当前 W25Q 系列使用的位定义。 */
 #define W25QXX_COMMAND_READ_STATUS_REGISTER_1 0x05u

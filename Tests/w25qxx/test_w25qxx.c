@@ -33,6 +33,10 @@ typedef struct
     uint32_t StatusRegister2ResponseIndex;
     uint8_t ExpectedExecuteInstruction;
     bool ExecuteWasCalled;
+    uint8_t ExpectedAddressedExecuteInstruction;
+    uint32_t ExpectedAddressedExecuteAddress;
+    W25Qxx_BusAddressedTransferConfigTypeDef ExpectedAddressedExecuteTransferConfig;
+    bool AddressedExecuteWasCalled;
     uint8_t ExpectedWriteInstruction;
     uint8_t ExpectedWriteData;
     bool WriteWasCalled;
@@ -129,6 +133,40 @@ static W25Qxx_BusStatusTypeDef test_w25qxx_execute_command(
     }
 
     fake_bus->ExecuteWasCalled = true;
+    return W25QXX_BUS_OK;
+}
+
+static W25Qxx_BusStatusTypeDef test_w25qxx_execute_addressed_command(
+    void *context,
+    uint8_t instruction,
+    uint32_t address,
+    const W25Qxx_BusAddressedTransferConfigTypeDef *transfer_config)
+{
+    W25Qxx_FakeBusTypeDef *fake_bus = (W25Qxx_FakeBusTypeDef *)context;
+
+    if ((fake_bus == NULL) ||
+        (transfer_config == NULL) ||
+        (instruction != fake_bus->ExpectedAddressedExecuteInstruction) ||
+        (address != fake_bus->ExpectedAddressedExecuteAddress) ||
+        (transfer_config->AddressLength !=
+         fake_bus->ExpectedAddressedExecuteTransferConfig.AddressLength) ||
+        (transfer_config->AddressLineMode !=
+         fake_bus->ExpectedAddressedExecuteTransferConfig.AddressLineMode) ||
+        (transfer_config->DataLineMode !=
+         fake_bus->ExpectedAddressedExecuteTransferConfig.DataLineMode) ||
+        (transfer_config->HasAlternateByte !=
+         fake_bus->ExpectedAddressedExecuteTransferConfig.HasAlternateByte) ||
+        (transfer_config->AlternateByte !=
+         fake_bus->ExpectedAddressedExecuteTransferConfig.AlternateByte) ||
+        (transfer_config->AlternateByteLineMode !=
+         fake_bus->ExpectedAddressedExecuteTransferConfig.AlternateByteLineMode) ||
+        (transfer_config->DummyCycles !=
+         fake_bus->ExpectedAddressedExecuteTransferConfig.DummyCycles))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    fake_bus->AddressedExecuteWasCalled = true;
     return W25QXX_BUS_OK;
 }
 
@@ -244,6 +282,7 @@ static const W25Qxx_BusOpsTypeDef test_w25qxx_fake_bus_ops = {
     .ReadCommand = test_w25qxx_read_command,
     .ReadAddressedCommand = test_w25qxx_read_addressed_command,
     .ExecuteCommand = test_w25qxx_execute_command,
+    .ExecuteAddressedCommand = test_w25qxx_execute_addressed_command,
     .WriteCommand = test_w25qxx_write_command,
     .WriteAddressedCommand = test_w25qxx_write_addressed_command,
     .GetTickMs = test_w25qxx_get_tick_ms
@@ -810,6 +849,122 @@ static void test_w25qxx_process_times_out_stalled_page_program(void)
     assert(hflash.LastBusStatus == W25QXX_BUS_TIMEOUT);
 }
 
+static void test_w25qxx_sector_erase_starts_and_completes(void)
+{
+    W25Qxx_FakeBusTypeDef fake_bus = {
+        .ExpectedInstruction = 0x9Fu,
+        .Response = {
+            .ManufacturerID = W25QXX_MANUFACTURER_ID_WINBOND,
+            .MemoryType = 0x40u,
+            .CapacityID = W25QXX_CAPACITY_ID_256MBIT
+        },
+        .ExpectedStatusRegister1Instruction = 0x05u,
+        .StatusRegister1ResponseSequence = {0x00u, 0x02u, 0x01u, 0x00u},
+        .StatusRegister1ResponseCount = 4u,
+        .ExpectedStatusRegister2Instruction = 0x35u,
+        .StatusRegister2ResponseSequence = {0x02u, 0x02u, 0x02u, 0x02u},
+        .StatusRegister2ResponseCount = 4u,
+        .ExpectedExecuteInstruction = 0x06u,
+        .ExpectedAddressedExecuteInstruction = 0x21u,
+        .ExpectedAddressedExecuteAddress = 0x01FFF000u,
+        .ExpectedAddressedExecuteTransferConfig = {
+            .AddressLength = 4u,
+            .AddressLineMode = W25QXX_BUS_LINES_1,
+            .DataLineMode = W25QXX_BUS_LINES_1,
+            .HasAlternateByte = false,
+            .AlternateByte = 0u,
+            .AlternateByteLineMode = W25QXX_BUS_LINES_1,
+            .DummyCycles = 0u
+        }
+    };
+    W25Qxx_HandleTypeDef hflash = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &fake_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+
+    assert(W25Qxx_Init(&hflash) == W25QXX_OK);
+    assert(W25Qxx_SectorEraseStart(&hflash,
+                                    fake_bus.ExpectedAddressedExecuteAddress) == W25QXX_OK);
+    assert(fake_bus.ExecuteWasCalled);
+    assert(fake_bus.AddressedExecuteWasCalled);
+    assert(hflash.State == W25QXX_STATE_BUSY);
+    assert(hflash.ActiveOperation == W25QXX_OPERATION_SECTOR_ERASE);
+    assert(W25Qxx_Process(&hflash) == W25QXX_BUSY);
+    assert(W25Qxx_Process(&hflash) == W25QXX_OK);
+    assert(hflash.State == W25QXX_STATE_READY);
+    assert(hflash.ActiveOperation == W25QXX_OPERATION_NONE);
+}
+
+static void test_w25qxx_sector_erase_rejects_unaligned_address(void)
+{
+    W25Qxx_FakeBusTypeDef fake_bus = {
+        .ExpectedInstruction = 0x9Fu,
+        .Response = {
+            .ManufacturerID = W25QXX_MANUFACTURER_ID_WINBOND,
+            .MemoryType = 0x40u,
+            .CapacityID = W25QXX_CAPACITY_ID_256MBIT
+        }
+    };
+    W25Qxx_HandleTypeDef hflash = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &fake_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+
+    assert(W25Qxx_Init(&hflash) == W25QXX_OK);
+    assert(W25Qxx_SectorEraseStart(&hflash, 0x00000001u) == W25QXX_ERROR);
+    assert(!fake_bus.ExecuteWasCalled);
+    assert(!fake_bus.AddressedExecuteWasCalled);
+    assert(hflash.State == W25QXX_STATE_READY);
+    assert(hflash.ErrorCode == W25QXX_ERROR_SECTOR_BOUNDARY);
+}
+
+static void test_w25qxx_process_times_out_stalled_sector_erase(void)
+{
+    W25Qxx_FakeBusTypeDef fake_bus = {
+        .ExpectedInstruction = 0x9Fu,
+        .Response = {
+            .ManufacturerID = W25QXX_MANUFACTURER_ID_WINBOND,
+            .MemoryType = 0x40u,
+            .CapacityID = W25QXX_CAPACITY_ID_256MBIT
+        },
+        .ExpectedStatusRegister1Instruction = 0x05u,
+        .StatusRegister1ResponseSequence = {0x00u, 0x02u, 0x01u},
+        .StatusRegister1ResponseCount = 3u,
+        .ExpectedStatusRegister2Instruction = 0x35u,
+        .StatusRegister2ResponseSequence = {0x02u, 0x02u, 0x02u},
+        .StatusRegister2ResponseCount = 3u,
+        .ExpectedExecuteInstruction = 0x06u,
+        .ExpectedAddressedExecuteInstruction = 0x21u,
+        .ExpectedAddressedExecuteAddress = 0x00000000u,
+        .ExpectedAddressedExecuteTransferConfig = {
+            .AddressLength = 4u,
+            .AddressLineMode = W25QXX_BUS_LINES_1,
+            .DataLineMode = W25QXX_BUS_LINES_1,
+            .HasAlternateByte = false,
+            .AlternateByte = 0u,
+            .AlternateByteLineMode = W25QXX_BUS_LINES_1,
+            .DummyCycles = 0u
+        }
+    };
+    W25Qxx_HandleTypeDef hflash = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &fake_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+
+    assert(W25Qxx_Init(&hflash) == W25QXX_OK);
+    assert(W25Qxx_SectorEraseStart(&hflash,
+                                    fake_bus.ExpectedAddressedExecuteAddress) == W25QXX_OK);
+    fake_bus.TickMs = 500u;
+    assert(W25Qxx_Process(&hflash) == W25QXX_ERROR);
+    assert(hflash.State == W25QXX_STATE_ERROR);
+    assert(hflash.ActiveOperation == W25QXX_OPERATION_NONE);
+    assert(hflash.ErrorCode == W25QXX_ERROR_SECTOR_ERASE_TIMEOUT);
+    assert(hflash.LastBusStatus == W25QXX_BUS_TIMEOUT);
+}
+
 int main(void)
 {
     test_w25qxx_init_accepts_expected_w25q256();
@@ -829,6 +984,9 @@ int main(void)
     test_w25qxx_program_page_rejects_page_crossing_request();
     test_w25qxx_program_page_rejects_quad_disabled_flash();
     test_w25qxx_process_times_out_stalled_page_program();
+    test_w25qxx_sector_erase_starts_and_completes();
+    test_w25qxx_sector_erase_rejects_unaligned_address();
+    test_w25qxx_process_times_out_stalled_sector_erase();
 
     return 0;
 }

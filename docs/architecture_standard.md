@@ -177,7 +177,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/stm32_hal/led_gpio` | STM32 HAL GPIO 到 LED Device PortOps；逻辑 ON 电平由 Platform 注入。 |
 | `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |
 | `Adapters/stm32_hal/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
-| `Adapters/stm32_hal/w25qxx_qspi` | STM32 HAL QSPI 到 W25Qxx Bus Ops；当前实现同步间接模式 JEDEC ID、SR1/SR2、SFDP、`0xEC` Quad I/O 读取、`0x34` 页数据传输及启动期 QE 配置。 |
+| `Adapters/stm32_hal/w25qxx_qspi` | STM32 HAL QSPI 到 W25Qxx Bus Ops；当前实现同步间接模式 JEDEC ID、SR1/SR2、SFDP、`0xEC` Quad I/O 读取、`0x34` 页数据传输、`0x21` 无数据扇区擦除及启动期 QE 配置。 |
 | `Adapters/stm32_hal/temp` | STM32H7 ADC3 内部温度传感器与 VREFINT 的校准、采样和工厂标定换算。 |
 | `Adapters/stm32_hal/irq/stm32_gpio_exti_irq` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
 | `Adapters/stm32_hal/irq/stm32_sdmmc_irq` | 按 `SD_HandleTypeDef` 注册 HAL SD 完成、错误和中止回调，并发布强类型传输事件。 |
@@ -185,7 +185,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 
 `bridge/` 只转换两个 Component Interface，不引入具体 MCU 依赖；`cortex/` 只封装 Cortex-M 架构能力，不持有外设或任务状态；`stm32_hal/` 则集中所有必须认识 STM32 HAL、CubeMX Handle 或 HAL 全局回调的实现。
 
-W25Qxx、STM32 HAL QSPI Adapter 与 Platform Flash 当前已完成间接模式的启动 JEDEC ID、SFDP 与 SR1/SR2 读取，以及 W25Q256 固定 4-byte `0xEC` Quad I/O 原始读取和 `0x34` 非阻塞单页编程状态机；Platform 注入本 PCB 的厂商和容量要求，Component 不把具体料号白名单写死。QE 已开启时不改写；QE 为 0 时只在调度器前进行一次 `0x06 → WEL 核验 → 0x31 → WIP 有界轮询 → QE 回读`。页编程由 Component `Process()` 单次轮询，不能在 MSC 或文件系统路径阻塞 `tPP`。Flash FTL 与跨 Component Bridge 仍未实现。现状、目录与接缝决定见 [w25q256_architecture.md](w25q256_architecture.md)。在原始 NOR 的擦除、对齐、写入和掉电策略经过验证前，不得把它接入 FatFs、USB MSC 或创建通用逻辑块抽象。
+W25Qxx、STM32 HAL QSPI Adapter 与 Platform Flash 当前已完成间接模式的启动 JEDEC ID、SFDP 与 SR1/SR2 读取，以及 W25Q256 固定 4-byte `0xEC` Quad I/O 原始读取、`0x34` 非阻塞单页编程和 `0x21` 非阻塞 4 KiB 扇区擦除状态机；Platform 注入本 PCB 的厂商和容量要求，Component 不把具体料号白名单写死。QE 已开启时不改写；QE 为 0 时只在调度器前进行一次 `0x06 → WEL 核验 → 0x31 → WIP 有界轮询 → QE 回读`。`Process()` 对页编程和扇区擦除分别以 5 ms、500 ms 为上限单次轮询，不能在 MSC 或文件系统路径阻塞 `tPP` 或 `tSE`。Platform 只在 ADR-0009 的双自检扇区通过显式诊断入口同步使用这些能力。Flash FTL 与跨 Component Bridge 仍未实现。现状、目录与接缝决定见 [w25q256_architecture.md](w25q256_architecture.md)。在原始 NOR 的擦除、对齐、写入和掉电策略经过验证前，不得把它接入 FatFs、USB MSC 或创建通用逻辑块抽象。
 
 FreeRTOS 内核源码、项目配置与 Hook 的边界为：
 
