@@ -431,8 +431,12 @@ SDMMC 仍保留各自的强类型 Interface，不能收敛为 `IRQ_ID + void *` 
 QSPI/MDMA 原始读取的当前路径为：
 
 ```text
-Storage Task（仅启动基准）
-  -> Platform_Flash_SetTransferCallback()
+Storage Task 启动
+  -> storage_flash_init()
+  -> Platform_Flash_SetTransferCallback()（长期唯一订阅）
+
+Storage Task 内的 Flash 请求者（当前为基准）
+  -> storage_flash_read_array()
   -> Platform_Flash_StartReadArray()
   -> W25Qxx_StartRead()
   -> HAL_QSPI_Receive_DMA()
@@ -440,11 +444,11 @@ Storage Task（仅启动基准）
   -> QUADSPI IRQ -> STM32 QSPI IRQ Adapter（按 Handle 匹配）
   -> Platform Flash 记录 Adapter 结果并转发轻量事件
   -> Storage Task 通知索引 2
-  -> Platform_Flash_ProcessTransfer()
+  -> storage_flash_read_array() 内部调用 Platform_Flash_ProcessTransfer()
   -> W25Qxx_Process() -> Adapter D-Cache Invalidate -> READY / ERROR
 ```
 
-这不是对外通用的 QSPI DMA 服务：当前只有 Platform Flash 可以注册 `hqspi`，当前调用者必须先设置唯一回调且只能在读取完成后从普通上下文收尾。QSPI IRQ、MDMA IRQ 均为 FreeRTOS 可调用 FromISR 的优先级 5；ISR 不访问缓冲、不记录日志，也不提交下一条 Flash 命令。
+这不是对外通用的 QSPI DMA 服务：当前只有 Platform Flash 可以注册 `hqspi`，而 APP 中只有 `storage_flash` 可以设置并长期持有唯一回调；基准和未来 Flash 业务只能经该 Module 发起、等待和收尾。QSPI IRQ、MDMA IRQ 均为 FreeRTOS 可调用 FromISR 的优先级 5；ISR 不访问缓冲、不记录日志，也不提交下一条 Flash 命令。
 
 SPI LCD DMA 的当前路径为：
 

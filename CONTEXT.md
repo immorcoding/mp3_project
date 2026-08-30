@@ -337,7 +337,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 存储任务（Storage Task）
 
-**存储任务**是 SD 热插拔、SDMMC DMA 完成和当前 FatFs 卷生命周期的唯一执行上下文。它通过索引 0 接收 GPIO EXTI 的轻量事件并完成机械触点消抖、平台 SD 生命周期推进；Filesystem Module 在同一任务上下文中通过索引 1 等待 SDMMC DMA 结果，并在插卡时挂载、拔卡时注销文件系统卷。启动 Flash 基准临时使用索引 2 等待 QSPI/MDMA 读取事件，收到事件后仍需在普通上下文调用平台 Flash 完成收尾。
+**存储任务**是 SD 热插拔、SDMMC DMA 完成、当前 FatFs 卷生命周期和 Platform Flash 异步传输的唯一执行上下文。它通过索引 0 接收 GPIO EXTI 的轻量事件并完成机械触点消抖、平台 SD 生命周期推进；Filesystem Module 在同一任务上下文中通过索引 1 等待 SDMMC DMA 结果，并在插卡时挂载、拔卡时注销文件系统卷。`storage_flash` Module 在任务启动时长期持有 Platform Flash 的唯一 QSPI IRQ 订阅，并通过索引 2 等待 QSPI/MDMA 读取结果；收到通知后仍需在普通上下文调用平台 Flash 完成收尾。索引 2 后续也承担 WIP 自动轮询的 Status Match 事件，业务 Module 不得临时抢占该回调槽。
 
 存储任务拥有 SD 卡与本地 FatFs 的访问时序，但不拥有 SDMMC、GPIO EXTI 或卡座引脚。中断回调只通知该任务，不能在 ISR 中执行消抖、FatFs、日志格式化或 SD 块访问。
 
@@ -413,7 +413,7 @@ W25Qxx 到 Flash FTL 的具体转换将由 `Adapters/bridge/flash_ftl_w25qxx` �
 
 ## 平台 Flash（Platform Flash）
 
-**平台 Flash**代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。当前它长期持有 W25Qxx Handle、QSPI Adapter Context 和 QSPI IRQ 回调节点，注入本板预期的 Winbond 厂商码和 256 Mbit 容量码，完成 HAL QSPI Adapter 的 Bind、启动 JEDEC ID 识别校验、SFDP 签名探测、QE 按需安全置位和一次从地址 0 读取 4 字节的非破坏性 `0xEC` 通路验证，并对上公开缓存 ID 与实时 SR1/SR2 快照。它保留同步物理读取，也以“设置唯一 IRQ 回调 → 启动 MDMA 读取 → 普通上下文处理完成”的接缝提供受限非阻塞读取；Platform 不拥有任务或 Cache 操作策略。它还公开受限的 `Platform_Flash_RunDiagnostic()`：调用者提供一个 4 KiB 工作缓冲时，只能对 ADR-0009 保留的首尾自检扇区执行一次擦除、页写和轮询读回图样校验，随后拥有同一 IRQ 订阅的任务可按“首/尾”区域语义分别请求 MDMA 读回，Platform 只比较私有图样而不等待通知或访问缓冲区。该自检接缝仅限启动诊断，不能作为 FTL 或 MSC 的通用擦写能力。Flash FTL 实现后才会增加 FTL Handle 与跨 Component Bridge 的 Bind。
+**平台 Flash**代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。当前它长期持有 W25Qxx Handle、QSPI Adapter Context 和 QSPI IRQ 回调节点，注入本板预期的 Winbond 厂商码和 256 Mbit 容量码，完成 HAL QSPI Adapter 的 Bind、启动 JEDEC ID 识别校验、SFDP 签名探测、QE 按需安全置位和一次从地址 0 读取 4 字节的非破坏性 `0xEC` 通路验证，并对上公开缓存 ID 与实时 SR1/SR2 快照。它保留同步物理读取，也以“设置唯一 IRQ 回调 → 启动 MDMA 读取 → 普通上下文处理完成”的接缝提供受限非阻塞读取；Platform 不拥有任务或 Cache 操作策略。唯一回调的任务所有者是 APP 的 `storage_flash`，由其长期注册，基准和后续业务只能经该 Module 发起和等待传输。它还公开受限的 `Platform_Flash_RunDiagnostic()`：调用者提供一个 4 KiB 工作缓冲时，只能对 ADR-0009 保留的首尾自检扇区执行一次擦除、页写和轮询读回图样校验，随后拥有同一 IRQ 订阅的任务可按“首/尾”区域语义分别请求 MDMA 读回，Platform 只比较私有图样而不等待通知或访问缓冲区。该自检接缝仅限启动诊断，不能作为 FTL 或 MSC 的通用擦写能力。Flash FTL 实现后才会增加 FTL Handle 与跨 Component Bridge 的 Bind。
 
 它不实现芯片协议、FTL 映射、FatFs 挂载、USB MSC 所有权或媒体扫描。CubeMX 管理实际 QSPI Handle、引脚、时钟和 IRQ，Platform 只注入借用的实例并决定本板启动识别策略。
 

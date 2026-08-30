@@ -20,7 +20,7 @@
 - `Adapters/stm32_hal/irq/stm32_qspi_irq` 的 Handle 局部 QSPI 回调分发 Interface；
 - CubeMX 管理的 QSPI Handle、GPIO 与时钟配置。
 
-Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识、QSPI Adapter Context 和 QSPI IRQ 节点。启动识别成功后注册 `hqspi` 的读完成、错误和中止回调；`MemoryType`（例如 `40` 或 `70`）只保留为诊断信息，不影响 W25Q256 兼容性判定。QE 已开启时不写 Flash；QE 为 0 时的 SR2 配置最多阻塞 20 ms，且仅发生在调度器启动前。`0xEC` 启动自检只读取物理地址 0 的 4 字节，不解释或记录内容。非阻塞路线只有在已设置上层回调、且无其他读取在飞时才允许启动：IRQ 先更新 Adapter 结果，再转发轻量事件；拥有请求的任务随后调用 `ProcessTransfer()`，成功时数据才可被 CPU 使用。`Platform_Flash_RunDiagnostic()` 使用调用者的 4 KiB 缓冲，顺序操作地址 `0x00000000` 与 `0x01FFF000` 两个保留扇区；它在显式板测中同步等待 Component 的异步擦写与轮询读回完成。成功后，拥有同一 QSPI/MDMA 订阅的任务可通过受限的区域语义分别启动两个 MDMA 读回，再由 Platform 比较私有图样；Platform 不等待任务通知、不访问 DMA 缓冲区。两条读回共同验证后，诊断入口仍不能被 FTL 或 MSC 当作通用写入能力。FTL 实现后才会增加 Flash FTL Handle 与 Bridge Bind。
+Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识、QSPI Adapter Context 和 QSPI IRQ 节点。启动识别成功后注册 `hqspi` 的读完成、错误和中止回调；`MemoryType`（例如 `40` 或 `70`）只保留为诊断信息，不影响 W25Q256 兼容性判定。QE 已开启时不写 Flash；QE 为 0 时的 SR2 配置最多阻塞 20 ms，且仅发生在调度器启动前。`0xEC` 启动自检只读取物理地址 0 的 4 字节，不解释或记录内容。非阻塞路线只有在已设置上层回调、且无其他读取在飞时才允许启动：IRQ 先更新 Adapter 结果，再转发轻量事件；拥有请求的任务随后调用 `ProcessTransfer()`，成功时数据才可被 CPU 使用。当前唯一上层订阅者是 APP 的 `storage_flash` Module：它在 Storage Task 启动时建立订阅并长期持有，不由 benchmark 或其他业务 Module 临时设置或清除。`Platform_Flash_RunDiagnostic()` 使用调用者的 4 KiB 缓冲，顺序操作地址 `0x00000000` 与 `0x01FFF000` 两个保留扇区；它在显式板测中同步等待 Component 的异步擦写与轮询读回完成。成功后，拥有同一 QSPI/MDMA 订阅的任务可通过受限的区域语义分别启动两个 MDMA 读回，再由 Platform 比较私有图样；Platform 不等待任务通知、不访问 DMA 缓冲区。两条读回共同验证后，诊断入口仍不能被 FTL 或 MSC 当作通用写入能力。FTL 实现后才会增加 Flash FTL Handle 与 Bridge Bind。
 
 ## 运行时请求与约束
 

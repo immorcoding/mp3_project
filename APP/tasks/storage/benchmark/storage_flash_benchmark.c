@@ -18,6 +18,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
 #include "APP/tasks/storage/benchmark/storage_flash_benchmark_config.h"
+#include "APP/tasks/storage/storage_flash.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -114,63 +115,13 @@ static bool storage_flash_benchmark_read_poll(uint32_t *elapsed_ticks)
 }
 
 /**
- * @brief  在 QSPI IRQ 中唤醒等待当前 MDMA 读取的 Storage Task。
- * @param  event 当前未使用；成功、错误和中止均交由普通上下文的 Process 判定。
- * @param  context 注册时传入的 Storage TaskHandle_t。
- * @note   QSPI 和 MDMA IRQ 的抢占优先级均为 5，满足 FreeRTOS FromISR 约束。
- *         此处不访问 MDMA 缓冲区、不记录日志，也不提交下一条 QSPI 命令。
- */
-static void storage_flash_benchmark_transfer_callback(
-    Platform_Flash_TransferEventTypeDef event,
-    void *context)
-{
-    TaskHandle_t task_handle = (TaskHandle_t)context;
-    BaseType_t higher_priority_task_woken = pdFALSE;
-
-    (void)event;
-
-    if (task_handle != NULL)
-    {
-        vTaskNotifyGiveIndexedFromISR(
-            task_handle,
-            FREERTOS_NOTIFY_INDEX_STORAGE_FLASH_TRANSFER,
-            &higher_priority_task_woken);
-        portYIELD_FROM_ISR(higher_priority_task_woken);
-    }
-}
-
-/**
- * @brief  等待已经启动的单次 MDMA 读取并在 Storage Task 上下文完成收尾。
- * @retval true QSPI IRQ 已通知成功，且 D-Cache 收尾后数据可由 CPU 消费。
- * @retval false 未收到通知，或 Adapter、Component 或 Cache 收尾失败。
- * @note   调用者必须先清除遗留通知并成功启动一条 Platform Flash MDMA 读取。
- *         超时路径额外等待一个 Task Tick，使 HAL Tick 的数组读取超时状态先成立。
- */
-static bool storage_flash_benchmark_wait_for_mdma_read(void)
-{
-    if (ulTaskNotifyTakeIndexed(
-            FREERTOS_NOTIFY_INDEX_STORAGE_FLASH_TRANSFER,
-            pdTRUE,
-            pdMS_TO_TICKS(STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS)) == 0U)
-    {
-        /* 任务 Tick 与 HAL Tick 可能相差一个边界 Tick，先让 Component 超时成立。 */
-        vTaskDelay(1U);
-        (void)Platform_Flash_ProcessTransfer();
-        return false;
-    }
-
-    return Platform_Flash_ProcessTransfer() == PLATFORM_OK;
-}
-
-/**
  * @brief  顺序执行由 MDMA 搬运的 0xEC 数组读取并采集端到端耗时。
  * @param  elapsed_ticks 接收累计 Tick 的有效地址。
  * @retval true 所有 MDMA 读取都在有界时限内完成并通过 Platform 收尾。
  * @retval false 参数无效、启动失败、未收到 IRQ 通知，或 QSPI/MDMA 收尾失败。
- * @note   每块读取前清除本通知索引中遗留的计数。回调可能在
- *         Platform_Flash_StartReadArray() 返回前到达；任务通知是计数型，故随后
- *         的 ulTaskNotifyTakeIndexed() 仍能立即取得完成事件。超时路径会调用
- *         ProcessTransfer() 让 Component 记录数组读取超时，随后停止本轮基准。
+ * @note   每块的 QSPI IRQ 订阅、遗留通知清理、等待与普通上下文收尾均由
+ *         storage_flash 协调 Module 执行。回调可能在启动函数返回前到达，但任务
+ *         通知是计数型，后续等待仍能立即取得完成事件。
  */
 static bool storage_flash_benchmark_read_mdma(uint32_t *elapsed_ticks)
 {
@@ -186,19 +137,10 @@ static bool storage_flash_benchmark_read_mdma(uint32_t *elapsed_ticks)
          offset < STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES;
          offset += STORAGE_FLASH_BENCHMARK_READ_CHUNK_BYTES)
     {
-        (void)ulTaskNotifyTakeIndexed(
-            FREERTOS_NOTIFY_INDEX_STORAGE_FLASH_TRANSFER,
-            pdTRUE,
-            0U);
-
-        if (Platform_Flash_StartReadArray(address,
-                                          storage_flash_benchmark_buffer,
-                                          sizeof(storage_flash_benchmark_buffer)) != PLATFORM_OK)
-        {
-            return false;
-        }
-
-        if (!storage_flash_benchmark_wait_for_mdma_read())
+        if (!storage_flash_read_array(address,
+                                      storage_flash_benchmark_buffer,
+                                      sizeof(storage_flash_benchmark_buffer),
+                                      STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS))
         {
             return false;
         }
@@ -215,9 +157,9 @@ static bool storage_flash_benchmark_read_mdma(uint32_t *elapsed_ticks)
  * @brief  使用当前 MDMA 配置读回并校验刚完成轮询自检的两个保留扇区。
  * @retval true 首、尾 4 KiB 均经 MDMA 读取、普通上下文 Cache 收尾并逐字节校验。
  * @retval false 任一诊断区域无法启动、完成、收尾或匹配预期图样。
- * @note   调用者必须已经注册 Storage Task 的传输通知，且刚由
- *         Platform_Flash_RunDiagnostic() 成功写入并通过同步读回验证。APP 不掌握
- *         保留扇区的物理地址或图样，只向 Platform 传递区域语义。
+ * @note   调用者必须已由 storage_flash_init() 绑定 Storage Task 的长期传输
+ *         通知，且刚由 Platform_Flash_RunDiagnostic() 成功写入并通过同步读回
+ *         验证。APP 不掌握保留扇区的物理地址或图样，只向 Platform 传递区域语义。
  */
 static bool storage_flash_benchmark_verify_diagnostic_with_mdma(void)
 {
@@ -230,20 +172,11 @@ static bool storage_flash_benchmark_verify_diagnostic_with_mdma(void)
          index < (sizeof(regions) / sizeof(regions[0]));
          ++index)
     {
-        (void)ulTaskNotifyTakeIndexed(
-            FREERTOS_NOTIFY_INDEX_STORAGE_FLASH_TRANSFER,
-            pdTRUE,
-            0U);
-
-        if (Platform_Flash_StartDiagnosticRead(
+        if (!storage_flash_read_diagnostic(
                 regions[index],
                 storage_flash_benchmark_buffer,
-                sizeof(storage_flash_benchmark_buffer)) != PLATFORM_OK)
-        {
-            return false;
-        }
-
-        if (!storage_flash_benchmark_wait_for_mdma_read())
+                sizeof(storage_flash_benchmark_buffer),
+                STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS))
         {
             return false;
         }
@@ -319,7 +252,6 @@ void storage_flash_benchmark_run(void)
     uint32_t elapsed_ticks;
     uint32_t elapsed_ms;
     uint32_t speed_x100;
-    bool transfer_callback_registered = false;
     char text[128];
 
     if (storage_flash_benchmark_completed || storage_flash_benchmark_running)
@@ -350,17 +282,6 @@ void storage_flash_benchmark_run(void)
                            storage_flash_benchmark_log_tag,
                            text);
 
-    if (Platform_Flash_SetTransferCallback(
-            storage_flash_benchmark_transfer_callback,
-            xTaskGetCurrentTaskHandle()) != PLATFORM_OK)
-    {
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                               storage_flash_benchmark_log_tag,
-                               "Bench MDMA read setup failed.");
-        goto complete;
-    }
-
-    transfer_callback_registered = true;
     if (!storage_flash_benchmark_read_mdma(&elapsed_ticks))
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
@@ -389,23 +310,7 @@ void storage_flash_benchmark_run(void)
     }
 #endif
 
-    if (Platform_Flash_ClearTransferCallback() != PLATFORM_OK)
-    {
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                               storage_flash_benchmark_log_tag,
-                               "Bench MDMA read teardown failed.");
-        transfer_callback_registered = false;
-        goto complete;
-    }
-
-    transfer_callback_registered = false;
-
 complete:
-    if (transfer_callback_registered)
-    {
-        (void)Platform_Flash_ClearTransferCallback();
-    }
-
     storage_flash_benchmark_completed = true;
     storage_flash_benchmark_running = false;
 }
