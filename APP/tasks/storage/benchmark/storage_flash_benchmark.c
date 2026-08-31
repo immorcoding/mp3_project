@@ -4,7 +4,7 @@
   * @brief   Storage Task 中外部 W25Q256 的读取、页编程测速与保留扇区自检。
   *
   * @details
-  *          本 Module 在 APP 层组织读取规模、FreeRTOS 时间采样和日志；实际物理
+  *          本 Module 在 APP 层组织读取规模、DWT 周期采样和日志；实际物理
   *          读取仍只经 Platform Flash Interface 完成。顺序读取故意不解释读回
   *          数据，因此可安全读取尚未分区的任意数组区域；启用破坏性开关后，
   *          Platform 仅可操作 ADR-0009 预留的首尾 4 KiB 自检扇区。
@@ -24,8 +24,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
-#include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
+#include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
 #include "Platform/flash/platform_flash.h"
 #include "Service/log/log_service.h"
 
@@ -50,50 +49,60 @@ static bool storage_flash_benchmark_running;
 
 /* Private functions ---------------------------------------------------------*/
 /**
- * @brief  把 FreeRTOS Tick 间隔换算为毫秒。
- * @param  elapsed_ticks 本次测速累计的 Tick 数。
+ * @brief  把 Cortex-M7 核心周期间隔换算为毫秒。
+ * @param  elapsed_cycles 本次测速累计的核心周期数。
  * @retval 向下取整的毫秒数。
  */
-static uint64_t storage_flash_benchmark_ticks_to_ms(uint32_t elapsed_ticks)
+static uint64_t storage_flash_benchmark_cycles_to_ms(uint32_t elapsed_cycles)
 {
-    return ((uint64_t)elapsed_ticks * 1000ULL) / configTICK_RATE_HZ;
+    const uint32_t core_frequency_hz = CortexM7CycleCounter_GetFrequencyHz();
+
+    if (core_frequency_hz == 0U)
+    {
+        return 0U;
+    }
+
+    return ((uint64_t)elapsed_cycles * 1000ULL) / core_frequency_hz;
 }
 
 /**
- * @brief  根据指定数据量与 Tick 间隔计算百分之一 MiB/s。
+ * @brief  根据指定数据量与 Cortex-M7 周期间隔计算百分之一 MiB/s。
  * @param  byte_count 本次传输的累计字节数。
- * @param  elapsed_ticks 本次测速累计的 Tick 数。
- * @retval 吞吐率乘以 100；零 Tick 时返回零。
+ * @param  elapsed_cycles 本次测速累计的核心周期数。
+ * @retval 吞吐率乘以 100；周期数或核心频率无效时返回零。
  */
 static uint64_t storage_flash_benchmark_mib_per_second_x100(
     uint32_t byte_count,
-    uint32_t elapsed_ticks)
+    uint32_t elapsed_cycles)
 {
-    if (elapsed_ticks == 0U)
+    const uint32_t core_frequency_hz = CortexM7CycleCounter_GetFrequencyHz();
+
+    if ((elapsed_cycles == 0U) || (core_frequency_hz == 0U))
     {
         return 0U;
     }
 
     return ((uint64_t)byte_count *
-            configTICK_RATE_HZ *
+            core_frequency_hz *
             100ULL) /
-           ((uint64_t)elapsed_ticks * 1024ULL * 1024ULL);
+           ((uint64_t)elapsed_cycles * 1024ULL * 1024ULL);
 }
 
 /**
  * @brief  顺序读取配置的物理数组范围并采集端到端耗时。
- * @param  elapsed_ticks 接收累计 Tick 的有效地址。
+ * @param  elapsed_cycles 接收累计核心周期数的有效地址。
  * @retval true 全部 QSPI 读取成功。
  * @retval false 参数无效或任一 Platform Flash 读取失败。
  * @note   计时范围包含每块 0xEC 指令、地址、模式字节、dummy cycle、HAL 轮询
- *         和数据搬运；中断与调度带来的延迟同样保留在真实产品吞吐结果中。
+ *         和数据搬运；中断与调度带来的延迟同样保留在真实产品吞吐结果中。调用
+ *         前必须由本 Module 成功启动全局 DWT 周期计数器。
  */
-static bool storage_flash_benchmark_read_poll(uint32_t *elapsed_ticks)
+static bool storage_flash_benchmark_read_poll(uint32_t *elapsed_cycles)
 {
     uint32_t address = STORAGE_FLASH_BENCHMARK_READ_START_ADDRESS;
-    const TickType_t start_tick = xTaskGetTickCount();
+    const uint32_t start_cycles = CortexM7CycleCounter_Read();
 
-    if (elapsed_ticks == NULL)
+    if (elapsed_cycles == NULL)
     {
         return false;
     }
@@ -112,25 +121,25 @@ static bool storage_flash_benchmark_read_poll(uint32_t *elapsed_ticks)
         address += STORAGE_FLASH_BENCHMARK_READ_CHUNK_BYTES;
     }
 
-    *elapsed_ticks = (uint32_t)(xTaskGetTickCount() - start_tick);
+    *elapsed_cycles = CortexM7CycleCounter_Read() - start_cycles;
     return true;
 }
 
 /**
  * @brief  顺序执行由 MDMA 搬运的 0xEC 数组读取并采集端到端耗时。
- * @param  elapsed_ticks 接收累计 Tick 的有效地址。
+ * @param  elapsed_cycles 接收累计核心周期数的有效地址。
  * @retval true 所有 MDMA 读取都在有界时限内完成并通过 Platform 收尾。
  * @retval false 参数无效、启动失败、未收到 IRQ 通知，或 QSPI/MDMA 收尾失败。
  * @note   每块的 QSPI IRQ 订阅、遗留通知清理、等待与普通上下文收尾均由
  *         storage_flash 协调 Module 执行。回调可能在启动函数返回前到达，但任务
  *         通知会保存最终事件值，后续等待仍能立即取得完成结果。
  */
-static bool storage_flash_benchmark_read_mdma(uint32_t *elapsed_ticks)
+static bool storage_flash_benchmark_read_mdma(uint32_t *elapsed_cycles)
 {
     uint32_t address = STORAGE_FLASH_BENCHMARK_READ_START_ADDRESS;
-    const TickType_t start_tick = xTaskGetTickCount();
+    const uint32_t start_cycles = CortexM7CycleCounter_Read();
 
-    if (elapsed_ticks == NULL)
+    if (elapsed_cycles == NULL)
     {
         return false;
     }
@@ -150,7 +159,7 @@ static bool storage_flash_benchmark_read_mdma(uint32_t *elapsed_ticks)
         address += STORAGE_FLASH_BENCHMARK_READ_CHUNK_BYTES;
     }
 
-    *elapsed_ticks = (uint32_t)(xTaskGetTickCount() - start_tick);
+    *elapsed_cycles = CortexM7CycleCounter_Read() - start_cycles;
     return true;
 }
 
@@ -208,7 +217,7 @@ static bool storage_flash_benchmark_run_destructive_diagnostic(void)
         PLATFORM_FLASH_DIAGNOSTIC_REGION_HEAD,
         PLATFORM_FLASH_DIAGNOSTIC_REGION_TAIL
     };
-    uint32_t program_elapsed_ticks = 0U;
+    uint32_t program_elapsed_cycles = 0U;
     uint32_t program_byte_count;
     uint32_t elapsed_ms;
     uint32_t speed_x100;
@@ -239,7 +248,7 @@ static bool storage_flash_benchmark_run_destructive_diagnostic(void)
             return false;
         }
 
-        const TickType_t program_start_tick = xTaskGetTickCount();
+        const uint32_t program_start_cycles = CortexM7CycleCounter_Read();
         for (uint32_t page_offset = 0U;
              page_offset < sizeof(storage_flash_benchmark_buffer);
              page_offset += STORAGE_FLASH_BENCHMARK_PROGRAM_PAGE_BYTES)
@@ -257,8 +266,8 @@ static bool storage_flash_benchmark_run_destructive_diagnostic(void)
                 return false;
             }
         }
-        program_elapsed_ticks +=
-            (uint32_t)(xTaskGetTickCount() - program_start_tick);
+        program_elapsed_cycles +=
+            CortexM7CycleCounter_Read() - program_start_cycles;
 
         if ((Platform_Flash_ReadDiagnostic(
                  regions[index],
@@ -286,11 +295,11 @@ static bool storage_flash_benchmark_run_destructive_diagnostic(void)
 
     program_byte_count = (uint32_t)(sizeof(regions) / sizeof(regions[0])) *
                          (uint32_t)sizeof(storage_flash_benchmark_buffer);
-    elapsed_ms = (uint32_t)storage_flash_benchmark_ticks_to_ms(
-        program_elapsed_ticks);
+    elapsed_ms = (uint32_t)storage_flash_benchmark_cycles_to_ms(
+        program_elapsed_cycles);
     speed_x100 = (uint32_t)storage_flash_benchmark_mib_per_second_x100(
         program_byte_count,
-        program_elapsed_ticks);
+        program_elapsed_cycles);
     (void)snprintf(text,
                    sizeof(text),
                    "Self-test passed: write %lu KiB, %lu ms, %lu.%02lu MiB/s; "
@@ -314,7 +323,7 @@ static bool storage_flash_benchmark_run_destructive_diagnostic(void)
  */
 void storage_flash_benchmark_run(void)
 {
-    uint32_t elapsed_ticks;
+    uint32_t elapsed_cycles;
     uint32_t elapsed_ms;
     uint32_t speed_x100;
     char text[128];
@@ -326,7 +335,15 @@ void storage_flash_benchmark_run(void)
 
     storage_flash_benchmark_running = true;
 
-    if (!storage_flash_benchmark_read_poll(&elapsed_ticks))
+    if (!CortexM7CycleCounter_Start())
+    {
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                               storage_flash_benchmark_log_tag,
+                               "Flash benchmark DWT counter is unavailable.");
+        goto complete;
+    }
+
+    if (!storage_flash_benchmark_read_poll(&elapsed_cycles))
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_flash_benchmark_log_tag,
@@ -334,10 +351,10 @@ void storage_flash_benchmark_run(void)
         goto complete;
     }
 
-    elapsed_ms = (uint32_t)storage_flash_benchmark_ticks_to_ms(elapsed_ticks);
+    elapsed_ms = (uint32_t)storage_flash_benchmark_cycles_to_ms(elapsed_cycles);
     speed_x100 = (uint32_t)storage_flash_benchmark_mib_per_second_x100(
         STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES,
-        elapsed_ticks);
+        elapsed_cycles);
     (void)snprintf(text,
                    sizeof(text),
                    "Bench poll read: %lu KiB, %lu ms, %lu.%02lu MiB/s.",
@@ -349,7 +366,7 @@ void storage_flash_benchmark_run(void)
                            storage_flash_benchmark_log_tag,
                            text);
 
-    if (!storage_flash_benchmark_read_mdma(&elapsed_ticks))
+    if (!storage_flash_benchmark_read_mdma(&elapsed_cycles))
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_flash_benchmark_log_tag,
@@ -357,10 +374,10 @@ void storage_flash_benchmark_run(void)
         goto complete;
     }
 
-    elapsed_ms = (uint32_t)storage_flash_benchmark_ticks_to_ms(elapsed_ticks);
+    elapsed_ms = (uint32_t)storage_flash_benchmark_cycles_to_ms(elapsed_cycles);
     speed_x100 = (uint32_t)storage_flash_benchmark_mib_per_second_x100(
         STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES,
-        elapsed_ticks);
+        elapsed_cycles);
     (void)snprintf(text,
                    sizeof(text),
                    "Bench MDMA read: %lu KiB, %lu ms, %lu.%02lu MiB/s.",
