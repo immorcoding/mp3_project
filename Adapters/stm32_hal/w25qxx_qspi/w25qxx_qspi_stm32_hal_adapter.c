@@ -823,7 +823,96 @@ W25Qxx_StatusTypeDef W25Qxx_QSPI_STM32HALAdapter_Bind(
     adapter->DMAReadStatus = W25QXX_BUS_OK;
     w25qxx_qspi_stm32_hal_clear_status_polling_metadata(adapter);
     adapter->StatusPollingStatus = W25QXX_BUS_OK;
+    adapter->MemoryMappedModeEnabled = false;
     return W25QXX_OK;
+}
+
+/**
+ * @brief 以 W25Qxx 提供的数组读取协议开启 STM32H7 QSPI 内存映射模式。
+ * @param adapter 由 Platform 长期持有的 HAL QSPI Adapter Context。
+ * @param protocol 已识别 W25Qxx Device 提供的数组读取协议。
+ * @retval W25QXX_BUS_OK H7 QSPI 已配置为 Memory-Mapped 模式。
+ * @retval W25QXX_BUS_BUSY 已存在 DMA、状态轮询或内存映射模式。
+ * @retval W25QXX_BUS_ERROR 参数无效、协议无法映射或 HAL 拒绝配置。
+ * @note 本函数只配置 STM32H7 QSPI，不检查 Flash WIP，也不决定何时允许映射；
+ *       这些生命周期语义属于 Platform Flash。Memory-Mapped 模式不使用 DLR，
+ *       但仍需 DataMode，因此以非零长度构造 Command。
+ */
+W25Qxx_BusStatusTypeDef W25Qxx_QSPI_STM32HALAdapter_EnableMemoryMappedMode(
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter,
+    const W25Qxx_ArrayReadProtocolTypeDef *protocol)
+{
+    QSPI_CommandTypeDef command = {0};
+    QSPI_MemoryMappedTypeDef memory_mapped_config = {0};
+    HAL_StatusTypeDef hal_status;
+
+    if ((adapter == NULL) ||
+        (adapter->Handle == NULL) ||
+        (protocol == NULL))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    if (adapter->DMAReadPending ||
+        adapter->StatusPollingPending ||
+        adapter->MemoryMappedModeEnabled)
+    {
+        return W25QXX_BUS_BUSY;
+    }
+
+    if (!w25qxx_qspi_stm32_hal_build_addressed_command(
+            &command,
+            protocol->Instruction,
+            0u,
+            &protocol->TransferConfig,
+            1u))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    memory_mapped_config.TimeOutPeriod = 0u;
+    memory_mapped_config.TimeOutActivation = QSPI_TIMEOUT_COUNTER_DISABLE;
+    hal_status = HAL_QSPI_MemoryMapped(adapter->Handle,
+                                       &command,
+                                       &memory_mapped_config);
+    if (hal_status == HAL_OK)
+    {
+        adapter->MemoryMappedModeEnabled = true;
+    }
+
+    return w25qxx_qspi_stm32_hal_map_status(hal_status);
+}
+
+/**
+ * @brief 退出 STM32H7 QSPI 内存映射模式并恢复间接事务可用状态。
+ * @param adapter 由 Platform 长期持有的 HAL QSPI Adapter Context。
+ * @retval W25QXX_BUS_OK 当前未映射，或已成功退出映射。
+ * @retval W25QXX_BUS_ERROR 参数无效或 HAL 中止失败。
+ * @note HAL_QSPI_Abort() 仅停止 H7 QSPI 的映射控制器，不影响 NOR 的内部写擦。
+ *       Platform 必须先调用此函数，才可开始后续间接读取、编程或擦除。
+ */
+W25Qxx_BusStatusTypeDef W25Qxx_QSPI_STM32HALAdapter_DisableMemoryMappedMode(
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter)
+{
+    HAL_StatusTypeDef hal_status;
+
+    if ((adapter == NULL) || (adapter->Handle == NULL))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+
+    if (!adapter->MemoryMappedModeEnabled)
+    {
+        return W25QXX_BUS_OK;
+    }
+
+    hal_status = HAL_QSPI_Abort(adapter->Handle);
+    if (hal_status == HAL_OK)
+    {
+        adapter->MemoryMappedModeEnabled = false;
+    }
+
+    return w25qxx_qspi_stm32_hal_map_status(hal_status);
 }
 
 /**

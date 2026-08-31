@@ -1,25 +1,25 @@
 # W25Q256 外部 NOR Flash 架构
 
 > 适用工程：`version0.4.0` 及后续版本  
-> 状态：启动识别、QE 配置、`0xEC` 同步与 QSPI/MDMA 非阻塞 Quad I/O 读取、`0x34` 非阻塞页编程及 `0x21` 非阻塞 4 KiB 扇区擦除已实现；页编程和擦除完成由 QSPI 自动状态轮询的 Status Match IRQ 异步收尾。APP 可选轮询/MDMA 读取测速与首尾双自检扇区的轮询/MDMA 双读回校验已接入。W25Qxx 协议状态机已通过主机测试；120 MHz QSPI、双端 8-beat MDMA burst 下顺序读取已在板上达到约 50 MiB/s。自动状态轮询的新板级路径应以首尾 8 KiB 自检日志再次确认
+> 状态：启动识别、QE 配置、`0xEC` 同步与 QSPI/MDMA 非阻塞 Quad I/O 读取、`0x34` 非阻塞页编程及 `0x21` 非阻塞 4 KiB 扇区擦除已实现；页编程和擦除完成由 QSPI 自动状态轮询的 Status Match IRQ 异步收尾。APP 可选轮询/MDMA 读取测速与首尾双自检扇区的轮询/MDMA 双读回校验已接入。Platform 已实现 H7 QSPI `0x90000000` 只读内存映射的开启、间接操作前退出和成功收尾后恢复；Flash benchmark 已加入 4 KiB 间接交叉比对及 1 MiB 映射读取测速，尚待本次真机日志确认。W25Qxx 协议状态机已通过主机测试；120 MHz QSPI、双端 8-beat MDMA burst 下顺序读取已在板上达到约 50 MiB/s。自动状态轮询的新板级路径应以首尾 8 KiB 自检日志再次确认
 > 当前范围：W25Qxx Device、STM32 HAL QSPI Adapter、Platform Flash 的最小识别、Quad 读写/擦除诊断路径，以及 Flash FTL 和跨 Component Bridge 的后续职责边界
 > 相关 ADR：[ADR-0001：W25Q256 的 Component、Adapter 与 Platform 接缝](adr/0001-w25q256-component-seams.md)、[ADR-0009：W25Q256 固件双槽与自检区保留](adr/0009-w25q256-firmware-slots-and-diagnostic-reservation.md)
 
 ## 1. 当前范围与非目标
 
-本轮当前实现 W25Qxx 的启动识别、一次性状态快照、QE 能力配置、固定 4-byte Quad I/O 的同步/MDMA 非阻塞读取、单页异步编程与 4 KiB 扇区异步擦除，以及写擦期间以 `0x05` 等待 WIP 清零的硬件自动状态轮询；Platform 只把后两项用于固定自检区，不实现以下内容：
+本轮当前实现 W25Qxx 的启动识别、一次性状态快照、QE 能力配置、固定 4-byte Quad I/O 的同步/MDMA 非阻塞读取、单页异步编程与 4 KiB 扇区异步擦除、写擦期间以 `0x05` 等待 WIP 清零的硬件自动状态轮询，以及 H7 QSPI 只读内存映射；Platform 只把后两项破坏性操作用于固定自检区，不实现以下内容：
 
-- 内存映射或 FTL 算法；
+- Flash FTL 算法；
 - FatFs 内部卷、USB MSC、CDC + MSC Composite；
 - Media Library、Queue、播放、歌曲元数据或 GUI 数据绑定。
 
 W25Q256 是 NOR Flash，而不是 SD 卡。其页编程与擦除块规则不能直接暴露给 FatFs；原始芯片能力与未来逻辑扇区之间必须存在 Flash FTL。
 
-### 1.1 后续内存映射的 WIP 契约
+### 1.1 已实现内存映射的 WIP 契约
 
-QSPI 内存映射尚未接入，但其与现有间接读写路径的互斥规则已经确定。`SR1.WIP` 的全称为 **Write In Progress**：它只表示 NOR 正在执行会改变非易失阵列的内部操作，例如页编程、擦除或状态寄存器写入。普通 `0xEC` 数组读取不会置位或清除 WIP；读取期间的 `W25Qxx` Device `BUSY`、STM32 QSPI 间接接收 `BUSY`、或 MDMA 传输中，均是控制器/软件的瞬态状态，不能与 Flash 的 SR1.WIP 混淆。
+`SR1.WIP` 的全称为 **Write In Progress**：它只表示 NOR 正在执行会改变非易失阵列的内部操作，例如页编程、擦除或状态寄存器写入。普通 `0xEC` 数组读取不会置位或清除 WIP；读取期间的 `W25Qxx` Device `BUSY`、STM32 QSPI 间接接收 `BUSY`、或 MDMA 传输中，均是控制器/软件的瞬态状态，不能与 Flash 的 SR1.WIP 混淆。
 
-STM32 QSPI 的内存映射、间接读写和自动状态轮询是互斥功能模式。内存映射访问 `0x90000000` 窗口时，控制器只会按预配置读协议发起数组读取；它不会自动发送 `0x05`、检查 WIP 或等待 WIP 清零。因此 Resource Pack 等映射消费者不应在每次指针读取前查询 WIP；Platform 必须以模式切换保证整个窗口有效：仅在已确认 WIP=0 且没有在飞 Flash 操作时开启映射，擦写前退出映射，随后以现有 `0x05` 自动轮询等待 WIP=0，最后才恢复映射。在初始化/MCU 独立复位后的恢复路径同样必须先确认 Flash 空闲，不能假定映射读会自行等待先前残留的写擦。
+STM32 QSPI 的内存映射、间接读写和自动状态轮询是互斥功能模式。`Platform_Flash_EnableMemoryMappedMode()` 先读取状态确认 WIP=0、要求没有在飞操作，再通过 Component 的 `W25Qxx_GetArrayReadProtocol()` 取得固定 `0xEC` 描述并让 Adapter 调用 `HAL_QSPI_MemoryMapped()`，开放 `0x90000000–0x91FFFFFF` 对应物理 `0x00000000–0x01FFFFFF` 的 32 MiB 只读窗口。内存映射访问该窗口时，控制器只会按预配置读协议发起数组读取；它不会自动发送 `0x05`、检查 WIP 或等待 WIP 清零。因此 Resource Pack 等映射消费者不应在每次指针读取前查询 WIP；Platform 以模式切换保证整个窗口有效：任何同步/异步间接访问先通过 `HAL_QSPI_Abort()` 退出映射，成功结束后才恢复；写擦还必须先由现有 `0x05` 自动轮询确认 WIP 清零。失败路径保持映射关闭，避免在 NOR 状态未知时继续访问窗口。在初始化/MCU 独立复位后的恢复路径同样必须先确认 Flash 空闲，不能假定映射读会自行等待先前残留的写擦。
 
 ## 2. 当前已实现的最小垂直切片
 
@@ -41,6 +41,15 @@ app_init()
   -> Platform_Flash_ReadStatusRegisters()
   -> 0x05 Read SR1
   -> 0x35 Read SR2
+
+Storage Flash benchmark（在所有可选写擦自检之后）
+  -> Platform_Flash_ReadArray(0x00000000, 4 KiB)
+  -> Platform_Flash_EnableMemoryMappedMode()
+  -> W25Qxx_ReadStatusRegisters() [WIP=0]
+  -> W25Qxx_GetArrayReadProtocol()
+  -> HAL_QSPI_MemoryMapped(0xEC, 1-4-4, 4-byte, 0xFF, 4 dummy)
+  -> compare 0x90000000 first 4 KiB against indirect reference
+  -> volatile sequential read 1 MiB + checksum
 ```
 
 `W25Qxx_Init()` 使用单线 SDR 的无地址 `0x9F` 命令读取并缓存三个 ID 字节。W25Qxx Component 公开各容量代码和 `W25Qxx_ExpectedJedecIDTypeDef`，但不拥有当前 PCB 的型号选择；Platform Flash 注入本板的 Winbond `EF` 与 256 Mbit `19`，Component 只比较这两个字节。`MemoryType`（典型为 `40` 或 `70`）完整缓存为诊断快照，却不参与首版兼容性判定，因此 `EF 40 19` 与 `EF 70 19` 都可通过。随后 `W25Qxx_ProbeSFDP()` 通过 `0x5A` 从 24-bit 地址 `0x000000` 读取四字节 `SFDP` 签名，使用 8 个 dummy cycle，验证带地址的单线间接读取路径。SFDP 成功后，`W25Qxx_EnsureQuadEnabled()` 读取 SR1/SR2：QE 已为 1 时不写 Flash；QE 为 0 时仅在 WIP=0 下执行 `0x06`、确认 WEL、以 `0x31` 回写原始 `SR2 | QE`，随后按 W25Q256JV `tW` 最大 15 ms 加余量，以 20 ms 上限轮询 WIP，并回读确认 QE。初始 WIP=1 时拒绝改写。QE 成功后，Platform 从物理地址 `0x000000` 读取 4 字节验证 `0xEC` 通路：指令单线，32-bit 地址四线，随后以四线发送连续读取模式字节 `0xFF`，再使用 4 个 dummy clock 四线接收数据。模式字节和 dummy clock 是两个独立协议阶段，HAL 中分别映射为 `AlternateBytes` 和 `DummyCycles`。该启动读不解释数据且不改写 Flash。本板配置、SFDP 命令或签名、QE 配置或 `0xEC` 读取失败时，`Platform_Flash_Init()` 返回失败，当前启动策略将其视为致命硬件识别错误。成功时 APP 仅记录整机 `PLATFORM` 初始化完成；JEDEC 与 SR1/SR2 快照保留给按需诊断 API，不在常规启动日志逐项输出。启动期 QE 轮询不等同于后续擦写的自动状态轮询。
@@ -49,9 +58,9 @@ app_init()
 
 当前 CubeMX QSPI 使用 D1HCLK 240 MHz、prescaler 1，即 120 MHz；`ChipSelectHighTime = 6 cycles`，等于 50 ns，满足 W25 数据手册中擦除、编程/写事务最严格的 `/CS Deselect Time` 50 ns。`QUADSPI_IRQn` 与 `MDMA_IRQn` 均由 CubeMX 注册为优先级 5。MDMA Channel0 使用 `QUADSPI_FIFO_TH` 请求、字节宽度、源地址固定和目的地址递增；其 `BufferTransferLength` 必须与 QSPI `FifoThreshold` 保持相同值，且 Burst 长度不得超过该值。两项参数及 Source/Destination Burst 均属于 CubeMX 配置，`.ioc` 与重新生成的 `quadspi.c` 必须同步后才可作为板级事实记录；MDMA 只用于非阻塞 `0xEC` 接收，页编程和扇区擦除的数据/命令阶段保持 HAL 间接轮询传输，随后由 QSPI 的 `HAL_QSPI_AutoPolling_IT()` 轮询 WIP。
 
-`Platform_Flash_ReadArray()` 是当前 FTL 接入前面向 APP 的同步原始数组读取能力：它仍完整保留 `0xEC` 的 4-byte 首地址对齐语义，不向 APP 暴露 W25Qxx 或 HAL Handle。另有成对的 `Platform_Flash_SetOperationCallback()`、`StartReadArray()`、`ProcessOperation()` 与 `ClearOperationCallback()` 提供单订阅者的异步路线。APP 的 `APP/tasks/storage/storage_flash.c` 在 Storage Task 启动时建立并长期持有该唯一订阅：IRQ 只写索引 2 任务通知，拥有请求的普通任务醒来后才调用 `ProcessOperation()` 收尾；在此之前不得访问或复用 MDMA 缓冲，也不能在 Status Match 后直接提交下一页。基准和未来 Flash 业务都不得临时抢占或清除该回调槽。`APP/tasks/storage/benchmark/storage_flash_benchmark.c` 当前由开关决定是否运行；启用后由 Storage Task 从 `0x00000000` 顺序读取 1 MiB、每次 4 KiB，先输出 `Bench poll read`，再经 `storage_flash` 以通知索引 2 输出 `Bench MDMA read`。两项都是端到端读取吞吐，不是四线 QSPI 的理论线速，也不修改 Flash 内容。
+`Platform_Flash_ReadArray()` 是当前 FTL 接入前面向 APP 的同步原始数组读取能力：它仍完整保留 `0xEC` 的 4-byte 首地址对齐语义，不向 APP 暴露 W25Qxx 或 HAL Handle。另有成对的 `Platform_Flash_SetOperationCallback()`、`StartReadArray()`、`ProcessOperation()` 与 `ClearOperationCallback()` 提供单订阅者的异步路线。APP 的 `APP/tasks/storage/storage_flash.c` 在 Storage Task 启动时建立并长期持有该唯一订阅：IRQ 只写索引 2 任务通知，拥有请求的普通任务醒来后才调用 `ProcessOperation()` 收尾；在此之前不得访问或复用 MDMA 缓冲，也不能在 Status Match 后直接提交下一页。基准和未来 Flash 业务都不得临时抢占或清除该回调槽。`APP/tasks/storage/benchmark/storage_flash_benchmark.c` 当前由开关决定是否运行；启用后由 Storage Task 从 `0x00000000` 顺序读取 1 MiB、每次 4 KiB，先输出 `Bench poll read`，再经 `storage_flash` 以通知索引 2 输出 `Bench MDMA read`。可选自检完成后，它以 4 KiB 轮询读取作为参照，开启 `0x90000000` 映射后逐字节交叉比对，再以 volatile 指针顺序读取 1 MiB、计算 checksum 并输出 `Bench memory-mapped read`。三项都是端到端读取吞吐，不是四线 QSPI 的理论线速，也不修改 Flash 内容；映射测试成功后窗口保持开启，供后续 Resource Pack 使用。
 
-当 `STORAGE_FLASH_BENCHMARK_PROGRAM_ENABLE` 明确开启时，同一基准只分配一个 4 KiB、32-byte 对齐的 AXI SRAM 工作缓冲。它固定通过首/尾区域语义操作 `0x00000000` 与 `0x01FFF000` 两个 ADR-0009 保留扇区：每个扇区先由 `storage_flash_erase_diagnostic()` 提交 `0x21` 并等待 Status Match，再由 `Platform_Flash_FillDiagnosticBuffer()` 生成私有地址相关图样，最后经 `storage_flash_program_diagnostic_page()` 分 16 页提交 `0x34` 并逐页等待 Status Match。写入图样只执行一轮；同步读回成功后，Storage Task 保持同一 QSPI/MDMA 订阅，并通过 `Platform_Flash_StartDiagnosticRead()` 按首/尾区域语义分别读取两个扇区，在 `ProcessOperation()` 完成 Cache 收尾后由 `Platform_Flash_VerifyDiagnosticReadBuffer()` 对同一私有图样逐字节校验。轮询和 MDMA 两条读回只验证完整性；三个 Flash 吞吐日志统一由 DWT 周期计数和 `SystemCoreClock` 换算，避免 FreeRTOS Tick 的毫秒量化。成功时唯一的 `Self-test passed` 日志同时报告两扇区共 8 KiB 的逐页 `0x34` 端到端写速，计时包含每页提交、自动 WIP 轮询、任务通知与普通上下文收尾，不包含擦除、图样生成或读回。读取吞吐仍只由前置的独立 1 MiB 基准输出。失败不自动重试，避免重复磨损。它是启动早期独占的破坏性板测，不是 FTL、MSC 或普通写入 API。
+当 `STORAGE_FLASH_BENCHMARK_PROGRAM_ENABLE` 明确开启时，同一基准只分配一个 4 KiB、32-byte 对齐的 AXI SRAM 工作缓冲。它固定通过首/尾区域语义操作 `0x00000000` 与 `0x01FFF000` 两个 ADR-0009 保留扇区：每个扇区先由 `storage_flash_erase_diagnostic()` 提交 `0x21` 并等待 Status Match，再由 `Platform_Flash_FillDiagnosticBuffer()` 生成私有地址相关图样，最后经 `storage_flash_program_diagnostic_page()` 分 16 页提交 `0x34` 并逐页等待 Status Match。写入图样只执行一轮；同步读回成功后，Storage Task 保持同一 QSPI/MDMA 订阅，并通过 `Platform_Flash_StartDiagnosticRead()` 按首/尾区域语义分别读取两个扇区，在 `ProcessOperation()` 完成 Cache 收尾后由 `Platform_Flash_VerifyDiagnosticReadBuffer()` 对同一私有图样逐字节校验。轮询和 MDMA 两条读回只验证完整性；两项间接读取吞吐和一项映射读取吞吐统一由 DWT 周期计数和 `SystemCoreClock` 换算，避免 FreeRTOS Tick 的毫秒量化。成功时唯一的 `Self-test passed` 日志同时报告两扇区共 8 KiB 的逐页 `0x34` 端到端写速，计时包含每页提交、自动 WIP 轮询、任务通知与普通上下文收尾，不包含擦除、图样生成或读回。失败不自动重试，避免重复磨损。它是启动早期独占的破坏性板测，不是 FTL、MSC 或普通写入 API。
 
 ## 3. 已接受的物理分区规划
 
@@ -148,7 +157,7 @@ Flash FTL 需要先明确并验证：
 
 1. 在板上验证 JEDEC ID 和 SFDP 签名，确认 QSPI 引脚、时钟、片选时序、无地址与带地址的单线读路径；
 2. 在板上回归 QE 的“已开启零写入”、`0xEC` 读取路径及其 APP 顺序读取吞吐；在两个自检扇区验证擦除、`0x34` 页编程、轮询读回与 MDMA 读回图样校验；
-3. 实现并验证 QSPI 内存映射：只在 WIP=0 时打开窗口；写擦前退出映射，Status Match 后恢复映射，并验证字库/模型的只读访问与 Cache 一致性；
+3. 在板上验证已实现的 QSPI 内存映射：确认 4 KiB 间接交叉比对、`Bench memory-mapped read` checksum、写擦前退出映射和 Status Match 后恢复映射；随后再验证字库/模型的只读访问与 Cache 一致性；
 4. 定义 Bootloader 镜像头、候选/回滚状态、完整性/真实性校验与断电恢复协议，再实现镜像槽的读写流程；
 5. 在首次写入资源前，确定原始 Resource Pack 的容量、镜像头、CRC 与固定边界；以已验证的 QSPI 内存映射读取字库/模型，且不让其进入 FTL；
 6. 设计并实现 Flash FTL，再以独立测试验证逻辑扇区、保留范围排除与掉电恢复边界，并讨论是否接入 `Service/filesystem`、FatFs 与 USB MSC 所有权切换。

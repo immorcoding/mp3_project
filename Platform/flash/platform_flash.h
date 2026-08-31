@@ -66,6 +66,9 @@ Platform_StatusTypeDef Platform_Flash_ReadArray(
     uint32_t address,
     uint8_t *data,
     uint32_t data_length);
+Platform_StatusTypeDef Platform_Flash_EnableMemoryMappedMode(
+    const uint8_t **mapped_base,
+    uint32_t *mapped_size);
 Platform_StatusTypeDef Platform_Flash_SetOperationCallback(
     Platform_Flash_OperationCallback_t operation_callback,
     void *operation_context);

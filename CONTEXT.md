@@ -397,7 +397,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## W25Qxx 设备（W25Qxx Device）
 
-**W25Qxx 设备**是面向 Winbond W25Q 系列串行 NOR Flash 的可复用芯片协议 Module。当前已负责启动阶段的 JEDEC ID 读取、缓存、实例注入的厂商与容量兼容性校验、SFDP 头签名探测，以及 SR1/SR2 的同步读取与 WIP/WEL/QE 位解析。启动期若 QE 为 0，它会在 WIP=0 后执行 `0x06`、核验 WEL、以 `0x31` 写入保留原值的 `SR2 | QE`、最多 20 ms 轮询 WIP，并回读核验 QE；QE 已开启时不写 Flash。`MemoryType` 始终保留为诊断信息，不属于首版兼容性条件。当前 W25Q256 还以固定 4-byte 指令完成 `0xEC` 的 `1-4-4` 同步或非阻塞原始读取（含四线 `0xFF` 模式字节与 4 个 dummy clock）、`0x34` 的 `1-1-4` 非阻塞单页编程，以及 `0x21` 的 `1-1` 非阻塞 4 KiB 扇区擦除。非阻塞数组读取由 BusOps Adapter 在 IRQ 后报告传输状态，`W25Qxx_Process()` 在普通上下文完成 Cache 收尾并在 100 ms 内返回 BUSY、完成或超时；页编程和扇区擦除提交后由 BusOps 启动对 `0x05` 的硬件状态匹配轮询，Status Match IRQ 到来后 `Process()` 只查询结果，分别以 5 ms、500 ms 为上限收尾，绝不等待 DMA、`tPP` 或 `tSE`，也不反复读取 SR1。状态寄存器结果是瞬态快照，启动期 QE 轮询不同于后续擦写的硬件自动轮询。FTL 映射、任意长度拆页、FatFs、USB MSC 和媒体业务均不属于它；它也不拥有 STM32 QSPI Handle 或板级引脚。
+**W25Qxx 设备**是面向 Winbond W25Q 系列串行 NOR Flash 的可复用芯片协议 Module。当前已负责启动阶段的 JEDEC ID 读取、缓存、实例注入的厂商与容量兼容性校验、SFDP 头签名探测，以及 SR1/SR2 的同步读取与 WIP/WEL/QE 位解析。启动期若 QE 为 0，它会在 WIP=0 后执行 `0x06`、核验 WEL、以 `0x31` 写入保留原值的 `SR2 | QE`、最多 20 ms 轮询 WIP，并回读核验 QE；QE 已开启时不写 Flash。`MemoryType` 始终保留为诊断信息，不属于首版兼容性条件。当前 W25Q256 还以固定 4-byte 指令完成 `0xEC` 的 `1-4-4` 同步或非阻塞原始读取（含四线 `0xFF` 模式字节与 4 个 dummy clock）、`0x34` 的 `1-1-4` 非阻塞单页编程，以及 `0x21` 的 `1-1` 非阻塞 4 KiB 扇区擦除。它还可在 READY 的已识别器件上返回同一 `0xEC` 的纯协议描述，供 Platform 装配内存映射；该调用不发起总线事务，也不持有映射模式。非阻塞数组读取由 BusOps Adapter 在 IRQ 后报告传输状态，`W25Qxx_Process()` 在普通上下文完成 Cache 收尾并在 100 ms 内返回 BUSY、完成或超时；页编程和扇区擦除提交后由 BusOps 启动对 `0x05` 的硬件状态匹配轮询，Status Match IRQ 到来后 `Process()` 只查询结果，分别以 5 ms、500 ms 为上限收尾，绝不等待 DMA、`tPP` 或 `tSE`，也不反复读取 SR1。状态寄存器结果是瞬态快照，启动期 QE 轮询不同于后续擦写的硬件自动轮询。FTL 映射、任意长度拆页、FatFs、USB MSC 和媒体业务均不属于它；它也不拥有 STM32 QSPI Handle 或板级引脚。
 
 它通过自身拥有的 `W25Qxx_BusOps` 使用具体总线后端；STM32 HAL QSPI 后端属于 `Adapters/stm32_hal/w25qxx_qspi`，具体实例由平台 Flash 注入。
 
@@ -413,7 +413,7 @@ W25Qxx 到 Flash FTL 的具体转换将由 `Adapters/bridge/flash_ftl_w25qxx` �
 
 ## 平台 Flash（Platform Flash）
 
-**平台 Flash**代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。当前它长期持有 W25Qxx Handle、QSPI Adapter Context 和 QSPI IRQ 回调节点，注入本板预期的 Winbond 厂商码和 256 Mbit 容量码，完成 HAL QSPI Adapter 的 Bind、启动 JEDEC ID 识别校验、SFDP 签名探测、QE 按需安全置位和一次从地址 0 读取 4 字节的非破坏性 `0xEC` 通路验证，并对上公开缓存 ID 与实时 SR1/SR2 快照。它保留同步物理读取，也以“设置唯一 IRQ 回调 → 启动 MDMA 读取或自动状态轮询 → 普通上下文处理完成”的接缝提供受限异步操作；Platform 不拥有任务或 Cache 操作策略。唯一回调的任务所有者是 APP 的 `storage_flash`，由其长期注册，基准和后续业务只能经该 Module 发起和等待操作。它只允许 ADR-0009 保留的首尾自检扇区经区域语义进行擦除、逐页写入、同步读回和 MDMA 读回：写擦完成由 QSPI Status Match 通知，Platform 只生成/比较私有图样而不等待通知或访问 DMA 缓冲区。该自检接缝仅限启动诊断，不能作为 FTL、Resource Pack 或 MSC 的通用擦写能力。Flash FTL 实现后才会增加 FTL Handle 与跨 Component Bridge 的 Bind。
+**平台 Flash**代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。当前它长期持有 W25Qxx Handle、QSPI Adapter Context 和 QSPI IRQ 回调节点，注入本板预期的 Winbond 厂商码和 256 Mbit 容量码，完成 HAL QSPI Adapter 的 Bind、启动 JEDEC ID 识别校验、SFDP 签名探测、QE 按需安全置位和一次从地址 0 读取 4 字节的非破坏性 `0xEC` 通路验证，并对上公开缓存 ID 与实时 SR1/SR2 快照。它保留同步物理读取，也以“设置唯一 IRQ 回调 → 启动 MDMA 读取或自动状态轮询 → 普通上下文处理完成”的接缝提供受限异步操作；Platform 不拥有任务或 Cache 操作策略。它还唯一拥有 H7 QSPI 的只读内存映射生命周期：仅在 WIP=0 且无在飞操作时配置固定 `0x90000000`、32 MiB 窗口；任一间接操作先退出映射，成功收尾后恢复，失败则保持关闭。唯一回调的任务所有者是 APP 的 `storage_flash`，由其长期注册，基准和后续业务只能经该 Module 发起和等待操作。它只允许 ADR-0009 保留的首尾自检扇区经区域语义进行擦除、逐页写入、同步读回和 MDMA 读回：写擦完成由 QSPI Status Match 通知，Platform 只生成/比较私有图样而不等待通知或访问 DMA 缓冲区。该自检接缝仅限启动诊断，不能作为 FTL、Resource Pack 或 MSC 的通用擦写能力。Flash FTL 实现后才会增加 FTL Handle 与跨 Component Bridge 的 Bind。
 
 它不实现芯片协议、FTL 映射、FatFs 挂载、USB MSC 所有权或媒体扫描。CubeMX 管理实际 QSPI Handle、引脚、时钟和 IRQ，Platform 只注入借用的实例并决定本板启动识别策略。
 

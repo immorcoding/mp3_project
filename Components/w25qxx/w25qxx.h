@@ -128,6 +128,13 @@ typedef struct
     uint8_t DummyCycles;
 } W25Qxx_BusAddressedTransferConfigTypeDef;
 
+/** @brief 已识别 W25Qxx 数组读取命令的协议描述。 */
+typedef struct
+{
+    uint8_t Instruction;
+    W25Qxx_BusAddressedTransferConfigTypeDef TransferConfig;
+} W25Qxx_ArrayReadProtocolTypeDef;
+
 /** @brief W25Qxx Device 当前由 Component 管理的异步原始操作。 */
 typedef enum
 {
@@ -344,6 +351,9 @@ W25Qxx_StatusTypeDef W25Qxx_ReadStatusRegisters(
     W25Qxx_StatusRegistersTypeDef *status_registers);
 W25Qxx_StatusTypeDef W25Qxx_EnsureQuadEnabled(
     W25Qxx_HandleTypeDef *hflash);
+W25Qxx_StatusTypeDef W25Qxx_GetArrayReadProtocol(
+    W25Qxx_HandleTypeDef *hflash,
+    W25Qxx_ArrayReadProtocolTypeDef *protocol);
 W25Qxx_StatusTypeDef W25Qxx_Read(
     W25Qxx_HandleTypeDef *hflash,
     uint32_t address,

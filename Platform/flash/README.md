@@ -1,6 +1,6 @@
 # Platform Flash
 
-本 Module 装配当前 PCB 上的 W25Q256 外部 NOR Flash 与 CubeMX QSPI。启动阶段绑定 STM32 HAL QSPI Adapter，读取 JEDEC ID，并按本板配置校验 Winbond 厂商码 `EF` 与 256 Mbit 容量码 `19`；随后以 `0x5A` 校验 SFDP 签名，确保 SR2.QE 已开启，并以一次从地址 0 开始的 `0xEC` Quad I/O 读取验证四线数据通路。它保留同步读取路线，并为已订阅的单一上层消费者提供 QSPI/MDMA 非阻塞读取、以及页编程/扇区擦除完成后的自动状态匹配收尾；也可读取实时 SR1/SR2 快照，并在显式诊断入口中固定操作 ADR-0009 保留的首尾两个 4 KiB 自检扇区。Flash FTL、通用公开擦写、逻辑扇区、FatFs 和 USB MSC 均未接入。
+本 Module 装配当前 PCB 上的 W25Q256 外部 NOR Flash 与 CubeMX QSPI。启动阶段绑定 STM32 HAL QSPI Adapter，读取 JEDEC ID，并按本板配置校验 Winbond 厂商码 `EF` 与 256 Mbit 容量码 `19`；随后以 `0x5A` 校验 SFDP 签名，确保 SR2.QE 已开启，并以一次从地址 0 开始的 `0xEC` Quad I/O 读取验证四线数据通路。它保留同步读取路线，并为已订阅的单一上层消费者提供 QSPI/MDMA 非阻塞读取、以及页编程/扇区擦除完成后的自动状态匹配收尾；也可读取实时 SR1/SR2 快照，并在显式诊断入口中固定操作 ADR-0009 保留的首尾两个 4 KiB 自检扇区。它还统一管理 H7 QSPI 只读内存映射窗口。Flash FTL、通用公开擦写、逻辑扇区、FatFs 和 USB MSC 均未接入。
 
 ## 预期公开 Interface
 
@@ -8,6 +8,7 @@
 - `Platform_Flash_GetJedecID()`：取得初始化阶段缓存的三字节 ID，不重新访问 QSPI。
 - `Platform_Flash_ReadStatusRegisters()`：实时读取 SR1、SR2 与 WIP/WEL/QE；不返回缓存。
 - `Platform_Flash_ReadArray()`：以 W25Q256 固定 `0xEC` 事务读取物理数组；仅供当前启动验证与 APP 基准，首地址必须 4-byte 对齐。
+- `Platform_Flash_EnableMemoryMappedMode()`：在 Flash 空闲且没有在飞操作时打开 H7 `0x90000000` 的只读窗口，返回窗口首地址和 32 MiB 有效范围；不接受任意协议、地址或 QSPI Handle。
 - `Platform_Flash_SetOperationCallback()` / `ClearOperationCallback()`：设置或移除唯一的 QSPI 异步操作 IRQ 订阅者；回调只能执行 FromISR 安全的轻量通知。
 - `Platform_Flash_StartReadArray()` / `ProcessOperation()`：启动一次 `0xEC` MDMA 读取，并在收到通知后于普通上下文完成 Component 状态推进和 D-Cache 收尾。
 - `Platform_Flash_StartDiagnosticRead()` / `ReadDiagnostic()` / `VerifyDiagnosticReadBuffer()`：只按“首/尾”区域语义对固定自检扇区执行 MDMA 或同步读回，并比较 Platform 私有的地址相关图样；调用者不能传递自检物理地址或图样。
@@ -27,6 +28,7 @@ Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识、QSPI Ada
 - 上层只使用 `Platform_Flash_*` 所表达的板级 Flash 能力，不访问 QSPI Handle、W25Qxx Handle 或未来 FTL 私有元数据；当前的 `ReadArray()` 是 FTL 接入前受限的物理读取接缝，不是逻辑地址 API；
 - 非阻塞读取缓冲区必须可被 MDMA 访问，首地址和长度均按 32-byte Cache line 对齐；从 `StartReadArray()` 成功到 `ProcessOperation()` 返回前，任何 CPU 或 DMA 都不得读取、写入或复用该区；页编程数据在 `StartDiagnosticPageProgram()` 返回后直至 `ProcessOperation()` 成功前同样不得改写或复用；
 - 自检入口固定使用 ADR-0009 的两个 4 KiB 扇区，并依赖调用者在启动诊断窗口独占 Flash；正常功能、资源包、镜像槽和未来 FTL 都不得传入或复用这些物理范围；
-- 后续 QSPI 内存映射由本 Module 统一切换：仅在确认 `SR1.WIP=0`、无间接事务且无异步操作在飞时开放。映射模式不会自动查询或等待 WIP；任何页编程、擦除或状态寄存器写入均须先退出映射，自动轮询匹配 WIP 清零后才允许恢复。映射消费者因此不得在写擦期间访问 `0x90000000` 窗口，也不应为每次读取自行发送状态查询；
+- 本 Module 统一切换 QSPI 内存映射：`Platform_Flash_EnableMemoryMappedMode()` 仅在确认 `SR1.WIP=0`、无间接事务且无异步操作在飞时开放固定的 `0x90000000`、32 MiB 只读窗口。映射模式不会自动查询或等待 WIP；任何同步或异步间接读取、状态读取、页编程或擦除都会先退出映射。同步操作成功后立即恢复；异步操作只在 `ProcessOperation()` 成功收尾、且写擦的自动轮询已确认 WIP 清零后恢复。失败路径保持映射关闭，避免在 NOR 状态未知时继续访问窗口；
+- 映射消费者只可读取返回的有效范围，且不得跨越后续间接操作期间保留、解引用或缓存该指针。它们不应为每次读取自行发送状态查询；Platform 的模式切换是整个窗口有效的唯一保证；
 - 本 Module 不实现 W25Q 指令、FTL 映射、FatFs 挂载、USB MSC 所有权、媒体扫描或任务策略；
 - QSPI 实例、引脚、时钟和启动顺序是本 PCB 的事实，必须由 Platform 管理并与 CubeMX 配置同步核对。

@@ -36,7 +36,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 - 读写测试分支在首次成功挂载后顺序写入 64 MiB、`f_sync()`、顺序读取 64 MiB，再进行不计时完整性校验；所有日志使用 `SD: Bench ...`，校验成功后删除 `0:/__sd_rw_bench.bin`，同一上电周期不重复执行。
 - `storage_task_config.h` 保存卡检测消抖静默窗口；`storage_sd_benchmark_config.h` 保存仅 APP 诊断使用的测速数据规模。两者均不是 Filesystem Service 的 DMA 参数或对其他 Task 的公开 Interface。
 - `storage_sdram_benchmark_config.h` 决定是否在启动阶段执行破坏性的全 SDRAM 诊断与基准；接入 SDRAM 业务数据后必须关闭，或在所有使用者前独占执行。
-- `APP/app_config.h` 的 `STORAGE_FLASH_BENCHMARK_ENABLE` 决定是否在启动阶段运行 Flash 基准；`storage_flash_benchmark_config.h` 保存固定读取范围、4 KiB 工作缓冲、单块 MDMA 等待上限及破坏性自检开关。基准依次打印 `Bench poll read` 和 `Bench MDMA read`；两者读取 1 MiB 都不改变 Flash 内容。`STORAGE_FLASH_BENCHMARK_PROGRAM_ENABLE` 开启时，Platform 只允许以首/尾区域语义擦写 ADR-0009 的两个 4 KiB 自检扇区：Storage Task 每页提交 `0x34` 后等待自动状态匹配，随后完成轮询读回逐字节校验，再使用索引 2 执行一次 MDMA 读回逐字节校验；两条路径都通过后仅输出一条自检成功日志，其中包含不计擦除和读回的 8 KiB 逐页编程端到端速率。该入口只可在 Storage Task 启动早期独占执行。
+- `APP/app_config.h` 的 `STORAGE_FLASH_BENCHMARK_ENABLE` 决定是否在启动阶段运行 Flash 基准；`storage_flash_benchmark_config.h` 保存固定读取范围、4 KiB 工作缓冲、单块 MDMA 等待上限及破坏性自检开关。基准先后打印 1 MiB 的 `Bench poll read` 和 `Bench MDMA read`；两者都不改变 Flash 内容。`STORAGE_FLASH_BENCHMARK_PROGRAM_ENABLE` 开启时，Platform 只允许以首/尾区域语义擦写 ADR-0009 的两个 4 KiB 自检扇区：Storage Task 每页提交 `0x34` 后等待自动状态匹配，随后完成轮询读回逐字节校验，再使用索引 2 执行一次 MDMA 读回逐字节校验；两条路径都通过后仅输出一条自检成功日志，其中包含不计擦除和读回的 8 KiB 逐页编程端到端速率。最后基准以 4 KiB 间接参照交叉比对 `0x90000000` 映射窗口，并输出 1 MiB 的 `Bench memory-mapped read` 和 checksum；成功后映射保持开启，任何后续间接 Flash 操作都会由 Platform 暂时退出并在成功收尾后恢复。该入口只可在 Storage Task 启动早期独占执行。
 
 ## 命名
 

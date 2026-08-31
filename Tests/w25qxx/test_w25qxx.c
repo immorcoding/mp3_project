@@ -469,6 +469,35 @@ static void test_w25qxx_init_rejects_unexpected_capacity(void)
     assert(hflash.LastBusStatus == W25QXX_BUS_OK);
 }
 
+static void test_w25qxx_get_array_read_protocol_describes_w25q256_quad_i_o(void)
+{
+    W25Qxx_FakeBusTypeDef fake_bus = {
+        .ExpectedInstruction = 0x9Fu,
+        .Response = {
+            .ManufacturerID = W25QXX_MANUFACTURER_ID_WINBOND,
+            .MemoryType = 0x40u,
+            .CapacityID = W25QXX_CAPACITY_ID_256MBIT
+        }
+    };
+    W25Qxx_HandleTypeDef hflash = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &fake_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+    W25Qxx_ArrayReadProtocolTypeDef protocol;
+
+    assert(W25Qxx_Init(&hflash) == W25QXX_OK);
+    assert(W25Qxx_GetArrayReadProtocol(&hflash, &protocol) == W25QXX_OK);
+    assert(protocol.Instruction == 0xECu);
+    assert(protocol.TransferConfig.AddressLength == 4u);
+    assert(protocol.TransferConfig.AddressLineMode == W25QXX_BUS_LINES_4);
+    assert(protocol.TransferConfig.DataLineMode == W25QXX_BUS_LINES_4);
+    assert(protocol.TransferConfig.HasAlternateByte);
+    assert(protocol.TransferConfig.AlternateByte == 0xFFu);
+    assert(protocol.TransferConfig.AlternateByteLineMode == W25QXX_BUS_LINES_4);
+    assert(protocol.TransferConfig.DummyCycles == 4u);
+}
+
 static void test_w25qxx_probe_sfdp_accepts_valid_signature(void)
 {
     W25Qxx_FakeBusTypeDef fake_bus = {
@@ -1195,6 +1224,7 @@ int main(void)
     test_w25qxx_init_accepts_expected_w25q256();
     test_w25qxx_init_rejects_unexpected_manufacturer();
     test_w25qxx_init_rejects_unexpected_capacity();
+    test_w25qxx_get_array_read_protocol_describes_w25q256_quad_i_o();
     test_w25qxx_probe_sfdp_accepts_valid_signature();
     test_w25qxx_probe_sfdp_rejects_invalid_signature();
     test_w25qxx_read_status_registers_parses_wip_wel_and_qe();

@@ -177,7 +177,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/stm32_hal/led_gpio` | STM32 HAL GPIO 到 LED Device PortOps；逻辑 ON 电平由 Platform 注入。 |
 | `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |
 | `Adapters/stm32_hal/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
-| `Adapters/stm32_hal/w25qxx_qspi` | STM32 HAL QSPI 到 W25Qxx Bus Ops；当前实现同步间接 JEDEC ID、SR1/SR2、SFDP、`0xEC` Quad I/O 读取，及经 QSPI FIFO 阈值 MDMA 的非阻塞 `0xEC` 接收、`0x34` 页数据传输、`0x21` 无数据扇区擦除、`0x05` 的硬件自动状态轮询和启动期 QE 配置。 |
+| `Adapters/stm32_hal/w25qxx_qspi` | STM32 HAL QSPI 到 W25Qxx Bus Ops；实现同步间接 JEDEC ID、SR1/SR2、SFDP、`0xEC` Quad I/O 读取，及经 QSPI FIFO 阈值 MDMA 的非阻塞 `0xEC` 接收、`0x34` 页数据传输、`0x21` 无数据扇区擦除、`0x05` 的硬件自动状态轮询和启动期 QE 配置；同时按 Component 交付的只读协议通过 `HAL_QSPI_MemoryMapped()` / `HAL_QSPI_Abort()` 进入或退出 H7 映射模式。 |
 | `Adapters/stm32_hal/temp` | STM32H7 ADC3 内部温度传感器与 VREFINT 的校准、采样和工厂标定换算。 |
 | `Adapters/stm32_hal/irq/stm32_gpio_exti_irq` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
 | `Adapters/stm32_hal/irq/stm32_sdmmc_irq` | 按 `SD_HandleTypeDef` 注册 HAL SD 完成、错误和中止回调，并发布强类型传输事件。 |
@@ -185,7 +185,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 
 `bridge/` 只转换两个 Component Interface，不引入具体 MCU 依赖；`cortex/` 只封装 Cortex-M 架构能力，不持有外设或任务状态；`stm32_hal/` 则集中所有必须认识 STM32 HAL、CubeMX Handle 或 HAL 全局回调的实现。
 
-W25Qxx、STM32 HAL QSPI Adapter 与 Platform Flash 当前已完成间接模式的启动 JEDEC ID、SFDP 与 SR1/SR2 读取，以及 W25Q256 固定 4-byte `0xEC` Quad I/O 的同步读取和 QSPI/MDMA 非阻塞读取、`0x34` 非阻塞单页编程和 `0x21` 非阻塞 4 KiB 扇区擦除状态机；Platform 注入本 PCB 的厂商和容量要求，Component 不把具体料号白名单写死。QE 已开启时不改写；QE 为 0 时只在调度器前进行一次 `0x06 → WEL 核验 → 0x31 → WIP 有界轮询 → QE 回读`。MDMA 路线与 `0x05` 自动状态轮询路线都由 QSPI IRQ Adapter 按 Handle 分发：前者发布读取完成，后者发布 Status Match，错误和中止两者共用；Platform 只转交轻量通知，拥有请求的普通任务才调用 `ProcessOperation()` 完成 Cache 和 Device 状态收尾。`Process()` 对数组读取、页编程和扇区擦除分别以 100 ms、5 ms、500 ms 为上限；写擦完成仅查询硬件状态匹配结果，超时只中止控制器轮询而不试图中止 NOR 内部操作，任何路径都不能在 MSC 或文件系统路径阻塞 DMA、`tPP` 或 `tSE`。Platform 只在 ADR-0009 的双自检扇区通过受限接口使用破坏性能力；诊断写入后，拥有任务可通过首/尾区域语义复用同一异步操作接缝完成 MDMA 图样读回校验，Platform 不等待通知。Flash FTL 与跨 Component Bridge 仍未实现。现状、目录与接缝决定见 [w25q256_architecture.md](w25q256_architecture.md)。在原始 NOR 的擦除、对齐、写入和掉电策略经过验证前，不得把它接入 FatFs、USB MSC 或创建通用逻辑块抽象。
+W25Qxx、STM32 HAL QSPI Adapter 与 Platform Flash 当前已完成间接模式的启动 JEDEC ID、SFDP 与 SR1/SR2 读取，以及 W25Q256 固定 4-byte `0xEC` Quad I/O 的同步读取和 QSPI/MDMA 非阻塞读取、`0x34` 非阻塞单页编程和 `0x21` 非阻塞 4 KiB 扇区擦除状态机；Platform 注入本 PCB 的厂商和容量要求，Component 不把具体料号白名单写死。QE 已开启时不改写；QE 为 0 时只在调度器前进行一次 `0x06 → WEL 核验 → 0x31 → WIP 有界轮询 → QE 回读`。Component 的 `W25Qxx_GetArrayReadProtocol()` 只返回已识别 W25Q256 的固定 `0xEC` 描述；Adapter 不硬编码该协议，Platform 在确认 WIP=0、无在飞操作时调用 `HAL_QSPI_MemoryMapped()` 打开 `0x90000000` 的只读窗口。任意间接操作先退出映射，同步操作成功后立即恢复，异步操作只在 `ProcessOperation()` 成功收尾且写擦 WIP 已清零后恢复；失败则保持映射关闭。MDMA 路线与 `0x05` 自动状态轮询路线都由 QSPI IRQ Adapter 按 Handle 分发：前者发布读取完成，后者发布 Status Match，错误和中止两者共用；Platform 只转交轻量通知，拥有请求的普通任务才调用 `ProcessOperation()` 完成 Cache 和 Device 状态收尾。`Process()` 对数组读取、页编程和扇区擦除分别以 100 ms、5 ms、500 ms 为上限；写擦完成仅查询硬件状态匹配结果，超时只中止控制器轮询而不试图中止 NOR 内部操作，任何路径都不能在 MSC 或文件系统路径阻塞 DMA、`tPP` 或 `tSE`。Platform 只在 ADR-0009 的双自检扇区通过受限接口使用破坏性能力；诊断写入后，拥有任务可通过首/尾区域语义复用同一异步操作接缝完成 MDMA 图样读回校验，Platform 不等待通知。Flash benchmark 使用首个 4 KiB 的间接读回交叉验证映射窗口，再以 volatile 读取 1 MiB 并记录 checksum；这条新集成路径尚待真机日志确认。Flash FTL 与跨 Component Bridge 仍未实现。现状、目录与接缝决定见 [w25q256_architecture.md](w25q256_architecture.md)。在原始 NOR 的擦除、对齐、写入和掉电策略经过验证前，不得把它接入 FatFs、USB MSC 或创建通用逻辑块抽象。
 
 FreeRTOS 内核源码、项目配置与 Hook 的边界为：
 
@@ -467,6 +467,25 @@ GUI Task 调用 Service_GUI_Process()
   -> GUI Service callback（FromISR：lv_disp_flush_ready() + 任务通知）
   -> GUI Task 中 LVGL wait callback 结束等待并继续处理
 ```
+
+QSPI 只读内存映射的当前路径为：
+
+```text
+Storage Flash benchmark / future Resource Pack owner
+  -> Platform_Flash_EnableMemoryMappedMode()
+  -> Platform_Flash_ReadStatusRegisters() [SR1.WIP = 0]
+  -> W25Qxx_GetArrayReadProtocol()
+  -> W25Qxx_QSPI_STM32HALAdapter_EnableMemoryMappedMode()
+  -> HAL_QSPI_MemoryMapped()
+  -> CPU read-only window 0x90000000–0x91FFFFFF
+
+later indirect read / program / erase
+  -> Platform Flash exits mapping with HAL_QSPI_Abort()
+  -> existing indirect transaction or automatic status polling
+  -> successful completion -> Platform restores prior mapping state
+```
+
+映射模式不触发 IRQ，也不自行检查 WIP；直接窗口读取只可发生在 Platform 保证的有效期内。当前 benchmark 先把首个 4 KiB 与间接 `0xEC` 读回逐字节比较，再对 1 MiB 执行 volatile 顺序读取并记录 checksum；其板级验证成功前，Resource Pack 仍不得依赖该窗口。
 
 DMA Stream TC 只表示 DMA 已把数据交给 SPI FIFO，不能作为本次 RAMWR 的最终完成；必须等待
 SPI EOT，才可安全续发下一块或释放 CS。当前只有一个 SPI1 异步使用者，STM32 HAL ST7789 SPI

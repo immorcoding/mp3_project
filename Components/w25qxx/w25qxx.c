@@ -575,6 +575,47 @@ W25Qxx_StatusTypeDef W25Qxx_EnsureQuadEnabled(
 }
 
 /**
+ * @brief 获取当前已识别 W25Q256 的固定 Quad I/O 数组读取协议描述。
+ * @param hflash 已完成初始化且处于 READY 的 W25Qxx Device Handle。
+ * @param protocol 接收指令与各事务阶段描述的有效地址。
+ * @retval W25QXX_OK 已写入 `0xEC` 的 4-byte `1-4-4` 读取协议。
+ * @retval W25QXX_ERROR 参数无效、Device 未就绪或当前容量不支持固定四字节协议。
+ * @note 此 Interface 仅公开 NOR 读取协议，不改变 Device 状态，也不进入任何
+ *       控制器的内存映射模式。Platform 可将该描述交给具体 QSPI Adapter。
+ */
+W25Qxx_StatusTypeDef W25Qxx_GetArrayReadProtocol(
+    W25Qxx_HandleTypeDef *hflash,
+    W25Qxx_ArrayReadProtocolTypeDef *protocol)
+{
+    if ((hflash == NULL) || (protocol == NULL))
+    {
+        if (hflash != NULL)
+        {
+            hflash->ErrorCode = W25QXX_ERROR_INVALID_PARAM;
+        }
+
+        return W25QXX_ERROR;
+    }
+
+    if (hflash->State != W25QXX_STATE_READY)
+    {
+        hflash->ErrorCode = W25QXX_ERROR_NOT_READY;
+        return W25QXX_ERROR;
+    }
+
+    if (!w25qxx_supports_fixed_4byte_quad_operations(hflash))
+    {
+        return W25QXX_ERROR;
+    }
+
+    protocol->Instruction = W25QXX_COMMAND_FAST_READ_QUAD_IO_4BYTE;
+    protocol->TransferConfig = w25qxx_quad_io_read_transfer_config;
+    hflash->ErrorCode = W25QXX_ERROR_NONE;
+    hflash->LastBusStatus = W25QXX_BUS_OK;
+    return W25QXX_OK;
+}
+
+/**
  * @brief 以 W25Q256 0xEC 固定 4-byte Quad I/O 命令读取原始 Flash 数据。
  * @param hflash 已完成初始化和 QE 配置的 W25Qxx Device Handle。
  * @param address 待读取首字节的物理 Flash 地址，必须 4-byte 对齐。

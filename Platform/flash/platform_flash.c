@@ -9,7 +9,8 @@
  *          校验 SFDP 签名、确保 QE 已开启，并以一次非破坏性的 Quad I/O 原始读
  *          校验当前硬件的 0xEC 读取通路；同时向当前 APP 基准测试开放受限的原始
  *          数组读取，并为 ADR-0009 保留的首尾 4 KiB 扇区提供受限的破坏性
- *          自检。FTL、逻辑扇区、通用擦写和内存映射均尚未接入。
+ *          自检。FTL、逻辑扇区和通用擦写均尚未接入；H7 QSPI 的只读内存映射
+ *          由本 Module 在 WIP 与间接操作互斥约束下统一管理。
   ******************************************************************************
   */
 
@@ -58,6 +59,12 @@ static bool hplatform_flash_irq_registered;
 
 /** @brief 当前是否存在由 Platform Flash 启动且尚未收尾的异步 QSPI 操作。 */
 static volatile bool hplatform_flash_operation_active;
+
+/** @brief 当前 H7 QSPI 是否已处于由本 Module 开启的内存映射模式。 */
+static bool hplatform_flash_memory_mapped_mode_enabled;
+
+/** @brief 当前异步间接操作收尾成功后是否应恢复先前开启的内存映射模式。 */
+static bool hplatform_flash_restore_memory_mapped_mode_after_operation;
 
 /**
  * @brief 将 W25Qxx 异步 API 返回状态转换为 Platform 通用状态。
@@ -252,6 +259,132 @@ static bool platform_flash_compare_diagnostic_buffer(
 }
 
 /**
+ * @brief 在 Flash 已空闲时配置 H7 QSPI 的只读内存映射模式。
+ * @retval PLATFORM_OK 映射已开启，或此前已保持开启。
+ * @retval PLATFORM_BUSY 当前仍有异步操作，或 SR1.WIP 尚未清零。
+ * @retval PLATFORM_FLASH_ERROR 初始化、协议描述、状态读取或 HAL 配置失败。
+ * @note 仅本 Module 调用此私有函数，以收敛 WIP 与 QSPI 模式互斥约束。调用前
+ *       必须不存在映射；若已经映射，直接保持当前模式而不重复发送状态读取。
+ */
+static Platform_StatusTypeDef platform_flash_enable_memory_mapped_mode_internal(void)
+{
+    W25Qxx_StatusRegistersTypeDef status_registers;
+    W25Qxx_ArrayReadProtocolTypeDef protocol;
+    W25Qxx_BusStatusTypeDef bus_status;
+
+    if (!hplatform_flash_irq_registered)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    if (hplatform_flash_operation_active)
+    {
+        return PLATFORM_BUSY;
+    }
+
+    if (hplatform_flash_memory_mapped_mode_enabled)
+    {
+        return PLATFORM_OK;
+    }
+
+    if (W25Qxx_ReadStatusRegisters(&hplatform_flash, &status_registers) !=
+        W25QXX_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    if (status_registers.IsWriteInProgress)
+    {
+        return PLATFORM_BUSY;
+    }
+
+    if (W25Qxx_GetArrayReadProtocol(&hplatform_flash, &protocol) != W25QXX_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    bus_status = W25Qxx_QSPI_STM32HALAdapter_EnableMemoryMappedMode(
+        &hplatform_flash_adapter,
+        &protocol);
+    if (bus_status == W25QXX_BUS_BUSY)
+    {
+        return PLATFORM_BUSY;
+    }
+
+    if (bus_status != W25QXX_BUS_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    hplatform_flash_memory_mapped_mode_enabled = true;
+    return PLATFORM_OK;
+}
+
+/**
+ * @brief 退出当前 H7 QSPI 内存映射模式，使间接事务可以安全提交。
+ * @retval PLATFORM_OK 当前未映射，或已成功退出映射。
+ * @retval PLATFORM_FLASH_ERROR HAL 未能停止内存映射控制器。
+ * @note 此操作不会中止 NOR 内部写擦；它只解除 H7 QSPI 的映射模式。
+ */
+static Platform_StatusTypeDef platform_flash_disable_memory_mapped_mode_internal(void)
+{
+    if (!hplatform_flash_memory_mapped_mode_enabled)
+    {
+        return PLATFORM_OK;
+    }
+
+    if (W25Qxx_QSPI_STM32HALAdapter_DisableMemoryMappedMode(
+            &hplatform_flash_adapter) != W25QXX_BUS_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    hplatform_flash_memory_mapped_mode_enabled = false;
+    return PLATFORM_OK;
+}
+
+/**
+ * @brief 为一次间接 QSPI 操作退出映射，并记录之后是否需要恢复。
+ * @param restore_after_access 接收本操作完成后是否恢复原映射状态的有效地址。
+ * @retval PLATFORM_OK 已可安全执行间接事务。
+ * @retval PLATFORM_FLASH_ERROR 映射退出失败或参数无效。
+ * @note 调用者必须只在普通上下文调用；同步操作在结束后立即恢复，异步操作由
+ *       Platform_Flash_ProcessOperation() 在成功收尾后恢复。
+ */
+static Platform_StatusTypeDef platform_flash_prepare_indirect_access(
+    bool *restore_after_access)
+{
+    if (restore_after_access == NULL)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    *restore_after_access = hplatform_flash_memory_mapped_mode_enabled;
+    if (!*restore_after_access)
+    {
+        return PLATFORM_OK;
+    }
+
+    return platform_flash_disable_memory_mapped_mode_internal();
+}
+
+/**
+ * @brief 在一次成功结束的间接操作后恢复此前开启的内存映射模式。
+ * @param restore_after_access 是否需要恢复本次操作前的映射状态。
+ * @retval PLATFORM_OK 无需恢复，或映射已恢复。
+ * @retval PLATFORM_FLASH_ERROR 映射恢复失败。
+ * @note 对页编程和擦除，调用此函数前的自动状态匹配已确认 WIP 清零；函数仍会
+ *       读取一次状态寄存器以统一正常恢复与启动期显式开启的安全条件。
+ */
+static Platform_StatusTypeDef platform_flash_restore_memory_mapped_mode_if_needed(
+    bool restore_after_access)
+{
+    return restore_after_access ?
+               platform_flash_enable_memory_mapped_mode_internal() :
+               PLATFORM_OK;
+}
+
+/**
  * @brief  绑定当前 PCB QSPI Adapter 并配置 W25Q256 的最小可用读取能力。
  * @retval PLATFORM_OK W25Qxx Device 已进入 READY，JEDEC ID、SFDP、QE 与 0xEC
  *         Quad I/O 读取通路均已校验。
@@ -274,6 +407,9 @@ Platform_StatusTypeDef Platform_Flash_Init(void)
     {
         return PLATFORM_FLASH_ERROR;
     }
+
+    hplatform_flash_memory_mapped_mode_enabled = false;
+    hplatform_flash_restore_memory_mapped_mode_after_operation = false;
 
     if (W25Qxx_Init(&hplatform_flash) != W25QXX_OK)
     {
@@ -351,25 +487,44 @@ Platform_StatusTypeDef Platform_Flash_ReadStatusRegisters(
     Platform_Flash_StatusRegistersTypeDef *status_registers)
 {
     W25Qxx_StatusRegistersTypeDef device_status_registers;
+    Platform_StatusTypeDef status;
+    bool restore_memory_mapped_mode;
 
     if (status_registers == NULL)
     {
         return PLATFORM_FLASH_ERROR;
     }
 
+    status = platform_flash_prepare_indirect_access(&restore_memory_mapped_mode);
+    if (status != PLATFORM_OK)
+    {
+        return status;
+    }
+
     if (W25Qxx_ReadStatusRegisters(&hplatform_flash,
                                    &device_status_registers) != W25QXX_OK)
     {
-        return PLATFORM_FLASH_ERROR;
+        status = PLATFORM_FLASH_ERROR;
+    }
+    else
+    {
+        status_registers->StatusRegister1 = device_status_registers.StatusRegister1;
+        status_registers->StatusRegister2 = device_status_registers.StatusRegister2;
+        status_registers->IsWriteInProgress =
+            device_status_registers.IsWriteInProgress;
+        status_registers->IsWriteEnabled = device_status_registers.IsWriteEnabled;
+        status_registers->IsQuadEnabled = device_status_registers.IsQuadEnabled;
+        status = PLATFORM_OK;
     }
 
-    status_registers->StatusRegister1 = device_status_registers.StatusRegister1;
-    status_registers->StatusRegister2 = device_status_registers.StatusRegister2;
-    status_registers->IsWriteInProgress =
-        device_status_registers.IsWriteInProgress;
-    status_registers->IsWriteEnabled = device_status_registers.IsWriteEnabled;
-    status_registers->IsQuadEnabled = device_status_registers.IsQuadEnabled;
-    return PLATFORM_OK;
+    if ((status == PLATFORM_OK) &&
+        (platform_flash_restore_memory_mapped_mode_if_needed(
+             restore_memory_mapped_mode) != PLATFORM_OK))
+    {
+        status = PLATFORM_FLASH_ERROR;
+    }
+
+    return status;
 }
 
 /**
@@ -389,9 +544,59 @@ Platform_StatusTypeDef Platform_Flash_ReadArray(
     uint8_t *data,
     uint32_t data_length)
 {
-    return (W25Qxx_Read(&hplatform_flash, address, data, data_length) == W25QXX_OK) ?
-               PLATFORM_OK :
-               PLATFORM_FLASH_ERROR;
+    Platform_StatusTypeDef status;
+    bool restore_memory_mapped_mode;
+
+    status = platform_flash_prepare_indirect_access(&restore_memory_mapped_mode);
+    if (status != PLATFORM_OK)
+    {
+        return status;
+    }
+
+    status = (W25Qxx_Read(&hplatform_flash, address, data, data_length) == W25QXX_OK) ?
+                 PLATFORM_OK :
+                 PLATFORM_FLASH_ERROR;
+    if ((status == PLATFORM_OK) &&
+        (platform_flash_restore_memory_mapped_mode_if_needed(
+             restore_memory_mapped_mode) != PLATFORM_OK))
+    {
+        status = PLATFORM_FLASH_ERROR;
+    }
+
+    return status;
+}
+
+/**
+ * @brief 开启当前 PCB W25Q256 的 H7 QSPI 内存映射模式并返回只读窗口。
+ * @param mapped_base 接收映射窗口首地址的有效指针。
+ * @param mapped_size 接收当前 W25Q256 可安全读取范围的有效指针。
+ * @retval PLATFORM_OK 映射窗口已可读取。
+ * @retval PLATFORM_BUSY 仍有异步操作在飞，或 Flash WIP 尚未清零。
+ * @retval PLATFORM_FLASH_ERROR 参数无效、Flash 未初始化或无法进入映射模式。
+ * @note 返回窗口固定从 H7 的 `0x90000000` 对应 W25Q256 物理 `0x00000000`。
+ *       调用者只可读取 `mapped_size` 范围；不得在后续间接写擦期间保留或访问该
+ *       指针。Platform 会在间接读写前自动退出映射，并在成功收尾后按先前状态恢复。
+ */
+Platform_StatusTypeDef Platform_Flash_EnableMemoryMappedMode(
+    const uint8_t **mapped_base,
+    uint32_t *mapped_size)
+{
+    Platform_StatusTypeDef status;
+
+    if ((mapped_base == NULL) || (mapped_size == NULL))
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    status = platform_flash_enable_memory_mapped_mode_internal();
+    if (status != PLATFORM_OK)
+    {
+        return status;
+    }
+
+    *mapped_base = (const uint8_t *)(uintptr_t)PLATFORM_FLASH_MEMORY_MAPPED_BASE_ADDRESS;
+    *mapped_size = (uint32_t)PLATFORM_FLASH_MEMORY_MAPPED_SIZE_BYTES;
+    return PLATFORM_OK;
 }
 
 /**
@@ -459,6 +664,7 @@ Platform_StatusTypeDef Platform_Flash_StartReadArray(
     uint32_t data_length)
 {
     Platform_StatusTypeDef status;
+    bool restore_memory_mapped_mode;
 
     if ((!hplatform_flash_irq_registered) ||
         (hplatform_flash_operation_callback == NULL))
@@ -471,7 +677,15 @@ Platform_StatusTypeDef Platform_Flash_StartReadArray(
         return PLATFORM_BUSY;
     }
 
+    status = platform_flash_prepare_indirect_access(&restore_memory_mapped_mode);
+    if (status != PLATFORM_OK)
+    {
+        return status;
+    }
+
     hplatform_flash_operation_active = true;
+    hplatform_flash_restore_memory_mapped_mode_after_operation =
+        restore_memory_mapped_mode;
     /* QSPI IRQ 可能在 W25Qxx_StartRead() 返回前到达，先让 ISR 可见在飞状态。 */
     __DMB();
     status = platform_flash_map_w25qxx_status(
@@ -479,7 +693,10 @@ Platform_StatusTypeDef Platform_Flash_StartReadArray(
     if (status != PLATFORM_OK)
     {
         hplatform_flash_operation_active = false;
+        hplatform_flash_restore_memory_mapped_mode_after_operation = false;
         __DMB();
+        (void)platform_flash_restore_memory_mapped_mode_if_needed(
+            restore_memory_mapped_mode);
     }
 
     return status;
@@ -499,6 +716,7 @@ Platform_StatusTypeDef Platform_Flash_StartReadArray(
 Platform_StatusTypeDef Platform_Flash_ProcessOperation(void)
 {
     Platform_StatusTypeDef status;
+    bool restore_memory_mapped_mode;
 
     if (!hplatform_flash_operation_active)
     {
@@ -508,8 +726,18 @@ Platform_StatusTypeDef Platform_Flash_ProcessOperation(void)
     status = platform_flash_map_w25qxx_status(W25Qxx_Process(&hplatform_flash));
     if (status != PLATFORM_BUSY)
     {
+        restore_memory_mapped_mode =
+            hplatform_flash_restore_memory_mapped_mode_after_operation;
         hplatform_flash_operation_active = false;
+        hplatform_flash_restore_memory_mapped_mode_after_operation = false;
         __DMB();
+
+        if ((status == PLATFORM_OK) &&
+            (platform_flash_restore_memory_mapped_mode_if_needed(
+                 restore_memory_mapped_mode) != PLATFORM_OK))
+        {
+            status = PLATFORM_FLASH_ERROR;
+        }
     }
 
     return status;
@@ -648,6 +876,7 @@ Platform_StatusTypeDef Platform_Flash_StartDiagnosticErase(
 {
     uint32_t sector_address;
     Platform_StatusTypeDef status;
+    bool restore_memory_mapped_mode;
 
     if (!platform_flash_get_diagnostic_region(region, &sector_address, NULL) ||
         (!hplatform_flash_irq_registered) ||
@@ -661,14 +890,25 @@ Platform_StatusTypeDef Platform_Flash_StartDiagnosticErase(
         return PLATFORM_BUSY;
     }
 
+    status = platform_flash_prepare_indirect_access(&restore_memory_mapped_mode);
+    if (status != PLATFORM_OK)
+    {
+        return status;
+    }
+
     hplatform_flash_operation_active = true;
+    hplatform_flash_restore_memory_mapped_mode_after_operation =
+        restore_memory_mapped_mode;
     __DMB();
     status = platform_flash_map_w25qxx_status(
         W25Qxx_SectorEraseStart(&hplatform_flash, sector_address));
     if (status != PLATFORM_OK)
     {
         hplatform_flash_operation_active = false;
+        hplatform_flash_restore_memory_mapped_mode_after_operation = false;
         __DMB();
+        (void)platform_flash_restore_memory_mapped_mode_if_needed(
+            restore_memory_mapped_mode);
     }
 
     return status;
@@ -695,6 +935,7 @@ Platform_StatusTypeDef Platform_Flash_StartDiagnosticPageProgram(
 {
     uint32_t sector_address;
     Platform_StatusTypeDef status;
+    bool restore_memory_mapped_mode;
 
     if ((data == NULL) ||
         (data_length == 0u) ||
@@ -715,7 +956,15 @@ Platform_StatusTypeDef Platform_Flash_StartDiagnosticPageProgram(
         return PLATFORM_BUSY;
     }
 
+    status = platform_flash_prepare_indirect_access(&restore_memory_mapped_mode);
+    if (status != PLATFORM_OK)
+    {
+        return status;
+    }
+
     hplatform_flash_operation_active = true;
+    hplatform_flash_restore_memory_mapped_mode_after_operation =
+        restore_memory_mapped_mode;
     __DMB();
     status = platform_flash_map_w25qxx_status(
         W25Qxx_ProgramPageStart(&hplatform_flash,
@@ -725,7 +974,10 @@ Platform_StatusTypeDef Platform_Flash_StartDiagnosticPageProgram(
     if (status != PLATFORM_OK)
     {
         hplatform_flash_operation_active = false;
+        hplatform_flash_restore_memory_mapped_mode_after_operation = false;
         __DMB();
+        (void)platform_flash_restore_memory_mapped_mode_if_needed(
+            restore_memory_mapped_mode);
     }
 
     return status;

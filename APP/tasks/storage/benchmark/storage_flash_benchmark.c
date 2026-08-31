@@ -163,6 +163,76 @@ static bool storage_flash_benchmark_read_mdma(uint32_t *elapsed_cycles)
     return true;
 }
 
+/**
+ * @brief 验证 H7 QSPI 映射窗口与间接读取一致，并测速顺序映射读取。
+ * @param elapsed_cycles 接收 1 MiB 直接映射读取的核心周期数。
+ * @param checksum 接收该范围的确定性滚动校验值。
+ * @retval true 4 KiB 交叉比对及完整映射读取均已完成。
+ * @retval false 间接参照读取、映射开启、地址范围校验或任一字节比对失败。
+ * @note 先通过 Platform 间接读取首个 4 KiB，才开启映射并逐字节比较，避免只凭
+ *       成功读取空白 Flash 便误判协议正确。计时循环使用 volatile 源指针，确保
+ *       每个字节都是一次真实的映射窗口读取；函数返回后故意保持映射开启，供
+ *       后续 Resource Pack 使用。该测试必须在所有破坏性自检之后执行。
+ */
+static bool storage_flash_benchmark_read_memory_mapped(
+    uint32_t *elapsed_cycles,
+    uint32_t *checksum)
+{
+    const uint8_t *mapped_base;
+    volatile const uint8_t *mapped_data;
+    uint32_t mapped_size;
+    uint32_t local_checksum = 0u;
+    uint32_t start_cycles;
+
+    if ((elapsed_cycles == NULL) || (checksum == NULL))
+    {
+        return false;
+    }
+
+    if (Platform_Flash_ReadArray(STORAGE_FLASH_BENCHMARK_READ_START_ADDRESS,
+                                 storage_flash_benchmark_buffer,
+                                 sizeof(storage_flash_benchmark_buffer)) != PLATFORM_OK)
+    {
+        return false;
+    }
+
+    if (Platform_Flash_EnableMemoryMappedMode(&mapped_base, &mapped_size) !=
+        PLATFORM_OK)
+    {
+        return false;
+    }
+
+    if (STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES >
+        (mapped_size - STORAGE_FLASH_BENCHMARK_READ_START_ADDRESS))
+    {
+        return false;
+    }
+
+    mapped_data = (volatile const uint8_t *)(mapped_base +
+                                             STORAGE_FLASH_BENCHMARK_READ_START_ADDRESS);
+    for (uint32_t offset = 0u;
+         offset < sizeof(storage_flash_benchmark_buffer);
+         ++offset)
+    {
+        if (mapped_data[offset] != storage_flash_benchmark_buffer[offset])
+        {
+            return false;
+        }
+    }
+
+    start_cycles = CortexM7CycleCounter_Read();
+    for (uint32_t offset = 0u;
+         offset < STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES;
+         ++offset)
+    {
+        local_checksum = (local_checksum << 5u) - local_checksum + mapped_data[offset];
+    }
+
+    *elapsed_cycles = CortexM7CycleCounter_Read() - start_cycles;
+    *checksum = local_checksum;
+    return true;
+}
+
 #if STORAGE_FLASH_BENCHMARK_PROGRAM_ENABLE
 /**
  * @brief  使用当前 MDMA 配置读回并校验刚完成轮询自检的两个保留扇区。
@@ -325,6 +395,7 @@ void storage_flash_benchmark_run(void)
 {
     uint32_t elapsed_cycles;
     uint32_t elapsed_ms;
+    uint32_t mapped_checksum;
     uint32_t speed_x100;
     char text[128];
 
@@ -395,6 +466,32 @@ void storage_flash_benchmark_run(void)
         goto complete;
     }
 #endif
+
+    if (!storage_flash_benchmark_read_memory_mapped(&elapsed_cycles,
+                                                    &mapped_checksum))
+    {
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                               storage_flash_benchmark_log_tag,
+                               "Bench memory-mapped read failed.");
+        goto complete;
+    }
+
+    elapsed_ms = (uint32_t)storage_flash_benchmark_cycles_to_ms(elapsed_cycles);
+    speed_x100 = (uint32_t)storage_flash_benchmark_mib_per_second_x100(
+        STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES,
+        elapsed_cycles);
+    (void)snprintf(text,
+                   sizeof(text),
+                   "Bench memory-mapped read: %lu KiB, %lu ms, %lu.%02lu MiB/s, "
+                   "checksum %08lX.",
+                   (unsigned long)(STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES / 1024U),
+                   (unsigned long)elapsed_ms,
+                   (unsigned long)(speed_x100 / 100U),
+                   (unsigned long)(speed_x100 % 100U),
+                   (unsigned long)mapped_checksum);
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO,
+                           storage_flash_benchmark_log_tag,
+                           text);
 
 complete:
     storage_flash_benchmark_completed = true;

@@ -32,6 +32,7 @@ typedef struct
     volatile W25Qxx_BusStatusTypeDef DMAReadStatus;
     volatile bool StatusPollingPending;
     volatile W25Qxx_BusStatusTypeDef StatusPollingStatus;
+    bool MemoryMappedModeEnabled;
 } W25Qxx_QSPI_STM32HALAdapterTypeDef;
 
 W25Qxx_StatusTypeDef W25Qxx_QSPI_STM32HALAdapter_Bind(
@@ -42,6 +43,11 @@ void W25Qxx_QSPI_STM32HALAdapter_NotifyReadComplete(
 void W25Qxx_QSPI_STM32HALAdapter_NotifyStatusMatch(
     W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter);
 void W25Qxx_QSPI_STM32HALAdapter_NotifyOperationError(
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter);
+W25Qxx_BusStatusTypeDef W25Qxx_QSPI_STM32HALAdapter_EnableMemoryMappedMode(
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter,
+    const W25Qxx_ArrayReadProtocolTypeDef *protocol);
+W25Qxx_BusStatusTypeDef W25Qxx_QSPI_STM32HALAdapter_DisableMemoryMappedMode(
     W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter);
 
 #endif /* W25QXX_QSPI_STM32_HAL_ADAPTER_H */
