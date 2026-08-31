@@ -1,11 +1,11 @@
 /**
   ******************************************************************************
   * @file    stm32_qspi_irq.h
-  * @brief   STM32 HAL QSPI 非阻塞传输回调的注册与分发接口。
+  * @brief   STM32 HAL QSPI 异步操作回调的注册与分发接口。
   *
   * @details
   *          本 Adapter 通过 HAL_QSPI_RegisterCallback() 为具体 QSPI Handle
-  *          安装接收完成、错误和中止回调。它只传播 HAL 已归类的 QSPI 事件，
+ *          安装接收完成、状态匹配、错误和中止回调。它只传播 HAL 已归类的 QSPI 事件，
   *          不包含 W25Qxx、Platform、FreeRTOS 或任何业务语义。
   ******************************************************************************
   */
@@ -22,16 +22,17 @@ typedef enum
     STM32QSPIIRQ_ERROR
 } STM32QSPIIRQ_StatusTypeDef;
 
-/** @brief 一个已注册 QSPI Handle 的接收 DMA 生命周期事件。 */
+/** @brief 一个已注册 QSPI Handle 的异步操作生命周期事件。 */
 typedef enum
 {
     STM32QSPIIRQ_EVENT_READ_COMPLETE = 0U,
+    STM32QSPIIRQ_EVENT_STATUS_MATCH,
     STM32QSPIIRQ_EVENT_ERROR,
     STM32QSPIIRQ_EVENT_ABORTED
 } STM32QSPIIRQ_EventTypeDef;
 
 /**
- * @brief 在 QSPI IRQ 上下文接收传输生命周期事件的函数类型。
+ * @brief 在 QSPI IRQ 上下文接收异步操作生命周期事件的函数类型。
  * @warning 实现只能执行常数时间、非阻塞且 FromISR 安全的操作。
  */
 typedef void (*STM32QSPIIRQ_HandlerTypeDef)(STM32QSPIIRQ_EventTypeDef event,

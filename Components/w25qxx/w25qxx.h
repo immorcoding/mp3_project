@@ -221,6 +221,36 @@ typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusGetReadAddressedCommandStatusFunc)(
     void *context);
 
 /**
+ * @brief 启动一次状态匹配的非阻塞轮询事务。
+ * @note  W25Qxx Device 决定状态寄存器命令、匹配值和掩码；Adapter 负责把它
+ *        映射为当前控制器的硬件自动轮询。首版使用 SR1（0x05）的
+ *        `(status & 0x01) == 0`，即等待 WIP 清零。函数只启动轮询，匹配或
+ *        错误结果必须由 GetStatusMatchPollingStatus 在普通上下文读取。
+ */
+typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusStartStatusMatchPollingFunc)(
+    void *context,
+    uint8_t instruction,
+    uint8_t match,
+    uint8_t mask);
+
+/**
+ * @brief 查询当前非阻塞状态匹配轮询的结果。
+ * @note  返回 BUSY 表示尚未收到状态匹配或错误事件；返回 OK 表示硬件已观察到
+ *        匹配条件并停止轮询。该函数只可在普通上下文调用，ISR 只更新 Adapter
+ *        私有结果。
+ */
+typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusGetStatusMatchPollingStatusFunc)(
+    void *context);
+
+/**
+ * @brief 中止当前非阻塞状态匹配轮询。
+ * @note  仅在 Component 的软件时限到期时调用，以使 QSPI 外设回到可接受下一笔
+ *        间接事务的状态；它不尝试中止 Flash 已经开始的页编程或扇区擦除。
+ */
+typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusAbortStatusMatchPollingFunc)(
+    void *context);
+
+/**
  * @brief 以单字节无数据命令控制 W25Qxx 的总线函数类型。
  * @note  Instruction 的协议语义仍由 W25Qxx Device 决定；Adapter 只负责发送
  *        不带地址和数据阶段的当前总线事务。首版用于 Write Enable（0x06）。
@@ -267,8 +297,9 @@ typedef W25Qxx_BusStatusTypeDef (*W25Qxx_BusWriteAddressedCommandFunc)(
 
 /**
  * @brief 取得单调递增毫秒计数的总线时间源函数类型。
- * @note  该时间源只用于 Component 内部的有界启动期状态轮询；其溢出由无符号
- *        差值计算处理。它不构成通用延时 Interface，也不负责 RTOS 调度。
+ * @note  该时间源用于启动期 QE 的有界状态轮询，以及异步数组读取、页编程和
+ *        扇区擦除的软件时限；其溢出由无符号差值计算处理。它不构成通用延时
+ *        Interface，也不负责 RTOS 调度。
  */
 typedef uint32_t (*W25Qxx_BusGetTickMsFunc)(void *context);
 
@@ -279,6 +310,9 @@ typedef struct
     W25Qxx_BusReadAddressedCommandFunc ReadAddressedCommand;
     W25Qxx_BusStartReadAddressedCommandFunc StartReadAddressedCommand;
     W25Qxx_BusGetReadAddressedCommandStatusFunc GetReadAddressedCommandStatus;
+    W25Qxx_BusStartStatusMatchPollingFunc StartStatusMatchPolling;
+    W25Qxx_BusGetStatusMatchPollingStatusFunc GetStatusMatchPollingStatus;
+    W25Qxx_BusAbortStatusMatchPollingFunc AbortStatusMatchPolling;
     W25Qxx_BusExecuteCommandFunc ExecuteCommand;
     W25Qxx_BusExecuteAddressedCommandFunc ExecuteAddressedCommand;
     W25Qxx_BusWriteCommandFunc WriteCommand;

@@ -47,17 +47,17 @@ static W25Qxx_QSPI_STM32HALAdapterTypeDef hplatform_flash_adapter = {
 /** @brief 当前 PCB QSPI 对应的 IRQ Adapter 注册节点。 */
 static STM32QSPIIRQ_CallbackTypeDef hplatform_flash_irq_callback;
 
-/** @brief 当前 Platform Flash 的唯一异步读取事件订阅者。 */
-static Platform_Flash_TransferCallback_t hplatform_flash_transfer_callback;
+/** @brief 当前 Platform Flash 的唯一异步 QSPI 操作事件订阅者。 */
+static Platform_Flash_OperationCallback_t hplatform_flash_operation_callback;
 
-/** @brief 原样传给异步读取事件订阅者的不透明上下文。 */
-static void *hplatform_flash_transfer_context;
+/** @brief 原样传给异步操作事件订阅者的不透明上下文。 */
+static void *hplatform_flash_operation_context;
 
 /** @brief QSPI IRQ Adapter 节点是否已经注册到 hqspi。 */
 static bool hplatform_flash_irq_registered;
 
-/** @brief 当前是否存在由 Platform_Flash_StartReadArray() 启动的读取。 */
-static volatile bool hplatform_flash_transfer_active;
+/** @brief 当前是否存在由 Platform Flash 启动且尚未收尾的异步 QSPI 操作。 */
+static volatile bool hplatform_flash_operation_active;
 
 /**
  * @brief 将 W25Qxx 异步 API 返回状态转换为 Platform 通用状态。
@@ -84,17 +84,17 @@ static Platform_StatusTypeDef platform_flash_map_w25qxx_status(
 }
 
 /**
- * @brief 把 QSPI IRQ Adapter 的源事件转换为 Platform Flash 读取生命周期事件。
+ * @brief 把 QSPI IRQ Adapter 的源事件转换为 Platform Flash 操作生命周期事件。
  * @param event QSPI IRQ Adapter 已归类的 HAL 事件。
  * @param context 未使用；保留以符合 STM32QSPIIRQ Handler 签名。
  * @note  本函数运行在 QSPI IRQ 上下文。它先把完成结果写入 QSPI Adapter，再仅在
- *        当前有读取在飞且已订阅时调用上层轻量通知；不推进 W25Qxx 状态机，不做
+ *        当前有操作在飞且已订阅时调用上层轻量通知；不推进 W25Qxx 状态机，不做
  *        Cache 维护，不访问 DMA 缓冲区，也不包含 FreeRTOS。
  */
 static void platform_flash_qspi_irq_callback(STM32QSPIIRQ_EventTypeDef event,
                                              void *context)
 {
-    Platform_Flash_TransferEventTypeDef platform_event;
+    Platform_Flash_OperationEventTypeDef platform_event;
 
     (void)context;
 
@@ -103,28 +103,34 @@ static void platform_flash_qspi_irq_callback(STM32QSPIIRQ_EventTypeDef event,
         case STM32QSPIIRQ_EVENT_READ_COMPLETE:
             W25Qxx_QSPI_STM32HALAdapter_NotifyReadComplete(
                 &hplatform_flash_adapter);
-            platform_event = PLATFORM_FLASH_TRANSFER_EVENT_READ_COMPLETE;
+            platform_event = PLATFORM_FLASH_OPERATION_EVENT_READ_COMPLETE;
+            break;
+
+        case STM32QSPIIRQ_EVENT_STATUS_MATCH:
+            W25Qxx_QSPI_STM32HALAdapter_NotifyStatusMatch(
+                &hplatform_flash_adapter);
+            platform_event = PLATFORM_FLASH_OPERATION_EVENT_STATUS_MATCH;
             break;
 
         case STM32QSPIIRQ_EVENT_ABORTED:
-            W25Qxx_QSPI_STM32HALAdapter_NotifyReadError(
+            W25Qxx_QSPI_STM32HALAdapter_NotifyOperationError(
                 &hplatform_flash_adapter);
-            platform_event = PLATFORM_FLASH_TRANSFER_EVENT_ABORTED;
+            platform_event = PLATFORM_FLASH_OPERATION_EVENT_ABORTED;
             break;
 
         case STM32QSPIIRQ_EVENT_ERROR:
         default:
-            W25Qxx_QSPI_STM32HALAdapter_NotifyReadError(
+            W25Qxx_QSPI_STM32HALAdapter_NotifyOperationError(
                 &hplatform_flash_adapter);
-            platform_event = PLATFORM_FLASH_TRANSFER_EVENT_ERROR;
+            platform_event = PLATFORM_FLASH_OPERATION_EVENT_ERROR;
             break;
     }
 
-    if (hplatform_flash_transfer_active &&
-        (hplatform_flash_transfer_callback != NULL))
+    if (hplatform_flash_operation_active &&
+        (hplatform_flash_operation_callback != NULL))
     {
-        hplatform_flash_transfer_callback(platform_event,
-                                          hplatform_flash_transfer_context);
+        hplatform_flash_operation_callback(platform_event,
+                                           hplatform_flash_operation_context);
     }
 }
 
@@ -147,25 +153,6 @@ static uint8_t platform_flash_diagnostic_pattern_byte(uint32_t address,
     value *= 0x846CA68Bu;
     value ^= value >> 16u;
     return (uint8_t)value;
-}
-
-/**
- * @brief  等待当前由 W25Qxx Component 管理的异步原始操作完成。
- * @retval true 已观察到 WIP 清零且 Component 回到 READY。
- * @retval false 状态读取、总线事务或当前操作超时失败。
- * @note   此同步包装只服务于启动期显式诊断；正常 FTL/MSC 路径必须自行按任务节拍
- *         调用 W25Qxx_Process()，不得在此忙等。
- */
-static bool platform_flash_wait_for_diagnostic_operation(void)
-{
-    W25Qxx_StatusTypeDef status;
-
-    do
-    {
-        status = W25Qxx_Process(&hplatform_flash);
-    } while (status == W25QXX_BUSY);
-
-    return status == W25QXX_OK;
 }
 
 /**
@@ -239,15 +226,13 @@ static bool platform_flash_get_diagnostic_region(
  * @param  sector_address 当前自检扇区首地址。
  * @param  seed 当前扇区的专属图样种子。
  * @param  buffer 已由同步或 MDMA 读取填满的 4 KiB 缓冲区。
- * @param  diagnostics 可选的诊断结果；失配时记录首个错误细节。
  * @retval true 缓冲区所有字节均与地址相关图样一致。
  * @retval false 发现至少一个字节失配。
  */
 static bool platform_flash_compare_diagnostic_buffer(
     uint32_t sector_address,
     uint32_t seed,
-    const uint8_t *buffer,
-    Platform_Flash_DiagnosticsTypeDef *diagnostics)
+    const uint8_t *buffer)
 {
     for (uint32_t offset = 0u;
          offset < PLATFORM_FLASH_DIAGNOSTIC_BUFFER_SIZE_BYTES;
@@ -259,80 +244,11 @@ static bool platform_flash_compare_diagnostic_buffer(
 
         if (buffer[offset] != expected)
         {
-            if (diagnostics != NULL)
-            {
-                diagnostics->FailureAddress = sector_address + offset;
-                diagnostics->ExpectedValue = expected;
-                diagnostics->ActualValue = buffer[offset];
-            }
-
             return false;
         }
     }
 
     return true;
-}
-
-/**
- * @brief  把一个已填充的 4 KiB 诊断缓冲区按 256-byte 页写入指定自检扇区。
- * @param  sector_address 已擦除的 4 KiB 自检扇区首地址。
- * @param  buffer 已填充的 4 KiB 诊断缓冲区。
- * @param  failure_address 接收首个失败页首地址的有效地址。
- * @retval true 所有页已完成非易失化。
- * @retval false 页编程启动或轮询失败。
- */
-static bool platform_flash_program_diagnostic_sector(uint32_t sector_address,
-                                                      const uint8_t *buffer,
-                                                      uint32_t *failure_address)
-{
-    for (uint32_t offset = 0u;
-         offset < PLATFORM_FLASH_DIAGNOSTIC_BUFFER_SIZE_BYTES;
-         offset += W25QXX_PAGE_PROGRAM_MAX_SIZE_BYTES)
-    {
-        const uint32_t page_address = sector_address + offset;
-
-        if ((W25Qxx_ProgramPageStart(&hplatform_flash,
-                                     page_address,
-                                     &buffer[offset],
-                                     W25QXX_PAGE_PROGRAM_MAX_SIZE_BYTES) != W25QXX_OK) ||
-            !platform_flash_wait_for_diagnostic_operation())
-        {
-            *failure_address = page_address;
-            return false;
-        }
-    }
-
-    return true;
-}
-
-/**
- * @brief  读取并校验一个已写入的 4 KiB 自检扇区。
- * @param  sector_address 当前自检扇区首地址。
- * @param  seed 当前扇区的专属图样种子。
- * @param  buffer 接收 4 KiB 读回数据的诊断缓冲区。
- * @param  diagnostics 当前诊断结果；失配时写入地址、预期值和实际值。
- * @retval true 已读回且所有字节均与地址相关图样一致。
- * @retval false 读取失败或存在至少一个失配。
- */
-static bool platform_flash_verify_diagnostic_sector(
-    uint32_t sector_address,
-    uint32_t seed,
-    uint8_t *buffer,
-    Platform_Flash_DiagnosticsTypeDef *diagnostics)
-{
-    if (W25Qxx_Read(&hplatform_flash,
-                    sector_address,
-                    buffer,
-                    PLATFORM_FLASH_DIAGNOSTIC_BUFFER_SIZE_BYTES) != W25QXX_OK)
-    {
-        diagnostics->FailureAddress = sector_address;
-        return false;
-    }
-
-    return platform_flash_compare_diagnostic_buffer(sector_address,
-                                                    seed,
-                                                    buffer,
-                                                    diagnostics);
 }
 
 /**
@@ -342,9 +258,10 @@ static bool platform_flash_verify_diagnostic_sector(
  * @retval PLATFORM_FLASH_ERROR Adapter 绑定或芯片识别失败。
  * @note   本函数仅用于启动阶段的一次同步硬件识别，必须在 CubeMX 已完成
  *         MX_QUADSPI_Init() 后调用。QE=0 时会执行一次最多 20 ms 的 SR2 写入
- *         轮询；同步识别成功后会为 hqspi 注册 MDMA 接收完成、错误和中止回调，
- *         供后续异步数组读取使用。扇区自检以外的异步页编程、自动状态轮询与 FTL
- *         状态机仍待后续定义。末尾会从物理地址 0 读取 4 字节，但不解释其内容、
+ *         轮询；同步识别成功后会为 hqspi 注册 MDMA 接收完成、自动状态匹配、错误
+ *         和中止回调，供后续异步数组读取及受限自检区擦写使用。FTL 状态机、资源包
+ *         写入和通用逻辑地址 Interface 仍待后续定义。末尾会从物理地址 0 读取 4 字节，
+ *         但不解释其内容、
  *         不修改 Flash；该地址满足 0xEC 的 4-byte 起始地址对齐要求。
  */
 Platform_StatusTypeDef Platform_Flash_Init(void)
@@ -478,48 +395,48 @@ Platform_StatusTypeDef Platform_Flash_ReadArray(
 }
 
 /**
- * @brief  设置本板 W25Q256 唯一的异步读取事件订阅者。
- * @param  transfer_callback 在 QSPI IRQ 中调用的有效轻量回调。
- * @param  transfer_context 原样传给 transfer_callback 的不透明上下文。
+ * @brief  设置本板 W25Q256 唯一的异步 QSPI 操作事件订阅者。
+ * @param  operation_callback 在 QSPI IRQ 中调用的有效轻量回调。
+ * @param  operation_context 原样传给 operation_callback 的不透明上下文。
  * @retval PLATFORM_OK 订阅者已保存。
- * @retval PLATFORM_FLASH_ERROR Flash 未完成初始化、回调无效或当前读取仍在飞。
- * @note   这是单订阅者 Interface，不是回调链表。回调只能用于唤醒拥有读取请求的
- *         任务；数据可用性与 W25Qxx 状态机收尾仍由
- *         Platform_Flash_ProcessTransfer() 在普通上下文确认。
+ * @retval PLATFORM_FLASH_ERROR Flash 未完成初始化、回调无效或当前操作仍在飞。
+ * @note   这是单订阅者 Interface，不是回调链表。回调只能用于唤醒拥有请求的
+ *         任务；数据可用性和页写/擦除完成语义均由
+ *         Platform_Flash_ProcessOperation() 在普通上下文确认。
  */
-Platform_StatusTypeDef Platform_Flash_SetTransferCallback(
-    Platform_Flash_TransferCallback_t transfer_callback,
-    void *transfer_context)
+Platform_StatusTypeDef Platform_Flash_SetOperationCallback(
+    Platform_Flash_OperationCallback_t operation_callback,
+    void *operation_context)
 {
     if ((!hplatform_flash_irq_registered) ||
-        hplatform_flash_transfer_active ||
-        (transfer_callback == NULL))
+        hplatform_flash_operation_active ||
+        (operation_callback == NULL))
     {
         return PLATFORM_FLASH_ERROR;
     }
 
-    hplatform_flash_transfer_callback = transfer_callback;
-    hplatform_flash_transfer_context = transfer_context;
+    hplatform_flash_operation_callback = operation_callback;
+    hplatform_flash_operation_context = operation_context;
     return PLATFORM_OK;
 }
 
 /**
- * @brief  清除本板 W25Q256 的异步读取事件订阅者。
+ * @brief  清除本板 W25Q256 的异步 QSPI 操作事件订阅者。
  * @retval PLATFORM_OK 当前订阅者已清除。
- * @retval PLATFORM_FLASH_ERROR Flash 未完成初始化或仍有读取在飞。
- * @note   正常读取完成后调用者可以回收自己的任务上下文。当前 QSPI IRQ Adapter
- *         节点随 Platform Flash 生命周期长期保留，它只在存在读取在飞时才向上发布
+ * @retval PLATFORM_FLASH_ERROR Flash 未完成初始化或仍有操作在飞。
+ * @note   正常操作完成后调用者可以回收自己的任务上下文。当前 QSPI IRQ Adapter
+ *         节点随 Platform Flash 生命周期长期保留，它只在存在操作在飞时才向上发布
  *         事件，因此清除订阅者不影响后续重新订阅。
  */
-Platform_StatusTypeDef Platform_Flash_ClearTransferCallback(void)
+Platform_StatusTypeDef Platform_Flash_ClearOperationCallback(void)
 {
-    if ((!hplatform_flash_irq_registered) || hplatform_flash_transfer_active)
+    if ((!hplatform_flash_irq_registered) || hplatform_flash_operation_active)
     {
         return PLATFORM_FLASH_ERROR;
     }
 
-    hplatform_flash_transfer_callback = NULL;
-    hplatform_flash_transfer_context = NULL;
+    hplatform_flash_operation_callback = NULL;
+    hplatform_flash_operation_context = NULL;
     return PLATFORM_OK;
 }
 
@@ -532,7 +449,7 @@ Platform_StatusTypeDef Platform_Flash_ClearTransferCallback(void)
  * @retval PLATFORM_BUSY 当前已有读取在飞。
  * @retval PLATFORM_FLASH_ERROR 未初始化、尚未订阅完成回调或 Component 拒绝请求。
  * @note   本函数不等待。调用者收到通知后必须在同一读取拥有者的普通上下文调用
- *         Platform_Flash_ProcessTransfer()，后者完成 D-Cache 失效并把 Component
+ *         Platform_Flash_ProcessOperation()，后者完成 D-Cache 失效并把 Component
  *         置回 READY。在此之前不得读取或复用 data，也不得发起任何同步 QSPI
  *         事务。
  */
@@ -544,24 +461,24 @@ Platform_StatusTypeDef Platform_Flash_StartReadArray(
     Platform_StatusTypeDef status;
 
     if ((!hplatform_flash_irq_registered) ||
-        (hplatform_flash_transfer_callback == NULL))
+        (hplatform_flash_operation_callback == NULL))
     {
         return PLATFORM_FLASH_ERROR;
     }
 
-    if (hplatform_flash_transfer_active)
+    if (hplatform_flash_operation_active)
     {
         return PLATFORM_BUSY;
     }
 
-    hplatform_flash_transfer_active = true;
+    hplatform_flash_operation_active = true;
     /* QSPI IRQ 可能在 W25Qxx_StartRead() 返回前到达，先让 ISR 可见在飞状态。 */
     __DMB();
     status = platform_flash_map_w25qxx_status(
         W25Qxx_StartRead(&hplatform_flash, address, data, data_length));
     if (status != PLATFORM_OK)
     {
-        hplatform_flash_transfer_active = false;
+        hplatform_flash_operation_active = false;
         __DMB();
     }
 
@@ -569,20 +486,21 @@ Platform_StatusTypeDef Platform_Flash_StartReadArray(
 }
 
 /**
- * @brief  在普通上下文推进当前 MDMA 原始读取并完成 D-Cache 收尾。
- * @retval PLATFORM_OK MDMA 接收成功，数据已经可由 CPU 消费。
+ * @brief  在普通上下文推进当前异步 QSPI 操作并完成必要收尾。
+ * @retval PLATFORM_OK 当前 MDMA 读取已完成 Cache 收尾，或页编程/擦除已收到
+ *         WIP 清零的 Status Match，W25Qxx Device 已回到 READY。
  * @retval PLATFORM_BUSY 尚未收到完成事件；调用者可继续等待其任务通知。
- * @retval PLATFORM_FLASH_ERROR 当前没有由 Platform 启动的读取，或 Adapter、
- *         Component、Cache 收尾或异步读取超时失败。
- * @note   该函数不轮询 QSPI 寄存器。它仅把 Adapter 的 IRQ 结果交给
- *         W25Qxx_Process()：成功完成时后者调用 Adapter 执行 D-Cache Invalidate；
- *         错误或超时则使 Device 进入 ERROR，当前读取拥有者必须停止复用缓冲区。
+ * @retval PLATFORM_FLASH_ERROR 当前没有由 Platform 启动的操作，或 Adapter、
+ *         Component、Cache 收尾、自动轮询或软件时限失败。
+ * @note   该函数不轮询 QSPI 寄存器。它只把 Adapter 的 IRQ 结果交给
+ *         W25Qxx_Process()：MDMA 成功时由 Adapter 失效 D-Cache；页编程/擦除
+ *         成功时只确认自动轮询已匹配。错误或超时使 Device 进入 ERROR。
  */
-Platform_StatusTypeDef Platform_Flash_ProcessTransfer(void)
+Platform_StatusTypeDef Platform_Flash_ProcessOperation(void)
 {
     Platform_StatusTypeDef status;
 
-    if (!hplatform_flash_transfer_active)
+    if (!hplatform_flash_operation_active)
     {
         return PLATFORM_FLASH_ERROR;
     }
@@ -590,7 +508,7 @@ Platform_StatusTypeDef Platform_Flash_ProcessTransfer(void)
     status = platform_flash_map_w25qxx_status(W25Qxx_Process(&hplatform_flash));
     if (status != PLATFORM_BUSY)
     {
-        hplatform_flash_transfer_active = false;
+        hplatform_flash_operation_active = false;
         __DMB();
     }
 
@@ -605,9 +523,9 @@ Platform_StatusTypeDef Platform_Flash_ProcessTransfer(void)
  * @retval PLATFORM_OK 异步读回已启动，完成后会通知当前唯一订阅者。
  * @retval PLATFORM_BUSY 另一个 Platform Flash 读取仍在飞。
  * @retval PLATFORM_FLASH_ERROR 区域、缓冲区、订阅状态或底层读取无效。
- * @warning 只能在同一启动诊断窗口内、且 Platform_Flash_RunDiagnostic() 已成功
+ * @warning 只能在同一启动诊断窗口内、且已通过本 Module 的受限擦除与页编程
  *          写入图样后调用；它不擦除、不编程，也不允许指定任意物理地址。
- * @note   调用者仍必须在收到通知后调用 Platform_Flash_ProcessTransfer()，随后再
+ * @note   调用者仍必须在收到通知后调用 Platform_Flash_ProcessOperation()，随后再
  *         以 Platform_Flash_VerifyDiagnosticReadBuffer() 逐字节校验数据。
  */
 Platform_StatusTypeDef Platform_Flash_StartDiagnosticRead(
@@ -630,11 +548,11 @@ Platform_StatusTypeDef Platform_Flash_StartDiagnosticRead(
 /**
  * @brief  验证一次 MDMA 自检读回缓冲区是否保留 Platform 生成的完整图样。
  * @param  region 已读回的首或尾自检扇区。
- * @param  data 已完成 ProcessTransfer() 的有效 4 KiB 接收缓冲区。
+ * @param  data 已完成 ProcessOperation() 的有效 4 KiB 接收缓冲区。
  * @param  data_length data 的实际长度，必须恰为一个 4 KiB 自检扇区。
  * @retval PLATFORM_OK 所有字节均与上一次诊断写入的图样一致。
  * @retval PLATFORM_FLASH_ERROR 区域或缓冲区无效，或发现任一字节失配。
- * @warning 调用前必须已对同一 data 成功执行 Platform_Flash_ProcessTransfer()；
+ * @warning 调用前必须已对同一 data 成功执行 Platform_Flash_ProcessOperation()；
  *          本函数只比较 CPU 可见数据，不会启动、等待或收尾任何 QSPI 事务。
  */
 Platform_StatusTypeDef Platform_Flash_VerifyDiagnosticReadBuffer(
@@ -654,111 +572,161 @@ Platform_StatusTypeDef Platform_Flash_VerifyDiagnosticReadBuffer(
 
     return platform_flash_compare_diagnostic_buffer(sector_address,
                                                     seed,
-                                                    data,
-                                                    NULL) ?
+                                                    data) ?
                PLATFORM_OK :
                PLATFORM_FLASH_ERROR;
 }
 
 /**
- * @brief  破坏性验证 ADR-0009 保留的首、尾 4 KiB W25Q256 自检扇区。
- * @param  buffer 调用者提供的 4 KiB 临时缓冲区；必须可由 CPU 访问且容量不少于
- *         PLATFORM_FLASH_DIAGNOSTIC_BUFFER_SIZE_BYTES。
- * @param  buffer_size buffer 的实际容量，单位为字节。
- * @param  diagnostics 接收测试范围和首个错误的有效地址。
- * @retval PLATFORM_OK 首尾扇区均完成擦除、16 页编程、读回和逐字节校验。
- * @retval PLATFORM_FLASH_ERROR 参数无效或任一底层 Flash 阶段失败。
- * @warning 本函数会反复擦除并覆写固定的首、尾 4 KiB 扇区；它们由 ADR-0009 永久
- *          保留，不得保存 FTL、资源包、镜像槽或用户数据。仅可在显式诊断宏开启、
- *          Storage Task 启动早期且 Flash 无其他使用者时调用。
- * @note   擦除和编程各保持 W25Qxx Component 的异步 Start/Process 语义；本函数仅
- *         因为属于显式板测而同步等待。吞吐测试由 APP 基准的独立、非破坏性 1 MiB
- *         顺序读取负责；自检不采样或报告速度。
+ * @brief  同步读取一个 ADR-0009 保留自检扇区。
+ * @param  region 首或尾自检扇区语义。
+ * @param  data 接收完整 4 KiB 扇区的有效 CPU 缓冲区。
+ * @param  data_length data 的实际长度，必须恰为一个自检扇区。
+ * @retval PLATFORM_OK 数据已由轮询 0xEC 读入 data。
+ * @retval PLATFORM_FLASH_ERROR 区域、参数或同步读取无效。
+ * @note   此 Interface 不暴露物理地址，只用于自检的轮询读回路径；不会等待或
+ *         干预任何异步 QSPI 操作。
  */
-Platform_StatusTypeDef Platform_Flash_RunDiagnostic(
+Platform_StatusTypeDef Platform_Flash_ReadDiagnostic(
+    Platform_Flash_DiagnosticRegionTypeDef region,
     uint8_t *buffer,
-    uint32_t buffer_size,
-    Platform_Flash_DiagnosticsTypeDef *diagnostics)
+    uint32_t buffer_size)
 {
+    uint32_t sector_address;
+
     if ((buffer == NULL) ||
-        (buffer_size < PLATFORM_FLASH_DIAGNOSTIC_BUFFER_SIZE_BYTES) ||
-        (diagnostics == NULL))
+        (buffer_size != PLATFORM_FLASH_DIAGNOSTIC_BUFFER_SIZE_BYTES) ||
+        !platform_flash_get_diagnostic_region(region, &sector_address, NULL))
     {
         return PLATFORM_FLASH_ERROR;
     }
 
-    *diagnostics = (Platform_Flash_DiagnosticsTypeDef){0};
-    diagnostics->TestedBytes = 2u * PLATFORM_FLASH_DIAGNOSTIC_BUFFER_SIZE_BYTES;
+    return Platform_Flash_ReadArray(sector_address, buffer, buffer_size);
+}
 
-    if ((W25Qxx_SectorEraseStart(&hplatform_flash,
-                                 PLATFORM_FLASH_DIAGNOSTIC_HEAD_SECTOR_ADDRESS) != W25QXX_OK) ||
-        !platform_flash_wait_for_diagnostic_operation())
+/**
+ * @brief  填充一个 ADR-0009 保留自检扇区的 Platform 私有地址相关图样。
+ * @param  region 首或尾自检扇区语义。
+ * @param  buffer 接收完整 4 KiB 图样的有效 CPU 缓冲区。
+ * @param  buffer_size buffer 的实际容量，必须恰为一个自检扇区。
+ * @retval PLATFORM_OK 图样已写入 buffer。
+ * @retval PLATFORM_FLASH_ERROR 区域或缓冲区无效。
+ * @note   APP 只能请求图样，不能取得物理地址或自行选择种子。缓冲区随后可经
+ *         StartDiagnosticPageProgram() 逐页写入。
+ */
+Platform_StatusTypeDef Platform_Flash_FillDiagnosticBuffer(
+    Platform_Flash_DiagnosticRegionTypeDef region,
+    uint8_t *buffer,
+    uint32_t buffer_size)
+{
+    uint32_t sector_address;
+    uint32_t seed;
+
+    if ((buffer == NULL) ||
+        (buffer_size != PLATFORM_FLASH_DIAGNOSTIC_BUFFER_SIZE_BYTES) ||
+        !platform_flash_get_diagnostic_region(region, &sector_address, &seed))
     {
-        diagnostics->FailedStage = PLATFORM_FLASH_DIAGNOSTIC_STAGE_HEAD_ERASE;
-        diagnostics->FailureAddress = PLATFORM_FLASH_DIAGNOSTIC_HEAD_SECTOR_ADDRESS;
         return PLATFORM_FLASH_ERROR;
     }
 
-    if ((W25Qxx_SectorEraseStart(&hplatform_flash,
-                                 PLATFORM_FLASH_DIAGNOSTIC_TAIL_SECTOR_ADDRESS) != W25QXX_OK) ||
-        !platform_flash_wait_for_diagnostic_operation())
-    {
-        diagnostics->FailedStage = PLATFORM_FLASH_DIAGNOSTIC_STAGE_TAIL_ERASE;
-        diagnostics->FailureAddress = PLATFORM_FLASH_DIAGNOSTIC_TAIL_SECTOR_ADDRESS;
-        return PLATFORM_FLASH_ERROR;
-    }
-
-    platform_flash_fill_diagnostic_buffer(
-        buffer,
-        PLATFORM_FLASH_DIAGNOSTIC_HEAD_SECTOR_ADDRESS,
-        PLATFORM_FLASH_DIAGNOSTIC_HEAD_PATTERN_SEED);
-    if (!platform_flash_program_diagnostic_sector(
-            PLATFORM_FLASH_DIAGNOSTIC_HEAD_SECTOR_ADDRESS,
-            buffer,
-            &diagnostics->FailureAddress))
-    {
-        diagnostics->FailedStage = PLATFORM_FLASH_DIAGNOSTIC_STAGE_HEAD_PROGRAM;
-        return PLATFORM_FLASH_ERROR;
-    }
-
-    platform_flash_fill_diagnostic_buffer(
-        buffer,
-        PLATFORM_FLASH_DIAGNOSTIC_TAIL_SECTOR_ADDRESS,
-        PLATFORM_FLASH_DIAGNOSTIC_TAIL_PATTERN_SEED);
-    if (!platform_flash_program_diagnostic_sector(
-            PLATFORM_FLASH_DIAGNOSTIC_TAIL_SECTOR_ADDRESS,
-            buffer,
-            &diagnostics->FailureAddress))
-    {
-        diagnostics->FailedStage = PLATFORM_FLASH_DIAGNOSTIC_STAGE_TAIL_PROGRAM;
-        return PLATFORM_FLASH_ERROR;
-    }
-
-    if (!platform_flash_verify_diagnostic_sector(
-            PLATFORM_FLASH_DIAGNOSTIC_HEAD_SECTOR_ADDRESS,
-            PLATFORM_FLASH_DIAGNOSTIC_HEAD_PATTERN_SEED,
-            buffer,
-            diagnostics))
-    {
-        diagnostics->FailedStage =
-            (diagnostics->ExpectedValue == diagnostics->ActualValue) ?
-                PLATFORM_FLASH_DIAGNOSTIC_STAGE_HEAD_READBACK :
-                PLATFORM_FLASH_DIAGNOSTIC_STAGE_HEAD_VERIFY;
-        return PLATFORM_FLASH_ERROR;
-    }
-
-    if (!platform_flash_verify_diagnostic_sector(
-            PLATFORM_FLASH_DIAGNOSTIC_TAIL_SECTOR_ADDRESS,
-            PLATFORM_FLASH_DIAGNOSTIC_TAIL_PATTERN_SEED,
-            buffer,
-            diagnostics))
-    {
-        diagnostics->FailedStage =
-            (diagnostics->ExpectedValue == diagnostics->ActualValue) ?
-                PLATFORM_FLASH_DIAGNOSTIC_STAGE_TAIL_READBACK :
-                PLATFORM_FLASH_DIAGNOSTIC_STAGE_TAIL_VERIFY;
-        return PLATFORM_FLASH_ERROR;
-    }
-
+    platform_flash_fill_diagnostic_buffer(buffer, sector_address, seed);
     return PLATFORM_OK;
+}
+
+/**
+ * @brief  启动一个 ADR-0009 保留自检扇区的异步 4 KiB 擦除。
+ * @param  region 首或尾自检扇区语义。
+ * @retval PLATFORM_OK 已提交 0x21 且硬件 WIP 自动轮询已启动。
+ * @retval PLATFORM_BUSY 已有异步 QSPI 操作在飞。
+ * @retval PLATFORM_FLASH_ERROR 区域、订阅或 Component 状态无效。
+ * @note   调用者必须等待 STATUS_MATCH，并在普通上下文调用
+ *         Platform_Flash_ProcessOperation()。该 Interface 严格限制为两个自检
+ *         扇区，不是任意地址擦除能力。
+ */
+Platform_StatusTypeDef Platform_Flash_StartDiagnosticErase(
+    Platform_Flash_DiagnosticRegionTypeDef region)
+{
+    uint32_t sector_address;
+    Platform_StatusTypeDef status;
+
+    if (!platform_flash_get_diagnostic_region(region, &sector_address, NULL) ||
+        (!hplatform_flash_irq_registered) ||
+        (hplatform_flash_operation_callback == NULL))
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    if (hplatform_flash_operation_active)
+    {
+        return PLATFORM_BUSY;
+    }
+
+    hplatform_flash_operation_active = true;
+    __DMB();
+    status = platform_flash_map_w25qxx_status(
+        W25Qxx_SectorEraseStart(&hplatform_flash, sector_address));
+    if (status != PLATFORM_OK)
+    {
+        hplatform_flash_operation_active = false;
+        __DMB();
+    }
+
+    return status;
+}
+
+/**
+ * @brief  启动一个 ADR-0009 保留自检扇区内的异步单页编程。
+ * @param  region 首或尾自检扇区语义。
+ * @param  page_offset 页首相对扇区首地址的偏移，必须是 256 的整数倍。
+ * @param  data 待写入的有效页数据。
+ * @param  data_length 写入长度，范围 1..256，且不得跨越此物理页。
+ * @retval PLATFORM_OK 已提交 0x34 且硬件 WIP 自动轮询已启动。
+ * @retval PLATFORM_BUSY 已有异步 QSPI 操作在飞。
+ * @retval PLATFORM_FLASH_ERROR 区域、页范围、订阅或 Component 状态无效。
+ * @note   调用者必须等待 STATUS_MATCH，并在普通上下文调用
+ *         Platform_Flash_ProcessOperation()。目标页必须已由受限擦除入口擦除；
+ *         此 Interface 只服务自检区，未来 Resource Pack 将拥有独立写入入口。
+ */
+Platform_StatusTypeDef Platform_Flash_StartDiagnosticPageProgram(
+    Platform_Flash_DiagnosticRegionTypeDef region,
+    uint32_t page_offset,
+    const uint8_t *data,
+    uint32_t data_length)
+{
+    uint32_t sector_address;
+    Platform_StatusTypeDef status;
+
+    if ((data == NULL) ||
+        (data_length == 0u) ||
+        (data_length > W25QXX_PAGE_PROGRAM_MAX_SIZE_BYTES) ||
+        ((page_offset % W25QXX_PAGE_PROGRAM_MAX_SIZE_BYTES) != 0u) ||
+        (page_offset >= PLATFORM_FLASH_DIAGNOSTIC_BUFFER_SIZE_BYTES) ||
+        (data_length >
+         (PLATFORM_FLASH_DIAGNOSTIC_BUFFER_SIZE_BYTES - page_offset)) ||
+        !platform_flash_get_diagnostic_region(region, &sector_address, NULL) ||
+        (!hplatform_flash_irq_registered) ||
+        (hplatform_flash_operation_callback == NULL))
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+
+    if (hplatform_flash_operation_active)
+    {
+        return PLATFORM_BUSY;
+    }
+
+    hplatform_flash_operation_active = true;
+    __DMB();
+    status = platform_flash_map_w25qxx_status(
+        W25Qxx_ProgramPageStart(&hplatform_flash,
+                                 sector_address + page_offset,
+                                 data,
+                                 data_length));
+    if (status != PLATFORM_OK)
+    {
+        hplatform_flash_operation_active = false;
+        __DMB();
+    }
+
+    return status;
 }

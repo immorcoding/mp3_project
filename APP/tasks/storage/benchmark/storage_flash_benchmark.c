@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    storage_flash_benchmark.c
-  * @brief   Storage Task 中外部 W25Q256 的读取测速与保留扇区自检。
+  * @brief   Storage Task 中外部 W25Q256 的读取、页编程测速与保留扇区自检。
   *
   * @details
   *          本 Module 在 APP 层组织读取规模、FreeRTOS 时间采样和日志；实际物理
@@ -60,11 +60,13 @@ static uint64_t storage_flash_benchmark_ticks_to_ms(uint32_t elapsed_ticks)
 }
 
 /**
- * @brief  根据本次固定读取量与 Tick 间隔计算百分之一 MiB/s。
+ * @brief  根据指定数据量与 Tick 间隔计算百分之一 MiB/s。
+ * @param  byte_count 本次传输的累计字节数。
  * @param  elapsed_ticks 本次测速累计的 Tick 数。
  * @retval 吞吐率乘以 100；零 Tick 时返回零。
  */
-static uint64_t storage_flash_benchmark_read_mib_per_second_x100(
+static uint64_t storage_flash_benchmark_mib_per_second_x100(
+    uint32_t byte_count,
     uint32_t elapsed_ticks)
 {
     if (elapsed_ticks == 0U)
@@ -72,7 +74,7 @@ static uint64_t storage_flash_benchmark_read_mib_per_second_x100(
         return 0U;
     }
 
-    return ((uint64_t)STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES *
+    return ((uint64_t)byte_count *
             configTICK_RATE_HZ *
             100ULL) /
            ((uint64_t)elapsed_ticks * 1024ULL * 1024ULL);
@@ -121,7 +123,7 @@ static bool storage_flash_benchmark_read_poll(uint32_t *elapsed_ticks)
  * @retval false 参数无效、启动失败、未收到 IRQ 通知，或 QSPI/MDMA 收尾失败。
  * @note   每块的 QSPI IRQ 订阅、遗留通知清理、等待与普通上下文收尾均由
  *         storage_flash 协调 Module 执行。回调可能在启动函数返回前到达，但任务
- *         通知是计数型，后续等待仍能立即取得完成事件。
+ *         通知会保存最终事件值，后续等待仍能立即取得完成结果。
  */
 static bool storage_flash_benchmark_read_mdma(uint32_t *elapsed_ticks)
 {
@@ -157,9 +159,9 @@ static bool storage_flash_benchmark_read_mdma(uint32_t *elapsed_ticks)
  * @brief  使用当前 MDMA 配置读回并校验刚完成轮询自检的两个保留扇区。
  * @retval true 首、尾 4 KiB 均经 MDMA 读取、普通上下文 Cache 收尾并逐字节校验。
  * @retval false 任一诊断区域无法启动、完成、收尾或匹配预期图样。
- * @note   调用者必须已由 storage_flash_init() 绑定 Storage Task 的长期传输
- *         通知，且刚由 Platform_Flash_RunDiagnostic() 成功写入并通过同步读回
- *         验证。APP 不掌握保留扇区的物理地址或图样，只向 Platform 传递区域语义。
+ * @note   调用者必须已由 storage_flash_init() 绑定 Storage Task 的长期操作
+ *         通知，且刚由本 Module 经受限擦写入口完成轮询读回验证。APP 不掌握
+ *         保留扇区的物理地址或图样，只向 Platform 传递区域语义。
  */
 static bool storage_flash_benchmark_verify_diagnostic_with_mdma(void)
 {
@@ -194,7 +196,7 @@ static bool storage_flash_benchmark_verify_diagnostic_with_mdma(void)
 }
 
 /**
- * @brief  执行一次首尾自检扇区破坏性诊断并投递完整性结果。
+ * @brief  执行一次首尾自检扇区破坏性诊断并投递写速与完整性结果。
  * @retval true 两个保留扇区均已写入一次，并分别经轮询和 MDMA 读回逐字节校验。
  * @retval false 擦除、页编程、任一路读回或图样校验任一阶段失败。
  * @note   物理地址、图样和所有实际擦写均收敛在 Platform Flash；APP 只提供
@@ -202,24 +204,76 @@ static bool storage_flash_benchmark_verify_diagnostic_with_mdma(void)
  */
 static bool storage_flash_benchmark_run_destructive_diagnostic(void)
 {
-    Platform_Flash_DiagnosticsTypeDef diagnostics;
-    char text[160];
+    static const Platform_Flash_DiagnosticRegionTypeDef regions[] = {
+        PLATFORM_FLASH_DIAGNOSTIC_REGION_HEAD,
+        PLATFORM_FLASH_DIAGNOSTIC_REGION_TAIL
+    };
+    uint32_t program_elapsed_ticks = 0U;
+    uint32_t program_byte_count;
+    uint32_t elapsed_ms;
+    uint32_t speed_x100;
+    char text[128];
 
-    if (Platform_Flash_RunDiagnostic(storage_flash_benchmark_buffer,
-                                     sizeof(storage_flash_benchmark_buffer),
-                                     &diagnostics) != PLATFORM_OK)
+    for (uint32_t index = 0U;
+         index < (sizeof(regions) / sizeof(regions[0]));
+         ++index)
     {
-        (void)snprintf(text,
-                       sizeof(text),
-                       "Self-test failed: stage=%lu, addr=0x%08lX, expected=0x%02X, actual=0x%02X.",
-                       (unsigned long)diagnostics.FailedStage,
-                       (unsigned long)diagnostics.FailureAddress,
-                       (unsigned int)diagnostics.ExpectedValue,
-                       (unsigned int)diagnostics.ActualValue);
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                               storage_flash_benchmark_log_tag,
-                               text);
-        return false;
+        if (!storage_flash_erase_diagnostic(
+                regions[index],
+                STORAGE_FLASH_BENCHMARK_SECTOR_ERASE_TIMEOUT_MS))
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                   storage_flash_benchmark_log_tag,
+                                   "Self-test erase failed.");
+            return false;
+        }
+
+        if (Platform_Flash_FillDiagnosticBuffer(
+                regions[index],
+                storage_flash_benchmark_buffer,
+                sizeof(storage_flash_benchmark_buffer)) != PLATFORM_OK)
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                   storage_flash_benchmark_log_tag,
+                                   "Self-test pattern setup failed.");
+            return false;
+        }
+
+        const TickType_t program_start_tick = xTaskGetTickCount();
+        for (uint32_t page_offset = 0U;
+             page_offset < sizeof(storage_flash_benchmark_buffer);
+             page_offset += STORAGE_FLASH_BENCHMARK_PROGRAM_PAGE_BYTES)
+        {
+            if (!storage_flash_program_diagnostic_page(
+                    regions[index],
+                    page_offset,
+                    &storage_flash_benchmark_buffer[page_offset],
+                    STORAGE_FLASH_BENCHMARK_PROGRAM_PAGE_BYTES,
+                    STORAGE_FLASH_BENCHMARK_PAGE_PROGRAM_TIMEOUT_MS))
+            {
+                (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                       storage_flash_benchmark_log_tag,
+                                       "Self-test page program failed.");
+                return false;
+            }
+        }
+        program_elapsed_ticks +=
+            (uint32_t)(xTaskGetTickCount() - program_start_tick);
+
+        if ((Platform_Flash_ReadDiagnostic(
+                 regions[index],
+                 storage_flash_benchmark_buffer,
+                 sizeof(storage_flash_benchmark_buffer)) != PLATFORM_OK) ||
+            (Platform_Flash_VerifyDiagnosticReadBuffer(
+                 regions[index],
+                 storage_flash_benchmark_buffer,
+                 sizeof(storage_flash_benchmark_buffer)) != PLATFORM_OK))
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                   storage_flash_benchmark_log_tag,
+                                   "Self-test poll read or verify failed.");
+            return false;
+        }
     }
 
     if (!storage_flash_benchmark_verify_diagnostic_with_mdma())
@@ -230,10 +284,21 @@ static bool storage_flash_benchmark_run_destructive_diagnostic(void)
         return false;
     }
 
+    program_byte_count = (uint32_t)(sizeof(regions) / sizeof(regions[0])) *
+                         (uint32_t)sizeof(storage_flash_benchmark_buffer);
+    elapsed_ms = (uint32_t)storage_flash_benchmark_ticks_to_ms(
+        program_elapsed_ticks);
+    speed_x100 = (uint32_t)storage_flash_benchmark_mib_per_second_x100(
+        program_byte_count,
+        program_elapsed_ticks);
     (void)snprintf(text,
                    sizeof(text),
-                   "Self-test passed: poll + MDMA, head/tail, %lu KiB verified.",
-                   (unsigned long)(diagnostics.TestedBytes / 1024U));
+                   "Self-test passed: write %lu KiB, %lu ms, %lu.%02lu MiB/s; "
+                   "poll + MDMA verified.",
+                   (unsigned long)(program_byte_count / 1024U),
+                   (unsigned long)elapsed_ms,
+                   (unsigned long)(speed_x100 / 100U),
+                   (unsigned long)(speed_x100 % 100U));
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO,
                            storage_flash_benchmark_log_tag,
                            text);
@@ -270,7 +335,9 @@ void storage_flash_benchmark_run(void)
     }
 
     elapsed_ms = (uint32_t)storage_flash_benchmark_ticks_to_ms(elapsed_ticks);
-    speed_x100 = (uint32_t)storage_flash_benchmark_read_mib_per_second_x100(elapsed_ticks);
+    speed_x100 = (uint32_t)storage_flash_benchmark_mib_per_second_x100(
+        STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES,
+        elapsed_ticks);
     (void)snprintf(text,
                    sizeof(text),
                    "Bench poll read: %lu KiB, %lu ms, %lu.%02lu MiB/s.",
@@ -291,7 +358,9 @@ void storage_flash_benchmark_run(void)
     }
 
     elapsed_ms = (uint32_t)storage_flash_benchmark_ticks_to_ms(elapsed_ticks);
-    speed_x100 = (uint32_t)storage_flash_benchmark_read_mib_per_second_x100(elapsed_ticks);
+    speed_x100 = (uint32_t)storage_flash_benchmark_mib_per_second_x100(
+        STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES,
+        elapsed_ticks);
     (void)snprintf(text,
                    sizeof(text),
                    "Bench MDMA read: %lu KiB, %lu ms, %lu.%02lu MiB/s.",

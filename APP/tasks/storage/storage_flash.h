@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    storage_flash.h
-  * @brief   Storage Task 内部的 Platform Flash 异步传输协调 Interface。
+  * @brief   Storage Task 内部的 Platform Flash 异步操作协调 Interface。
   *
   * @details
   *          本 Module 长期持有 Platform Flash 的唯一 QSPI IRQ 订阅，并把 IRQ
@@ -31,6 +31,17 @@ bool storage_flash_read_array(uint32_t address,
 bool storage_flash_read_diagnostic(
     Platform_Flash_DiagnosticRegionTypeDef region,
     uint8_t *data,
+    uint32_t data_length,
+    uint32_t timeout_ms);
+
+bool storage_flash_erase_diagnostic(
+    Platform_Flash_DiagnosticRegionTypeDef region,
+    uint32_t timeout_ms);
+
+bool storage_flash_program_diagnostic_page(
+    Platform_Flash_DiagnosticRegionTypeDef region,
+    uint32_t page_offset,
+    const uint8_t *data,
     uint32_t data_length,
     uint32_t timeout_ms);
 

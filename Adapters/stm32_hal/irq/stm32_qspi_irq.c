@@ -1,11 +1,11 @@
 /**
   ******************************************************************************
   * @file    stm32_qspi_irq.c
-  * @brief   STM32 HAL QSPI 非阻塞传输回调的注册和 Handle 匹配分发实现。
+  * @brief   STM32 HAL QSPI 异步操作回调的注册和 Handle 匹配分发实现。
   *
   * @details
   *          CubeMX 的 QSPI 向量只负责调用 HAL_QSPI_IRQHandler()。本模块使用
-  *          Handle 局部回调注册接收 HAL 的读完成、错误和中止事件，因此不定义
+ *          Handle 局部回调注册接收 HAL 的读完成、状态匹配、错误和中止事件，因此不定义
   *          全局 HAL_QSPI_*Callback() 符号，也不会与其他 QSPI 使用者冲突。
   ******************************************************************************
   */
@@ -21,7 +21,7 @@ static STM32QSPIIRQ_CallbackTypeDef * volatile hstm32_qspi_irq_callbacks;
 /**
  * @brief  把一个源特定 QSPI 事件分发给匹配 HAL Handle 的所有注册节点。
  * @param  handle HAL_QSPI_IRQHandler() 当前正在处理的 Handle。
- * @param  event 已由 HAL 归类的非阻塞读取生命周期事件。
+ * @param  event 已由 HAL 归类的异步操作生命周期事件。
  * @note   本函数运行在 IRQ 上下文。注册/注销会短暂关闭普通中断，以保证链表
  *         迭代期间节点不会被并发移除；Handler 不得在回调中注销自身或改动节点。
  */
@@ -47,6 +47,12 @@ static void stm32_qspi_irq_read_complete(QSPI_HandleTypeDef *handle)
     stm32_qspi_irq_dispatch(handle, STM32QSPIIRQ_EVENT_READ_COMPLETE);
 }
 
+/** @brief HAL 注册的 QSPI 自动轮询状态匹配入口。 */
+static void stm32_qspi_irq_status_match(QSPI_HandleTypeDef *handle)
+{
+    stm32_qspi_irq_dispatch(handle, STM32QSPIIRQ_EVENT_STATUS_MATCH);
+}
+
 /** @brief HAL 注册的 QSPI 传输错误入口。 */
 static void stm32_qspi_irq_error(QSPI_HandleTypeDef *handle)
 {
@@ -60,7 +66,7 @@ static void stm32_qspi_irq_abort(QSPI_HandleTypeDef *handle)
 }
 
 /**
- * @brief  将本 Adapter 的 DMA 生命周期回调安装到一个 READY 的 HAL QSPI Handle。
+ * @brief  将本 Adapter 的异步操作回调安装到一个 READY 的 HAL QSPI Handle。
  * @retval true 所有回调均已成功注册。
  * @retval false HAL Handle 状态不允许注册，或任一个 HAL 注册调用失败。
  * @note   HAL_QSPI_Init() 会复位 Handle 内的回调指针；当前 QSPI 不支持热插拔，
@@ -85,9 +91,19 @@ static bool stm32_qspi_irq_install_callbacks(QSPI_HandleTypeDef *handle)
     }
 
     if (HAL_QSPI_RegisterCallback(handle,
+                                  HAL_QSPI_STATUS_MATCH_CB_ID,
+                                  stm32_qspi_irq_status_match) != HAL_OK)
+    {
+        (void)HAL_QSPI_UnRegisterCallback(handle, HAL_QSPI_ERROR_CB_ID);
+        (void)HAL_QSPI_UnRegisterCallback(handle, HAL_QSPI_RX_CPLT_CB_ID);
+        return false;
+    }
+
+    if (HAL_QSPI_RegisterCallback(handle,
                                   HAL_QSPI_ABORT_CB_ID,
                                   stm32_qspi_irq_abort) != HAL_OK)
     {
+        (void)HAL_QSPI_UnRegisterCallback(handle, HAL_QSPI_STATUS_MATCH_CB_ID);
         (void)HAL_QSPI_UnRegisterCallback(handle, HAL_QSPI_ERROR_CB_ID);
         (void)HAL_QSPI_UnRegisterCallback(handle, HAL_QSPI_RX_CPLT_CB_ID);
         return false;
@@ -244,6 +260,7 @@ STM32QSPIIRQ_StatusTypeDef STM32QSPIIRQ_Unregister(
     {
         (void)HAL_QSPI_UnRegisterCallback(handle, HAL_QSPI_RX_CPLT_CB_ID);
         (void)HAL_QSPI_UnRegisterCallback(handle, HAL_QSPI_ERROR_CB_ID);
+        (void)HAL_QSPI_UnRegisterCallback(handle, HAL_QSPI_STATUS_MATCH_CB_ID);
         (void)HAL_QSPI_UnRegisterCallback(handle, HAL_QSPI_ABORT_CB_ID);
     }
 

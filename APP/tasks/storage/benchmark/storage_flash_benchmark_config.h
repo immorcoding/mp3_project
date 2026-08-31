@@ -21,6 +21,15 @@
 /* 单块 MDMA 读取等待 QSPI IRQ 的最大时长；到期后仅标记本次基准失败。 */
 #define STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS        100U
 
+/* W25Q256JV tPP 最大 4 ms；为任务通知、Status Match 与普通上下文收尾留出裕量。 */
+#define STORAGE_FLASH_BENCHMARK_PAGE_PROGRAM_TIMEOUT_MS 10U
+
+/* W25Q256JV 4 KiB tSE 最大 400 ms；为任务调度和时钟测量留出裕量。 */
+#define STORAGE_FLASH_BENCHMARK_SECTOR_ERASE_TIMEOUT_MS 600U
+
+/* 自检始终以 W25Qxx 固定物理 256-byte 页为单位提交写入。 */
+#define STORAGE_FLASH_BENCHMARK_PROGRAM_PAGE_BYTES      256U
+
 /* 关闭 Platform 对首尾保留自检扇区执行擦除、页编程及双路径读回校验。 */
 #define STORAGE_FLASH_BENCHMARK_PROGRAM_ENABLE         1
 
@@ -42,6 +51,13 @@
 
 #if (STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS == 0U)
 #error "Flash MDMA benchmark timeout must be non-zero."
+#endif
+
+#if ((STORAGE_FLASH_BENCHMARK_PAGE_PROGRAM_TIMEOUT_MS == 0U) || \
+     (STORAGE_FLASH_BENCHMARK_SECTOR_ERASE_TIMEOUT_MS == 0U) || \
+     ((STORAGE_FLASH_BENCHMARK_READ_CHUNK_BYTES % \
+       STORAGE_FLASH_BENCHMARK_PROGRAM_PAGE_BYTES) != 0U))
+#error "Flash diagnostic timing or page geometry is invalid."
 #endif
 
 #endif /* STORAGE_FLASH_BENCHMARK_CONFIG_H */

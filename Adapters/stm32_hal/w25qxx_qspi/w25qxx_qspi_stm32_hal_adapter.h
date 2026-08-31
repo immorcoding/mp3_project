@@ -15,10 +15,12 @@
 #include "stm32h7xx_hal.h"
 
 /**
- * @brief Platform 注入的 STM32 HAL QSPI 后端与当前 DMA 读取元数据。
- * @note  DMAReadBuffer、DMAReadByteCount、DMAReadPending 和 DMAReadStatus 仅由
- *        本 Adapter 读写：IRQ 只更新完成状态，普通上下文查询完成状态时才执行
- *        Cache 失效并清理元数据。Platform 只能初始化 Handle 和 TimeoutMs。
+ * @brief Platform 注入的 STM32 HAL QSPI 后端及当前异步操作元数据。
+ * @note  DMARead* 仅服务 MDMA 数组读取：IRQ 只更新完成状态，普通上下文查询
+ *        状态时才执行 Cache 失效。StatusPolling* 服务页编程和扇区擦除后的
+ *        `HAL_QSPI_AutoPolling_IT()`：Status Match IRQ 只更新结果，普通上下文
+ *        再由 W25Qxx_Process() 推进 Device。Platform 只能初始化 Handle 和
+ *        TimeoutMs，不能直接改动任一异步状态字段。
  */
 typedef struct
 {
@@ -28,6 +30,8 @@ typedef struct
     uint32_t DMAReadByteCount;
     volatile bool DMAReadPending;
     volatile W25Qxx_BusStatusTypeDef DMAReadStatus;
+    volatile bool StatusPollingPending;
+    volatile W25Qxx_BusStatusTypeDef StatusPollingStatus;
 } W25Qxx_QSPI_STM32HALAdapterTypeDef;
 
 W25Qxx_StatusTypeDef W25Qxx_QSPI_STM32HALAdapter_Bind(
@@ -35,7 +39,9 @@ W25Qxx_StatusTypeDef W25Qxx_QSPI_STM32HALAdapter_Bind(
     W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter);
 void W25Qxx_QSPI_STM32HALAdapter_NotifyReadComplete(
     W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter);
-void W25Qxx_QSPI_STM32HALAdapter_NotifyReadError(
+void W25Qxx_QSPI_STM32HALAdapter_NotifyStatusMatch(
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter);
+void W25Qxx_QSPI_STM32HALAdapter_NotifyOperationError(
     W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter);
 
 #endif /* W25QXX_QSPI_STM32_HAL_ADAPTER_H */

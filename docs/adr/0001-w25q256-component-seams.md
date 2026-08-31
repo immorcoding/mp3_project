@@ -15,7 +15,7 @@
 3. `Adapters/stm32_hal/w25qxx_qspi` 实现 W25Qxx 的 Bus Ops，并集中所有 STM32 HAL QSPI 依赖。
 4. `Adapters/bridge/flash_ftl_w25qxx` 以 W25Qxx 的公开 Interface 实现 Flash FTL 的 Raw Ops；该 Bridge 不依赖 HAL、CMSIS、FreeRTOS 或 Platform。
 5. `Platform/flash` 长期持有两个 Component Handle 与 QSPI Adapter Context，完成 Bind、初始化和本 PCB 的 QSPI 资源装配。
-6. 当前只建立目录和文档接缝；不实现 QSPI、FTL、FatFs、USB MSC 或媒体业务。
+6. 首个垂直切片实现 W25Qxx 的 QSPI 间接识别、读、页编程、扇区擦除和自动状态轮询，但不实现 Flash FTL、FatFs、USB MSC 或媒体业务。
 
 ## 不采用的方案
 

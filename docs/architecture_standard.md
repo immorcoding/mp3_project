@@ -177,7 +177,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | `Adapters/stm32_hal/led_gpio` | STM32 HAL GPIO 到 LED Device PortOps；逻辑 ON 电平由 Platform 注入。 |
 | `Adapters/stm32_hal/sd` | STM32 HAL SDMMC/GPIO 到 SD Port Ops，并在 DMA 前后委托 Cortex Cache Adapter。 |
 | `Adapters/stm32_hal/soft_i2c` | STM32 HAL GPIO 到 SoftI2C GPIO Ops。 |
-| `Adapters/stm32_hal/w25qxx_qspi` | STM32 HAL QSPI 到 W25Qxx Bus Ops；当前实现同步间接 JEDEC ID、SR1/SR2、SFDP、`0xEC` Quad I/O 读取，及经 QSPI FIFO 阈值 MDMA 的非阻塞 `0xEC` 接收、`0x34` 页数据传输、`0x21` 无数据扇区擦除和启动期 QE 配置。 |
+| `Adapters/stm32_hal/w25qxx_qspi` | STM32 HAL QSPI 到 W25Qxx Bus Ops；当前实现同步间接 JEDEC ID、SR1/SR2、SFDP、`0xEC` Quad I/O 读取，及经 QSPI FIFO 阈值 MDMA 的非阻塞 `0xEC` 接收、`0x34` 页数据传输、`0x21` 无数据扇区擦除、`0x05` 的硬件自动状态轮询和启动期 QE 配置。 |
 | `Adapters/stm32_hal/temp` | STM32H7 ADC3 内部温度传感器与 VREFINT 的校准、采样和工厂标定换算。 |
 | `Adapters/stm32_hal/irq/stm32_gpio_exti_irq` | 独占 STM32 HAL GPIO EXTI 全局入口，并按 GPIO PinMask 管理调用者回调链表。 |
 | `Adapters/stm32_hal/irq/stm32_sdmmc_irq` | 按 `SD_HandleTypeDef` 注册 HAL SD 完成、错误和中止回调，并发布强类型传输事件。 |
@@ -185,7 +185,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 
 `bridge/` 只转换两个 Component Interface，不引入具体 MCU 依赖；`cortex/` 只封装 Cortex-M 架构能力，不持有外设或任务状态；`stm32_hal/` 则集中所有必须认识 STM32 HAL、CubeMX Handle 或 HAL 全局回调的实现。
 
-W25Qxx、STM32 HAL QSPI Adapter 与 Platform Flash 当前已完成间接模式的启动 JEDEC ID、SFDP 与 SR1/SR2 读取，以及 W25Q256 固定 4-byte `0xEC` Quad I/O 的同步读取和 QSPI/MDMA 非阻塞读取、`0x34` 非阻塞单页编程和 `0x21` 非阻塞 4 KiB 扇区擦除状态机；Platform 注入本 PCB 的厂商和容量要求，Component 不把具体料号白名单写死。QE 已开启时不改写；QE 为 0 时只在调度器前进行一次 `0x06 → WEL 核验 → 0x31 → WIP 有界轮询 → QE 回读`。MDMA 路线由 QSPI IRQ Adapter 按 Handle 分发完成、错误和中止事件；Platform 只转交轻量通知，拥有请求的普通任务才调用 `ProcessTransfer()` 完成 Cache 和 Device 状态收尾。`Process()` 对数组读取、页编程和扇区擦除分别以 100 ms、5 ms、500 ms 为上限，不能在 MSC 或文件系统路径阻塞 DMA、`tPP` 或 `tSE`。Platform 只在 ADR-0009 的双自检扇区通过显式诊断入口同步使用破坏性能力；诊断写入后，拥有任务可通过首/尾区域语义复用同一非阻塞读取接缝完成 MDMA 图样读回校验，Platform 不等待通知。Flash FTL 与跨 Component Bridge 仍未实现。现状、目录与接缝决定见 [w25q256_architecture.md](w25q256_architecture.md)。在原始 NOR 的擦除、对齐、写入和掉电策略经过验证前，不得把它接入 FatFs、USB MSC 或创建通用逻辑块抽象。
+W25Qxx、STM32 HAL QSPI Adapter 与 Platform Flash 当前已完成间接模式的启动 JEDEC ID、SFDP 与 SR1/SR2 读取，以及 W25Q256 固定 4-byte `0xEC` Quad I/O 的同步读取和 QSPI/MDMA 非阻塞读取、`0x34` 非阻塞单页编程和 `0x21` 非阻塞 4 KiB 扇区擦除状态机；Platform 注入本 PCB 的厂商和容量要求，Component 不把具体料号白名单写死。QE 已开启时不改写；QE 为 0 时只在调度器前进行一次 `0x06 → WEL 核验 → 0x31 → WIP 有界轮询 → QE 回读`。MDMA 路线与 `0x05` 自动状态轮询路线都由 QSPI IRQ Adapter 按 Handle 分发：前者发布读取完成，后者发布 Status Match，错误和中止两者共用；Platform 只转交轻量通知，拥有请求的普通任务才调用 `ProcessOperation()` 完成 Cache 和 Device 状态收尾。`Process()` 对数组读取、页编程和扇区擦除分别以 100 ms、5 ms、500 ms 为上限；写擦完成仅查询硬件状态匹配结果，超时只中止控制器轮询而不试图中止 NOR 内部操作，任何路径都不能在 MSC 或文件系统路径阻塞 DMA、`tPP` 或 `tSE`。Platform 只在 ADR-0009 的双自检扇区通过受限接口使用破坏性能力；诊断写入后，拥有任务可通过首/尾区域语义复用同一异步操作接缝完成 MDMA 图样读回校验，Platform 不等待通知。Flash FTL 与跨 Component Bridge 仍未实现。现状、目录与接缝决定见 [w25q256_architecture.md](w25q256_architecture.md)。在原始 NOR 的擦除、对齐、写入和掉电策略经过验证前，不得把它接入 FatFs、USB MSC 或创建通用逻辑块抽象。
 
 FreeRTOS 内核源码、项目配置与 Hook 的边界为：
 
@@ -428,24 +428,24 @@ SDMMC1_IRQHandler()
 不得共用同一个无类型通知。`Adapters/stm32_hal/irq` 只集中 HAL 全局回调的唯一所有权，GPIO EXTI 和
 SDMMC 仍保留各自的强类型 Interface，不能收敛为 `IRQ_ID + void *` 的通用分发器。
 
-QSPI/MDMA 原始读取的当前路径为：
+QSPI 异步操作的当前路径为：
 
 ```text
 Storage Task 启动
   -> storage_flash_init()
-  -> Platform_Flash_SetTransferCallback()（长期唯一订阅）
+  -> Platform_Flash_SetOperationCallback()（长期唯一订阅）
 
 Storage Task 内的 Flash 请求者（当前为基准）
-  -> storage_flash_read_array()
-  -> Platform_Flash_StartReadArray()
-  -> W25Qxx_StartRead()
-  -> HAL_QSPI_Receive_DMA()
-  -> MDMA Channel0 (QUADSPI_FIFO_TH)
+  -> storage_flash_read_array() / storage_flash_erase_diagnostic()
+  -> Platform_Flash_StartReadArray() / StartDiagnosticErase()
+  -> W25Qxx_StartRead() / W25Qxx_SectorEraseStart()
+  -> HAL_QSPI_Receive_DMA() / HAL_QSPI_AutoPolling_IT()
+  -> MDMA Channel0 (QUADSPI_FIFO_TH) / QSPI 状态匹配
   -> QUADSPI IRQ -> STM32 QSPI IRQ Adapter（按 Handle 匹配）
   -> Platform Flash 记录 Adapter 结果并转发轻量事件
   -> Storage Task 通知索引 2
-  -> storage_flash_read_array() 内部调用 Platform_Flash_ProcessTransfer()
-  -> W25Qxx_Process() -> Adapter D-Cache Invalidate -> READY / ERROR
+  -> storage_flash_*() 内部调用 Platform_Flash_ProcessOperation()
+  -> W25Qxx_Process() -> D-Cache Invalidate 或状态匹配确认 -> READY / ERROR
 ```
 
 这不是对外通用的 QSPI DMA 服务：当前只有 Platform Flash 可以注册 `hqspi`，而 APP 中只有 `storage_flash` 可以设置并长期持有唯一回调；基准和未来 Flash 业务只能经该 Module 发起、等待和收尾。QSPI IRQ、MDMA IRQ 均为 FreeRTOS 可调用 FromISR 的优先级 5；ISR 不访问缓冲、不记录日志，也不提交下一条 Flash 命令。
