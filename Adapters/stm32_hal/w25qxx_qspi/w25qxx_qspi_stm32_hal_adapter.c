@@ -1,17 +1,17 @@
 /**
-  ******************************************************************************
-  * @file    w25qxx_qspi_stm32_hal_adapter.c
+ ******************************************************************************
+ * @file    w25qxx_qspi_stm32_hal_adapter.c
  * @brief   STM32 HAL QSPI 到 W25Qxx BusOps 的 Adapter 实现。
-  *
-  * @details
+ *
+ * @details
  *          本 Module 把 W25Qxx Device 发出的控制、读写命令映射为 HAL QSPI
  *          间接模式事务。当前服务 JEDEC ID、SFDP、状态寄存器、启动期 QE 配置、
  *          0xEC Quad I/O 同步读取和 MDMA 非阻塞读取、0x34 Quad 页数据传输，
  *          以及 WIP 清零的硬件自动状态轮询。Adapter 不持有 Task；QSPI IRQ
  *          只更新异步结果，读取完成后的 D-Cache 失效由 W25Qxx_Process() 所在
  *          普通上下文执行。
-  ******************************************************************************
-  */
+ ******************************************************************************
+ */
 
 #include "Adapters/stm32_hal/w25qxx_qspi/w25qxx_qspi_stm32_hal_adapter.h"
 #include "Adapters/cortex/cache/cortex_m7_dcache_adapter.h"
@@ -395,7 +395,7 @@ static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_start_read_addressed_comman
 
     if (hal_status != HAL_OK)
     {
-        w25qxx_qspi_stm32_hal_clear_dma_read_metadata(adapter);
+        /* HAL 启动失败也可能留下在飞状态，统一由 Quiesce 归还。 */
         adapter->DMAReadStatus = w25qxx_qspi_stm32_hal_map_status(hal_status);
         __DMB();
     }
@@ -432,7 +432,7 @@ static W25Qxx_BusStatusTypeDef
 
     if (status != W25QXX_BUS_OK)
     {
-        w25qxx_qspi_stm32_hal_clear_dma_read_metadata(adapter);
+        /* 保留缓冲信息供 Quiesce 在硬件停止后收尾。 */
         return status;
     }
 
@@ -770,25 +770,70 @@ static uint32_t w25qxx_qspi_stm32_hal_get_tick_ms(void *context)
     return HAL_GetTick();
 }
 
+/**
+ * @brief 停止 QSPI/MDMA 后完成接收 Cache 收尾，再清理在飞元数据。
+ * @param[in,out] context 已绑定的 HAL QSPI Adapter Context。
+ * @return W25QXX_BUS_OK 表示控制器和 DMA 已停止且缓冲安全；W25QXX_BUS_BUSY 表示中止或硬件静止尚未确认；
+ *       W25QXX_BUS_ERROR 表示参数或 Cache 收尾失败。
+ * @note 仅普通上下文调用；先关闭中断和 DMA 请求，再中止 MDMA/QSPI。失败或忙时不得复用缓冲；不向 NOR 发送复位，也不取消芯片内部擦写。
+ */
+static W25Qxx_BusStatusTypeDef w25qxx_qspi_stm32_hal_quiesce(void *context)
+{
+    W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter = context;
+    if (!adapter || !adapter->Handle)
+    {
+        return W25QXX_BUS_ERROR;
+    }
+    QSPI_HandleTypeDef *q = adapter->Handle;
+    __HAL_QSPI_DISABLE_IT(q, QSPI_IT_TO | QSPI_IT_SM | QSPI_IT_FT | QSPI_IT_TC | QSPI_IT_TE);
+    CLEAR_BIT(q->Instance->CR, QUADSPI_CR_DMAEN);
+    if (q->hmdma && (q->hmdma->Instance->CCR & MDMA_CCR_EN))
+    {
+        if (HAL_MDMA_Abort(q->hmdma) != HAL_OK)
+        {
+            return W25QXX_BUS_BUSY;
+        }
+    }
+    if (HAL_QSPI_Abort(q) != HAL_OK)
+    {
+        return W25QXX_BUS_BUSY;
+    }
+    if (__HAL_QSPI_GET_FLAG(q, QSPI_FLAG_BUSY) != RESET)
+    {
+        SET_BIT(q->Instance->CR, QUADSPI_CR_ABORT);
+        return W25QXX_BUS_BUSY;
+    }
+    if (q->hmdma && (q->hmdma->Instance->CCR & MDMA_CCR_EN))
+    {
+        return W25QXX_BUS_BUSY;
+    }
+    __HAL_QSPI_CLEAR_FLAG(q, QSPI_FLAG_TC | QSPI_FLAG_SM | QSPI_FLAG_TE | QSPI_FLAG_TO);
+    if (!w25qxx_qspi_stm32_hal_finish_dma_read(adapter))
+    {
+        return W25QXX_BUS_ERROR;
+    }
+    w25qxx_qspi_stm32_hal_clear_dma_read_metadata(adapter);
+    w25qxx_qspi_stm32_hal_clear_status_polling_metadata(adapter);
+    adapter->MemoryMappedModeEnabled = false;
+    __DMB();
+    return W25QXX_BUS_OK;
+}
+
 /** @brief W25Qxx Device 使用的 STM32 HAL QSPI BusOps 表。 */
 static const W25Qxx_BusOpsTypeDef w25qxx_qspi_stm32_hal_ops = {
+    .Quiesce = w25qxx_qspi_stm32_hal_quiesce,
     .ReadCommand = w25qxx_qspi_stm32_hal_read_command,
     .ReadAddressedCommand = w25qxx_qspi_stm32_hal_read_addressed_command,
     .StartReadAddressedCommand = w25qxx_qspi_stm32_hal_start_read_addressed_command,
-    .GetReadAddressedCommandStatus =
-        w25qxx_qspi_stm32_hal_get_read_addressed_command_status,
-    .StartStatusMatchPolling =
-        w25qxx_qspi_stm32_hal_start_status_match_polling,
-    .GetStatusMatchPollingStatus =
-        w25qxx_qspi_stm32_hal_get_status_match_polling_status,
-    .AbortStatusMatchPolling =
-        w25qxx_qspi_stm32_hal_abort_status_match_polling,
+    .GetReadAddressedCommandStatus = w25qxx_qspi_stm32_hal_get_read_addressed_command_status,
+    .StartStatusMatchPolling = w25qxx_qspi_stm32_hal_start_status_match_polling,
+    .GetStatusMatchPollingStatus = w25qxx_qspi_stm32_hal_get_status_match_polling_status,
+    .AbortStatusMatchPolling = w25qxx_qspi_stm32_hal_abort_status_match_polling,
     .ExecuteCommand = w25qxx_qspi_stm32_hal_execute_command,
     .ExecuteAddressedCommand = w25qxx_qspi_stm32_hal_execute_addressed_command,
     .WriteCommand = w25qxx_qspi_stm32_hal_write_command,
     .WriteAddressedCommand = w25qxx_qspi_stm32_hal_write_addressed_command,
-    .GetTickMs = w25qxx_qspi_stm32_hal_get_tick_ms
-};
+    .GetTickMs = w25qxx_qspi_stm32_hal_get_tick_ms};
 
 /**
  * @brief  将 STM32 HAL QSPI Context 绑定到 W25Qxx Device。
@@ -936,8 +981,8 @@ void W25Qxx_QSPI_STM32HALAdapter_NotifyReadComplete(
  * @brief 记录 HAL QSPI 当前异步操作的错误或中止。
  * @param adapter 当前已绑定 QSPI Adapter Context。
  * @note 由 Platform 在 QSPI IRQ 上下文调用。中止或错误数据不得交给 CPU 消费，
- *        因而 MDMA 读取的后续状态查询只清理元数据并返回错误；自动状态轮询则
- *        在普通上下文把 W25Qxx Device 置 ERROR。
+ *        因而错误查询保留 MDMA 缓冲元数据，直到 Quiesce 确认硬件停止后才清理；
+ *        自动状态轮询同样在普通上下文将 Device 置 ERROR 并完成安全收尾。
  */
 void W25Qxx_QSPI_STM32HALAdapter_NotifyOperationError(
     W25Qxx_QSPI_STM32HALAdapterTypeDef *adapter)

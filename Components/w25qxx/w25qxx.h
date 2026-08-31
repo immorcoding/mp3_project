@@ -325,6 +325,8 @@ typedef struct
     W25Qxx_BusWriteCommandFunc WriteCommand;
     W25Qxx_BusWriteAddressedCommandFunc WriteAddressedCommand;
     W25Qxx_BusGetTickMsFunc GetTickMs;
+    /* 停止控制器和 DMA；不取消 NOR 内部擦写。 */
+    W25Qxx_BusStatusTypeDef (*Quiesce)(void *context);
 } W25Qxx_BusOpsTypeDef;
 
 /** @brief W25Qxx Device 实例句柄。 */
@@ -373,6 +375,8 @@ W25Qxx_StatusTypeDef W25Qxx_SectorEraseStart(
     W25Qxx_HandleTypeDef *hflash,
     uint32_t address);
 W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash);
+W25Qxx_StatusTypeDef W25Qxx_Quiesce(W25Qxx_HandleTypeDef *hflash);
+W25Qxx_StatusTypeDef W25Qxx_Recover(W25Qxx_HandleTypeDef *hflash);
 
 #ifdef __cplusplus
 }

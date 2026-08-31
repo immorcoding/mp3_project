@@ -1,0 +1,19 @@
+/**
+ * @file filesystem_flash_config.h
+ * @brief Flash 执行器私有预算；调整不改变 FTL 持久化格式。
+ */
+#ifndef FILESYSTEM_FLASH_CONFIG_H
+#define FILESYSTEM_FLASH_CONFIG_H
+#define FILESYSTEM_FLASH_DIAG_LOG_ENABLE 0U
+/* 毫秒：硬件等待短周期重查，通知丢失时仍能触发底层超时收尾。 */
+#define FILESYSTEM_FLASH_WAIT_SLICE_MS    2U
+#define FILESYSTEM_FLASH_READ_TIMEOUT_MS  30000U
+#define FILESYSTEM_FLASH_WRITE_TIMEOUT_MS 120000U
+#define FILESYSTEM_FLASH_OPEN_TIMEOUT_MS  120000U
+/* 24 MiB 全擦除包含约六千次擦除；不是普通写请求预算。 */
+#define FILESYSTEM_FLASH_FORMAT_TIMEOUT_MS   3600000U
+#define FILESYSTEM_FLASH_RECOVERY_TIMEOUT_MS 2000U
+#define FILESYSTEM_FLASH_MAINTAIN_TIMEOUT_MS 2000U
+/* 长扫描的软件步骤也主动给较低优先级任务一次调度机会。 */
+#define FILESYSTEM_FLASH_SOFTWARE_YIELD_STEPS 64U
+#endif

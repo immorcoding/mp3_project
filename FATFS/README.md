@@ -1,17 +1,13 @@
 # FATFS
 
-CubeMX 生成本目录下的 `App` 与 `Target` 子目录；它们共同提供 FatFs 卷对象、Driver Link、DiskIO Glue 和外部 `BSP_SD_*` Override Seam。
+本目录是中间件集成层。CubeMX 维护 App 卷对象、Driver Link 和 Target DiskIO Glue；自维护的 `Target/bsp_driver_user_diskio.c/.h` 提供 USER 外部后端契约。
 
-## Interface
+## 编译依赖与运行接缝
 
-- `App/fatfs.c` 只持有 CubeMX 逻辑卷对象和 Driver Link。
-- `Target/bsp_driver_sd.h` 声明由生成的 `Target/sd_diskio.c` 消费的 BSP Override Seam。
-- `Service/filesystem/filesystem_fatfs_bsp.c` 是该 Seam 的强定义实现，即 Service-owned FatFs DiskIO bridge，也是项目内唯一的 `BSP_SD_*` Implementation。
-- 只有 `Service/filesystem` 调用 FatFs `f_*` Interface。
+SD Glue 调用 BSP_SD_*，由 `Service/filesystem/sd/filesystem_sd_bsp.c` 强定义。USER Glue 只在 USER CODE 区调用 BSP_USER_DISKIO_*，由 `Service/filesystem/flash/filesystem_flash_bsp.c` 强定义。Target 的默认弱实现用于后端缺失时安全失败；弱属性仅位于定义处。
 
-## 约束
+运行时进入 Service 强定义，不等于 FATFS 编译期包含 Service 实现。只有 Service 使用 FatFs f_* 产品流程；不在中间件添加任务等待、FTL、板级装配或 Cache 策略。APP/Platform 不直接调用 f_*。
 
-- CubeMX 管理的文件保持生成状态；仅在 USER CODE 区加入需要随重新生成保留的内容。
-- 不在生成目录放入 APP 任务所有权、Platform 装配、DMA 等待或 D-Cache 维护。
-- APP 和 Platform 不直接调用 FatFs `f_*` 函数。
-- `disk_* → BSP_SD_*` 是生成代码/第三方经外部契约进入 Service 的运行时入站 Seam，不表示 Service 反向包含 `FATFS/Target` 的 Implementation。
+## 生成与验证
+
+保持 CubeMX 文件的 USER CODE 接缝；USER 契约不是自动生成文件，由根 CMake 显式收集。当前 ARM 链接已确认五个 USER 符号由 Service 强定义接管，真实 FatFs 主机测试通过。重新生成后仍需复核 Driver Link 和转发保留，硬件验收尚未完成。见 [ADR-0010](../docs/adr/0010-fatfs-user-diskio-service-ownership.md) 和 [FTL 设计](../docs/flash_ftl_design.md)。

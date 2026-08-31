@@ -21,7 +21,8 @@ ADR 不替代技术文档。技术文档引用相关 ADR，并保持对当前代
 - [adr/README.md](adr/README.md)：长期架构决策记录；
 - [coding_standard.md](coding_standard.md)：命名、Doxygen 与行内注释规则；
 - [sd_architecture.md](sd_architecture.md)：SD、热插拔与 FatFs 接缝；
-- [w25q256_architecture.md](w25q256_architecture.md)：W25Q256、Flash FTL 与 Adapter 接缝；
+- [w25q256_architecture.md](w25q256_architecture.md)：W25Q256 原始 NOR 现状与 Adapter 接缝；
+- [flash_ftl_design.md](flash_ftl_design.md)：已实现、待硬件验收的首版 FTL 链路、分组提交、恢复、GC、配置和逐文件实施/验收清单；
 - [log_architecture.md](log_architecture.md)：日志核心、USB Adapter 与任务化约束；
 - [pmic_i2c_architecture.md](pmic_i2c_architecture.md)：AXP2101、SoftI2C 与平台电源；
 - [sdram_architecture.md](sdram_architecture.md)：FMC SDRAM 的初始化、诊断与后续使用约束；

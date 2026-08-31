@@ -214,6 +214,14 @@ SECTIONS
     . = ALIGN(32);
   } >RAM
 
+  /* FTL 扫描在使用前完整重建；禁止与破坏性 SDRAM 诊断同时使用。 */
+  .flash_ftl_tables (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.flash_ftl_tables)
+    . = ALIGN(32);
+  } >SDRAM
+
   /* SDRAM 帧缓冲区域：不加载、不自动清零，由拥有者在首次使用前完整写入。 */
   .sdram_framebuffer (NOLOAD) :
   {

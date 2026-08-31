@@ -15,3 +15,6 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 - [0007-gui-runtime-and-squareline-boundary.md](0007-gui-runtime-and-squareline-boundary.md)：GUI Task、GUI Service 与 SquareLine 生成边界。
 - [0008-sdram-early-init-and-noload-ownership.md](0008-sdram-early-init-and-noload-ownership.md)：SDRAM 早期初始化、正式初始化与 NOLOAD 缓冲责任。
 - [0009-w25q256-firmware-slots-and-diagnostic-reservation.md](0009-w25q256-firmware-slots-and-diagnostic-reservation.md)：W25Q256 的 OTA 固件双槽、自检区、Resource Pack 与 FTL 物理边界。
+
+- [0010-fatfs-user-diskio-service-ownership.md](0010-fatfs-user-diskio-service-ownership.md)：USER DiskIO 自维护契约、弱默认/强接管及 Filesystem Service 的 Flash 执行所有权。
+- [0011-ftl-copy-on-write-and-recovery.md](0011-ftl-copy-on-write-and-recovery.md)：FTL 整组异地提交、扫描恢复、显式格式化及首版 GC/磨损边界。

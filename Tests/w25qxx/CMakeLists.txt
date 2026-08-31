@@ -7,11 +7,15 @@ enable_testing()
 add_executable(w25qxx_component_tests
     test_w25qxx.c
     ../../Components/w25qxx/w25qxx.c
+    ../../Components/flash_ftl/flash_ftl.c
+    ../../Adapters/bridge/flash_ftl_w25qxx/flash_ftl_w25qxx_bridge.c
 )
 
 target_include_directories(w25qxx_component_tests PRIVATE
     ../..
 )
+
+target_compile_options(w25qxx_component_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 
 add_test(
     NAME w25qxx_identification_quad_configuration_and_array_io

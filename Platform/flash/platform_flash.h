@@ -1,9 +1,9 @@
 /**
-  ******************************************************************************
-  * @file    platform_flash.h
-  * @brief   当前 PCB W25Q256 外部 NOR Flash 的 Platform Interface。
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file    platform_flash.h
+ * @brief   当前 PCB W25Q256 外部 NOR Flash 的 Platform Interface。
+ ******************************************************************************
+ */
 
 #ifndef PLATFORM_FLASH_H
 #define PLATFORM_FLASH_H
@@ -98,8 +98,55 @@ Platform_StatusTypeDef Platform_Flash_StartDiagnosticPageProgram(
     const uint8_t *data,
     uint32_t data_length);
 Platform_StatusTypeDef Platform_Flash_VerifyDiagnosticReadBuffer(
-    Platform_Flash_DiagnosticRegionTypeDef region,
-    const uint8_t *data,
-    uint32_t data_length);
+    Platform_Flash_DiagnosticRegionTypeDef region, const uint8_t *data, uint32_t data_length);
+
+/** @brief 底层逻辑卷持续状态，未格式化不自动变成可用盘。 */
+typedef enum
+{
+    PLATFORM_FLASH_VOLUME_RESET = 0,
+    PLATFORM_FLASH_VOLUME_READY,
+    PLATFORM_FLASH_VOLUME_BUSY,
+    PLATFORM_FLASH_VOLUME_UNFORMATTED,
+    PLATFORM_FLASH_VOLUME_INCOMPLETE,
+    PLATFORM_FLASH_VOLUME_INCOMPATIBLE,
+    PLATFORM_FLASH_VOLUME_CORRUPT,
+    PLATFORM_FLASH_VOLUME_ERROR
+} Platform_Flash_VolumeStateTypeDef;
+
+typedef struct
+{
+    uint32_t SectorCount;
+    uint32_t SectorBytes;
+    uint32_t PhysicalBytes;
+} Platform_Flash_VolumeInfoTypeDef;
+
+typedef struct
+{
+    uint32_t FormatVersion;
+    uint64_t Epoch;
+    uint32_t ValidGroups;
+    uint32_t FreeBlocks;
+    uint32_t StaleBlocks;
+    uint32_t SessionErases;
+    uint32_t DeviceError;
+    uint32_t PortStatus;
+} Platform_Flash_VolumeDiagnosticsTypeDef;
+
+Platform_StatusTypeDef Platform_Flash_BindVolume(void);
+Platform_StatusTypeDef Platform_Flash_OpenVolumeStart(void);
+Platform_StatusTypeDef Platform_Flash_FormatVolumeStart(void);
+Platform_StatusTypeDef Platform_Flash_ReadBlocksStart(uint32_t lba, uint8_t *data, uint32_t count);
+Platform_StatusTypeDef Platform_Flash_WriteBlocksStart(uint32_t lba,
+                                                       const uint8_t *data,
+                                                       uint32_t count);
+Platform_StatusTypeDef Platform_Flash_SyncVolumeStart(void);
+Platform_StatusTypeDef Platform_Flash_MaintainVolumeStart(void);
+Platform_Flash_VolumeStateTypeDef Platform_Flash_GetVolumeState(void);
+Platform_StatusTypeDef Platform_Flash_GetVolumeInfo(Platform_Flash_VolumeInfoTypeDef *info);
+Platform_StatusTypeDef Platform_Flash_GetVolumeDiagnostics(
+    Platform_Flash_VolumeDiagnosticsTypeDef *diagnostics);
+bool Platform_Flash_OperationNeedsWait(void);
+void Platform_Flash_AbortOperation(void);
+Platform_StatusTypeDef Platform_Flash_RecoverVolume(void);
 
 #endif /* PLATFORM_FLASH_H */

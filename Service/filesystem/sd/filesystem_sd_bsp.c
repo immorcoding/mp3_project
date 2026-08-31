@@ -1,6 +1,6 @@
 /**
   ******************************************************************************
-  * @file    filesystem_fatfs_bsp.c
+  * @file    filesystem_sd_bsp.c
   * @brief   实现 CubeMX FatFs BSP_SD Override Seam 的 Adapter。
   *
   * @details
@@ -16,7 +16,7 @@
 #include <string.h>
 
 #include "Platform/sd/platform_sd.h"
-#include "Service/filesystem/filesystem_sd_transfer.h"
+#include "Service/filesystem/sd/filesystem_sd_transfer.h"
 
 /**
   * @brief  根据 Platform SD 状态实现 FatFs BSP 初始化钩子。
@@ -45,8 +45,13 @@ uint8_t BSP_SD_ITConfig(void)
 
 /**
   * @brief  提供由 SDMMC DMA 支持的同步 FatFs 块读取。
+  * @param[out] p_data 至少 block_count * 512 B 的接收缓冲，返回前保持有效。
+  * @param[in] read_address 起始逻辑扇区号，不是字节地址。
+  * @param[in] block_count 非零逻辑扇区数。
+  * @param[in] timeout_ms 每个内部 DMA 分块等待及后续卡同步的毫秒预算。
   * @retval MSD_OK 所有请求块均已到达 p_data。
   * @retval MSD_ERROR 请求未能以同步方式完成。
+  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_ReadBlocks(uint32_t *p_data,
                           uint32_t read_address,
@@ -63,8 +68,13 @@ uint8_t BSP_SD_ReadBlocks(uint32_t *p_data,
 
 /**
   * @brief  提供由 SDMMC DMA 支持的同步 FatFs 块写入。
+  * @param[in] p_data 至少 block_count * 512 B 的输入缓冲，返回前不可改写。
+  * @param[in] write_address 起始逻辑扇区号，不是字节地址。
+  * @param[in] block_count 非零逻辑扇区数。
+  * @param[in] timeout_ms 每个内部 DMA 分块等待及后续卡同步的毫秒预算。
   * @retval MSD_OK 所有请求块均已提交到卡。
   * @retval MSD_ERROR 请求未能以同步方式完成。
+  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_WriteBlocks(uint32_t *p_data,
                            uint32_t write_address,
@@ -81,8 +91,12 @@ uint8_t BSP_SD_WriteBlocks(uint32_t *p_data,
 
 /**
   * @brief  保持带 DMA 名称的 Cube 读钩子对 FatFs 调用者仍为同步。
+  * @param[out] p_data 至少 block_count * 512 B 的接收缓冲。
+  * @param[in] read_address 起始逻辑扇区号。
+  * @param[in] block_count 非零逻辑扇区数。
   * @retval MSD_OK 所有请求块均已到达 p_data。
   * @retval MSD_ERROR 请求未能以同步方式完成。
+  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *p_data,
                               uint32_t read_address,
@@ -96,8 +110,12 @@ uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *p_data,
 
 /**
   * @brief  保持带 DMA 名称的 Cube 写钩子对 FatFs 调用者仍为同步。
+  * @param[in] p_data 至少 block_count * 512 B 的输入缓冲。
+  * @param[in] write_address 起始逻辑扇区号。
+  * @param[in] block_count 非零逻辑扇区数。
   * @retval MSD_OK 所有请求块均已提交到卡。
   * @retval MSD_ERROR 请求未能以同步方式完成。
+  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_WriteBlocks_DMA(uint32_t *p_data,
                                uint32_t write_address,
@@ -111,6 +129,8 @@ uint8_t BSP_SD_WriteBlocks_DMA(uint32_t *p_data,
 
 /**
   * @brief  报告当前 Platform SD Interface 尚未提供擦除操作。
+  * @param[in] start_address 起始地址，当前不支持擦除，因此不解释或访问。
+  * @param[in] end_address 结束地址，当前不支持擦除，因此不解释或访问。
   * @retval MSD_ERROR 在 Platform SD 提供擦除能力前，此操作有意不支持。
   */
 uint8_t BSP_SD_Erase(uint32_t start_address, uint32_t end_address)

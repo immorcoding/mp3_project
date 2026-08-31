@@ -1,21 +1,22 @@
 /**
-  ******************************************************************************
-  * @file    w25qxx.c
+ ******************************************************************************
+ * @file    w25qxx.c
  * @brief   W25Q 系列串行 NOR Flash Device 的识别与原始读写实现。
-  *
+ *
  * @details
  *          当前定义启动识别和 Quad 能力配置的最小语义：经已绑定的总线读取并
  *          缓存 JEDEC 三字节 ID、校验实例注入的厂商与容量、探测 SFDP 头签名，
  *          并在 QE 未开启时安全写入 SR2。当前还提供 W25Q256 固定 4-byte
  *          Quad I/O 同步/非阻塞读取、非阻塞 Quad 页编程和 4 KiB Sector Erase
  *          启动和状态匹配轮询；FTL、内存映射和任意长度写入仍不属于本 Module。
-  ******************************************************************************
-  */
+ ******************************************************************************
+ */
 
 #include "Components/w25qxx/w25qxx.h"
 #include "Components/w25qxx/w25qxx_config.h"
 
 #include <stddef.h>
+
 
 /** @brief SFDP 0x5A 的固定 24-bit 单线带地址读取阶段。 */
 static const W25Qxx_BusAddressedTransferConfigTypeDef
@@ -1230,5 +1231,68 @@ W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash)
     hflash->ErrorCode = W25QXX_ERROR_NONE;
     hflash->LastBusStatus = W25QXX_BUS_OK;
     hflash->State = W25QXX_STATE_READY;
+    return W25QXX_OK;
+}
+
+
+/**
+ * @brief 停止控制器与 DMA 并保持 ERROR，不撤销 NOR 内部擦写。
+ * @param hflash 已绑定且提供 Quiesce 的实例，仅唯一普通上下文调用。
+ * @retval W25QXX_OK 后端保证不再访问缓冲，仍未确认 NOR 空闲。
+ * @retval W25QXX_BUSY 仍需继续安全收尾。
+ * @retval W25QXX_ERROR 参数、后端或收尾失败，不得复用缓冲。
+ * @note 成功不代表 Device READY。不得在 ISR 调用，也不得绕过后续 WIP/QE 恢复核验。
+ */
+W25Qxx_StatusTypeDef W25Qxx_Quiesce(W25Qxx_HandleTypeDef *hflash)
+{
+    if (!hflash || !hflash->BusOps || !hflash->BusOps->Quiesce)
+    {
+        return W25QXX_ERROR;
+    }
+    W25Qxx_BusStatusTypeDef status = hflash->BusOps->Quiesce(hflash->BusContext);
+    hflash->State = W25QXX_STATE_ERROR;
+    if (status != W25QXX_BUS_OK)
+    {
+        return status == W25QXX_BUS_BUSY ? W25QXX_BUSY : W25QXX_ERROR;
+    }
+    hflash->ActiveOperation = W25QXX_OPERATION_NONE;
+    hflash->ActiveOperationStartTickMs = 0;
+    return W25QXX_OK;
+}
+
+/**
+ * @brief 显式恢复已安全收尾的已识别器件，检查 WIP 清零和 QE。
+ * @param hflash 已识别且控制器/DMA 已安全停止的实例。
+ * @retval W25QXX_OK 已回到 READY，不执行数组擦写。
+ * @retval W25QXX_BUSY Device 仍在飞或 NOR WIP 尚未清零，稍后重查。
+ * @retval W25QXX_ERROR 实例、状态读取或 QE 条件无效。
+ * @note 仅唯一普通上下文调用；不能用此函数替代 Quiesce，也不能代替 FTL 重扫。
+ */
+W25Qxx_StatusTypeDef W25Qxx_Recover(W25Qxx_HandleTypeDef *hflash)
+{
+    W25Qxx_StatusRegistersTypeDef status;
+    if (!hflash)
+    {
+        return W25QXX_ERROR;
+    }
+    if (hflash->State == W25QXX_STATE_BUSY)
+    {
+        return W25QXX_BUSY;
+    }
+    if (w25qxx_read_status_registers_internal(hflash, &status) != W25QXX_OK)
+    {
+        return W25QXX_ERROR;
+    }
+    if (status.IsWriteInProgress)
+    {
+        return W25QXX_BUSY;
+    }
+    if (!status.IsQuadEnabled)
+    {
+        return W25QXX_ERROR;
+    }
+    hflash->State = W25QXX_STATE_READY;
+    hflash->ErrorCode = W25QXX_ERROR_NONE;
+    hflash->LastBusStatus = W25QXX_BUS_OK;
     return W25QXX_OK;
 }

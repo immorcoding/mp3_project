@@ -110,3 +110,11 @@ I2S 没有 I2C 的 NACK 概念，因此 Audio 的归一化总线状态不包含 
 5. 只有归一化信息不够时，再查看具体 Port 私有句柄的原始 `ErrorCode`。
 
 上层业务不应依据 HAL 或 SoftI2C 原始错误位编写控制逻辑，因为这样会破坏 Port 隔离。原始错误只用于特定后端的深入调试。
+
+## Flash FTL 错误原则（已实现，待硬件验收）
+
+[首版 FTL 设计](flash_ftl_design.md) 延续调用结果、生命周期、失败阶段和归一化后端状态的区分；具体状态由 `Components/flash_ftl/flash_ftl.h` 发布，不复用其他 Device 数值。RUNNING/WAIT 表示仍在飞；最终状态包括 OK、INVALID_PARAM、NOT_READY、NO_SPACE、IO_ERROR、CORRUPT、INCOMPATIBLE、INCOMPLETE、UNFORMATTED，BUSY 表示已有操作拒绝新请求。
+
+非法参数不污染正常状态，忙请求不并行执行；空间不足先尝试必要 GC。真实介质故障或超时停止当前操作、安全收尾并拒绝新请求，随后显式恢复并重建映射。最新已提交记录损坏不静默回退，格式不兼容或格式化未完成不自动格式化。错误返回不代表介质未改变，提交完成但通知丢失仍可能报告失败。
+
+软件超时、控制器/DMA 停止、NOR 内部操作结束是三个不同条件。不能在硬件仍可能访问时复用缓冲，不能在 NOR 状态未知时恢复映射；无法确认安全则保持隔离。可选日志关闭不屏蔽这些错误和状态。

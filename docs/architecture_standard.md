@@ -98,7 +98,7 @@ Components/
   axp2101/
   audio/
   ft6x36/
-  flash_ftl/                  # 预留，尚未实现
+  flash_ftl/                  # 已实现 NOR 逻辑组映射、提交、恢复与 GC
   led/
   log/
   sd/
@@ -168,7 +168,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 | 目录 | 职责 |
 | --- | --- |
 | `Adapters/bridge/axp2101_soft_i2c` | SoftI2C Component 到 AXP2101 Bus Ops 的跨 Component Bridge。 |
-| `Adapters/bridge/flash_ftl_w25qxx` | 预留、尚未实现；W25Qxx Component 公开 Interface 到 Flash FTL Raw Ops 的跨 Component Bridge。 |
+| `Adapters/bridge/flash_ftl_w25qxx` | 已实现，待板级验收；W25Qxx Component 公开 Interface 到 Flash FTL Raw Ops 的跨 Component Bridge。 |
 | `Adapters/cortex/cache` | Cortex-M7 Cacheable 内存范围的 D-Cache 维护；DMA Adapter 和外部存储器诊断按需复用。 |
 | `Adapters/cortex/cycle_counter` | Cortex-M7 DWT 周期计数器与核心频率读取；性能诊断按需复用。 |
 | `Adapters/stm32_hal/audio_i2s` | STM32 HAL I2S/GPIO 到 Audio Ops。 |
@@ -185,7 +185,7 @@ Adapter 实现 Component 定义的 Ops，把具体 SDK 语义转换为稳定语�
 
 `bridge/` 只转换两个 Component Interface，不引入具体 MCU 依赖；`cortex/` 只封装 Cortex-M 架构能力，不持有外设或任务状态；`stm32_hal/` 则集中所有必须认识 STM32 HAL、CubeMX Handle 或 HAL 全局回调的实现。
 
-W25Qxx、STM32 HAL QSPI Adapter 与 Platform Flash 当前已完成间接模式的启动 JEDEC ID、SFDP 与 SR1/SR2 读取，以及 W25Q256 固定 4-byte `0xEC` Quad I/O 的同步读取和 QSPI/MDMA 非阻塞读取、`0x34` 非阻塞单页编程和 `0x21` 非阻塞 4 KiB 扇区擦除状态机；Platform 注入本 PCB 的厂商和容量要求，Component 不把具体料号白名单写死。QE 已开启时不改写；QE 为 0 时只在调度器前进行一次 `0x06 → WEL 核验 → 0x31 → WIP 有界轮询 → QE 回读`。Component 的 `W25Qxx_GetArrayReadProtocol()` 只返回已识别 W25Q256 的固定 `0xEC` 描述；Adapter 不硬编码该协议，Platform 在确认 WIP=0、无在飞操作时调用 `HAL_QSPI_MemoryMapped()` 打开 `0x90000000` 的只读窗口。任意间接操作先退出映射，同步操作成功后立即恢复，异步操作只在 `ProcessOperation()` 成功收尾且写擦 WIP 已清零后恢复；失败则保持映射关闭。MDMA 路线与 `0x05` 自动状态轮询路线都由 QSPI IRQ Adapter 按 Handle 分发：前者发布读取完成，后者发布 Status Match，错误和中止两者共用；Platform 只转交轻量通知，拥有请求的普通任务才调用 `ProcessOperation()` 完成 Cache 和 Device 状态收尾。`Process()` 对数组读取、页编程和扇区擦除分别以 100 ms、5 ms、500 ms 为上限；写擦完成仅查询硬件状态匹配结果，超时只中止控制器轮询而不试图中止 NOR 内部操作，任何路径都不能在 MSC 或文件系统路径阻塞 DMA、`tPP` 或 `tSE`。Platform 只在 ADR-0009 的双自检扇区通过受限接口使用破坏性能力；诊断写入后，拥有任务可通过首/尾区域语义复用同一异步操作接缝完成 MDMA 图样读回校验，Platform 不等待通知。Flash benchmark 使用首个 4 KiB 的间接读回交叉验证映射窗口，再以 volatile 读取 1 MiB 并记录 checksum；这条新集成路径尚待真机日志确认。Flash FTL 与跨 Component Bridge 仍未实现。现状、目录与接缝决定见 [w25q256_architecture.md](w25q256_architecture.md)。在原始 NOR 的擦除、对齐、写入和掉电策略经过验证前，不得把它接入 FatFs、USB MSC 或创建通用逻辑块抽象。
+W25Qxx、STM32 HAL QSPI Adapter 与 Platform Flash 当前已完成间接模式的启动 JEDEC ID、SFDP 与 SR1/SR2 读取，以及 W25Q256 固定 4-byte `0xEC` Quad I/O 的同步读取和 QSPI/MDMA 非阻塞读取、`0x34` 非阻塞单页编程和 `0x21` 非阻塞 4 KiB 扇区擦除状态机；Platform 注入本 PCB 的厂商和容量要求，Component 不把具体料号白名单写死。QE 已开启时不改写；QE 为 0 时只在调度器前进行一次 `0x06 → WEL 核验 → 0x31 → WIP 有界轮询 → QE 回读`。Component 的 `W25Qxx_GetArrayReadProtocol()` 只返回已识别 W25Q256 的固定 `0xEC` 描述；Adapter 不硬编码该协议，Platform 在确认 WIP=0、无在飞操作时调用 `HAL_QSPI_MemoryMapped()` 打开 `0x90000000` 的只读窗口。任意间接操作先退出映射，同步操作成功后立即恢复，异步操作只在 `ProcessOperation()` 成功收尾且写擦 WIP 已清零后恢复；失败则保持映射关闭。MDMA 路线与 `0x05` 自动状态轮询路线都由 QSPI IRQ Adapter 按 Handle 分发：前者发布读取完成，后者发布 Status Match，错误和中止两者共用；Platform 只转交轻量通知，拥有请求的普通任务才调用 `ProcessOperation()` 完成 Cache 和 Device 状态收尾。`Process()` 对数组读取、页编程和扇区擦除分别以 100 ms、5 ms、500 ms 为上限；写擦完成仅查询硬件状态匹配结果，超时只中止控制器轮询而不试图中止 NOR 内部操作，任何路径都不能在 MSC 或文件系统路径阻塞 DMA、`tPP` 或 `tSE`。原始诊断只在 ADR-0009 的双自检扇区通过受限接口使用破坏性能力；逻辑卷经绑定分区的 FTL/Bridge 操作；诊断写入后，拥有任务可通过首/尾区域语义复用同一异步操作接缝完成 MDMA 图样读回校验，Platform 不等待通知。Flash benchmark 使用首个 4 KiB 的间接读回交叉验证映射窗口，再以 volatile 读取 1 MiB 并记录 checksum；这条新集成路径尚待真机日志确认。Flash FTL 与跨 Component Bridge 已实现并通过主机回归，真实掉电验收待完成。现状、目录与接缝决定见 [w25q256_architecture.md](w25q256_architecture.md)。FatFs 的受控集成只经过已实现 FTL，不得直接把原始 NOR 伪装成逻辑扇区；正式业务使用仍须板级验收，USB MSC 与通用逻辑块抽象另行设计。
 
 FreeRTOS 内核源码、项目配置与 Hook 的边界为：
 
@@ -432,11 +432,12 @@ QSPI 异步操作的当前路径为：
 
 ```text
 Storage Task 启动
-  -> storage_flash_init()
+  -> storage_flash_init() -> Service_Filesystem_InitFlash()
   -> Platform_Flash_SetOperationCallback()（长期唯一订阅）
 
-Storage Task 内的 Flash 请求者（当前为基准）
+Storage Task 内的原始 Flash 诊断（逻辑卷路径见第 13 节）
   -> storage_flash_read_array() / storage_flash_erase_diagnostic()
+  -> Service_Filesystem_*Flash*() -> Flash 私有执行器
   -> Platform_Flash_StartReadArray() / StartDiagnosticErase()
   -> W25Qxx_StartRead() / W25Qxx_SectorEraseStart()
   -> HAL_QSPI_Receive_DMA() / HAL_QSPI_AutoPolling_IT()
@@ -444,11 +445,11 @@ Storage Task 内的 Flash 请求者（当前为基准）
   -> QUADSPI IRQ -> STM32 QSPI IRQ Adapter（按 Handle 匹配）
   -> Platform Flash 记录 Adapter 结果并转发轻量事件
   -> Storage Task 通知索引 2
-  -> storage_flash_*() 内部调用 Platform_Flash_ProcessOperation()
+  -> Filesystem Flash 私有执行器调用 Platform_Flash_ProcessOperation()
   -> W25Qxx_Process() -> D-Cache Invalidate 或状态匹配确认 -> READY / ERROR
 ```
 
-这不是对外通用的 QSPI DMA 服务：当前只有 Platform Flash 可以注册 `hqspi`，而 APP 中只有 `storage_flash` 可以设置并长期持有唯一回调；基准和未来 Flash 业务只能经该 Module 发起、等待和收尾。QSPI IRQ、MDMA IRQ 均为 FreeRTOS 可调用 FromISR 的优先级 5；ISR 不访问缓冲、不记录日志，也不提交下一条 Flash 命令。
+这不是对外通用的 QSPI DMA 服务：当前只有 Platform Flash 可以注册 `hqspi`，而上层只有 Filesystem Service Flash 执行器长期持有唯一回调；APP storage_flash 只转交诊断，基准与逻辑请求共用 Service 执行者。QSPI IRQ、MDMA IRQ 均为 FreeRTOS 可调用 FromISR 的优先级 5；ISR 不访问缓冲、不记录日志，也不提交下一条 Flash 命令。
 
 SPI LCD DMA 的当前路径为：
 
@@ -523,10 +524,10 @@ ISR 禁止：
 按本工程约定：
 
 - `.h` 中函数声明保持干净，不写逐函数 Doxygen；公共枚举、结构体和关键字段可写类型说明；
-- 公开函数的完整 Doxygen 只写在对应 `.c` 的定义处，避免声明和定义的重复说明漂移；
+- 所有自维护函数（含私有函数、回调和测试辅助函数）的 Doxygen 必须写在实现处，所有仅声明的位置不写；具体标签与覆盖要求统一遵循 [代码规范](coding_standard.md#4-doxygen-与行内注释)，避免两处说明漂移；
 - 同一 Module 的固定时序、缓冲区大小、诊断测试规模、板级极性和策略位使用私有 `<module>_config.h` 集中保存；该头不是跨 Module Interface，其他层不得包含。调用者必须理解的稳定能力、尺寸或类型才保留在公开 `.h`。
 - 同一 Module 的 `<module>_config.h` 统一保存固定定义：除时序、缓冲区和板级策略位外，也可包含芯片默认地址、寄存器地址和位掩码等协议常量；它们不得泄漏为上层直接依赖。
-- 复杂私有函数和关键时序内部写必要注释，重点说明资源、并发和时序约束；
+- 函数体内对关键时序按需增加行内注释，重点说明资源、并发和时序约束；这不能替代实现处的 Doxygen；
 - include 使用工程根目录起始的完整路径；
 - 避免无意义地在 `=` 后立即换行；
 - 不在注释中保留已失效的目录名和旧层名。
@@ -581,3 +582,11 @@ USB_DEVICE/Target/*.c
 替代本文件的全局规则。
 
 无法清楚回答时，不要急着新建目录，先在本文中补充边界决定。
+
+## 13. FTL 集成规则（已实现，待板级验收）
+
+[ADR-0010](adr/0010-fatfs-user-diskio-service-ownership.md) 将既有 SD Override Seam 模式扩展到 USER：FATFS Target 自维护 `bsp_driver_user_diskio` 契约与安全弱定义，生成 USER CODE 仅转发，Service 强定义实现。运行时进入 Service 不构成中间件包含 Service 头的许可，也不允许在契约默认实现中放入产品任务或装配逻辑。
+
+Filesystem 保持一个 Module，SD/Flash 为私有实现子目录。Flash 完成订阅和等待由 APP 迁入 Service，Storage Task 仍决定执行时机；不提前创建通用 BlockDevice 或 Service/storage。FTL 算法、GC 与 RawOps 仍归 Component，Platform 持有实例/内存并管理完整操作的映射生命周期。设计详见 [flash_ftl_design.md](flash_ftl_design.md)。
+
+上述原始诊断与 FTL 共用 Service 的唯一执行器；FTL 主机回归、真实 FatFs 主机集成及 Debug/Release 构建通过，但不能把软件验证当成真实欠压掉电验收。禁止绕过 FTL 将原始 NOR 接入 FatFs/MSC。

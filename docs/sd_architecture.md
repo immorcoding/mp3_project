@@ -57,8 +57,8 @@ APP/tasks/storage/
 
 Service/filesystem/
   filesystem_service.h/.c       FatFs 路径转换、挂载、卸载和格式化 Service Interface
-  filesystem_sd_transfer.h/.c   Storage Task 独占的同步 DMA 执行器与中转缓冲区
-  filesystem_fatfs_bsp.c        BSP_SD_* 强定义，连接 Cube DiskIO Override Seam
+  sd/filesystem_sd_transfer.h/.c   Storage Task 独占的同步 DMA 执行器与中转缓冲区
+  sd/filesystem_sd_bsp.c           BSP_SD_* 强定义，连接 Cube DiskIO Override Seam
 
 FATFS/App/
   fatfs.c                       CubeMX 逻辑卷对象与 Driver Link
@@ -138,8 +138,8 @@ FatFs 当前使用同步 DMA Bridge：对 DiskIO 来说调用仍同步返回，�
 
 ```text
 FatFs disk_read / disk_write
-  -> Service/filesystem/filesystem_fatfs_bsp.c 的 BSP_SD_ReadBlocks / BSP_SD_WriteBlocks
-  -> Service/filesystem/filesystem_sd_transfer.c
+  -> Service/filesystem/sd/filesystem_sd_bsp.c 的 BSP_SD_ReadBlocks / BSP_SD_WriteBlocks
+  -> Service/filesystem/sd/filesystem_sd_transfer.c
   -> 复制到 32 KiB、32 字节对齐的 AXI SRAM 中转缓冲区
   -> STM32 HAL SD Adapter 按方向委托 Cortex-M7 Cache Adapter 执行 Clean 或 Clean+Invalidate
   -> Platform_SD_StartReadBlocks / Platform_SD_StartWriteBlocks
@@ -307,7 +307,7 @@ CubeMX 继续管理：
 
 ## 10. FatFs 适配边界
 
-当前 `Service/filesystem/filesystem_fatfs_bsp.c` 强定义 CubeMX `BSP_SD_*`，使生成的
+当前 `Service/filesystem/sd/filesystem_sd_bsp.c` 强定义 CubeMX `BSP_SD_*`，使生成的
 `sd_diskio.c` 通过 Filesystem Module 和 Platform SD 访问介质，而不是直接使用 `hsd1`。`fatfs.c`
 仅保留逻辑卷对象和 Driver Link。映射关系为：
 
@@ -353,3 +353,9 @@ Storage Task 的 Platform SD 生命周期实现。
 - FreeRTOS 替换接缝；
 - FatFs 映射；
 - 当前限制。
+
+## Flash 接入后的目录划分（已实施）
+
+[ADR-0010](adr/0010-fatfs-user-diskio-service-ownership.md) 已实施：Filesystem 私有实现划分为 `sd/` 和 `flash/`，SD BSP 为 `sd/filesystem_sd_bsp.c`，SD 私有执行器同步迁入。SD 契约、任务索引 1 及逻辑块语义保持；重新构建通过，硬件 SD 回归待执行。
+
+SDCard Component 并未被省略，SD 卡内部控制器承担其 NAND 映射；外部原始 NOR 则需要独立 FTL。新 Flash 后端的索引 2 等待同样由 Filesystem Service 私有执行器持有，详见 [FTL 设计](flash_ftl_design.md)。

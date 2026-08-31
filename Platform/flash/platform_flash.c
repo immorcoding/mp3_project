@@ -1,18 +1,19 @@
 /**
-  ******************************************************************************
-  * @file    platform_flash.c
-  * @brief   当前 PCB W25Q256 与 CubeMX QSPI 的 Platform 装配实现。
-  *
+ ******************************************************************************
+ * @file    platform_flash.c
+ * @brief   当前 PCB W25Q256 与 CubeMX QSPI 的 Platform 装配实现。
+ *
  * @details
  *          本 Module 长期持有 W25Qxx Device 和 STM32 HAL QSPI Adapter Context，
  *          并把 CubeMX 管理的 hqspi 和本板预期 JEDEC ID 注入其中。启动时还会
  *          校验 SFDP 签名、确保 QE 已开启，并以一次非破坏性的 Quad I/O 原始读
  *          校验当前硬件的 0xEC 读取通路；同时向当前 APP 基准测试开放受限的原始
  *          数组读取，并为 ADR-0009 保留的首尾 4 KiB 扇区提供受限的破坏性
- *          自检。FTL、逻辑扇区和通用擦写均尚未接入；H7 QSPI 的只读内存映射
- *          由本 Module 在 WIP 与间接操作互斥约束下统一管理。
-  ******************************************************************************
-  */
+ *          自检。FTL 实例、Bridge、分区与工作内存也由本 Module 长期持有，
+ *          向 Service 提供逻辑卷能力；不提供任意物理擦写。H7 QSPI 只读映射
+ *          在 WIP 与整个间接请求的互斥约束下统一管理。
+ ******************************************************************************
+ */
 
 #include "Platform/flash/platform_flash.h"
 #include "Platform/flash/platform_flash_config.h"
@@ -24,11 +25,32 @@
 #include "Components/w25qxx/w25qxx.h"
 #include "quadspi.h"
 
+#include "Components/flash_ftl/flash_ftl.h"
+#include "Adapters/bridge/flash_ftl_w25qxx/flash_ftl_w25qxx_bridge.h"
+
+static FlashFTL_HandleTypeDef platform_flash_ftl;
+static FlashFTL_W25QxxBridgeTypeDef platform_flash_ftl_bridge;
+static bool platform_flash_ftl_bound;
+static bool platform_flash_ftl_active;
+static bool platform_flash_raw_failed;
+static bool platform_flash_needs_wait;
+static FlashFTL_StatusTypeDef platform_flash_ftl_result = FLASH_FTL_NOT_READY;
+/* 按物理数据块上限分配表，不跨 Module 引用 FTL 私有预留比例。 */
+static uint32_t platform_flash_map[PLATFORM_FLASH_FTL_DATA_BLOCKS]
+    __attribute__((section(".flash_ftl_tables"), aligned(32)));
+static uint64_t platform_flash_versions[PLATFORM_FLASH_FTL_DATA_BLOCKS]
+    __attribute__((section(".flash_ftl_tables"), aligned(32)));
+static uint8_t platform_flash_states[PLATFORM_FLASH_FTL_DATA_BLOCKS]
+    __attribute__((section(".flash_ftl_tables"), aligned(32)));
+static uint8_t platform_flash_work[FLASH_FTL_BLOCK_BYTES]
+    __attribute__((section(".flash_write_buffer"), aligned(32)));
+static uint8_t platform_flash_scratch[FLASH_FTL_SECTOR_BYTES]
+    __attribute__((section(".flash_write_buffer"), aligned(32)));
+
 /** @brief 当前 PCB W25Q256 对应的最小 JEDEC 兼容性要求。 */
 static const W25Qxx_ExpectedJedecIDTypeDef platform_flash_expected_jedec_id = {
     .ManufacturerID = PLATFORM_FLASH_EXPECTED_MANUFACTURER_ID,
-    .CapacityID = PLATFORM_FLASH_EXPECTED_CAPACITY_ID
-};
+    .CapacityID = PLATFORM_FLASH_EXPECTED_CAPACITY_ID};
 
 /** @brief 当前 PCB 唯一 W25Q256 对应的 W25Qxx Device 实例。 */
 static W25Qxx_HandleTypeDef hplatform_flash = {
@@ -392,8 +414,8 @@ static Platform_StatusTypeDef platform_flash_restore_memory_mapped_mode_if_neede
  * @note   本函数仅用于启动阶段的一次同步硬件识别，必须在 CubeMX 已完成
  *         MX_QUADSPI_Init() 后调用。QE=0 时会执行一次最多 20 ms 的 SR2 写入
  *         轮询；同步识别成功后会为 hqspi 注册 MDMA 接收完成、自动状态匹配、错误
- *         和中止回调，供后续异步数组读取及受限自检区擦写使用。FTL 状态机、资源包
- *         写入和通用逻辑地址 Interface 仍待后续定义。末尾会从物理地址 0 读取 4 字节，
+ *         和中止回调，供异步诊断与 FTL 请求复用。资源包写入另行设计；
+ *         FTL 在 Service 打开卷时独立绑定。末尾从物理地址 0 读取 4 字节，
  *         但不解释其内容、
  *         不修改 Flash；该地址满足 0xEC 的 4-byte 起始地址对齐要求。
  */
@@ -535,7 +557,7 @@ Platform_StatusTypeDef Platform_Flash_ReadStatusRegisters(
  * @retval PLATFORM_OK 数据已同步写入 data。
  * @retval PLATFORM_FLASH_ERROR Flash 未就绪，或地址、对齐、长度或底层 QSPI
  *         事务无效。
- * @note   此 Interface 仅用于当前 FTL 接入前的启动验证和 APP 读取基准。它保留
+ * @note   此 Interface 仅用于当前 启动诊断使用的的启动验证和 APP 读取基准。它保留
  *         W25Q256 0xEC 的首地址 4-byte 对齐约束，不扩展为逻辑地址接口，也不向
  *         上层泄漏 W25Qxx Handle 或 HAL QSPI Handle。
  */
@@ -692,54 +714,84 @@ Platform_StatusTypeDef Platform_Flash_StartReadArray(
         W25Qxx_StartRead(&hplatform_flash, address, data, data_length));
     if (status != PLATFORM_OK)
     {
-        hplatform_flash_operation_active = false;
         hplatform_flash_restore_memory_mapped_mode_after_operation = false;
+        if (hplatform_flash.State == W25QXX_STATE_ERROR)
+        {
+            /* 启动也可能部分成功；由 Process 完成硬件收尾后再向上报告失败。 */
+            platform_flash_raw_failed = true;
+            return PLATFORM_OK;
+        }
+        hplatform_flash_operation_active = false;
         __DMB();
-        (void)platform_flash_restore_memory_mapped_mode_if_needed(
-            restore_memory_mapped_mode);
+        (void)platform_flash_restore_memory_mapped_mode_if_needed(restore_memory_mapped_mode);
     }
 
     return status;
 }
 
 /**
- * @brief  在普通上下文推进当前异步 QSPI 操作并完成必要收尾。
- * @retval PLATFORM_OK 当前 MDMA 读取已完成 Cache 收尾，或页编程/擦除已收到
- *         WIP 清零的 Status Match，W25Qxx Device 已回到 READY。
- * @retval PLATFORM_BUSY 尚未收到完成事件；调用者可继续等待其任务通知。
- * @retval PLATFORM_FLASH_ERROR 当前没有由 Platform 启动的操作，或 Adapter、
- *         Component、Cache 收尾、自动轮询或软件时限失败。
- * @note   该函数不轮询 QSPI 寄存器。它只把 Adapter 的 IRQ 结果交给
- *         W25Qxx_Process()：MDMA 成功时由 Adapter 失效 D-Cache；页编程/擦除
- *         成功时只确认自动轮询已匹配。错误或超时使 Device 进入 ERROR。
+ * @brief 在普通上下文推进当前 FTL 请求或原始诊断，并完成安全收尾。
+ * @retval PLATFORM_OK 整个请求成功完成，先前开启的映射模式也已恢复。
+ * @retval PLATFORM_BUSY 仍需软件推进、等待硬件或继续故障收尾。
+ * @retval PLATFORM_FLASH_ERROR 没有在飞请求，或请求、校验、硬件、映射恢复失败。
+ * @note 每次只派发到 FTL 或 W25Qxx 一条推进链，不能重复推进同一底层操作。
+ *       BUSY 后通过 OperationNeedsWait 区分等待和软件继续；通知仅为重查提示。
+ *       失败须先确认控制器/DMA 不再访问缓冲，保持映射关闭，等待显式恢复。
+ *       仅唯一普通执行上下文调用，禁止在 ISR 访问缓冲或推进请求。
  */
 Platform_StatusTypeDef Platform_Flash_ProcessOperation(void)
 {
-    Platform_StatusTypeDef status;
-    bool restore_memory_mapped_mode;
-
     if (!hplatform_flash_operation_active)
     {
         return PLATFORM_FLASH_ERROR;
     }
-
-    status = platform_flash_map_w25qxx_status(W25Qxx_Process(&hplatform_flash));
-    if (status != PLATFORM_BUSY)
+    Platform_StatusTypeDef status;
+    if (platform_flash_ftl_active)
     {
-        restore_memory_mapped_mode =
-            hplatform_flash_restore_memory_mapped_mode_after_operation;
-        hplatform_flash_operation_active = false;
-        hplatform_flash_restore_memory_mapped_mode_after_operation = false;
-        __DMB();
-
-        if ((status == PLATFORM_OK) &&
-            (platform_flash_restore_memory_mapped_mode_if_needed(
-                 restore_memory_mapped_mode) != PLATFORM_OK))
+        FlashFTL_StatusTypeDef result = FlashFTL_Process(&platform_flash_ftl);
+        platform_flash_ftl_result = result;
+        platform_flash_needs_wait = result == FLASH_FTL_WAIT;
+        if (result == FLASH_FTL_RUNNING || result == FLASH_FTL_WAIT)
         {
+            return PLATFORM_BUSY;
+        }
+        status = result == FLASH_FTL_OK ? PLATFORM_OK : PLATFORM_FLASH_ERROR;
+        platform_flash_ftl_active = false;
+    }
+    else
+    {
+        platform_flash_needs_wait = true;
+        status = platform_flash_raw_failed
+                     ? PLATFORM_FLASH_ERROR
+                     : platform_flash_map_w25qxx_status(W25Qxx_Process(&hplatform_flash));
+        if (status == PLATFORM_BUSY)
+        {
+            return status;
+        }
+        if (status != PLATFORM_OK)
+        {
+            platform_flash_raw_failed = true;
+            if (W25Qxx_Quiesce(&hplatform_flash) != W25QXX_OK)
+            {
+                return PLATFORM_BUSY;
+            }
+        }
+    }
+    bool restore = hplatform_flash_restore_memory_mapped_mode_after_operation;
+    hplatform_flash_operation_active = false;
+    hplatform_flash_restore_memory_mapped_mode_after_operation = false;
+    platform_flash_raw_failed = false;
+    platform_flash_needs_wait = false;
+    __DMB();
+    if (status == PLATFORM_OK)
+    {
+        if (platform_flash_restore_memory_mapped_mode_if_needed(restore) != PLATFORM_OK)
+        {
+            /* 数据可能已提交，但板级模式恢复失败仍须关闭卷入口，等待显式恢复。 */
+            platform_flash_ftl_result = FLASH_FTL_IO_ERROR;
             status = PLATFORM_FLASH_ERROR;
         }
     }
-
     return status;
 }
 
@@ -757,9 +809,7 @@ Platform_StatusTypeDef Platform_Flash_ProcessOperation(void)
  *         以 Platform_Flash_VerifyDiagnosticReadBuffer() 逐字节校验数据。
  */
 Platform_StatusTypeDef Platform_Flash_StartDiagnosticRead(
-    Platform_Flash_DiagnosticRegionTypeDef region,
-    uint8_t *data,
-    uint32_t data_length)
+    Platform_Flash_DiagnosticRegionTypeDef region, uint8_t *data, uint32_t data_length)
 {
     uint32_t sector_address;
 
@@ -808,9 +858,9 @@ Platform_StatusTypeDef Platform_Flash_VerifyDiagnosticReadBuffer(
 /**
  * @brief  同步读取一个 ADR-0009 保留自检扇区。
  * @param  region 首或尾自检扇区语义。
- * @param  data 接收完整 4 KiB 扇区的有效 CPU 缓冲区。
- * @param  data_length data 的实际长度，必须恰为一个自检扇区。
- * @retval PLATFORM_OK 数据已由轮询 0xEC 读入 data。
+ * @param[out] buffer 接收完整 4 KiB 扇区的有效 CPU 缓冲区。
+ * @param[in] buffer_size buffer 的实际长度，必须恰为一个自检扇区。
+ * @retval PLATFORM_OK 数据已由轮询 0xEC 读入 buffer。
  * @retval PLATFORM_FLASH_ERROR 区域、参数或同步读取无效。
  * @note   此 Interface 不暴露物理地址，只用于自检的轮询读回路径；不会等待或
  *         干预任何异步 QSPI 操作。
@@ -904,11 +954,16 @@ Platform_StatusTypeDef Platform_Flash_StartDiagnosticErase(
         W25Qxx_SectorEraseStart(&hplatform_flash, sector_address));
     if (status != PLATFORM_OK)
     {
-        hplatform_flash_operation_active = false;
         hplatform_flash_restore_memory_mapped_mode_after_operation = false;
+        if (hplatform_flash.State == W25QXX_STATE_ERROR)
+        {
+            /* 启动也可能部分成功；由 Process 完成硬件收尾后再向上报告失败。 */
+            platform_flash_raw_failed = true;
+            return PLATFORM_OK;
+        }
+        hplatform_flash_operation_active = false;
         __DMB();
-        (void)platform_flash_restore_memory_mapped_mode_if_needed(
-            restore_memory_mapped_mode);
+        (void)platform_flash_restore_memory_mapped_mode_if_needed(restore_memory_mapped_mode);
     }
 
     return status;
@@ -973,12 +1028,369 @@ Platform_StatusTypeDef Platform_Flash_StartDiagnosticPageProgram(
                                  data_length));
     if (status != PLATFORM_OK)
     {
-        hplatform_flash_operation_active = false;
         hplatform_flash_restore_memory_mapped_mode_after_operation = false;
+        if (hplatform_flash.State == W25QXX_STATE_ERROR)
+        {
+            /* 启动也可能部分成功；由 Process 完成硬件收尾后再向上报告失败。 */
+            platform_flash_raw_failed = true;
+            return PLATFORM_OK;
+        }
+        hplatform_flash_operation_active = false;
         __DMB();
-        (void)platform_flash_restore_memory_mapped_mode_if_needed(
-            restore_memory_mapped_mode);
+        (void)platform_flash_restore_memory_mapped_mode_if_needed(restore_memory_mapped_mode);
     }
 
+    return status;
+}
+
+
+/**
+ * @brief 绑定 FTL/Bridge、物理分区和长期工作内存，不打开或格式化卷。
+ * @retval PLATFORM_OK 已成功绑定，或此前已绑定。
+ * @retval PLATFORM_FLASH_ERROR 硬件/IRQ 未就绪、已有操作，或分区与内存校验失败。
+ * @note 在 SDRAM 和 W25Qxx 就绪后的唯一普通上下文调用；表置于 SDRAM NOLOAD，
+ *       Work/Scratch 置于 DMA 可达且 32 B 对齐的内部 SRAM。首次 Open 重建表。
+ */
+Platform_StatusTypeDef Platform_Flash_BindVolume(void)
+{
+    if (platform_flash_ftl_bound)
+    {
+        return PLATFORM_OK;
+    }
+    if (hplatform_flash_operation_active || !hplatform_flash_irq_registered)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+    const FlashFTL_MemoryTypeDef memory = {platform_flash_map,
+                                           platform_flash_versions,
+                                           platform_flash_states,
+                                           PLATFORM_FLASH_FTL_DATA_BLOCKS,
+                                           PLATFORM_FLASH_FTL_DATA_BLOCKS,
+                                           platform_flash_work,
+                                           platform_flash_scratch};
+    FlashFTL_StatusTypeDef result = FlashFTL_W25QxxBridge_Bind(&platform_flash_ftl,
+                                                               &platform_flash_ftl_bridge,
+                                                               &hplatform_flash,
+                                                               PLATFORM_FLASH_FTL_BASE_ADDRESS,
+                                                               PLATFORM_FLASH_FTL_SIZE_BYTES,
+                                                               &memory);
+    platform_flash_ftl_bound = result == FLASH_FTL_OK;
+    return platform_flash_ftl_bound ? PLATFORM_OK : PLATFORM_FLASH_ERROR;
+}
+
+enum
+{
+    PLATFORM_FLASH_VOLUME_OP_OPEN,
+    PLATFORM_FLASH_VOLUME_OP_FORMAT,
+    PLATFORM_FLASH_VOLUME_OP_READ,
+    PLATFORM_FLASH_VOLUME_OP_WRITE,
+    PLATFORM_FLASH_VOLUME_OP_SYNC,
+    PLATFORM_FLASH_VOLUME_OP_MAINTAIN
+};
+
+/**
+ * @brief 统一受理 FTL 操作，并在整笔请求期间保持间接访问模式。
+ * @param[in] operation 本 Module 的 PLATFORM_FLASH_VOLUME_OP_* 请求类别。
+ * @param[in] lba 读写起始逻辑扇区，其他操作传零。
+ * @param[out] read_buffer 读取输出缓冲，非读操作传 NULL。
+ * @param[in] write_buffer 写入输入缓冲，非写操作传 NULL。
+ * @param[in] count 读写扇区数，其他操作传零。
+ * @return PLATFORM_OK 表示已受理；PLATFORM_BUSY 表示已有请求；PLATFORM_FLASH_ERROR 表示绑定、硬件、映射切换或启动失败。
+ * @note 调用前已注册长期事件回调；仅唯一普通上下文使用。成功仅保存入口映射状态，待整笔请求收尾后再按结果恢复，缓冲在此之前保持有效。
+ */
+static Platform_StatusTypeDef platform_flash_start_volume(uint32_t operation,
+                                                          uint32_t lba,
+                                                          uint8_t *read_buffer,
+                                                          const uint8_t *write_buffer,
+                                                          uint32_t count)
+{
+    if (hplatform_flash_operation_active)
+    {
+        return PLATFORM_BUSY;
+    }
+    if (!platform_flash_ftl_bound || !hplatform_flash_operation_callback ||
+        hplatform_flash.State != W25QXX_STATE_READY ||
+        platform_flash_ftl_result == FLASH_FTL_IO_ERROR)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+    bool restore;
+    if (platform_flash_prepare_indirect_access(&restore) != PLATFORM_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+    FlashFTL_StatusTypeDef result;
+    switch (operation)
+    {
+        case PLATFORM_FLASH_VOLUME_OP_OPEN:
+            result = FlashFTL_OpenStart(&platform_flash_ftl);
+            break;
+        case PLATFORM_FLASH_VOLUME_OP_FORMAT:
+            result = FlashFTL_FormatStart(&platform_flash_ftl);
+            break;
+        case PLATFORM_FLASH_VOLUME_OP_READ:
+            result = FlashFTL_ReadStart(&platform_flash_ftl, lba, read_buffer, count);
+            break;
+        case PLATFORM_FLASH_VOLUME_OP_WRITE:
+            result = FlashFTL_WriteStart(&platform_flash_ftl, lba, write_buffer, count);
+            break;
+        case PLATFORM_FLASH_VOLUME_OP_SYNC:
+            result = FlashFTL_SyncStart(&platform_flash_ftl);
+            break;
+        default:
+            result = FlashFTL_MaintainStart(&platform_flash_ftl);
+            break;
+    }
+    if (result != FLASH_FTL_OK)
+    {
+        (void)platform_flash_restore_memory_mapped_mode_if_needed(restore);
+        return result == FLASH_FTL_BUSY ? PLATFORM_BUSY : PLATFORM_FLASH_ERROR;
+    }
+    platform_flash_ftl_result = FLASH_FTL_RUNNING;
+    platform_flash_ftl_active = true;
+    platform_flash_raw_failed = false;
+    platform_flash_needs_wait = false;
+    hplatform_flash_operation_active = true;
+    hplatform_flash_restore_memory_mapped_mode_after_operation = restore;
+    __DMB();
+    return PLATFORM_OK;
+}
+
+/**
+ * @brief 受理只读 FTL 扫描，重建卷映射和物理块状态。
+ * @retval PLATFORM_OK 仅表示受理，须持续 ProcessOperation 取得最终结果。
+ * @retval PLATFORM_BUSY 已有请求在飞。
+ * @retval PLATFORM_FLASH_ERROR 尚未绑定、硬件未就绪或启动失败。
+ * @note 仅唯一普通上下文调用；先建立事件订阅。扫描期间映射窗口关闭，
+ *       不自动格式化，不兼容/未完成/损坏等细分结果通过 GetVolumeState 查询。
+ */
+Platform_StatusTypeDef Platform_Flash_OpenVolumeStart(void)
+{
+    return platform_flash_start_volume(PLATFORM_FLASH_VOLUME_OP_OPEN, 0, NULL, NULL, 0);
+}
+
+/**
+ * @brief 受理显式破坏性 FTL 格式化，不建立 FAT 文件系统。
+ * @retval PLATFORM_OK 已受理，须持续 ProcessOperation 直到结束。
+ * @retval PLATFORM_BUSY 已有请求在飞。
+ * @retval PLATFORM_FLASH_ERROR 状态或启动条件不满足。
+ * @warning 调用前必须注销文件系统并确认绑定分区内数据可丢弃。
+ * @note 仅唯一普通上下文调用；不因打开失败自动触发，失败不保证保留旧卷。
+ */
+Platform_StatusTypeDef Platform_Flash_FormatVolumeStart(void)
+{
+    return platform_flash_start_volume(PLATFORM_FLASH_VOLUME_OP_FORMAT, 0, NULL, NULL, 0);
+}
+
+/**
+ * @brief 受理逻辑扇区读取，不向调用者暴露原始页/擦除块。
+ * @param lba 起始逻辑扇区号。
+ * @param data 至少 count * 512 B 输出，到最终完成或安全收尾前保持有效。
+ * @param count 非零扇区数，完整范围不得越逻辑容量。
+ * @retval PLATFORM_OK 仅表示受理，数据须等 ProcessOperation 成功后使用。
+ * @retval PLATFORM_BUSY 已有请求在飞。
+ * @retval PLATFORM_FLASH_ERROR 参数、卷状态、硬件或启动失败。
+ * @note 仅唯一普通上下文调用；用户数据由 CPU 复制，DMA 使用 Platform 私有工作区。
+ *       失败时输出可能部分更新，不得继续当作完整结果使用。
+ */
+Platform_StatusTypeDef Platform_Flash_ReadBlocksStart(uint32_t lba, uint8_t *data, uint32_t count)
+{
+    return platform_flash_start_volume(PLATFORM_FLASH_VOLUME_OP_READ, lba, data, NULL, count);
+}
+
+/**
+ * @brief 受理逻辑扇区异地提交写入，首版无 RAM 写回早确认。
+ * @param lba 起始逻辑扇区号。
+ * @param data 至少 count * 512 B 输入，整个请求最终结束前保持有效且不改写。
+ * @param count 非零扇区数，整个范围有效；跨组不保证整体原子。
+ * @retval PLATFORM_OK 已受理，提交完成由 ProcessOperation 返回。
+ * @retval PLATFORM_BUSY 已有请求在飞。
+ * @retval PLATFORM_FLASH_ERROR 参数、卷状态、硬件或启动失败。
+ * @note 仅唯一普通上下文调用；用户缓冲由 CPU 复制，不直接提交 DMA。
+ *       失败可能已有部分组持久化，不能据错误返回断言没有写入。
+ */
+Platform_StatusTypeDef Platform_Flash_WriteBlocksStart(uint32_t lba,
+                                                       const uint8_t *data,
+                                                       uint32_t count)
+{
+    return platform_flash_start_volume(PLATFORM_FLASH_VOLUME_OP_WRITE, lba, NULL, data, count);
+}
+
+/**
+ * @brief 受理逻辑卷同步确认，不强制清空全部后台 GC。
+ * @retval PLATFORM_OK 已受理，仍须调用 ProcessOperation 确认完成。
+ * @retval PLATFORM_BUSY 已有请求在飞，不能用此入口代替该请求的推进。
+ * @retval PLATFORM_FLASH_ERROR 卷或硬件未就绪、启动失败。
+ * @note 仅唯一普通上下文调用；首版此前成功的写请求已完成提交，没有写回缓存。
+ */
+Platform_StatusTypeDef Platform_Flash_SyncVolumeStart(void)
+{
+    return platform_flash_start_volume(PLATFORM_FLASH_VOLUME_OP_SYNC, 0, NULL, NULL, 0);
+}
+
+/**
+ * @brief 受理一次有限 FTL 维护，最多回收一个失效块。
+ * @retval PLATFORM_OK 已受理，是否需要实际擦除由 FTL 决定。
+ * @retval PLATFORM_BUSY 已有请求在飞。
+ * @retval PLATFORM_FLASH_ERROR 卷未就绪或启动失败。
+ * @note 仅唯一普通上下文调用，完成由 ProcessOperation 表达；
+ *       映射关闭覆盖整个维护请求，NOR 擦除一旦发起不能保证抢占。
+ */
+Platform_StatusTypeDef Platform_Flash_MaintainVolumeStart(void)
+{
+    return platform_flash_start_volume(PLATFORM_FLASH_VOLUME_OP_MAINTAIN, 0, NULL, NULL, 0);
+}
+
+/**
+ * @brief 查询卷持续状态，不访问硬件。
+ * @return 就绪、忙、未格式化、不完整、不兼容、损坏或错误等状态。
+ * @note 仅在唯一普通执行上下文查询，不作为跨任务锁；
+ *       映射恢复失败也会关闭卷入口，不能仅因 RAM 表存在就认为可用。
+ */
+Platform_Flash_VolumeStateTypeDef Platform_Flash_GetVolumeState(void)
+{
+    if (!platform_flash_ftl_bound)
+    {
+        return PLATFORM_FLASH_VOLUME_RESET;
+    }
+    if (hplatform_flash_operation_active)
+    {
+        return PLATFORM_FLASH_VOLUME_BUSY;
+    }
+    if (platform_flash_ftl_result == FLASH_FTL_IO_ERROR)
+    {
+        return PLATFORM_FLASH_VOLUME_ERROR;
+    }
+    if (FlashFTL_IsReady(&platform_flash_ftl) && hplatform_flash.State == W25QXX_STATE_READY)
+    {
+        return PLATFORM_FLASH_VOLUME_READY;
+    }
+    switch (platform_flash_ftl_result)
+    {
+        case FLASH_FTL_UNFORMATTED:
+            return PLATFORM_FLASH_VOLUME_UNFORMATTED;
+        case FLASH_FTL_INCOMPLETE:
+            return PLATFORM_FLASH_VOLUME_INCOMPLETE;
+        case FLASH_FTL_INCOMPATIBLE:
+            return PLATFORM_FLASH_VOLUME_INCOMPATIBLE;
+        case FLASH_FTL_CORRUPT:
+            return PLATFORM_FLASH_VOLUME_CORRUPT;
+        case FLASH_FTL_NOT_READY:
+            return PLATFORM_FLASH_VOLUME_RESET;
+        default:
+            return PLATFORM_FLASH_VOLUME_ERROR;
+    }
+}
+
+/**
+ * @brief 查询已绑定卷的容量，不暴露物理基址或 FTL 私有表。
+ * @param info 接收扇区数、扇区字节数和物理分区字节数。
+ * @retval PLATFORM_OK 已复制容量，不等同于卷已打开。
+ * @retval PLATFORM_FLASH_ERROR 未绑定或输出无效。
+ * @note 在唯一普通执行上下文调用，不访问介质。
+ */
+Platform_StatusTypeDef Platform_Flash_GetVolumeInfo(Platform_Flash_VolumeInfoTypeDef *info)
+{
+    FlashFTL_InfoTypeDef raw;
+    if (!info || !platform_flash_ftl_bound ||
+        FlashFTL_GetInfo(&platform_flash_ftl, &raw) != FLASH_FTL_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+    *info = (Platform_Flash_VolumeInfoTypeDef){
+        raw.SectorCount, FLASH_FTL_SECTOR_BYTES, PLATFORM_FLASH_FTL_SIZE_BYTES};
+    return PLATFORM_OK;
+}
+
+/**
+ * @brief 查询逻辑卷和芯片后端诊断快照，不输出日志。
+ * @param diagnostics 接收格式/代次、块计数及归一化芯片错误/端口状态。
+ * @retval PLATFORM_OK 已复制快照。
+ * @retval PLATFORM_FLASH_ERROR 未绑定或输出指针无效。
+ * @note 仅唯一普通执行上下文调用。SessionErases 是数据块累计擦除数，
+ *       其他块计数为当前表快照；未就绪时有效/失效计数可能为零。
+ */
+Platform_StatusTypeDef Platform_Flash_GetVolumeDiagnostics(
+    Platform_Flash_VolumeDiagnosticsTypeDef *diagnostics)
+{
+    FlashFTL_DiagnosticsTypeDef raw;
+    if (!diagnostics || !platform_flash_ftl_bound ||
+        FlashFTL_GetDiagnostics(&platform_flash_ftl, &raw) != FLASH_FTL_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+    *diagnostics = (Platform_Flash_VolumeDiagnosticsTypeDef){raw.FormatVersion,
+                                                             raw.Epoch,
+                                                             raw.ValidGroups,
+                                                             raw.FreeBlocks,
+                                                             raw.StaleBlocks,
+                                                             raw.SessionErases,
+                                                             hplatform_flash.ErrorCode,
+                                                             hplatform_flash.LastBusStatus};
+    return PLATFORM_OK;
+}
+
+/**
+ * @brief 为正在推进请求的执行者区分硬件等待与可继续的软件步骤。
+ * @retval true 等待通知或短周期重查，再调用 ProcessOperation。
+ * @retval false 软件仍可继续推进，不表示请求已经完成。
+ * @note 仅在 ProcessOperation 返回 BUSY 后查询；最终结果由 ProcessOperation 判定。
+ */
+bool Platform_Flash_OperationNeedsWait(void)
+{
+    return !platform_flash_ftl_active || platform_flash_needs_wait;
+}
+
+/**
+ * @brief 请求当前操作进入故障收尾，取消之后的自动映射恢复。
+ * @note 仅唯一普通上下文调用；无在飞请求时无操作。
+ *       调用后必须继续 ProcessOperation 到最终结束，不能立即复用缓冲。
+ *       不保证回滚已提交组，也不取消 NOR 内部已经启动的擦写。
+ */
+void Platform_Flash_AbortOperation(void)
+{
+    if (!hplatform_flash_operation_active)
+    {
+        return;
+    }
+    hplatform_flash_restore_memory_mapped_mode_after_operation = false;
+    if (platform_flash_ftl_active)
+    {
+        (void)FlashFTL_Abort(&platform_flash_ftl);
+    }
+    else
+    {
+        platform_flash_raw_failed = true;
+    }
+}
+
+/**
+ * @brief 显式恢复控制器及器件状态，确认 NOR WIP 清零与 QE 有效。
+ * @retval PLATFORM_OK 硬件恢复成功；Service 随后必须重扫 FTL 并处理旧文件对象。
+ * @retval PLATFORM_BUSY 仍有请求、硬件未完成安全停止或 NOR 仍忙，稍后重查。
+ * @retval PLATFORM_FLASH_ERROR 映射关闭、状态读取或恢复核验失败。
+ * @note 仅唯一普通上下文调用，不扫描、不格式化，也不自动重挂载。
+ *       控制器 Abort 与 NOR 内部擦写取消不同，不能省略空闲核验。
+ */
+Platform_StatusTypeDef Platform_Flash_RecoverVolume(void)
+{
+    if (hplatform_flash_operation_active)
+    {
+        return PLATFORM_BUSY;
+    }
+    if (platform_flash_disable_memory_mapped_mode_internal() != PLATFORM_OK)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+    if (W25Qxx_Quiesce(&hplatform_flash) != W25QXX_OK)
+    {
+        return PLATFORM_BUSY;
+    }
+    Platform_StatusTypeDef status =
+        platform_flash_map_w25qxx_status(W25Qxx_Recover(&hplatform_flash));
+    if (status == PLATFORM_OK)
+    {
+        platform_flash_ftl_result = FLASH_FTL_NOT_READY;
+    }
     return status;
 }

@@ -108,6 +108,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${PLATFORM_SOURCES}
     ${USB_DEVICE_SOURCES}
     ${SERVICE_SOURCES}
+    FATFS/Target/bsp_driver_user_diskio.c
     ${FREERTOS_CONFIG_SOURCES}
     ${APP_SOURCES}
 )

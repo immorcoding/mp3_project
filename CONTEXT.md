@@ -337,7 +337,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 存储任务（Storage Task）
 
-**存储任务**是 SD 热插拔、SDMMC DMA 完成、当前 FatFs 卷生命周期和 Platform Flash 异步操作的唯一执行上下文。它通过索引 0 接收 GPIO EXTI 的轻量事件并完成机械触点消抖、平台 SD 生命周期推进；Filesystem Module 在同一任务上下文中通过索引 1 等待 SDMMC DMA 结果，并在插卡时挂载、拔卡时注销文件系统卷。`storage_flash` Module 在任务启动时长期持有 Platform Flash 的唯一 QSPI IRQ 订阅，并通过索引 2 等待 QSPI/MDMA 读取结果或 WIP 自动轮询的 Status Match；收到通知后仍需在普通上下文调用平台 Flash 完成收尾。业务 Module 不得临时抢占该回调槽。
+**存储任务**是 SD 热插拔、SDMMC DMA 完成、当前 FatFs 卷生命周期和 Platform Flash 异步操作的唯一执行上下文。它通过索引 0 接收 GPIO EXTI 的轻量事件并完成机械触点消抖、平台 SD 生命周期推进；Filesystem Module 在同一任务上下文中通过索引 1 等待 SDMMC DMA 结果，并在插卡时挂载、拔卡时注销文件系统卷。Filesystem Module 的 Flash 私有执行器已长期持有 Platform Flash 唯一 QSPI 回调，并在 Storage Task 上下文等待索引 2；APP `storage_flash` 仅将诊断请求交给 Service，不再订阅或等待。Service 在普通上下文推进 Process 和安全收尾，通知只作为唤醒提示。Storage Task 空闲时定期提供一次有限维护机会，GC 策略仍归 FTL。
 
 存储任务拥有 SD 卡与本地 FatFs 的访问时序，但不拥有 SDMMC、GPIO EXTI 或卡座引脚。中断回调只通知该任务，不能在 ISR 中执行消抖、FatFs、日志格式化或 SD 块访问。
 
@@ -351,7 +351,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **文件系统 Module**封装当前 FatFs 逻辑卷的驱动就绪检查、挂载、注销和显式格式化，并持有 FatFs 所需的同步 DMA 执行器。它只在存储任务已经取得 SD 独占权且平台 SD 已处于可访问状态时调用 FatFs，不负责卡检测、消抖或 SDMMC 初始化。
 
-该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和大块中转区挤占任务栈。它经 FatFs 声明的 `BSP_SD_*` Override Seam 间接使用 Platform SD；DMA 等待与 Cache 一致性细节见 `docs/sd_architecture.md`。它向上返回 `Service_StatusTypeDef`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果，同时不泄漏 FatFs 原始类型。
+该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和大块中转区挤占任务栈。它经 FatFs 声明的 `BSP_SD_*` Override Seam 间接使用 Platform SD；DMA 等待与 Cache 一致性细节见 `docs/sd_architecture.md`。Flash 扩展已在同一 Module 中分开 SD/Flash 私有实现，承接 USER DiskIO 契约与 Flash 同步执行器；当前同时提供 SD 与 Flash 卷流程。它向上返回 `Service_StatusTypeDef`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果，同时不泄漏 FatFs 原始类型。
 
 相关术语：**存储任务**、**平台 SD**、**SD 卡设备**。
 
@@ -405,15 +405,25 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## Flash FTL（Flash Translation Layer）
 
-**Flash FTL**是预留的逻辑扇区 Module，用于把原始 NOR Flash 的页编程、擦除块、同步与掉电恢复规则隐藏在稳定的逻辑存储语义之后。它拥有 `FlashFTL_RawOps`，但不认识 W25Qxx、STM32 HAL、Platform、FatFs、USB MSC 或媒体业务。
+**Flash FTL**是把原始 NOR Flash 转换为稳定逻辑扇区的可复用 Module；首版代码已实现并通过主机回归，板级掉电验收待完成。它拥有 `FlashFTL_RawOps`，但不认识 W25Qxx、STM32 HAL、Platform、FatFs、USB MSC 或媒体业务。
 
-W25Qxx 到 Flash FTL 的具体转换将由 `Adapters/bridge/flash_ftl_w25qxx` 实现。只有 FTL 的擦写和掉电策略完成验证后，才可讨论由文件系统或 USB MSC 消费其逻辑扇区。
+W25Qxx 到 Flash FTL 的转换由跨 Component Bridge 承担。首版以逻辑组异地提交、上电扫描恢复和整块回收提供存储语义；Service 的同步返回必须等待真实提交完成，不采用 RAM 写回早确认。文件系统链路已接通，仍须完成硬件验收后才能作为可用业务盘；USB MSC 所有权切换另行设计。技术规则集中于 [FTL 设计](docs/flash_ftl_design.md)。
+
+**FTL 逻辑组**是一组共同映射并提交版本的相邻逻辑扇区；组内局部更新保留其他扇区，跨组请求不具备整体原子性。
+
+**已提交组版本**是数据校验和最后提交记录都满足卷格式要求的组记录；最新已提交版本损坏时报告损坏，不静默回退旧版。
+
+**已擦除空闲块**是确认整块擦除、可安全接收新记录的物理块；只看到空头不能把它归为可分配空闲块。
+
+**FTL 格式代次**标识一次显式底层格式化产生的卷世代，用来隔离旧记录；它不同于格式协议版本和单组更新版本。
+
+**FTL 格式化**建立底层卷与空闲块，**FatFs 格式化**在其逻辑扇区上建立文件系统；两者都不因挂载失败而自动执行。
 
 相关术语：**W25Qxx 设备**、**平台 Flash**。
 
 ## 平台 Flash（Platform Flash）
 
-**平台 Flash**代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。当前它长期持有 W25Qxx Handle、QSPI Adapter Context 和 QSPI IRQ 回调节点，注入本板预期的 Winbond 厂商码和 256 Mbit 容量码，完成 HAL QSPI Adapter 的 Bind、启动 JEDEC ID 识别校验、SFDP 签名探测、QE 按需安全置位和一次从地址 0 读取 4 字节的非破坏性 `0xEC` 通路验证，并对上公开缓存 ID 与实时 SR1/SR2 快照。它保留同步物理读取，也以“设置唯一 IRQ 回调 → 启动 MDMA 读取或自动状态轮询 → 普通上下文处理完成”的接缝提供受限异步操作；Platform 不拥有任务或 Cache 操作策略。它还唯一拥有 H7 QSPI 的只读内存映射生命周期：仅在 WIP=0 且无在飞操作时配置固定 `0x90000000`、32 MiB 窗口；任一间接操作先退出映射，成功收尾后恢复，失败则保持关闭。唯一回调的任务所有者是 APP 的 `storage_flash`，由其长期注册，基准和后续业务只能经该 Module 发起和等待操作。它只允许 ADR-0009 保留的首尾自检扇区经区域语义进行擦除、逐页写入、同步读回和 MDMA 读回：写擦完成由 QSPI Status Match 通知，Platform 只生成/比较私有图样而不等待通知或访问 DMA 缓冲区。该自检接缝仅限启动诊断，不能作为 FTL、Resource Pack 或 MSC 的通用擦写能力。Flash FTL 实现后才会增加 FTL Handle 与跨 Component Bridge 的 Bind。
+**平台 Flash**代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。当前它长期持有 W25Qxx Handle、QSPI Adapter Context 和 QSPI IRQ 回调节点，注入本板预期的 Winbond 厂商码和 256 Mbit 容量码，完成 HAL QSPI Adapter 的 Bind、启动 JEDEC ID 识别校验、SFDP 签名探测、QE 按需安全置位和一次从地址 0 读取 4 字节的非破坏性 `0xEC` 通路验证，并对上公开缓存 ID 与实时 SR1/SR2 快照。它保留同步物理读取，也以“设置唯一 IRQ 回调 → 启动 MDMA 读取或自动状态轮询 → 普通上下文处理完成”的接缝提供受限异步操作；Platform 不拥有任务或 Cache 操作策略。它还唯一拥有 H7 QSPI 的只读内存映射生命周期：仅在 WIP=0 且无在飞操作时配置固定 `0x90000000`、32 MiB 窗口；任一间接操作先退出映射，成功收尾后恢复，失败则保持关闭。当前唯一回调所有者是 Filesystem Service Flash 私有执行器，基准和逻辑请求共用 Storage Task 上下文中的同步执行者。它只允许 ADR-0009 保留的首尾自检扇区经区域语义进行擦除、逐页写入、同步读回和 MDMA 读回：写擦完成由 QSPI Status Match 通知，Platform 只生成/比较私有图样而不等待通知或访问 DMA 缓冲区。该自检接缝仅限启动诊断，不能作为 FTL、Resource Pack 或 MSC 的通用擦写能力。当前也持有 FTL Handle、Bridge Context、SDRAM 映射/版本/状态表与 AXI SRAM 工作区，并提供逻辑卷启动、访问、维护和恢复接缝。
 
 它不实现芯片协议、FTL 映射、FatFs 挂载、USB MSC 所有权或媒体扫描。CubeMX 管理实际 QSPI Handle、引脚、时钟和 IRQ，Platform 只注入借用的实例并决定本板启动识别策略。
 
@@ -439,6 +449,6 @@ W25Qxx 到 Flash FTL 的具体转换将由 `Adapters/bridge/flash_ftl_w25qxx` �
 
 **资源包**是外部 Flash 中连续、原始且只读的数据镜像，承载字库、模型等需要按地址高吞吐读取的系统资源。它有独立的镜像头、版本、偏移、长度和 CRC，由烧录工具在开发/发布时写入固定物理范围；运行时通过 QSPI 内存映射读取，不经过 FatFs、USB MSC 或 Flash FTL。映射窗口仅在 Flash 已确认 `SR1.WIP=0` 且没有在飞操作时开放；映射控制器不会自行读取 `0x05` 或等待 WIP。任何擦写必须先退出映射、以自动轮询等待 WIP 清零，再恢复映射，因此资源消费者不逐次查询 WIP，也不得在写擦期间访问映射窗口。
 
-其固定范围必须位于两个固件槽之后、FTL 格式化之前；当前尚未确定容量，故在第一次写入资源包前不能初始化 FTL。资源包的运行时在线更新、候选包与回滚协议不是当前决定的一部分。
+其固定范围必须位于两个固件槽之后、FTL 分区之前，并在首次破坏性格式化前确定与核验。FTL 容量现已接受由可调宏预留，资源包协议与上层加载尚未实现；边界确定不要求先把资源包写入 Flash。资源包在线更新、候选/回滚协议和字体/模型预加载策略不属于本轮 FTL 设计。
 
 相关术语：**平台 Flash**、**Flash FTL**、**固件镜像槽**。
