@@ -20,6 +20,7 @@
 #include "Middlewares/Third_Party/FatFs/src/ff.h"
 #include "Service/filesystem/sd/filesystem_sd_transfer.h"
 #include "Service/filesystem/flash/filesystem_flash_transfer.h"
+#include "Service/filesystem/flash/filesystem_flash_file.h"
 
 /** @brief 格式化期间使用的 Service 私有静态工作区。 */
 static uint8_t filesystem_mkfs_work_buffer[FILESYSTEM_MKFS_WORK_BUFFER_SIZE];
@@ -205,6 +206,7 @@ Service_StatusTypeDef Service_Filesystem_OpenFlash(void)
 /**
  * @brief 打开 FTL 后挂载 USERPath 对应的 Flash FAT 卷。
  * @retval SERVICE_OK FTL 打开并且 FatFs 挂载成功。
+ * @retval SERVICE_BUSY 文件槽仍占用，拒绝重新挂载以免使在用文件失效。
  * @retval SERVICE_NO_FILESYSTEM 缺少 FTL 格式或可挂载的 FAT 文件系统。
  * @return 其他 Service 状态表示打开或挂载失败，保留未就绪/超时/错误语义。
  * @note 仅初始化后的 Storage Task 调用，可能同步等待；失败不执行格式化。
@@ -212,6 +214,10 @@ Service_StatusTypeDef Service_Filesystem_OpenFlash(void)
 Service_StatusTypeDef Service_Filesystem_MountFlash(void)
 {
     TCHAR drive_path[FILESYSTEM_DRIVE_PATH_LENGTH];
+    if (filesystem_flash_file_is_open())
+    {
+        return SERVICE_BUSY;
+    }
     Service_StatusTypeDef status = Service_Filesystem_OpenFlash();
     if (status != SERVICE_OK)
     {
@@ -221,7 +227,10 @@ Service_StatusTypeDef Service_Filesystem_MountFlash(void)
     {
         return SERVICE_INVALID_PARAM;
     }
-    return filesystem_make_service_status(f_mount(&USERFatFS, drive_path, 1));
+    filesystem_flash_file_set_mounted(false);
+    FRESULT result = f_mount(&USERFatFS, drive_path, 1);
+    filesystem_flash_file_set_mounted(result == FR_OK);
+    return filesystem_make_service_status(result);
 }
 
 /**
@@ -243,7 +252,12 @@ Service_StatusTypeDef Service_Filesystem_UnmountFlash(void)
     {
         return SERVICE_INVALID_PARAM;
     }
-    return filesystem_make_service_status(f_mount(NULL, drive_path, 0));
+    FRESULT result = f_mount(NULL, drive_path, 0);
+    if (result == FR_OK)
+    {
+        filesystem_flash_file_set_mounted(false);
+    }
+    return filesystem_make_service_status(result);
 }
 
 /**

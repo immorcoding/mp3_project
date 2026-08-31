@@ -29,3 +29,25 @@ FatFs disk_* → SD 或 USER BSP 强定义 → 私有执行器 → Platform。SD
 SD 保留 32 KiB、32 B 对齐的 AXI SRAM bounce buffer，配置在 `filesystem_config.h`。Flash 映射与工作内存由 Platform 注入 FTL，Service 不另建写回缓存。`flash/filesystem_flash_config.h` 控制等待预算和可选摘要日志，默认关闭日志不影响错误返回。
 
 SD 与 Flash 初始化、挂载和错误状态独立。Flash 执行器拒绝其他任务，首版不提供跨任务文件请求队列或 USB MSC 仲裁。完整链路及验收记录见 [FTL 设计](../../docs/flash_ftl_design.md)。
+
+
+## Flash 文件访问
+
+根公开头新增 OpenFlashFile、ReadFile、WriteFile、SyncFile、CloseFile、RemoveFlashFile。
+APP 只持有 Service_Filesystem_FileTypeDef，FIL、TCHAR、FRESULT 和 FatFs 调用均在
+flash/filesystem_flash_file.c 中。首版仅支持已经显式挂载的 Flash 卷，同时一个打开文件，
+接受最长 31 字节的根目录 ASCII 文件名，不接收卷号或路径分隔符；卷号取自 USERPath。
+这是当前最小文件能力，不是跨任务文件队列，也不改变旧 SD benchmark。
+
+打开方式为只读或仅新建；仅新建遇同名文件返回 SERVICE_BUSY，不截断或覆盖。
+读写调用必须检查实际字节数：短读可能是 EOF，短写可能是容量不足，SERVICE_OK
+不能代替长度检查。SyncFile 同步文件数据与目录元数据；CloseFile 成功后清零句柄。
+所有函数均在唯一 Storage Task 同步执行，普通 APP 缓冲不直接交给 DMA。
+
+Service 静态持有一个 FIL 及文件信息输出，避免挤占任务栈。句柄以代次校验，
+关闭后重开或卷注销后旧句柄不可使用。挂载入口遇仍打开的文件返回 BUSY；正常注销前
+调用者须先关闭文件。关闭失败保留槽及句柄，显式注销/恢复才丢弃旧对象，不伪造关闭成功。
+
+RemoveFlashFile 只删除文件，不删除目录；文件不存在按成功处理，存在未关闭文件时拒绝删除。
+无 TRIM 时，f_unlink 释放 FAT 簇并同步元数据，不把文件数据的 LBA 直接通知 FTL 作废。
+后续 LBA 重写完成后，旧物理版本才成为可 GC 的失效块。文件删除不是安全擦除。

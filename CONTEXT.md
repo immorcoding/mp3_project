@@ -349,6 +349,13 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 文件系统 Module（Filesystem Module）
 
+Flash 文件访问已经通过 Filesystem Service 封装：APP 只持有 Service 文件句柄，
+文件对象和 FatFs 类型归 Service。首版仅唯一 Storage Task、已挂载 Flash 卷和单文件槽，
+支持根目录 ASCII 名称、新建/只读、顺序读写、同步、关闭和删除。
+删除释放 FAT 簇；未实现 TRIM 时不直接使 FTL 数据映射失效，后续逻辑覆盖写才使旧版本可回收。
+Flash 文件 benchmark 由 APP 在挂载后编排，不把测速策略下沉为 Service 业务。
+
+
 **文件系统 Module**封装当前 FatFs 逻辑卷的驱动就绪检查、挂载、注销和显式格式化，并持有 FatFs 所需的同步 DMA 执行器。它只在存储任务已经取得 SD 独占权且平台 SD 已处于可访问状态时调用 FatFs，不负责卡检测、消抖或 SDMMC 初始化。
 
 该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和大块中转区挤占任务栈。它经 FatFs 声明的 `BSP_SD_*` Override Seam 间接使用 Platform SD；DMA 等待与 Cache 一致性细节见 `docs/sd_architecture.md`。Flash 扩展已在同一 Module 中分开 SD/Flash 私有实现，承接 USER DiskIO 契约与 Flash 同步执行器；当前同时提供 SD 与 Flash 卷流程。它向上返回 `Service_StatusTypeDef`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果，同时不泄漏 FatFs 原始类型。

@@ -388,8 +388,9 @@ static bool storage_flash_benchmark_run_destructive_diagnostic(void)
 /* Exported functions --------------------------------------------------------*/
 /**
  * @brief  执行一次外部 W25Q256 顺序读取基准并将结果投递到 Log Service。
- * @note   该函数只应在 Storage Task 的启动早期调用。它不读取或修改任何 FTL、
- *         文件系统或用户数据元信息；物理数组内容也不会改变。
+ * @note   仅在 Storage Task 启动早期、FTL 挂载前运行物理读取和可选保留扇区自检。
+ *         不访问 FTL/FAT 元数据；破坏性开关开启时会改写两个保留自检扇区。
+ *         文件读写测试由挂载成功后的 storage_flash_benchmark_run_file() 单独执行。
  */
 void storage_flash_benchmark_run(void)
 {

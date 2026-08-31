@@ -8,6 +8,7 @@
 #include "APP/tasks/storage/storage_flash.h"
 #include "APP/tasks/storage/storage_sd.h"
 #include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
+#include "APP/tasks/storage/benchmark/storage_flash_benchmark_config.h"
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark.h"
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark_config.h"
 #include "APP/app_config.h"
@@ -55,6 +56,9 @@ void storage_task(void *handle)
     if (flash_status == SERVICE_OK)
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "FLASH", "Filesystem mounted.");
+#if STORAGE_FLASH_BENCHMARK_ENABLE && STORAGE_FLASH_BENCHMARK_FILE_ENABLE
+        storage_flash_benchmark_run_file();
+#endif
     }
     else if (flash_status == SERVICE_NO_FILESYSTEM)
     {

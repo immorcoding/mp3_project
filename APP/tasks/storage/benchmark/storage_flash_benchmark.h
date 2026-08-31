@@ -9,5 +9,6 @@
 #define STORAGE_FLASH_BENCHMARK_H
 
 void storage_flash_benchmark_run(void);
+void storage_flash_benchmark_run_file(void);
 
 #endif /* STORAGE_FLASH_BENCHMARK_H */

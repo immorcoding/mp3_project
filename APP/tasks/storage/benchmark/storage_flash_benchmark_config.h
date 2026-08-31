@@ -18,7 +18,7 @@
 #define STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES       (1U * 1024U * 1024U)
 #define STORAGE_FLASH_BENCHMARK_READ_CHUNK_BYTES       (4U * 1024U)
 
-/* 单块 MDMA 读取等待 QSPI IRQ 的最大时长；到期后仅标记本次基准失败。 */
+/* 单块 MDMA 的超时预算；到期后 Service 仍须确认 DMA 安全收尾才能返回。 */
 #define STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS        100U
 
 /* W25Q256JV tPP 最大 4 ms；为任务通知、Status Match 与普通上下文收尾留出裕量。 */
@@ -30,7 +30,7 @@
 /* 自检始终以 W25Qxx 固定物理 256-byte 页为单位提交写入。 */
 #define STORAGE_FLASH_BENCHMARK_PROGRAM_PAGE_BYTES      256U
 
-/* 关闭 Platform 对首尾保留自检扇区执行擦除、页编程及双路径读回校验。 */
+/* 总开关开启时，1 允许对首尾保留自检扇区擦写；0 关闭这项破坏性自检。 */
 #define STORAGE_FLASH_BENCHMARK_PROGRAM_ENABLE         1
 
 #if ((STORAGE_FLASH_BENCHMARK_READ_START_ADDRESS % 4U) != 0U)
@@ -58,6 +58,27 @@
      ((STORAGE_FLASH_BENCHMARK_READ_CHUNK_BYTES % \
        STORAGE_FLASH_BENCHMARK_PROGRAM_PAGE_BYTES) != 0U))
 #error "Flash diagnostic timing or page geometry is invalid."
+#endif
+
+
+/** @brief 文件测速随 Flash 总开关执行；仅在成功挂载后运行，不自动格式化。 */
+#define STORAGE_FLASH_BENCHMARK_FILE_ENABLE 1
+
+/** @brief 根目录专用测试文件名；同名文件存在则拒绝新建，不覆盖、不预先删除。 */
+#define STORAGE_FLASH_BENCHMARK_FILE_NAME "__ftlrw.bin"
+
+/** @brief 默认 1 MiB；可由主机测试覆盖，须为分块的整数倍且不超过卷可用空间。 */
+#ifndef STORAGE_FLASH_BENCHMARK_FILE_TOTAL_BYTES
+#define STORAGE_FLASH_BENCHMARK_FILE_TOTAL_BYTES (1U * 1024U * 1024U)
+#endif
+
+/** @brief 默认 4 KiB 应用缓冲，跨越七扇区组边界以覆盖 FTL 部分组更新。 */
+#define STORAGE_FLASH_BENCHMARK_FILE_CHUNK_BYTES (4U * 1024U)
+
+#if ((STORAGE_FLASH_BENCHMARK_FILE_TOTAL_BYTES == 0U) || \
+     (STORAGE_FLASH_BENCHMARK_FILE_CHUNK_BYTES == 0U) || \
+     ((STORAGE_FLASH_BENCHMARK_FILE_TOTAL_BYTES % STORAGE_FLASH_BENCHMARK_FILE_CHUNK_BYTES) != 0U))
+#error "Flash file benchmark requires non-zero, whole chunks."
 #endif
 
 #endif /* STORAGE_FLASH_BENCHMARK_CONFIG_H */

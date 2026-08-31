@@ -334,3 +334,35 @@ USER 驱动内 LUN 为 0，与全局 1:/ 分开；GET_SECTOR_COUNT 返回 38689�
 - 四项已有 CTest 通过，Debug/Release 固件均构建成功；两种固件的 BIN 与本轮注释修改前逐字节相同。
 - 环境未安装 Doxygen，本次验证的是源码注释关联、标签和参数一致性，未生成或检查 Doxygen HTML。
 - 保留既有 RWX 链接段警告；未烧录或对实际设备执行格式化，硬件验收边界不变。
+
+
+## 18. Flash 文件 benchmark 与删除边界
+
+本轮新增 Service 文件封装及挂载后的 APP 文件基准。链路为 APP benchmark →
+Service 文件接口 → FatFs → USER DiskIO → Service 块后端 → Platform → FTL → RawOps。
+实现、默认 1 MiB/4 KiB 参数、计时范围和失败清理详见
+[benchmark 说明](../APP/tasks/storage/benchmark/README.md)；
+单文件槽、句柄代次和文件名范围见 [Service 说明](../Service/filesystem/README.md)。
+
+仅新建本轮测试文件，同名拒绝覆盖或删除；写入同步后重新打开读取、独立校验，最后关闭并删除。
+异常也尝试清理，但介质/锁故障无法删除时必须明确报告残留。未挂载或无文件系统时跳过测试，
+不自动调用两层格式化，也不在测试结束时强行擦物理地址。
+
+f_unlink 使 FatFs 文件目录项与簇链释放并同步，不是安全擦除。当前 _USE_TRIM=0，
+后端未实现 CTRL_TRIM；FTL 不知道哪些有效 LBA 已被文件系统释放。
+直到这些 LBA 被重新写入且新版本提交，旧物理版本才失效并可由 GC 回收。
+目录/FAT 自身的更新仍会经过 FTL 异地写与 GC，但不等于文件 payload 已直接失效。
+
+本轮验证：新增 12 个文件场景与原有 4 项回归共 16 项 CTest 通过；
+正常删除后重挂载确认文件不存在且 FAT 空闲簇恢复。新增实现及测试通过
+-Wall -Wextra -Werror 语法检查，相关 70 个函数定义的 Doxygen/形参/返回说明核查通过。
+默认关闭基准的 Debug/Release 构建通过，第一 FLASH 区分别为 503116 B / 343556 B。
+正式布局开启基准时，Debug 为 697492 B、Release 为 537044 B，均超过 524288 B；
+因此不能宣称开启基准的正式固件构建通过。
+
+仅在 build/flash-file-benchmark-Release 中验证了链接草案：将 cc936.c.obj 的
+.rodata.oem2uni（87172 B）放到 FLASH2，Release 链接后第一 FLASH 为 449868 B，
+FLASH2 为 463804 B，两者均小于各自 512 KiB。正式 stm32h743zgtx_flash.ld 未在本轮改动；
+该布局调整及 Debug 的额外容量安排待用户确认。未修改 CubeMX 配置或生成文件，
+未烧录、未对实际设备格式化；保留既有 RWX 链接警告，未生成 Doxygen HTML。
+

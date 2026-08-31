@@ -590,3 +590,12 @@ USB_DEVICE/Target/*.c
 Filesystem 保持一个 Module，SD/Flash 为私有实现子目录。Flash 完成订阅和等待由 APP 迁入 Service，Storage Task 仍决定执行时机；不提前创建通用 BlockDevice 或 Service/storage。FTL 算法、GC 与 RawOps 仍归 Component，Platform 持有实例/内存并管理完整操作的映射生命周期。设计详见 [flash_ftl_design.md](flash_ftl_design.md)。
 
 上述原始诊断与 FTL 共用 Service 的唯一执行器；FTL 主机回归、真实 FatFs 主机集成及 Debug/Release 构建通过，但不能把软件验证当成真实欠压掉电验收。禁止绕过 FTL 将原始 NOR 接入 FatFs/MSC。
+
+
+### Flash 文件 benchmark 的访问边界
+
+APP 文件诊断只经 Filesystem Service 的文件接口执行，不直接包含 FatFs 或访问逻辑块。
+Service 持有 FIL、路径编码转换和同步文件生命周期，APP 持有图样、计时、校验与日志策略。
+首版没有跨任务文件请求队列；现有 Storage Task 是唯一执行上下文。
+删除文件释放 FAT 簇，不在 APP/Service 中按文件地址直接擦 NOR。无 TRIM 时，FTL 只有在
+后续 LBA 更新后才把对应旧物理版本列为失效；GC 策略继续归 FTL。

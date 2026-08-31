@@ -17,7 +17,10 @@
 #define APP_CONFIG_H
 
 #define STORAGE_SD_BENCHMARK_ENABLE       0
-#define STORAGE_FLASH_BENCHMARK_ENABLE    0
+/* 默认关闭；允许独立验证构建通过编译定义启用，不改动产品默认值。 */
+#ifndef STORAGE_FLASH_BENCHMARK_ENABLE
+#define STORAGE_FLASH_BENCHMARK_ENABLE    1
+#endif
 #define STORAGE_SDRAM_BENCHMARK_ENABLE    0
 
 #endif /* APP_CONFIG_H */

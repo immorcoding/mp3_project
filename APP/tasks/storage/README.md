@@ -47,3 +47,8 @@ Task 内部 Implementation 使用 `storage_*`；任务入口保持 `storage_task
 启动诊断之后执行 OpenFlash/MountFlash，未格式化只记录告警，绝不自动格式化。按 [FTL 设计](../../../docs/flash_ftl_design.md)，原 `storage_flash` 持有的 QSPI 回调、索引 2 等待和传输收尾职责已迁入 Filesystem Service 私有 Flash 执行器。Storage Task 仍是唯一上下文，APP 保留启动/诊断编排、挂载策略和维护调用时机，不注册第二个传输回调。
 
 主循环已为 Service 维护入口安排定期机会，不再无限期只等 SD 检测。FTL 决定是否 GC、回收哪个块；已在飞操作按硬件通知与超时推进。默认维护机会周期 100 ms，每次最多回收一块，不承诺 NOR 擦除可以立即抢占。SDRAM 破坏性自检必须早于 FTL 表与业务缓冲使用。
+
+
+Flash 文件 benchmark 在成功挂载后运行：APP 通过 Service 完成新建、写入同步、
+读回测速、校验和删除，不直接操作 FatFs 类型或 FTL 块。挂载失败跳过，不自动格式化。
+测试文件仅在本轮成功创建后清理；同名文件保护、故障残留及配置见 benchmark/README.md。

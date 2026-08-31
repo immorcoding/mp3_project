@@ -666,13 +666,21 @@ static void volume_erase_must_be_verified_before_preparing(void)
     assert(erases == before + 1);
 }
 
+#ifdef FTL_TEST_FILE_BENCHMARK
+int test_flash_file_benchmark(void);
+#endif
+
 /**
- * @brief 运行 FTL 行为回归，并按编译开关运行真实 FatFs 重挂载测试。
+ * @brief 运行 FTL 行为回归，并按编译开关运行真实 FatFs 或 APP 文件基准测试。
  * @return 全部断言通过返回 0；任一断言失败则终止进程。
  * @note 仅操作内存 Fake NOR，不代表真实 QSPI、任务调度或掉电验收。
  */
 int main(void)
 {
+#ifdef FTL_TEST_FILE_BENCHMARK
+    format_fresh();
+    return test_flash_file_benchmark();
+#else
     blank_media_is_not_formatted_implicitly();
     explicit_format_survives_restart_and_reads_erased_sectors();
     partial_group_update_survives_restart();
@@ -691,4 +699,5 @@ int main(void)
     volume_erase_must_be_verified_before_preparing();
     puts("flash_ftl: all behavior tests passed");
     return 0;
+#endif
 }
