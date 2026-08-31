@@ -19,8 +19,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-/* 120 MHz QSPI 下约 0.55 ms 的硬件轮询间隔，避免 WIP 期间占满串行总线。 */
-#define W25QXX_QSPI_STM32_HAL_STATUS_POLL_INTERVAL_CYCLES  0xFFFFu
+/* 120 MHz QSPI 下约 8.5 us 的硬件轮询间隔，优先降低页编程完成发现延迟。 */
+#define W25QXX_QSPI_STM32_HAL_STATUS_POLL_INTERVAL_CYCLES  0x03FFu
 
 /**
  * @brief 将 STM32 HAL QSPI 返回状态转换为 W25Qxx 归一化总线状态。
