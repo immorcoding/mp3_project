@@ -56,7 +56,10 @@ APP/tasks/storage/
   storage_sd.h/.c               Platform SD 生命周期、FatFs 卷管理和介质日志
 
 Service/filesystem/
-  filesystem_service.h/.c       FatFs 路径转换、挂载、卸载和格式化 Service Interface
+  filesystem_service.h/.c       FatFs 卷生命周期 Service Interface
+  filesystem_file.h             Flash 文件访问 Interface
+  filesystem_flash_access.h     启动诊断 Interface
+  filesystem_status.h/.c        私有 FRESULT 映射与盘符路径
   sd/filesystem_sd_transfer.h/.c   Storage Task 独占的同步 DMA 执行器与中转缓冲区
   sd/filesystem_sd_bsp.c           BSP_SD_* 强定义，连接 Cube DiskIO Override Seam
 
@@ -106,7 +109,7 @@ Storage Task
                -> Port.GetInfo(&hsd1)
                   -> 缓存归一化逻辑块信息
                -> State = READY
-          -> Service_Filesystem_Init()
+          -> Service_Filesystem_InitSD()
              -> filesystem_sd_transfer_init()
             -> Platform_SD_SetTransferCallback(
                    filesystem_sd_transfer_irq_callback, ...)

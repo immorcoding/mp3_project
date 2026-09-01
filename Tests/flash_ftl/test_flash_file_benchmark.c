@@ -4,7 +4,7 @@
  */
 #include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
 #include "APP/tasks/storage/benchmark/storage_flash_benchmark_config.h"
-#include "Service/filesystem/filesystem_service.h"
+#include "Service/filesystem/filesystem_file.h"
 #include "Service/filesystem/flash/filesystem_flash_file.h"
 #include "Service/log/log_service.h"
 #include "FATFS/App/fatfs.h"

@@ -414,7 +414,7 @@ static void erased_payload_skips_programming_and_fault_retains_ownership(void)
 
 /**
  * @brief 验证旧版本块被 GC 擦到一半后，重启仍可读取最新提交。
- * @note 制造足够失效块，维护时注入 128 B 撕裂擦除，再重开核对最新扇区。 断言失败即终止用例。
+ * @note 制造足够失效块，回收时注入 128 B 撕裂擦除，再重开核对最新扇区。 断言失败即终止用例。
  */
 static void interrupted_gc_of_old_version_does_not_hide_latest_data(void)
 {
@@ -428,7 +428,7 @@ static void interrupted_gc_of_old_version_does_not_hide_latest_data(void)
     }
     cut_after = 0;
     tear_bytes = 128;
-    assert(FlashFTL_MaintainStart(&disk) == FLASH_FTL_OK);
+    assert(FlashFTL_ReclaimStart(&disk) == FLASH_FTL_OK);
     assert(finish() == FLASH_FTL_IO_ERROR);
     bind_disk();
     assert(FlashFTL_OpenStart(&disk) == FLASH_FTL_OK);
@@ -619,8 +619,8 @@ static void bounds_busy_and_cross_group_io_preserve_neighbors(void)
 }
 
 /**
- * @brief 验证后台维护单次最多擦一个块，并在达到高水位后停止。
- * @note 构造低空闲水位，通过擦除计数与 FreeBlocks 快照验证维护预算和滞回停止。 断言失败即终止用例。
+ * @brief 验证后台回收单次最多擦一个块，并在达到高水位后停止。
+ * @note 构造低空闲水位，通过擦除计数与 FreeBlocks 快照验证回收预算和滞回停止。 断言失败即终止用例。
  */
 static void maintenance_is_bounded_and_stops_at_high_watermark(void)
 {
@@ -633,13 +633,13 @@ static void maintenance_is_bounded_and_stops_at_high_watermark(void)
         assert(finish() == FLASH_FTL_OK);
     }
     uint32_t before = erases;
-    assert(FlashFTL_MaintainStart(&disk) == FLASH_FTL_OK);
+    assert(FlashFTL_ReclaimStart(&disk) == FLASH_FTL_OK);
     assert(finish() == FLASH_FTL_OK);
     assert(erases == before + 1);
     for (uint32_t i = 0; i < 20; i++)
     {
         before = erases;
-        assert(FlashFTL_MaintainStart(&disk) == FLASH_FTL_OK);
+        assert(FlashFTL_ReclaimStart(&disk) == FLASH_FTL_OK);
         assert(finish() == FLASH_FTL_OK);
         assert(erases - before <= 1);
     }
@@ -647,7 +647,7 @@ static void maintenance_is_bounded_and_stops_at_high_watermark(void)
     assert(FlashFTL_GetDiagnostics(&disk, &d) == FLASH_FTL_OK);
     assert(d.FreeBlocks == 7);
     before = erases;
-    assert(FlashFTL_MaintainStart(&disk) == FLASH_FTL_OK);
+    assert(FlashFTL_ReclaimStart(&disk) == FLASH_FTL_OK);
     assert(finish() == FLASH_FTL_OK);
     assert(erases == before);
 }

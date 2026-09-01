@@ -2,7 +2,8 @@
  * @file filesystem_flash_file.c
  * @brief Storage Task 独占的 Flash 文件访问；FatFs 对象及类型不向 APP 暴露。
  */
-#include "Service/filesystem/filesystem_service.h"
+#include "Service/filesystem/filesystem_file.h"
+#include "Service/filesystem/filesystem_status.h"
 #include "Service/filesystem/flash/filesystem_flash_file.h"
 #include "Service/filesystem/flash/filesystem_flash_transfer.h"
 #include "FATFS/App/fatfs.h"
@@ -18,36 +19,6 @@ static bool filesystem_flash_file_mounted;
 static bool filesystem_flash_file_open;
 /** @brief 每次成功打开递增；卷注销不复位，避免旧句柄命中新文件。 */
 static uint32_t filesystem_flash_file_generation;
-
-/**
- * @brief 将 FatFs 文件结果转换为 Service 状态，不泄漏 FRESULT。
- * @param[in] result 文件操作结果。
- * @return OK 为成功；已存在或被锁定为 BUSY；未就绪/超时/无文件系统分别保留，
- *         无效对象或参数为 INVALID_PARAM，其余失败为 ERROR。
- */
-static Service_StatusTypeDef filesystem_flash_file_result(FRESULT result)
-{
-    switch (result)
-    {
-        case FR_OK:
-            return SERVICE_OK;
-        case FR_EXIST:
-        case FR_LOCKED:
-            return SERVICE_BUSY;
-        case FR_NOT_READY:
-            return SERVICE_NOT_READY;
-        case FR_TIMEOUT:
-            return SERVICE_TIMEOUT;
-        case FR_NO_FILESYSTEM:
-            return SERVICE_NO_FILESYSTEM;
-        case FR_INVALID_OBJECT:
-        case FR_INVALID_NAME:
-        case FR_INVALID_PARAMETER:
-            return SERVICE_INVALID_PARAM;
-        default:
-            return SERVICE_ERROR;
-    }
-}
 
 /**
  * @brief 接收卷挂载状态；注销时丢弃旧文件对象，但不执行隐式同步。
@@ -175,7 +146,7 @@ Service_StatusTypeDef Service_Filesystem_OpenFlashFile(const char *name,
         filesystem_flash_file_open = true;
         file->Token = ++filesystem_flash_file_generation;
     }
-    return filesystem_flash_file_result(result);
+    return filesystem_make_service_status(result);
 }
 
 /**
@@ -209,7 +180,7 @@ Service_StatusTypeDef Service_Filesystem_ReadFile(Service_Filesystem_FileTypeDef
     UINT count = 0U;
     FRESULT result = f_read(&filesystem_flash_file, data, (UINT)length, &count);
     *transferred = count;
-    return filesystem_flash_file_result(result);
+    return filesystem_make_service_status(result);
 }
 
 /**
@@ -243,7 +214,7 @@ Service_StatusTypeDef Service_Filesystem_WriteFile(Service_Filesystem_FileTypeDe
     UINT count = 0U;
     FRESULT result = f_write(&filesystem_flash_file, data, (UINT)length, &count);
     *transferred = count;
-    return filesystem_flash_file_result(result);
+    return filesystem_make_service_status(result);
 }
 
 /**
@@ -255,7 +226,7 @@ Service_StatusTypeDef Service_Filesystem_WriteFile(Service_Filesystem_FileTypeDe
 Service_StatusTypeDef Service_Filesystem_SyncFile(Service_Filesystem_FileTypeDef file)
 {
     Service_StatusTypeDef status = filesystem_flash_file_validate(file);
-    return status == SERVICE_OK ? filesystem_flash_file_result(f_sync(&filesystem_flash_file))
+    return status == SERVICE_OK ? filesystem_make_service_status(f_sync(&filesystem_flash_file))
                                 : status;
 }
 
@@ -276,7 +247,7 @@ Service_StatusTypeDef Service_Filesystem_CloseFile(Service_Filesystem_FileTypeDe
     {
         return status;
     }
-    status = filesystem_flash_file_result(f_close(&filesystem_flash_file));
+    status = filesystem_make_service_status(f_close(&filesystem_flash_file));
     if (status == SERVICE_OK)
     {
         filesystem_flash_file_open = false;
@@ -315,11 +286,11 @@ Service_StatusTypeDef Service_Filesystem_RemoveFlashFile(const char *name)
     }
     if (result != FR_OK)
     {
-        return filesystem_flash_file_result(result);
+        return filesystem_make_service_status(result);
     }
     if (info.fattrib & AM_DIR)
     {
         return SERVICE_INVALID_PARAM;
     }
-    return filesystem_flash_file_result(f_unlink(path));
+    return filesystem_make_service_status(f_unlink(path));
 }

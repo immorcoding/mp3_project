@@ -242,7 +242,7 @@ FlashFTL_StatusTypeDef FlashFTL_WriteStart(FlashFTL_HandleTypeDef *hftl,
                                            uint32_t count);
 FlashFTL_StatusTypeDef FlashFTL_SyncStart(FlashFTL_HandleTypeDef *hftl);
 FlashFTL_StatusTypeDef FlashFTL_Abort(FlashFTL_HandleTypeDef *hftl);
-FlashFTL_StatusTypeDef FlashFTL_MaintainStart(FlashFTL_HandleTypeDef *hftl);
+FlashFTL_StatusTypeDef FlashFTL_ReclaimStart(FlashFTL_HandleTypeDef *hftl);
 bool FlashFTL_IsReady(const FlashFTL_HandleTypeDef *hftl);
 FlashFTL_StatusTypeDef FlashFTL_GetDiagnostics(const FlashFTL_HandleTypeDef *hftl,
                                                FlashFTL_DiagnosticsTypeDef *diagnostics);

@@ -18,7 +18,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
 #include "APP/tasks/storage/benchmark/storage_flash_benchmark_config.h"
-#include "APP/tasks/storage/storage_flash.h"
+#include "Service/filesystem/filesystem_flash_access.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -131,7 +131,7 @@ static bool storage_flash_benchmark_read_poll(uint32_t *elapsed_cycles)
  * @retval true 所有 MDMA 读取都在有界时限内完成并通过 Platform 收尾。
  * @retval false 参数无效、启动失败、未收到 IRQ 通知，或 QSPI/MDMA 收尾失败。
  * @note   每块的 QSPI IRQ 订阅、遗留通知清理、等待与普通上下文收尾均由
- *         storage_flash 协调 Module 执行。回调可能在启动函数返回前到达，但任务
+ *         Filesystem Flash 执行器完成。回调可能在启动函数返回前到达，但任务
  *         通知会保存最终事件值，后续等待仍能立即取得完成结果。
  */
 static bool storage_flash_benchmark_read_mdma(uint32_t *elapsed_cycles)
@@ -148,10 +148,11 @@ static bool storage_flash_benchmark_read_mdma(uint32_t *elapsed_cycles)
          offset < STORAGE_FLASH_BENCHMARK_READ_TOTAL_BYTES;
          offset += STORAGE_FLASH_BENCHMARK_READ_CHUNK_BYTES)
     {
-        if (!storage_flash_read_array(address,
-                                      storage_flash_benchmark_buffer,
-                                      sizeof(storage_flash_benchmark_buffer),
-                                      STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS))
+        if (Service_Filesystem_ReadFlashArray(address,
+                                              storage_flash_benchmark_buffer,
+                                              sizeof(storage_flash_benchmark_buffer),
+                                              STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS) !=
+            SERVICE_OK)
         {
             return false;
         }
@@ -238,7 +239,7 @@ static bool storage_flash_benchmark_read_memory_mapped(
  * @brief  使用当前 MDMA 配置读回并校验刚完成轮询自检的两个保留扇区。
  * @retval true 首、尾 4 KiB 均经 MDMA 读取、普通上下文 Cache 收尾并逐字节校验。
  * @retval false 任一诊断区域无法启动、完成、收尾或匹配预期图样。
- * @note   调用者必须已由 storage_flash_init() 绑定 Storage Task 的长期操作
+ * @note   调用者必须已由 Service_Filesystem_InitFlash() 绑定 Storage Task 的长期操作
  *         通知，且刚由本 Module 经受限擦写入口完成轮询读回验证。APP 不掌握
  *         保留扇区的物理地址或图样，只向 Platform 传递区域语义。
  */
@@ -253,11 +254,11 @@ static bool storage_flash_benchmark_verify_diagnostic_with_mdma(void)
          index < (sizeof(regions) / sizeof(regions[0]));
          ++index)
     {
-        if (!storage_flash_read_diagnostic(
+        if (Service_Filesystem_ReadFlashDiagnostic(
                 regions[index],
                 storage_flash_benchmark_buffer,
                 sizeof(storage_flash_benchmark_buffer),
-                STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS))
+                STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS) != SERVICE_OK)
         {
             return false;
         }
@@ -297,9 +298,9 @@ static bool storage_flash_benchmark_run_destructive_diagnostic(void)
          index < (sizeof(regions) / sizeof(regions[0]));
          ++index)
     {
-        if (!storage_flash_erase_diagnostic(
+        if (Service_Filesystem_EraseFlashDiagnostic(
                 regions[index],
-                STORAGE_FLASH_BENCHMARK_SECTOR_ERASE_TIMEOUT_MS))
+                STORAGE_FLASH_BENCHMARK_SECTOR_ERASE_TIMEOUT_MS) != SERVICE_OK)
         {
             (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                    storage_flash_benchmark_log_tag,
@@ -323,12 +324,12 @@ static bool storage_flash_benchmark_run_destructive_diagnostic(void)
              page_offset < sizeof(storage_flash_benchmark_buffer);
              page_offset += STORAGE_FLASH_BENCHMARK_PROGRAM_PAGE_BYTES)
         {
-            if (!storage_flash_program_diagnostic_page(
+            if (Service_Filesystem_ProgramFlashDiagnostic(
                     regions[index],
                     page_offset,
                     &storage_flash_benchmark_buffer[page_offset],
                     STORAGE_FLASH_BENCHMARK_PROGRAM_PAGE_BYTES,
-                    STORAGE_FLASH_BENCHMARK_PAGE_PROGRAM_TIMEOUT_MS))
+                    STORAGE_FLASH_BENCHMARK_PAGE_PROGRAM_TIMEOUT_MS) != SERVICE_OK)
             {
                 (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                        storage_flash_benchmark_log_tag,

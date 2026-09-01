@@ -18,3 +18,4 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 
 - [0010-fatfs-user-diskio-service-ownership.md](0010-fatfs-user-diskio-service-ownership.md)：USER DiskIO 自维护契约、弱默认/强接管及 Filesystem Service 的 Flash 执行所有权。
 - [0011-ftl-copy-on-write-and-recovery.md](0011-ftl-copy-on-write-and-recovery.md)：FTL 整组异地提交、扫描恢复、显式格式化及首版 GC/磨损边界。
+- [0012-filesystem-public-seams.md](0012-filesystem-public-seams.md)：Filesystem 公开接缝按卷/文件/诊断切开，MSC 首版只导出 SD，`Maintain` 改名 `Reclaim`。

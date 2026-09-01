@@ -21,7 +21,7 @@
 - `Adapters/stm32_hal/irq/stm32_qspi_irq` 的 Handle 局部 QSPI 回调分发 Interface；
 - CubeMX 管理的 QSPI Handle、GPIO 与时钟配置。
 
-Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识、QSPI Adapter Context 和 QSPI IRQ 节点。启动识别成功后注册 `hqspi` 的读完成、自动轮询状态匹配、错误和中止回调；`MemoryType`（例如 `40` 或 `70`）只保留为诊断信息，不影响 W25Q256 兼容性判定。QE 已开启时不写 Flash；QE 为 0 时的 SR2 配置最多阻塞 20 ms，且仅发生在调度器启动前。`0xEC` 启动自检只读取物理地址 0 的 4 字节，不解释或记录内容。异步路线只有在已设置上层回调、且无其他操作在飞时才允许启动：IRQ 先更新 Adapter 结果，再转发轻量事件；拥有请求的任务随后调用 `ProcessOperation()`，MDMA 成功后数据才可被 CPU 使用，写擦成功后 Device 才回到 READY。当前唯一上层订阅者是 Filesystem Service Flash 执行器，在 Storage Task 启动时建立长期订阅；APP storage_flash 只转交诊断，不由 benchmark 临时设置或清除回调。受限自检通过首/尾区域语义请求擦除、逐页编程和读回；每笔 `0x34/0x21` 提交后由 Adapter 自动轮询 `0x05` 的 WIP 位，Status Match 唤醒 Storage Task，Platform 自身绝不等待任务通知或访问 DMA 缓冲区。两条读回共同验证后，诊断入口仍不能被 FTL 或 MSC 当作通用写入能力。当前已持有 Flash FTL Handle、Bridge Context、78 KiB SDRAM 表和 4096/512 B AXI SRAM 工作/校验区，绑定完整物理分区。
+Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识、QSPI Adapter Context 和 QSPI IRQ 节点。启动识别成功后注册 `hqspi` 的读完成、自动轮询状态匹配、错误和中止回调；`MemoryType`（例如 `40` 或 `70`）只保留为诊断信息，不影响 W25Q256 兼容性判定。QE 已开启时不写 Flash；QE 为 0 时的 SR2 配置最多阻塞 20 ms，且仅发生在调度器启动前。`0xEC` 启动自检只读取物理地址 0 的 4 字节，不解释或记录内容。异步路线只有在已设置上层回调、且无其他操作在飞时才允许启动：IRQ 先更新 Adapter 结果，再转发轻量事件；拥有请求的任务随后调用 `ProcessOperation()`，MDMA 成功后数据才可被 CPU 使用，写擦成功后 Device 才回到 READY。当前唯一上层订阅者是 Filesystem Service Flash 执行器，在 Storage Task 启动时建立长期订阅；APP 物理 benchmark 直接调用 Filesystem 诊断 Interface，不由 benchmark 临时设置或清除回调。受限自检通过首/尾区域语义请求擦除、逐页编程和读回；每笔 `0x34/0x21` 提交后由 Adapter 自动轮询 `0x05` 的 WIP 位，Status Match 唤醒 Storage Task，Platform 自身绝不等待任务通知或访问 DMA 缓冲区。两条读回共同验证后，诊断入口仍不能被 FTL 或 MSC 当作通用写入能力。当前已持有 Flash FTL Handle、Bridge Context、78 KiB SDRAM 表和 4096/512 B AXI SRAM 工作/校验区，绑定完整物理分区。
 
 ## 运行时请求与约束
 
@@ -37,6 +37,6 @@ Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识、QSPI Ada
 
 原始诊断与逻辑卷共用唯一执行上下文。按 [FTL 设计](../../docs/flash_ftl_design.md)，本 Module 长期持有 FTL/Bridge、SDRAM 映射表与内部 SRAM 工作区，注入经过边界核验的分区；不向 Service 暴露原始任意地址擦写。
 
-唯一上层回调所有者已从 APP `storage_flash` 迁移到 Filesystem Service 的 Flash 执行器，仍在 Storage Task 上下文完成。Process 按当前操作派发到原始 W25Qxx 或 FTL，不重复推进同一底层操作。映射关闭覆盖整个 FTL 请求，不能每页完成就重新打开；错误时先确保控制器/DMA 不再访问缓冲，再显式恢复，NOR 内部仍忙不能视为已取消。
+唯一上层回调所有者是 Filesystem Service 的 Flash 执行器，仍在 Storage Task 上下文完成。Process 按当前操作派发到原始 W25Qxx 或 FTL，不重复推进同一底层操作。映射关闭覆盖整个 FTL 请求，不能每页完成就重新打开；错误时先确保控制器/DMA 不再访问缓冲，再显式恢复，NOR 内部仍忙不能视为已取消。
 
 诊断范围仍受 ADR-0009 限制，不能借自检接口操作 FTL。具体容量、内存和启动顺序在设计文档维护，主机与构建验证通过，实际 QSPI/MDMA 和掉电验收待完成。

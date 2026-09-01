@@ -21,6 +21,6 @@ Service_StatusTypeDef filesystem_flash_transfer_write(uint32_t lba,
                                                       const uint8_t *data,
                                                       uint32_t count);
 Service_StatusTypeDef filesystem_flash_transfer_sync(void);
-Service_StatusTypeDef filesystem_flash_transfer_maintain(void);
+Service_StatusTypeDef filesystem_flash_transfer_reclaim(void);
 Service_StatusTypeDef filesystem_flash_transfer_recover(void);
 #endif

@@ -1085,7 +1085,7 @@ enum
     PLATFORM_FLASH_VOLUME_OP_READ,
     PLATFORM_FLASH_VOLUME_OP_WRITE,
     PLATFORM_FLASH_VOLUME_OP_SYNC,
-    PLATFORM_FLASH_VOLUME_OP_MAINTAIN
+    PLATFORM_FLASH_VOLUME_OP_RECLAIM
 };
 
 /**
@@ -1138,7 +1138,7 @@ static Platform_StatusTypeDef platform_flash_start_volume(uint32_t operation,
             result = FlashFTL_SyncStart(&platform_flash_ftl);
             break;
         default:
-            result = FlashFTL_MaintainStart(&platform_flash_ftl);
+            result = FlashFTL_ReclaimStart(&platform_flash_ftl);
             break;
     }
     if (result != FLASH_FTL_OK)
@@ -1229,16 +1229,16 @@ Platform_StatusTypeDef Platform_Flash_SyncVolumeStart(void)
 }
 
 /**
- * @brief 受理一次有限 FTL 维护，最多回收一个失效块。
+ * @brief 受理一次有限 FTL 回收，最多回收一个失效块。
  * @retval PLATFORM_OK 已受理，是否需要实际擦除由 FTL 决定。
  * @retval PLATFORM_BUSY 已有请求在飞。
  * @retval PLATFORM_FLASH_ERROR 卷未就绪或启动失败。
  * @note 仅唯一普通上下文调用，完成由 ProcessOperation 表达；
- *       映射关闭覆盖整个维护请求，NOR 擦除一旦发起不能保证抢占。
+ *       映射关闭覆盖整个回收请求，NOR 擦除一旦发起不能保证抢占。
  */
-Platform_StatusTypeDef Platform_Flash_MaintainVolumeStart(void)
+Platform_StatusTypeDef Platform_Flash_ReclaimVolumeStart(void)
 {
-    return platform_flash_start_volume(PLATFORM_FLASH_VOLUME_OP_MAINTAIN, 0, NULL, NULL, 0);
+    return platform_flash_start_volume(PLATFORM_FLASH_VOLUME_OP_RECLAIM, 0, NULL, NULL, 0);
 }
 
 /**

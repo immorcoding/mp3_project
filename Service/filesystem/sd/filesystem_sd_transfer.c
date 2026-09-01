@@ -142,7 +142,7 @@ static bool filesystem_sd_transfer_finish(
   * @retval true 当前任务持有执行器并接收 DMA 事件。
   * @retval false 调度器未运行、已由其他任务持有，或 Platform SD 尚不能接收订阅者。
   * @note   允许同一 Storage Task 重复初始化：挂载和卸载路径也会把
-  *         Service_Filesystem_Init() 用作幂等的就绪检查。
+  *         Service_Filesystem_InitSD() 用作幂等的就绪检查。
   */
 bool filesystem_sd_transfer_init(void)
 {

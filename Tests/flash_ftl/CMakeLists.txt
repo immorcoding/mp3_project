@@ -58,6 +58,7 @@ add_executable(flash_file_benchmark_tests
     ${FILE_BENCH_SOURCES}
     test_flash_file_benchmark.c
     ../../Service/filesystem/flash/filesystem_flash_file.c
+    ../../Service/filesystem/filesystem_status.c
     ../../APP/tasks/storage/benchmark/storage_flash_file_benchmark.c)
 target_include_directories(flash_file_benchmark_tests BEFORE PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/host_config" stubs ../..

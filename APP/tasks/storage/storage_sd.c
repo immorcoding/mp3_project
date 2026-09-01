@@ -87,7 +87,7 @@ static void storage_sd_log_card_ready(const char *prefix)
   */
 static Service_StatusTypeDef storage_sd_prepare_filesystem(void)
 {
-    Service_StatusTypeDef result = Service_Filesystem_Init();
+    Service_StatusTypeDef result = Service_Filesystem_InitSD();
 
     if (result != SERVICE_OK)
     {

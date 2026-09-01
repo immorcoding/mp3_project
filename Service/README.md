@@ -6,7 +6,7 @@
 
 - `service.h`：Service 对上层公开的通用操作结果；
 - `Service_Log_*`：普通任务上下文的异步日志投递与消费；
-- `Service_Filesystem_*`：Storage Task 独占期间的 FatFs 初始化、挂载、卸载和格式化。
+- `Service_Filesystem_*`：Storage Task 独占期间的 FatFs 卷生命周期、Flash 文件访问和启动诊断；调用者按需包含 `filesystem_service.h`、`filesystem_file.h` 或 `filesystem_flash_access.h`。
 - `Service_GUI_*`：GUI Task 内的 LVGL 生命周期推进、显示 DMA 刷新协调和触摸输入接入。
 - `Service_Resource_*`：任务启动前映射并校验 RPKC1，把当前必需资源加载到链接器预留的 SDRAM。
 

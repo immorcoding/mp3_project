@@ -8,9 +8,9 @@
 
 ## 1. 范围与代码现状
 
-首版拉通 Filesystem Service 及以下的 Flash 逻辑扇区链路，并安排 Storage Task 的启动、维护和恢复入口。暂不创建通用 BlockDevice、独立 Service/storage，也不实现 USB MSC 仲裁、资源包在线更新或 GUI/模型加载流程。
+首版拉通 Filesystem Service 及以下的 Flash 逻辑扇区链路，并安排 Storage Task 的启动、回收和恢复入口。暂不创建通用 BlockDevice、独立 Service/storage，也不实现 USB MSC 仲裁、资源包在线更新或 GUI/模型加载流程。
 
-当前 W25Qxx 已有读取、单页编程、4 KiB 擦除和 WIP 自动状态轮询；QSPI/MDMA 读取已接入。页编程的数据发送当前仍使用 HAL 轮询，不能声称已支持 MDMA TX。FTL、Bridge、Platform 装配、Service 同步执行器和 USER 转发均已接通；Storage Task 已安排打开/挂载及定期维护。
+当前 W25Qxx 已有读取、单页编程、4 KiB 擦除和 WIP 自动状态轮询；QSPI/MDMA 读取已接入。页编程的数据发送当前仍使用 HAL 轮询，不能声称已支持 MDMA TX。FTL、Bridge、Platform 装配、Service 同步执行器和 USER 转发均已接通；Storage Task 已安排打开/挂载及定期回收。
 
 SD 路径仍经过 SDCard Component；卡内部控制器完成底层 Flash 映射，不能据此省略原始 NOR 所需的 FTL。
 
@@ -22,7 +22,7 @@ SD 路径仍经过 SDCard Component；卡内部控制器完成底层 Flash 映�
 | --- | --- | --- |
 | FatFs / FATFS Glue | 文件系统、卷链接、DiskIO 与外部 BSP 契约 | FTL、任务等待、板级装配 |
 | Filesystem Service | BSP 强定义、同步执行器、错误转换、可选日志、显式卷流程 | 映射、芯片协议 |
-| Storage Task | 唯一执行上下文、启动/挂载策略、维护时机 | QSPI 实现、GC 算法 |
+| Storage Task | 唯一执行上下文、启动/挂载策略、回收时机 | QSPI 实现、GC 算法 |
 | Platform Flash | 长期持有实例/内存、绑定分区、管理映射模式 | FTL 元数据解释、FatFs、任务等待 |
 | Flash FTL Component | 映射、提交、扫描、分配、GC、RawOps 契约 | W25Qxx、HAL、RTOS、文件系统 |
 | FTL W25Qxx Bridge | 地址/范围及两个 Component 的操作和状态转换 | 任务、GC、HAL |
@@ -51,7 +51,7 @@ StorageTask 调用 Service 文件流程
   -> 普通任务继续 Process、Cache 收尾及下一步操作
 ```
 
-ISR 只记录结果并通知，不访问数据缓冲、不记日志、不推进 FTL、不提交下一页。索引 0 保留 SD 检测，索引 1 保留 SD 传输，索引 2 用于 Flash。现有 APP `storage_flash` 的唯一订阅和等待能力迁入 Service；原始诊断与 FTL 共用执行所有者，不临时抢占回调。
+ISR 只记录结果并通知，不访问数据缓冲、不记日志、不推进 FTL、不提交下一页。索引 0 保留 SD 检测，索引 1 保留 SD 传输，索引 2 用于 Flash。Filesystem Service Flash 私有执行器长期持有唯一订阅和等待；原始诊断与 FTL 共用执行所有者，不临时抢占回调。
 
 ## 3. CubeMX 与 USER DiskIO 契约
 
@@ -175,17 +175,17 @@ FTL 提供诊断快照，经 Platform 转交，Service 按宏格式化并 `Servi
 
 分配游标循环找已擦除空闲块，GC 游标循环找可回收块。旧组版本整块失效，普通 GC 直接擦除，无需搬迁混合有效扇区。未提交/中断擦除块须经恢复分类确认不承载当前有效数据后才可回收。
 
-预留 R 是全池预算，不是固定地址区域；空闲 F 只计确认擦除块。F 不高于 `ceil(R * 75 / 100)` 时启动，达到 `ceil(R * 90 / 100)` 时停止，默认 462 / 554 块。区间保持滞回。无可回收块时结束维护，不忙循环、不擦有效数据。
+预留 R 是全池预算，不是固定地址区域；空闲 F 只计确认擦除块。F 不高于 `ceil(R * 75 / 100)` 时启动，达到 `ceil(R * 90 / 100)` 时停止，默认 462 / 554 块。区间保持滞回。无可回收块时结束回收，不忙循环、不擦有效数据。
 
 前台分配触及保护下限先 GC，不能安全分配则报空间不足；比较为 F <= 2 时先回收，F > 2 时才允许分配并扣减，不能让分配越过保护下限。
 
 ```text
-StorageTask 空闲维护机会 -> Service -> Platform -> FTL 判断/选块
+StorageTask 空闲回收机会 -> Service -> Platform -> FTL 判断/选块
   -> RawOps 擦除 -> IRQ 通知 -> 普通上下文收尾
   -> 擦除校验 -> 更新空闲状态
 ```
 
-维护采用有限工作推进，不一次无限清空 GC 队列。主循环不能无限期只等 SD 检测通知，需安排维护机会；在飞操作按 IRQ/超时推进。不承诺 NOR 擦除可即时抢占；周期/批量预算实现时配置验证。
+回收采用有限工作推进，不一次无限清空 GC 队列。主循环不能无限期只等 SD 检测通知，需安排回收机会；在飞操作按 IRQ/超时推进。不承诺 NOR 擦除可即时抢占；周期/批量预算实现时配置验证。
 
 首版不做静态磨损均衡、冷数据搬迁或持久化擦除计数。游标掉电丢失不影响映射恢复，频繁重启可能造成磨损偏向。统计只代表本次上电，不当作寿命累计或全盘均匀磨损保证。
 
@@ -217,12 +217,12 @@ Platform 在整个 FTL 请求期间关闭映射，不在每个内部页操作后
 
 | 层 | 能力 |
 | --- | --- |
-| Service | 执行器初始化、同步读写/同步、维护、显式恢复、挂载/显式格式化 |
-| Platform | 绑定、打开卷、逻辑读写/同步/维护/格式化启动、推进、状态/几何/诊断、安全恢复 |
+| Service | 执行器初始化、同步读写/同步、回收、显式恢复、挂载/显式格式化 |
+| Platform | 绑定、打开卷、逻辑读写/同步/回收/格式化启动、推进、状态/几何/诊断、安全恢复 |
 | FTL | 绑定检查、启动操作、推进、结果/几何/统计；不接收 FatFs 类型 |
 | RawOps | 几何、原始读/编程/擦除及进度/结果、安全收尾；Context 覆盖所有在飞操作 |
 
-启动：SDRAM/QSPI/W25Qxx 就绪（破坏性 SDRAM 自检早于内存使用）→ Platform 绑定 FTL/分区/内存 → StorageTask 初始化 Service 执行器并长期订阅 → 打开卷并扫描验证 → 通过 USERPath 挂载 → 文件流程与维护。USER 初始化遇已就绪直接返回，不重复扫描。
+启动：SDRAM/QSPI/W25Qxx 就绪（破坏性 SDRAM 自检早于内存使用）→ Platform 绑定 FTL/分区/内存 → StorageTask 初始化 Service 执行器并长期订阅 → 打开卷并扫描验证 → 通过 USERPath 挂载 → 文件流程与回收。USER 初始化遇已就绪直接返回，不重复扫描。
 
 原始诊断只访问既有受限区域，不借自检 API 操作 FTL。SD/Flash 独立初始化、挂载和错误状态，一个未就绪不能让另一个伪报成功或失败。
 
@@ -238,8 +238,8 @@ Platform 在整个 FTL 请求期间关闭映射，不在每个内部页操作后
 | `FATFS/Target/user_diskio.c` | 仅 USER CODE 区包含契约并薄转发 |
 | `Service/filesystem/sd/` | 原 `filesystem_fatfs_bsp.c` 改名 `filesystem_sd_bsp.c` 并迁入；迁入 SD 私有执行器及头 |
 | `Service/filesystem/flash/` | 新增 `filesystem_flash_bsp.c`、`filesystem_flash_transfer.c/.h` 与私有配置 |
-| `Service/filesystem/filesystem_service.c/.h` 及配置 | 保留单个 Module 与根公开头，增加 Flash 卷、维护/恢复能力 |
-| `APP/tasks/storage/storage_flash.c/.h`、`storage_task.c`、相关 benchmark | 执行职责交 Service；APP 保留启动/诊断编排及维护，不留第二回调所有者 |
+| `Service/filesystem/filesystem_service.c/.h` 及配置 | 保留单个 Module；公开头按卷/文件/诊断切开，增加 Flash 卷、回收/恢复能力 |
+| `APP/tasks/storage/storage_task.c`、相关 benchmark | 执行职责交 Service；APP 保留启动/诊断编排及回收时机，不留第二回调所有者 |
 | 自维护 CMake 与必要链接脚本 | 核查源收集、强符号、SDRAM/DMA SRAM 容量对齐，不向生成构建嵌入产品逻辑 |
 | `Tests/flash_ftl/`与相关测试 | 纯 C Fake NOR、故障注入，与固件构建隔离 |
 
@@ -279,7 +279,7 @@ epoch 首次为 1，每次显式格式化递增；组版本从 1 起递增，0 �
 
 ## 15. 对外流程和实际预算
 
-Service 公开 InitFlash、OpenFlash、MountFlash、UnmountFlash、FormatFlash、MaintainFlash、RecoverFlash。首次使用时由 Storage Task 初始化执行器，启动诊断完成后打开/挂载。FormatFlash 是显式破坏性 API：先注销旧 FAT 卷，再格式化 FTL，最后用 FM_FAT | FM_SFD 建 FAT12/16；不会在启动路径执行，也不自动重挂载。RecoverFlash 注销旧文件对象、确认硬件空闲后重扫 FTL，调用者随后显式挂载。
+Service 公开 InitFlash、OpenFlash、MountFlash、UnmountFlash、FormatFlash、ReclaimFlash、RecoverFlash。首次使用时由 Storage Task 初始化执行器，启动诊断完成后打开/挂载。FormatFlash 是显式破坏性 API：先注销旧 FAT 卷，再格式化 FTL，最后用 FM_FAT | FM_SFD 建 FAT12/16；不会在启动路径执行，也不自动重挂载。RecoverFlash 注销旧文件对象、确认硬件空闲后重扫 FTL，调用者随后显式挂载。
 
 USER 驱动内 LUN 为 0，与全局 1:/ 分开；GET_SECTOR_COUNT 返回 38689（默认），GET_SECTOR_SIZE 返回 512。GET_BLOCK_SIZE 返回 1：本版 FatFs 要求其为二次幂，七扇区组是 FTL 内部约束。CTRL_SYNC 经过同步执行器，未知命令返回 RES_PARERR；未就绪返回 RES_NOTRDY，传输失败返回 RES_ERROR。
 
@@ -287,8 +287,8 @@ USER 驱动内 LUN 为 0，与全局 1:/ 分开；GET_SECTOR_COUNT 返回 38689�
 | --- | --- |
 | Platform/flash/platform_flash_config.h | 物理 24 MiB，从尾部自检块之前向前保留；修改容量必须重新核验已有数据、资源/镜像边界和格式兼容性 |
 | Components/flash_ftl/flash_ftl_config.h | 预留 10%；GC 启动/停止为预留预算的 75%/90%；空闲保护下限 2 块 |
-| Service/filesystem/flash/filesystem_flash_config.h | 摘要日志开关 0；通知重查 2 ms；读 30 s、写/打开 120 s、全格式化 3600 s、恢复/单次维护 2 s；每 64 个软件步骤让出一次调度 |
-| APP/tasks/storage/storage_task_config.h | 空闲维护机会默认 100 ms；每次最多擦一块，不保证擦除可抢占 |
+| Service/filesystem/flash/filesystem_flash_config.h | 摘要日志开关 0；通知重查 2 ms；读 30 s、写/打开 120 s、全格式化 3600 s、恢复/单次回收 2 s；每 64 个软件步骤让出一次调度 |
+| APP/tasks/storage/storage_task_config.h | 空闲回收机会默认 100 ms；每次最多擦一块，不保证擦除可抢占 |
 
 这些预算是保守的软件超时，不是硬件实测速率或最长响应时间保证。任务同步调用期间可阻塞让出 CPU；返回超时前仍须确认控制器/DMA 安全停止。若硬件始终不能 Quiesce，执行器保持等待而非让 DMA 访问已归还的缓冲；该极端情况需板级看门狗/复位策略处理。NOR 内部擦写不会被控制器 Abort 取消，恢复必须另查 WIP=0 与 QE。
 

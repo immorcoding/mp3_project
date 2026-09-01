@@ -1,11 +1,10 @@
 /**
  * @file storage_task.c
- * @brief StorageTask 启动、SD 消抖及 Flash 空闲维护调度；传输由 Service 执行。
+ * @brief StorageTask 启动、SD 消抖及 Flash 空闲回收调度；传输由 Service 执行。
  */
 
 #include "APP/tasks/storage/storage_task.h"
 #include "APP/tasks/storage/storage_task_config.h"
-#include "APP/tasks/storage/storage_flash.h"
 #include "APP/tasks/storage/storage_sd.h"
 #include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
 #include "APP/tasks/storage/benchmark/storage_flash_benchmark_config.h"
@@ -27,7 +26,7 @@
  *         下一次通知；只要等待期间仍有新边沿，就重新开始完整静默期。超时后才
  *         调用 storage_sd_process()，因此触点抖动不会触发 SDMMC 或 FatFs 操作。
  *
- *         主循环有界等待索引 0 并提供维护机会；索引 1 与索引 2 由同一任务调用栈中的
+ *         主循环有界等待索引 0 并提供回收机会；索引 1 与索引 2 由同一任务调用栈中的
  *         Filesystem SD/Flash 私有执行器等待。
  *         它们完成后返回各自调用者，绝不在 IRQ 中提交下一笔传输。
  */
@@ -38,7 +37,11 @@ void storage_task(void *handle)
     (void)handle;
     task_handle = xTaskGetCurrentTaskHandle();
     storage_sd_init(task_handle);
-    storage_flash_init(task_handle);
+    if (Service_Filesystem_InitFlash() != SERVICE_OK)
+    {
+        (void)Service_Log_Post(
+            SERVICE_LOG_LEVEL_ERROR, "FLASH", "Flash executor initialization failed.");
+    }
 
 #if STORAGE_SDRAM_BENCHMARK_ENABLE
     storage_sdram_benchmark_run();
@@ -77,7 +80,7 @@ void storage_task(void *handle)
         uint32_t notified =
             ulTaskNotifyTakeIndexed(FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT,
                                     pdTRUE,
-                                    pdMS_TO_TICKS(STORAGE_FLASH_MAINTENANCE_PERIOD_MS));
+                                    pdMS_TO_TICKS(STORAGE_FLASH_RECLAIM_PERIOD_MS));
         if (notified)
         {
             while (ulTaskNotifyTakeIndexed(FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT,
@@ -88,12 +91,12 @@ void storage_task(void *handle)
             }
             storage_sd_process();
         }
-        flash_status = Service_Filesystem_MaintainFlash();
+        flash_status = Service_Filesystem_ReclaimFlash();
         if (flash_status == SERVICE_ERROR || flash_status == SERVICE_TIMEOUT)
         {
             (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                    "FLASH",
-                                   "Maintenance failed; explicit recovery required.");
+                                   "Reclaim failed; explicit recovery required.");
         }
     }
 }

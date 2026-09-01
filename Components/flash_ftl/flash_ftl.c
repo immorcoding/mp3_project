@@ -1268,7 +1268,7 @@ FlashFTL_StatusTypeDef FlashFTL_WriteStart(FlashFTL_HandleTypeDef *hftl,
 }
 
 /**
- * @brief 受理一次有限维护，由 GC 水位决定是否回收失效块。
+ * @brief 受理一次有限回收，由 GC 水位决定是否回收失效块。
  * @param hftl 已打开实例，只允许唯一普通执行上下文调用。
  * @retval FLASH_FTL_OK 已受理；Process 可能不擦除，也可能最多回收一个块。
  * @retval FLASH_FTL_BUSY 已有请求在飞。
@@ -1276,7 +1276,7 @@ FlashFTL_StatusTypeDef FlashFTL_WriteStart(FlashFTL_HandleTypeDef *hftl,
  * @retval FLASH_FTL_INVALID_PARAM 句柄无效或未绑定。
  * @note 不擦当前有效块，不保证已开始的 NOR 擦除可抢占。
  */
-FlashFTL_StatusTypeDef FlashFTL_MaintainStart(FlashFTL_HandleTypeDef *hftl)
+FlashFTL_StatusTypeDef FlashFTL_ReclaimStart(FlashFTL_HandleTypeDef *hftl)
 {
     if (!hftl || !hftl->Ops)
     {

@@ -1,6 +1,6 @@
 # Filesystem Service 公开接缝切开
 
-> 状态：已确认设计，待实现
+> 状态：已实施
 > 日期：2026-09-01
 > 相关决定：[ADR-0005](adr/0005-sd-filesystem-task-ownership.md)、[ADR-0010](adr/0010-fatfs-user-diskio-service-ownership.md)
 > 实现后将新增 ADR-0012，记录本设计的长期取舍

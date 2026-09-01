@@ -140,7 +140,7 @@ Platform_StatusTypeDef Platform_Flash_WriteBlocksStart(uint32_t lba,
                                                        const uint8_t *data,
                                                        uint32_t count);
 Platform_StatusTypeDef Platform_Flash_SyncVolumeStart(void);
-Platform_StatusTypeDef Platform_Flash_MaintainVolumeStart(void);
+Platform_StatusTypeDef Platform_Flash_ReclaimVolumeStart(void);
 Platform_Flash_VolumeStateTypeDef Platform_Flash_GetVolumeState(void);
 Platform_StatusTypeDef Platform_Flash_GetVolumeInfo(Platform_Flash_VolumeInfoTypeDef *info);
 Platform_StatusTypeDef Platform_Flash_GetVolumeDiagnostics(

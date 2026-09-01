@@ -432,12 +432,12 @@ QSPI 异步操作的当前路径为：
 
 ```text
 Storage Task 启动
-  -> storage_flash_init() -> Service_Filesystem_InitFlash()
+  -> Service_Filesystem_InitFlash()
   -> Platform_Flash_SetOperationCallback()（长期唯一订阅）
 
 Storage Task 内的原始 Flash 诊断（逻辑卷路径见第 13 节）
-  -> storage_flash_read_array() / storage_flash_erase_diagnostic()
-  -> Service_Filesystem_*Flash*() -> Flash 私有执行器
+  -> Service_Filesystem_ReadFlashArray() / EraseFlashDiagnostic()
+  -> Flash 私有执行器
   -> Platform_Flash_StartReadArray() / StartDiagnosticErase()
   -> W25Qxx_StartRead() / W25Qxx_SectorEraseStart()
   -> HAL_QSPI_Receive_DMA() / HAL_QSPI_AutoPolling_IT()
@@ -449,7 +449,7 @@ Storage Task 内的原始 Flash 诊断（逻辑卷路径见第 13 节）
   -> W25Qxx_Process() -> D-Cache Invalidate 或状态匹配确认 -> READY / ERROR
 ```
 
-这不是对外通用的 QSPI DMA 服务：当前只有 Platform Flash 可以注册 `hqspi`，而上层只有 Filesystem Service Flash 执行器长期持有唯一回调；APP storage_flash 只转交诊断，基准与逻辑请求共用 Service 执行者。QSPI IRQ、MDMA IRQ 均为 FreeRTOS 可调用 FromISR 的优先级 5；ISR 不访问缓冲、不记录日志，也不提交下一条 Flash 命令。
+这不是对外通用的 QSPI DMA 服务：当前只有 Platform Flash 可以注册 `hqspi`，而上层只有 Filesystem Service Flash 执行器长期持有唯一回调；APP 物理 benchmark 直接调用诊断 Interface，基准与逻辑请求共用 Service 执行者。QSPI IRQ、MDMA IRQ 均为 FreeRTOS 可调用 FromISR 的优先级 5；ISR 不访问缓冲、不记录日志，也不提交下一条 Flash 命令。
 
 SPI LCD DMA 的当前路径为：
 
@@ -587,7 +587,7 @@ USB_DEVICE/Target/*.c
 
 [ADR-0010](adr/0010-fatfs-user-diskio-service-ownership.md) 将既有 SD Override Seam 模式扩展到 USER：FATFS Target 自维护 `bsp_driver_user_diskio` 契约与安全弱定义，生成 USER CODE 仅转发，Service 强定义实现。运行时进入 Service 不构成中间件包含 Service 头的许可，也不允许在契约默认实现中放入产品任务或装配逻辑。
 
-Filesystem 保持一个 Module，SD/Flash 为私有实现子目录。Flash 完成订阅和等待由 APP 迁入 Service，Storage Task 仍决定执行时机；不提前创建通用 BlockDevice 或 Service/storage。FTL 算法、GC 与 RawOps 仍归 Component，Platform 持有实例/内存并管理完整操作的映射生命周期。设计详见 [flash_ftl_design.md](flash_ftl_design.md)。
+Filesystem 保持一个 Module，SD/Flash 为私有实现子目录。公开 Interface 按卷、文件、诊断切开，见 [ADR-0012](adr/0012-filesystem-public-seams.md)。Flash 完成订阅和等待由 Service 持有，Storage Task 仍决定执行时机；不提前创建通用 BlockDevice 或 Service/storage。MSC 首版只导出 SD。FTL 算法、GC 与 RawOps 仍归 Component，Platform 持有实例/内存并管理完整操作的映射生命周期。设计详见 [flash_ftl_design.md](flash_ftl_design.md)。
 
 上述原始诊断与 FTL 共用 Service 的唯一执行器；FTL 主机回归、真实 FatFs 主机集成及 Debug/Release 构建通过，但不能把软件验证当成真实欠压掉电验收。禁止绕过 FTL 将原始 NOR 接入 FatFs/MSC。
 

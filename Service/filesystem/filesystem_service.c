@@ -12,8 +12,8 @@
 
 #include "Service/filesystem/filesystem_service.h"
 #include "Service/filesystem/filesystem_config.h"
+#include "Service/filesystem/filesystem_status.h"
 
-#include <stdbool.h>
 #include <stdint.h>
 
 #include "FATFS/App/fatfs.h"
@@ -26,77 +26,12 @@
 static uint8_t filesystem_mkfs_work_buffer[FILESYSTEM_MKFS_WORK_BUFFER_SIZE];
 
 /**
- * @brief  将 FatFs 的内部结果收敛为 Service 的公开操作结果。
- * @param  result FatFs API 返回的原始结果。
- * @return 调用者可据此作出流程决策的 Service 状态。
- */
-static Service_StatusTypeDef filesystem_make_service_status(FRESULT result)
-{
-    switch (result)
-    {
-        case FR_OK:
-            return SERVICE_OK;
-
-        case FR_INVALID_PARAMETER:
-            return SERVICE_INVALID_PARAM;
-
-        case FR_NOT_READY:
-            return SERVICE_NOT_READY;
-
-        case FR_TIMEOUT:
-            return SERVICE_TIMEOUT;
-
-        case FR_LOCKED:
-            return SERVICE_BUSY;
-
-        case FR_NO_FILESYSTEM:
-            return SERVICE_NO_FILESYSTEM;
-
-        default:
-            return SERVICE_ERROR;
-    }
-}
-
-/**
- * @brief  将 CubeMX 生成的 ASCII 逻辑卷路径复制为 FatFs API 所需的 TCHAR 路径。
- * @param  source CubeMX 生成的 '\0' 结尾 ASCII 路径，例如 "0:/"。
- * @param  destination 接收 TCHAR 路径的固定长度缓冲区。
- * @retval true 路径完整复制。
- * @retval false 参数无效或路径没有在固定缓冲区内结束。
- * @note   当前 _LFN_UNICODE 为 1，TCHAR 是 UTF-16，不能把 char * 直接强转为
- *         TCHAR *。逻辑卷路径只包含 ASCII 字符，因此逐字符提升是安全的。
- */
-static bool filesystem_make_drive_path(
-    const char *source,
-    TCHAR *destination)
-{
-    uint32_t index;
-
-    if ((source == NULL) || (destination == NULL))
-    {
-        return false;
-    }
-
-    for (index = 0U; index < FILESYSTEM_DRIVE_PATH_LENGTH; index++)
-    {
-        destination[index] = (TCHAR)(uint8_t)source[index];
-
-        if (source[index] == '\0')
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/**
  * @brief  检查 CubeMX 是否已成功链接 SD DiskIO Driver。
  * @retval SERVICE_OK SD Driver 已由 main() 中的 MX_FATFS_Init() 链接。
  * @retval SERVICE_NOT_READY 驱动尚未链接或链接失败。
  * @note   本函数绝不再次调用 MX_FATFS_Init()，避免重复增加 FatFs 逻辑卷。
  */
-Service_StatusTypeDef Service_Filesystem_Init(void)
+Service_StatusTypeDef Service_Filesystem_InitSD(void)
 {
     if ((retSD != 0U) || (SDPath[0] == '\0'))
     {
@@ -171,7 +106,6 @@ Service_StatusTypeDef Service_Filesystem_UnmountSD(void)
 
     return filesystem_make_service_status(f_mount(NULL, sd_drive_path, 0U));
 }
-
 
 /**
  * @brief 在当前 Storage Task 建立唯一 Flash 执行器和长期事件订阅。
@@ -295,15 +229,15 @@ Service_StatusTypeDef Service_Filesystem_FormatFlash(void)
 }
 
 /**
- * @brief 给 FTL 一次有限维护机会，最多回收一个失效块。
- * @retval SERVICE_OK 本次维护完成，可能无需实际擦除。
- * @retval SERVICE_NOT_READY 非所有者上下文或卷未就绪，不发起维护。
+ * @brief 给 FTL 一次有限回收机会，最多回收一个失效块。
+ * @retval SERVICE_OK 本次回收完成，可能无需实际擦除。
+ * @retval SERVICE_NOT_READY 非所有者上下文或卷未就绪，不发起回收。
  * @return 其他 Service 状态表示传输或安全收尾失败。
  * @note 仅 Storage Task 在空闲机会调用。GC 策略属于 FTL，已发起擦除不可抢占。
  */
-Service_StatusTypeDef Service_Filesystem_MaintainFlash(void)
+Service_StatusTypeDef Service_Filesystem_ReclaimFlash(void)
 {
-    return filesystem_flash_transfer_maintain();
+    return filesystem_flash_transfer_reclaim();
 }
 
 /**

@@ -337,7 +337,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 存储任务（Storage Task）
 
-**存储任务**是 SD 热插拔、SDMMC DMA 完成、当前 FatFs 卷生命周期和 Platform Flash 异步操作的唯一执行上下文。它通过索引 0 接收 GPIO EXTI 的轻量事件并完成机械触点消抖、平台 SD 生命周期推进；Filesystem Module 在同一任务上下文中通过索引 1 等待 SDMMC DMA 结果，并在插卡时挂载、拔卡时注销文件系统卷。Filesystem Module 的 Flash 私有执行器已长期持有 Platform Flash 唯一 QSPI 回调，并在 Storage Task 上下文等待索引 2；APP `storage_flash` 仅将诊断请求交给 Service，不再订阅或等待。Service 在普通上下文推进 Process 和安全收尾，通知只作为唤醒提示。Storage Task 空闲时定期提供一次有限维护机会，GC 策略仍归 FTL。
+**存储任务**是 SD 热插拔、SDMMC DMA 完成、当前 FatFs 卷生命周期和 Platform Flash 异步操作的唯一执行上下文。它通过索引 0 接收 GPIO EXTI 的轻量事件并完成机械触点消抖、平台 SD 生命周期推进；Filesystem Module 在同一任务上下文中通过索引 1 等待 SDMMC DMA 结果，并在插卡时挂载、拔卡时注销文件系统卷。Filesystem Module 的 Flash 私有执行器已长期持有 Platform Flash 唯一 QSPI 回调，并在 Storage Task 上下文等待索引 2。Service 在普通上下文推进 Process 和安全收尾，通知只作为唤醒提示。Storage Task 空闲时定期提供一次有限回收机会，GC 策略仍归 FTL。
 
 存储任务拥有 SD 卡与本地 FatFs 的访问时序，但不拥有 SDMMC、GPIO EXTI 或卡座引脚。中断回调只通知该任务，不能在 ISR 中执行消抖、FatFs、日志格式化或 SD 块访问。
 
@@ -349,18 +349,13 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 文件系统 Module（Filesystem Module）
 
-Flash 文件访问已经通过 Filesystem Service 封装：APP 只持有 Service 文件句柄，
-文件对象和 FatFs 类型归 Service。首版仅唯一 Storage Task、已挂载 Flash 卷和单文件槽，
-支持根目录 ASCII 名称、新建/只读、顺序读写、同步、关闭和删除。
-删除释放 FAT 簇；未实现 TRIM 时不直接使 FTL 数据映射失效，后续逻辑覆盖写才使旧版本可回收。
-Flash 文件 benchmark 由 APP 在挂载后编排，不把测速策略下沉为 Service 业务。
+**文件系统 Module**封装当前 FatFs 逻辑卷的驱动就绪检查、挂载、注销和显式格式化，并持有 FatFs 所需的同步 DMA 与 Flash 执行器。它只在存储任务已经取得介质独占权且对应 Platform 能力已处于可访问状态时调用 FatFs，不负责卡检测、消抖或 SDMMC/QSPI 初始化。
 
+公开 Interface 分成三块：卷生命周期、Flash 文件访问、启动诊断。APP 只持有 Service 文件句柄，文件对象和 FatFs 类型归 Service。首版仅唯一 Storage Task、已挂载 Flash 卷和单文件槽，支持根目录 ASCII 名称、新建/只读、顺序读写、同步、关闭和删除。删除释放 FAT 簇；未实现 TRIM 时不直接使 FTL 数据映射失效，后续逻辑覆盖写才使旧版本可回收。Flash 文件 benchmark 由 APP 在挂载后编排，不把测速策略下沉为 Service 业务。启动诊断由 APP benchmark 直接调用诊断 Interface，不经空转发层。
 
-**文件系统 Module**封装当前 FatFs 逻辑卷的驱动就绪检查、挂载、注销和显式格式化，并持有 FatFs 所需的同步 DMA 执行器。它只在存储任务已经取得 SD 独占权且平台 SD 已处于可访问状态时调用 FatFs，不负责卡检测、消抖或 SDMMC 初始化。
+该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和大块中转区挤占任务栈。它经 FatFs 声明的 `BSP_SD_*` Override Seam 间接使用 Platform SD；DMA 等待与 Cache 一致性细节见 `docs/sd_architecture.md`。Flash 扩展已在同一 Module 中分开 SD/Flash 私有实现，承接 USER DiskIO 契约与 Flash 同步执行器；当前同时提供 SD 与 Flash 卷流程。空闲时由存储任务调用回收入口，GC 策略仍归 FTL。它向上返回 `Service_StatusTypeDef`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果，同时不泄漏 FatFs 原始类型。
 
-该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和大块中转区挤占任务栈。它经 FatFs 声明的 `BSP_SD_*` Override Seam 间接使用 Platform SD；DMA 等待与 Cache 一致性细节见 `docs/sd_architecture.md`。Flash 扩展已在同一 Module 中分开 SD/Flash 私有实现，承接 USER DiskIO 契约与 Flash 同步执行器；当前同时提供 SD 与 Flash 卷流程。它向上返回 `Service_StatusTypeDef`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果，同时不泄漏 FatFs 原始类型。
-
-相关术语：**存储任务**、**平台 SD**、**SD 卡设备**。
+相关术语：**存储任务**、**平台 SD**、**平台 Flash**、**SD 卡设备**。
 
 示例：
 
@@ -430,7 +425,7 @@ W25Qxx 到 Flash FTL 的转换由跨 Component Bridge 承担。首版以逻辑�
 
 ## 平台 Flash（Platform Flash）
 
-**平台 Flash**代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。当前它长期持有 W25Qxx Handle、QSPI Adapter Context 和 QSPI IRQ 回调节点，注入本板预期的 Winbond 厂商码和 256 Mbit 容量码，完成 HAL QSPI Adapter 的 Bind、启动 JEDEC ID 识别校验、SFDP 签名探测、QE 按需安全置位和一次从地址 0 读取 4 字节的非破坏性 `0xEC` 通路验证，并对上公开缓存 ID 与实时 SR1/SR2 快照。它保留同步物理读取，也以“设置唯一 IRQ 回调 → 启动 MDMA 读取或自动状态轮询 → 普通上下文处理完成”的接缝提供受限异步操作；Platform 不拥有任务或 Cache 操作策略。它还唯一拥有 H7 QSPI 的只读内存映射生命周期：仅在 WIP=0 且无在飞操作时配置固定 `0x90000000`、32 MiB 窗口；任一间接操作先退出映射，成功收尾后恢复，失败则保持关闭。当前唯一回调所有者是 Filesystem Service Flash 私有执行器，基准和逻辑请求共用 Storage Task 上下文中的同步执行者。它只允许 ADR-0009 保留的首尾自检扇区经区域语义进行擦除、逐页写入、同步读回和 MDMA 读回：写擦完成由 QSPI Status Match 通知，Platform 只生成/比较私有图样而不等待通知或访问 DMA 缓冲区。该自检接缝仅限启动诊断，不能作为 FTL、Resource Pack 或 MSC 的通用擦写能力。当前也持有 FTL Handle、Bridge Context、SDRAM 映射/版本/状态表与 AXI SRAM 工作区，并提供逻辑卷启动、访问、维护和恢复接缝。
+**平台 Flash**代表当前 PCB W25Q256 外部 NOR Flash 的板级装配 Module。当前它长期持有 W25Qxx Handle、QSPI Adapter Context 和 QSPI IRQ 回调节点，注入本板预期的 Winbond 厂商码和 256 Mbit 容量码，完成 HAL QSPI Adapter 的 Bind、启动 JEDEC ID 识别校验、SFDP 签名探测、QE 按需安全置位和一次从地址 0 读取 4 字节的非破坏性 `0xEC` 通路验证，并对上公开缓存 ID 与实时 SR1/SR2 快照。它保留同步物理读取，也以“设置唯一 IRQ 回调 → 启动 MDMA 读取或自动状态轮询 → 普通上下文处理完成”的接缝提供受限异步操作；Platform 不拥有任务或 Cache 操作策略。它还唯一拥有 H7 QSPI 的只读内存映射生命周期：仅在 WIP=0 且无在飞操作时配置固定 `0x90000000`、32 MiB 窗口；任一间接操作先退出映射，成功收尾后恢复，失败则保持关闭。当前唯一回调所有者是 Filesystem Service Flash 私有执行器，基准和逻辑请求共用 Storage Task 上下文中的同步执行者。它只允许 ADR-0009 保留的首尾自检扇区经区域语义进行擦除、逐页写入、同步读回和 MDMA 读回：写擦完成由 QSPI Status Match 通知，Platform 只生成/比较私有图样而不等待通知或访问 DMA 缓冲区。该自检接缝仅限启动诊断，不能作为 FTL、Resource Pack 或 MSC 的通用擦写能力。当前也持有 FTL Handle、Bridge Context、SDRAM 映射/版本/状态表与 AXI SRAM 工作区，并提供逻辑卷启动、访问、回收和恢复接缝。
 
 它不实现芯片协议、FTL 映射、FatFs 挂载、USB MSC 所有权或媒体扫描。CubeMX 管理实际 QSPI Handle、引脚、时钟和 IRQ，Platform 只注入借用的实例并决定本板启动识别策略。
 

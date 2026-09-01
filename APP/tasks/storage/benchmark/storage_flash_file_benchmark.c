@@ -8,7 +8,7 @@
 #if STORAGE_FLASH_BENCHMARK_ENABLE && STORAGE_FLASH_BENCHMARK_FILE_ENABLE
 
 #include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
-#include "Service/filesystem/filesystem_service.h"
+#include "Service/filesystem/filesystem_file.h"
 #include "Service/log/log_service.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
