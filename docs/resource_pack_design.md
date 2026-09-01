@@ -1,6 +1,6 @@
 # RPKC1 通用资源包设计
 
-> 状态：协议设计已确认，尚未实现 RPKC1 打包器、ResourcePack Component 或 Resource Service。
+> 状态：首版 PC 打包器、ResourcePack Core/BINARY/IMAGE、Resource Service 和 APP 启动接线已实现；主机协议测试与 Debug 固件构建通过，等待实际打包、重新烧录和硬件启动验收。
 > 日期：2026-09-01。
 > 首版范围：实现 Core、BINARY 与 IMAGE；FONT、AUDIO、MODEL、FIRMWARE 先完成协议定义，类型解码器默认关闭。
 > 当前硬件：STM32H743ZG、32 MiB W25Q256、32 MiB SDRAM。

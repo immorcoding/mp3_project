@@ -9,8 +9,9 @@
   *          Platform Module 并启动 FreeRTOS 任务。可移除 SD 卡的初始化、
   *          热插拔消抖和后续文件系统工作由 Storage Task 独占处理。
   *
-  *          当前初始化依赖顺序为：
-  *          Platform_Log_Init() -> 启动日志入队 -> Platform_Init() -> app_task_start()。
+ *          当前初始化依赖顺序为：
+  *          Platform_Log_Init() -> 启动日志入队 -> Platform_Init() ->
+  *          Service_Resource_Init() -> app_task_start()。
    *          Platform_Init() 内部初始化 GPIO EXTI Adapter、PMIC、W25Q256 Flash、
    *          音频、LCD、LED 和 Touch；Storage Task 在 Log Service 就绪后处理
    *          可选 SD 卡。
@@ -31,6 +32,7 @@
 #include "Platform/log/platform_log.h"
 #include "Platform/power/platform_power.h"
 #include "Components/log/log.h"
+#include "Service/resource/resource_service.h"
 /* Variables ------------------------------------------------------------------*/
 
 /* Private functions ---------------------------------------------------------*/
@@ -127,6 +129,27 @@ void app_init(void)
             Error_Handler();
             break;
     }
+
+    /* GUI 和 FatFs 使用这些地址前，先从只读 NOR 资源包校验并加载到 SDRAM。 */
+    if (Service_Resource_Init() != SERVICE_OK)
+    {
+        Service_ResourceDiagnosticsTypeDef diagnostics;
+
+        if (Service_Resource_GetDiagnostics(&diagnostics) == SERVICE_OK)
+        {
+            (void)LOG_Printf(
+                LOG_LEVEL_ERROR,
+                "RESOURCE",
+                "Initialization failed: id=%lu, stage=%lu, component=%lu.",
+                (unsigned long)diagnostics.FailedResourceID,
+                (unsigned long)diagnostics.FailedStage,
+                (unsigned long)diagnostics.ComponentStatus);
+        }
+
+        Error_Handler();
+    }
+
+    (void)LOG_Printf(LOG_LEVEL_INFO, "RESOURCE", "Initialization successful.");
 
     app_task_start();
 }

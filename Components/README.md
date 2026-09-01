@@ -6,6 +6,7 @@
 
 - `audio`、`axp2101`、`ft6x36`、`led`、`log`、`sd`、`soft_i2c`、`st7789`、`w25qxx` 各自的公开类型、状态和函数；
 - `w25qxx` 当前实现启动阶段 JEDEC ID 识别；`flash_ftl` 逻辑扇区 Component 仍为预留目录。两者的 Interface 所有权见 [../docs/w25q256_architecture.md](../docs/w25q256_architecture.md)。
+- `resource_pack` 实现 RPKC1 Core、BINARY 与 IMAGE Metadata 的只读解析和校验，不认识具体存储介质。
 - 每个 Module 自己定义的 `*_OpsTypeDef` 或回调类型。
 
 ## 编译期依赖
