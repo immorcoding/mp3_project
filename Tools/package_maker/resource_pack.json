@@ -1,0 +1,62 @@
+{
+  "format_version": 1,
+  "header_size": "0x1000",
+  "data_alignment": "0x1000",
+  "metadata_alignment": 4,
+  "vendor_id": 1,
+  "product_id": 1,
+  "package_version": 1,
+  "maximum_pack_size": "0x003FE000",
+  "deployment": {
+    "nor_chip_offset": "0x00401000",
+    "mapped_base": "0x90000000"
+  },
+  "resources": [
+    {
+      "id": 1,
+      "name": "cp936_uni2oem",
+      "type": "BINARY",
+      "version": 1,
+      "data": "generated/uni2oem.bin",
+      "metadata": {
+        "version": 1,
+        "element_format": "UINT16",
+        "byte_order": "LITTLE_ENDIAN",
+        "element_size": 2,
+        "element_count": 43586
+      }
+    },
+    {
+      "id": 2,
+      "name": "cp936_oem2uni",
+      "type": "BINARY",
+      "version": 1,
+      "data": "generated/oem2uni.bin",
+      "metadata": {
+        "version": 1,
+        "element_format": "UINT16",
+        "byte_order": "LITTLE_ENDIAN",
+        "element_size": 2,
+        "element_count": 43586
+      }
+    },
+    {
+      "id": 3,
+      "name": "default_wallpaper",
+      "type": "IMAGE",
+      "version": 1,
+      "data": "generated/wallpaper.bin",
+      "metadata": {
+        "version": 1,
+        "image_format": "LVGL_NATIVE",
+        "pixel_format": "TRUE_COLOR_ALPHA",
+        "width": 240,
+        "height": 320,
+        "stride_bytes": 720,
+        "frame_count": 1,
+        "color_space": "SRGB",
+        "alpha_mode": "STRAIGHT"
+      }
+    }
+  ]
+}

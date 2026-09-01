@@ -82,6 +82,84 @@ SECTIONS
     . = ALIGN(4);
   } >FLASH
 
+  /* Constant data goes into FLASH */
+  /* 提前取走cp936的两张映射表和默认壁纸 */
+  .sdram_external_resources (NOLOAD) :
+  {
+      . = ALIGN(32);
+
+      __external_resource_uni2oem_start__ = .;
+      KEEP(*(.rodata.uni2oem))
+      __external_resource_uni2oem_end__ = .;
+
+      . = ALIGN(32);
+      __external_resource_oem2uni_start__ = .;
+      KEEP(*(.rodata.oem2uni))
+      __external_resource_oem2uni_end__ = .;
+
+      . = ALIGN(32);
+      __external_resource_wallpaper_start__ = .;
+      KEEP(*(.rodata.ui_img_wallpaper_indigo_mist_soft_dark_png_data))
+      __external_resource_wallpaper_end__ = .;
+
+      . = ALIGN(32);
+  } >SDRAM
+
+  ASSERT((__external_resource_uni2oem_end__ - __external_resource_uni2oem_start__) == 0x15484,
+         "External resource uni2oem size mismatch")
+  ASSERT((__external_resource_oem2uni_end__ - __external_resource_oem2uni_start__) == 0x15484,
+         "External resource oem2uni size mismatch")
+  ASSERT((__external_resource_wallpaper_end__ - __external_resource_wallpaper_start__) == 0x38400,
+         "External resource wallpaper size mismatch")
+
+  /*
+  * 提前取走存储测试代码放到FLASH2
+  */
+  .storage_benchmark :
+  {
+      . = ALIGN(4);
+
+      *APP/tasks/storage/benchmark/*.obj(
+          .text
+          .text.*
+          .rodata
+          .rodata.*
+      )
+
+      . = ALIGN(4);
+  } >FLASH2
+
+  /* 图片与字体的只读资源。在匹配到下面的.rodata之前先取走。 */
+  .gui_assets :
+  {
+    . = ALIGN(4);
+
+    *(.rodata.ui_img_*)
+    *(.rodata.glyph_*)
+    *(.rodata.cmaps)
+    *(.rodata.kern_*)
+    *(.rodata.ui_font_Number)
+
+    . = ALIGN(4);
+  } >FLASH
+
+  /*
+  * 提前取走 LVGL 静态库中的其他代码和只读数据，放到 FLASH2。
+  */
+  .lvgl_flash2 :
+  {
+      . = ALIGN(4);
+
+      *liblvgl.a:*(
+          .text
+          .text.*
+          .rodata
+          .rodata.*
+      )
+
+      . = ALIGN(4);
+  } >FLASH2
+
   /* The program code and other data goes into FLASH */
   .text :
   {
@@ -98,21 +176,6 @@ SECTIONS
     . = ALIGN(4);
     _etext = .;        /* define a global symbols at end of code */
   } >FLASH
-
-  /* Constant data goes into FLASH */
-  /* SquareLine 图片与自定义字体的只读资源。在匹配到下面的.rodata之前先取走。 */
-  .gui_assets :
-  {
-    . = ALIGN(4);
-
-    *(.rodata.ui_img_*)
-    *(.rodata.glyph_*)
-    *(.rodata.cmaps)
-    *(.rodata.kern_*)
-    *(.rodata.ui_font_Number)
-
-    . = ALIGN(4);
-  } >FLASH2
 
   .rodata :
   {
@@ -252,5 +315,4 @@ SECTIONS
   }
 
 }
-
 
