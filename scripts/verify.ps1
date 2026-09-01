@@ -13,9 +13,11 @@ $ErrorActionPreference = 'Stop'
 
 [void](Get-RepositoryRoot -EntryScriptPath $PSCommandPath)
 
+$checkLayerIncludesScript = Join-Path -Path $PSScriptRoot -ChildPath 'check-layer-includes.ps1'
 $buildFirmwareScript = Join-Path -Path $PSScriptRoot -ChildPath 'build-firmware.ps1'
 $testHostScript = Join-Path -Path $PSScriptRoot -ChildPath 'test-host.ps1'
 
+Invoke-PowerShellScript -ScriptPath $checkLayerIncludesScript
 Invoke-PowerShellScript -ScriptPath $buildFirmwareScript -Parameters @{ Configuration = 'Debug' }
 Invoke-PowerShellScript -ScriptPath $buildFirmwareScript -Parameters @{ Configuration = 'Release' }
 

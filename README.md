@@ -43,6 +43,16 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 
 分别生成到 `build/firmware-debug/` 和 `build/firmware-release/`。CMake Preset 仍可供 IDE 使用；日常命令使用上述脚本。
 
+## 分层检查
+
+`Components/` 与 `Adapters/bridge/` 不得包含 HAL、FreeRTOS、CubeMX 头或上层目录。`Service/` 不得包含 HAL、`main.h`、`Drivers/` 或 HAL Adapter；FreeRTOS、FatFs Glue、LVGL 与 `GUI/` 导出头仍允许。单独检查：
+
+```powershell
+./scripts/check-layer-includes.ps1
+```
+
+`./scripts/verify.ps1` 会先跑该项，再构建固件并跑主机回归。
+
 ## 主机回归
 
 主机回归的环境要求、运行命令和安全边界见 [Tests/README.md](Tests/README.md)。

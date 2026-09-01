@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-AXP2101_StatusTypeDef AXP2101_SoftI2CAdapter_Bind(
+AXP2101_StatusTypeDef AXP2101_SoftI2CBridge_Bind(
     AXP2101_HandleTypeDef *haxp2101,
     SoftI2C_HandleTypeDef *hi2c);
 

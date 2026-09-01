@@ -4,7 +4,7 @@
 
 ## 公开 Interface
 
-- `AXP2101_SoftI2CAdapter_Bind()`；
+- `AXP2101_SoftI2CBridge_Bind()`；
 - 对应 Adapter Context 类型。
 
 ## 编译期依赖

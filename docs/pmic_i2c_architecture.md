@@ -86,7 +86,7 @@ Platform_Init()
                                        timeout)
             -> hplatform_power_i2c.GPIOOps = STM32 GPIO Ops
             -> hplatform_power_i2c.GPIOContext = &hplatform_power_gpio
-       -> AXP2101_SoftI2CAdapter_Bind(&hplatform_power,
+       -> AXP2101_SoftI2CBridge_Bind(&hplatform_power,
                                       &hplatform_power_i2c)
             -> hplatform_power.BusOps = &axp2101_soft_i2c_ops
             -> hplatform_power.BusContext = &hplatform_power_i2c
@@ -238,7 +238,7 @@ Platform_Power_GetDiagnostics(&diagnostics);
 ### 8.2 Platform 或 Device 独立测试使用
 
 ```c
-AXP2101_SoftI2CAdapter_Bind(&device, &soft_i2c);
+AXP2101_SoftI2CBridge_Bind(&device, &soft_i2c);
 AXP2101_Init(&device);
 AXP2101_ApplyConfiguration(&device, profile, count);
 AXP2101_SetALDO1Enabled(&device, true);

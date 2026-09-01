@@ -135,7 +135,7 @@ static const AXP2101_BusOpsTypeDef axp2101_soft_i2c_ops = {
   * @retval AXP2101_ERROR 任一参数为空。
   * @note   本函数只安装 Ops 和 Context，不初始化总线，也不产生 I2C 波形。
   */
-AXP2101_StatusTypeDef AXP2101_SoftI2CAdapter_Bind(
+AXP2101_StatusTypeDef AXP2101_SoftI2CBridge_Bind(
     AXP2101_HandleTypeDef *haxp2101,
     SoftI2C_HandleTypeDef *hi2c)
 {

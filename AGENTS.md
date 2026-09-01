@@ -63,6 +63,10 @@ APP
 
 具体的情况参考每个工程目录下的 分层.png
 
+## 完成前验收
+
+未运行且通过 `./scripts/verify.ps1`，不得声称工作完成。该命令会先做分层 `#include` 检查，再构建固件 Debug/Release 并跑主机回归。只改 `Components/`、`Adapters/bridge/` 或 `Service/` 的包含关系时，可先单独运行 `./scripts/check-layer-includes.ps1`。
+
 ## Agent skills
 
 ### Issue tracker

@@ -338,7 +338,7 @@ Read(context, line)
 Platform_Power_Init
   -> SoftI2C_STM32HALAdapter_Bind
        -> GPIOOps + STM32 GPIO Context
-  -> AXP2101_SoftI2CAdapter_Bind
+  -> AXP2101_SoftI2CBridge_Bind
        -> AXP2101 BusOps + SoftI2C Context
   -> AXP2101_Init
        -> SoftI2C_Init

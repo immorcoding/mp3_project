@@ -90,7 +90,7 @@ Platform_StatusTypeDef Platform_Power_Init(void)
         return PLATFORM_PMIC_ERROR;
     }
 
-    if (AXP2101_SoftI2CAdapter_Bind(&hplatform_power, &hplatform_power_i2c) != AXP2101_OK)
+    if (AXP2101_SoftI2CBridge_Bind(&hplatform_power, &hplatform_power_i2c) != AXP2101_OK)
     {
         return PLATFORM_PMIC_ERROR;
     }
