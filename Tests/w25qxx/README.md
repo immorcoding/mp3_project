@@ -1,13 +1,11 @@
 # W25Qxx Component 主机测试
 
-该目录独立编译 `Components/w25qxx/w25qxx.c` 与一个 Fake Bus，不链接 STM32 HAL、FreeRTOS 或目标固件。
+该目录独立编译 `Components/w25qxx/w25qxx.c`、`Components/flash_ftl/flash_ftl.c`、`Adapters/bridge/flash_ftl_w25qxx/flash_ftl_w25qxx_bridge.c` 与 Fake Bus，不链接 STM32 HAL、FreeRTOS 或目标固件。运行方法见 [主机回归操作手册](../README.md)。
 
-当前行为测试：W25Qxx Device 在已绑定总线后初始化，必须通过 `0x9F` 读取三字节 JEDEC ID；只有制造商和容量与实例期望值相同才进入 READY，`MemoryType` 不参与判定。测试覆盖合法的 `EF 70 19`，以及厂商或容量不匹配时的拒绝路径；随后覆盖 `0x5A`、地址 0、24-bit 地址长度、8 个 dummy cycle 的 SFDP 读取，并分别验证正确与错误签名。状态寄存器测试覆盖 `0x05`、`0x35` 的 SR1/SR2 读取、WIP/WEL/QE 解析，以及 SR2 总线失败时拒绝返回不完整结果。QE 测试覆盖“已开启时零写入直通”“QE=0 时 `0x06 → WEL 核验 → 0x31 → WIP 清零 → QE 回读`”及“初始 WIP=1 时拒绝改写”。数组读取测试核验 W25Q256 `0xEC` 的 32-bit 四线地址、四线 `0xFF` 模式字节和 4 个 dummy clock，并拒绝非 4-byte 对齐首地址或非 W25Q256 容量；其中也核验 `W25Qxx_GetArrayReadProtocol()` 在 READY 的 W25Q256 上仅返回同一固定事务描述，不发起总线操作或改变 Device 状态。异步数组读取还核验 `W25Qxx_StartRead()` 进入 `BUSY`、Adapter 报告完成后 `Process()` 回到 `READY`，以及 100 ms 未完成时进入 ERROR。页编程测试核验 `0x34` 的 32-bit 单线地址/四线数据、`0x06 → WEL` 前置条件、非阻塞 `WIP` 轮询、跨页和 QE 未开启拒绝，以及 5 ms 超时进入 ERROR。扇区擦除测试核验 `0x21` 的 32-bit 单线地址/无数据阶段、`0x06 → WEL` 前置条件、4 KiB 对齐拒绝、非阻塞轮询与 500 ms 超时进入 ERROR。H7 内存映射本身属于 Adapter/Platform 板级集成，由 Flash benchmark 的交叉比对和真机运行验证，不在 Fake Bus 主机测试范围内。成功后调用者可通过 `W25Qxx_GetJedecID()` 读取缓存结果。
+## 范围
 
-```powershell
-cmake -S Tests/w25qxx -B build/tests/w25qxx -G "MinGW Makefiles"
-cmake --build build/tests/w25qxx
-ctest --test-dir build/tests/w25qxx -C Debug --output-on-failure
-```
-
-测试构建目录不属于目标固件 CMake 的源文件收集范围，也不应提交产物。
+- 初始化时仅执行 `0x9F` JEDEC ID 校验；初始化之外由 `W25Qxx_ProbeSFDP` 独立执行 `0x5A` SFDP 读取与签名校验；`0x05`/`0x35` 状态寄存器读取与 WIP/WEL/QE 解析为独立的状态寄存器读取/解析。
+- QE 配置状态机：`0x06`、WEL 核验、`0x31`、WIP 清零与回读；已开启直通及忙时拒绝。
+- W25Q256 `0xEC` 固定四线数组读取协议、异步读取状态与超时，以及 `0x34` 页编程、`0x21` 扇区擦除的地址、对齐、轮询和超时边界。
+- Flash FTL 与 W25Qxx Bridge：分区范围、芯片容量越界、分区末端跨界及极大非法偏移拒绝、FTL 地址到芯片地址转换，以及 Bridge 实现 FTL 拥有的 `FlashFTL_RawOps` 接缝 `ReadStart`/`Process` 异步受理、忙态与完成推进。
+- H7 内存映射属于 Adapter/Platform 板级集成，不在 Fake Bus 主机测试范围内。

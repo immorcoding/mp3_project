@@ -33,12 +33,19 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 
 构建环境需要 CMake、Ninja 与可从命令行找到的 Arm GNU Toolchain（`arm-none-eabi-*`）。在工程根目录执行：
 
-```text
-cmake --preset Debug
-cmake --build --preset Debug
+```powershell
+./scripts/build-firmware.ps1 -Configuration Debug
 ```
 
-Release 构建可将两个 `Debug` 替换为 `Release`。生成的 ELF、HEX、BIN 位于对应的 `build/<preset>/` 目录。
+```powershell
+./scripts/build-firmware.ps1 -Configuration Release
+```
+
+分别生成到 `build/firmware-debug/` 和 `build/firmware-release/`。CMake Preset 仍可供 IDE 使用；日常命令使用上述脚本。
+
+## 主机回归
+
+主机回归的环境要求、运行命令和安全边界见 [Tests/README.md](Tests/README.md)。
 
 ## 交流与审阅重点
 
