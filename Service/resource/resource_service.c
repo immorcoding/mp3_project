@@ -91,6 +91,47 @@ static const Service_ResourceTargetTypeDef resource_targets[] = {
 /** @brief Service 生命周期内保留的最终状态和最近失败信息。 */
 static Service_ResourceDiagnosticsTypeDef resource_diagnostics;
 
+#if SERVICE_RESOURCE_LOG_ENABLE
+/**
+ * @brief 将无符号 64 位整数转换为十进制字符串。
+ * @param value 待转换数值。
+ * @param text 接收字符串的缓冲区。
+ * @param text_size 缓冲区字节数，包含字符串结束符。
+ * @retval true 转换成功。
+ * @retval false 参数无效或缓冲区空间不足。
+ */
+static bool resource_format_u64(uint64_t value, char *text, uint32_t text_size)
+{
+    char reversed_digits[20];
+    uint32_t digit_count = 0U;
+
+    if ((text == NULL) || (text_size == 0U))
+    {
+        return false;
+    }
+
+    do
+    {
+        reversed_digits[digit_count] = (char)('0' + (value % 10U));
+        digit_count++;
+        value /= 10U;
+    } while (value != 0U);
+
+    if (text_size <= digit_count)
+    {
+        return false;
+    }
+
+    for (uint32_t index = 0U; index < digit_count; index++)
+    {
+        text[index] = reversed_digits[digit_count - index - 1U];
+    }
+
+    text[digit_count] = '\0';
+    return true;
+}
+#endif
+
 /**
  * @brief 记录初始化失败的资源、阶段和 Component 状态。
  * @param resource_id 失败资源 ID；包级失败使用零。
@@ -286,12 +327,18 @@ static Service_StatusTypeDef resource_load_target(
     }
 
 #if SERVICE_RESOURCE_LOG_ENABLE && SERVICE_RESOURCE_LOG_ENTRY_ENABLE
+    char version_text[21] = "?";
+
+    (void)resource_format_u64(entry.ResourceVersion,
+                              version_text,
+                              sizeof(version_text));
+
     (void)LOG_Printf(LOG_LEVEL_INFO,
                      "RESOURCE",
-                     "Loaded id=%lu, type=%u, version=%llu, bytes=%lu.",
+                     "Loaded id=%lu, type=%u, version=%s, bytes=%lu.",
                      (unsigned long)entry.ResourceID,
                      (unsigned int)entry.ResourceType,
-                     (unsigned long long)entry.ResourceVersion,
+                     version_text,
                      (unsigned long)entry.DataLength);
 #endif
 
@@ -379,12 +426,18 @@ Service_StatusTypeDef Service_Resource_Init(void)
     }
 
 #if SERVICE_RESOURCE_LOG_ENABLE
+    char package_version_text[21] = "?";
+
+    (void)resource_format_u64(info.PackageVersion,
+                              package_version_text,
+                              sizeof(package_version_text));
+
     (void)LOG_Printf(LOG_LEVEL_INFO,
                      "RESOURCE",
-                     "RPKC1 vendor=%lu, product=%lu, version=%llu, entries=%u.",
+                     "RPKC1 vendor=%lu, product=%lu, version=%s, entries=%u.",
                      (unsigned long)info.VendorID,
                      (unsigned long)info.ProductID,
-                     (unsigned long long)info.PackageVersion,
+                     package_version_text,
                      (unsigned int)info.EntryCount);
 #endif
 
@@ -408,11 +461,16 @@ Service_StatusTypeDef Service_Resource_Init(void)
     if (frequency_hz != 0U)
     {
         uint64_t elapsed_us = (uint64_t)elapsed_cycles * 1000000ULL / frequency_hz;
+        char elapsed_us_text[21] = "?";
+
+        (void)resource_format_u64(elapsed_us,
+                                  elapsed_us_text,
+                                  sizeof(elapsed_us_text));
 
         (void)LOG_Printf(LOG_LEVEL_INFO,
                          "RESOURCE",
-                         "Initialization time=%llu us.",
-                         (unsigned long long)elapsed_us);
+                         "Initialization time=%s us.",
+                         elapsed_us_text);
     }
 #endif
 
