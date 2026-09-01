@@ -35,7 +35,7 @@ function Get-LayerIncludeViolation {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('component', 'bridge', 'service')]
+        [ValidateSet('component', 'bridge', 'service', 'platform', 'stm32_hal', 'cortex')]
         [string]$SourceKind,
 
         [Parameter(Mandatory)]
@@ -49,6 +49,24 @@ function Get-LayerIncludeViolation {
 
     $leaf = ($normalized -split '/')[-1]
     $isHalHeader = $leaf -match '(?i)^(main|i2s|sdmmc|usb_device|stm32[^/]*|cmsis[^/]*|usbd_[^/]+)\.h$'
+
+    if ($SourceKind -in @('platform', 'stm32_hal', 'cortex')) {
+        $sourceLabel = switch ($SourceKind) {
+            'platform' { 'Platform' }
+            'stm32_hal' { 'Adapters/stm32_hal' }
+            default { 'Adapters/cortex' }
+        }
+
+        if ($normalized -cmatch '(^|/)APP(/|$)') {
+            return "禁止包含 '$normalized'。$sourceLabel 禁止反向依赖 APP。"
+        }
+
+        if ($normalized -match '(?i)(^|/)Service(/|$)') {
+            return "禁止包含 '$normalized'。$sourceLabel 禁止反向依赖 Service。"
+        }
+
+        return $null
+    }
 
     if ($SourceKind -eq 'service') {
         if ($isHalHeader) {
@@ -120,6 +138,9 @@ function Invoke-LayerIncludeCheck {
     $scanRoots = @(
         @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Components'; Kind = 'component' }
         @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Adapters/bridge'; Kind = 'bridge' }
+        @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Adapters/stm32_hal'; Kind = 'stm32_hal' }
+        @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Adapters/cortex'; Kind = 'cortex' }
+        @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Platform'; Kind = 'platform' }
         @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Service'; Kind = 'service' }
     )
 

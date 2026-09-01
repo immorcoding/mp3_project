@@ -45,7 +45,7 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 
 ## 分层检查
 
-`Components/` 与 `Adapters/bridge/` 不得包含 HAL、FreeRTOS、CubeMX 头或上层目录。`Service/` 不得包含 HAL、`main.h`、`Drivers/` 或 HAL Adapter；FreeRTOS、FatFs Glue、LVGL 与 `GUI/` 导出头仍允许。单独检查：
+`Components/` 与 `Adapters/bridge/` 不得包含 HAL、FreeRTOS、CubeMX 头或上层目录。`Service/` 不得包含 HAL、`main.h`、`Drivers/`、HAL Adapter 或 `APP/`；FreeRTOS、FatFs Glue、LVGL 与 `GUI/` 导出头仍允许。`Platform/`、`Adapters/stm32_hal/` 与 `Adapters/cortex/` 不得反向包含 `Service/` 或 `APP/`。不扫 `APP/`。单独检查：
 
 ```powershell
 ./scripts/check-layer-includes.ps1

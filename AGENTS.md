@@ -65,7 +65,7 @@ APP
 
 ## 完成前验收
 
-未运行且通过 `./scripts/verify.ps1`，不得声称工作完成。该命令会先做分层 `#include` 检查和生成目录写保护，再构建固件 Debug/Release 并跑主机回归。只改 `Components/`、`Adapters/bridge/` 或 `Service/` 的包含关系时，可先单独运行 `./scripts/check-layer-includes.ps1`。只核对应保护的生成目录是否被手改时，可先单独运行 `./scripts/check-generated-write.ps1`。
+未运行且通过 `./scripts/verify.ps1`，不得声称工作完成。该命令会先做分层 `#include` 检查和生成目录写保护，再构建固件 Debug/Release 并跑主机回归。只改 `Components/`、`Adapters/`、`Platform/` 或 `Service/` 的包含关系时，可先单独运行 `./scripts/check-layer-includes.ps1`。只核对应保护的生成目录是否被手改时，可先单独运行 `./scripts/check-generated-write.ps1`。
 
 克隆后在仓库根目录执行一次 `./scripts/install-git-hooks.ps1`，提交时由 `pre-commit` 自动跑分层检查和生成目录写保护，失败则拒绝提交。助手禁止使用 `git commit --no-verify`，也禁止设置 `ALLOW_GENERATED_UPDATE`；仅维护者本人在本机命令行显式带上 `--no-verify`，或在当前 PowerShell 会话执行 `$env:ALLOW_GENERATED_UPDATE = '1'` 后提交 SquareLine / CubeMX 重新导出时可以绕过对应闸门。不要把该变量写入用户或系统环境变量；Git Graph 提交带不上它，导出后的那一次请用终端提交。
 

@@ -107,6 +107,27 @@ Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'service' -Include
 Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'service' -IncludePath 'APP/app.h') `
     -Message 'Service 禁止 APP'
 
+Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'platform' -IncludePath 'main.h') `
+    -Message 'Platform 允许 main.h'
+Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'platform' -IncludePath 'Adapters/stm32_hal/sd/sd_stm32_hal_adapter.h') `
+    -Message 'Platform 允许 HAL Adapter'
+Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'platform' -IncludePath 'Service/gui/gui_service.h') `
+    -Message 'Platform 禁止 Service'
+Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'platform' -IncludePath 'APP/app.h') `
+    -Message 'Platform 禁止 APP'
+
+Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'stm32_hal' -IncludePath 'stm32h7xx_hal.h') `
+    -Message 'HAL Adapter 允许 HAL 头'
+Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'stm32_hal' -IncludePath 'Service/filesystem/filesystem_service.h') `
+    -Message 'HAL Adapter 禁止 Service'
+Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'stm32_hal' -IncludePath 'APP/app.h') `
+    -Message 'HAL Adapter 禁止 APP'
+
+Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'cortex' -IncludePath 'stm32h7xx.h') `
+    -Message 'Cortex Adapter 允许 CMSIS 头'
+Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'cortex' -IncludePath 'Service/gui/gui_service.h') `
+    -Message 'Cortex Adapter 禁止 Service'
+
 $repositoryRoot = Split-Path -Path $PSScriptRoot -Parent
 Invoke-LayerIncludeCheck -RepositoryRoot $repositoryRoot
 
@@ -129,6 +150,9 @@ function Assert-FixtureViolation {
     try {
         New-Item -ItemType Directory -Path (Join-Path -Path $fixtureRoot -ChildPath 'Components') | Out-Null
         New-Item -ItemType Directory -Path (Join-Path -Path $fixtureRoot -ChildPath 'Adapters/bridge') | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path -Path $fixtureRoot -ChildPath 'Adapters/stm32_hal') | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path -Path $fixtureRoot -ChildPath 'Adapters/cortex') | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path -Path $fixtureRoot -ChildPath 'Platform') | Out-Null
         New-Item -ItemType Directory -Path (Join-Path -Path $fixtureRoot -ChildPath 'Service') | Out-Null
         $targetFile = Join-Path -Path $fixtureRoot -ChildPath $RelativeFile
         New-Item -ItemType Directory -Path (Split-Path -Path $targetFile -Parent) -Force | Out-Null
@@ -164,5 +188,13 @@ Assert-FixtureViolation -RelativeFile 'Service/foo/foo.c' `
     -IncludeLine '#include "main.h"' `
     -ExpectedPattern 'main\.h' `
     -FailureMessage 'Service 夹具含 main.h 时分层检查应失败。'
+Assert-FixtureViolation -RelativeFile 'Platform/foo/foo.c' `
+    -IncludeLine '#include "Service/gui/gui_service.h"' `
+    -ExpectedPattern 'Service/gui/gui_service\.h' `
+    -FailureMessage 'Platform 夹具含 Service 头时分层检查应失败。'
+Assert-FixtureViolation -RelativeFile 'Adapters/stm32_hal/foo/foo.c' `
+    -IncludeLine '#include "APP/app.h"' `
+    -ExpectedPattern 'APP/app\.h' `
+    -FailureMessage 'HAL Adapter 夹具含 APP 头时分层检查应失败。'
 
 Write-Output 'check-layer-includes 函数测试通过。'
