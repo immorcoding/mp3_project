@@ -67,6 +67,8 @@ APP
 
 未运行且通过 `./scripts/verify.ps1`，不得声称工作完成。该命令会先做分层 `#include` 检查，再构建固件 Debug/Release 并跑主机回归。只改 `Components/`、`Adapters/bridge/` 或 `Service/` 的包含关系时，可先单独运行 `./scripts/check-layer-includes.ps1`。
 
+克隆后在仓库根目录执行一次 `./scripts/install-git-hooks.ps1`，提交时由 `pre-commit` 自动跑分层检查，失败则拒绝提交。助手禁止使用 `git commit --no-verify`；仅维护者本人在本机命令行显式带上该参数时可以绕过 hook。
+
 ## Agent skills
 
 ### Issue tracker

@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+root=$(git rev-parse --show-toplevel)
+script="$root/scripts/check-layer-includes.ps1"
+
+if command -v cygpath >/dev/null 2>&1; then
+    script=$(cygpath -w "$script")
+fi
+
+if command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$script"
+else
+    pwsh -NoProfile -File "$script"
+fi

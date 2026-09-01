@@ -53,6 +53,8 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 
 `./scripts/verify.ps1` 会先跑该项，再构建固件并跑主机回归。
 
+克隆后执行一次 `./scripts/install-git-hooks.ps1`，之后每次 `git commit` 会自动跑分层检查，失败则拒绝提交。完整固件构建与主机回归仍需手动执行 `verify.ps1`，上板测试不在 hook 范围内。
+
 ## 主机回归
 
 主机回归的环境要求、运行命令和安全边界见 [Tests/README.md](Tests/README.md)。
