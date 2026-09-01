@@ -90,9 +90,16 @@ function Find-ExternalCommand {
     }
 
     $commandName = $Name.Trim()
-    $command = Get-Command -Name $commandName -CommandType Application -ErrorAction SilentlyContinue
-    if ($null -ne $command) {
-        return $command.Path
+    $commands = @(Get-Command -Name $commandName -CommandType Application -ErrorAction SilentlyContinue)
+    foreach ($command in $commands) {
+        if ($null -eq $command) {
+            continue
+        }
+
+        $candidate = [string]$command.Path
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            return $candidate
+        }
     }
 
     if (-not (Test-Path -LiteralPath $commandName -PathType Leaf)) {
@@ -117,6 +124,22 @@ function Get-ExternalCommand {
     )
 
     $commandPath = Find-ExternalCommand -Name $Name
+    if ($commandPath -is [System.Array]) {
+        $selected = $null
+        foreach ($item in $commandPath) {
+            $text = [string]$item
+            if (-not [string]::IsNullOrWhiteSpace($text)) {
+                $selected = $text
+                break
+            }
+        }
+
+        $commandPath = $selected
+    }
+    elseif ($null -ne $commandPath) {
+        $commandPath = [string]$commandPath
+    }
+
     if ([string]::IsNullOrWhiteSpace($commandPath)) {
         throw "未找到外部命令：$Name。"
     }

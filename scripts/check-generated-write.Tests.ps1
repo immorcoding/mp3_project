@@ -66,6 +66,39 @@ Assert-False -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'cmake/gcc-
 Assert-False -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Service/gui/gui_service.c') `
     -Message 'GUI Service 应允许修改'
 
+$gitPath = Get-ExternalCommand -Name 'git'
+if ($gitPath -is [System.Array]) {
+    throw 'Get-ExternalCommand 必须返回单个路径字符串。'
+}
+if ($gitPath -isnot [string] -or [string]::IsNullOrWhiteSpace($gitPath)) {
+    throw 'Get-ExternalCommand 必须返回非空路径字符串。'
+}
+
+$mingwGitBin = 'C:\Program Files\Git\mingw64\bin'
+$cmdGitBin = 'C:\Program Files\Git\cmd'
+if ((Test-Path -LiteralPath (Join-Path -Path $mingwGitBin -ChildPath 'git.exe')) -and
+    (Test-Path -LiteralPath (Join-Path -Path $cmdGitBin -ChildPath 'git.exe'))) {
+    $previousPath = $env:PATH
+    try {
+        $env:PATH = "$mingwGitBin;$cmdGitBin;$previousPath"
+        $hookGitPath = Get-ExternalCommand -Name 'git'
+        if ($hookGitPath -is [System.Array]) {
+            throw 'Git hook PATH 下 Get-ExternalCommand 仍返回了多个路径。'
+        }
+
+        $repositoryRootForGit = Get-RepositoryRoot -EntryScriptPath $checkerScript
+        $insideWorkTree = Get-GitOutputLines -GitPath $hookGitPath -RepositoryRoot $repositoryRootForGit -Arguments @(
+            'rev-parse', '--is-inside-work-tree'
+        )
+        if (($insideWorkTree -join '').Trim() -ne 'true') {
+            throw '双 git.exe PATH 下应能调用 git rev-parse。'
+        }
+    }
+    finally {
+        $env:PATH = $previousPath
+    }
+}
+
 function Invoke-InTempGitRepository {
     param(
         [Parameter(Mandatory)]
