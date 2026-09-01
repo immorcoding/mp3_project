@@ -22,7 +22,7 @@
 # 按模块回归
 ./scripts/test-host.ps1 -HostCompiler E:/mingw64/bin/gcc.exe -Module flash_ftl
 
-# 提交前核对分层 include、固件 Debug/Release 构建与主机回归
+# 提交前核对分层 include、生成目录写保护、固件 Debug/Release 构建与主机回归
 ./scripts/verify.ps1 -HostCompiler E:/mingw64/bin/gcc.exe
 ```
 

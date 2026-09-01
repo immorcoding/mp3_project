@@ -26,7 +26,7 @@
 - `GUI/screens/` 下的所有文件；
 - `GUI/CMakeLists.txt`、`GUI/filelist.txt`、`GUI/project.info` 与生成的资源清单。
 
-后续 GUI 工作流程固定为：助手给出 SquareLine 的组件、相对布局、视觉层级、样式和事件配置步骤；用户在 SquareLine 编辑器中完成操作并先在模拟器验证；确认后由用户导出 `GUI/`，再进行固件编译和硬件验证。除非用户明确撤销此约束，助手不得以“临时原型”“修复导出结果”或其他理由手工改写任何 SquareLine 生成文件。
+后续 GUI 工作流程固定为：助手给出 SquareLine 的组件、相对布局、视觉层级、样式和事件配置步骤；用户在 SquareLine 编辑器中完成操作并先在模拟器验证；确认后由用户导出 `GUI/`，再进行固件编译和硬件验证。除非用户明确撤销此约束，助手不得以“临时原型”“修复导出结果”或其他理由手工改写任何 SquareLine 生成文件。`scripts/check-generated-write.ps1` 会拒绝 `GUI/` 与 `SquareLineProject/` 相对 `HEAD` 的手改；维护者重新导出后，在本机 PowerShell 当前会话执行 `$env:ALLOW_GENERATED_UPDATE = '1'` 再 `git commit`，不要写入用户或系统环境变量。
 
 需要真实硬件或业务行为时，应先在 SquareLine 中保留可视控件与空事件；后续功能接入的代码边界另行评审，不能反向破坏 SquareLine 对 `GUI/` 的所有权。
 

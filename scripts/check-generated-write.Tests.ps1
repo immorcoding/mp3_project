@@ -1,0 +1,149 @@
+﻿Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$checkerScript = Join-Path -Path $PSScriptRoot -ChildPath 'check-generated-write.ps1'
+if (-not (Test-Path -LiteralPath $checkerScript -PathType Leaf)) {
+    throw "缺少生成目录写保护脚本：$checkerScript"
+}
+
+. $checkerScript
+
+function Assert-True {
+    param(
+        [Parameter(Mandatory)]
+        [bool]$Actual,
+
+        [Parameter(Mandatory)]
+        [string]$Message
+    )
+
+    if (-not $Actual) {
+        throw $Message
+    }
+}
+
+function Assert-False {
+    param(
+        [Parameter(Mandatory)]
+        [bool]$Actual,
+
+        [Parameter(Mandatory)]
+        [string]$Message
+    )
+
+    if ($Actual) {
+        throw $Message
+    }
+}
+
+Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'GUI/ui.c') `
+    -Message 'GUI 导出文件应受保护'
+Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'SquareLineProject/mp3_gui.spj') `
+    -Message 'SquareLine 工程应受保护'
+Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal.c') `
+    -Message 'Drivers 应受保护'
+Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c') `
+    -Message 'ST USB 库应受保护'
+Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Middlewares/Third_Party/LVGL/src/core/lv_obj.c') `
+    -Message 'LVGL 源码应受保护'
+Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Middlewares/Third_Party/FreeRTOS/Source/tasks.c') `
+    -Message 'FreeRTOS 内核源码应受保护'
+Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'cmake/stm32cubemx/CMakeLists.txt') `
+    -Message 'CubeMX CMake 应受保护'
+
+Assert-False -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Middlewares/Third_Party/LVGL/lv_conf.h') `
+    -Message 'lv_conf.h 应允许修改'
+Assert-False -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Middlewares/Third_Party/FreeRTOS/Config/FreeRTOSConfig.h') `
+    -Message 'FreeRTOSConfig.h 应允许修改'
+Assert-False -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Core/Src/main.c') `
+    -Message 'Core USER CODE 接缝应允许修改'
+Assert-False -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'FATFS/App/fatfs.c') `
+    -Message 'FATFS 接缝应允许修改'
+Assert-False -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'USB_DEVICE/App/usb_device.c') `
+    -Message 'USB_DEVICE 接缝应允许修改'
+Assert-False -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'cmake/gcc-arm-none-eabi.cmake') `
+    -Message '自维护工具链 CMake 应允许修改'
+Assert-False -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Service/gui/gui_service.c') `
+    -Message 'GUI Service 应允许修改'
+
+function Invoke-InTempGitRepository {
+    param(
+        [Parameter(Mandatory)]
+        [scriptblock]$Action
+    )
+
+    $repositoryRoot = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ('generated-write-' + [Guid]::NewGuid().ToString('N'))
+    $emptyHooks = Join-Path -Path $repositoryRoot -ChildPath '.empty-hooks'
+    New-Item -ItemType Directory -Path $emptyHooks -Force | Out-Null
+    New-Item -ItemType Directory -Path $repositoryRoot -Force | Out-Null
+
+    $git = Get-ExternalCommand -Name 'git'
+    $previousAllow = $env:ALLOW_GENERATED_UPDATE
+    try {
+        Invoke-InDirectory -Path $repositoryRoot -Action {
+            Invoke-ExternalCommand -CommandPath $git -Arguments @('init')
+            Set-Content -LiteralPath (Join-Path -Path $repositoryRoot -ChildPath 'tracked.txt') -Value 'seed' -Encoding ascii
+            Invoke-ExternalCommand -CommandPath $git -Arguments @('add', '--', 'tracked.txt')
+            Invoke-ExternalCommand -CommandPath $git -Arguments @(
+                '-c', ('core.hooksPath=' + $emptyHooks)
+                '-c', 'commit.gpgsign=false'
+                '-c', 'user.email=generated-write-test@example.invalid'
+                '-c', 'user.name=generated-write-test'
+                'commit', '-m', 'seed'
+            )
+        }
+
+        & $Action $repositoryRoot
+    }
+    finally {
+        if ($null -eq $previousAllow) {
+            Remove-Item -Path Env:ALLOW_GENERATED_UPDATE -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:ALLOW_GENERATED_UPDATE = $previousAllow
+        }
+
+        if (Test-Path -LiteralPath $repositoryRoot) {
+            Remove-Item -LiteralPath $repositoryRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Invoke-InTempGitRepository -Action {
+    param($RepositoryRoot)
+
+    New-Item -ItemType Directory -Path (Join-Path -Path $RepositoryRoot -ChildPath 'GUI') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path -Path $RepositoryRoot -ChildPath 'GUI/ui.c') -Value 'generated' -Encoding ascii
+
+    try {
+        Invoke-GeneratedWriteCheck -RepositoryRoot $RepositoryRoot
+        throw '未跟踪的 GUI 文件应让写保护失败。'
+    }
+    catch {
+        if ($_.Exception.Message -notmatch 'GUI/ui\.c') {
+            throw "未跟踪 GUI 文件的失败信息应包含路径，实际：$($_.Exception.Message)"
+        }
+    }
+}
+
+Invoke-InTempGitRepository -Action {
+    param($RepositoryRoot)
+
+    New-Item -ItemType Directory -Path (Join-Path -Path $RepositoryRoot -ChildPath 'Core/Src') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path -Path $RepositoryRoot -ChildPath 'Core/Src/main.c') -Value 'user code' -Encoding ascii
+    Invoke-GeneratedWriteCheck -RepositoryRoot $RepositoryRoot
+}
+
+Invoke-InTempGitRepository -Action {
+    param($RepositoryRoot)
+
+    New-Item -ItemType Directory -Path (Join-Path -Path $RepositoryRoot -ChildPath 'GUI') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path -Path $RepositoryRoot -ChildPath 'GUI/ui.c') -Value 'generated' -Encoding ascii
+    $env:ALLOW_GENERATED_UPDATE = '1'
+    Invoke-GeneratedWriteCheck -RepositoryRoot $RepositoryRoot
+}
+
+$repositoryRoot = Get-RepositoryRoot -EntryScriptPath $checkerScript
+Invoke-GeneratedWriteCheck -RepositoryRoot $repositoryRoot
+
+Write-Output 'check-generated-write 函数测试通过。'

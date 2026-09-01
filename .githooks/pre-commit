@@ -8,14 +8,19 @@ if command -v chcp.com >/dev/null 2>&1; then
 fi
 
 root=$(git rev-parse --show-toplevel)
-script="$root/scripts/check-layer-includes.ps1"
 
-if command -v cygpath >/dev/null 2>&1; then
-    script=$(cygpath -w "$script")
-fi
+run_powershell_script() {
+    script="$1"
+    if command -v cygpath >/dev/null 2>&1; then
+        script=$(cygpath -w "$script")
+    fi
 
-if command -v powershell.exe >/dev/null 2>&1; then
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$script"
-else
-    pwsh -NoProfile -File "$script"
-fi
+    if command -v powershell.exe >/dev/null 2>&1; then
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$script"
+    else
+        pwsh -NoProfile -File "$script"
+    fi
+}
+
+run_powershell_script "$root/scripts/check-layer-includes.ps1"
+run_powershell_script "$root/scripts/check-generated-write.ps1"

@@ -51,9 +51,27 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 ./scripts/check-layer-includes.ps1
 ```
 
-`./scripts/verify.ps1` 会先跑该项，再构建固件并跑主机回归。
+`./scripts/verify.ps1` 会先跑分层检查和生成目录写保护，再构建固件并跑主机回归。
 
-克隆后执行一次 `./scripts/install-git-hooks.ps1`，之后每次 `git commit` 会自动跑分层检查，失败则拒绝提交。完整固件构建与主机回归仍需手动执行 `verify.ps1`，上板测试不在 hook 范围内。
+## 生成目录写保护
+
+`GUI/`、`SquareLineProject/`、`Drivers/`、`Middlewares/ST/`、LVGL 源码、FreeRTOS 内核源码和 `cmake/stm32cubemx/` 相对 `HEAD` 出现改动时，检查失败。`Core/`、`FATFS/`、`USB_DEVICE/`、`FreeRTOS/Config/` 与 `Middlewares/Third_Party/LVGL/lv_conf.h` 仍可直接修改。单独检查：
+
+```powershell
+./scripts/check-generated-write.ps1
+```
+
+若这是你本人在 SquareLine 或 CubeMX 中重新导出，不要改仓库文件做放行。在**当前 PowerShell 会话**执行：
+
+```powershell
+$env:ALLOW_GENERATED_UPDATE = '1'
+./scripts/verify.ps1
+git commit -m "说明这次是重新导出"
+```
+
+只放行检查也可以：`./scripts/check-generated-write.ps1 -AllowGeneratedUpdate`，或 `./scripts/verify.ps1 -AllowGeneratedUpdate`。不要写入用户或系统环境变量，关终端即失效。Git Graph 带不上该变量，导出后的那一次用终端提交。助手禁止设置该变量。
+
+克隆后执行一次 `./scripts/install-git-hooks.ps1`，之后每次 `git commit` 会自动跑分层检查和生成目录写保护，失败则拒绝提交。完整固件构建与主机回归仍需手动执行 `verify.ps1`，上板测试不在 hook 范围内。
 
 ## 主机回归
 

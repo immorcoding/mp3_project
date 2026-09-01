@@ -21,7 +21,7 @@
 
 ## GUI 与 SquareLine 规则
 
-`GUI/` 是 SquareLine Studio 的生成目录，SquareLine 工程与其模拟器是 GUI 原型的唯一事实来源。除非用户明确撤销此约束，禁止直接修改其中的生成代码、生成配置或资源清单；助手只能给出 SquareLine 编辑器中的组件、布局、样式和事件配置步骤，由用户编辑、验证并导出。
+`GUI/` 是 SquareLine Studio 的生成目录，SquareLine 工程与其模拟器是 GUI 原型的唯一事实来源。除非用户明确撤销此约束，禁止直接修改其中的生成代码、生成配置或资源清单；助手只能给出 SquareLine 编辑器中的组件、布局、样式和事件配置步骤，由用户编辑、验证并导出。生成目录写保护会拒绝 `GUI/` 与 `SquareLineProject/` 的手改，见下方完成前验收。
 
 GUI 设计每推进一步，必须先同步更新 `docs/gui_ui_design.md`，再开始下一步 SquareLine 操作。页面、组件层级、坐标、视觉规范、手势或事件归属、动画、状态切换和原型范围的任何确认或修订都属于一次设计推进；待验证方案必须在文档中明确标记，模拟器或硬件验证推翻既有决定时也必须先修正文档。
 
@@ -65,9 +65,9 @@ APP
 
 ## 完成前验收
 
-未运行且通过 `./scripts/verify.ps1`，不得声称工作完成。该命令会先做分层 `#include` 检查，再构建固件 Debug/Release 并跑主机回归。只改 `Components/`、`Adapters/bridge/` 或 `Service/` 的包含关系时，可先单独运行 `./scripts/check-layer-includes.ps1`。
+未运行且通过 `./scripts/verify.ps1`，不得声称工作完成。该命令会先做分层 `#include` 检查和生成目录写保护，再构建固件 Debug/Release 并跑主机回归。只改 `Components/`、`Adapters/bridge/` 或 `Service/` 的包含关系时，可先单独运行 `./scripts/check-layer-includes.ps1`。只核对应保护的生成目录是否被手改时，可先单独运行 `./scripts/check-generated-write.ps1`。
 
-克隆后在仓库根目录执行一次 `./scripts/install-git-hooks.ps1`，提交时由 `pre-commit` 自动跑分层检查，失败则拒绝提交。助手禁止使用 `git commit --no-verify`；仅维护者本人在本机命令行显式带上该参数时可以绕过 hook。
+克隆后在仓库根目录执行一次 `./scripts/install-git-hooks.ps1`，提交时由 `pre-commit` 自动跑分层检查和生成目录写保护，失败则拒绝提交。助手禁止使用 `git commit --no-verify`，也禁止设置 `ALLOW_GENERATED_UPDATE`；仅维护者本人在本机命令行显式带上 `--no-verify`，或在当前 PowerShell 会话执行 `$env:ALLOW_GENERATED_UPDATE = '1'` 后提交 SquareLine / CubeMX 重新导出时可以绕过对应闸门。不要把该变量写入用户或系统环境变量；Git Graph 提交带不上它，导出后的那一次请用终端提交。
 
 ## Agent skills
 

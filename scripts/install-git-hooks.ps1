@@ -24,5 +24,5 @@ Complete-Utf8EntryScript -Action {
         '.githooks'
     )
 
-    Write-NativeUtf8Line -Text '已为本仓库启用 .githooks（仅 local core.hooksPath）。提交时将运行分层 include 检查。'
+    Write-NativeUtf8Line -Text '已为本仓库启用 .githooks（仅 local core.hooksPath）。提交时将运行分层 include 检查和生成目录写保护。'
 }

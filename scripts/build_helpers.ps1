@@ -143,7 +143,7 @@ function Invoke-ExternalCommand {
     }
 
     $exitCode = $LASTEXITCODE
-    if ($exitCode -ne 0) {
+    if (($null -ne $exitCode) -and ($exitCode -ne 0)) {
         throw "外部命令执行失败：$CommandPath，退出码：$exitCode。"
     }
 
