@@ -33,9 +33,7 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 
 构建环境需要 CMake、Ninja 与可从命令行找到的 Arm GNU Toolchain（`arm-none-eabi-*`）。固件有两条构建路径，产物目录不同，互不覆盖。
 
-### 命令行（脚本 / 自动化）
-
-人和 agent 的可复现入口。在工程根目录执行：
+### 脚本构建（命令行 / 验收）
 
 ```powershell
 ./scripts/build-firmware.ps1 -Configuration Debug
@@ -45,11 +43,11 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 ./scripts/build-firmware.ps1 -Configuration Release
 ```
 
-使用 CMake Preset `firmware-debug` / `firmware-release`，产物分别在 `build/firmware-debug/` 和 `build/firmware-release/`。提交前验收请跑 `./scripts/verify.ps1`（分层检查、生成目录写保护、上述两次固件构建、主机回归）。IDE 点 Build 不会跑这些脚本。
+使用 CMake Preset `firmware-debug` / `firmware-release`，产物分别在 `build/firmware-debug/` 和 `build/firmware-release/`。提交前验收见 `./scripts/verify.ps1`。
 
-### 手动（IDE）
+### IDE 构建（日常调试）
 
-日常在 VS Code CMake Tools 里选预设 `Debug` 或 `Release` 再 Build / Flash。产物在 `build/Debug/` 和 `build/Release/`。只编当前固件，不跑分层检查、写保护或主机回归。
+在 VS Code CMake Tools 中选择预设 `Debug` 或 `Release` 后 Build。产物在 `build/Debug/` 和 `build/Release/`。只编当前固件，不跑 `verify.ps1`。
 
 ## 分层检查
 
