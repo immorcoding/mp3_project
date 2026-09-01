@@ -92,27 +92,29 @@ function Confirm-HostGccCompiler {
     }
 }
 
-$repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
-$hostCompilerPath = Get-HostCompiler -RequestedCompiler $HostCompiler
-Confirm-HostGccCompiler -CompilerPath $hostCompilerPath
+Complete-Utf8EntryScript -Action {
+    $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
+    $hostCompilerPath = Get-HostCompiler -RequestedCompiler $HostCompiler
+    Confirm-HostGccCompiler -CompilerPath $hostCompilerPath
 
-$cmake = Get-ExternalCommand -Name 'cmake'
-[void](Get-ExternalCommand -Name 'ninja')
-$ctest = Get-ExternalCommand -Name 'ctest'
+    $cmake = Get-ExternalCommand -Name 'cmake'
+    [void](Get-ExternalCommand -Name 'ninja')
+    $ctest = Get-ExternalCommand -Name 'ctest'
 
-foreach ($moduleName in $Module) {
-    $moduleSourceDirectory = Join-Path -Path $repositoryRoot -ChildPath (Join-Path -Path 'Tests' -ChildPath $moduleName)
-    $moduleBuildDirectory = Join-Path -Path $repositoryRoot -ChildPath (Join-Path -Path 'build/host' -ChildPath $moduleName)
+    foreach ($moduleName in $Module) {
+        $moduleSourceDirectory = Join-Path -Path $repositoryRoot -ChildPath (Join-Path -Path 'Tests' -ChildPath $moduleName)
+        $moduleBuildDirectory = Join-Path -Path $repositoryRoot -ChildPath (Join-Path -Path 'build/host' -ChildPath $moduleName)
 
-    Invoke-ExternalCommand -CommandPath $cmake -Arguments @(
-        '-S', $moduleSourceDirectory,
-        '-B', $moduleBuildDirectory,
-        '-G', 'Ninja',
-        "-DCMAKE_C_COMPILER=$hostCompilerPath",
-        '-DCMAKE_BUILD_TYPE=Debug'
-    )
-    Invoke-ExternalCommand -CommandPath $cmake -Arguments @('--build', $moduleBuildDirectory)
-    Invoke-InDirectory -Path $moduleBuildDirectory -Action {
-        Invoke-ExternalCommand -CommandPath $ctest -Arguments @('--output-on-failure')
+        Invoke-ExternalCommand -CommandPath $cmake -Arguments @(
+            '-S', $moduleSourceDirectory,
+            '-B', $moduleBuildDirectory,
+            '-G', 'Ninja',
+            "-DCMAKE_C_COMPILER=$hostCompilerPath",
+            '-DCMAKE_BUILD_TYPE=Debug'
+        )
+        Invoke-ExternalCommand -CommandPath $cmake -Arguments @('--build', $moduleBuildDirectory)
+        Invoke-InDirectory -Path $moduleBuildDirectory -Action {
+            Invoke-ExternalCommand -CommandPath $ctest -Arguments @('--output-on-failure')
+        }
     }
 }

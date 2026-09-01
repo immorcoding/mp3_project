@@ -1,6 +1,60 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Initialize-Utf8Console {
+    [CmdletBinding()]
+    param()
+
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    try {
+        [Console]::OutputEncoding = $utf8
+        [Console]::InputEncoding = $utf8
+    }
+    catch {
+    }
+
+    $global:OutputEncoding = $utf8
+}
+
+function Write-NativeUtf8Line {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Text,
+
+        [ValidateSet('Output', 'Error')]
+        [string]$Stream = 'Output'
+    )
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text + "`n")
+    $consoleStream = if ($Stream -eq 'Error') {
+        [Console]::OpenStandardError()
+    }
+    else {
+        [Console]::OpenStandardOutput()
+    }
+
+    $consoleStream.Write($bytes, 0, $bytes.Length)
+    $consoleStream.Flush()
+}
+
+function Complete-Utf8EntryScript {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [scriptblock]$Action
+    )
+
+    Initialize-Utf8Console
+    try {
+        & $Action
+    }
+    catch {
+        Write-NativeUtf8Line -Stream Error -Text $_.Exception.Message
+        exit 1
+    }
+}
+
 function Get-RepositoryRoot {
     [CmdletBinding()]
     param(

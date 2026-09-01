@@ -4,6 +4,8 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path -Path $PSScriptRoot -ChildPath 'build_helpers.ps1')
+
 function Get-CIncludeDirective {
     [CmdletBinding()]
     param(
@@ -161,37 +163,10 @@ function Invoke-LayerIncludeCheck {
     Write-NativeUtf8Line -Text "分层 include 检查通过：已扫描 $scannedFileCount 个文件。"
 }
 
-function Write-NativeUtf8Line {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string]$Text,
-
-        [ValidateSet('Output', 'Error')]
-        [string]$Stream = 'Output'
-    )
-
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text + "`n")
-    $consoleStream = if ($Stream -eq 'Error') {
-        [Console]::OpenStandardError()
-    }
-    else {
-        [Console]::OpenStandardOutput()
-    }
-
-    $consoleStream.Write($bytes, 0, $bytes.Length)
-    $consoleStream.Flush()
-}
-
 $isDotSourced = $MyInvocation.InvocationName -eq '.'
 if (-not $isDotSourced) {
-    . (Join-Path -Path $PSScriptRoot -ChildPath 'build_helpers.ps1')
-    $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
-    try {
+    Complete-Utf8EntryScript -Action {
+        $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
         Invoke-LayerIncludeCheck -RepositoryRoot $repositoryRoot
-    }
-    catch {
-        Write-NativeUtf8Line -Stream Error -Text $_.Exception.Message
-        exit 1
     }
 }
