@@ -35,7 +35,7 @@ void storage_task(void *handle)
     TaskHandle_t task_handle;
 
     (void)handle;
-    task_handle = xTaskGetCurrentTaskHandle();s
+    task_handle = xTaskGetCurrentTaskHandle();
 
     _Static_assert((unsigned)STORAGE_NOTIFY_COUNT <=
                        (unsigned)configTASK_NOTIFICATION_ARRAY_ENTRIES,
