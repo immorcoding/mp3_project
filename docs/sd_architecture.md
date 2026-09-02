@@ -111,8 +111,8 @@ Storage Task
                -> Port.GetInfo(&hsd1)
                   -> 缓存归一化逻辑块信息
                -> State = READY
-          -> Service_Filesystem_InitSD()
-             -> filesystem_sd_transfer_init()
+          -> Service_Filesystem_InitSD(STORAGE_NOTIFY_SD_TRANSFER)
+             -> filesystem_sd_transfer_init(notify_index)
             -> Platform_SD_SetTransferCallback(
                    filesystem_sd_transfer_irq_callback, ...)
             -> Platform 私有地 STM32SDMMCIRQ_Register(
@@ -149,7 +149,7 @@ FatFs disk_read / disk_write
   -> STM32 HAL SD Adapter 按方向委托 Cortex-M7 Cache Adapter 执行 Clean 或 Clean+Invalidate
   -> Platform_SD_StartReadBlocks / Platform_SD_StartWriteBlocks
   -> SDCard_Start*()：State = BUSY，只启动 HAL_SD_*Blocks_DMA()
-  -> Storage Task 在通知索引 1 阻塞等待 SDMMC IRQ
+  -> Storage Task 在 STORAGE_NOTIFY_SD_TRANSFER 阻塞等待 SDMMC IRQ
   -> Platform_SD_CompleteTransfer()：检查卡状态并使 Device 回到 READY 或 ERROR
   -> 读取方向由 SD Adapter 委托 Cache Adapter Invalidate 缓冲区，再 memcpy 到 FatFs 原始缓冲区
 ```
@@ -168,11 +168,11 @@ EXTI9_5_IRQHandler()
   -> PinMask 匹配 DetectIRQCallback
   -> platform_sd_detect_irq_cb(SD_CD_Pin, &hplatform_sd)
      -> storage_sd_detect_callback(StorageTaskHandle)
-        -> vTaskNotifyGiveIndexedFromISR(index = 0)
+        -> vTaskNotifyGiveIndexedFromISR(STORAGE_NOTIFY_SD_DETECT)
 
 Storage Task
-  -> ulTaskNotifyTakeIndexed(index = 0, portMAX_DELAY) 取得边沿通知
-  -> 以 30 ms 超时再次 ulTaskNotifyTakeIndexed(index = 0)
+  -> ulTaskNotifyTakeIndexed(STORAGE_NOTIFY_SD_DETECT, portMAX_DELAY) 取得边沿通知
+  -> 以 30 ms 超时再次 ulTaskNotifyTakeIndexed(STORAGE_NOTIFY_SD_DETECT)
      -> 有新边沿：重新开始完整 30 ms 静默期
      -> 超时：Platform_SD_Process(&event)
         -> Platform_SD_Refresh()
@@ -191,7 +191,7 @@ GPIO EXTI Adapter 只认识 STM32 HAL 的 GPIO PinMask，不认识 SD、PMIC 或
 回调上下文直接指回自己的私有 Handle。Platform 的原始 ISR 回调再调用
 `Platform_SD_Init()` 注入的 `DetectCallback`；当前该回调由 Storage Task 的
 `storage_sd_detect_callback()` 实现为
-`vTaskNotifyGiveIndexedFromISR(..., index = 0)`，但 Platform 本身不包含 FreeRTOS。
+`vTaskNotifyGiveIndexedFromISR(..., STORAGE_NOTIFY_SD_DETECT)`，但 Platform 本身不包含 FreeRTOS。
 
 因此不再需要额外的 `Platform_IRQ_SourceTypeDef`、GPIO 到逻辑源的映射表或
 Platform IRQ 二次分发。以后新增按键或 PMIC 中断时，由各自模块持有并注册新的
@@ -201,7 +201,7 @@ Callback 对象，GPIO EXTI Adapter 的实现不需要修改。
 
 `volatile` 只保证每次都真实访问内存，不保证“读取并清除”这个复合操作不可被 ISR 打断。直接任务通知由 FreeRTOS 原子维护，且 Storage Task 是唯一接收者；它既没有额外队列存储，也不需要跨文件全局初始化标志。
 
-ISR 只调用 `vTaskNotifyGiveIndexedFromISR(..., index = 0)`，Storage Task 使用 `ulTaskNotifyTakeIndexed()` 等待。每次收到新边沿后，任务重新等待完整的 30 ms；只有该时间内没有新通知，才执行后续刷新。
+ISR 只调用 `vTaskNotifyGiveIndexedFromISR(..., STORAGE_NOTIFY_SD_DETECT)`，Storage Task 使用 `ulTaskNotifyTakeIndexed()` 等待。每次收到新边沿后，任务重新等待完整的 30 ms；只有该时间内没有新通知，才执行后续刷新。
 
 ### 5.4 FreeRTOS 实现
 
@@ -216,14 +216,14 @@ SDMMC1_IRQHandler()
   -> STM32SDMMCIRQAdapter（按 SD_HandleTypeDef 匹配）
   -> Platform SD 私有转发 callback
   -> filesystem_sd_transfer_irq_callback()
-     -> xTaskNotifyIndexedFromISR(index = 1, event, eSetValueWithOverwrite)
+     -> xTaskNotifyIndexedFromISR(STORAGE_NOTIFY_SD_TRANSFER, event, eSetValueWithOverwrite)
 
 Storage Task 上下文中的 Filesystem DMA executor
-  -> xTaskNotifyWaitIndexed(index = 1)
+  -> xTaskNotifyWaitIndexed(STORAGE_NOTIFY_SD_TRANSFER)
   -> Platform_SD_CompleteTransfer(event)
 ```
 
-索引 1 保存的是一次 DMA 的完整事件值，不是计数；它只能由正在执行 DiskIO 的 Storage Task 等待。卡检测边沿仍留在索引 0，因此拔卡边沿不会被误当作 DMA 传输完成，也不会被 30 ms 消抖延迟为传输结果。
+`STORAGE_NOTIFY_SD_TRANSFER` 保存的是一次 DMA 的完整事件值，不是计数；它只能由正在执行 DiskIO 的 Storage Task 等待。卡检测边沿仍留在 `STORAGE_NOTIFY_SD_DETECT`，因此拔卡边沿不会被误当作 DMA 传输完成，也不会被 30 ms 消抖延迟为传输结果。槽位由 APP 枚举注入；`MountSD`/`UnmountSD` 不得把未绑定的执行器默认到检测槽。
 
 ## 6. 状态、返回值与诊断
 

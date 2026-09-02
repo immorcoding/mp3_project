@@ -28,7 +28,12 @@
 void gui_task(void *handle)
 {
     (void)handle;
-    if (Service_GUI_Init() != SERVICE_OK)
+
+    _Static_assert((unsigned)GUI_NOTIFY_COUNT <=
+                       (unsigned)configTASK_NOTIFICATION_ARRAY_ENTRIES,
+                   "GUI Task notify slots exceed FreeRTOS array length");
+
+    if (Service_GUI_Init(GUI_NOTIFY_LCD_TRANSFER) != SERVICE_OK)
     {
         Error_Handler();
     }

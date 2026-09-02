@@ -45,6 +45,7 @@ static lv_disp_drv_t service_gui_display_driver;
 static lv_indev_drv_t service_gui_touch_driver;
 static lv_disp_t *service_gui_display;
 static TickType_t service_gui_last_tick;
+static uint32_t service_gui_notify_index;
 
 /**
   * @brief  向 LVGL 提供当前触摸状态。
@@ -112,7 +113,7 @@ static void service_gui_lcd_transfer_callback(
 
     vTaskNotifyGiveIndexedFromISR(
         gui_task_handle,
-        FREERTOS_NOTIFY_INDEX_GUI_LCD_TRANSFER,
+        (UBaseType_t)service_gui_notify_index,
         &higher_priority_task_woken);
     portYIELD_FROM_ISR(higher_priority_task_woken);
 }
@@ -150,30 +151,38 @@ static void service_gui_flush_wait_callback(
     (void)disp_drv;
 
     (void)ulTaskNotifyTakeIndexed(
-        FREERTOS_NOTIFY_INDEX_GUI_LCD_TRANSFER,
+        (UBaseType_t)service_gui_notify_index,
         pdTRUE,
         portMAX_DELAY);
 }
 
 /**
  * @brief  初始化 GUI Task 独占的 LVGL、显示、触摸与启动视觉序列。
+ * @param[in] notify_index GUI Task 通知数组中的 LCD DMA 完成槽，由 APP 枚举注入。
  * @retval SERVICE_OK 全部 LVGL Driver、LCD 最终回调、Pointer 输入和 Boot 资源已就绪。
  * @retval SERVICE_BUSY GUI 已初始化，或 Platform LCD 正在使用其唯一最终回调。
+ * @retval SERVICE_INVALID_PARAM 通知槽越界，或壁纸资源不满足当前 Canvas 视觉处理约束。
  * @retval SERVICE_ERROR 显示、输入或启动视觉资源的注册/生成失败。
- * @retval SERVICE_INVALID_PARAM 壁纸资源不满足当前 Canvas 视觉处理约束。
  * @retval SERVICE_NOT_READY GUI 生成对象或内部 Canvas 尚未就绪。
  * @note   只能由 GUI Task 调用一次。当前 GUI Task 将任何非 SERVICE_OK 视为致命
  *         初始化故障并进入 Error_Handler()；本 Module 尚未提供失败后的回滚或重试。
  */
-Service_StatusTypeDef Service_GUI_Init(void)
+Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
 {
     Platform_StatusTypeDef lcd_status;
     Service_StatusTypeDef gui_status;
+
+    if (notify_index >= (uint32_t)configTASK_NOTIFICATION_ARRAY_ENTRIES)
+    {
+        return SERVICE_INVALID_PARAM;
+    }
 
     if (service_gui_display != NULL)
     {
         return SERVICE_BUSY;
     }
+
+    service_gui_notify_index = notify_index;
 
     lv_init();
 

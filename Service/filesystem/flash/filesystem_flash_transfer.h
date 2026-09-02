@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include "Platform/flash/platform_flash.h"
 #include "Service/service.h"
-bool filesystem_flash_transfer_init(void);
+bool filesystem_flash_transfer_init(uint32_t notify_index);
 bool filesystem_flash_transfer_is_owner(void);
 Service_StatusTypeDef filesystem_flash_transfer_finish(Platform_StatusTypeDef started,
                                                        uint32_t timeout_ms);

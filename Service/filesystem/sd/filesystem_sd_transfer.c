@@ -26,6 +26,8 @@
 #endif
 
 static TaskHandle_t filesystem_sd_transfer_owner_task;
+static uint32_t filesystem_sd_notify_index;
+static bool filesystem_sd_notify_bound;
 
 static uint8_t filesystem_sd_dma_buffer[
     FILESYSTEM_SD_BLOCK_SIZE * FILESYSTEM_SD_DMA_BLOCK_COUNT]
@@ -51,7 +53,7 @@ static void filesystem_sd_transfer_irq_callback(
     }
 
     (void)xTaskNotifyIndexedFromISR(filesystem_sd_transfer_owner_task,
-                                    FREERTOS_NOTIFY_INDEX_STORAGE_SD_TRANSFER,
+                                    (UBaseType_t)filesystem_sd_notify_index,
                                     (uint32_t)event,
                                     eSetValueWithOverwrite,
                                     &higher_priority_task_woken);
@@ -73,7 +75,7 @@ static bool filesystem_sd_transfer_prepare_wait(void)
 
     (void)xTaskNotifyStateClearIndexed(
         filesystem_sd_transfer_owner_task,
-        FREERTOS_NOTIFY_INDEX_STORAGE_SD_TRANSFER);
+        (UBaseType_t)filesystem_sd_notify_index);
     return true;
 }
 
@@ -96,7 +98,7 @@ static bool filesystem_sd_transfer_wait(Platform_SD_TransferEventTypeDef *event,
         return false;
     }
 
-    if (xTaskNotifyWaitIndexed(FREERTOS_NOTIFY_INDEX_STORAGE_SD_TRANSFER,
+    if (xTaskNotifyWaitIndexed((UBaseType_t)filesystem_sd_notify_index,
                                0U,
                                UINT32_MAX,
                                &notification_value,
@@ -139,12 +141,13 @@ static bool filesystem_sd_transfer_finish(
 
 /**
   * @brief  将 Filesystem Service DMA 执行器绑定到唯一的 Storage Task。
+  * @param  notify_index 本任务通知数组中的 SD DMA 完成槽，由 APP 枚举注入。
   * @retval true 当前任务持有执行器并接收 DMA 事件。
-  * @retval false 调度器未运行、已由其他任务持有，或 Platform SD 尚不能接收订阅者。
+  * @retval false 调度器未运行、索引越界、已由其他任务持有，或 Platform SD 尚不能接收订阅者。
   * @note   允许同一 Storage Task 重复初始化：挂载和卸载路径也会把
-  *         Service_Filesystem_InitSD() 用作幂等的就绪检查。
+  *         Service_Filesystem_InitSD() 用作幂等的就绪检查。首次绑定后忽略后续索引参数。
   */
-bool filesystem_sd_transfer_init(void)
+bool filesystem_sd_transfer_init(uint32_t notify_index)
 {
     TaskHandle_t current_task = xTaskGetCurrentTaskHandle();
 
@@ -153,9 +156,16 @@ bool filesystem_sd_transfer_init(void)
         return false;
     }
 
+    if (notify_index >= (uint32_t)configTASK_NOTIFICATION_ARRAY_ENTRIES)
+    {
+        return false;
+    }
+
     if (filesystem_sd_transfer_owner_task == NULL)
     {
         filesystem_sd_transfer_owner_task = current_task;
+        filesystem_sd_notify_index = notify_index;
+        filesystem_sd_notify_bound = true;
     }
 
     if (filesystem_sd_transfer_owner_task != current_task)
@@ -165,6 +175,24 @@ bool filesystem_sd_transfer_init(void)
 
     return Platform_SD_SetTransferCallback(filesystem_sd_transfer_irq_callback,
                                            &filesystem_sd_transfer_owner_task) == PLATFORM_OK;
+}
+
+/**
+  * @brief  查询 DMA 执行器是否已绑定到某个 Storage Task。
+  * @retval true 已完成首次 InitSD 绑定。
+  */
+bool filesystem_sd_transfer_is_bound(void)
+{
+    return filesystem_sd_notify_bound && (filesystem_sd_transfer_owner_task != NULL);
+}
+
+/**
+  * @brief  返回首次绑定保存的 SD DMA 完成通知槽。
+  * @return APP 注入的索引；未绑定时无意义。
+  */
+uint32_t filesystem_sd_transfer_notify_index(void)
+{
+    return filesystem_sd_notify_index;
 }
 
 /**

@@ -24,13 +24,25 @@ static const char *scenario;
 static unsigned removes, closes, writes;
 static bool passed, failed, cleanup_failed;
 
-bool filesystem_sd_transfer_init(void)
+bool filesystem_sd_transfer_init(uint32_t notify_index)
+{
+    (void)notify_index;
+    return false;
+}
+
+bool filesystem_sd_transfer_is_bound(void)
 {
     return false;
 }
 
-bool filesystem_flash_transfer_init(void)
+uint32_t filesystem_sd_transfer_notify_index(void)
 {
+    return 0U;
+}
+
+bool filesystem_flash_transfer_init(uint32_t notify_index)
+{
+    (void)notify_index;
     return true;
 }
 

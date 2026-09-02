@@ -337,7 +337,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 存储任务（Storage Task）
 
-**存储任务**是 SD 热插拔、SDMMC DMA 完成、当前 FatFs 卷生命周期和 Platform Flash 异步操作的唯一执行上下文。它通过索引 0 接收 GPIO EXTI 的轻量事件并完成机械触点消抖、平台 SD 生命周期推进；Filesystem Module 在同一任务上下文中通过索引 1 等待 SDMMC DMA 结果，并在插卡时挂载、拔卡时注销文件系统卷。Filesystem Module 的 Flash 私有执行器已长期持有 Platform Flash 唯一 QSPI 回调，并在 Storage Task 上下文等待索引 2。Service 在普通上下文推进 Process 和安全收尾，通知只作为唤醒提示。Storage Task 空闲时定期提供一次有限回收机会，GC 策略仍归 FTL。
+**存储任务**是 SD 热插拔、SDMMC DMA 完成、当前 FatFs 卷生命周期和 Platform Flash 异步操作的唯一执行上下文。通知槽由本任务枚举命名：`STORAGE_NOTIFY_SD_DETECT` 接收 GPIO EXTI 轻量事件并完成机械触点消抖、平台 SD 生命周期推进；Filesystem Module 在同一任务上下文中等待 `STORAGE_NOTIFY_SD_TRANSFER` 上的 SDMMC DMA 结果，并在插卡时挂载、拔卡时注销文件系统卷。Filesystem Module 的 Flash 私有执行器已长期持有 Platform Flash 唯一 QSPI 回调，并在 Storage Task 上下文等待 `STORAGE_NOTIFY_FLASH_OPERATION`。槽位在 `InitSD`/`InitFlash` 时以整数注入 Service，Service 不包含 APP 头。Service 在普通上下文推进 Process 和安全收尾，通知只作为唤醒提示。Storage Task 空闲时定期提供一次有限回收机会，GC 策略仍归 FTL。
 
 存储任务拥有 SD 卡与本地 FatFs 的访问时序，但不拥有 SDMMC、GPIO EXTI 或卡座引脚。中断回调只通知该任务，不能在 ISR 中执行消抖、FatFs、日志格式化或 SD 块访问。
 

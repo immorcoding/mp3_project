@@ -420,12 +420,13 @@ SDMMC1_IRQHandler()
   -> STM32 SDMMC IRQ Adapter（按 Handle 匹配）
   -> Platform SD 私有转发
   -> Filesystem Service 注册的传输 callback
-  -> Storage Task 的通知索引 1
+  -> Storage Task 的 STORAGE_NOTIFY_SD_TRANSFER
   -> FatFs 同步桥接等待返回后调用 Platform_SD_CompleteTransfer()
 ```
 
-卡检测边沿保留通知索引 0，DMA 完成使用索引 1；两类事件的含义、消抖规则和等待方式不同，
-不得共用同一个无类型通知。`Adapters/stm32_hal/irq` 只集中 HAL 全局回调的唯一所有权，GPIO EXTI 和
+卡检测边沿使用 `STORAGE_NOTIFY_SD_DETECT`，DMA 完成使用 `STORAGE_NOTIFY_SD_TRANSFER`；
+两类事件的含义、消抖规则和等待方式不同，不得共用同一个无类型通知。
+槽位由 Storage Task 枚举持有，并在 `InitSD` 时注入 Filesystem Service。`Adapters/stm32_hal/irq` 只集中 HAL 全局回调的唯一所有权，GPIO EXTI 和
 SDMMC 仍保留各自的强类型 Interface，不能收敛为 `IRQ_ID + void *` 的通用分发器。
 
 QSPI 异步操作的当前路径为：
@@ -433,7 +434,7 @@ QSPI 异步操作的当前路径为：
 ```text
 Storage Task 启动
   -> storage_flash_init()
-  -> Service_Filesystem_InitFlash()
+  -> Service_Filesystem_InitFlash(STORAGE_NOTIFY_FLASH_OPERATION)
   -> Platform_Flash_SetOperationCallback()（长期唯一订阅）
 
 Storage Task 内的原始 Flash 诊断（逻辑卷路径见第 13 节）
@@ -445,7 +446,7 @@ Storage Task 内的原始 Flash 诊断（逻辑卷路径见第 13 节）
   -> MDMA Channel0 (QUADSPI_FIFO_TH) / QSPI 状态匹配
   -> QUADSPI IRQ -> STM32 QSPI IRQ Adapter（按 Handle 匹配）
   -> Platform Flash 记录 Adapter 结果并转发轻量事件
-  -> Storage Task 通知索引 2
+  -> Storage Task 的 STORAGE_NOTIFY_FLASH_OPERATION
   -> Filesystem Flash 私有执行器调用 Platform_Flash_ProcessOperation()
   -> W25Qxx_Process() -> D-Cache Invalidate 或状态匹配确认 -> READY / ERROR
 ```
@@ -466,7 +467,7 @@ GUI Task 调用 Service_GUI_Process()
   -> Adapter 续发下一块或发布最终结果
   -> ST7789 Device (释放 CS、恢复 READY)
   -> Platform LCD 转发强类型事件
-  -> GUI Service callback（FromISR：lv_disp_flush_ready() + 任务通知）
+  -> GUI Service callback（FromISR：lv_disp_flush_ready() + GUI_NOTIFY_LCD_TRANSFER）
   -> GUI Task 中 LVGL wait callback 结束等待并继续处理
 ```
 
@@ -492,7 +493,8 @@ later indirect read / program / erase
 DMA Stream TC 只表示 DMA 已把数据交给 SPI FIFO，不能作为本次 RAMWR 的最终完成；必须等待
 SPI EOT，才可安全续发下一块或释放 CS。当前只有一个 SPI1 异步使用者，STM32 HAL ST7789 SPI
 Adapter 可直接注册该 Handle 的回调；第二个真实异步使用者出现后，才按 Handle 提取强类型 SPI
-IRQ 分发 Module。任务通知索引属于每个 Task，GUI Task 可独立复用索引 0，不与 Storage Task 冲突。
+IRQ 分发 Module。任务通知槽属于每个 Task 自己的数组；GUI Task 的 `GUI_NOTIFY_LCD_TRANSFER`
+与 Storage Task 的 `STORAGE_NOTIFY_SD_DETECT` 数值都可以是 0，语义互不相关。
 
 ISR 禁止：
 

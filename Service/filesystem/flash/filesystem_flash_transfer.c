@@ -12,6 +12,7 @@
 
 static TaskHandle_t filesystem_flash_owner;
 static bool filesystem_flash_registered;
+static uint32_t filesystem_flash_notify_index;
 
 /**
  * @brief 发布轻量唤醒提示，不在 ISR 中推进 Flash 请求。
@@ -23,7 +24,7 @@ static void filesystem_flash_irq(Platform_Flash_OperationEventTypeDef event, voi
 {
     BaseType_t higher_priority_task_woken = pdFALSE;
     (void)xTaskNotifyIndexedFromISR((TaskHandle_t)context,
-                                    FREERTOS_NOTIFY_INDEX_STORAGE_FLASH_OPERATION,
+                                    (UBaseType_t)filesystem_flash_notify_index,
                                     (uint32_t)event,
                                     eSetValueWithOverwrite,
                                     &higher_priority_task_woken);
@@ -43,11 +44,16 @@ bool filesystem_flash_transfer_is_owner(void)
 
 /**
  * @brief 将当前任务登记为 Flash 执行器并注册长期事件回调。
- * @return true 表示首次注册成功或同一所有者重复初始化；false 表示无任务、注册失败或所有者不匹配。
- * @note 由 Storage Task 初始化；注册成功后不临时转移回调和任务所有权。
+ * @param[in] notify_index 本任务通知数组中的 QSPI/MDMA 完成槽，由 APP 枚举注入。
+ * @return true 表示首次注册成功或同一所有者重复初始化；false 表示无任务、索引越界、注册失败或所有者不匹配。
+ * @note 由 Storage Task 初始化；注册成功后不临时转移回调、任务所有权和通知槽。
  */
-bool filesystem_flash_transfer_init(void)
+bool filesystem_flash_transfer_init(uint32_t notify_index)
 {
+    if (notify_index >= (uint32_t)configTASK_NOTIFICATION_ARRAY_ENTRIES)
+    {
+        return false;
+    }
     if (filesystem_flash_registered)
     {
         return filesystem_flash_transfer_is_owner();
@@ -58,6 +64,7 @@ bool filesystem_flash_transfer_init(void)
         return false;
     }
     filesystem_flash_owner = owner;
+    filesystem_flash_notify_index = notify_index;
     filesystem_flash_registered = true;
     return true;
 }
@@ -113,7 +120,7 @@ Service_StatusTypeDef filesystem_flash_transfer_finish(Platform_StatusTypeDef st
         {
             uint32_t notification;
             /* 通知只是提示，结果只相信 Process。延迟/旧通知不能当成当前请求完成。 */
-            (void)xTaskNotifyWaitIndexed(FREERTOS_NOTIFY_INDEX_STORAGE_FLASH_OPERATION,
+            (void)xTaskNotifyWaitIndexed((UBaseType_t)filesystem_flash_notify_index,
                                          0,
                                          UINT32_MAX,
                                          &notification,

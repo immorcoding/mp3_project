@@ -6,7 +6,7 @@
 
 ## 公开 Interface
 
-- `filesystem_service.h`：卷生命周期。SD 为 `InitSD/MountSD/UnmountSD`；Flash 为 `InitFlash`（注册执行器）、`MountFlash`（扫描 FTL 并挂载 FAT）、`UnmountFlash`、`FormatAndMountFlash`、`RecoverAndMountFlash`、`ReclaimFlash`。设备不提供 SD 格式化入口。
+- `filesystem_service.h`：卷生命周期。SD 为 `InitSD(notify_index)/MountSD/UnmountSD`；Flash 为 `InitFlash(notify_index)`（注册执行器）、`MountFlash`（扫描 FTL 并挂载 FAT）、`UnmountFlash`、`FormatAndMountFlash`、`RecoverAndMountFlash`、`ReclaimFlash`。设备不提供 SD 格式化入口。`notify_index` 是拥有该任务的 APP 枚举给出的通知槽，Service 不认识 APP 类型。
 - `filesystem_file.h`：卷感知文件访问。`OpenFile/ReadFile/WriteFile/SeekFile/GetFilePosition/GetFileSize/SyncFile/CloseFile/RemoveFile/RenameFile/GetFileInfo`。调用必须给出 Volume；相对路径只在该卷内解释。
 - `filesystem_directory.h`：卷感知目录访问。`OpenDirectory/ReadDirectory/RewindDirectory/CloseDirectory/CreateDirectory/RemoveDirectory`。空路径表示所选卷的根目录；文件接口不得把空路径当作文件名。
 - `filesystem_flash_access.h`：启动诊断的同步包装。`ReadFlashArray/ReadFlashDiagnostic/EraseFlashDiagnostic/ProgramFlashDiagnostic`。这是唯一允许包含 `platform_flash.h` 的公开头，以便使用 Platform 诊断区域枚举。
@@ -41,7 +41,7 @@ Service 包含 FatFs 卷对象/公开 API、中间件 BSP 契约、Platform SD/F
 
 ## 请求与事件路径
 
-FatFs disk_* → SD 或 USER BSP 强定义 → 私有执行器 → Platform。SDMMC/QSPI IRQ 经 Adapter 和 Platform 已注册回调唤醒同一 Storage Task。SD 使用通知索引 1，Flash 使用索引 2；索引 0 保留给 APP 卡检测。Flash 的唯一订阅和等待由本 Module 持有，诊断和逻辑请求共用所有者。APP 启动诊断直接调用 `filesystem_flash_access.h`，不再经过 APP 转发层。
+FatFs disk_* → SD 或 USER BSP 强定义 → 私有执行器 → Platform。SDMMC/QSPI IRQ 经 Adapter 和 Platform 已注册回调唤醒同一 Storage Task。SD DMA 完成槽与 Flash 操作槽在 `InitSD`/`InitFlash` 时由 APP 注入；卡检测槽只由 Storage Task 自己等待，不进入 Service。Flash 的唯一订阅和等待由本 Module 持有，诊断和逻辑请求共用所有者。APP 启动诊断直接调用 `filesystem_flash_access.h`，不再经过 APP 转发层。
 
 通知只是唤醒提示，最终结果由普通上下文 Process 确认。ISR 不访问缓冲、不维护 Cache、不记录日志或提交下一笔操作。Flash 软件阶段主动让出调度，硬件阶段有界等待通知；超时后仍须完成安全收尾，控制器无法停止时不得提前返回并复用缓冲。
 

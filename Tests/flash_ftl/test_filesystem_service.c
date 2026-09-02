@@ -120,13 +120,25 @@ static DRESULT ram_ioctl(BYTE pdrv, BYTE cmd, void *buff)
 static const Diskio_drvTypeDef ram_driver = {
     ram_initialize, ram_status, ram_read, ram_write, ram_ioctl};
 
-bool filesystem_sd_transfer_init(void)
+bool filesystem_sd_transfer_init(uint32_t notify_index)
+{
+    (void)notify_index;
+    return true;
+}
+
+bool filesystem_sd_transfer_is_bound(void)
 {
     return true;
 }
 
-bool filesystem_flash_transfer_init(void)
+uint32_t filesystem_sd_transfer_notify_index(void)
 {
+    return 1U;
+}
+
+bool filesystem_flash_transfer_init(uint32_t notify_index)
+{
+    (void)notify_index;
     return true;
 }
 
@@ -174,8 +186,8 @@ static void setup_volumes(void)
     retUSER = 0U;
     assert(SDPath[0] == '0');
     assert(USERPath[0] == '1');
-    assert(Service_Filesystem_InitSD() == SERVICE_OK);
-    assert(Service_Filesystem_InitFlash() == SERVICE_OK);
+    assert(Service_Filesystem_InitSD(1U) == SERVICE_OK);
+    assert(Service_Filesystem_InitFlash(2U) == SERVICE_OK);
     assert(f_mkfs(sd_drive, FM_FAT | FM_SFD, 0, work, sizeof(work)) == FR_OK);
     assert(f_mkfs(user_drive, FM_FAT | FM_SFD, 0, work, sizeof(work)) == FR_OK);
     assert(Service_Filesystem_MountSD() == SERVICE_OK);

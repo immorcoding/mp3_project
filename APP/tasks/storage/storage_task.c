@@ -25,8 +25,9 @@
  *         下一次通知；只要等待期间仍有新边沿，就重新开始完整静默期。超时后才
  *         调用 storage_sd_process()，因此触点抖动不会触发 SDMMC 或 FatFs 操作。
  *
- *         主循环有界等待索引 0 并提供回收机会；索引 1 与索引 2 由同一任务调用栈中的
- *         Filesystem SD/Flash 私有执行器等待。
+ *         主循环有界等待 STORAGE_NOTIFY_SD_DETECT 并提供回收机会；
+ *         STORAGE_NOTIFY_SD_TRANSFER 与 STORAGE_NOTIFY_FLASH_OPERATION 由同一任务
+ *         调用栈中的 Filesystem SD/Flash 私有执行器等待。
  *         它们完成后返回各自调用者，绝不在 IRQ 中提交下一笔传输。
  */
 void storage_task(void *handle)
@@ -34,7 +35,11 @@ void storage_task(void *handle)
     TaskHandle_t task_handle;
 
     (void)handle;
-    task_handle = xTaskGetCurrentTaskHandle();
+    task_handle = xTaskGetCurrentTaskHandle();s
+
+    _Static_assert((unsigned)STORAGE_NOTIFY_COUNT <=
+                       (unsigned)configTASK_NOTIFICATION_ARRAY_ENTRIES,
+                   "Storage Task notify slots exceed FreeRTOS array length");
 
 #if STORAGE_SDRAM_BENCHMARK_ENABLE
     storage_sdram_benchmark_run();
@@ -45,12 +50,12 @@ void storage_task(void *handle)
 
     for (;;)
     {
-        uint32_t notified = ulTaskNotifyTakeIndexed(FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT,
+        uint32_t notified = ulTaskNotifyTakeIndexed(STORAGE_NOTIFY_SD_DETECT,
                                                     pdTRUE,
                                                     pdMS_TO_TICKS(STORAGE_FLASH_RECLAIM_PERIOD_MS));
         if (notified)
         {
-            while (ulTaskNotifyTakeIndexed(FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT,
+            while (ulTaskNotifyTakeIndexed(STORAGE_NOTIFY_SD_DETECT,
                                            pdTRUE,
                                            pdMS_TO_TICKS(STORAGE_SD_DEBOUNCE_MS)) != 0U)
             {

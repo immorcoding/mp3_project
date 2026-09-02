@@ -42,12 +42,14 @@ static Service_StatusTypeDef filesystem_flash_open_volume(void)
 }
 
 /**
- * @brief  检查 CubeMX 是否已成功链接 SD DiskIO Driver。
- * @retval SERVICE_OK SD Driver 已由 main() 中的 MX_FATFS_Init() 链接。
- * @retval SERVICE_NOT_READY 驱动尚未链接或链接失败。
+ * @brief  检查 CubeMX 是否已成功链接 SD DiskIO Driver，并绑定 DMA 完成通知槽。
+ * @param[in] notify_index Storage Task 通知数组中的 SD DMA 完成槽，由 APP 枚举注入。
+ * @retval SERVICE_OK SD Driver 已由 main() 中的 MX_FATFS_Init() 链接，且执行器已绑定。
+ * @retval SERVICE_NOT_READY 驱动尚未链接、索引越界或执行器绑定失败。
  * @note   本函数绝不再次调用 MX_FATFS_Init()，避免重复增加 FatFs 逻辑卷。
+ *         首次绑定保存 notify_index；挂载/卸载再次进入时必须沿用已保存槽位。
  */
-Service_StatusTypeDef Service_Filesystem_InitSD(void)
+Service_StatusTypeDef Service_Filesystem_InitSD(uint32_t notify_index)
 {
     if ((retSD != 0U) || (SDPath[0] == '\0'))
     {
@@ -55,7 +57,7 @@ Service_StatusTypeDef Service_Filesystem_InitSD(void)
         return SERVICE_NOT_READY;
     }
 
-    if (!filesystem_sd_transfer_init())
+    if (!filesystem_sd_transfer_init(notify_index))
     {
         filesystem_handle_set_volume_initialized(SERVICE_FILESYSTEM_VOLUME_SD, false);
         return SERVICE_NOT_READY;
@@ -63,6 +65,21 @@ Service_StatusTypeDef Service_Filesystem_InitSD(void)
 
     filesystem_handle_set_volume_initialized(SERVICE_FILESYSTEM_VOLUME_SD, true);
     return SERVICE_OK;
+}
+
+/**
+ * @brief  在已绑定执行器的前提下，用保存的通知槽做幂等就绪检查。
+ * @retval SERVICE_OK 当前任务仍持有 SD 执行器。
+ * @retval SERVICE_NOT_READY 尚未 InitSD，或再次绑定失败。
+ */
+static Service_StatusTypeDef filesystem_sd_ensure_bound(void)
+{
+    if (!filesystem_sd_transfer_is_bound())
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    return Service_Filesystem_InitSD(filesystem_sd_transfer_notify_index());
 }
 
 /**
@@ -81,7 +98,7 @@ Service_StatusTypeDef Service_Filesystem_MountSD(void)
         return SERVICE_BUSY;
     }
 
-    if (Service_Filesystem_InitSD() != SERVICE_OK)
+    if (filesystem_sd_ensure_bound() != SERVICE_OK)
     {
         return SERVICE_NOT_READY;
     }
@@ -107,7 +124,7 @@ Service_StatusTypeDef Service_Filesystem_UnmountSD(void)
     TCHAR sd_drive_path[FILESYSTEM_DRIVE_PATH_LENGTH];
     FRESULT result;
 
-    if (Service_Filesystem_InitSD() != SERVICE_OK)
+    if (filesystem_sd_ensure_bound() != SERVICE_OK)
     {
         filesystem_handle_set_mounted(SERVICE_FILESYSTEM_VOLUME_SD, false);
         return SERVICE_NOT_READY;
@@ -125,13 +142,14 @@ Service_StatusTypeDef Service_Filesystem_UnmountSD(void)
 
 /**
  * @brief 在当前 Storage Task 建立唯一 Flash 执行器和长期事件订阅。
+ * @param[in] notify_index Storage Task 通知数组中的 QSPI/MDMA 完成槽，由 APP 枚举注入。
  * @retval SERVICE_OK 绑定成功，或已由同一任务绑定。
- * @retval SERVICE_NOT_READY 无有效任务、订阅失败或其他任务已持有执行器。
+ * @retval SERVICE_NOT_READY 无有效任务、索引越界、订阅失败或其他任务已持有执行器。
  * @note 只在 Storage Task 普通上下文调用；不扫描、不挂载，也不格式化。
  */
-Service_StatusTypeDef Service_Filesystem_InitFlash(void)
+Service_StatusTypeDef Service_Filesystem_InitFlash(uint32_t notify_index)
 {
-    return filesystem_flash_transfer_init() ? SERVICE_OK : SERVICE_NOT_READY;
+    return filesystem_flash_transfer_init(notify_index) ? SERVICE_OK : SERVICE_NOT_READY;
 }
 
 /**

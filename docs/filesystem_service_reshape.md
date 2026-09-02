@@ -69,12 +69,12 @@ APP/tasks/storage/
 ### 5.1 卷生命周期 — `filesystem_service.h`
 
 ```c
-Service_StatusTypeDef Service_Filesystem_InitSD(void);
+Service_StatusTypeDef Service_Filesystem_InitSD(uint32_t notify_index);
 Service_StatusTypeDef Service_Filesystem_FormatSD(void);
 Service_StatusTypeDef Service_Filesystem_MountSD(void);
 Service_StatusTypeDef Service_Filesystem_UnmountSD(void);
 
-Service_StatusTypeDef Service_Filesystem_InitFlash(void);
+Service_StatusTypeDef Service_Filesystem_InitFlash(uint32_t notify_index);
 Service_StatusTypeDef Service_Filesystem_OpenFlash(void);
 Service_StatusTypeDef Service_Filesystem_MountFlash(void);
 Service_StatusTypeDef Service_Filesystem_UnmountFlash(void);
@@ -83,7 +83,7 @@ Service_StatusTypeDef Service_Filesystem_ReclaimFlash(void);
 Service_StatusTypeDef Service_Filesystem_RecoverFlash(void);
 ```
 
-`InitSD` 的实现与现 `Init` 完全相同：检查 `retSD` / `SDPath`，再调用 `filesystem_sd_transfer_init()`。
+`InitSD` 检查 `retSD` / `SDPath`，再调用 `filesystem_sd_transfer_init(notify_index)`。通知槽由 APP 的 Storage Task 枚举注入；`MountSD`/`UnmountSD` 再次进入时沿用已保存的 DMA 完成槽，不得默认成卡检测槽。
 
 `ReclaimFlash` 的实现与现 `MaintainFlash` 完全相同。自维护链路上的 `Maintain` 标识符一并改掉，不留旧名：
 

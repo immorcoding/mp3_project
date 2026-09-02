@@ -10,6 +10,7 @@
  */
 
 #include "APP/tasks/storage/flash/storage_flash.h"
+#include "APP/tasks/storage/storage_task.h"
 #include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
 #include "APP/app_config.h"
 
@@ -55,7 +56,7 @@ void storage_flash_init(TaskHandle_t task_handle)
 
     storage_flash_owner_task = task_handle;
 
-    if (Service_Filesystem_InitFlash() != SERVICE_OK)
+    if (Service_Filesystem_InitFlash(STORAGE_NOTIFY_FLASH_OPERATION) != SERVICE_OK)
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_flash_log_tag,
@@ -83,7 +84,10 @@ void storage_flash_init(TaskHandle_t task_handle)
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
                                storage_flash_log_tag,
                                "No formatted FTL/FAT volume; explicit format required.");
+#if STORAGE_FLASH_AUTO_FORMAT
+        (void)Service_Filesystem_FormatAndMountFlash();
         return;
+#endif
     }
 
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,

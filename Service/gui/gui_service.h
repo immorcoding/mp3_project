@@ -8,9 +8,10 @@
 #ifndef GUI_SERVICE_H
 #define GUI_SERVICE_H
 
+#include <stdint.h>
 #include "Service/service.h"
 
-Service_StatusTypeDef Service_GUI_Init(void);
+Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index);
 void Service_GUI_Process(void);
 
 #endif /* GUI_SERVICE_H */

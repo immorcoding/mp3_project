@@ -11,6 +11,7 @@
   */
 
 #include "APP/tasks/storage/sd/storage_sd.h"
+#include "APP/tasks/storage/storage_task.h"
 #include "APP/tasks/storage/benchmark/storage_sd_benchmark.h"
 #include "APP/app_config.h"
 
@@ -84,7 +85,7 @@ static void storage_sd_log_card_ready(const char *prefix)
   */
 static Service_StatusTypeDef storage_sd_prepare_filesystem(void)
 {
-    Service_StatusTypeDef result = Service_Filesystem_InitSD();
+    Service_StatusTypeDef result = Service_Filesystem_InitSD(STORAGE_NOTIFY_SD_TRANSFER);
 
     if (result != SERVICE_OK)
     {
@@ -173,7 +174,7 @@ static void storage_sd_detect_callback(void *context)
     if (task_handle != NULL)
     {
         vTaskNotifyGiveIndexedFromISR(task_handle,
-                                      FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT,
+                                      STORAGE_NOTIFY_SD_DETECT,
                                       &higher_priority_task_woken);
         portYIELD_FROM_ISR(higher_priority_task_woken);
     }
