@@ -129,12 +129,12 @@ typedef struct
  */
 typedef enum
 {
-    FLASH_FTL_OP_OPEN = 1,
-    FLASH_FTL_OP_FORMAT,
-    FLASH_FTL_OP_READ,
-    FLASH_FTL_OP_WRITE,
-    FLASH_FTL_OP_GC,
-    FLASH_FTL_OP_SYNC
+    FLASH_FTL_OP_OPEN = 1, /**< 打开已有卷并重建映射。 */
+    FLASH_FTL_OP_FORMAT,   /**< 显式格式化并建立空卷。 */
+    FLASH_FTL_OP_READ,     /**< 读取逻辑扇区。 */
+    FLASH_FTL_OP_WRITE,    /**< 写入逻辑扇区并提交新组版本。 */
+    FLASH_FTL_OP_GC,       /**< 回收失效块。 */
+    FLASH_FTL_OP_SYNC      /**< 等待已提交写入落到介质。 */
 } FlashFTL_OperationTypeDef;
 
 /**
@@ -146,45 +146,45 @@ typedef enum
  */
 typedef enum
 {
-    FLASH_FTL_STEP_VOLUME_A = 1,
-    FLASH_FTL_STEP_VOLUME_A_DONE,
-    FLASH_FTL_STEP_VOLUME_B,
-    FLASH_FTL_STEP_VOLUME_B_DONE,
-    FLASH_FTL_STEP_SELECT_VOLUME,
-    FLASH_FTL_STEP_FORMAT_ERASE_VOLUME,
-    FLASH_FTL_STEP_FORMAT_VERIFY_VOLUME,
-    FLASH_FTL_STEP_FORMAT_CHECK_VOLUME,
-    FLASH_FTL_STEP_FORMAT_PREPARE,
-    FLASH_FTL_STEP_FORMAT_VERIFY_PREPARE,
-    FLASH_FTL_STEP_FORMAT_CHECK_PREPARE,
-    FLASH_FTL_STEP_FORMAT_ERASE_DATA,
-    FLASH_FTL_STEP_FORMAT_VERIFY_DATA,
-    FLASH_FTL_STEP_FORMAT_CHECK_DATA,
-    FLASH_FTL_STEP_FORMAT_READY,
-    FLASH_FTL_STEP_FORMAT_VERIFY_READY,
-    FLASH_FTL_STEP_FORMAT_CHECK_READY,
-    FLASH_FTL_STEP_SCAN,
-    FLASH_FTL_STEP_SCAN_FOOTER,
-    FLASH_FTL_STEP_SCAN_DONE,
-    FLASH_FTL_STEP_SCAN_CHECK_EMPTY,
-    FLASH_FTL_STEP_VALIDATE,
-    FLASH_FTL_STEP_VALIDATE_DONE,
-    FLASH_FTL_STEP_READ,
-    FLASH_FTL_STEP_READ_DONE,
-    FLASH_FTL_STEP_WRITE,
-    FLASH_FTL_STEP_WRITE_OLD_DONE,
-    FLASH_FTL_STEP_WRITE_ALLOCATE,
-    FLASH_FTL_STEP_WRITE_PAGE,
-    FLASH_FTL_STEP_WRITE_VERIFY,
-    FLASH_FTL_STEP_WRITE_VERIFY_DONE,
-    FLASH_FTL_STEP_WRITE_COMMIT,
-    FLASH_FTL_STEP_WRITE_COMMIT_VERIFY,
-    FLASH_FTL_STEP_WRITE_COMMIT_DONE,
-    FLASH_FTL_STEP_SYNC,
-    FLASH_FTL_STEP_GC,
-    FLASH_FTL_STEP_GC_VERIFY,
-    FLASH_FTL_STEP_GC_DONE,
-    FLASH_FTL_STEP_FAULT
+    FLASH_FTL_STEP_VOLUME_A = 1,           /**< 读取卷描述槽 A。 */
+    FLASH_FTL_STEP_VOLUME_A_DONE,          /**< 卷描述槽 A 已读完。 */
+    FLASH_FTL_STEP_VOLUME_B,               /**< 读取卷描述槽 B。 */
+    FLASH_FTL_STEP_VOLUME_B_DONE,          /**< 卷描述槽 B 已读完。 */
+    FLASH_FTL_STEP_SELECT_VOLUME,          /**< 根据两槽选择有效卷。 */
+    FLASH_FTL_STEP_FORMAT_ERASE_VOLUME,    /**< 格式化：擦除卷描述块。 */
+    FLASH_FTL_STEP_FORMAT_VERIFY_VOLUME,   /**< 格式化：回读卷描述块是否擦净。 */
+    FLASH_FTL_STEP_FORMAT_CHECK_VOLUME,    /**< 格式化：检查卷描述块擦除结果。 */
+    FLASH_FTL_STEP_FORMAT_PREPARE,         /**< 格式化：写入 PREPARING 页。 */
+    FLASH_FTL_STEP_FORMAT_VERIFY_PREPARE,  /**< 格式化：回读 PREPARING 页。 */
+    FLASH_FTL_STEP_FORMAT_CHECK_PREPARE,   /**< 格式化：检查 PREPARING 页。 */
+    FLASH_FTL_STEP_FORMAT_ERASE_DATA,      /**< 格式化：擦除数据块。 */
+    FLASH_FTL_STEP_FORMAT_VERIFY_DATA,     /**< 格式化：回读数据块是否擦净。 */
+    FLASH_FTL_STEP_FORMAT_CHECK_DATA,      /**< 格式化：检查数据块擦除结果。 */
+    FLASH_FTL_STEP_FORMAT_READY,           /**< 格式化：写入 READY 页。 */
+    FLASH_FTL_STEP_FORMAT_VERIFY_READY,    /**< 格式化：回读 READY 页。 */
+    FLASH_FTL_STEP_FORMAT_CHECK_READY,     /**< 格式化：检查 READY 页。 */
+    FLASH_FTL_STEP_SCAN,                   /**< 扫描数据块头。 */
+    FLASH_FTL_STEP_SCAN_FOOTER,            /**< 扫描提交页。 */
+    FLASH_FTL_STEP_SCAN_DONE,              /**< 扫描完成并整理映射。 */
+    FLASH_FTL_STEP_SCAN_CHECK_EMPTY,       /**< 检查未映射块是否擦净。 */
+    FLASH_FTL_STEP_VALIDATE,               /**< 校验获选组记录。 */
+    FLASH_FTL_STEP_VALIDATE_DONE,          /**< 组记录校验完成。 */
+    FLASH_FTL_STEP_READ,                   /**< 读取逻辑组数据。 */
+    FLASH_FTL_STEP_READ_DONE,              /**< 逻辑组读取完成。 */
+    FLASH_FTL_STEP_WRITE,                  /**< 开始写入新组版本。 */
+    FLASH_FTL_STEP_WRITE_OLD_DONE,         /**< 旧组数据已读入工作区。 */
+    FLASH_FTL_STEP_WRITE_ALLOCATE,         /**< 为新版本分配物理块。 */
+    FLASH_FTL_STEP_WRITE_PAGE,             /**< 编程数据页。 */
+    FLASH_FTL_STEP_WRITE_VERIFY,           /**< 回读验证数据页。 */
+    FLASH_FTL_STEP_WRITE_VERIFY_DONE,      /**< 数据页回读完成。 */
+    FLASH_FTL_STEP_WRITE_COMMIT,           /**< 编程提交页。 */
+    FLASH_FTL_STEP_WRITE_COMMIT_VERIFY,    /**< 回读提交页。 */
+    FLASH_FTL_STEP_WRITE_COMMIT_DONE,      /**< 提交完成并切换 RAM 映射。 */
+    FLASH_FTL_STEP_SYNC,                   /**< 等待已提交写入落到介质。 */
+    FLASH_FTL_STEP_GC,                     /**< 擦除失效块。 */
+    FLASH_FTL_STEP_GC_VERIFY,              /**< 回读验证已擦块。 */
+    FLASH_FTL_STEP_GC_DONE,                /**< 单次回收完成。 */
+    FLASH_FTL_STEP_FAULT                   /**< 故障，等待安全收尾后发布失败。 */
 } FlashFTL_StepTypeDef;
 
 /** @brief 静态分配所需的实例存储；字段只供本 Module 使用，调用者不得自行改写。 */

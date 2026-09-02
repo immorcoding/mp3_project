@@ -26,19 +26,19 @@
  */
 typedef enum
 {
-    SERVICE_GUI_MAIN_PAGER_SLOT_LEFT = 0,
-    SERVICE_GUI_MAIN_PAGER_SLOT_CENTER,
-    SERVICE_GUI_MAIN_PAGER_SLOT_RIGHT,
-    SERVICE_GUI_MAIN_PAGER_SLOT_COUNT,
+    SERVICE_GUI_MAIN_PAGER_SLOT_LEFT = 0, /**< Viewport 左侧物理槽，水平偏移 0%。 */
+    SERVICE_GUI_MAIN_PAGER_SLOT_CENTER,   /**< Viewport 中央物理槽，水平偏移 100%。 */
+    SERVICE_GUI_MAIN_PAGER_SLOT_RIGHT,    /**< Viewport 右侧物理槽，水平偏移 200%。 */
+    SERVICE_GUI_MAIN_PAGER_SLOT_COUNT,    /**< 物理槽数量，不是可显示页面。 */
 } Service_GUI_MainPagerSlotTypeDef;
 
 /** @brief 三张逻辑 Page 的固定身份编号，仅用于底部圆点映射。 */
 typedef enum
 {
-    SERVICE_GUI_MAIN_PAGER_PAGE_SETTINGS = 0,
-    SERVICE_GUI_MAIN_PAGER_PAGE_MUSIC,
-    SERVICE_GUI_MAIN_PAGER_PAGE_BOOKS,
-    SERVICE_GUI_MAIN_PAGER_PAGE_COUNT,
+    SERVICE_GUI_MAIN_PAGER_PAGE_SETTINGS = 0, /**< 设置页。 */
+    SERVICE_GUI_MAIN_PAGER_PAGE_MUSIC,        /**< 音乐页。 */
+    SERVICE_GUI_MAIN_PAGER_PAGE_BOOKS,        /**< 阅读页。 */
+    SERVICE_GUI_MAIN_PAGER_PAGE_COUNT,        /**< 逻辑页数量，不是可滑动槽位。 */
 } Service_GUI_MainPagerPageTypeDef;
 
 /** @brief 当前已完成吸附的物理槽位。 */

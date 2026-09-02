@@ -13,15 +13,15 @@
 /** @brief 当前 PCB 向上公开的 LED 逻辑编号。 */
 typedef enum
 {
-    PLATFORM_LED_ID_STATUS = 0,
-    PLATFORM_LED_ID_COUNT
+    PLATFORM_LED_ID_STATUS = 0, /**< 状态指示灯。 */
+    PLATFORM_LED_ID_COUNT       /**< LED 数量，不是有效编号。 */
 } Platform_LED_IdTypeDef;
 
 /** @brief Platform LED 的逻辑亮灭状态，不表示任何物理高低电平。 */
 typedef enum
 {
-    PLATFORM_LED_OFF = 0,
-    PLATFORM_LED_ON
+    PLATFORM_LED_OFF = 0, /**< 逻辑熄灭。 */
+    PLATFORM_LED_ON       /**< 逻辑点亮。 */
 } Platform_LED_OnOffTypeDef;
 
 Platform_StatusTypeDef Platform_LED_Init(void);

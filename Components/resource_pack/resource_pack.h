@@ -13,78 +13,78 @@
 /** @brief RPKC1 公共操作状态。 */
 typedef enum
 {
-    RESOURCE_PACK_OK = 0U,
-    RESOURCE_PACK_INVALID_PARAM,
-    RESOURCE_PACK_NOT_OPEN,
-    RESOURCE_PACK_NOT_FOUND,
-    RESOURCE_PACK_FORMAT_ERROR,
-    RESOURCE_PACK_CRC_ERROR,
-    RESOURCE_PACK_UNSUPPORTED_TYPE,
-    RESOURCE_PACK_UNSUPPORTED_VERSION,
-    RESOURCE_PACK_UNSUPPORTED_FORMAT
+    RESOURCE_PACK_OK = 0U,              /**< 本次解析或读取成功。 */
+    RESOURCE_PACK_INVALID_PARAM,        /**< 句柄、缓冲区或范围参数非法。 */
+    RESOURCE_PACK_NOT_OPEN,             /**< 资源包尚未成功打开。 */
+    RESOURCE_PACK_NOT_FOUND,            /**< 指定资源 ID 不存在。 */
+    RESOURCE_PACK_FORMAT_ERROR,         /**< 包头、目录或元数据布局非法。 */
+    RESOURCE_PACK_CRC_ERROR,            /**< CRC 校验失败。 */
+    RESOURCE_PACK_UNSUPPORTED_TYPE,     /**< 资源类型编号不被当前实现支持。 */
+    RESOURCE_PACK_UNSUPPORTED_VERSION,  /**< 包或元数据版本不被当前实现支持。 */
+    RESOURCE_PACK_UNSUPPORTED_FORMAT    /**< 元素、像素或其他格式编号不被支持。 */
 } ResourcePack_StatusTypeDef;
 
 /** @brief RPKC1 标准顶层资源类型编号。 */
 typedef enum
 {
-    RESOURCE_PACK_TYPE_INVALID = 0U,
-    RESOURCE_PACK_TYPE_BINARY = 1U,
-    RESOURCE_PACK_TYPE_FONT = 2U,
-    RESOURCE_PACK_TYPE_IMAGE = 3U,
-    RESOURCE_PACK_TYPE_AUDIO = 4U,
-    RESOURCE_PACK_TYPE_MODEL = 5U,
-    RESOURCE_PACK_TYPE_FIRMWARE = 6U
+    RESOURCE_PACK_TYPE_INVALID = 0U,  /**< 无效或未指定类型。 */
+    RESOURCE_PACK_TYPE_BINARY = 1U,   /**< 通用二进制。 */
+    RESOURCE_PACK_TYPE_FONT = 2U,     /**< 字体。 */
+    RESOURCE_PACK_TYPE_IMAGE = 3U,    /**< 图片。 */
+    RESOURCE_PACK_TYPE_AUDIO = 4U,    /**< 音频。 */
+    RESOURCE_PACK_TYPE_MODEL = 5U,    /**< 模型。 */
+    RESOURCE_PACK_TYPE_FIRMWARE = 6U  /**< 固件镜像。 */
 } ResourcePack_TypeTypeDef;
 
 /** @brief BINARY Metadata V1 的标准元素格式编号。 */
 typedef enum
 {
-    RESOURCE_PACK_ELEMENT_FORMAT_INVALID = 0U,
-    RESOURCE_PACK_ELEMENT_FORMAT_OPAQUE = 1U,
-    RESOURCE_PACK_ELEMENT_FORMAT_UINT8 = 2U,
-    RESOURCE_PACK_ELEMENT_FORMAT_UINT16 = 3U,
-    RESOURCE_PACK_ELEMENT_FORMAT_UINT32 = 4U,
-    RESOURCE_PACK_ELEMENT_FORMAT_INT8 = 5U,
-    RESOURCE_PACK_ELEMENT_FORMAT_INT16 = 6U,
-    RESOURCE_PACK_ELEMENT_FORMAT_INT32 = 7U
+    RESOURCE_PACK_ELEMENT_FORMAT_INVALID = 0U, /**< 无效元素格式。 */
+    RESOURCE_PACK_ELEMENT_FORMAT_OPAQUE = 1U,  /**< 不解释内部布局的不透明字节。 */
+    RESOURCE_PACK_ELEMENT_FORMAT_UINT8 = 2U,   /**< 无符号 8 位。 */
+    RESOURCE_PACK_ELEMENT_FORMAT_UINT16 = 3U,  /**< 无符号 16 位。 */
+    RESOURCE_PACK_ELEMENT_FORMAT_UINT32 = 4U,  /**< 无符号 32 位。 */
+    RESOURCE_PACK_ELEMENT_FORMAT_INT8 = 5U,    /**< 有符号 8 位。 */
+    RESOURCE_PACK_ELEMENT_FORMAT_INT16 = 6U,   /**< 有符号 16 位。 */
+    RESOURCE_PACK_ELEMENT_FORMAT_INT32 = 7U    /**< 有符号 32 位。 */
 } ResourcePack_ElementFormatTypeDef;
 
 /** @brief BINARY Metadata V1 的字节序编号。 */
 typedef enum
 {
-    RESOURCE_PACK_BYTE_ORDER_UNKNOWN = 0U,
-    RESOURCE_PACK_BYTE_ORDER_LITTLE_ENDIAN = 1U,
-    RESOURCE_PACK_BYTE_ORDER_BIG_ENDIAN = 2U
+    RESOURCE_PACK_BYTE_ORDER_UNKNOWN = 0U,        /**< 未声明字节序。 */
+    RESOURCE_PACK_BYTE_ORDER_LITTLE_ENDIAN = 1U,  /**< 小端。 */
+    RESOURCE_PACK_BYTE_ORDER_BIG_ENDIAN = 2U      /**< 大端。 */
 } ResourcePack_ByteOrderTypeDef;
 
 /** @brief IMAGE Metadata V1 的图片载荷格式编号。 */
 typedef enum
 {
-    RESOURCE_PACK_IMAGE_FORMAT_UNKNOWN = 0U,
-    RESOURCE_PACK_IMAGE_FORMAT_LVGL_NATIVE = 1U
+    RESOURCE_PACK_IMAGE_FORMAT_UNKNOWN = 0U,     /**< 未声明图片载荷格式。 */
+    RESOURCE_PACK_IMAGE_FORMAT_LVGL_NATIVE = 1U  /**< LVGL 原生像素缓冲。 */
 } ResourcePack_ImageFormatTypeDef;
 
 /** @brief IMAGE Metadata V1 的像素格式编号。 */
 typedef enum
 {
-    RESOURCE_PACK_PIXEL_FORMAT_UNKNOWN = 0U,
-    RESOURCE_PACK_PIXEL_FORMAT_TRUE_COLOR_ALPHA = 1U
+    RESOURCE_PACK_PIXEL_FORMAT_UNKNOWN = 0U,           /**< 未声明像素格式。 */
+    RESOURCE_PACK_PIXEL_FORMAT_TRUE_COLOR_ALPHA = 1U   /**< 真彩加 Alpha。 */
 } ResourcePack_PixelFormatTypeDef;
 
 /** @brief IMAGE Metadata V1 的色彩空间编号。 */
 typedef enum
 {
-    RESOURCE_PACK_COLOR_SPACE_UNKNOWN = 0U,
-    RESOURCE_PACK_COLOR_SPACE_SRGB = 1U
+    RESOURCE_PACK_COLOR_SPACE_UNKNOWN = 0U, /**< 未声明色彩空间。 */
+    RESOURCE_PACK_COLOR_SPACE_SRGB = 1U     /**< sRGB。 */
 } ResourcePack_ColorSpaceTypeDef;
 
 /** @brief IMAGE Metadata V1 的 Alpha 表达方式编号。 */
 typedef enum
 {
-    RESOURCE_PACK_ALPHA_MODE_UNKNOWN = 0U,
-    RESOURCE_PACK_ALPHA_MODE_STRAIGHT = 1U,
-    RESOURCE_PACK_ALPHA_MODE_PREMULTIPLIED = 2U,
-    RESOURCE_PACK_ALPHA_MODE_OPAQUE = 3U
+    RESOURCE_PACK_ALPHA_MODE_UNKNOWN = 0U,        /**< 未声明 Alpha 方式。 */
+    RESOURCE_PACK_ALPHA_MODE_STRAIGHT = 1U,       /**< 非预乘 Alpha。 */
+    RESOURCE_PACK_ALPHA_MODE_PREMULTIPLIED = 2U,  /**< 预乘 Alpha。 */
+    RESOURCE_PACK_ALPHA_MODE_OPAQUE = 3U          /**< 不透明，忽略 Alpha。 */
 } ResourcePack_AlphaModeTypeDef;
 
 /** @brief 已打开资源包的公共头信息。 */

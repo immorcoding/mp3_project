@@ -24,8 +24,8 @@
   */
 typedef enum
 {
-    STM32SDMMCIRQ_OK = 0U,
-    STM32SDMMCIRQ_ERROR
+    STM32SDMMCIRQ_OK = 0U, /**< 回调注册或注销成功。 */
+    STM32SDMMCIRQ_ERROR    /**< 参数非法、重复注册或目标未注册。 */
 } STM32SDMMCIRQ_StatusTypeDef;
 
 /**
@@ -33,10 +33,10 @@ typedef enum
   */
 typedef enum
 {
-    STM32SDMMCIRQ_EVENT_READ_COMPLETE = 0U,
-    STM32SDMMCIRQ_EVENT_WRITE_COMPLETE,
-    STM32SDMMCIRQ_EVENT_ERROR,
-    STM32SDMMCIRQ_EVENT_ABORTED
+    STM32SDMMCIRQ_EVENT_READ_COMPLETE = 0U, /**< HAL 报告读 DMA 完成。 */
+    STM32SDMMCIRQ_EVENT_WRITE_COMPLETE,     /**< HAL 报告写 DMA 完成。 */
+    STM32SDMMCIRQ_EVENT_ERROR,              /**< HAL 报告 SDMMC 传输错误。 */
+    STM32SDMMCIRQ_EVENT_ABORTED             /**< HAL 报告传输中止。 */
 } STM32SDMMCIRQ_EventTypeDef;
 
 /**

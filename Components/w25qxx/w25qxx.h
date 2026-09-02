@@ -46,68 +46,68 @@ extern "C" {
 /** @brief W25Qxx Device API 的立即返回状态。 */
 typedef enum
 {
-    W25QXX_OK = 0,
-    W25QXX_BUSY,
-    W25QXX_ERROR
+    W25QXX_OK = 0,    /**< 本次调用成功；异步操作须再查生命周期。 */
+    W25QXX_BUSY,      /**< Device 正执行异步读、编程或擦除。 */
+    W25QXX_ERROR      /**< 本次调用失败，详细原因保存在 Handle 中。 */
 } W25Qxx_StatusTypeDef;
 
 /** @brief W25Qxx Device 的持续生命周期状态。 */
 typedef enum
 {
-    W25QXX_STATE_RESET = 0,
-    W25QXX_STATE_READY,
-    W25QXX_STATE_BUSY,
-    W25QXX_STATE_ERROR
+    W25QXX_STATE_RESET = 0, /**< 尚未识别芯片或已回到复位。 */
+    W25QXX_STATE_READY,     /**< 已识别且空闲，可以受理新请求。 */
+    W25QXX_STATE_BUSY,      /**< 正在执行同步或异步总线事务。 */
+    W25QXX_STATE_ERROR      /**< 最近一次不可恢复操作失败。 */
 } W25Qxx_StateTypeDef;
 
 /** @brief W25Qxx Device 可理解的归一化底层总线状态。 */
 typedef enum
 {
-    W25QXX_BUS_OK = 0,
-    W25QXX_BUS_ERROR,
-    W25QXX_BUS_BUSY,
-    W25QXX_BUS_TIMEOUT
+    W25QXX_BUS_OK = 0, /**< 总线操作成功。 */
+    W25QXX_BUS_ERROR,  /**< 未进一步分类的总线错误。 */
+    W25QXX_BUS_BUSY,   /**< 控制器或 DMA 正忙。 */
+    W25QXX_BUS_TIMEOUT /**< 总线操作超时。 */
 } W25Qxx_BusStatusTypeDef;
 
 /** @brief W25Qxx Device 记录的最近一次语义失败阶段。 */
 typedef enum
 {
-    W25QXX_ERROR_NONE = 0,
-    W25QXX_ERROR_INVALID_PARAM,
-    W25QXX_ERROR_BUS_NOT_BOUND,
-    W25QXX_ERROR_NOT_READY,
-    W25QXX_ERROR_FLASH_BUSY,
-    W25QXX_ERROR_READ_JEDEC_ID,
-    W25QXX_ERROR_CHIP_MISMATCH,
-    W25QXX_ERROR_READ_SFDP,
-    W25QXX_ERROR_INVALID_SFDP_SIGNATURE,
-    W25QXX_ERROR_READ_STATUS_REGISTER_1,
-    W25QXX_ERROR_READ_STATUS_REGISTER_2,
-    W25QXX_ERROR_WRITE_ENABLE,
-    W25QXX_ERROR_WRITE_ENABLE_NOT_LATCHED,
-    W25QXX_ERROR_WRITE_STATUS_REGISTER_2,
-    W25QXX_ERROR_STATUS_REGISTER_WRITE_TIMEOUT,
-    W25QXX_ERROR_QUAD_NOT_ENABLED,
-    W25QXX_ERROR_UNSUPPORTED_ARRAY_OPERATION,
-    W25QXX_ERROR_INVALID_ADDRESS,
-    W25QXX_ERROR_INVALID_READ_ADDRESS_ALIGNMENT,
-    W25QXX_ERROR_INVALID_DATA_LENGTH,
-    W25QXX_ERROR_PAGE_BOUNDARY,
-    W25QXX_ERROR_SECTOR_BOUNDARY,
-    W25QXX_ERROR_READ_ARRAY,
-    W25QXX_ERROR_READ_ARRAY_TIMEOUT,
-    W25QXX_ERROR_PROGRAM_PAGE,
-    W25QXX_ERROR_PAGE_PROGRAM_TIMEOUT,
-    W25QXX_ERROR_ERASE_SECTOR,
-    W25QXX_ERROR_SECTOR_ERASE_TIMEOUT
+    W25QXX_ERROR_NONE = 0,                       /**< 没有错误。 */
+    W25QXX_ERROR_INVALID_PARAM,                  /**< 句柄、缓冲、地址或长度非法。 */
+    W25QXX_ERROR_BUS_NOT_BOUND,                  /**< 总线 Ops 或 Context 未绑定。 */
+    W25QXX_ERROR_NOT_READY,                      /**< 当前生命周期不允许该操作。 */
+    W25QXX_ERROR_FLASH_BUSY,                     /**< 芯片仍处于 WIP，拒绝新写擦。 */
+    W25QXX_ERROR_READ_JEDEC_ID,                  /**< 读取 JEDEC ID 失败。 */
+    W25QXX_ERROR_CHIP_MISMATCH,                  /**< JEDEC ID 不是预期的 W25Q 系列。 */
+    W25QXX_ERROR_READ_SFDP,                      /**< 读取 SFDP 失败。 */
+    W25QXX_ERROR_INVALID_SFDP_SIGNATURE,         /**< SFDP 签名无效。 */
+    W25QXX_ERROR_READ_STATUS_REGISTER_1,         /**< 读取状态寄存器 1 失败。 */
+    W25QXX_ERROR_READ_STATUS_REGISTER_2,         /**< 读取状态寄存器 2 失败。 */
+    W25QXX_ERROR_WRITE_ENABLE,                   /**< 发送写使能失败。 */
+    W25QXX_ERROR_WRITE_ENABLE_NOT_LATCHED,       /**< 写使能未锁存。 */
+    W25QXX_ERROR_WRITE_STATUS_REGISTER_2,        /**< 写状态寄存器 2 失败。 */
+    W25QXX_ERROR_STATUS_REGISTER_WRITE_TIMEOUT,  /**< 等待状态寄存器写入完成超时。 */
+    W25QXX_ERROR_QUAD_NOT_ENABLED,               /**< QE 位未置位。 */
+    W25QXX_ERROR_UNSUPPORTED_ARRAY_OPERATION,    /**< 当前芯片不支持该阵列命令。 */
+    W25QXX_ERROR_INVALID_ADDRESS,                /**< 地址超出已识别容量。 */
+    W25QXX_ERROR_INVALID_READ_ADDRESS_ALIGNMENT, /**< 四线读取起始地址未按协议对齐。 */
+    W25QXX_ERROR_INVALID_DATA_LENGTH,            /**< 长度为零或超出允许范围。 */
+    W25QXX_ERROR_PAGE_BOUNDARY,                  /**< 页编程跨越页边界。 */
+    W25QXX_ERROR_SECTOR_BOUNDARY,                /**< 扇区擦除地址未按扇区对齐。 */
+    W25QXX_ERROR_READ_ARRAY,                     /**< 阵列读取失败。 */
+    W25QXX_ERROR_READ_ARRAY_TIMEOUT,             /**< 阵列读取超时。 */
+    W25QXX_ERROR_PROGRAM_PAGE,                   /**< 页编程启动或提交失败。 */
+    W25QXX_ERROR_PAGE_PROGRAM_TIMEOUT,           /**< 等待页编程完成超时。 */
+    W25QXX_ERROR_ERASE_SECTOR,                   /**< 扇区擦除启动失败。 */
+    W25QXX_ERROR_SECTOR_ERASE_TIMEOUT            /**< 等待扇区擦除完成超时。 */
 } W25Qxx_ErrorTypeDef;
 
 /** @brief W25Qxx 间接事务一个阶段使用的数据线数量。 */
 typedef enum
 {
-    W25QXX_BUS_LINES_1 = 1,
-    W25QXX_BUS_LINES_2 = 2,
-    W25QXX_BUS_LINES_4 = 4
+    W25QXX_BUS_LINES_1 = 1, /**< 单线。 */
+    W25QXX_BUS_LINES_2 = 2, /**< 双线。 */
+    W25QXX_BUS_LINES_4 = 4  /**< 四线。 */
 } W25Qxx_BusLineModeTypeDef;
 
 /**
@@ -138,10 +138,10 @@ typedef struct
 /** @brief W25Qxx Device 当前由 Component 管理的异步原始操作。 */
 typedef enum
 {
-    W25QXX_OPERATION_NONE = 0,
-    W25QXX_OPERATION_ARRAY_READ,
-    W25QXX_OPERATION_PAGE_PROGRAM,
-    W25QXX_OPERATION_SECTOR_ERASE
+    W25QXX_OPERATION_NONE = 0,       /**< 没有在飞的异步原始操作。 */
+    W25QXX_OPERATION_ARRAY_READ,     /**< 间接阵列读取。 */
+    W25QXX_OPERATION_PAGE_PROGRAM,   /**< 页编程。 */
+    W25QXX_OPERATION_SECTOR_ERASE    /**< 扇区擦除。 */
 } W25Qxx_OperationTypeDef;
 
 /** @brief JEDEC Read ID 命令返回的三字节芯片标识。 */

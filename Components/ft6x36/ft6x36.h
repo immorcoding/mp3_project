@@ -13,36 +13,36 @@
 
 typedef enum
 {
-    FT6X36_OK = 0,
-    FT6X36_ERROR
+    FT6X36_OK = 0, /**< 本次操作成功。 */
+    FT6X36_ERROR   /**< 本次操作失败，详细原因保存在 Handle 中。 */
 } FT6X36_StatusTypeDef;
 
 typedef enum
 {
-    FT6X36_STATE_RESET = 0,
-    FT6X36_STATE_READY,
-    FT6X36_STATE_BUSY,
-    FT6X36_STATE_ERROR
+    FT6X36_STATE_RESET = 0, /**< 尚未初始化。 */
+    FT6X36_STATE_READY,     /**< 已探测到控制器，可以读取触点。 */
+    FT6X36_STATE_BUSY,      /**< 正在执行总线访问。 */
+    FT6X36_STATE_ERROR      /**< 最近一次不可恢复操作失败。 */
 } FT6X36_StateTypeDef;
 
 typedef enum
 {
-    FT6X36_PORT_OK = 0,
-    FT6X36_PORT_ERROR,
-    FT6X36_PORT_BUSY,
-    FT6X36_PORT_TIMEOUT
+    FT6X36_PORT_OK = 0, /**< 总线操作成功。 */
+    FT6X36_PORT_ERROR,  /**< 未进一步分类的总线错误。 */
+    FT6X36_PORT_BUSY,   /**< 总线或后端正忙。 */
+    FT6X36_PORT_TIMEOUT /**< 总线操作超时。 */
 } FT6X36_PortStatusTypeDef;
 
 typedef enum
 {
-    FT6X36_ERROR_NONE = 0,
-    FT6X36_ERROR_INVALID_PARAM,
-    FT6X36_ERROR_PORT_NOT_BOUND,
-    FT6X36_ERROR_INITIALIZE,
-    FT6X36_ERROR_NOT_READY,
-    FT6X36_ERROR_PROBE,
-    FT6X36_ERROR_READ_CHIP_ID,
-    FT6X36_ERROR_READ_TOUCH_POINT
+    FT6X36_ERROR_NONE = 0,         /**< 没有错误。 */
+    FT6X36_ERROR_INVALID_PARAM,    /**< 句柄或输出参数非法。 */
+    FT6X36_ERROR_PORT_NOT_BOUND,   /**< 总线 Ops 或 Context 未绑定。 */
+    FT6X36_ERROR_INITIALIZE,       /**< 复位或启动配置失败。 */
+    FT6X36_ERROR_NOT_READY,        /**< 当前生命周期状态不允许该操作。 */
+    FT6X36_ERROR_PROBE,            /**< 未探测到预期触摸控制器。 */
+    FT6X36_ERROR_READ_CHIP_ID,     /**< 读取芯片 ID 失败。 */
+    FT6X36_ERROR_READ_TOUCH_POINT  /**< 读取触点坐标失败。 */
 } FT6X36_ErrorTypeDef;
 
 /** @brief FT6X36 控制器报告的第一触点原始坐标。 */

@@ -22,8 +22,8 @@
  */
 typedef enum
 {
-    SERVICE_FILESYSTEM_VOLUME_SD = 0,
-    SERVICE_FILESYSTEM_VOLUME_FLASH
+    SERVICE_FILESYSTEM_VOLUME_SD = 0, /**< SD 卡上的 FatFs 逻辑卷；相对路径只在此卷内解释。 */
+    SERVICE_FILESYSTEM_VOLUME_FLASH   /**< 外部 NOR Flash FTL 上的 FatFs 逻辑卷；相对路径只在此卷内解释。 */
 } Service_Filesystem_VolumeTypeDef;
 
 /**
@@ -40,10 +40,10 @@ typedef struct
  */
 typedef enum
 {
-    SERVICE_FILESYSTEM_FILE_MODE_READ = 0, /**< 打开已有文件，只读。 */
-    SERVICE_FILESYSTEM_FILE_MODE_CREATE_NEW, /**< 新建可读可写文件；同名已存在则拒绝。 */
-    SERVICE_FILESYSTEM_FILE_MODE_READ_WRITE, /**< 打开已有文件，可读可写。 */
-    SERVICE_FILESYSTEM_FILE_MODE_APPEND /**< 打开已有文件并定位到末尾，可写。 */
+    SERVICE_FILESYSTEM_FILE_MODE_READ = 0, /**< 打开已有文件，只读；目标不存在则失败。 */
+    SERVICE_FILESYSTEM_FILE_MODE_CREATE_NEW, /**< 新建可读可写文件；同名已存在则返回 SERVICE_BUSY，不截断或覆盖。 */
+    SERVICE_FILESYSTEM_FILE_MODE_READ_WRITE, /**< 打开已有文件，可读可写；目标不存在则失败。 */
+    SERVICE_FILESYSTEM_FILE_MODE_APPEND      /**< 打开已有文件并定位到末尾，可读可写；目标不存在则失败。 */
 } Service_Filesystem_FileModeTypeDef;
 
 /**

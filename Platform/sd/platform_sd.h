@@ -82,11 +82,11 @@ typedef void (*Platform_SD_DetectCallback_t)(void *context);
   */
 typedef enum
 {
-    PLATFORM_SD_TRANSFER_EVENT_NONE = 0U,
-    PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE,
-    PLATFORM_SD_TRANSFER_EVENT_WRITE_COMPLETE,
-    PLATFORM_SD_TRANSFER_EVENT_ERROR,
-    PLATFORM_SD_TRANSFER_EVENT_ABORTED
+    PLATFORM_SD_TRANSFER_EVENT_NONE = 0U,     /**< 没有待处理的 DMA 事件。 */
+    PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE, /**< 读 DMA 完成；普通上下文仍须收尾。 */
+    PLATFORM_SD_TRANSFER_EVENT_WRITE_COMPLETE,/**< 写 DMA 完成；普通上下文仍须收尾。 */
+    PLATFORM_SD_TRANSFER_EVENT_ERROR,         /**< SDMMC DMA 或控制器报错。 */
+    PLATFORM_SD_TRANSFER_EVENT_ABORTED        /**< 当前 DMA 传输被中止。 */
 } Platform_SD_TransferEventTypeDef;
 
 /**

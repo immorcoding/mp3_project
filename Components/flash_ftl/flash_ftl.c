@@ -20,10 +20,10 @@
  */
 typedef enum
 {
-    FLASH_FTL_BLOCK_UNKNOWN,
-    FLASH_FTL_BLOCK_FREE,
-    FLASH_FTL_BLOCK_STALE,
-    FLASH_FTL_BLOCK_VALID
+    FLASH_FTL_BLOCK_UNKNOWN, /**< 扫描前未知，不能当作空闲。 */
+    FLASH_FTL_BLOCK_FREE,    /**< 已确认整块为擦除值。 */
+    FLASH_FTL_BLOCK_STALE,   /**< 旧版本或已替换，待 GC 擦除。 */
+    FLASH_FTL_BLOCK_VALID    /**< 当前有效组版本所在块。 */
 } FlashFTL_BlockStateTypeDef;
 
 /**

@@ -38,26 +38,26 @@ extern "C" {
   */
 typedef enum
 {
-    LOG_LEVEL_NONE = 0U, /*!< 关闭全部日志输出。 */
-    LOG_LEVEL_ERROR,     /*!< 严重错误信息。 */
-    LOG_LEVEL_WARN,      /*!< 警告信息。 */
-    LOG_LEVEL_INFO,      /*!< 正常运行信息。 */
-    LOG_LEVEL_DEBUG      /*!< 调试详细信息。 */
+    LOG_LEVEL_NONE = 0U, /**< 关闭全部日志输出。 */
+    LOG_LEVEL_ERROR,     /**< 严重错误信息。 */
+    LOG_LEVEL_WARN,      /**< 警告信息。 */
+    LOG_LEVEL_INFO,      /**< 正常运行信息。 */
+    LOG_LEVEL_DEBUG      /**< 调试详细信息。 */
 } LOG_LevelTypeDef;
 
 /** @brief 日志接口返回状态。 */
 typedef enum
 {
-    LOG_OK = 0U, /*!< 操作成功，或日志被等级策略正常过滤。 */
-    LOG_ERROR    /*!< 参数、状态、格式化或底层输出发生错误。 */
+    LOG_OK = 0U, /**< 操作成功，或日志被等级策略正常过滤。 */
+    LOG_ERROR    /**< 参数、状态、格式化或底层输出发生错误。 */
 } LOG_StatusTypeDef;
 
 /** @brief 日志模块运行状态。 */
 typedef enum
 {
-    LOG_STATE_RESET = 0U, /*!< 尚未初始化。 */
-    LOG_STATE_READY,      /*!< 已初始化，可以输出日志。 */
-    LOG_STATE_ERROR       /*!< 初始化或内部接口发生错误。 */
+    LOG_STATE_RESET = 0U, /**< 尚未初始化。 */
+    LOG_STATE_READY,      /**< 已初始化，可以输出日志。 */
+    LOG_STATE_ERROR       /**< 初始化或内部接口发生错误。 */
 } LOG_StateTypeDef;
 
 /**

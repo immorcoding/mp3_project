@@ -34,17 +34,17 @@ typedef struct
 /** @brief ADR-0009 固定保留的 Flash 自检扇区。 */
 typedef enum
 {
-    PLATFORM_FLASH_DIAGNOSTIC_REGION_HEAD = 0U,
-    PLATFORM_FLASH_DIAGNOSTIC_REGION_TAIL
+    PLATFORM_FLASH_DIAGNOSTIC_REGION_HEAD = 0U, /**< ADR-0009 最低地址的 4 KiB 自检扇区。 */
+    PLATFORM_FLASH_DIAGNOSTIC_REGION_TAIL       /**< ADR-0009 最高地址的 4 KiB 自检扇区。 */
 } Platform_Flash_DiagnosticRegionTypeDef;
 
 /** @brief Platform Flash 在 QSPI IRQ 中向订阅者发布的异步操作生命周期事件。 */
 typedef enum
 {
-    PLATFORM_FLASH_OPERATION_EVENT_READ_COMPLETE = 0U,
-    PLATFORM_FLASH_OPERATION_EVENT_STATUS_MATCH,
-    PLATFORM_FLASH_OPERATION_EVENT_ERROR,
-    PLATFORM_FLASH_OPERATION_EVENT_ABORTED
+    PLATFORM_FLASH_OPERATION_EVENT_READ_COMPLETE = 0U, /**< 间接读取完成；普通上下文仍须收尾。 */
+    PLATFORM_FLASH_OPERATION_EVENT_STATUS_MATCH,       /**< 自动状态轮询匹配，例如 WIP 清零。 */
+    PLATFORM_FLASH_OPERATION_EVENT_ERROR,              /**< QSPI 或 MDMA 报错。 */
+    PLATFORM_FLASH_OPERATION_EVENT_ABORTED             /**< 当前异步操作被中止。 */
 } Platform_Flash_OperationEventTypeDef;
 
 /**
@@ -103,14 +103,14 @@ Platform_StatusTypeDef Platform_Flash_VerifyDiagnosticReadBuffer(
 /** @brief 底层逻辑卷持续状态，未格式化不自动变成可用盘。 */
 typedef enum
 {
-    PLATFORM_FLASH_VOLUME_RESET = 0,
-    PLATFORM_FLASH_VOLUME_READY,
-    PLATFORM_FLASH_VOLUME_BUSY,
-    PLATFORM_FLASH_VOLUME_UNFORMATTED,
-    PLATFORM_FLASH_VOLUME_INCOMPLETE,
-    PLATFORM_FLASH_VOLUME_INCOMPATIBLE,
-    PLATFORM_FLASH_VOLUME_CORRUPT,
-    PLATFORM_FLASH_VOLUME_ERROR
+    PLATFORM_FLASH_VOLUME_RESET = 0,        /**< 尚未打开或已注销逻辑卷。 */
+    PLATFORM_FLASH_VOLUME_READY,            /**< 卷已打开，可以受理逻辑块请求。 */
+    PLATFORM_FLASH_VOLUME_BUSY,             /**< 正在执行打开、读写、同步、格式化或回收。 */
+    PLATFORM_FLASH_VOLUME_UNFORMATTED,      /**< 没有可识别的 FTL 卷，不自动格式化。 */
+    PLATFORM_FLASH_VOLUME_INCOMPLETE,       /**< 最新格式代次未完成 READY。 */
+    PLATFORM_FLASH_VOLUME_INCOMPATIBLE,     /**< 格式、几何或版本空间不兼容。 */
+    PLATFORM_FLASH_VOLUME_CORRUPT,          /**< 提交或数据校验损坏。 */
+    PLATFORM_FLASH_VOLUME_ERROR             /**< 原始访问或恢复失败。 */
 } Platform_Flash_VolumeStateTypeDef;
 
 typedef struct

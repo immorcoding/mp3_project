@@ -15,11 +15,11 @@
 /** @brief Service_Log 对上层公开的日志等级。 */
 typedef enum
 {
-    SERVICE_LOG_LEVEL_NONE = 0U,
-    SERVICE_LOG_LEVEL_ERROR,
-    SERVICE_LOG_LEVEL_WARN,
-    SERVICE_LOG_LEVEL_INFO,
-    SERVICE_LOG_LEVEL_DEBUG
+    SERVICE_LOG_LEVEL_NONE = 0U, /**< 不投递任何等级。 */
+    SERVICE_LOG_LEVEL_ERROR,     /**< 严重错误。 */
+    SERVICE_LOG_LEVEL_WARN,      /**< 警告。 */
+    SERVICE_LOG_LEVEL_INFO,      /**< 正常运行信息。 */
+    SERVICE_LOG_LEVEL_DEBUG      /**< 调试详细信息。 */
 } Service_Log_LevelTypeDef;
 
 Service_StatusTypeDef Service_Log_Init(void);

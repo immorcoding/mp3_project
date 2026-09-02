@@ -16,10 +16,8 @@
 
 typedef enum
 {
-    /** @brief 使用 Radius 描述的圆角矩形区域；Radius 为零时等价于矩形。 */
-    SERVICE_GUI_CANVAS_REGION_ROUNDED_RECT = 0U,
-    /** @brief 以区域短边为直径、中心与区域中心重合的内接圆区域。 */
-    SERVICE_GUI_CANVAS_REGION_CIRCLE
+    SERVICE_GUI_CANVAS_REGION_ROUNDED_RECT = 0U, /**< 使用 Radius 描述的圆角矩形；Radius 为零时等价于矩形。 */
+    SERVICE_GUI_CANVAS_REGION_CIRCLE             /**< 以区域短边为直径、中心与区域中心重合的内接圆。 */
 } Service_GUI_CanvasRegionShapeTypeDef;
 
 typedef struct

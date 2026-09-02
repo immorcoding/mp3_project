@@ -18,17 +18,17 @@
 /** @brief STM32 QSPI IRQ Adapter 的操作结果。 */
 typedef enum
 {
-    STM32QSPIIRQ_OK = 0U,
-    STM32QSPIIRQ_ERROR
+    STM32QSPIIRQ_OK = 0U, /**< 回调注册或注销成功。 */
+    STM32QSPIIRQ_ERROR    /**< 参数非法、重复注册或目标未注册。 */
 } STM32QSPIIRQ_StatusTypeDef;
 
 /** @brief 一个已注册 QSPI Handle 的异步操作生命周期事件。 */
 typedef enum
 {
-    STM32QSPIIRQ_EVENT_READ_COMPLETE = 0U,
-    STM32QSPIIRQ_EVENT_STATUS_MATCH,
-    STM32QSPIIRQ_EVENT_ERROR,
-    STM32QSPIIRQ_EVENT_ABORTED
+    STM32QSPIIRQ_EVENT_READ_COMPLETE = 0U, /**< HAL 报告接收完成。 */
+    STM32QSPIIRQ_EVENT_STATUS_MATCH,       /**< HAL 报告自动状态匹配。 */
+    STM32QSPIIRQ_EVENT_ERROR,              /**< HAL 报告 QSPI 错误。 */
+    STM32QSPIIRQ_EVENT_ABORTED             /**< HAL 报告操作中止。 */
 } STM32QSPIIRQ_EventTypeDef;
 
 /**
