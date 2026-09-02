@@ -1,18 +1,14 @@
 /**
  * @file storage_task.c
- * @brief StorageTask 启动、SD 消抖及 Flash 空闲回收调度；传输由 Service 执行。
+ * @brief Storage Task 入口：启动 SD/Flash 编排并调度热插拔消抖与空闲回收。
  */
 
 #include "APP/tasks/storage/storage_task.h"
 #include "APP/tasks/storage/storage_task_config.h"
-#include "APP/tasks/storage/storage_sd.h"
-#include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
-#include "APP/tasks/storage/benchmark/storage_flash_benchmark_config.h"
+#include "APP/tasks/storage/flash/storage_flash.h"
+#include "APP/tasks/storage/sd/storage_sd.h"
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark.h"
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark_config.h"
-#include "APP/app_config.h"
-#include "Service/filesystem/filesystem_service.h"
-#include "Service/log/log_service.h"
 
 #include <stdint.h>
 
@@ -22,7 +18,10 @@
 /**
  * @brief  运行 Storage Task 的存储协调与 SD 卡热插拔调度循环。
  * @param  handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
- * @note   每次检测边沿都会通知本任务。任务先取得通知，再以 30 ms 超时等待
+ * @note   SDRAM 破坏性自检必须早于 Flash 挂载使用的 FTL 表。随后 Flash 完成
+ *         执行器绑定、可选物理基准和挂载策略，再初始化 SD 热插拔。
+ *
+ *         每次检测边沿都会通知本任务。任务先取得通知，再以 30 ms 超时等待
  *         下一次通知；只要等待期间仍有新边沿，就重新开始完整静默期。超时后才
  *         调用 storage_sd_process()，因此触点抖动不会触发 SDMMC 或 FatFs 操作。
  *
@@ -36,47 +35,19 @@ void storage_task(void *handle)
 
     (void)handle;
     task_handle = xTaskGetCurrentTaskHandle();
-    if (Service_Filesystem_InitFlash() != SERVICE_OK)
-    {
-        (void)Service_Log_Post(
-            SERVICE_LOG_LEVEL_ERROR, "FLASH", "Flash executor initialization failed.");
-    }
-    storage_sd_init(task_handle);
 
 #if STORAGE_SDRAM_BENCHMARK_ENABLE
     storage_sdram_benchmark_run();
 #endif
 
-#if STORAGE_FLASH_BENCHMARK_ENABLE
-    storage_flash_benchmark_run();
-#endif
-
-    Service_StatusTypeDef flash_status = Service_Filesystem_MountFlash();
-    if (flash_status == SERVICE_OK)
-    {
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "FLASH", "Filesystem mounted.");
-#if STORAGE_FLASH_BENCHMARK_ENABLE && STORAGE_FLASH_BENCHMARK_FILE_ENABLE
-        storage_flash_benchmark_run_file();
-#endif
-    }
-    else if (flash_status == SERVICE_NO_FILESYSTEM)
-    {
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
-                               "FLASH",
-                               "No formatted FTL/FAT volume; explicit format required.");
-    }
-    else
-    {
-        (void)Service_Log_Post(
-            SERVICE_LOG_LEVEL_ERROR, "FLASH", "Volume unavailable; no automatic format.");
-    }
+    storage_flash_init(task_handle);
+    storage_sd_init(task_handle);
 
     for (;;)
     {
-        uint32_t notified =
-            ulTaskNotifyTakeIndexed(FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT,
-                                    pdTRUE,
-                                    pdMS_TO_TICKS(STORAGE_FLASH_RECLAIM_PERIOD_MS));
+        uint32_t notified = ulTaskNotifyTakeIndexed(FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT,
+                                                    pdTRUE,
+                                                    pdMS_TO_TICKS(STORAGE_FLASH_RECLAIM_PERIOD_MS));
         if (notified)
         {
             while (ulTaskNotifyTakeIndexed(FREERTOS_NOTIFY_INDEX_STORAGE_SD_DETECT,
@@ -87,12 +58,6 @@ void storage_task(void *handle)
             }
             storage_sd_process();
         }
-        flash_status = Service_Filesystem_ReclaimFlash();
-        if (flash_status == SERVICE_ERROR || flash_status == SERVICE_TIMEOUT)
-        {
-            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                                   "FLASH",
-                                   "Reclaim failed; explicit recovery required.");
-        }
+        storage_flash_reclaim();
     }
 }

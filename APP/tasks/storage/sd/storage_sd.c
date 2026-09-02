@@ -10,7 +10,7 @@
   ******************************************************************************
   */
 
-#include "APP/tasks/storage/storage_sd.h"
+#include "APP/tasks/storage/sd/storage_sd.h"
 #include "APP/tasks/storage/benchmark/storage_sd_benchmark.h"
 #include "APP/app_config.h"
 
@@ -182,7 +182,8 @@ static void storage_sd_detect_callback(void *context)
 /**
   * @brief  初始化 Platform SD，并处理启动时已经插入的介质。
   * @param  task_handle 当前 Storage Task 的有效任务句柄。
-  * @note   本函数把 EXTI 轻量通知绑定到 task_handle。无卡属于正常状态；已插卡
+  * @note   本函数把 EXTI 轻量通知绑定到 task_handle。必须在该任务上下文调用；
+  *         句柄为空或与当前任务不符时拒绝。无卡属于正常状态；已插卡
   *         时会在 Storage Task 上下文尝试挂载文件系统。
   */
 void storage_sd_init(TaskHandle_t task_handle)
@@ -191,6 +192,14 @@ void storage_sd_init(TaskHandle_t task_handle)
     Platform_SD_StateTypeDef state;
 
     if (task_handle == NULL)
+    {
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                               storage_sd_log_tag,
+                               "Storage task handle is invalid.");
+        return;
+    }
+
+    if (task_handle != xTaskGetCurrentTaskHandle())
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_sd_log_tag,

@@ -53,7 +53,8 @@ Platform/sd/
 
 APP/tasks/storage/
   storage_task.c                FreeRTOS 通知、30 ms 消抖和调度循环
-  storage_sd.h/.c               Platform SD 生命周期、FatFs 卷管理和介质日志
+  sd/storage_sd.h/.c            Platform SD 生命周期、FatFs 卷管理和介质日志
+  flash/storage_flash.h/.c      Flash 执行器启动、挂载策略与空闲回收
 
 Service/filesystem/
   filesystem_service.h/.c       FatFs 卷生命周期 Service Interface

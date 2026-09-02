@@ -1,14 +1,15 @@
 # 存储任务
 
-Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任务上下文。GPIO EXTI 边沿只表示“稍后重新检查”，并不直接表示“已经插卡”或“已经拔卡”。
+Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任务上下文。GPIO EXTI 边沿只表示“稍后重新检查”，并不直接表示“已经插卡”或“已经拔卡”。`sd/` 与 `flash/` 是本 Task 的私有编排分区：任务入口只做启动顺序、消抖等待和空闲回收时机。
 
 ## 公开 Interface
 
 - `storage_task(void *argument)`：由 APP 创建的任务入口。
-- `storage_sd_*()`：本 Task Module 的内部调度 Interface，不是面向其他任务的通用文件访问 Interface。
+- `storage_sd_*()`：SD 热插拔与挂载策略，仅供本 Task 调用。
+- `storage_flash_init()` / `storage_flash_reclaim()`：Flash 启动、挂载策略与空闲回收，仅供本 Task 调用。`storage_flash_init()` 必须传入当前 Storage Task 句柄，句柄为空或与当前任务不符时拒绝。
 - `storage_sd_benchmark_run()`：仅读写测试分支使用的内部诊断入口；成功挂载后由 `storage_sd_init()` 调用，不向其他任务公开。
 - `storage_sdram_benchmark_run()`：本 Task 启动阶段的内部 SDRAM 硬件诊断与基准入口；不向其他任务公开。
-- `storage_flash_benchmark_run()`：本 Task 启动阶段的 W25Q256 原始读取及可选双自检扇区破坏性基准入口；不向其他任务公开。
+- `storage_flash_benchmark_run()`：本 Task 启动阶段的 W25Q256 原始读取及可选双自检扇区破坏性基准入口；由 `storage_flash_init()` 在执行器绑定后调用，不向其他任务公开。
 
 ## 编译期依赖
 
@@ -23,7 +24,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 
 卡检测 GPIO EXTI 经 Adapter、Platform SD 回调通知本 Task 的索引 0；Filesystem 私有 DMA 执行器在同一 Task 上下文等待索引 1。Filesystem Service Flash 私有执行器在 Task 启动时长期订阅 Platform Flash 的 QSPI IRQ，并以索引 2 等待 0xEC QSPI/MDMA 读取完成、`0x34/0x21` 自动状态轮询的匹配、错误或中止；任务醒来后才调用 Platform Flash 收尾。
 
-`storage_task()` 主循环有界等待索引 0、消抖，并每隔默认 100 ms 空闲机会调用 `Service_Filesystem_ReclaimFlash()`；FTL 决定是否回收，最长一次不可抢占擦除仍需板测。一次 Service 文件读写会在同一个 Task 的嵌套调用栈中进入 Filesystem 的 SD DMA 执行器，等待索引 1、收尾当前分块后再启动下一分块；一次 Flash MDMA 读取则由 Service Flash 私有执行器在同一 Task 的嵌套调用栈中等待索引 2。ISR 只发布事件，绝不复制数据、维护 Cache 或启动下一笔传输。
+`storage_task()` 主循环有界等待索引 0、消抖，并每隔默认 100 ms 空闲机会调用 `storage_flash_reclaim()`；FTL 决定是否回收，最长一次不可抢占擦除仍需板测。一次 Service 文件读写会在同一个 Task 的嵌套调用栈中进入 Filesystem 的 SD DMA 执行器，等待索引 1、收尾当前分块后再启动下一分块；一次 Flash MDMA 读取则由 Service Flash 私有执行器在同一 Task 的嵌套调用栈中等待索引 2。ISR 只发布事件，绝不复制数据、维护 Cache 或启动下一笔传输。
 
 ## 约束
 
@@ -43,7 +44,7 @@ Task 内部 Implementation 使用 `storage_*`；任务入口保持 `storage_task
 
 ## FTL 集成（已实现，待上板验收）
 
-启动诊断之后执行 `MountFlash()`，未格式化只记录告警，绝不自动格式化。QSPI 回调、索引 2 等待和传输收尾职责属于 Filesystem Service 私有 Flash 执行器。Storage Task 仍是唯一上下文，APP 保留启动/诊断编排、挂载策略和回收调用时机，不注册第二个传输回调。`storage_task()` 先调用 `Service_Filesystem_InitFlash()`，再初始化 SD。
+启动时先可选跑 SDRAM 破坏性自检，再由 `storage_flash_init()` 绑定执行器、按策略挂载已有卷；未格式化只记录告警，绝不自动格式化。物理基准在执行器绑定之后、挂载之前运行；文件基准仅在挂载成功后运行。QSPI 回调、索引 2 等待和传输收尾职责属于 Filesystem Service 私有 Flash 执行器。Storage Task 仍是唯一上下文，APP 的 `flash/` 分区保留启动/诊断编排、挂载策略和回收调用时机，不注册第二个传输回调。随后 `storage_sd_init()` 处理卡槽热插拔。
 
 主循环已为 `ReclaimFlash` 安排定期机会，不再无限期只等 SD 检测。FTL 决定是否 GC、回收哪个块；已在飞操作按硬件通知与超时推进。默认回收机会周期 100 ms，每次最多回收一块，不承诺 NOR 擦除可以立即抢占。SDRAM 破坏性自检必须早于 FTL 表与业务缓冲使用。
 

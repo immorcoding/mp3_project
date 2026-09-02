@@ -432,6 +432,7 @@ QSPI 异步操作的当前路径为：
 
 ```text
 Storage Task 启动
+  -> storage_flash_init()
   -> Service_Filesystem_InitFlash()
   -> Platform_Flash_SetOperationCallback()（长期唯一订阅）
 

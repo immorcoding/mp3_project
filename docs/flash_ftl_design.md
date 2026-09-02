@@ -239,7 +239,7 @@ Platform 在整个 FTL 请求期间关闭映射，不在每个内部页操作后
 | `Service/filesystem/sd/` | 原 `filesystem_fatfs_bsp.c` 改名 `filesystem_sd_bsp.c` 并迁入；迁入 SD 私有执行器及头 |
 | `Service/filesystem/flash/` | 新增 `filesystem_flash_bsp.c`、`filesystem_flash_transfer.c/.h` 与私有配置 |
 | `Service/filesystem/filesystem_service.c/.h` 及配置 | 保留单个 Module；公开头按卷/文件/诊断切开，增加 Flash 卷、回收/恢复能力 |
-| `APP/tasks/storage/storage_task.c`、相关 benchmark | 执行职责交 Service；APP 保留启动/诊断编排及回收时机，不留第二回调所有者 |
+| `APP/tasks/storage/flash/storage_flash.c`、相关 benchmark | 执行职责交 Service；APP 保留启动/诊断编排及回收时机，不留第二回调所有者 |
 | 自维护 CMake 与必要链接脚本 | 核查源收集、强符号、SDRAM/DMA SRAM 容量对齐，不向生成构建嵌入产品逻辑 |
 | `Tests/flash_ftl/`与相关测试 | 纯 C Fake NOR、故障注入，与固件构建隔离 |
 
