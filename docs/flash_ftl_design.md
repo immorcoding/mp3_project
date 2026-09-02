@@ -8,7 +8,7 @@
 
 ## 1. 范围与代码现状
 
-首版拉通 Filesystem Service 及以下的 Flash 逻辑扇区链路，并安排 Storage Task 的启动、回收和恢复入口。暂不创建通用 BlockDevice、独立 Service/storage，也不实现 USB MSC 仲裁、资源包在线更新或 GUI/模型加载流程。
+首版拉通 Filesystem Service 及以下的 Flash 逻辑扇区链路，并安排 Storage Task 的启动、回收和恢复入口。暂不创建通用 BlockDevice、独立 Service/storage、资源包在线更新或 GUI/模型加载流程；USB MSC 不属于当前产品范围。
 
 当前 W25Qxx 已有读取、单页编程、4 KiB 擦除和 WIP 自动状态轮询；QSPI/MDMA 读取已接入。页编程的数据发送当前仍使用 HAL 轮询，不能声称已支持 MDMA TX。FTL、Bridge、Platform 装配、Service 同步执行器和 USER 转发均已接通；Storage Task 已安排打开/挂载及定期回收。
 

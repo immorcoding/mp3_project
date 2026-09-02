@@ -19,6 +19,6 @@ Filesystem 保持一个 Module，内部划分 SD/Flash 子目录，SD 专属 BSP
 
 - 不在生成 DiskIO 放入 RTOS 等待或直接包含 Service 头，避免重生成风险与反向实现依赖。
 - 不在 USER 生成函数上另加一套强弱覆盖，避免绕开驱动表和 USER CODE 接缝。
-- 不提前创建通用 BlockDevice 或 Service/storage；未来 MSC 仲裁另行设计。
+- 不提前创建通用 BlockDevice 或 Service/storage；当前产品不提供 USB MSC 仲裁。
 - 弱后端明确报告未就绪，不得无操作返回成功；Service 同步返回不改变下层异步推进模型。
 - APP 原始诊断也通过同一个执行所有者，不保留第二条回调注册路径。

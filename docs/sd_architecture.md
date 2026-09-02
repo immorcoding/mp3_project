@@ -283,7 +283,7 @@ SD Card Device 集中隐藏了多处上层都需要的规则：
 - 统一的 Device 和 Port 诊断；
 - 部分初始化失败后的清理。
 
-如果 `SDCard_ReadBlocks()` 只转调 `HAL_SD_ReadBlocks()`，APP、FatFs DiskIO 和 USB MSC 都要重复这些规则，Device 就失去了存在价值。
+如果 `SDCard_ReadBlocks()` 只转调 `HAL_SD_ReadBlocks()`，APP 和 FatFs DiskIO 都要重复这些规则，Device 就失去了存在价值。
 
 ## 9. CubeMX 边界
 
@@ -329,19 +329,18 @@ CubeMX 继续管理：
 文件系统挂载状态不属于 `SDCard_StateTypeDef`。`Filesystem` Module 不会调用
 `Platform_SD_Init()`；Storage Task 必须先完成卡检测、消抖和 Platform 生命周期，
 再调用挂载；拔卡后由同一任务注销 FatFs 卷对象。当前 Storage Task 是 SD 与本地
-FatFs 的唯一普通任务上下文。未来若出现 `Service/storage`，它只应接收跨任务命令、
-协调文件打开状态，并处理本地 FatFs 与 USB MSC 之间的介质所有权仲裁，而不应复制
-Storage Task 的 Platform SD 生命周期实现。
+FatFs 的唯一普通任务上下文。未来若出现 `Service/storage`，它只应接收跨任务命令并
+协调文件打开状态，而不应复制 Storage Task 的 Platform SD 生命周期实现。
 
 ## 11. 当前限制
 
-1. Filesystem DMA executor 只允许 Storage Task 作为唯一调用者；尚未实现 Mutex、多任务文件系统服务或 USB MSC 所有权切换；
+1. Filesystem DMA executor 只允许 Storage Task 作为唯一调用者；尚未实现 Mutex 或多任务文件系统服务；
 2. 当前使用固定的 32 KiB、32 字节对齐 AXI SRAM 中转缓冲区。它每次传输最多 64 个逻辑块，大请求会串行分块；
 3. Cache 操作仅覆盖该专用缓冲区。未来若直接 DMA 到其他缓冲区，必须重新满足 AXI SRAM 可访问性、32 字节对齐和 Clean/Invalidate 规则；
 4. DMA 等待超时、错误或中止会使 Device 进入 `ERROR`；当前恢复策略是由后续卡检测/重新初始化恢复，尚未实现传输中的 HAL Abort 与原地重试；
 5. 当前热插拔路径依赖 FreeRTOS Storage Task；若要回到裸机，应在应用层提供轮询通知和消抖策略，而不是把 FreeRTOS 依赖加入 Platform；
 6. SD Card Port 的 SDMMC 初始化值、SDMMC1 NVIC 和 HAL 回调注册开关必须与 CubeMX 配置保持一致；
-7. 已实现本地 FatFs 挂载、卸载和显式格式化；尚未实现 USB MSC，以及本地 FatFs 与 USB MSC 之间的所有权切换。
+7. 已实现本地 FatFs 挂载、卸载和显式格式化；当前产品不支持 USB MSC，批量文件导入使用读卡器。
 
 ## 12. 对外使用规则
 

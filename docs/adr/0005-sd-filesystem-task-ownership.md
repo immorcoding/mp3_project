@@ -20,4 +20,4 @@ SD 卡既有热插拔，也有 SDMMC DMA、D-Cache 和 FatFs 同步 DiskIO 契�
 
 - 未插卡是正常持续状态，不阻止系统启动；
 - DMA 完成与 FatFs 调用均在任务上下文收尾，ISR 只发布事件；
-- 后续 USB MSC 必须先建立卷所有权切换，不能与本地 FatFs 并发挂载同一介质。
+- 当前产品不提供 USB MSC；本地 FatFs 是 SD 介质的唯一文件系统所有者。

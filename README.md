@@ -89,5 +89,5 @@ git commit -m "说明这次是重新导出"
 
 - Module 所有权、Interface 和 Adapter 接缝是否足够清晰；
 - FreeRTOS 任务、ISR 回调、DMA 与 Cache 一致性的运行时路径是否合理；
-- 后续音频解码、外部 Flash、USB MSC 与 GUI 功能继续接入时的演进方式；
+- 后续音频解码、外部 Flash 与 GUI 功能继续接入时的演进方式；
 - 注释、文档、命名和可复现构建体验中的不足。

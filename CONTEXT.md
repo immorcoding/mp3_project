@@ -409,7 +409,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **Flash FTL**是把原始 NOR Flash 转换为稳定逻辑扇区的可复用 Module；首版代码已实现并通过主机回归，板级掉电验收待完成。它拥有 `FlashFTL_RawOps`，但不认识 W25Qxx、STM32 HAL、Platform、FatFs、USB MSC 或媒体业务。
 
-W25Qxx 到 Flash FTL 的转换由跨 Component Bridge 承担。首版以逻辑组异地提交、上电扫描恢复和整块回收提供存储语义；Service 的同步返回必须等待真实提交完成，不采用 RAM 写回早确认。文件系统链路已接通，仍须完成硬件验收后才能作为可用业务盘；USB MSC 所有权切换另行设计。技术规则集中于 [FTL 设计](docs/flash_ftl_design.md)。
+W25Qxx 到 Flash FTL 的转换由跨 Component Bridge 承担。首版以逻辑组异地提交、上电扫描恢复和整块回收提供存储语义；Service 的同步返回必须等待真实提交完成，不采用 RAM 写回早确认。文件系统链路已接通，仍须完成硬件验收后才能作为可用业务盘。技术规则集中于 [FTL 设计](docs/flash_ftl_design.md)。
 
 **FTL 逻辑组**是一组共同映射并提交版本的相邻逻辑扇区；组内局部更新保留其他扇区，跨组请求不具备整体原子性。
 

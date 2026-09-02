@@ -30,7 +30,7 @@ FatFs disk_* → SD 或 USER BSP 强定义 → 私有执行器 → Platform。SD
 
 SD 保留 32 KiB、32 B 对齐的 AXI SRAM bounce buffer，配置在 `filesystem_config.h`。Flash 映射与工作内存由 Platform 注入 FTL，Service 不另建写回缓存。`flash/filesystem_flash_config.h` 控制等待预算和可选摘要日志，默认关闭日志不影响错误返回。
 
-SD 与 Flash 初始化、挂载和错误状态独立。Flash 执行器拒绝其他任务，首版不提供跨任务文件请求队列或 USB MSC 仲裁。MSC 首版只导出 SD；所有权门槛加在现有 `BSP_SD_* → filesystem_sd_transfer_*` 之间。完整链路及验收记录见 [FTL 设计](../../docs/flash_ftl_design.md) 与 [公开接缝切开](../../docs/filesystem_service_reshape.md)。
+SD 与 Flash 初始化、挂载和错误状态独立。Flash 执行器拒绝其他任务，首版不提供跨任务文件请求队列、USB MSC 仲裁或原始 SD 块访问 Interface。当前产品范围不提供 USB MSC；批量文件导入使用读卡器。完整链路及验收记录见 [FTL 设计](../../docs/flash_ftl_design.md)、[公开接缝切开](../../docs/filesystem_service_reshape.md) 与 [ADR-0013](../../docs/adr/0013-usb-msc-product-scope.md)。
 
 ## Flash 文件访问
 

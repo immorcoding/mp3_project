@@ -13,7 +13,7 @@ Filesystem Module 仍然是一个 Module，SD/Flash 私有子目录保留。调�
 
 ## 2. 已确认的取舍
 
-1. 不新建 `Service/storage`，不抽通用 BlockDevice，不建 `filesystem_sd_access`。MSC 首版只导出 SD；所有权门槛和跨任务命令在 MSC 实现时加在现有 `BSP_SD_* → filesystem_sd_transfer_*` 之间。
+1. 不新建 `Service/storage`，不抽通用 BlockDevice，不建 `filesystem_sd_access`。当前产品不提供 USB MSC；不预建 SD 所有权门槛或跨任务命令。
 2. 不做文件级卷选择。`ReadFile` / `WriteFile` 继续只服务已打开的 Flash 文件句柄；SD 没有文件 API。
 3. 不把 Platform 诊断区域枚举复制成 Service 枚举。`filesystem_flash_access.h` 是唯一允许包含 `platform_flash.h` 的 Filesystem 公开头。
 4. 删除 `APP/tasks/storage/storage_flash.c/.h`。`InitFlash` 由 `storage_task.c` 直接调用；诊断由 benchmark 直接调用 Service。
@@ -206,14 +206,14 @@ Service_Filesystem_MountFlash()
 | `docs/architecture_standard.md` §8 QSPI 路径、§13 | `storage_flash_init` → `Service_Filesystem_InitFlash`；诊断调用改为 Service；维护改为回收 |
 | `docs/sd_architecture.md` | 目录表拆三个头；`Init` → `InitSD` |
 | `docs/w25q256_architecture.md`、`docs/flash_ftl_design.md`、`Components/flash_ftl/README.md` | 去掉经 `storage_flash` 转发的表述；`Maintain*` → `Reclaim*` |
-| `docs/adr/0012-filesystem-public-seams.md` | 新建：切开公开接缝、MSC 首版只导出 SD、本轮不建 storage/BlockDevice/sd_access、`Maintain` 全链改名 `Reclaim` |
+| `docs/adr/0012-filesystem-public-seams.md` | 新建：切开公开接缝、本轮不建 storage/BlockDevice/sd_access、`Maintain` 全链改名 `Reclaim` |
 | `docs/adr/README.md`、`docs/README.md` | 链到 0012 与本文 |
 
-ADR-0005 / ADR-0010 不改写正文决定，由 0012 引用并收窄「未来 MSC」为「首版只导出 SD」。
+ADR-0005 / ADR-0010 不改写正文决定；ADR-0012 记录公开接缝取舍，MSC 产品范围由 ADR-0013 明确。
 
 ## 10. 明确不做
 
-- USB MSC 协议、LUN、跨任务命令队列、SD 所有者枚举
+- USB MSC 协议、LUN、SD 所有者枚举
 - SD 文件 API、通用 `Open(volume, path)`
 - 合并 SD/Flash 执行器
 - 改变 FTL 算法、`FLASH_FTL_OP_GC`、FatFs 生成 Glue
