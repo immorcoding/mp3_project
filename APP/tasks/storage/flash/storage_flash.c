@@ -85,7 +85,19 @@ void storage_flash_init(TaskHandle_t task_handle)
                                storage_flash_log_tag,
                                "No formatted FTL/FAT volume; explicit format required.");
 #if STORAGE_FLASH_AUTO_FORMAT
-        (void)Service_Filesystem_FormatAndMountFlash();
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO,
+                               storage_flash_log_tag,
+                               "Formatting Flash volume...");
+        if (Service_Filesystem_FormatAndMountFlash() != SERVICE_OK)
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                   storage_flash_log_tag,
+                                   "Flash volume format failed.");
+            return;
+        }
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO,
+                               storage_flash_log_tag,
+                               "Flash volume formatted and mounted.");
         return;
 #endif
     }
