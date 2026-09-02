@@ -27,6 +27,9 @@ Service_StatusTypeDef filesystem_make_service_status(FRESULT result)
             return SERVICE_BUSY;
 
         case FR_NOT_READY:
+            return SERVICE_NO_MEDIA;
+
+        case FR_NOT_ENABLED:
             return SERVICE_NOT_READY;
 
         case FR_TIMEOUT:
@@ -35,7 +38,12 @@ Service_StatusTypeDef filesystem_make_service_status(FRESULT result)
         case FR_NO_FILESYSTEM:
             return SERVICE_NO_FILESYSTEM;
 
+        case FR_DENIED:
+            return SERVICE_NO_SPACE;
+
         case FR_INVALID_OBJECT:
+            return SERVICE_INVALID_HANDLE;
+
         case FR_INVALID_NAME:
         case FR_INVALID_PARAMETER:
             return SERVICE_INVALID_PARAM;

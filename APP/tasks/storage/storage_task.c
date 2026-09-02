@@ -36,12 +36,12 @@ void storage_task(void *handle)
 
     (void)handle;
     task_handle = xTaskGetCurrentTaskHandle();
-    storage_sd_init(task_handle);
     if (Service_Filesystem_InitFlash() != SERVICE_OK)
     {
         (void)Service_Log_Post(
             SERVICE_LOG_LEVEL_ERROR, "FLASH", "Flash executor initialization failed.");
     }
+    storage_sd_init(task_handle);
 
 #if STORAGE_SDRAM_BENCHMARK_ENABLE
     storage_sdram_benchmark_run();
@@ -51,11 +51,7 @@ void storage_task(void *handle)
     storage_flash_benchmark_run();
 #endif
 
-    Service_StatusTypeDef flash_status = Service_Filesystem_OpenFlash();
-    if (flash_status == SERVICE_OK)
-    {
-        flash_status = Service_Filesystem_MountFlash();
-    }
+    Service_StatusTypeDef flash_status = Service_Filesystem_MountFlash();
     if (flash_status == SERVICE_OK)
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "FLASH", "Filesystem mounted.");

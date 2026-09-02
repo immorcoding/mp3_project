@@ -587,15 +587,15 @@ USB_DEVICE/Target/*.c
 
 [ADR-0010](adr/0010-fatfs-user-diskio-service-ownership.md) 将既有 SD Override Seam 模式扩展到 USER：FATFS Target 自维护 `bsp_driver_user_diskio` 契约与安全弱定义，生成 USER CODE 仅转发，Service 强定义实现。运行时进入 Service 不构成中间件包含 Service 头的许可，也不允许在契约默认实现中放入产品任务或装配逻辑。
 
-Filesystem 保持一个 Module，SD/Flash 为私有实现子目录。公开 Interface 按卷、文件、诊断切开，见 [ADR-0012](adr/0012-filesystem-public-seams.md)。Flash 完成订阅和等待由 Service 持有，Storage Task 仍决定执行时机；不提前创建通用 BlockDevice 或 Service/storage。当前产品不提供 USB MSC，详见 [ADR-0013](adr/0013-usb-msc-product-scope.md)。FTL 算法、GC 与 RawOps 仍归 Component，Platform 持有实例/内存并管理完整操作的映射生命周期。设计详见 [flash_ftl_design.md](flash_ftl_design.md)。
+Filesystem 保持一个 Module，SD/Flash 为私有实现子目录。公开 Interface 按卷、文件、目录、诊断切开，见 [ADR-0012](adr/0012-filesystem-public-seams.md) 与 [ADR-0014](adr/0014-filesystem-volume-aware-file-interface.md)。Flash 完成订阅和等待由 Service 持有，Storage Task 仍决定执行时机；不提前创建通用 BlockDevice 或 Service/storage。当前产品不提供 USB MSC，详见 [ADR-0013](adr/0013-usb-msc-product-scope.md)。FTL 算法、GC 与 RawOps 仍归 Component，Platform 持有实例/内存并管理完整操作的映射生命周期。设计详见 [flash_ftl_design.md](flash_ftl_design.md)。
 
 上述原始诊断与 FTL 共用 Service 的唯一执行器；FTL 主机回归、真实 FatFs 主机集成及 Debug/Release 构建通过，但不能把软件验证当成真实欠压掉电验收。禁止绕过 FTL 将原始 NOR 接入 FatFs。
 
 
 ### Flash 文件 benchmark 的访问边界
 
-APP 文件诊断只经 Filesystem Service 的文件接口执行，不直接包含 FatFs 或访问逻辑块。
-Service 持有 FIL、路径编码转换和同步文件生命周期，APP 持有图样、计时、校验与日志策略。
+APP 文件诊断只经 Filesystem Service 的卷感知文件接口执行，不直接包含 FatFs 或访问逻辑块。
+Service 持有 FIL/DIR、UTF-8 路径校验、盘符转换和同步文件/目录生命周期，APP 持有图样、计时、校验与日志策略。
 首版没有跨任务文件请求队列；现有 Storage Task 是唯一执行上下文。
 删除文件释放 FAT 簇，不在 APP/Service 中按文件地址直接擦 NOR。无 TRIM 时，FTL 只有在
 后续 LBA 更新后才把对应旧物理版本列为失效；GC 策略继续归 FTL。

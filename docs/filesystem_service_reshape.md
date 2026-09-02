@@ -1,20 +1,19 @@
 # Filesystem Service 公开接缝切开
 
-> 状态：已实施
+> 状态：已实施（2026-09-01 接缝切开）。文件级卷选择、设备侧 FormatSD 删除，以及 Flash `FormatAndMount`/`RecoverAndMount` 由 [ADR-0014](adr/0014-filesystem-volume-aware-file-interface.md) 记录；下文第 2 条第 2 款和第 10 条「SD 文件 API」以该 ADR 为准。
 > 日期：2026-09-01
-> 相关决定：[ADR-0005](adr/0005-sd-filesystem-task-ownership.md)、[ADR-0010](adr/0010-fatfs-user-diskio-service-ownership.md)
-> 实现后将新增 ADR-0012，记录本设计的长期取舍
+> 相关决定：[ADR-0005](adr/0005-sd-filesystem-task-ownership.md)、[ADR-0010](adr/0010-fatfs-user-diskio-service-ownership.md)、[ADR-0012](adr/0012-filesystem-public-seams.md)、[ADR-0014](adr/0014-filesystem-volume-aware-file-interface.md)
 
 ## 1. 目的
 
 Filesystem Module 仍然是一个 Module，SD/Flash 私有子目录保留。调整只切开公开 Interface，让调用者按需包含，不再把卷生命周期、Flash 文件和启动诊断挤在同一个头里。
 
-行为不变：挂载/卸载/格式化语义、单文件槽、DMA/QSPI 执行器、DiskIO 强定义、Storage Task 唯一执行上下文均保持。
+接缝切开时不改变下列行为：挂载/卸载/格式化语义、单文件槽、DMA/QSPI 执行器、DiskIO 强定义、Storage Task 唯一执行上下文。其中单文件槽与格式化语义已由 ADR-0014 取代；执行器、DiskIO 强定义和唯一 Storage Task 仍然有效。后续卷感知文件/目录见第 12 节。
 
 ## 2. 已确认的取舍
 
 1. 不新建 `Service/storage`，不抽通用 BlockDevice，不建 `filesystem_sd_access`。当前产品不提供 USB MSC；不预建 SD 所有权门槛或跨任务命令。
-2. 不做文件级卷选择。`ReadFile` / `WriteFile` 继续只服务已打开的 Flash 文件句柄；SD 没有文件 API。
+2. 当时不做文件级卷选择。`ReadFile` / `WriteFile` 只服务已打开的 Flash 文件句柄；SD 没有文件 API。该条已由 ADR-0014 取代。
 3. 不把 Platform 诊断区域枚举复制成 Service 枚举。`filesystem_flash_access.h` 是唯一允许包含 `platform_flash.h` 的 Filesystem 公开头。
 4. 删除 `APP/tasks/storage/storage_flash.c/.h`。`InitFlash` 由 `storage_task.c` 直接调用；诊断由 benchmark 直接调用 Service。
 5. `Service_Filesystem_Init` 改名为 `Service_Filesystem_InitSD`，与 `InitFlash` 对称。
@@ -213,8 +212,8 @@ ADR-0005 / ADR-0010 不改写正文决定；ADR-0012 记录公开接缝取舍，
 
 ## 10. 明确不做
 
-- USB MSC 协议、LUN、SD 所有者枚举
-- SD 文件 API、通用 `Open(volume, path)`
+- USB MSC 协议、LUN、SD 所有者枚举（产品范围见 ADR-0013）
+- SD 文件 API、通用 `Open(volume, path)`（当时范围；ADR-0014 已提供 Volume + 相对路径）
 - 合并 SD/Flash 执行器
 - 改变 FTL 算法、`FLASH_FTL_OP_GC`、FatFs 生成 Glue
 - 给诊断头再包一层 APP 转发
@@ -226,3 +225,7 @@ ADR-0005 / ADR-0010 不改写正文决定；ADR-0012 记录公开接缝取舍，
 - 自维护代码与文档无 `Service_Filesystem_Init(`、`FlashFTL_MaintainStart`、`MaintainVolumeStart`、`MaintainFlash`、`storage_flash_init`、`storage_flash_read_array` 等旧符号
 - `storage_flash.c/.h` 不存在
 - 三个公开头的包含关系符合第 4 节
+
+## 12. 后续公开 Interface（ADR-0014）
+
+接缝切开之后，文件与目录改为卷感知 UTF-8 相对路径；当前公开头为 `filesystem_service.h`、`filesystem_file.h`、`filesystem_directory.h`、`filesystem_flash_access.h`。SD 不再提供 `FormatSD`；Flash 以 `FormatAndMountFlash` / `RecoverAndMountFlash` 取代「格式化或恢复后不自动挂载」的旧语义。实现与路径/句柄契约以 [Service 说明](../Service/filesystem/README.md) 和 ADR-0014 为准，不以本文第 5 节的历史签名为准。

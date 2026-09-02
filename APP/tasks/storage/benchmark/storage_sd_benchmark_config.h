@@ -14,7 +14,7 @@
 
 /** @brief 测试文件写入的总有效载荷，64 MiB 足以稀释文件创建和关闭的固定开销。 */
 #define STORAGE_SD_BENCHMARK_TOTAL_BYTES       (64U * 1024U * 1024U)
-/** @brief 单次 FatFs f_write() 的应用层缓冲区长度，单位为字节。 */
+/** @brief 单次 WriteFile 的应用层缓冲区长度，单位为字节。 */
 #define STORAGE_SD_BENCHMARK_CHUNK_BYTES       (32U * 1024U)
 /** @brief 总有效载荷按固定应用层缓冲区分割后的块数。 */
 #define STORAGE_SD_BENCHMARK_CHUNK_COUNT       \

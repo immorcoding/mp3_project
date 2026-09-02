@@ -62,7 +62,7 @@ static void storage_flash_file_log_speed(const char *phase, TickType_t elapsed)
  * @return OK 为全部写入并同步成功；短写返回 ERROR，其余保留 Service 错误。
  * @note 不负责关闭或删除，所有失败统一由入口清理；长阶段采用 RTOS tick 避免 DWT 短周期回绕。
  */
-static Service_StatusTypeDef storage_flash_file_write(Service_Filesystem_FileTypeDef file,
+static Service_StatusTypeDef storage_flash_file_write(Service_Filesystem_FileHandleTypeDef file,
                                                       TickType_t *elapsed)
 {
     TickType_t start = xTaskGetTickCount();
@@ -94,7 +94,7 @@ static Service_StatusTypeDef storage_flash_file_write(Service_Filesystem_FileTyp
  * @return OK 为长度及可选内容符合期望；短读、额外数据或内容不符返回 ERROR。
  * @note 测速与校验各自重新打开文件；不依赖读取阶段残留的 APP 缓冲。
  */
-static Service_StatusTypeDef storage_flash_file_read(Service_Filesystem_FileTypeDef file,
+static Service_StatusTypeDef storage_flash_file_read(Service_Filesystem_FileHandleTypeDef file,
                                                      bool verify,
                                                      TickType_t *elapsed)
 {
@@ -141,15 +141,17 @@ void storage_flash_benchmark_run_file(void)
     }
     storage_flash_file_attempted = true;
 
-    Service_Filesystem_FileTypeDef file = {0};
+    Service_Filesystem_FileHandleTypeDef file = {0};
     Service_StatusTypeDef status;
     TickType_t elapsed = 0U;
     const char *stage = "create";
     bool created = false;
     bool removed = false;
 
-    status = Service_Filesystem_OpenFlashFile(
-        STORAGE_FLASH_BENCHMARK_FILE_NAME, SERVICE_FILESYSTEM_FILE_CREATE_NEW, &file);
+    status = Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_FLASH,
+                                         STORAGE_FLASH_BENCHMARK_FILE_NAME,
+                                         SERVICE_FILESYSTEM_FILE_MODE_CREATE_NEW,
+                                         &file);
     if (status != SERVICE_OK)
     {
         goto cleanup;
@@ -162,18 +164,21 @@ void storage_flash_benchmark_run_file(void)
         goto cleanup;
     }
     stage = "close writer";
-    status = Service_Filesystem_CloseFile(&file);
+    status = Service_Filesystem_CloseFile(file);
     if (status != SERVICE_OK)
     {
         goto cleanup;
     }
+    file.Token = 0U;
     storage_flash_file_log_speed("write+sync", elapsed);
 
     for (uint32_t pass = 0U; pass < 2U; pass++)
     {
         stage = pass ? "open verify" : "open reader";
-        status = Service_Filesystem_OpenFlashFile(
-            STORAGE_FLASH_BENCHMARK_FILE_NAME, SERVICE_FILESYSTEM_FILE_READ, &file);
+        status = Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_FLASH,
+                                             STORAGE_FLASH_BENCHMARK_FILE_NAME,
+                                             SERVICE_FILESYSTEM_FILE_MODE_READ,
+                                             &file);
         if (status != SERVICE_OK)
         {
             goto cleanup;
@@ -185,11 +190,12 @@ void storage_flash_benchmark_run_file(void)
             goto cleanup;
         }
         stage = "close reader";
-        status = Service_Filesystem_CloseFile(&file);
+        status = Service_Filesystem_CloseFile(file);
         if (status != SERVICE_OK)
         {
             goto cleanup;
         }
+        file.Token = 0U;
         if (!pass)
         {
             storage_flash_file_log_speed("read", elapsed);
@@ -199,7 +205,7 @@ void storage_flash_benchmark_run_file(void)
 cleanup:
     if (file.Token)
     {
-        Service_StatusTypeDef close_status = Service_Filesystem_CloseFile(&file);
+        Service_StatusTypeDef close_status = Service_Filesystem_CloseFile(file);
         if (close_status != SERVICE_OK)
         {
             (void)Service_Log_Post(
@@ -211,7 +217,8 @@ cleanup:
     if (created)
     {
         Service_StatusTypeDef remove_status =
-            Service_Filesystem_RemoveFlashFile(STORAGE_FLASH_BENCHMARK_FILE_NAME);
+            Service_Filesystem_RemoveFile(SERVICE_FILESYSTEM_VOLUME_FLASH,
+                                          STORAGE_FLASH_BENCHMARK_FILE_NAME);
         removed = remove_status == SERVICE_OK;
         if (!removed)
         {

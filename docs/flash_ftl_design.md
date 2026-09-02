@@ -279,7 +279,7 @@ epoch 首次为 1，每次显式格式化递增；组版本从 1 起递增，0 �
 
 ## 15. 对外流程和实际预算
 
-Service 公开 InitFlash、OpenFlash、MountFlash、UnmountFlash、FormatFlash、ReclaimFlash、RecoverFlash。首次使用时由 Storage Task 初始化执行器，启动诊断完成后打开/挂载。FormatFlash 是显式破坏性 API：先注销旧 FAT 卷，再格式化 FTL，最后用 FM_FAT | FM_SFD 建 FAT12/16；不会在启动路径执行，也不自动重挂载。RecoverFlash 注销旧文件对象、确认硬件空闲后重扫 FTL，调用者随后显式挂载。
+Service 公开 InitFlash、MountFlash、UnmountFlash、FormatAndMountFlash、RecoverAndMountFlash、ReclaimFlash。首次使用时由 Storage Task 初始化执行器，启动诊断完成后挂载已有卷。FormatAndMountFlash 是显式破坏性 API：先注销旧 FAT 卷，再格式化 FTL，最后用 FM_FAT | FM_SFD 建 FAT12/16 并重新挂载；不会在启动路径执行。RecoverAndMountFlash 注销旧文件对象、确认硬件空闲后重扫 FTL，成功返回时卷已经挂载。
 
 USER 驱动内 LUN 为 0，与全局 1:/ 分开；GET_SECTOR_COUNT 返回 38689（默认），GET_SECTOR_SIZE 返回 512。GET_BLOCK_SIZE 返回 1：本版 FatFs 要求其为二次幂，七扇区组是 FTL 内部约束。CTRL_SYNC 经过同步执行器，未知命令返回 RES_PARERR；未就绪返回 RES_NOTRDY，传输失败返回 RES_ERROR。
 
@@ -342,7 +342,7 @@ USER 驱动内 LUN 为 0，与全局 1:/ 分开；GET_SECTOR_COUNT 返回 38689�
 Service 文件接口 → FatFs → USER DiskIO → Service 块后端 → Platform → FTL → RawOps。
 实现、默认 1 MiB/4 KiB 参数、计时范围和失败清理详见
 [benchmark 说明](../APP/tasks/storage/benchmark/README.md)；
-单文件槽、句柄代次和文件名范围见 [Service 说明](../Service/filesystem/README.md)。
+静态文件/目录槽、句柄代次和 UTF-8 相对路径范围见 [Service 说明](../Service/filesystem/README.md)。
 
 仅新建本轮测试文件，同名拒绝覆盖或删除；写入同步后重新打开读取、独立校验，最后关闭并删除。
 异常也尝试清理，但介质/锁故障无法删除时必须明确报告残留。未挂载或无文件系统时跳过测试，

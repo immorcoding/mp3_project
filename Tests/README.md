@@ -1,6 +1,6 @@
 # 主机回归
 
-`flash_ftl`、`w25qxx` 与 `resource_pack` 是三个独立的 CMake 工程，共 17 个 CTest：`flash_ftl` 15 个（3 个固定测试、12 个场景测试），`w25qxx` 1 个，`resource_pack` 1 个。
+`flash_ftl`、`w25qxx` 与 `resource_pack` 是三个独立的 CMake 工程，共 18 个 CTest：`flash_ftl` 16 个（3 个固定测试、12 个文件场景测试、1 个卷感知 Service 测试），`w25qxx` 1 个，`resource_pack` 1 个。
 
 ## 环境
 

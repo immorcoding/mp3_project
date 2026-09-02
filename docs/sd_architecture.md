@@ -57,7 +57,8 @@ APP/tasks/storage/
 
 Service/filesystem/
   filesystem_service.h/.c       FatFs 卷生命周期 Service Interface
-  filesystem_file.h             Flash 文件访问 Interface
+  filesystem_file.h             卷感知文件 Interface
+  filesystem_directory.h        卷感知目录 Interface
   filesystem_flash_access.h     启动诊断 Interface
   filesystem_status.h/.c        私有 FRESULT 映射与盘符路径
   sd/filesystem_sd_transfer.h/.c   Storage Task 独占的同步 DMA 执行器与中转缓冲区

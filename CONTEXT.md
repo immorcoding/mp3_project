@@ -349,9 +349,9 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 文件系统 Module（Filesystem Module）
 
-**文件系统 Module**封装当前 FatFs 逻辑卷的驱动就绪检查、挂载、注销和显式格式化，并持有 FatFs 所需的同步 DMA 与 Flash 执行器。它只在存储任务已经取得介质独占权且对应 Platform 能力已处于可访问状态时调用 FatFs，不负责卡检测、消抖或 SDMMC/QSPI 初始化。
+**文件系统 Module**封装当前 FatFs 逻辑卷的驱动就绪检查、挂载、注销，以及仅针对内部 Flash 卷的显式格式化/恢复，并持有 FatFs 所需的同步 DMA 与 Flash 执行器。它只在存储任务已经取得介质独占权且对应 Platform 能力已处于可访问状态时调用 FatFs，不负责卡检测、消抖或 SDMMC/QSPI 初始化。设备不格式化 SD 卡。
 
-公开 Interface 分成三块：卷生命周期、Flash 文件访问、启动诊断。APP 只持有 Service 文件句柄，文件对象和 FatFs 类型归 Service。首版仅唯一 Storage Task、已挂载 Flash 卷和单文件槽，支持根目录 ASCII 名称、新建/只读、顺序读写、同步、关闭和删除。删除释放 FAT 簇；未实现 TRIM 时不直接使 FTL 数据映射失效，后续逻辑覆盖写才使旧版本可回收。Flash 文件 benchmark 由 APP 在挂载后编排，不把测速策略下沉为 Service 业务。启动诊断由 APP benchmark 直接调用诊断 Interface，不经空转发层。
+公开 Interface 分成卷生命周期、卷感知文件、卷感知目录和启动诊断。APP 只持有 Service 的 Volume、UTF-8 相对路径和不透明句柄，文件对象和 FatFs 类型归 Service。同步接口仅唯一 Storage Task 调用；路径禁止盘符、绝对路径和穿越。删除释放 FAT 簇；未实现 TRIM 时不直接使 FTL 数据映射失效，后续逻辑覆盖写才使旧版本可回收。Flash 文件 benchmark 由 APP 在挂载后编排，不把测速策略下沉为 Service 业务。启动诊断由 APP benchmark 直接调用诊断 Interface，不经空转发层。
 
 该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和大块中转区挤占任务栈。它经 FatFs 声明的 `BSP_SD_*` Override Seam 间接使用 Platform SD；DMA 等待与 Cache 一致性细节见 `docs/sd_architecture.md`。Flash 扩展已在同一 Module 中分开 SD/Flash 私有实现，承接 USER DiskIO 契约与 Flash 同步执行器；当前同时提供 SD 与 Flash 卷流程。空闲时由存储任务调用回收入口，GC 策略仍归 FTL。它向上返回 `Service_StatusTypeDef`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果，同时不泄漏 FatFs 原始类型。
 
@@ -359,7 +359,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 示例：
 
-> 插入一张未格式化卡时，平台 SD 仍可 READY；随后文件系统 Module 返回 `SERVICE_NO_FILESYSTEM`，由存储任务决定是否响应明确的格式化请求。
+> 插入一张未格式化卡时，平台 SD 仍可 READY；随后文件系统 Module 返回 `SERVICE_NO_FILESYSTEM`。设备不格式化 SD，只记录可诊断状态或告警，由用户在电脑上格式化。
 
 ## STM32 HAL GPIO EXTI 适配器（STM32 HAL GPIO EXTI adapter）
 

@@ -24,9 +24,6 @@
 /** @brief Storage Task 发送 SD 子系统日志时使用的稳定标签。 */
 static const char storage_sd_log_tag[] = "SD";
 
-/** @brief 已执行 storage_sd_init() 的 Storage Task，用于保护破坏性操作的调用上下文。 */
-static TaskHandle_t storage_sd_task_handle;
-
 /**
   * @brief  读取 Platform SD 最近一次诊断并写入一条错误日志。
   * @param  operation 失败操作的固定说明，例如 "Initialization"。
@@ -201,7 +198,6 @@ void storage_sd_init(TaskHandle_t task_handle)
         return;
     }
 
-    storage_sd_task_handle = task_handle;
     status = Platform_SD_Init(storage_sd_detect_callback,
                               task_handle);
     state = Platform_SD_GetState();
@@ -264,50 +260,4 @@ void storage_sd_process(void)
         (void)storage_sd_unmount();
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, storage_sd_log_tag, "Card removed.");
     }
-}
-
-/**
-  * @brief  显式格式化 SD 卡为 FAT32，并在成功后重新挂载。
-  * @warning 此操作会销毁卷中所有文件，绝不会由启动或热插拔路径自动调用。
-  * @note    调用者必须是已经初始化的 Storage Task；其他任务将来只能经由受控的
-  *          Storage 命令请求此操作。
-  */
-void storage_sd_format_and_mount(void)
-{
-    Service_StatusTypeDef result;
-
-    if ((storage_sd_task_handle == NULL) ||
-        (xTaskGetCurrentTaskHandle() != storage_sd_task_handle))
-    {
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                               storage_sd_log_tag,
-                               "Format request rejected outside Storage Task.");
-        return;
-    }
-
-    if (Platform_SD_GetState() != PLATFORM_SD_STATE_READY)
-    {
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                               storage_sd_log_tag,
-                               "Format request rejected: card is not ready.");
-        return;
-    }
-
-    result = storage_sd_unmount();
-    if (result != SERVICE_OK)
-    {
-        return;
-    }
-
-    result = Service_Filesystem_FormatSD();
-    if (result != SERVICE_OK)
-    {
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                               storage_sd_log_tag,
-                               "Filesystem format failed.");
-        return;
-    }
-
-    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, storage_sd_log_tag, "Filesystem formatted.");
-    (void)storage_sd_mount();
 }

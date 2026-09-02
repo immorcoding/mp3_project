@@ -57,7 +57,11 @@ get_target_property(FILE_BENCH_SOURCES flash_ftl_fatfs_tests SOURCES)
 add_executable(flash_file_benchmark_tests
     ${FILE_BENCH_SOURCES}
     test_flash_file_benchmark.c
-    ../../Service/filesystem/flash/filesystem_flash_file.c
+    ../../Service/filesystem/filesystem_service.c
+    ../../Service/filesystem/filesystem_file.c
+    ../../Service/filesystem/filesystem_directory.c
+    ../../Service/filesystem/filesystem_path.c
+    ../../Service/filesystem/filesystem_handle.c
     ../../Service/filesystem/filesystem_status.c
     ../../APP/tasks/storage/benchmark/storage_flash_file_benchmark.c)
 target_include_directories(flash_file_benchmark_tests BEFORE PRIVATE
@@ -67,7 +71,7 @@ target_compile_definitions(flash_file_benchmark_tests PRIVATE FTL_TEST_FATFS
     FTL_TEST_FILE_BENCHMARK STORAGE_FLASH_BENCHMARK_ENABLE=1
     STORAGE_FLASH_BENCHMARK_FILE_TOTAL_BYTES=16384)
 target_compile_options(flash_file_benchmark_tests PRIVATE -UNDEBUG)
-foreach(OP WriteFile ReadFile SyncFile CloseFile RemoveFlashFile)
+foreach(OP WriteFile ReadFile SyncFile CloseFile RemoveFile)
     target_link_options(flash_file_benchmark_tests PRIVATE "-Wl,--wrap=Service_Filesystem_${OP}")
 endforeach()
 foreach(SCENARIO success exists nonowner short_write write_error sync_error read_error corrupt
@@ -76,5 +80,23 @@ foreach(SCENARIO success exists nonowner short_write write_error sync_error read
     set_tests_properties(flash_file_${SCENARIO} PROPERTIES
         ENVIRONMENT "FLASH_FILE_SCENARIO=${SCENARIO}")
 endforeach()
+
+add_executable(filesystem_service_tests
+    test_filesystem_service.c
+    ../../Service/filesystem/filesystem_service.c
+    ../../Service/filesystem/filesystem_file.c
+    ../../Service/filesystem/filesystem_directory.c
+    ../../Service/filesystem/filesystem_path.c
+    ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_status.c
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c)
+target_include_directories(filesystem_service_tests BEFORE PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" stubs ../..
+    ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
+target_compile_options(filesystem_service_tests PRIVATE -UNDEBUG)
+add_test(NAME filesystem_service_volume_aware COMMAND filesystem_service_tests)
 
 

@@ -4,7 +4,7 @@
   * @brief   Storage Task 中执行的 SD 文件系统端到端读写测速与完整性校验。
   *
   * @details
-  *          本测试经由 FatFs f_write()/f_read()、DiskIO、Filesystem 同步 DMA
+  *          本测试经由 Filesystem Service 文件接口、DiskIO、同步 DMA
   *          执行器和 Platform SD 访问介质，测量当前产品实际可获得的顺序文件吞吐量。
   *          测试文件、数据量和日志属于 APP 诊断逻辑，不属于 Filesystem Service。
   *          吞吐量测试完成后另行读取并校验数据，避免 CPU 校验工作影响读速结果。
@@ -19,21 +19,13 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "Middlewares/Third_Party/FatFs/src/ff.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
+#include "Service/filesystem/filesystem_file.h"
 #include "Service/log/log_service.h"
 
-/** @brief 测试使用的 FAT 文件路径；完整性校验通过后会删除该文件。 */
-static const TCHAR storage_sd_benchmark_path[] = {
-    (TCHAR)'0', (TCHAR)':', (TCHAR)'/', (TCHAR)'_', (TCHAR)'_',
-    (TCHAR)'s', (TCHAR)'d', (TCHAR)'_', (TCHAR)'r', (TCHAR)'w',
-    (TCHAR)'_', (TCHAR)'b', (TCHAR)'e', (TCHAR)'n', (TCHAR)'c',
-    (TCHAR)'h', (TCHAR)'.', (TCHAR)'b', (TCHAR)'i', (TCHAR)'n',
-    (TCHAR)'\0'};
-
-/** @brief 测试独占使用的 FatFs 文件对象，避免把扇区缓存压入 Storage Task 栈。 */
-static FIL storage_sd_benchmark_file;
+/** @brief 测试使用的相对路径；完整性校验通过后会删除该文件。 */
+static const char storage_sd_benchmark_path[] = "__sd_rw_bench.bin";
 
 /** @brief 测试应用层缓冲区不直接交给 DMA，因此无需 DMA 段或 Cache 对齐。 */
 static uint8_t storage_sd_benchmark_buffer[STORAGE_SD_BENCHMARK_CHUNK_BYTES];
@@ -153,179 +145,171 @@ static uint32_t storage_sd_benchmark_display_u32(uint64_t value)
 
 /**
   * @brief  删除上次保留的测试文件。
-  * @return FR_OK 文件已删除或此前不存在；其他值表示清理失败。
+  * @return SERVICE_OK 文件已删除或此前不存在；其他值表示清理失败。
   */
-static FRESULT storage_sd_benchmark_remove_previous_file(void)
+static Service_StatusTypeDef storage_sd_benchmark_remove_previous_file(void)
 {
-    FRESULT result = f_unlink(storage_sd_benchmark_path);
-
-    return (result == FR_NO_FILE) ? FR_OK : result;
+    return Service_Filesystem_RemoveFile(SERVICE_FILESYSTEM_VOLUME_SD, storage_sd_benchmark_path);
 }
 
 /**
   * @brief  创建测试文件、顺序写入固定有效载荷并同步到 SD 卡。
-  * @param  elapsed_ticks 接收从首个 f_write() 到 f_sync() 完成的连续 Tick 数。
-  * @retval FR_OK 所有测试块均已写入且 f_sync() 成功。
-  * @retval 其他值 打开、写入、同步或关闭文件失败。
-  * @note   计时不包含删除旧文件、f_open() 和日志；计时包含每次 f_write() 与最终
-  *         f_sync()，因此会反映 FatFs、同步 DMA Bridge 和卡内部编程时间。
+  * @param  elapsed_ticks 接收从首次 WriteFile 到 SyncFile 完成的连续 Tick 数。
+  * @retval SERVICE_OK 所有测试块均已写入且同步成功。
+  * @note   计时不包含删除旧文件、打开和日志；计时包含每次写入与最终同步。
   */
-static FRESULT storage_sd_benchmark_write_file(uint32_t *elapsed_ticks)
+static Service_StatusTypeDef storage_sd_benchmark_write_file(uint32_t *elapsed_ticks)
 {
-    FRESULT result;
+    Service_Filesystem_FileHandleTypeDef file = {0};
+    Service_StatusTypeDef status;
     TickType_t start_tick;
-    UINT transferred;
     uint32_t sequence;
 
     if (elapsed_ticks == NULL)
     {
-        return FR_INVALID_PARAMETER;
+        return SERVICE_INVALID_PARAM;
     }
 
-    result = f_open(&storage_sd_benchmark_file,
-                    storage_sd_benchmark_path,
-                    FA_CREATE_ALWAYS | FA_WRITE);
-    if (result != FR_OK)
+    status = Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_SD,
+                                         storage_sd_benchmark_path,
+                                         SERVICE_FILESYSTEM_FILE_MODE_CREATE_NEW,
+                                         &file);
+    if (status != SERVICE_OK)
     {
-        return result;
+        return status;
     }
 
     start_tick = xTaskGetTickCount();
     for (sequence = 0U; sequence < STORAGE_SD_BENCHMARK_CHUNK_COUNT; sequence++)
     {
-        storage_sd_benchmark_set_sequence(sequence);
-        transferred = 0U;
-        result = f_write(&storage_sd_benchmark_file,
-                         storage_sd_benchmark_buffer,
-                         STORAGE_SD_BENCHMARK_CHUNK_BYTES,
-                         &transferred);
-        if ((result != FR_OK) ||
-            (transferred != STORAGE_SD_BENCHMARK_CHUNK_BYTES))
-        {
-            if (result == FR_OK)
-            {
-                result = FR_DISK_ERR;
-            }
+        uint32_t transferred = 0U;
 
+        storage_sd_benchmark_set_sequence(sequence);
+        status = Service_Filesystem_WriteFile(file,
+                                              storage_sd_benchmark_buffer,
+                                              STORAGE_SD_BENCHMARK_CHUNK_BYTES,
+                                              &transferred);
+        if ((status != SERVICE_OK) || (transferred != STORAGE_SD_BENCHMARK_CHUNK_BYTES))
+        {
+            if (status == SERVICE_OK)
+            {
+                status = SERVICE_ERROR;
+            }
             break;
         }
     }
 
-    if (result == FR_OK)
+    if (status == SERVICE_OK)
     {
-        result = f_sync(&storage_sd_benchmark_file);
+        status = Service_Filesystem_SyncFile(file);
     }
 
     *elapsed_ticks = (uint32_t)(xTaskGetTickCount() - start_tick);
 
-    if (f_close(&storage_sd_benchmark_file) != FR_OK)
+    if (Service_Filesystem_CloseFile(file) != SERVICE_OK)
     {
-        result = (result == FR_OK) ? FR_DISK_ERR : result;
+        status = (status == SERVICE_OK) ? SERVICE_ERROR : status;
     }
 
-    return result;
+    return status;
 }
 
 /**
-  * @brief  顺序读取完整测试文件，并测量 FatFs 文件读取有效吞吐量。
-  * @param  elapsed_ticks 接收从首个 f_read() 到最后一个 f_read() 完成的连续 Tick 数。
-  * @retval FR_OK 读取到的所有应用层块都具有预期长度。
-  * @retval 其他值 打开、读取或关闭文件失败。
-  * @note   本阶段不在循环内校验有效载荷，避免 CPU 比较工作污染读取吞吐量；完整性
-  *         校验由下一测试切片独立完成。
+  * @brief  顺序读取完整测试文件，并测量文件读取有效吞吐量。
+  * @param  elapsed_ticks 接收从首次 ReadFile 到最后一次 ReadFile 完成的连续 Tick 数。
+  * @retval SERVICE_OK 读取到的所有应用层块都具有预期长度。
+  * @note   本阶段不在循环内校验有效载荷。
   */
-static FRESULT storage_sd_benchmark_read_file(uint32_t *elapsed_ticks)
+static Service_StatusTypeDef storage_sd_benchmark_read_file(uint32_t *elapsed_ticks)
 {
-    FRESULT result;
+    Service_Filesystem_FileHandleTypeDef file = {0};
+    Service_StatusTypeDef status;
     TickType_t start_tick;
-    UINT transferred;
     uint32_t sequence;
 
     if (elapsed_ticks == NULL)
     {
-        return FR_INVALID_PARAMETER;
+        return SERVICE_INVALID_PARAM;
     }
 
-    result = f_open(&storage_sd_benchmark_file,
-                    storage_sd_benchmark_path,
-                    FA_READ);
-    if (result != FR_OK)
+    status = Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_SD,
+                                         storage_sd_benchmark_path,
+                                         SERVICE_FILESYSTEM_FILE_MODE_READ,
+                                         &file);
+    if (status != SERVICE_OK)
     {
-        return result;
+        return status;
     }
 
     start_tick = xTaskGetTickCount();
     for (sequence = 0U; sequence < STORAGE_SD_BENCHMARK_CHUNK_COUNT; sequence++)
     {
-        transferred = 0U;
-        result = f_read(&storage_sd_benchmark_file,
-                        storage_sd_benchmark_buffer,
-                        STORAGE_SD_BENCHMARK_CHUNK_BYTES,
-                        &transferred);
-        if ((result != FR_OK) ||
-            (transferred != STORAGE_SD_BENCHMARK_CHUNK_BYTES))
-        {
-            if (result == FR_OK)
-            {
-                result = FR_DISK_ERR;
-            }
+        uint32_t transferred = 0U;
 
+        status = Service_Filesystem_ReadFile(file,
+                                             storage_sd_benchmark_buffer,
+                                             STORAGE_SD_BENCHMARK_CHUNK_BYTES,
+                                             &transferred);
+        if ((status != SERVICE_OK) || (transferred != STORAGE_SD_BENCHMARK_CHUNK_BYTES))
+        {
+            if (status == SERVICE_OK)
+            {
+                status = SERVICE_ERROR;
+            }
             break;
         }
     }
 
     *elapsed_ticks = (uint32_t)(xTaskGetTickCount() - start_tick);
 
-    if (f_close(&storage_sd_benchmark_file) != FR_OK)
+    if (Service_Filesystem_CloseFile(file) != SERVICE_OK)
     {
-        result = (result == FR_OK) ? FR_DISK_ERR : result;
+        status = (status == SERVICE_OK) ? SERVICE_ERROR : status;
     }
 
-    return result;
+    return status;
 }
 
 /**
   * @brief  重新顺序读取测试文件并校验全部块序号与固定有效载荷。
   * @param  data_matched 接收内容是否与写入模式完全一致。
-  * @retval FR_OK 文件可完整读取；此时由 data_matched 区分内容是否一致。
-  * @retval 其他值 打开、读取或关闭文件失败。
-  * @note   本函数不计入读吞吐量，避免数据比较循环污染测速结果。
+  * @retval SERVICE_OK 文件可完整读取；此时由 data_matched 区分内容是否一致。
   */
-static FRESULT storage_sd_benchmark_verify_file(bool *data_matched)
+static Service_StatusTypeDef storage_sd_benchmark_verify_file(bool *data_matched)
 {
-    FRESULT result;
-    UINT transferred;
+    Service_Filesystem_FileHandleTypeDef file = {0};
+    Service_StatusTypeDef status;
     uint32_t sequence;
 
     if (data_matched == NULL)
     {
-        return FR_INVALID_PARAMETER;
+        return SERVICE_INVALID_PARAM;
     }
 
     *data_matched = false;
-    result = f_open(&storage_sd_benchmark_file,
-                    storage_sd_benchmark_path,
-                    FA_READ);
-    if (result != FR_OK)
+    status = Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_SD,
+                                         storage_sd_benchmark_path,
+                                         SERVICE_FILESYSTEM_FILE_MODE_READ,
+                                         &file);
+    if (status != SERVICE_OK)
     {
-        return result;
+        return status;
     }
 
     for (sequence = 0U; sequence < STORAGE_SD_BENCHMARK_CHUNK_COUNT; sequence++)
     {
-        transferred = 0U;
-        result = f_read(&storage_sd_benchmark_file,
-                        storage_sd_benchmark_buffer,
-                        STORAGE_SD_BENCHMARK_CHUNK_BYTES,
-                        &transferred);
-        if ((result != FR_OK) ||
-            (transferred != STORAGE_SD_BENCHMARK_CHUNK_BYTES))
-        {
-            if (result == FR_OK)
-            {
-                result = FR_DISK_ERR;
-            }
+        uint32_t transferred = 0U;
 
+        status = Service_Filesystem_ReadFile(file,
+                                             storage_sd_benchmark_buffer,
+                                             STORAGE_SD_BENCHMARK_CHUNK_BYTES,
+                                             &transferred);
+        if ((status != SERVICE_OK) || (transferred != STORAGE_SD_BENCHMARK_CHUNK_BYTES))
+        {
+            if (status == SERVICE_OK)
+            {
+                status = SERVICE_ERROR;
+            }
             break;
         }
 
@@ -335,17 +319,17 @@ static FRESULT storage_sd_benchmark_verify_file(bool *data_matched)
         }
     }
 
-    if (f_close(&storage_sd_benchmark_file) != FR_OK)
+    if (Service_Filesystem_CloseFile(file) != SERVICE_OK)
     {
-        result = (result == FR_OK) ? FR_DISK_ERR : result;
+        status = (status == SERVICE_OK) ? SERVICE_ERROR : status;
     }
 
-    if ((result == FR_OK) && (sequence == STORAGE_SD_BENCHMARK_CHUNK_COUNT))
+    if ((status == SERVICE_OK) && (sequence == STORAGE_SD_BENCHMARK_CHUNK_COUNT))
     {
         *data_matched = true;
     }
 
-    return result;
+    return status;
 }
 
 /**
@@ -356,7 +340,7 @@ static FRESULT storage_sd_benchmark_verify_file(bool *data_matched)
   */
 bool storage_sd_benchmark_run(void)
 {
-    FRESULT result;
+    Service_StatusTypeDef status;
     uint32_t elapsed_ticks;
     uint32_t elapsed_ms;
     uint32_t speed_x100;
@@ -379,25 +363,25 @@ bool storage_sd_benchmark_run(void)
                            "SD",
                            "Bench start: read/write 64 MiB, chunk 32 KiB.");
 
-    result = storage_sd_benchmark_remove_previous_file();
-    if (result != FR_OK)
+    status = storage_sd_benchmark_remove_previous_file();
+    if (status != SERVICE_OK)
     {
         (void)snprintf(storage_sd_benchmark_log_text,
                        sizeof(storage_sd_benchmark_log_text),
-                       "Bench cleanup failed: fresult=%d.",
-                       (int)result);
+                       "Bench cleanup failed: Service=%u.",
+                       (unsigned)status);
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
         goto exit;
     }
 
     storage_sd_benchmark_prepare_pattern();
-    result = storage_sd_benchmark_write_file(&elapsed_ticks);
-    if (result != FR_OK)
+    status = storage_sd_benchmark_write_file(&elapsed_ticks);
+    if (status != SERVICE_OK)
     {
         (void)snprintf(storage_sd_benchmark_log_text,
                        sizeof(storage_sd_benchmark_log_text),
-                       "Bench write failed: fresult=%d.",
-                       (int)result);
+                       "Bench write failed: Service=%u.",
+                       (unsigned)status);
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
         goto exit;
     }
@@ -414,13 +398,13 @@ bool storage_sd_benchmark_run(void)
                    (unsigned long)(speed_x100 % 100U));
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "SD", storage_sd_benchmark_log_text);
 
-    result = storage_sd_benchmark_read_file(&elapsed_ticks);
-    if (result != FR_OK)
+    status = storage_sd_benchmark_read_file(&elapsed_ticks);
+    if (status != SERVICE_OK)
     {
         (void)snprintf(storage_sd_benchmark_log_text,
                        sizeof(storage_sd_benchmark_log_text),
-                       "Bench read failed: fresult=%d.",
-                       (int)result);
+                       "Bench read failed: Service=%u.",
+                       (unsigned)status);
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
         goto exit;
     }
@@ -437,13 +421,13 @@ bool storage_sd_benchmark_run(void)
                    (unsigned long)(speed_x100 % 100U));
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "SD", storage_sd_benchmark_log_text);
 
-    result = storage_sd_benchmark_verify_file(&data_matched);
-    if (result != FR_OK)
+    status = storage_sd_benchmark_verify_file(&data_matched);
+    if (status != SERVICE_OK)
     {
         (void)snprintf(storage_sd_benchmark_log_text,
                        sizeof(storage_sd_benchmark_log_text),
-                       "Bench verify read failed: fresult=%d.",
-                       (int)result);
+                       "Bench verify read failed: Service=%u.",
+                       (unsigned)status);
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
         goto exit;
     }
@@ -458,13 +442,13 @@ bool storage_sd_benchmark_run(void)
 
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "SD", "Bench verify: 64 MiB passed.");
 
-    result = storage_sd_benchmark_remove_previous_file();
-    if (result != FR_OK)
+    status = storage_sd_benchmark_remove_previous_file();
+    if (status != SERVICE_OK)
     {
         (void)snprintf(storage_sd_benchmark_log_text,
                        sizeof(storage_sd_benchmark_log_text),
-                       "Bench final cleanup failed: fresult=%d.",
-                       (int)result);
+                       "Bench final cleanup failed: Service=%u.",
+                       (unsigned)status);
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, "SD", storage_sd_benchmark_log_text);
         goto exit;
     }

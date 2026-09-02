@@ -20,6 +20,4 @@ void storage_sd_init(TaskHandle_t task_handle);
 
 void storage_sd_process(void);
 
-void storage_sd_format_and_mount(void);
-
 #endif /* STORAGE_SD_H */
