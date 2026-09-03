@@ -15,7 +15,7 @@
 - 32 MiB 外部 SDRAM；
 - ST7789 LCD、FT6X36 触摸与 LVGL v8.3.11 GUI 原型；
 - W25Q256 QSPI Flash 的间接模式 JEDEC ID 与 SFDP 启动识别；
-- 后续将加入音频解码与 Flash 原始擦写/FTL；当前产品范围不提供 USB MSC，批量文件导入使用读卡器。
+- 后续将加入音频解码与 Flash 原始擦写/FTL；当前产品范围不提供 USB MSC，批量文件导入使用读卡器。首版曲库只扫 SD `Music/`；Flash FTL 作机内盘与资源安装暂存，壁纸/模型经暂存后再写入 Resource Pack，见 [ADR-0015](docs/adr/0015-volume-roles-and-resource-install.md)。
 
 技术文档和代码注释统一使用中文。
 

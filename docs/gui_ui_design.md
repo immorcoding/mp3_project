@@ -1,6 +1,6 @@
 # GUI 原型设计
 
-> 相关 ADR：[ADR-0007：GUI 运行时所有权与 SquareLine 生成边界](adr/0007-gui-runtime-and-squareline-boundary.md)
+> 相关 ADR：[ADR-0007：GUI 运行时所有权与 SquareLine 生成边界](adr/0007-gui-runtime-and-squareline-boundary.md)、[ADR-0015：卷分工与资源安装](adr/0015-volume-roles-and-resource-install.md)
 
 ## 1. 目的与当前范围
 
@@ -8,10 +8,12 @@
 
 当前基线为 LVGL 8.3.11、SquareLine Studio 和 240 x 320 RGB565 LCD。
 
-本阶段**不包含**：
+本阶段 SquareLine 原型**不包含**真实扫描与解码，歌曲与专辑仍可用固定假数据。产品侧已确认：首版曲库只扫 SD `Music/`，Queue 只绑定可见行；壁纸/模型的设备更新经 Settings 发起、FTL 暂存后再写 Resource Pack。实现这些数据路径前不必改 SquareLine 导出。详见 [ADR-0015](adr/0015-volume-roles-and-resource-install.md)。
 
-- SD 卡扫描、文件排序、媒体库建立；
-- MP3 解码、播放队列、ID3 标签或专辑封面读取；
+本阶段原型**仍不包含**：
+
+- SD 卡扫描、文件排序、媒体库建立的 GUI 接线；
+- MP3 解码、真实播放队列、ID3 标签或专辑封面读取；
 - 真实背光 PWM、亮度调节和设置持久化；
 - 书签持久化、真实电子书解析和排版；
 - 中文字库、多语言切换和密码锁。
@@ -138,7 +140,7 @@ MusicPage 每次作为 MainPageContainer 内容页显示时默认展示 `Now Pla
 完整播放器区           y = 210 ~ 312
 ```
 
-`Now Playing` 内容区显示较大的方形假封面、曲名和歌手。`Queue` 显示当前及后续曲目的简化列表。`Library` 显示两列专辑封面网格；首版每张专辑都使用固定标题、歌手和占位封面。
+`Now Playing` 内容区显示较大的方形假封面、曲名和歌手。`Queue` 显示当前及后续曲目的简化列表。接入真实数据后，Queue 只加载可见窗口（行数待定，可另预取数行曲名以免滚动空白），完整播放列表由 Storage/Media 持有，不把整表指针交给 GUI。`Library` 显示两列专辑封面网格；首版每张专辑都使用固定标题、歌手和占位封面。产品曲库首版只来自 SD `Music/`，不展示空的 Flash 分区。
 
 ### 6.2 专辑详情
 

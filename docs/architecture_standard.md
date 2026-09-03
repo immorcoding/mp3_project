@@ -249,7 +249,7 @@ Service 表达跨模块产品流程，例如：
 
 - Playback Module：文件读取、解码、音频缓冲和播放状态机；
 - 未来的 Storage Module：跨任务存储命令和文件打开状态协调；
-- Media Library：扫描、索引和曲目元数据。
+- Media Library：扫描、索引和曲目元数据。首版只扫 SD `Music/` 生成顺序播放列表；Flash FTL 不作曲库。壁纸/模型的设备侧更新先暂存 FTL 再写入 Resource Pack，见 [ADR-0015](adr/0015-volume-roles-and-resource-install.md)。
 
 Service 可以在编译期依赖 Platform、Component 和必要 Middleware 的公开 Interface，但不直接依赖 HAL。它在运行时编排产品流程；进入硬件通常经 Platform，外部事件只能经 Platform 声明的回调接缝到达其持有的任务逻辑。
 

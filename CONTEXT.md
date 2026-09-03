@@ -16,7 +16,7 @@
 
 示例：
 
-> 播放器应用把 SD 卡视为可选介质，因此未插卡不会阻止系统启动。
+> 播放器应用把 SD 卡视为可选介质，因此未插卡不会阻止系统启动。首版曲库只扫描 SD 上的 `Music/`；未插卡或没有该目录时播放列表为空。
 
 ## 平台电源（Platform Power）
 
@@ -353,6 +353,8 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 公开 Interface 分成卷生命周期、卷感知文件、卷感知目录和启动诊断。APP 只持有 Service 的 Volume、UTF-8 相对路径和不透明句柄，文件对象和 FatFs 类型归 Service。同步接口仅唯一 Storage Task 调用；路径禁止盘符、绝对路径和穿越。删除释放 FAT 簇；未实现 TRIM 时不直接使 FTL 数据映射失效，后续逻辑覆盖写才使旧版本可回收。Flash 文件 benchmark 由 APP 在挂载后编排，不把测速策略下沉为 Service 业务。启动诊断由 APP benchmark 直接调用诊断 Interface，不经空转发层。
 
+SD 是用户媒体的主库；Flash FTL 卷是机内可写磁盘，不是第二音乐库。首版播放列表只枚举 SD 的 `Music/`。Flash 卷承载可选的书或少量副本、机内小文件，以及资源安装暂存。两卷路径彼此独立，条目若进入媒体目录必须带上来源卷。完整取舍见 [ADR-0015](docs/adr/0015-volume-roles-and-resource-install.md)。
+
 该 Module 的工作缓冲区和 DMA 中转缓冲区均属于静态存储期，以避免长文件名、格式化工作区和大块中转区挤占任务栈。它经 FatFs 声明的 `BSP_SD_*` Override Seam 间接使用 Platform SD；DMA 等待与 Cache 一致性细节见 `docs/sd_architecture.md`。Flash 扩展已在同一 Module 中分开 SD/Flash 私有实现，承接 USER DiskIO 契约与 Flash 同步执行器；当前同时提供 SD 与 Flash 卷流程。空闲时由存储任务调用回收入口，GC 策略仍归 FTL。它向上返回 `Service_StatusTypeDef`，使存储任务能够区分“介质通信失败”和“介质上没有可挂载文件系统”等结果，同时不泄漏 FatFs 原始类型。
 
 相关术语：**存储任务**、**平台 SD**、**平台 Flash**、**SD 卡设备**。
@@ -451,6 +453,22 @@ W25Qxx 到 Flash FTL 的转换由跨 Component Bridge 承担。首版以逻辑�
 
 **资源包**是外部 Flash 中连续、原始且只读的数据镜像，承载字库、模型等需要按地址高吞吐读取的系统资源。它有独立的镜像头、版本、偏移、长度和 CRC，由烧录工具在开发/发布时写入固定物理范围；运行时通过 QSPI 内存映射读取，不经过 FatFs、USB MSC 或 Flash FTL。映射窗口仅在 Flash 已确认 `SR1.WIP=0` 且没有在飞操作时开放；映射控制器不会自行读取 `0x05` 或等待 WIP。任何擦写必须先退出映射、以自动轮询等待 WIP 清零，再恢复映射，因此资源消费者不逐次查询 WIP，也不得在写擦期间访问映射窗口。
 
-其固定范围必须位于两个固件槽之后、FTL 分区之前，并在首次破坏性格式化前确定与核验。当前 RPKC1 由 PC 打包器生成，ResourcePack Component 校验通用协议，Resource Service 在任务启动前核对产品身份并把 CP936 表和默认壁纸复制到链接器预留的 SDRAM。Service 初始化结束后不发布 NOR View，后续 FTL 间接操作可以安全退出和恢复映射。资源包在线更新、候选/回滚协议和字体/模型按需加载策略不属于首版实现。
+其固定范围必须位于两个固件槽之后、FTL 分区之前，并在首次破坏性格式化前确定与核验。当前 RPKC1 由 PC 打包器生成，ResourcePack Component 校验通用协议，Resource Service 在任务启动前核对产品身份并把 CP936 表和默认壁纸复制到链接器预留的 SDRAM。Service 初始化结束后不发布 NOR View，后续 FTL 间接操作可以安全退出和恢复映射。发布默认包仍由 PC 烧录；设备侧更新壁纸或小模型时，用户文件可放在 SD，但生效位置只能是本包。安装先把整包落入 Flash FTL 暂存并校验，再写入资源区，不得从 SD 边读边编程 Pack。该设备侧更新与按需加载尚未实现，路径见 [ADR-0015](docs/adr/0015-volume-roles-and-resource-install.md)。
 
-相关术语：**平台 Flash**、**Flash FTL**、**固件镜像槽**、**Cortex-M7 Cache 适配器**。
+相关术语：**平台 Flash**、**Flash FTL**、**固件镜像槽**、**资源安装**、**Cortex-M7 Cache 适配器**。
+
+## 播放列表（Playback List）
+
+**播放列表**是已扫描曲目的顺序下标序列，不是 GUI 可见行的拷贝。首版按 SD `Music/` 的目录顺序生成；上一首/下一首沿下标移动。随机播放或以后的心动模式只替换这条序列，不重新遍历文件系统。
+
+GUI Queue 只读取可见窗口（外加少量行预取以免滚动空白）。预取的是曲名等行数据，不是解码缓冲。Playback 打开当前曲，至多再预开下一首，与窗口滑到哪一行无关。
+
+相关术语：**文件系统 Module**、**资源安装**。
+
+## 资源安装（Resource Install）
+
+**资源安装**是把 SD 上的壁纸包或模型包装进机内 Resource Pack 的事务，不是把普通文件 `Move to` 到 FTL 目录供 GUI 长期引用。Storage Task 推进暂存、校验与 Pack 写入；Settings 只发起并显示阶段。中途拔卡不得破坏正在使用的旧包；暂存完整后不插卡也可重试写入 Pack。
+
+以后只读资源管理器的跨卷复制（歌、书）与资源安装分开，暂存路径不进入曲库扫描。
+
+相关术语：**资源包**、**文件系统 Module**、**播放列表**。

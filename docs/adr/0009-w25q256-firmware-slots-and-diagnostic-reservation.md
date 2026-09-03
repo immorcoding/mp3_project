@@ -23,3 +23,4 @@ W25Q256 的首、尾 4 KiB 扇区永久保留为显式读写测试自检区；�
 - Flash FTL 的初始物理范围不是整片 W25Q256，必须显式排除四个原始保留区域及容量待定的 Resource Pack；
 - Bootloader 镜像头、完整性/真实性校验、升级状态与试运行确认协议将成为独立设计，不提前塞入 FTL；
 - 将来调整镜像槽或 Resource Pack 大小需要同步升级分区表、Bootloader 与 FTL 容量，不能只改应用侧宏。
+- 设备侧更新壁纸/模型不得从 SD 直接编程 Pack；先落入 FTL 暂存再写入资源区，见 [ADR-0015](0015-volume-roles-and-resource-install.md)。PC 烧录默认包的路径不变。
