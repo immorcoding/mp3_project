@@ -13,11 +13,19 @@
 #ifndef STORAGE_SD_H
 #define STORAGE_SD_H
 
+#include "APP/tasks/storage/storage_task.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
-void storage_sd_init(TaskHandle_t task_handle);
+typedef enum
+{
+    STORAGE_SD_EVENT_INSERTED,
+    STORAGE_SD_EVENT_REMOVED,
+    STORAGE_SD_EVENT_ERROR
+} Storage_SD_EventTypeDef;
 
-void storage_sd_process(void);
+Storage_StatusTypeDef storage_sd_init(TaskHandle_t task_handle);
+
+Storage_StatusTypeDef storage_sd_process(void);
 
 #endif /* STORAGE_SD_H */

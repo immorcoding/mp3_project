@@ -15,6 +15,9 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
+#include "Service/log/log_service.h"
+#include "catalog/storage_catalog.h"
+
 /**
  * @brief  运行 Storage Task 的存储协调与 SD 卡热插拔调度循环。
  * @param  handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
@@ -45,8 +48,20 @@ void storage_task(void *handle)
     storage_sdram_benchmark_run();
 #endif
 
-    storage_flash_init(task_handle);
-    storage_sd_init(task_handle);
+    if (storage_flash_init(task_handle) != STORAGE_OK)
+    {
+        /* Handle flash initialization error */
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                               "STORAGE",
+                               "Flash initialization failed.");
+    }
+    if (storage_sd_init(task_handle) != STORAGE_OK)
+    {
+        /* Handle SD initialization error */
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                               "STORAGE",
+                               "SD initialization failed.");
+    }
 
     for (;;)
     {
@@ -61,8 +76,18 @@ void storage_task(void *handle)
             {
                 /* 新边沿重新开始静默窗口。传输通知由 Service 独立消费。 */
             }
-            storage_sd_process();
+            if (storage_sd_process() != STORAGE_OK)
+            {
+                (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                       "STORAGE",
+                                       "SD process failed.");
+            }
         }
-        storage_flash_reclaim();
+        if (storage_flash_reclaim() != STORAGE_OK)
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                   "STORAGE",
+                                   "Flash reclaim failed.");
+        }
     }
 }

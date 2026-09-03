@@ -14,7 +14,7 @@
 #define FILESYSTEM_CONFIG_H
 
 #include "Platform/sd/platform_sd.h"
-#include "Service/filesystem/filesystem_file.h"
+#include "Service/filesystem/filesystem_types.h"
 
 /** @brief CubeMX 生成的逻辑卷路径固定为 "N:/" 加结尾 '\0'。 */
 #define FILESYSTEM_DRIVE_PATH_LENGTH        4U
@@ -22,7 +22,7 @@
 #define FILESYSTEM_FILE_SLOT_COUNT          4U
 /** @brief 静态目录槽数量；用尽后 OpenDirectory 返回 SERVICE_BUSY。 */
 #define FILESYSTEM_DIRECTORY_SLOT_COUNT     4U
-/** @brief 公开相对路径上限，与 filesystem_file.h 保持一致。 */
+/** @brief 公开相对路径上限，与 filesystem_types.h 保持一致。 */
 #define FILESYSTEM_PATH_MAX_BYTES           SERVICE_FILESYSTEM_PATH_MAX_BYTES
 /** @brief 当前 FatFs 配置使用 512 B 扇区，格式化工作区无需占用任务栈。 */
 #define FILESYSTEM_MKFS_WORK_BUFFER_SIZE    512U

@@ -4,10 +4,12 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 
 ## 公开 Interface
 
+- `storage_task.h` 的 `Storage_StatusTypeDef`：本 Task 编排函数的成功/失败。Filesystem 的细粒度结果仍用 `Service_StatusTypeDef`，在 Storage 边界收成 `STORAGE_OK` / `STORAGE_ERROR`。
 - `storage_task.h` 的 `Storage_NotifyIndexTypeDef`：本任务私有通知槽。`STORAGE_NOTIFY_SD_DETECT` 由本任务主循环消抖；`STORAGE_NOTIFY_SD_TRANSFER` 与 `STORAGE_NOTIFY_FLASH_OPERATION` 在 `InitSD`/`InitFlash` 时注入 Filesystem Service。
-- `storage_task(void *argument)`：由 APP 创建的任务入口。
-- `storage_sd_*()`：SD 热插拔与挂载策略，仅供本 Task 调用。
-- `storage_flash_init()` / `storage_flash_reclaim()`：Flash 启动、挂载策略与空闲回收，仅供本 Task 调用。`storage_flash_init()` 必须传入当前 Storage Task 句柄，句柄为空或与当前任务不符时拒绝。
+- `storage_task(void *argument)`：由 APP 创建的任务入口，保持 `void` 以满足 `TaskFunction_t`。
+- `storage_sd_*()`：SD 热插拔与挂载策略，仅供本 Task 调用；返回 `Storage_StatusTypeDef`。
+- `storage_flash_init()` / `storage_flash_reclaim()`：Flash 启动、挂载策略与空闲回收，仅供本 Task 调用，返回 `Storage_StatusTypeDef`。`storage_flash_init()` 必须传入当前 Storage Task 句柄，句柄为空或与当前任务不符时拒绝。
+- `storage_catalog_*()`：曲库/书架扫描与作废，返回 `Storage_StatusTypeDef`。字符串池和条目偏移是本目录私有实现；公开头不暴露表结构。启动不把该段并入 `.bss` 清零；扫描前重置表头，拔卡调用 `storage_catalog_invalidate()`。
 - `storage_sd_benchmark_run()`：仅读写测试分支使用的内部诊断入口；成功挂载后由 `storage_sd_init()` 调用，不向其他任务公开。
 - `storage_sdram_benchmark_run()`：本 Task 启动阶段的内部 SDRAM 硬件诊断与基准入口；不向其他任务公开。
 - `storage_flash_benchmark_run()`：本 Task 启动阶段的 W25Q256 原始读取及可选双自检扇区破坏性基准入口；由 `storage_flash_init()` 在执行器绑定后调用，不向其他任务公开。

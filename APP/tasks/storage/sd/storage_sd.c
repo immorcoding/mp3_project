@@ -12,6 +12,7 @@
 
 #include "APP/tasks/storage/sd/storage_sd.h"
 #include "APP/tasks/storage/storage_task.h"
+#include "APP/tasks/storage/catalog/storage_catalog.h"
 #include "APP/tasks/storage/benchmark/storage_sd_benchmark.h"
 #include "APP/app_config.h"
 
@@ -24,6 +25,16 @@
 
 /** @brief Storage Task 发送 SD 子系统日志时使用的稳定标签。 */
 static const char storage_sd_log_tag[] = "SD";
+
+/**
+ * @brief 将 Filesystem Service 结果收成 Storage 状态。
+ * @param[in] status Service 返回值。
+ * @return SERVICE_OK 对应 STORAGE_OK，其余为 STORAGE_ERROR。
+ */
+static Storage_StatusTypeDef storage_sd_from_service(Service_StatusTypeDef status)
+{
+    return (status == SERVICE_OK) ? STORAGE_OK : STORAGE_ERROR;
+}
 
 /**
   * @brief  读取 Platform SD 最近一次诊断并写入一条错误日志。
@@ -80,10 +91,10 @@ static void storage_sd_log_card_ready(const char *prefix)
 
 /**
   * @brief  确认 CubeMX DiskIO Driver 已链接，并为后续 FatFs 操作报告失败。
-  * @retval SERVICE_OK 可继续执行 FatFs 操作。
-  * @retval 其他值 Driver 未就绪。
+  * @retval STORAGE_OK 可继续执行 FatFs 操作。
+  * @retval STORAGE_ERROR Driver 未就绪。
   */
-static Service_StatusTypeDef storage_sd_prepare_filesystem(void)
+static Storage_StatusTypeDef storage_sd_prepare_filesystem(void)
 {
     Service_StatusTypeDef result = Service_Filesystem_InitSD(STORAGE_NOTIFY_SD_TRANSFER);
 
@@ -94,23 +105,21 @@ static Service_StatusTypeDef storage_sd_prepare_filesystem(void)
                                "FatFs driver is not ready.");
     }
 
-    return result;
+    return storage_sd_from_service(result);
 }
 
 /**
   * @brief  挂载当前已经由 Platform SD 初始化完成的 FAT 卷。
- * @retval SERVICE_OK 当前卷已挂载。
- * @retval 其他值 挂载失败；未格式化或文件系统类型不受支持的卡通常返回
- *         SERVICE_NO_FILESYSTEM，这不表示 SDMMC 通信链路失败。
+ * @retval STORAGE_OK 当前卷已挂载。
+ * @retval STORAGE_ERROR 挂载失败；未格式化卡会先记告警，再作为失败返回。
  */
-static Service_StatusTypeDef storage_sd_mount(void)
+static Storage_StatusTypeDef storage_sd_mount(void)
 {
     Service_StatusTypeDef result;
 
-    result = storage_sd_prepare_filesystem();
-    if (result != SERVICE_OK)
+    if (storage_sd_prepare_filesystem() != STORAGE_OK)
     {
-        return result;
+        return STORAGE_ERROR;
     }
 
     result = Service_Filesystem_MountSD();
@@ -131,23 +140,22 @@ static Service_StatusTypeDef storage_sd_mount(void)
                                "Filesystem mount failed.");
     }
 
-    return result;
+    return storage_sd_from_service(result);
 }
 
 /**
   * @brief  注销当前 SD 的 FatFs 卷对象。
-  * @retval SERVICE_OK 卷对象已注销，或此前尚未成功挂载。
-  * @retval 其他值 注销失败。
+  * @retval STORAGE_OK 卷对象已注销，或此前尚未成功挂载。
+  * @retval STORAGE_ERROR 注销失败。
   * @note   此操作不访问已移除的 SD 卡，只解除 FatFs 与逻辑卷的关联。
   */
-static Service_StatusTypeDef storage_sd_unmount(void)
+static Storage_StatusTypeDef storage_sd_unmount(void)
 {
     Service_StatusTypeDef result;
 
-    result = storage_sd_prepare_filesystem();
-    if (result != SERVICE_OK)
+    if (storage_sd_prepare_filesystem() != STORAGE_OK)
     {
-        return result;
+        return STORAGE_ERROR;
     }
 
     result = Service_Filesystem_UnmountSD();
@@ -158,7 +166,7 @@ static Service_StatusTypeDef storage_sd_unmount(void)
                                "Filesystem unmount failed.");
     }
 
-    return result;
+    return storage_sd_from_service(result);
 }
 
 /**
@@ -186,8 +194,10 @@ static void storage_sd_detect_callback(void *context)
   * @note   本函数把 EXTI 轻量通知绑定到 task_handle。必须在该任务上下文调用；
   *         句柄为空或与当前任务不符时拒绝。无卡属于正常状态；已插卡
   *         时会在 Storage Task 上下文尝试挂载文件系统。
+  * @retval STORAGE_OK 无卡或已完成挂载策略。
+  * @retval STORAGE_ERROR 句柄非法、Platform 初始化失败、驱动未就绪或挂载失败。
   */
-void storage_sd_init(TaskHandle_t task_handle)
+Storage_StatusTypeDef storage_sd_init(TaskHandle_t task_handle)
 {
     Platform_StatusTypeDef status;
     Platform_SD_StateTypeDef state;
@@ -197,7 +207,7 @@ void storage_sd_init(TaskHandle_t task_handle)
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_sd_log_tag,
                                "Storage task handle is invalid.");
-        return;
+        return STORAGE_ERROR;
     }
 
     if (task_handle != xTaskGetCurrentTaskHandle())
@@ -205,7 +215,7 @@ void storage_sd_init(TaskHandle_t task_handle)
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_sd_log_tag,
                                "Storage task handle is invalid.");
-        return;
+        return STORAGE_ERROR;
     }
 
     status = Platform_SD_Init(storage_sd_detect_callback,
@@ -215,59 +225,94 @@ void storage_sd_init(TaskHandle_t task_handle)
     if (status != PLATFORM_OK)
     {
         storage_sd_post_diagnostics("Initialization");
-        return;
+        return STORAGE_ERROR;
     }
 
-    if (storage_sd_prepare_filesystem() != SERVICE_OK)
+    if (storage_sd_prepare_filesystem() != STORAGE_OK)
     {
-        return;
+        return STORAGE_ERROR;
     }
 
     if (state == PLATFORM_SD_STATE_NOT_PRESENT)
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, storage_sd_log_tag, "No card inserted.");
+        return STORAGE_OK;
     }
-    else if (state == PLATFORM_SD_STATE_READY)
+
+    if (state == PLATFORM_SD_STATE_READY)
     {
         storage_sd_log_card_ready("Card ready");
-        if (storage_sd_mount() == SERVICE_OK)
+        if (storage_sd_mount() != STORAGE_OK)
         {
-#if STORAGE_SD_BENCHMARK_ENABLE /* SD 读写基准测试。 */
-            (void)storage_sd_benchmark_run();
-#endif
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                   storage_sd_log_tag,
+                                   "Mount failed.");
+            return STORAGE_ERROR;
         }
+#if STORAGE_SD_BENCHMARK_ENABLE /* SD 读写基准测试。 */
+        (void)storage_sd_benchmark_run();
+#endif
+        if (storage_catalog_init() != STORAGE_OK)
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                storage_sd_log_tag,
+                                "Catalog initialization failed.");
+            return STORAGE_ERROR;
+        }
+        return STORAGE_OK;
     }
-    else
-    {
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                               storage_sd_log_tag,
-                               "Initialization returned an unexpected SD state.");
-    }
+
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                           storage_sd_log_tag,
+                           "Initialization returned an unexpected SD state.");
+    return STORAGE_ERROR;
 }
 
 /**
   * @brief  处理已完成消抖的一次 SD 卡检测事件。
   * @note   仅能在 Storage Task 普通上下文调用。插卡后挂载，拔卡后先注销 FatFs
   *         卷对象；本函数不执行机械触点消抖。
+  * @retval STORAGE_OK 无事件，或插拔后的挂载/卸载成功。
+  * @retval STORAGE_ERROR 刷新失败，或挂载/卸载失败。
   */
-void storage_sd_process(void)
+Storage_StatusTypeDef storage_sd_process(void)
 {
     Platform_SD_EventTypeDef event;
 
     if (Platform_SD_Process(&event) != PLATFORM_OK)
     {
         storage_sd_post_diagnostics("Hotplug refresh");
-        return;
+        return STORAGE_ERROR;
     }
 
     if (event == PLATFORM_SD_EVENT_INSERTED)
     {
         storage_sd_log_card_ready("Card inserted");
-        (void)storage_sd_mount();
+        if (storage_sd_mount() != STORAGE_OK)
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                   storage_sd_log_tag,
+                                   "Mount failed.");
+            return STORAGE_ERROR;
+        }
+
+        if (storage_catalog_init() != STORAGE_OK)
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                   storage_sd_log_tag,
+                                   "Catalog initialization failed.");
+            return STORAGE_ERROR;
+        }
+        return STORAGE_OK;
     }
-    else if (event == PLATFORM_SD_EVENT_REMOVED)
+
+    if (event == PLATFORM_SD_EVENT_REMOVED)
     {
-        (void)storage_sd_unmount();
+        (void)storage_catalog_invalidate();
+        Storage_StatusTypeDef unmount_status = storage_sd_unmount();
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, storage_sd_log_tag, "Card removed.");
+        return unmount_status;
     }
+
+    return STORAGE_OK;
 }

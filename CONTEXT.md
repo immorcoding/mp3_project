@@ -351,7 +351,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **文件系统 Module**封装当前 FatFs 逻辑卷的驱动就绪检查、挂载、注销，以及仅针对内部 Flash 卷的显式格式化/恢复，并持有 FatFs 所需的同步 DMA 与 Flash 执行器。它只在存储任务已经取得介质独占权且对应 Platform 能力已处于可访问状态时调用 FatFs，不负责卡检测、消抖或 SDMMC/QSPI 初始化。设备不格式化 SD 卡。
 
-公开 Interface 分成卷生命周期、卷感知文件、卷感知目录和启动诊断。APP 只持有 Service 的 Volume、UTF-8 相对路径和不透明句柄，文件对象和 FatFs 类型归 Service。同步接口仅唯一 Storage Task 调用；路径禁止盘符、绝对路径和穿越。删除释放 FAT 簇；未实现 TRIM 时不直接使 FTL 数据映射失效，后续逻辑覆盖写才使旧版本可回收。Flash 文件 benchmark 由 APP 在挂载后编排，不把测速策略下沉为 Service 业务。启动诊断由 APP benchmark 直接调用诊断 Interface，不经空转发层。
+公开 Interface 分成公共类型、卷生命周期、卷感知文件、卷感知目录和启动诊断。APP 只持有 Service 的 Volume、UTF-8 相对路径和不透明句柄，文件对象和 FatFs 类型归 Service。同步接口仅唯一 Storage Task 调用；路径禁止盘符、绝对路径和穿越。删除释放 FAT 簇；未实现 TRIM 时不直接使 FTL 数据映射失效，后续逻辑覆盖写才使旧版本可回收。Flash 文件 benchmark 由 APP 在挂载后编排，不把测速策略下沉为 Service 业务。启动诊断由 APP benchmark 直接调用诊断 Interface，不经空转发层。
 
 SD 是用户媒体的主库；Flash FTL 卷是机内可写磁盘，不是第二音乐库。首版播放列表只枚举 SD 的 `Music/`。Flash 卷承载可选的书或少量副本、机内小文件，以及资源安装暂存。两卷路径彼此独立，条目若进入媒体目录必须带上来源卷。完整取舍见 [ADR-0015](docs/adr/0015-volume-roles-and-resource-install.md)。
 

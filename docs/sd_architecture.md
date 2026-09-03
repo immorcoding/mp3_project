@@ -57,6 +57,7 @@ APP/tasks/storage/
   flash/storage_flash.h/.c      Flash 执行器启动、挂载策略与空闲回收
 
 Service/filesystem/
+  filesystem_types.h            逻辑卷与路径/名称上限
   filesystem_service.h/.c       FatFs 卷生命周期 Service Interface
   filesystem_file.h             卷感知文件 Interface
   filesystem_directory.h        卷感知目录 Interface

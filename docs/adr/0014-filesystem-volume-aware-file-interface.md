@@ -16,6 +16,7 @@ Filesystem 仍是一个 Module，`sd/` 与 `flash/` 仍是私有实现分区。�
 
 公开 Interface 按调用者切开：
 
+- `filesystem_types.h`：逻辑卷与路径/名称上限。文件头与目录头只依赖本头，互不包含。
 - `filesystem_service.h`：卷生命周期。SD 为 `InitSD` / `MountSD` / `UnmountSD`。Flash 为 `InitFlash` / `MountFlash` / `UnmountFlash` / `FormatAndMountFlash` / `RecoverAndMountFlash` / `ReclaimFlash`。
 - `filesystem_file.h`：卷感知文件访问。调用时必须给出 Volume；相对路径只在该卷内解释。
 - `filesystem_directory.h`：卷感知目录访问。空路径表示所选卷的根目录。

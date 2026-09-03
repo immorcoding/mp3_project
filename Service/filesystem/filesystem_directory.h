@@ -6,7 +6,10 @@
 #ifndef FILESYSTEM_DIRECTORY_H
 #define FILESYSTEM_DIRECTORY_H
 
-#include "Service/filesystem/filesystem_file.h"
+#include <stdbool.h>
+#include <stdint.h>
+#include "Service/filesystem/filesystem_types.h"
+#include "Service/service.h"
 
 /**
  * @brief 不透明目录句柄；Token 由 Service 分配，调用者不得自行构造。

@@ -13,11 +13,12 @@
 #ifndef STORAGE_FLASH_H
 #define STORAGE_FLASH_H
 
+#include "APP/tasks/storage/storage_task.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
-void storage_flash_init(TaskHandle_t task_handle);
+Storage_StatusTypeDef storage_flash_init(TaskHandle_t task_handle);
 
-void storage_flash_reclaim(void);
+Storage_StatusTypeDef storage_flash_reclaim(void);
 
 #endif /* STORAGE_FLASH_H */

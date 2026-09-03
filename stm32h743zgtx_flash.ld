@@ -285,6 +285,14 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
+  /* Storage Catalog 曲目表；NOLOAD，由 Storage Task 在挂载扫描时完整写入。 */
+  .storage_catalog (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.storage_catalog)
+    . = ALIGN(32);
+  } >SDRAM
+
   /* SDRAM 帧缓冲区域：不加载、不自动清零，由拥有者在首次使用前完整写入。 */
   .sdram_framebuffer (NOLOAD) :
   {

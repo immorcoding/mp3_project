@@ -228,4 +228,4 @@ ADR-0005 / ADR-0010 不改写正文决定；ADR-0012 记录公开接缝取舍，
 
 ## 12. 后续公开 Interface（ADR-0014）
 
-接缝切开之后，文件与目录改为卷感知 UTF-8 相对路径；当前公开头为 `filesystem_service.h`、`filesystem_file.h`、`filesystem_directory.h`、`filesystem_flash_access.h`。SD 不再提供 `FormatSD`；Flash 以 `FormatAndMountFlash` / `RecoverAndMountFlash` 取代「格式化或恢复后不自动挂载」的旧语义。实现与路径/句柄契约以 [Service 说明](../Service/filesystem/README.md) 和 ADR-0014 为准，不以本文第 5 节的历史签名为准。APP Storage 将 SD/Flash 编排收回 `sd/` 与 `flash/` 分区：`storage_flash_init()` 持有启动、挂载策略和诊断时机，不是逐个转发 Service API 的薄包装。
+接缝切开之后，文件与目录改为卷感知 UTF-8 相对路径；当前公开头为 `filesystem_types.h`、`filesystem_service.h`、`filesystem_file.h`、`filesystem_directory.h`、`filesystem_flash_access.h`。SD 不再提供 `FormatSD`；Flash 以 `FormatAndMountFlash` / `RecoverAndMountFlash` 取代「格式化或恢复后不自动挂载」的旧语义。实现与路径/句柄契约以 [Service 说明](../Service/filesystem/README.md) 和 ADR-0014 为准，不以本文第 5 节的历史签名为准。APP Storage 将 SD/Flash 编排收回 `sd/` 与 `flash/` 分区：`storage_flash_init()` 持有启动、挂载策略和诊断时机，不是逐个转发 Service API 的薄包装。

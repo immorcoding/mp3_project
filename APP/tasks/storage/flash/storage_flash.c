@@ -41,8 +41,10 @@ static bool storage_flash_is_storage_task(TaskHandle_t task_handle)
  * @note 必须在该任务的普通上下文调用。句柄为空、或与当前任务不符时拒绝。
  *       未格式化只记录告警，不调用格式化。物理基准需要执行器已经绑定；
  *       文件基准需要 FAT 已经挂载。
+ * @retval STORAGE_OK 卷已挂载（含按本地开关完成的格式化挂载）。
+ * @retval STORAGE_ERROR 句柄非法、执行器失败、挂载失败或未格式化且未自动格式化。
  */
-void storage_flash_init(TaskHandle_t task_handle)
+Storage_StatusTypeDef storage_flash_init(TaskHandle_t task_handle)
 {
     Service_StatusTypeDef status;
 
@@ -51,7 +53,7 @@ void storage_flash_init(TaskHandle_t task_handle)
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_flash_log_tag,
                                "Storage task handle is invalid.");
-        return;
+        return STORAGE_ERROR;
     }
 
     storage_flash_owner_task = task_handle;
@@ -61,7 +63,7 @@ void storage_flash_init(TaskHandle_t task_handle)
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_flash_log_tag,
                                "Flash executor initialization failed.");
-        return;
+        return STORAGE_ERROR;
     }
 
 #if STORAGE_FLASH_BENCHMARK_ENABLE
@@ -76,7 +78,7 @@ void storage_flash_init(TaskHandle_t task_handle)
 #if STORAGE_FLASH_BENCHMARK_ENABLE && STORAGE_FLASH_BENCHMARK_FILE_ENABLE
         storage_flash_benchmark_run_file();
 #endif
-        return;
+        return STORAGE_OK;
     }
 
     if (status == SERVICE_NO_FILESYSTEM)
@@ -93,26 +95,29 @@ void storage_flash_init(TaskHandle_t task_handle)
             (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                    storage_flash_log_tag,
                                    "Flash volume format failed.");
-            return;
+            return STORAGE_ERROR;
         }
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO,
                                storage_flash_log_tag,
                                "Flash volume formatted and mounted.");
-        return;
+        return STORAGE_OK;
 #endif
     }
 
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                            storage_flash_log_tag,
                            "Volume unavailable; no automatic format.");
+    return STORAGE_ERROR;
 }
 
 /**
  * @brief 给 FTL 一次有限回收机会，并记录需要显式恢复的失败。
  * @note 仅已通过 init 校验的 Storage Task 空闲周期调用。是否擦块仍由 FTL
  *       决定；本函数不改变挂载状态，也不在失败时自动恢复或格式化。
+ * @retval STORAGE_OK 本次回收机会已交给 FTL，或 FTL 选择不擦。
+ * @retval STORAGE_ERROR 调用者不合法，或回收报告错误/超时。
  */
-void storage_flash_reclaim(void)
+Storage_StatusTypeDef storage_flash_reclaim(void)
 {
     Service_StatusTypeDef status;
 
@@ -121,7 +126,7 @@ void storage_flash_reclaim(void)
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_flash_log_tag,
                                "Storage task handle is invalid.");
-        return;
+        return STORAGE_ERROR;
     }
 
     status = Service_Filesystem_ReclaimFlash();
@@ -130,5 +135,8 @@ void storage_flash_reclaim(void)
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_flash_log_tag,
                                "Reclaim failed; explicit recovery required.");
+        return STORAGE_ERROR;
     }
+
+    return STORAGE_OK;
 }
