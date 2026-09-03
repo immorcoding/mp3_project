@@ -1,9 +1,10 @@
 /**
  * @file storage_catalog.c
- * @brief 扫描 SD `Music/`，把相对路径写入 SDRAM 字符串池。
+ * @brief 扫描 SD `Music/`，把相对路径写入 SDRAM 字符串池；成功后生成顺序播放列表。
  */
 
 #include "storage_catalog.h"
+#include "storage_sheet.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,7 +21,7 @@
 typedef struct
 {
     uint32_t Generation; /**< Catalog 代次，内部 .bss 计数的副本。 */
-    uint32_t IndexNum;   /**< 已收录曲目数。 */
+    uint16_t IndexNum;   /**< 已收录曲目数。 */
     uint32_t Tail;       /**< 字符串池已用字节，含每条结尾 '\0'。 */
     char Path[STORAGE_CATALOG_MUSIC_POOL_SIZE];
 } StorageCatalog_MusicTypeDef;
@@ -259,14 +260,29 @@ static Storage_StatusTypeDef storage_catalog_music_dfs(void)
 }
 
 /**
- * @brief 扫描已挂载 SD 的 `Music/`，写入 Music Catalog。
- * @return STORAGE_OK 扫描完成（含空目录或表满截断）；STORAGE_ERROR 读取或关闭失败。
+ * @brief 扫描已挂载 SD 的 `Music/`，写入 Music Catalog，成功后生成顺序播放列表。
+ * @return STORAGE_OK 扫描完成（含空目录或表满截断）；STORAGE_ERROR 读取、关闭或建表失败。
  * @note 仅 Storage Task 在 MountSD 成功之后调用。不 memset 整池。
  */
 Storage_StatusTypeDef storage_catalog_music_init(void)
 {
     storage_catalog_music_reset();
-    return storage_catalog_music_dfs();
+    if (storage_catalog_music_dfs() != STORAGE_OK)
+    {
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                               storage_catalog_log_tag,
+                               "Music catalog dfs failed.");
+        return STORAGE_ERROR;
+    }
+
+    if (storage_sheet_init(MusicCatalogPool.IndexNum, MusicCatalogPool.Generation) != STORAGE_OK)
+    {
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                               storage_catalog_log_tag,
+                               "Music sheet initialization failed.");
+        return STORAGE_ERROR;
+    }
+    return STORAGE_OK;
 }
 
 /**
@@ -304,11 +320,11 @@ Storage_StatusTypeDef storage_catalog_init(void)
 }
 
 /**
- * @brief 拔卡或卸载时作废 Catalog。
+ * @brief 拔卡或卸载时作废 Catalog，并作废对应的播放列表。
  * @return STORAGE_OK。
  */
 Storage_StatusTypeDef storage_catalog_invalidate(void)
 {
     storage_catalog_music_reset();
-    return STORAGE_OK;
+    return storage_sheet_invalidate();
 }

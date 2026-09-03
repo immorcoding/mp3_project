@@ -21,4 +21,4 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 - [0012-filesystem-public-seams.md](0012-filesystem-public-seams.md)：Filesystem 公开接缝按卷/文件/诊断切开，`Maintain` 改名 `Reclaim`；其中 MSC 前瞻范围由 ADR-0013 取代，文件级卷选择由 ADR-0014 取代。
 - [0013-usb-msc-product-scope.md](0013-usb-msc-product-scope.md)：主线不支持 USB MSC，批量文件导入使用读卡器。
 - [0014-filesystem-volume-aware-file-interface.md](0014-filesystem-volume-aware-file-interface.md)：SD/Flash 统一为 Volume + UTF-8 相对路径；删除设备侧 FormatSD 与 Flash 单槽旧符号；Flash 格式化/恢复成功后已挂载。
-- [0015-volume-roles-and-resource-install.md](0015-volume-roles-and-resource-install.md)：SD 为曲库主介质；Flash FTL 作机内盘与资源安装暂存；壁纸/模型经 FTL 校验后再写入 Resource Pack。
+- [0015-volume-roles-and-resource-install.md](0015-volume-roles-and-resource-install.md)：SD 为曲库主介质；曲库与播放列表分开且不向 GUI 交整表指针；Flash FTL 作机内盘与资源安装暂存；壁纸/模型经 FTL 校验后再写入 Resource Pack。
