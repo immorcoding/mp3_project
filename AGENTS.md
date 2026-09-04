@@ -1,84 +1,57 @@
 # AGENTS.md
 
-## 项目说明
+> 章程：始终注入的工作合同。只放闸门、权限与开场协议。功能清单见根 `README.md`；领域词见 `CONTEXT.md`；进度与本场交接见 `CURRENT.md`。超约 100 行则删回指针。
 
-本项目是基于 STM32H743 的便携式媒体播放器固件。
+本仓库是基于 STM32H743 的便携式媒体播放器固件。技术文档和代码注释使用中文。不信任对话压缩摘要；硬切后只靠磁盘重建现场。
 
-当前主要功能包括：
+## 开场
 
-- AXP2101 电源管理；
-- PCM5102A I2S 音频输出；
-- SDMMC SD 卡访问、热插拔，以及由 Filesystem Service 持有、在 Storage Task 上下文执行的同步 DMA FatFs Bridge；
-- USB CDC 日志；
-- FreeRTOS；
-- FatFs 文件系统的挂载、卸载和显式格式化；
-- 32 MiB 外部 SDRAM；
-- ST7789 LCD、FT6X36 触摸与 LVGL v8.3.11 GUI 原型；
-- W25Q256 QSPI Flash 的间接模式 JEDEC ID 与 SFDP 启动识别；
-- 后续将加入音频解码与 Flash 原始擦写/FTL；当前产品范围不提供 USB MSC，批量文件导入使用读卡器。首版曲库只扫 SD `Music/`；Flash FTL 作机内盘与资源安装暂存，壁纸/模型经暂存后再写入 Resource Pack，见 [ADR-0015](docs/adr/0015-volume-roles-and-resource-install.md)。
+1. 读完整 `CURRENT.md`。
+2. 只跟随其中给出的路径（`.scratch/`、ADR、架构文档、术语名）。
+3. 术语到 `CONTEXT.md` **按条**查阅；禁止开场整本阅读。
+4. 跨层、改边界或改公开 Interface 前，读 `docs/architecture_standard.md` 与相关模块文档。分别判断：功能/抽象所有权、编译期 `#include` 所有权、运行时请求/回调路径。禁止从功能分层图推导 `#include` 方向。
 
-技术文档和代码注释统一使用中文。
+## 权限
 
-## GUI 与 SquareLine 规则
+默认先问再写盘。许可只来自当前**未完成**的那条可执行任务。
 
-`GUI/` 是 SquareLine Studio 的生成目录，SquareLine 工程与其模拟器是 GUI 原型的唯一事实来源。除非用户明确撤销此约束，禁止直接修改其中的生成代码、生成配置或资源清单；助手只能给出 SquareLine 编辑器中的组件、布局、样式和事件配置步骤，由用户编辑、验证并导出。生成目录写保护会拒绝 `GUI/` 与 `SquareLineProject/` 的手改，见下方完成前验收。
+| 档 | 规则 |
+| --- | --- |
+| 禁止 | 手改 `GUI/`、`SquareLineProject/`；`git commit --no-verify`；把 `ALLOW_GENERATED_UPDATE` 写入用户或系统环境变量；开场整本读 `CONTEXT.md`；范围外顺手重构 |
+| 先问 | 改 `AGENTS.md` / `CONTEXT.md`；改 `CURRENT.md` 的**进度**主线；新建或修改 ADR；当前任务范围外的文件；破坏性公开 Interface |
+| 当前任务可写 | 用户这条任务点名的模块/文件；因实现事实变化必须同步的对应 `*_architecture.md` 与该 Module `README.md` |
+| 必须写 | `CURRENT.md` 的**本场交接**（任务替换时、硬切前）；已成立决定同步进正式文档；声称完成前的 `./scripts/verify.ps1` |
 
-GUI 设计每推进一步，必须先同步更新 `docs/gui_ui_design.md`，再开始下一步 SquareLine 操作。页面、组件层级、坐标、视觉规范、手势或事件归属、动画、状态切换和原型范围的任何确认或修订都属于一次设计推进；待验证方案必须在文档中明确标记，模拟器或硬件验证推翻既有决定时也必须先修正文档。
+许可生命周期：新的可执行改动**替换**旧许可；「继续」「可以」或回答确认**不替换**；「顺便改 X」在当前许可上**追加**。硬切由用户发起；建议硬切前必须先写本场交接。
 
-## 开始工作前
+## 严禁与 GUI
 
-涉及架构、模块边界或公共接口修改前，必须先阅读：
+`GUI/` 与 `SquareLineProject/` 以 SquareLine 工程为唯一事实来源。助手只给编辑器中的组件、布局、样式和事件步骤，由用户编辑、验证并导出。GUI 设计每推进一步，必须先更新 `docs/gui_ui_design.md`。生成目录写保护见完成前验收。
 
-- `CONTEXT.md`
-- `docs/architecture_standard.md`
-- 与当前模块对应的 `docs/*.md`
-
-不要仅根据目录名称推测职责，应结合现有代码和文档判断。
-
-开始跨层设计或修改前，必须分别判断：
-
-1. 功能/抽象所有权属于哪一层；
-2. 编译期需要包含或链接谁拥有的公开 Interface；
-3. 运行时请求向下如何进入、外部事件经哪个已注册回调向上发布。
-
-禁止从功能分层图直接推导 `#include` 方向。具体规则以 `docs/architecture_standard.md` 为准，目录 README 记录局部 Module 的三类路径和资源约束。
-
-## 工程分层
-
-工程主要遵循以下逻辑分层：
-
-```text
-Vendor/HAL
-    ↓
-Adapters
-    ↓
-Components
-    ↓
-Platform
-    ↓
-Service
-    ↓
-APP
-```
-
-具体的情况参考每个工程目录下的 分层.png
+仅维护者本人可在本机命令行对生成目录提交使用 `--no-verify`，或在当前 PowerShell 会话设置 `$env:ALLOW_GENERATED_UPDATE = '1'` 后提交 SquareLine / CubeMX 重新导出。不要把该变量写入用户或系统环境变量；Git Graph 带不上它。
 
 ## 完成前验收
 
-未运行且通过 `./scripts/verify.ps1`，不得声称工作完成。该命令会先做分层 `#include` 检查和生成目录写保护，再构建固件 Debug/Release 并跑主机回归。只改 `Components/`、`Adapters/`、`Platform/` 或 `Service/` 的包含关系时，可先单独运行 `./scripts/check-layer-includes.ps1`。只核对应保护的生成目录是否被手改时，可先单独运行 `./scripts/check-generated-write.ps1`。
+未运行且通过 `./scripts/verify.ps1`，不得声称完成。该命令先做分层 `#include` 检查和生成目录写保护，再构建固件 Debug/Release 并跑主机回归。只改 `Components/`、`Adapters/`、`Platform/` 或 `Service/` 的包含关系时，可先跑 `./scripts/check-layer-includes.ps1`。只核对应保护生成目录是否被手改时，可先跑 `./scripts/check-generated-write.ps1`。
 
-克隆后在仓库根目录执行一次 `./scripts/install-git-hooks.ps1`，提交时由 `pre-commit` 自动跑分层检查和生成目录写保护，失败则拒绝提交。助手禁止使用 `git commit --no-verify`，也禁止设置 `ALLOW_GENERATED_UPDATE`；仅维护者本人在本机命令行显式带上 `--no-verify`，或在当前 PowerShell 会话执行 `$env:ALLOW_GENERATED_UPDATE = '1'` 后提交 SquareLine / CubeMX 重新导出时可以绕过对应闸门。不要把该变量写入用户或系统环境变量；Git Graph 提交带不上它，导出后的那一次请用终端提交。
+克隆后在仓库根执行一次 `./scripts/install-git-hooks.ps1`。`pre-commit` 跑分层检查和生成目录写保护，失败则拒绝提交。
 
-## Agent skills
+## 三份根文档限制
 
-### Issue tracker
+| 文件 | 篇幅 | 只准 | 不准 |
+| --- | --- | --- | --- |
+| `AGENTS.md` | 约 100 行 | 开场协议、权限、严禁、验收、路径 | 功能清单、领域定义、进度、分层图、ADR/架构正文 |
+| `CONTEXT.md` | 全文可长；单条约 25 行 | 稳定术语、职责边界、相关术语、一句示例 | 进度、脏文件、`#include` 方向、寄存器/坐标/缓存大小 |
+| `CURRENT.md` | 合计约 80 行，单节约 40 行 | 主线、路径、阻塞、下场第一刀、分支/脏文件名、verify、未落盘未决项 | 抄 ADR/架构/`CONTEXT` 正文、贴 diff、功能清单 |
 
-需求说明和可执行 issue 使用本地 Markdown 维护，放在 `.scratch/<feature-slug>/` 下。具体格式见 `docs/agents/issue-tracker.md`。
+超限：从本文件删回指针；`CONTEXT.md` 单条下沉到 `*_architecture.md` 或 Module README；`CURRENT.md` 外溢到 `.scratch/` / ADR / 架构文档。
 
-### Triage labels
+## 指针
 
-本项目使用固定的本地状态标签来标记需求和 issue 的处理状态。具体定义见 `docs/agents/triage-labels.md`。
-
-### Domain docs
-
-项目领域上下文以根目录 `CONTEXT.md` 为唯一入口；如需记录非显然、会长期约束后续重构的架构决策，则在 `docs/adr/` 新建 ADR。具体读取规则见 `docs/agents/domain.md`。
+- 功能清单（给人看，非必要不读）：根 `README.md`
+- 术语词典：`CONTEXT.md`（按条查）
+- 现场：`CURRENT.md`
+- 文档地图：`docs/README.md`
+- 冷启动与 ADR 范围：`docs/agents/domain.md`
+- 本地事项：`docs/agents/issue-tracker.md`；状态：`docs/agents/triage-labels.md`
+- 命名与注释：`docs/coding_standard.md`

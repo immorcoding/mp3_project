@@ -6,7 +6,9 @@
 
 | 层级 | 载体 | 记录内容 |
 | --- | --- | --- |
-| 术语层 | `../CONTEXT.md` | 稳定领域术语、产品职责与入口。 |
+| 工作合同 | `../AGENTS.md` | agent 闸门、权限与开场协议；始终注入。 |
+| 现场层 | `../CURRENT.md` | 当前主线与本场交接；开场必读，只放指针。 |
+| 术语层 | `../CONTEXT.md` | 稳定领域术语、产品职责与入口；按条查阅。 |
 | 规范层 | `architecture_standard.md`、`coding_standard.md` | 全工程必须遵守的分层、Interface、命名与注释规则。 |
 | 决策层 | `adr/` | 可替代方案中的长期取舍、未采用方案和演进后果。 |
 | 技术事实层 | `*_architecture.md`、`error_model.md` | 当前目录、调用链、状态机、参数、资源和验收约束。 |
@@ -16,7 +18,9 @@ ADR 不替代技术文档。技术文档引用相关 ADR，并保持对当前代
 
 ## 入口
 
-- [../CONTEXT.md](../CONTEXT.md)：稳定领域术语、产品语义和职责归属；
+- [../AGENTS.md](../AGENTS.md)：闸门、权限与开场协议；
+- [../CURRENT.md](../CURRENT.md)：当前主线与本场交接；
+- [../CONTEXT.md](../CONTEXT.md)：稳定领域术语、产品语义和职责归属（按条查阅）；
 - [architecture_standard.md](architecture_standard.md)：功能/抽象所有权、编译期依赖、运行时请求/事件路径、装配和中断规则的唯一总则；
 - [adr/README.md](adr/README.md)：长期架构决策记录；
 - [coding_standard.md](coding_standard.md)：命名、Doxygen 与行内注释规则；
@@ -34,4 +38,4 @@ ADR 不替代技术文档。技术文档引用相关 ADR，并保持对当前代
 - [gui_ui_design.md](gui_ui_design.md)：240 x 320 GUI 原型的视觉规范、页面层级与交互边界；
 - [error_model.md](error_model.md)：状态、错误和诊断语义。
 
-根目录与源码目录的 README 负责导航、局部职责和调用约束；`CONTEXT.md` 负责稳定领域术语；本目录负责跨 Module 的技术事实。发生影响多个 Module 的行为、Interface 或职责归属的调整时，必须同步更新相应技术文档并核对 `CONTEXT.md`。
+agent 冷启动是根目录 `AGENTS.md`、`CURRENT.md` 与按条查阅的 `CONTEXT.md`；根 `README.md` 给人看功能清单，agent 非必要不读。本目录仍是按需正文。发生影响多个 Module 的行为、Interface 或职责归属的调整时，必须同步更新相应技术文档并核对 `CONTEXT.md`。
