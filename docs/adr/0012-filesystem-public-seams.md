@@ -11,11 +11,11 @@ Filesystem Module 在接入 Flash FTL、文件槽和启动诊断后，公开头�
 
 ## 决定
 
-Filesystem 仍是一个 Module，不新建 `Service/storage`，不抽通用 BlockDevice，不预建 SD 所有权层。公开 Interface 按调用者分成卷、文件、诊断三个头。启动诊断由 APP benchmark 直接调用诊断头，删除 `storage_flash` 转发。自维护链路上的 `Maintain` 公开符号改为 `Reclaim`，表示一次有限 GC 机会。
+Filesystem 仍是一个 Module，不新建 `Service/storage`，不抽通用 BlockDevice，不预建 SD 所有权层。公开 Interface 按调用者切开；当前五头见 [ADR-0014](0014-filesystem-volume-aware-file-interface.md)。启动诊断由 APP benchmark 直接调用诊断头。自维护链路上的 `Maintain` 公开符号改为 `Reclaim`，表示一次有限 GC 机会。当时删除的无逻辑 `storage_flash` 转发，已由 ADR-0014 之后的 Storage `flash/` 编排分区收回，不再是逐个转发 Service API 的薄包装。
 
 ## 不采用的方案与后果
 
 - 现在抽出 `Service/storage` 或通用块设备，会在只有一个块消费者时得到浅转发。
-- 文件级卷选择不适用于当前文件槽 Interface。
+- 文件级卷选择不适用于当时的文件槽 Interface（已由 ADR-0014 取代）。
 - 为诊断复制 Platform 区域枚举没有语义增益。
 - 仅为假设的第二个块消费者预建 `filesystem_sd_access` 同样是单 Adapter 假接缝。

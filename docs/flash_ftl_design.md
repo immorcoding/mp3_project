@@ -62,9 +62,9 @@ H743 当前 CubeMX User-defined 配置只生成 `user_diskio.c/.h` 骨架，不�
 - `BSP_USER_DISKIO_Init`、`BSP_USER_DISKIO_GetStatus`；
 - `BSP_USER_DISKIO_ReadBlocks`、`BSP_USER_DISKIO_WriteBlocks`、`BSP_USER_DISKIO_Ioctl`。
 
-头声明契约，`.c` 提供安全弱默认实现，Service 提供同名强定义。弱属性只在弱定义处使用，不污染声明或强定义。缺少后端时报告未就绪，读写不得伪报成功。`DSTATUS`、`DRESULT` 等 FatFs 类型不进入 Platform/FTL。
+头声明契约，`.c` 提供安全弱默认实现，Service 提供同名强定义。弱属性只在弱定义处使用，不污染声明或强定义。缺少后端时报告未就绪（`RES_NOTRDY` / `STA_NOINIT`），读写不得伪报成功。`DSTATUS`、`DRESULT` 等 FatFs 类型不进入 Platform/FTL。
 
-当前 USER 读写无实际操作却返回 `RES_OK`，接入时必须替换。让强定义源直接进入构建目标并检查最终链接 map；仅放入未被提取的静态库不能保证接管。CubeMX 重生成后检查 USER CODE 保留和源文件纳入情况。
+弱默认已按上述安全失败实现；`Service/filesystem/flash/filesystem_flash_bsp.c` 以同名强定义接管真实读写。让强定义源直接进入构建目标并检查最终链接 map；仅放入未被提取的静态库不能保证接管。CubeMX 重生成后检查 USER CODE 保留和源文件纳入情况。
 
 当前两个卷、固定 512 B 扇区、无多分区、TRIM 关闭。先链接 SD 再链接 USER，两次成功时通常分别得到 `0:/` 和 `1:/`；使用 `SDPath`、`USERPath` 与各自链接结果，不硬编码卷号。传给 USER 函数的是驱动内 LUN，当前为 0，不能与全局卷号 1 比较。
 

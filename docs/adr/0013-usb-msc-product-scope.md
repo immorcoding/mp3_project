@@ -18,7 +18,7 @@ USB Full-Speed 的物理上限和 MSC 协议开销使大文件写入速度远低
 ## 后果
 
 - Storage Task 只管理本地 FatFs 和 SD 生命周期，无须切换卷所有权。
-- Filesystem 保持卷、文件和诊断三个公开 Interface，不增加 MSC 专用接缝。
+- Filesystem 保持卷生命周期、卷感知文件、卷感知目录、类型上限与启动诊断五类公开头，不增加 MSC 专用接缝。
 - 若未来硬件具备 USB High-Speed 能力且产品需要免读卡器的文件维护，需重新评估性能、主机兼容性和所有权语义；不能直接恢复旧实验实现。
 - 设备内从 SD 复制到 Flash FTL（资源管理器或安装暂存）不属于 MSC，见 [ADR-0015](0015-volume-roles-and-resource-install.md)。
 

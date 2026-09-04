@@ -1,6 +1,6 @@
 # Service
 
-本目录包含跨 Platform 和 Component 的产品流程 Module。当前有异步日志投递和 FatFs 卷操作；未来播放、媒体库或存储命令可在此增加独立目录。
+本目录包含跨 Platform 和 Component 的产品流程 Module。当前有异步日志投递、FatFs 卷操作、GUI 运行时与资源包加载。曲库扫描属于 APP Storage Task，不在本目录。未来播放或跨任务存储命令可在此增加独立目录。
 
 ## 公开 Interface
 

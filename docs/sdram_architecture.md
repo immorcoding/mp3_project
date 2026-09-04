@@ -50,8 +50,7 @@ Cache 命中被错误当成 SDRAM 带宽。DWT 运行在 480 MHz Cortex-M7 核�
 的 `SCB_*DCache_by_Addr()`、CoreDebug、DWT 或内核屏障；DMA Adapter 与 SDRAM 诊断只是在不同资源
 语义下复用同一份 Clean、Invalidate 和 Clean + Invalidate Implementation。
 
-该诊断会覆写完整 SDRAM，必须在任何外部堆、LVGL 帧缓冲、音频缓存或 DMA 缓冲使用前完成。启用开关
-位于 `APP/tasks/storage/benchmark/storage_sdram_benchmark_config.h`；后续把业务对象放进 SDRAM 前，应默认关闭。
+该诊断会覆写完整 SDRAM，必须在任何外部堆、LVGL 帧缓冲、音频缓存或 DMA 缓冲使用前完成。启用开关是 `APP/app_config.h` 的 `STORAGE_SDRAM_BENCHMARK_ENABLE`。`storage_task.c` 用该宏门控，但当前只包含空的 `storage_sdram_benchmark_config.h`，未包含 `app_config.h`；未另以编译器 `-D` 定义时，该 TU 里宏视为 0，诊断不会跑。后续把业务对象放进 SDRAM 前，应保持关闭。
 
 ## 后续使用
 

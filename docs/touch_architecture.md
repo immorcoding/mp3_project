@@ -4,9 +4,9 @@
 
 ## 1. 当前范围
 
-本阶段建立触摸控制器的轮询式单指输入链路：复位触摸模组、探测 I2C 地址、读取 Chip ID 寄存器 `0xA3`，并把第一触点交给 LVGL Pointer 输入设备。
+本阶段建立触摸控制器的轮询式单指输入链路：复位触摸模组、探测 I2C 地址并确认 `IsReady`，再把第一触点交给 LVGL Pointer 输入设备。`Platform_Touch_ReadID()` 可读 Chip ID 寄存器 `0xA3`，但启动路径不调用它，也不打成功 Chip ID 日志。
 
-读取成功仅说明当前地址和寄存器通信正常；不得在代码中预先假定某个固定 Chip ID 值。旧验证工程中的模组曾使用 FT6336U 命名，而本板资料使用 FT6X36 系列命名，应先记录实际读值后再决定是否需要更严格的型号校验。
+读取 Chip ID 成功仅说明当前地址和寄存器通信正常；不得在代码中预先假定某个固定 Chip ID 值。旧验证工程中的模组曾使用 FT6336U 命名，而本板资料使用 FT6X36 系列命名。
 
 `Components/ft6x36` 从 `TD_STATUS (0x02)` 连续读取 5 字节：低 4 位为触点数，后 4 字节为第一触点的 12 位原始 X/Y。无触摸是成功结果，多个触点时首版只使用第一点。`Platform/touch` 原样发布这一结果；坐标方向是 GUI 语义，留在 `Service/gui` 的 LVGL `read_cb`。
 
@@ -114,10 +114,4 @@ GPIO EXTI IRQ → GPIO EXTI Adapter 分发 → 已注册的平台/任务回调 �
 
 `Platform_Init()` 成功完成触摸初始化后，GUI Task 创建 LVGL Pointer 输入设备。烧录后应验证界面上的可点击控件能收到点击；若触点方向不匹配显示方向，只在 `Service/gui` 的 `read_cb` 中交换或镜像 X/Y，不能把 UI 方向下沉到 Platform 或 FT6X36 Device。
 
-启动阶段的 Chip ID 日志仍用于确认基础链路：
-
-```text
-I (...) TOUCH: Chip ID: 0xNN.
-```
-
-失败时由 Platform 记录错误语义、最后一个 Port 状态和失败寄存器；先检查 TP_RST、I2C2 上拉、地址、供电和模组连接，再扩展上层功能。
+启动阶段不读取、不打印 Chip ID。失败时由 Platform 记录错误语义、最后一个 Port 状态和失败寄存器；先检查 TP_RST、I2C2 上拉、地址、供电和模组连接，再扩展上层功能。

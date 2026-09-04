@@ -5,7 +5,7 @@
 | Module | 介质与范围 | 数据影响 | 启用方式 |
 | --- | --- | --- | --- |
 | `storage_sd_benchmark` | 经 Service 文件接口、DiskIO 与 SDMMC 的 64 MiB 端到端文件读写 | 临时创建并在校验后删除 `__sd_rw_bench.bin` | `APP/app_config.h` 的 `STORAGE_SD_BENCHMARK_ENABLE` |
-| `storage_sdram_benchmark` | 整片 32 MiB SDRAM 的数据线、地址线、图样与吞吐诊断 | 破坏 SDRAM 全部内容 | `storage_sdram_benchmark_config.h` 的 `STORAGE_SDRAM_BENCHMARK_ENABLE` |
+| `storage_sdram_benchmark` | 整片 32 MiB SDRAM 的数据线、地址线、图样与吞吐诊断 | 破坏 SDRAM 全部内容 | `APP/app_config.h` 的 `STORAGE_SDRAM_BENCHMARK_ENABLE`（`storage_task.c` 当前未包含该头） |
 | `storage_flash_benchmark` | W25Q256 `0xEC` 物理数组顺序读取；可选首尾 4 KiB 自检 | 读取不修改内容；自检会擦除并覆写 ADR-0009 两个保留扇区 | `APP/app_config.h` 的 `STORAGE_FLASH_BENCHMARK_ENABLE` |
 
 `storage_flash_benchmark_config.h` 当前从物理地址 `0x00000000` 顺序读取 1 MiB、每次 4 KiB；该地址与分块均满足 W25Q256 `0xEC` 的 4-byte 首地址对齐约束和 MDMA 的 32-byte Cache-line 缓冲约束。基准先输出 `Bench poll read`：它包含每次间接 QSPI 命令、HAL 轮询、CPU 搬运和正常中断的端到端耗时。随后经 Filesystem 诊断入口转交 Service，由其长期持有 Platform Flash 回调并等待 Storage Task 通知索引 2 输出 `Bench MDMA read`：每块经 QSPI FIFO 阈值请求交给 MDMA，IRQ 只唤醒任务，Service 再在普通上下文调用 `Platform_Flash_ProcessOperation()` 完成 Cache 失效和状态收尾。可选破坏性自检结束后，基准先用轮询 `0xEC` 读取首个 4 KiB 作为参照，再通过 Platform 开启 `0x90000000` 映射并逐字节比对该参照，最后以 `volatile` 源指针顺序读取同一 1 MiB，输出带确定性 checksum 的 `Bench memory-mapped read`。该交叉比对验证映射协议和物理地址对应关系，`volatile` 避免编译器将测速循环优化为无效读取；成功后故意保持映射开启，供后续 Resource Pack 使用。所有读取吞吐数字均以同一 DWT 周期计数器和 `SystemCoreClock` 换算，避免 FreeRTOS Tick 的毫秒量化；它们都不是理论总线带宽，MDMA 结果仍包含实际任务调度与通知延迟。单块未在 `STORAGE_FLASH_BENCHMARK_MDMA_TIMEOUT_MS` 内完成即停止该轮基准，不会继续提交后续读取。

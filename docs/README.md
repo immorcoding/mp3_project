@@ -28,8 +28,11 @@ ADR 不替代技术文档。技术文档引用相关 ADR，并保持对当前代
 - [w25q256_architecture.md](w25q256_architecture.md)：W25Q256 原始 NOR 现状与 Adapter 接缝；
 - [flash_ftl_design.md](flash_ftl_design.md)：已实现、待硬件验收的首版 FTL 链路、分组提交、恢复、GC、配置和逐文件实施/验收清单；
 - [filesystem_service_reshape.md](filesystem_service_reshape.md)：Filesystem 公开接缝切开、Maintain 改名 Reclaim；后续卷感知文件/目录见 ADR-0014；
+- [catalog_architecture.md](catalog_architecture.md)：曲库扫描与顺序播放列表的代码事实（APP Storage Task）；
+- [resource_pack_design.md](resource_pack_design.md)：RPKC1 资源包格式与启动加载；设备侧安装见 ADR-0015（未实现）；
 - [adr/0013-usb-msc-product-scope.md](adr/0013-usb-msc-product-scope.md)：主线 USB MSC 产品范围决定；
-- [adr/0014-filesystem-volume-aware-file-interface.md](adr/0014-filesystem-volume-aware-file-interface.md)：SD/Flash 统一为 Volume + UTF-8 相对路径；
+- [adr/0014-filesystem-volume-aware-file-interface.md](adr/0014-filesystem-volume-aware-file-interface.md)：SD/Flash 统一为 Volume + UTF-8 相对路径；Flash 自动格式化由 Storage 宏控制；
+- [adr/0015-volume-roles-and-resource-install.md](adr/0015-volume-roles-and-resource-install.md)：SD 为唯一音乐库；曲库与播放列表分开；Flash FTL 作机内盘与资源安装暂存；
 - [log_architecture.md](log_architecture.md)：日志核心、USB Adapter 与任务化约束；
 - [pmic_i2c_architecture.md](pmic_i2c_architecture.md)：AXP2101、SoftI2C 与平台电源；
 - [sdram_architecture.md](sdram_architecture.md)：FMC SDRAM 的初始化、诊断与后续使用约束；

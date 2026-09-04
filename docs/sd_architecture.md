@@ -7,7 +7,7 @@
 > 当前调度：FreeRTOS Storage Task 通过索引 0 的直接任务通知处理 SD 热插拔，并通过索引 1 等待 SDMMC DMA 完成
 >
 > 当前范围：逻辑块访问、热插拔、同步 DMA FatFs DiskIO Bridge，以及由 Storage Task
-> 串行执行的 FAT32 挂载、卸载与显式格式化。
+> 串行执行的 FAT32 挂载与卸载。设备不格式化 SD。
 >
 > 相关 ADR：[ADR-0005：SD、FatFs 与 Storage Task 的所有权](adr/0005-sd-filesystem-task-ownership.md)、[ADR-0006：Cortex-M7 D-Cache 范围与 DMA 缓冲所有权](adr/0006-cache-range-ownership.md)
 
@@ -22,7 +22,7 @@
 - 一个独占 SD 初始化、消抖、FatFs 卷生命周期和介质事件日志的 Storage Task；
 - 一个封装 FatFs 逻辑卷操作、同步 DMA 执行器和 Cube BSP Override Adapter 的 Filesystem Module。
 
-当前不抽象通用 `BlockDevice`。SD 是现阶段唯一的块设备；等 QSPI Flash 成为第二个真实实现，并明确其擦除、对齐和写入规则后，再从两个具体需求中提取公共接口更稳妥。
+当前不抽象通用 `BlockDevice`。SD 与 Flash FTL 已是两个真实块后端，仍各走独立 DiskIO；不从二者再抽公共块设备接口。
 
 除第 2 节的目录/所有权说明外，本文的调用图均为**运行时请求或事件路径**，不表示 C 头文件依赖。功能/抽象所有权、编译期依赖与装配规则以 [architecture_standard.md](architecture_standard.md) 为准。
 
@@ -343,7 +343,7 @@ FatFs 的唯一普通任务上下文。未来若出现 `Service/storage`，它�
 4. DMA 等待超时、错误或中止会使 Device 进入 `ERROR`；当前恢复策略是由后续卡检测/重新初始化恢复，尚未实现传输中的 HAL Abort 与原地重试；
 5. 当前热插拔路径依赖 FreeRTOS Storage Task；若要回到裸机，应在应用层提供轮询通知和消抖策略，而不是把 FreeRTOS 依赖加入 Platform；
 6. SD Card Port 的 SDMMC 初始化值、SDMMC1 NVIC 和 HAL 回调注册开关必须与 CubeMX 配置保持一致；
-7. 已实现本地 FatFs 挂载、卸载和显式格式化；当前产品不支持 USB MSC，批量文件导入使用读卡器。
+7. 已实现本地 FatFs 挂载与卸载；设备不格式化 SD。当前产品不支持 USB MSC，批量文件导入使用读卡器。
 
 ## 12. 对外使用规则
 

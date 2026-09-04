@@ -330,7 +330,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 文件系统 Module（Filesystem Module）
 
-**文件系统 Module**封装 FatFs 逻辑卷的就绪检查、挂载、注销，以及仅针对内部 Flash 卷的显式格式化/恢复，并持有同步 DMA 与 Flash 执行器。它只在存储任务已经取得介质独占权且对应 Platform 能力可访问时调用 FatFs，不负责卡检测、消抖或控制器初始化。设备不格式化 SD 卡。
+**文件系统 Module**封装 FatFs 逻辑卷的就绪检查、挂载、注销，以及仅针对内部 Flash 卷的显式格式化/恢复，并持有同步 DMA 与 Flash 执行器。它只在存储任务已经取得介质独占权且对应 Platform 能力可访问时调用 FatFs，不负责卡检测、消抖或控制器初始化。设备不格式化 SD 卡。Service 不因挂载失败自动格式化 Flash；Storage Task 是否在无文件系统时调用 `FormatAndMountFlash`，由 `STORAGE_FLASH_AUTO_FORMAT` 控制。
 
 公开 Interface 按卷生命周期、卷感知文件、卷感知目录和启动诊断切开。调用者只持有 Volume、UTF-8 相对路径和不透明句柄。同步接口仅唯一 Storage Task 调用。卷分工见 [ADR-0015](docs/adr/0015-volume-roles-and-resource-install.md)；路径与句柄规则见 [ADR-0014](docs/adr/0014-filesystem-volume-aware-file-interface.md) 和 [filesystem README](Service/filesystem/README.md)。
 
@@ -400,9 +400,9 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **FTL 格式代次**标识一次显式底层格式化产生的卷世代；它不同于格式协议版本和单组更新版本。
 
-**FTL 格式化**建立底层卷与空闲块，**FatFs 格式化**在其逻辑扇区上建立文件系统；两者都不因挂载失败而自动执行。
+**FTL 格式化**建立底层卷与空闲块，**FatFs 格式化**在其逻辑扇区上建立文件系统。Filesystem Service 与 FTL 都不因挂载失败而自动执行格式化；Storage Task 可用宏决定是否显式调用 `FormatAndMountFlash`。
 
-规则见 [flash_ftl_design.md](docs/flash_ftl_design.md) 与 [ADR-0011](docs/adr/0011-ftl-copy-on-write-and-recovery.md)。板级验收状态见 `CURRENT.md`。
+规则见 [flash_ftl_design.md](docs/flash_ftl_design.md) 与 [ADR-0011](docs/adr/0011-ftl-copy-on-write-and-recovery.md)。板级掉电验收状态见该设计文档，不写在 `CURRENT.md`。
 
 相关术语：**W25Qxx 设备**、**平台 Flash**。
 
@@ -444,21 +444,27 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 ## 曲库（Catalog）
 
-**曲库**是已扫描曲目的事实表：来源卷加上 UTF-8 相对路径。它不是播放顺序，也不等于 GUI Queue 窗口。首版只枚举已挂载 SD 的 `Music/`，收录 `.mp3`；没有该目录或未插卡时曲库为空，不自动创建目录。重扫或拔卡后旧下标作废，问询必须带代次。
+**曲库**是已扫描曲目的事实表：SD `Music/` 下的 UTF-8 相对路径。它不是播放顺序，也不等于 GUI Queue 窗口。首版只枚举已挂载 SD 的 `Music/`，收录 `.mp3`；没有该目录或未插卡时曲库为空，不自动创建目录。条目不存来源卷：Flash 不作音乐库。重扫或拔卡后旧下标作废。公开问询尚未提供。实现见 [catalog_architecture.md](docs/catalog_architecture.md)。
 
-相关术语：**播放列表**、**文件系统 Module**。
+相关术语：**播放列表**、**文件系统 Module**、**存储任务**。
+
+示例：
+
+> 插卡并挂载成功后，存储任务扫描 `Music/`，把相对路径写入曲库，再生成顺序播放列表。
 
 ## 播放列表（Playback List）
 
-**播放列表**是曲库下标的排列，不是路径的第二份拷贝，也不是 GUI 可见行。首版按曲库扫描顺序生成恒等序列；上一首/下一首沿播放列表下标移动。随机播放或以后的心动模式只替换这条序列，不重新遍历文件系统。有效长度就是当时的曲库条数。Storage Task 在曲库扫描成功后立即重建播放列表，拔卡时与曲库一并作废。不向 GUI 暴露整表指针；问询带代次。
+**播放列表**是曲库下标的排列，不是路径的第二份拷贝，也不是 GUI 可见行。首版按曲库扫描顺序生成恒等序列。有效长度就是当时的曲库条数。Storage Task 在曲库扫描成功后立即重建播放列表，拔卡时与曲库一并作废。不向 GUI 暴露整表指针。带代次的窗口问询、上一首/下一首尚未公开。随机或心动模式以后只替换这条序列，不重新遍历文件系统。
 
-GUI Queue 只读取可见窗口（外加少量行预取以免滚动空白）。预取的是曲名等行数据，不是解码缓冲。Playback 打开当前曲，至多再预开下一首，与窗口滑到哪一行无关。
+相关术语：**曲库**、**文件系统 Module**、**存储任务**。
 
-相关术语：**曲库**、**文件系统 Module**、**资源安装**。
+示例：
+
+> 顺序播放列表的第 N 项是曲库下标 N；换随机模式时只重排这些下标。
 
 ## 资源安装（Resource Install）
 
-**资源安装**是把 SD 上的壁纸包或模型包装进机内 Resource Pack 的事务，不是把普通文件挪到 FTL 目录供 GUI 长期引用。Storage Task 推进暂存、校验与 Pack 写入；Settings 只发起并显示阶段。中途拔卡不得破坏正在使用的旧包；暂存完整后不插卡也可重试写入 Pack。
+**资源安装**是把 SD 上的壁纸包或模型包装进机内 Resource Pack 的事务，不是把普通文件挪到 FTL 目录供 GUI 长期引用。产品路径见 [ADR-0015](docs/adr/0015-volume-roles-and-resource-install.md)；设备侧状态机尚未实现。Storage Task 将推进暂存、校验与 Pack 写入；Settings 只发起并显示阶段。中途拔卡不得破坏正在使用的旧包；暂存完整后不插卡也可重试写入 Pack。
 
 以后只读资源管理器的跨卷复制（歌、书）与资源安装分开，暂存路径不进入曲库扫描。
 

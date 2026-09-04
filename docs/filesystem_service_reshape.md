@@ -1,6 +1,7 @@
 # Filesystem Service 公开接缝切开
 
-> 状态：已实施（2026-09-01 接缝切开）。文件级卷选择、设备侧 FormatSD 删除，以及 Flash `FormatAndMount`/`RecoverAndMount` 由 [ADR-0014](adr/0014-filesystem-volume-aware-file-interface.md) 记录；下文第 2 条第 2 款和第 10 条「SD 文件 API」以该 ADR 为准。
+> 状态：已实施（2026-09-01 接缝切开）。文件级卷选择、设备侧 FormatSD 删除，以及 Flash `FormatAndMount`/`RecoverAndMount` 由 [ADR-0014](adr/0014-filesystem-volume-aware-file-interface.md) 记录。
+> 第 3–8、11 节是切开当时的目标清单与验收，签名以当时为准；**当前**公开符号与 APP `flash/` 分区以 [Service README](../Service/filesystem/README.md)、ADR-0014 和第 12 节为准。第 11 条「`storage_flash.c/.h` 不存在」已被后来收回的 Storage `flash/` 编排覆盖。
 > 日期：2026-09-01
 > 相关决定：[ADR-0005](adr/0005-sd-filesystem-task-ownership.md)、[ADR-0010](adr/0010-fatfs-user-diskio-service-ownership.md)、[ADR-0012](adr/0012-filesystem-public-seams.md)、[ADR-0014](adr/0014-filesystem-volume-aware-file-interface.md)
 

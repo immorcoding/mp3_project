@@ -4,18 +4,18 @@
 
 ## 进度
 
-- 当前活动：仓库 agent 外部记忆（根上 `AGENTS.md` / `CONTEXT.md` / `CURRENT.md`），替代对话压缩摘要。
-- 固件最近落地：曲库与乐谱（2026/9/3）。Filesystem 卷感知与卷分工见 [ADR-0014](docs/adr/0014-filesystem-volume-aware-file-interface.md)、[ADR-0015](docs/adr/0015-volume-roles-and-resource-install.md)。
-- 活动 scratch：无（本场直接改根文档）。`.scratch/settings_backdrop_prototype/` 是旧 GUI 草稿，不是当前主线。
+- 当前活动：文档按代码全库同步。GUI 播放列表已搁置，本场不启动。
+- 固件最近落地：曲库与顺序播放列表（2026/9/3）。技术事实见 [catalog_architecture.md](docs/catalog_architecture.md)；卷分工见 [ADR-0015](docs/adr/0015-volume-roles-and-resource-install.md)。
+- 活动 scratch：无。`.scratch/settings_backdrop_prototype/` 是旧 GUI 草稿，不是当前主线。
 - 阻塞：无。
-- 本主线必读：`docs/agents/domain.md`、`docs/README.md`。
-- 本主线之后：回到播放器功能。尚未排期：Flash FTL 板级掉电验收（[flash_ftl_design.md](docs/flash_ftl_design.md)）、音频解码；若继续曲库/GUI，先核对 [gui_ui_design.md](docs/gui_ui_design.md) 是否仍写「原型不接线真实扫描」。
-- 按需查词：曲库 / GUI → **曲库**、**播放列表**；存储 → **文件系统 Module**。
+- 本主线必读：`docs/catalog_architecture.md`、`docs/adr/0014-filesystem-volume-aware-file-interface.md`、`docs/adr/0015-volume-roles-and-resource-install.md`、`APP/tasks/storage/README.md`、`Service/filesystem/README.md`。
+- 本主线之后：用户新开窗口继续 GUI 播放列表。尚未排期：Flash FTL 板级掉电验收（[flash_ftl_design.md](docs/flash_ftl_design.md)）、音频解码。
+- 按需查词：曲库 / 播放列表 → **曲库**、**播放列表**；存储 → **文件系统 Module**、**存储任务**。
 
 ## 本场交接
 
-- 分支：`main`。本场改：`AGENTS.md`、`CURRENT.md`、`CONTEXT.md`、`README.md`、`docs/README.md`、`docs/agents/domain.md`、`docs/agents/issue-tracker.md`。
-- 上场：三入口落盘后，按章程瘦 `CONTEXT.md` 越界条（实现参数未迁出，目标架构文档里已有）；根 `README.md` 改为四入口。
-- 未决：固件「下一刀」用户未点名；不要擅自开产品功能或新建 `.scratch/`。
-- 下场第一刀：用户审「进度」是否符合真实主线；需要则改正度（先问）后硬切开新对话。
+- 分支：`main`。本场只改文档与 Module README，不改产品代码、不手改 `GUI/`。
+- 上场：用户搁置 GUI 播放列表，要求文档以代码为准。曲库不存来源卷（Flash 存歌已取消）；Flash 自动格式化由 `STORAGE_FLASH_AUTO_FORMAT` 控制。
+- 未决：无。
+- 下场第一刀：文档同步完成后，用户新开窗口做 GUI 播放列表；先核 [gui_ui_design.md](docs/gui_ui_design.md)（原型仍不接线真实扫描）。
 - `verify.ps1`：已通过（分层 include、生成目录写保护、固件 Debug/Release、主机回归）。

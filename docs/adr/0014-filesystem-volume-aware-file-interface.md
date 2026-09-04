@@ -2,6 +2,7 @@
 
 - 状态：已接受、已实施
 - 日期：2026-09-02
+- 修订：2026-09-04。Flash 是否在无文件系统时格式化，由 Storage Task 宏 `STORAGE_FLASH_AUTO_FORMAT` 控制；Service 仍不自行格式化。
 - 相关决定：[ADR-0005](0005-sd-filesystem-task-ownership.md)、[ADR-0010](0010-fatfs-user-diskio-service-ownership.md)、[ADR-0012](0012-filesystem-public-seams.md)、[ADR-0013](0013-usb-msc-product-scope.md)
 
 ## 背景
@@ -26,15 +27,15 @@ Filesystem 仍是一个 Module，`sd/` 与 `flash/` 仍是私有实现分区。�
 
 路径契约：UTF-8、正斜杠、禁止盘符/绝对路径/`\`/`.`/`..`/非法 UTF-8/超长路径。Service 内部加盘符并转为 FatFs TCHAR。文件和目录句柄是带代次的不透明 Token，槽位静态分配；一卷卸载、拔卡、格式化或恢复后，该卷 Token 立即失效。
 
-Flash 格式化与恢复成功返回时卷必须已经挂载。启动路径不得因未格式化而自动格式化。`ReclaimFlash` 只给 FTL 一次有限回收机会。
+Flash 格式化与恢复成功返回时卷必须已经挂载。Filesystem Service **不会**因 `MountFlash` 失败或启动未格式化而自行调用 `FormatAndMountFlash`。Storage Task 在 `SERVICE_NO_FILESYSTEM` 时是否显式调用，由 `STORAGE_FLASH_AUTO_FORMAT` 控制（见 `storage_task.h`）。`ReclaimFlash` 只给 FTL 一次有限回收机会。
 
 ## 不采用的方案与后果
 
 - 抽出 `Service/storage` 或通用 BlockDevice：当前仍只有 Storage Task 一个块消费者，会得到浅转发。
-- 保留 Flash 专属单槽 API 并另开一套 SD 文件 API：上层必须知道后端差异，后续媒体库无法用同一「来源卷 + 相对路径」模型。
+- 保留 Flash 专属单槽 API 并另开一套 SD 文件 API：上层必须知道后端差异，文件调用无法统一为 Volume + 相对路径。
 - 为过渡保留 `FormatSD` / `OpenFlash` 等旧符号包装：调用面分裂，搜索无法证明旧语义已退出。
 - 设备侧格式化 SD：未格式化卡应由用户在电脑上处理；播放器只报告 `SERVICE_NO_FILESYSTEM` 或告警。
-- 启动自动格式化 Flash：会在扫描失败时销毁用户数据。
+- Filesystem Service 在挂载失败时静默自格式化 Flash：会在无 APP 策略、无日志的情况下销毁卷。Storage Task 可用 `STORAGE_FLASH_AUTO_FORMAT` 决定是否显式调用 `FormatAndMountFlash`。
 - 本轮实现跨任务文件请求队列，或允许 GUI 直接调用同步文件/格式化接口：执行上下文仍必须是唯一 Storage Task。
 
 ADR-0012 正文中「文件级卷选择不适用于当前文件槽 Interface」由本 ADR 取代；接缝切开、不建 `Service/storage`/BlockDevice、`Maintain` 改名 `Reclaim`、诊断头携带 Platform 区域枚举等其余决定保持有效。编号使用 0014，因为 0013 已用于 USB MSC 产品范围。

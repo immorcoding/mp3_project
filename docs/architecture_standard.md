@@ -248,14 +248,17 @@ Platform 对 APP 隐藏：
 Service 表达跨模块产品流程，例如：
 
 - Playback Module：文件读取、解码、音频缓冲和播放状态机；
-- 未来的 Storage Module：跨任务存储命令和文件打开状态协调；
-- Media Library：扫描、索引和曲目元数据。首版只扫 SD `Music/` 生成顺序播放列表；Flash FTL 不作曲库。壁纸/模型的设备侧更新先暂存 FTL 再写入 Resource Pack，见 [ADR-0015](adr/0015-volume-roles-and-resource-install.md)。
+- 未来的 Storage Module：跨任务存储命令和文件打开状态协调。
 
 Service 可以在编译期依赖 Platform、Component 和必要 Middleware 的公开 Interface，但不直接依赖 HAL。它在运行时编排产品流程；进入硬件通常经 Platform，外部事件只能经 Platform 声明的回调接缝到达其持有的任务逻辑。
 
 当前的 `Service/log` 负责 RTOS 日志消息块的投递与消费，`Service/filesystem`
-负责 Storage Task 独占期间的 FatFs 操作。SD 生命周期、热插拔消抖与卷调用时序目前
-属于 `APP/tasks/storage` 的 Storage Task，不等同于未来的 `Service/storage` Module。
+负责 Storage Task 独占期间的 FatFs 操作。SD 生命周期、热插拔消抖、卷调用时序、
+曲库扫描与顺序播放列表目前属于 `APP/tasks/storage` 的 Storage Task，不等同于
+未来的 `Service/storage` Module。曲库只存 SD `Music/` 相对路径，无曲目元数据；
+Flash FTL 不作曲库。壁纸/模型的设备侧更新先暂存 FTL 再写入 Resource Pack
+（安装路径尚未实现），见 [ADR-0015](adr/0015-volume-roles-and-resource-install.md)
+与 [catalog_architecture.md](catalog_architecture.md)。
 它们的公开 Interface、资源所有权和调用约束必须在各自 README 中明确；新 Module 不创建
 空目录或占位 Interface。
 

@@ -66,18 +66,18 @@ Storage Flash benchmark（在所有可选写擦自检之后）
 
 ## 3. 已接受的物理分区规划
 
-以下规划针对 32 MiB W25Q256 的物理地址 `0x00000000–0x01FFFFFF`。它是 Bootloader、诊断、未来 Resource Pack 与 Flash FTL 共同遵守的分区契约；当前代码尚未实现镜像协议、资源包装载；FTL 已绑定下表所列默认独立分区。
+以下规划针对 32 MiB W25Q256 的物理地址 `0x00000000–0x01FFFFFF`。它是 Bootloader、诊断、Resource Pack 与 Flash FTL 共同遵守的分区契约。Resource Pack **加载**已落地（解析与启动映射读取，见 [resource_pack_design.md](resource_pack_design.md)）；设备侧整包安装尚未实现。FTL 已绑定下表所列默认独立分区。
 
 | 物理范围 | 容量 | 所有者/用途 | FTL 是否可用 |
 | --- | ---: | --- | --- |
 | `0x00000000–0x00000FFF` | 4 KiB | 首自检扇区；仅显式读写诊断 | 否 |
 | `0x00001000–0x00200FFF` | 2 MiB | `rollback` 固件镜像槽 | 否 |
 | `0x00201000–0x00400FFF` | 2 MiB | `candidate` 固件镜像槽 | 否 |
-| `0x00401000–0x007FEFFF` | 约 3.99 MiB | 默认原始 Resource Pack 保留范围，协议未实现 | 不可用 |
+| `0x00401000–0x007FEFFF` | 约 3.99 MiB | 默认原始 Resource Pack 保留范围；加载已落地，设备侧安装未做 | 不可用 |
 | `0x007FF000–0x01FFEFFF` | 24 MiB | 默认 FTL 物理分区，容量由 Platform 私有宏调整 | 仅经 FTL 使用 |
 | `0x01FFF000–0x01FFFFFF` | 4 KiB | 尾自检扇区；仅显式读写诊断 | 否 |
 
-两个自检扇区只在相应诊断宏开启时擦除、页编程和读回；普通启动只能进行非破坏性读取检查。`rollback` 和 `candidate` 槽由未来 Bootloader 的镜像头、完整性/真实性校验、试运行确认和恢复状态机直接管理，不经过 FTL 或 FatFs。字库和模型将放入位于表中独立保留范围、连续且原始的 Resource Pack，通过 QSPI 内存映射读取；其精确容量、镜像头和 CRC 尚待首次资源包落盘前确定。Resource Pack 之后的连续剩余范围才可由 FTL 格式化，用于错误日志和可写文件；FTL 的记录格式原则、循环分配、GC 和掉电恢复已在 [首版设计](flash_ftl_design.md) 中确定，并已实现，主机回归通过但尚待硬件验收。物理容量默认 24 MiB、可调；按尾部排他上界计算的布局示例及资源预留边界见该文档，首次破坏性操作前仍需核验。
+两个自检扇区只在相应诊断宏开启时擦除、页编程和读回；普通启动只能进行非破坏性读取检查。`rollback` 和 `candidate` 槽由未来 Bootloader 的镜像头、完整性/真实性校验、试运行确认和恢复状态机直接管理，不经过 FTL 或 FatFs。字库和模型放在表中独立保留范围、连续且原始的 Resource Pack，通过 QSPI 内存映射读取；格式与加载见 [resource_pack_design.md](resource_pack_design.md)。Resource Pack 之后的连续剩余范围才可由 FTL 格式化，用于小文件和资源安装暂存；FTL 的记录格式原则、循环分配、GC 和掉电恢复已在 [首版设计](flash_ftl_design.md) 中确定，并已实现，主机回归通过但尚待硬件验收。物理容量默认 24 MiB、可调；按尾部排他上界计算的布局示例及资源预留边界见该文档，首次破坏性操作前仍需核验。
 
 ## 4. 目录、所有权与 Interface
 
@@ -160,7 +160,7 @@ Flash FTL 已按以下规则实现，仍需板级验证：
 
 1. 回归原始 NOR 的识别、QE、读、双自检扇区擦写/读回与映射切换；这些代码已存在，硬件结果按实际日志确认。
 2. FTL 格式、Fake NOR 回归、Component/Bridge/Platform 和 Service 链路已实现；下一步按 [FTL 设计](flash_ftl_design.md) 验证真实物理分区保护、恢复、扫描和 GC 时延。
-3. 将 Flash 执行所有权从 APP 迁入 Filesystem Service，接入 USER BSP 弱默认/强定义契约，保留 SD 行为；完成逻辑块和 FatFs 的受控集成验收、实际断电测试。
-4. 后续独立设计 Bootloader 镜像协议、Resource Pack 格式与字库/模型加载、USB MSC 所有权切换。它们不作为首版 Service 及以下 FTL 链路开发的前置功能，但已有镜像/自检/资源保留边界必须始终遵守。
+3. Flash 执行所有权已迁入 Filesystem Service，USER BSP 弱默认/强定义已接入。逻辑块与 FatFs 主机回归已通过；真实断电测试仍待板级验收。
+4. Bootloader 镜像协议仍待独立设计。Resource Pack 格式与启动加载已落地；未做的是设备侧整包安装（ADR-0015）以及 USB MSC（ADR-0013 明确不做）。已有镜像/自检/资源保留边界必须始终遵守。
 
 文件修改清单、宏默认值、完成语义和验收范围由 FTL 设计文档统一维护。当前已实施 FTL，但未新增通用物理擦写或 MSC 接口。

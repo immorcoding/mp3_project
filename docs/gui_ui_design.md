@@ -8,7 +8,7 @@
 
 当前基线为 LVGL 8.3.11、SquareLine Studio 和 240 x 320 RGB565 LCD。
 
-本阶段 SquareLine 原型**不包含**真实扫描与解码，歌曲与专辑仍可用固定假数据。产品侧已确认：首版曲库只扫 SD `Music/`，Queue 只绑定可见行；壁纸/模型的设备更新经 Settings 发起、FTL 暂存后再写 Resource Pack。实现这些数据路径前不必改 SquareLine 导出。详见 [ADR-0015](adr/0015-volume-roles-and-resource-install.md)。
+本阶段 SquareLine 原型**不包含**真实扫描与解码，歌曲与专辑仍可用固定假数据。Storage Task 已有曲库与顺序播放列表，本原型仍不接线。产品侧已确认：首版曲库只扫 SD `Music/`，Queue 以后只绑定可见行；壁纸/模型的设备更新经 Settings 发起、FTL 暂存后再写 Resource Pack（安装未实现）。实现这些数据路径前不必改 SquareLine 导出。详见 [ADR-0015](adr/0015-volume-roles-and-resource-install.md)、[catalog_architecture.md](catalog_architecture.md)。
 
 本阶段原型**仍不包含**：
 

@@ -163,7 +163,7 @@ Adapter 在 `TxBuffer` 中拼接颜色前缀和复位序列，不修改日志核
 | 宏 | 当前值 | 作用 |
 | --- | ---: | --- |
 | `LOG_FORMAT_BUFFER_SIZE` | 256 | 单条完整消息缓冲区，包含 `'\0'`。 |
-| `LOG_QUEUE_DEPTH` | 8 | 固定日志槽位数量。 |
+| `LOG_QUEUE_DEPTH` | 5 | 固定日志槽位数量。 |
 | `LOG_DEFAULT_LEVEL` | INFO | 上电默认过滤等级。 |
 
 统计：
