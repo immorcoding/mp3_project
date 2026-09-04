@@ -43,7 +43,7 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 ./scripts/build-firmware.ps1 -Configuration Release
 ```
 
-使用 CMake Preset `firmware-debug` / `firmware-release`，产物分别在 `build/firmware-debug/` 和 `build/firmware-release/`。提交前验收见 `./scripts/verify.ps1`。
+使用 CMake Preset `firmware-debug` / `firmware-release`，产物分别在 `build/firmware-debug/` 和 `build/firmware-release/`。分层验证、Hook 与结果状态见 [docs/verification.md](docs/verification.md)；兼容入口 `./scripts/verify.ps1` 固定执行 FULL。
 
 ### IDE 构建（日常调试）
 
@@ -57,7 +57,7 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 ./scripts/check-layer-includes.ps1
 ```
 
-`./scripts/verify.ps1` 会先跑分层检查和生成目录写保护，再构建固件并跑主机回归。
+FAST 会运行分层检查、生成目录写保护和 Harness 自测；FULL 再构建固件并跑全部主机回归。入口见 [分层验证](docs/verification.md)。
 
 ## 生成目录写保护
 
@@ -77,7 +77,7 @@ git commit -m "说明这次是重新导出"
 
 只放行检查也可以：`./scripts/check-generated-write.ps1 -AllowGeneratedUpdate`，或 `./scripts/verify.ps1 -AllowGeneratedUpdate`。不要写入用户或系统环境变量，关终端即失效。Git Graph 带不上该变量，导出后的那一次用终端提交。助手禁止设置该变量。
 
-克隆后执行一次 `./scripts/install-git-hooks.ps1`，之后每次 `git commit` 会自动跑分层检查和生成目录写保护，失败则拒绝提交。完整固件构建与主机回归仍需手动执行 `verify.ps1`，上板测试不在 hook 范围内。
+克隆后执行一次 `./scripts/install-git-hooks.ps1`。`pre-commit` 对暂存索引运行 FAST；`pre-push` 对实际推送提交运行 CHANGED，并按路径选择受影响的主机 fake/mock 测试。完整固件构建与全部主机回归仍由 `verify.ps1` / `verify_full.ps1` 执行，上板测试不在 Hook 范围内。
 
 ## 主机回归
 

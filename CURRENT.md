@@ -14,7 +14,8 @@
 
 ## 本场交接
 
-- 分支：`main`。本场不手改 `GUI/`。
-- 上场：用户要求把提交标题格式写入规范后再提交一次。
-- 未决：滚动时上一窗未回是丢弃还是合并最新起点（当前非 `IDLE` 的 `request` 返回 `STORAGE_ERROR`）。
-- 下场第一刀：用户 SquareLine 建 Queue 行模板并导出；GUI Task 轮询 `READY` 涂 List，读完把 `Status` 写回 `IDLE`。`Service/gui` 不得包含 listbuffer 头。
+- 分支：`main`。本场任务为标准化 Agent Harness；不手改 `GUI/`，不改变暂停中的 Queue 功能主线。
+- 已落盘到工作副本：FAST → CHANGED → FULL → HARDWARE 入口、索引/推送快照、集中影响规则、pre-push、三个项目 Skill、两个只读审校者及验证文档。
+- 已通过：Harness 路由、分层/生成保护、Windows PowerShell 5.1 真实 pre-commit 索引正反演练、pre-push 提交快照隔离演练、CHANGED 选择性主机测试，以及 FULL 的 Debug/Release 固件构建和 18 项 host 回归。
+- 独立审校：`independent-verifier` 已关闭全部通用问题；`embedded-reviewer` 的硬件路径边界均已修复并由路由测试覆盖。
+- 后续使用：日常由 Git hooks 自动执行 FAST/CHANGED；发布、合并或要求完整证据时运行 `./scripts/verify.ps1`。硬件敏感改动必须继续上板验证。

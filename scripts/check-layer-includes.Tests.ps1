@@ -197,4 +197,48 @@ Assert-FixtureViolation -RelativeFile 'Adapters/stm32_hal/foo/foo.c' `
     -ExpectedPattern 'APP/app\.h' `
     -FailureMessage 'HAL Adapter 夹具含 APP 头时分层检查应失败。'
 
+$indexFixtureRoot = Join-Path -Path ([System.IO.Path]::GetTempPath()) `
+    -ChildPath ('layer-index-fixture-' + [Guid]::NewGuid().ToString('N'))
+try {
+    $scanRoots = @('Components', 'Adapters/bridge', 'Adapters/stm32_hal', 'Adapters/cortex', 'Platform', 'Service')
+    foreach ($scanRoot in $scanRoots) {
+        $directory = Join-Path -Path $indexFixtureRoot -ChildPath $scanRoot
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path -Path $directory -ChildPath 'fixture.c') `
+            -Value '#include <stdint.h>' -Encoding ascii
+    }
+
+    $git = Get-ExternalCommand -Name 'git'
+    Invoke-ExternalCommand -CommandPath $git -Arguments @('-C', $indexFixtureRoot, 'init')
+    Invoke-ExternalCommand -CommandPath $git -Arguments @('-C', $indexFixtureRoot, 'add', '--all')
+    Invoke-ExternalCommand -CommandPath $git -Arguments @(
+        '-C', $indexFixtureRoot,
+        '-c', 'commit.gpgsign=false',
+        '-c', 'user.email=layer-index-test@example.invalid',
+        '-c', 'user.name=layer-index-test',
+        'commit', '-m', 'seed'
+    )
+
+    $componentFile = Join-Path -Path $indexFixtureRoot -ChildPath 'Components/fixture.c'
+    Set-Content -LiteralPath $componentFile -Value '#include "main.h"' -Encoding ascii
+    Invoke-ExternalCommand -CommandPath $git -Arguments @('-C', $indexFixtureRoot, 'add', '--', 'Components/fixture.c')
+    Set-Content -LiteralPath $componentFile -Value '#include <stdint.h>' -Encoding ascii
+
+    Invoke-LayerIncludeCheck -RepositoryRoot $indexFixtureRoot
+    try {
+        Invoke-LayerIndexIncludeCheck -RepositoryRoot $indexFixtureRoot
+        throw '工作树已修正时，索引里的违规 include 仍应失败。'
+    }
+    catch {
+        if ($_.Exception.Message -notmatch 'main\.h') {
+            throw "索引快照应报告暂存的 main.h，实际：$($_.Exception.Message)"
+        }
+    }
+}
+finally {
+    if (Test-Path -LiteralPath $indexFixtureRoot) {
+        Remove-Item -LiteralPath $indexFixtureRoot -Recurse -Force
+    }
+}
+
 Write-Output 'check-layer-includes 函数测试通过。'

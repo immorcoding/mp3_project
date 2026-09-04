@@ -1,12 +1,17 @@
 ﻿[CmdletBinding()]
 param(
+    [ValidateSet('WorkingTree', 'Index')]
+    [string]$Snapshot = 'WorkingTree',
+
+    [string[]]$ChangedPath,
+
     [switch]$AllowGeneratedUpdate
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-. (Join-Path -Path $PSScriptRoot -ChildPath 'build_helpers.ps1')
+. (Join-Path -Path $PSScriptRoot -ChildPath 'harness_helpers.ps1')
 
 function Get-NormalizedRepositoryPath {
     [CmdletBinding()]
@@ -156,34 +161,7 @@ function Get-GitDirtyRelativePaths {
         [string]$RepositoryRoot
     )
 
-    $git = Get-ExternalCommand -Name 'git'
-    $insideWorkTree = Get-GitOutputLines -GitPath $git -RepositoryRoot $RepositoryRoot -Arguments @(
-        'rev-parse', '--is-inside-work-tree'
-    )
-    if (($insideWorkTree -join '').Trim() -ne 'true') {
-        throw "当前目录不是 git 仓库，无法检查生成目录写保护：$RepositoryRoot"
-    }
-
-    [void](Get-GitOutputLines -GitPath $git -RepositoryRoot $RepositoryRoot -Arguments @(
-        'rev-parse', '--verify', 'HEAD'
-    ))
-
-    $changedPaths = Get-GitOutputLines -GitPath $git -RepositoryRoot $RepositoryRoot -AllowDifferencesExitCode -Arguments @(
-        'diff', '--name-only', 'HEAD'
-    )
-    $untrackedPaths = Get-GitOutputLines -GitPath $git -RepositoryRoot $RepositoryRoot -Arguments @(
-        'ls-files', '--others', '--exclude-standard'
-    )
-
-    $uniquePaths = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($relativePath in ($changedPaths + $untrackedPaths)) {
-        $normalized = Get-NormalizedRepositoryPath -RelativePath $relativePath
-        if (-not [string]::IsNullOrWhiteSpace($normalized)) {
-            [void]$uniquePaths.Add($normalized)
-        }
-    }
-
-    return @($uniquePaths)
+    return Get-HarnessWorkingTreeChangedPaths -RepositoryRoot $RepositoryRoot
 }
 
 function Invoke-GeneratedWriteCheck {
@@ -191,6 +169,11 @@ function Invoke-GeneratedWriteCheck {
     param(
         [Parameter(Mandatory)]
         [string]$RepositoryRoot,
+
+        [ValidateSet('WorkingTree', 'Index')]
+        [string]$Snapshot = 'WorkingTree',
+
+        [string[]]$ChangedPath,
 
         [switch]$AllowGeneratedUpdate
     )
@@ -200,12 +183,23 @@ function Invoke-GeneratedWriteCheck {
         return
     }
 
-    $dirtyPaths = @(Get-GitDirtyRelativePaths -RepositoryRoot $RepositoryRoot |
+    $changedPaths = if ($PSBoundParameters.ContainsKey('ChangedPath')) {
+        Get-HarnessUniquePaths -Path $ChangedPath
+    }
+    elseif ($Snapshot -eq 'Index') {
+        Get-HarnessIndexChangedPaths -RepositoryRoot $RepositoryRoot
+    }
+    else {
+        Get-GitDirtyRelativePaths -RepositoryRoot $RepositoryRoot
+    }
+
+    $dirtyPaths = @($changedPaths |
         Where-Object { Test-GeneratedWriteProtectedPath -RelativePath $_ } |
         Sort-Object)
 
     if ($dirtyPaths.Count -eq 0) {
-        Write-NativeUtf8Line -Text '生成目录写保护通过：受保护路径相对 HEAD 无改动。'
+        $scopeText = if ($Snapshot -eq 'Index') { 'Git 索引快照' } else { '工作树相对 HEAD' }
+        Write-NativeUtf8Line -Text "生成目录写保护通过：$scopeText 中的受保护路径无改动。"
         return
     }
 
@@ -222,8 +216,17 @@ function Invoke-GeneratedWriteCheck {
 
 $isDotSourced = $MyInvocation.InvocationName -eq '.'
 if (-not $isDotSourced) {
+    $entryChangedPathSpecified = $PSBoundParameters.ContainsKey('ChangedPath')
     Complete-Utf8EntryScript -Action {
         $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
-        Invoke-GeneratedWriteCheck -RepositoryRoot $repositoryRoot -AllowGeneratedUpdate:$AllowGeneratedUpdate
+        $parameters = @{
+            RepositoryRoot = $repositoryRoot
+            Snapshot = $Snapshot
+            AllowGeneratedUpdate = $AllowGeneratedUpdate
+        }
+        if ($entryChangedPathSpecified) {
+            $parameters.ChangedPath = $ChangedPath
+        }
+        Invoke-GeneratedWriteCheck @parameters
     }
 }

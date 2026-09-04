@@ -23,4 +23,4 @@ run_powershell_script() {
     fi
 }
 
-run_powershell_script "$root/scripts/check_fast.ps1" -Snapshot Index
+run_powershell_script "$root/scripts/verify_changed.ps1" -Push -RemoteName "$1" -RemoteLocation "$2"

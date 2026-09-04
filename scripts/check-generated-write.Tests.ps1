@@ -1,6 +1,8 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$skipRepositoryCheck = $env:MP3_HARNESS_INDEX_SNAPSHOT -eq '1'
+
 $checkerScript = Join-Path -Path $PSScriptRoot -ChildPath 'check-generated-write.ps1'
 if (-not (Test-Path -LiteralPath $checkerScript -PathType Leaf)) {
     throw "缺少生成目录写保护脚本：$checkerScript"
@@ -74,28 +76,30 @@ if ($gitPath -isnot [string] -or [string]::IsNullOrWhiteSpace($gitPath)) {
     throw 'Get-ExternalCommand 必须返回非空路径字符串。'
 }
 
-$mingwGitBin = 'C:\Program Files\Git\mingw64\bin'
-$cmdGitBin = 'C:\Program Files\Git\cmd'
-if ((Test-Path -LiteralPath (Join-Path -Path $mingwGitBin -ChildPath 'git.exe')) -and
-    (Test-Path -LiteralPath (Join-Path -Path $cmdGitBin -ChildPath 'git.exe'))) {
-    $previousPath = $env:PATH
-    try {
-        $env:PATH = "$mingwGitBin;$cmdGitBin;$previousPath"
-        $hookGitPath = Get-ExternalCommand -Name 'git'
-        if ($hookGitPath -is [System.Array]) {
-            throw 'Git hook PATH 下 Get-ExternalCommand 仍返回了多个路径。'
-        }
+if (-not $skipRepositoryCheck) {
+    $mingwGitBin = 'C:\Program Files\Git\mingw64\bin'
+    $cmdGitBin = 'C:\Program Files\Git\cmd'
+    if ((Test-Path -LiteralPath (Join-Path -Path $mingwGitBin -ChildPath 'git.exe')) -and
+        (Test-Path -LiteralPath (Join-Path -Path $cmdGitBin -ChildPath 'git.exe'))) {
+        $previousPath = $env:PATH
+        try {
+            $env:PATH = "$mingwGitBin;$cmdGitBin;$previousPath"
+            $hookGitPath = Get-ExternalCommand -Name 'git'
+            if ($hookGitPath -is [System.Array]) {
+                throw 'Git hook PATH 下 Get-ExternalCommand 仍返回了多个路径。'
+            }
 
-        $repositoryRootForGit = Get-RepositoryRoot -EntryScriptPath $checkerScript
-        $insideWorkTree = Get-GitOutputLines -GitPath $hookGitPath -RepositoryRoot $repositoryRootForGit -Arguments @(
-            'rev-parse', '--is-inside-work-tree'
-        )
-        if (($insideWorkTree -join '').Trim() -ne 'true') {
-            throw '双 git.exe PATH 下应能调用 git rev-parse。'
+            $repositoryRootForGit = Get-RepositoryRoot -EntryScriptPath $checkerScript
+            $insideWorkTree = Get-GitOutputLines -GitPath $hookGitPath -RepositoryRoot $repositoryRootForGit -Arguments @(
+                'rev-parse', '--is-inside-work-tree'
+            )
+            if (($insideWorkTree -join '').Trim() -ne 'true') {
+                throw '双 git.exe PATH 下应能调用 git rev-parse。'
+            }
         }
-    }
-    finally {
-        $env:PATH = $previousPath
+        finally {
+            $env:PATH = $previousPath
+        }
     }
 }
 
@@ -176,7 +180,31 @@ Invoke-InTempGitRepository -Action {
     Invoke-GeneratedWriteCheck -RepositoryRoot $RepositoryRoot
 }
 
-$repositoryRoot = Get-RepositoryRoot -EntryScriptPath $checkerScript
-Invoke-GeneratedWriteCheck -RepositoryRoot $repositoryRoot
+Invoke-InTempGitRepository -Action {
+    param($RepositoryRoot)
+
+    $guiDirectory = Join-Path -Path $RepositoryRoot -ChildPath 'GUI'
+    $generatedFile = Join-Path -Path $guiDirectory -ChildPath 'ui.c'
+    New-Item -ItemType Directory -Path $guiDirectory -Force | Out-Null
+    Set-Content -LiteralPath $generatedFile -Value 'staged generated content' -Encoding ascii
+    $git = Get-ExternalCommand -Name 'git'
+    Invoke-ExternalCommand -CommandPath $git -Arguments @('-C', $RepositoryRoot, 'add', '--', 'GUI/ui.c')
+    Remove-Item -LiteralPath $generatedFile -Force
+
+    try {
+        Invoke-GeneratedWriteCheck -RepositoryRoot $RepositoryRoot -Snapshot Index
+        throw '索引中已暂存、工作树中已删除的 GUI 文件仍应让写保护失败。'
+    }
+    catch {
+        if ($_.Exception.Message -notmatch 'GUI/ui\.c') {
+            throw "索引快照失败信息应包含暂存路径，实际：$($_.Exception.Message)"
+        }
+    }
+}
+
+if (-not $skipRepositoryCheck) {
+    $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $checkerScript
+    Invoke-GeneratedWriteCheck -RepositoryRoot $repositoryRoot
+}
 
 Write-Output 'check-generated-write 函数测试通过。'

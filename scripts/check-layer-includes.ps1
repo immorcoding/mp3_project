@@ -1,5 +1,8 @@
 ﻿[CmdletBinding()]
-param()
+param(
+    [ValidateSet('WorkingTree', 'Index')]
+    [string]$Snapshot = 'WorkingTree'
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -128,6 +131,37 @@ function Get-RelativeRepositoryPath {
     return $normalizedFullPath
 }
 
+function Invoke-LayerIndexIncludeCheck {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$RepositoryRoot
+    )
+
+    $snapshotRoot = Join-Path -Path ([System.IO.Path]::GetTempPath()) `
+        -ChildPath ('layer-index-' + [Guid]::NewGuid().ToString('N'))
+    try {
+        New-Item -ItemType Directory -Path $snapshotRoot -Force | Out-Null
+        $git = Get-ExternalCommand -Name 'git'
+        $prefix = (($snapshotRoot -replace '\\', '/').TrimEnd('/')) + '/'
+        Invoke-ExternalCommand -CommandPath $git -Arguments @(
+            '-C', $RepositoryRoot,
+            'checkout-index', '--all', '--force', "--prefix=$prefix"
+        )
+        Invoke-LayerIncludeCheck -RepositoryRoot $snapshotRoot
+    }
+    finally {
+        if (Test-Path -LiteralPath $snapshotRoot) {
+            $resolvedSnapshot = (Resolve-Path -LiteralPath $snapshotRoot).Path
+            $resolvedTemp = (Resolve-Path -LiteralPath ([System.IO.Path]::GetTempPath())).Path.TrimEnd('\')
+            if (-not $resolvedSnapshot.StartsWith($resolvedTemp + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "拒绝清理临时索引快照之外的路径：$resolvedSnapshot"
+            }
+            Remove-Item -LiteralPath $resolvedSnapshot -Recurse -Force
+        }
+    }
+}
+
 function Invoke-LayerIncludeCheck {
     [CmdletBinding()]
     param(
@@ -188,6 +222,11 @@ $isDotSourced = $MyInvocation.InvocationName -eq '.'
 if (-not $isDotSourced) {
     Complete-Utf8EntryScript -Action {
         $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
-        Invoke-LayerIncludeCheck -RepositoryRoot $repositoryRoot
+        if ($Snapshot -eq 'Index') {
+            Invoke-LayerIndexIncludeCheck -RepositoryRoot $repositoryRoot
+        }
+        else {
+            Invoke-LayerIncludeCheck -RepositoryRoot $repositoryRoot
+        }
     }
 }

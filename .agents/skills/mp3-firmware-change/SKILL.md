@@ -1,0 +1,17 @@
+---
+name: mp3-firmware-change
+description: Route implementation, fixes, and refactors in this STM32H743 MP3 firmware to the affected Module documentation and verification without duplicating the domain dictionary. Use for changes under APP, Service, Platform, Components, Adapters, FATFS, FreeRTOS configuration, or firmware build integration; do not use for unrelated repository prose edits.
+---
+
+# MP3 固件变更路由
+
+先读根 `CURRENT.md`，再遵守根 `AGENTS.md`。只按需求与实际路径读取相关 Module README、`docs/*_architecture.md` 和 `CONTEXT.md` 对应词条；不要把这些事实复制进本 Skill。
+
+## 路由
+
+1. 区分功能/抽象所有权、编译期 include 与运行时请求/事件三种关系。跨层或公开 Interface 变化必须读取 `docs/architecture_standard.md`。
+2. 用 `scripts/rules/verification.psd1` 判断已有主机测试覆盖和硬件敏感路径。该文件是确定性路径映射的唯一来源；发现未知生产路径时，不得解释成“无需测试”。
+3. 实现期间运行最窄的相关测试；完成非 trivial 变更时使用 `verify-firmware-change` 的层级规则。
+4. 命中硬件敏感路径时同时使用 `review-embedded-change`。Skill 只触发审阅，不替代上板验证。
+
+保持修改局部，不手改 `GUI/`、`SquareLineProject/` 或受保护的 Vendor/生成目录。新 Module 只有在职责、Interface 和真实实现同时成立时才创建。

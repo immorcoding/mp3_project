@@ -13,33 +13,14 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path -Path $PSScriptRoot -ChildPath 'build_helpers.ps1')
 
-Complete-Utf8EntryScript -Action {
-    [void](Get-RepositoryRoot -EntryScriptPath $PSCommandPath)
-
-    $checkLayerIncludesScript = Join-Path -Path $PSScriptRoot -ChildPath 'check-layer-includes.ps1'
-    $checkGeneratedWriteScript = Join-Path -Path $PSScriptRoot -ChildPath 'check-generated-write.ps1'
-    $buildFirmwareScript = Join-Path -Path $PSScriptRoot -ChildPath 'build-firmware.ps1'
-    $testHostScript = Join-Path -Path $PSScriptRoot -ChildPath 'test-host.ps1'
-
-    Invoke-PowerShellScript -ScriptPath $checkLayerIncludesScript
-
-    $generatedWriteParameters = @{}
-    if ($AllowGeneratedUpdate) {
-        $generatedWriteParameters.AllowGeneratedUpdate = $true
-    }
-
-    Invoke-PowerShellScript -ScriptPath $checkGeneratedWriteScript -Parameters $generatedWriteParameters
-    Invoke-PowerShellScript -ScriptPath $buildFirmwareScript -Parameters @{ Configuration = 'Debug' }
-    Invoke-PowerShellScript -ScriptPath $buildFirmwareScript -Parameters @{ Configuration = 'Release' }
-
-    $testHostParameters = @{}
-    if ($PSBoundParameters.ContainsKey('HostCompiler')) {
-        $testHostParameters.HostCompiler = $HostCompiler
-    }
-
-    if ($PSBoundParameters.ContainsKey('Module')) {
-        $testHostParameters.Module = $Module
-    }
-
-    Invoke-PowerShellScript -ScriptPath $testHostScript -Parameters $testHostParameters
+if ($PSBoundParameters.ContainsKey('Module')) {
+    Write-NativeUtf8Line -Text '提示：verify.ps1 现在固定等价于 FULL；为避免削弱验收，-Module 参数已忽略。按影响测试请使用 verify_changed.ps1。'
 }
+
+$parameters = @{ AllowGeneratedUpdate = $AllowGeneratedUpdate }
+if (-not [string]::IsNullOrWhiteSpace($HostCompiler)) {
+    $parameters.HostCompiler = $HostCompiler
+}
+Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'verify_full.ps1') `
+    -Parameters $parameters
+exit $LASTEXITCODE

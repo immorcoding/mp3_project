@@ -24,6 +24,10 @@
 
 # 提交前核对分层 include、生成目录写保护、固件 Debug/Release 构建与主机回归
 ./scripts/verify.ps1 -HostCompiler E:/mingw64/bin/gcc.exe
+
+# 手动按当前工作树变化选择受影响模块（pre-push 会按实际推送提交自动执行）
+./scripts/verify_changed.ps1 -HostCompiler E:/mingw64/bin/gcc.exe
 ```
 
 这些命令只在主机上配置、构建和运行测试；不会烧录固件、安装软件或访问硬件。
+测试影响映射、未知路径回退和状态语义见 [分层验证与 Agent Harness](../docs/verification.md)。

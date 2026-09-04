@@ -32,9 +32,9 @@
 
 ## 完成前验收
 
-未运行且通过 `./scripts/verify.ps1`，不得声称完成。该命令先做分层 `#include` 检查和生成目录写保护，再构建固件 Debug/Release 并跑主机回归。只改 `Components/`、`Adapters/`、`Platform/` 或 `Service/` 的包含关系时，可先跑 `./scripts/check-layer-includes.ps1`。只核对应保护生成目录是否被手改时，可先跑 `./scripts/check-generated-write.ps1`。
+未运行且通过 `./scripts/verify.ps1`（固定等价 FULL），不得声称软件验证完成；硬件敏感变化还必须明确保留上板状态。FAST → CHANGED → FULL → HARDWARE 的入口、状态和路径映射见 [verification.md](docs/verification.md)。只有 `FAIL` 阻止 Hook；`PASS_HOST_ONLY` 与 `NEEDS_HARDWARE_VALIDATION` 均不得冒充板级验收。
 
-克隆后在仓库根执行一次 `./scripts/install-git-hooks.ps1`。`pre-commit` 跑分层检查和生成目录写保护，失败则拒绝提交。`git commit` 标题必须为 `YYYY/M/D HH:MM` + 一句中文，不要另写正文；细则见 [coding_standard.md](docs/coding_standard.md) 第 6 节。
+克隆后执行一次 `./scripts/install-git-hooks.ps1`。`pre-commit` 对 Git 索引运行 FAST，`pre-push` 对实际推送提交运行 CHANGED。非 trivial 变化完成后用只读 `independent-verifier`；DMA、Cache、ISR、RTOS、HAL、Platform、链接段或硬件生命周期变化再用只读 `embedded-reviewer`。两者不进入 Hook。`git commit` 标题必须为 `YYYY/M/D HH:MM` + 一句中文，不写正文；细则见 [coding_standard.md](docs/coding_standard.md) 第 6 节。
 
 ## 三份根文档限制
 
@@ -52,6 +52,7 @@
 - 术语词典：`CONTEXT.md`（按条查）
 - 现场：`CURRENT.md`
 - 文档地图：`docs/README.md`
+- 分层验证与 Agent Harness：`docs/verification.md`
 - 冷启动与 ADR 范围：`docs/agents/domain.md`
 - 本地事项：`docs/agents/issue-tracker.md`；状态：`docs/agents/triage-labels.md`
 - 命名、注释与提交标题：`docs/coding_standard.md`
