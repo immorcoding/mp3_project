@@ -21,5 +21,7 @@ Storage_StatusTypeDef storage_sheet_init(uint16_t music_indexnum, uint32_t gener
  * @brief 作废播放列表。只把代次置 0，不清整张下标数组。
  */
 Storage_StatusTypeDef storage_sheet_invalidate(void);
+uint32_t storage_sheet_generation(void);
+uint16_t storage_sheet_catalog_index(uint16_t sheet_index);
 
 #endif /* STORAGE_SHEET_H */

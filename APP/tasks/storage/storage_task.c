@@ -17,6 +17,7 @@
 
 #include "Service/log/log_service.h"
 #include "catalog/storage_catalog.h"
+#include "catalog/storage_listbuffer.h"
 
 /**
  * @brief  运行 Storage Task 的存储协调与 SD 卡热插拔调度循环。
@@ -28,7 +29,8 @@
  *         下一次通知；只要等待期间仍有新边沿，就重新开始完整静默期。超时后才
  *         调用 storage_sd_process()，因此触点抖动不会触发 SDMMC 或 FatFs 操作。
  *
- *         主循环有界等待 STORAGE_NOTIFY_SD_DETECT 并提供回收机会；
+ *         主循环有界等待 STORAGE_NOTIFY_LISTBUFFER（GUI 窗口请求或卡检测兼作叫醒），
+         再以 0 超时收取 STORAGE_NOTIFY_SD_DETECT 做消抖；超时仍提供回收机会。
  *         STORAGE_NOTIFY_SD_TRANSFER 与 STORAGE_NOTIFY_FLASH_OPERATION 由同一任务
  *         调用栈中的 Filesystem SD/Flash 私有执行器等待。
  *         它们完成后返回各自调用者，绝不在 IRQ 中提交下一笔传输。
@@ -39,6 +41,7 @@ void storage_task(void *handle)
 
     (void)handle;
     task_handle = xTaskGetCurrentTaskHandle();
+    storage_listbuffer_bind(task_handle);
 
     _Static_assert((unsigned)STORAGE_NOTIFY_COUNT <=
                        (unsigned)configTASK_NOTIFICATION_ARRAY_ENTRIES,
@@ -65,9 +68,23 @@ void storage_task(void *handle)
 
     for (;;)
     {
-        uint32_t notified = ulTaskNotifyTakeIndexed(STORAGE_NOTIFY_SD_DETECT,
-                                                    pdTRUE,
-                                                    pdMS_TO_TICKS(STORAGE_FLASH_RECLAIM_PERIOD_MS));
+        uint32_t listbuffer_notified;
+        uint32_t notified;
+
+        listbuffer_notified = ulTaskNotifyTakeIndexed(STORAGE_NOTIFY_LISTBUFFER,
+                                                      pdTRUE,
+                                                      pdMS_TO_TICKS(STORAGE_FLASH_RECLAIM_PERIOD_MS));
+        (void)listbuffer_notified;
+        if (storage_listbuffer_load() != STORAGE_OK)
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                   "STORAGE",
+                                   "List buffer load failed.");
+        }
+
+        notified = ulTaskNotifyTakeIndexed(STORAGE_NOTIFY_SD_DETECT,
+                                           pdTRUE,
+                                           0U);
         if (notified)
         {
             while (ulTaskNotifyTakeIndexed(STORAGE_NOTIFY_SD_DETECT,

@@ -184,6 +184,9 @@ static void storage_sd_detect_callback(void *context)
         vTaskNotifyGiveIndexedFromISR(task_handle,
                                       STORAGE_NOTIFY_SD_DETECT,
                                       &higher_priority_task_woken);
+        vTaskNotifyGiveIndexedFromISR(task_handle,
+                                      STORAGE_NOTIFY_LISTBUFFER,
+                                      &higher_priority_task_woken);
         portYIELD_FROM_ISR(higher_priority_task_woken);
     }
 }

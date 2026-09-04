@@ -16,11 +16,23 @@
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
 
-#define STORAGE_SD_BENCHMARK_ENABLE       0
-/* 默认关闭；允许独立验证构建通过编译定义启用，不改动产品默认值。 */
+/* app_config.h */
+#define STORAGE_SD_BENCHMARK_ENABLE 0 /* 产品默认关闭 SD 文件读写基准。 */
 #ifndef STORAGE_FLASH_BENCHMARK_ENABLE
-#define STORAGE_FLASH_BENCHMARK_ENABLE    0
+#define STORAGE_FLASH_BENCHMARK_ENABLE 0 /* 产品默认关闭 Flash 基准；独立验证构建可 -D 打开。 */
 #endif
-#define STORAGE_SDRAM_BENCHMARK_ENABLE    0
+#define STORAGE_SDRAM_BENCHMARK_ENABLE 0 /* 产品默认关闭 SDRAM 破坏性自检。 */
+
+/* app_tasks.h */
+#define APP_BOOT_TASK_STACK_WORDS    128U /* Create Task 栈，单位为 word。 */
+#define APP_LOG_TASK_STACK_WORDS     512U
+#define APP_STORAGE_TASK_STACK_WORDS 512U
+#define APP_MONITOR_TASK_STACK_WORDS 256U
+#define APP_GUI_TASK_STACK_WORDS     2048U
+#define APP_BOOT_TASK_PRIORITY       0U
+#define APP_LOG_TASK_PRIORITY        1U
+#define APP_STORAGE_TASK_PRIORITY    2U
+#define APP_MONITOR_TASK_PRIORITY    1U
+#define APP_GUI_TASK_PRIORITY        1U
 
 #endif /* APP_CONFIG_H */

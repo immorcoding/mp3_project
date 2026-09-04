@@ -1,6 +1,6 @@
 # 曲库与播放列表
 
-> 状态：扫描与顺序表已落地（2026-09-03）；窗口问询、导航、元数据未做。  
+> 状态：扫描、顺序表与 Queue 窗口单槽已落地；GUI 尚未接线；导航、元数据未做。  
 > 相关决定：[ADR-0015](adr/0015-volume-roles-and-resource-install.md)  
 > 实现：[`APP/tasks/storage/catalog/`](../APP/tasks/storage/catalog/)  
 > 术语：[CONTEXT.md](../CONTEXT.md) **曲库**、**播放列表**
@@ -11,7 +11,7 @@
 
 ## 2. 公开 Interface
 
-仅供同一 Storage Task 在挂载成功或拔卡时调用：
+仅供 Storage Task 在挂载/拔卡时调用的建表接口，以及 GUI Task 的窗口单槽：
 
 | 函数 | 作用 |
 | --- | --- |
@@ -21,10 +21,12 @@
 | `storage_catalog_invalidate()` | 作废 Catalog，并作废播放列表 |
 | `storage_sheet_init(index_num, generation)` | 填写恒等 `SeqList[i] = i`，记下 Catalog 代次 |
 | `storage_sheet_invalidate()` | 只把 Sheet `Generation` 置 0，不清数组 |
+| `storage_listbuffer_request()` | GUI Task：仅 `IDLE` 时写入起点/条数/代次，打成 `PENDING` 并通知 Storage |
+| `storage_listbuffer_load()` | Storage Task：仅 `PENDING` 时填路径拷贝；代次不符则 `Generation=0`、空窗，最后打 `READY` |
 
-公开头不暴露字符串池、条目数组或 `SeqList`。没有按代次问行、窗口切片、按 Sheet 下标取路径、上一首/下一首 API。
+公开头不暴露字符串池、条目数组或 `SeqList`。窗口载荷在 `storage_listbuffer` 单槽：`Index` + `Length` + `Generation` + `Buffer[][]`。GUI 看见 `READY` 后整窗消费，再把 `Status` 写回 `IDLE`。`0` 代次表示请求方无快照或应答已作废。
 
-常量（公开头）：`STORAGE_CATALOG_MUSIC_POOL_SIZE` 为 4 MiB；`STORAGE_CATALOG_MUSIC_MAX_NUM` 为 32000，须能放入 `uint16_t`。
+尺寸宏在 `storage_catalog_config.h`（`STORAGE_CATALOG_MUSIC_POOL_SIZE` 4 MiB，`STORAGE_CATALOG_MUSIC_MAX_NUM` 32000，`STORAGE_LISTBUFFER_MAX_ENTRIES` 12）。
 
 ## 3. 扫描与作废
 
@@ -38,8 +40,8 @@ Music 扫描从相对路径 `Music` 递归子目录，同时只开一个目录�
 
 ## 4. 未落地
 
-- 带代次的窗口问询、Queue 行预取
-- 上一首/下一首游标、Playback 打开/预开
+- 带代次的上一首/下一首游标、Playback 打开/预开
+- GUI Queue 行模板接线（SquareLine 由用户改）
 - 随机列表、心动列表（结构体里已注释）
 - 标题/歌手/封面等元数据
 - Books Catalog 扫描

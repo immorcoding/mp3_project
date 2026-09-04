@@ -47,3 +47,25 @@ Storage_StatusTypeDef storage_sheet_invalidate(void)
     MusicSheet.Generation = 0; /* 0 表示没有有效 Sheet，不会与 Catalog 代次（从 1 起）重合。 */
     return STORAGE_OK;
 }
+
+/**
+ * @brief 返回播放列表代次；0 表示已作废。
+ */
+uint32_t storage_sheet_generation(void)
+{
+    return MusicSheet.Generation;
+}
+
+/**
+ * @brief 把播放列表位置映射为 Catalog 下标。
+ */
+uint16_t storage_sheet_catalog_index(uint16_t sheet_index)
+{
+    if ((MusicSheet.Generation == 0U) ||
+        (sheet_index >= STORAGE_CATALOG_MUSIC_MAX_NUM))
+    {
+        return UINT16_MAX;
+    }
+
+    return MusicSheet.SeqList[sheet_index];
+}

@@ -22,7 +22,7 @@ Service_Log 将多个普通任务的短日志文本汇集到静态消息块池�
 
 ## 资源与约束
 
-- 队列元素是 `log_service_message_t *` 的指针值，不是完整结构体副本；
+- 队列深度宏在 `log_service_config.h`，由 `log_service.h` 再导出；其他 Module 不得直接包含 config。
 - 所有权路径固定为 `free → producer → ready → Log task → free`；
 - `tag` 必须在消费前保持有效，通常使用字符串字面量；
 - 仅普通任务可调用，不支持 ISR；队列满时不等待并返回错误。

@@ -61,19 +61,16 @@
 #endif
 
 
-/** @brief 文件测速随 Flash 总开关执行；仅在成功挂载后运行，不自动格式化。 */
-#define STORAGE_FLASH_BENCHMARK_FILE_ENABLE 1
+#define STORAGE_FLASH_BENCHMARK_FILE_ENABLE 1 /* 文件测速随 Flash 总开关执行；仅在成功挂载后运行，不自动格式化。 */
 
-/** @brief 根目录专用测试文件名；同名文件存在则拒绝新建，不覆盖、不预先删除。 */
-#define STORAGE_FLASH_BENCHMARK_FILE_NAME "__ftlrw.bin"
+#define STORAGE_FLASH_BENCHMARK_FILE_NAME "__ftlrw.bin" /* 根目录专用测试文件名；同名文件存在则拒绝新建，不覆盖、不预先删除。 */
 
 /** @brief 默认 1 MiB；可由主机测试覆盖，须为分块的整数倍且不超过卷可用空间。 */
 #ifndef STORAGE_FLASH_BENCHMARK_FILE_TOTAL_BYTES
 #define STORAGE_FLASH_BENCHMARK_FILE_TOTAL_BYTES (1U * 1024U * 1024U)
 #endif
 
-/** @brief 默认 4 KiB 应用缓冲，跨越七扇区组边界以覆盖 FTL 部分组更新。 */
-#define STORAGE_FLASH_BENCHMARK_FILE_CHUNK_BYTES (4U * 1024U)
+#define STORAGE_FLASH_BENCHMARK_FILE_CHUNK_BYTES (4U * 1024U) /* 默认 4 KiB 应用缓冲，跨越七扇区组边界以覆盖 FTL 部分组更新。 */
 
 #if ((STORAGE_FLASH_BENCHMARK_FILE_TOTAL_BYTES == 0U) || \
      (STORAGE_FLASH_BENCHMARK_FILE_CHUNK_BYTES == 0U) || \

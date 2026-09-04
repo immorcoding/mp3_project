@@ -12,11 +12,8 @@
 
 #include "Platform/platform.h"
 
-/** @brief 当前产品 LCD 的可见宽度，单位为像素。 */
-#define PLATFORM_LCD_WIDTH   240u
-
-/** @brief 当前产品 LCD 的可见高度，单位为像素。 */
-#define PLATFORM_LCD_HEIGHT  320u
+#define PLATFORM_LCD_WIDTH   240u /* 当前产品 LCD 可见宽度，单位为像素。 */
+#define PLATFORM_LCD_HEIGHT  320u /* 当前产品 LCD 可见高度，单位为像素。 */
 
 /** @brief Platform LCD 对上公开的 24 位显示标识快照。 */
 typedef struct

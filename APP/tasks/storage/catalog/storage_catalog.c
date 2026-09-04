@@ -15,9 +15,6 @@
 #include "Service/filesystem/filesystem_types.h"
 #include "Service/log/log_service.h"
 
-/** @brief 待扫子目录栈深度；同时只开一个目录句柄。 */
-#define STORAGE_CATALOG_DIR_STACK_MAX 128U
-
 typedef struct
 {
     uint32_t Generation; /**< Catalog 代次，内部 .bss 计数的副本。 */
@@ -327,4 +324,47 @@ Storage_StatusTypeDef storage_catalog_invalidate(void)
 {
     storage_catalog_music_reset();
     return storage_sheet_invalidate();
+}
+
+/**
+ * @brief 返回当前 Catalog 代次（含空表递增后的值）。
+ */
+uint32_t storage_catalog_generation(void)
+{
+    return MusicCatalogPool.Generation;
+}
+
+/**
+ * @brief 返回已收录曲目数。
+ */
+uint16_t storage_catalog_index_num(void)
+{
+    return MusicCatalogPool.IndexNum;
+}
+
+/**
+ * @brief 把指定 Catalog 下标的 UTF-8 相对路径拷进调用方缓冲。
+ */
+Storage_StatusTypeDef storage_catalog_copy_path(uint16_t catalog_index,
+                                                char *out,
+                                                uint32_t out_bytes)
+{
+    uint32_t length;
+
+    if ((out == NULL) || (out_bytes == 0U) ||
+        (catalog_index >= MusicCatalogPool.IndexNum))
+    {
+        return STORAGE_ERROR;
+    }
+
+    length = MusicCatalogIndex[catalog_index].Length;
+    if ((length + 1U) > out_bytes)
+    {
+        return STORAGE_ERROR;
+    }
+
+    (void)memcpy(out,
+                 &MusicCatalogPool.Path[MusicCatalogIndex[catalog_index].Offset],
+                 length + 1U);
+    return STORAGE_OK;
 }

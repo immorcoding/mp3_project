@@ -8,7 +8,22 @@
 #ifndef W25QXX_CONFIG_H
 #define W25QXX_CONFIG_H
 
-/* JEDEC ID 命令返回制造商、存储器类型和容量代码三个字节。 */
+/* w25qxx.h */
+#define W25QXX_MANUFACTURER_ID_WINBOND       0xEFu /* JEDEC 制造商：Winbond。 */
+#define W25QXX_CAPACITY_ID_1MBIT             0x11u
+#define W25QXX_CAPACITY_ID_2MBIT             0x12u
+#define W25QXX_CAPACITY_ID_4MBIT             0x13u
+#define W25QXX_CAPACITY_ID_8MBIT             0x14u
+#define W25QXX_CAPACITY_ID_16MBIT            0x15u
+#define W25QXX_CAPACITY_ID_32MBIT            0x16u
+#define W25QXX_CAPACITY_ID_64MBIT            0x17u
+#define W25QXX_CAPACITY_ID_128MBIT           0x18u
+#define W25QXX_CAPACITY_ID_256MBIT           0x19u
+#define W25QXX_PAGE_PROGRAM_MAX_SIZE_BYTES   256u /* Quad Input Page Program 单页上限。 */
+#define W25QXX_SECTOR_ERASE_SIZE_BYTES       (4u * 1024u) /* 4-byte Sector Erase 粒度。 */
+#define W25QXX_QUAD_READ_ADDRESS_ALIGNMENT_BYTES  4u /* 0xEC Quad I/O Read 起始地址对齐。 */
+
+/* w25qxx.c */
 #define W25QXX_COMMAND_READ_JEDEC_ID          0x9Fu
 #define W25QXX_JEDEC_ID_LENGTH                3u
 

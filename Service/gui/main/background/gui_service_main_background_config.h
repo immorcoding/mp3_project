@@ -10,20 +10,10 @@
 
 #include "Platform/lcd/platform_lcd.h"
 
-/** @brief Music 局部毛玻璃使用的全屏壁纸模糊半径。 */
-#define SERVICE_GUI_MAIN_BACKGROUND_WALLPAPER_BLUR_RADIUS  (10U)
+#define SERVICE_GUI_MAIN_BACKGROUND_WALLPAPER_BLUR_RADIUS  (10U) /* Music 局部毛玻璃使用的全屏壁纸模糊半径。 */
 
-/**
- * @brief MusicModeTabs 局部背景允许的最大宽度。
- * @note 使用整屏宽度，避免将当前 SquareLine 的 90% 相对宽度写死到 Service。
- */
-#define SERVICE_GUI_MAIN_BACKGROUND_TABS_MAX_WIDTH  (PLATFORM_LCD_WIDTH)
+#define SERVICE_GUI_MAIN_BACKGROUND_TABS_MAX_WIDTH  (PLATFORM_LCD_WIDTH) /* MusicModeTabs 局部背景允许的最大宽度。 使用整屏宽度，避免将当前 SquareLine 的 90% 相对宽度写死到 Service。 */
 
-/**
- * @brief MusicModeTabs 局部背景允许的最大高度。
- * @note 当前 Tabview 高度约为有效页面高度的 66%，此处留至整屏 60% 的容量余量。
- *       若后续 UI 需要更高的玻璃区域，必须先调整本配置并重新核对 SDRAM 峰值。
- */
 #define SERVICE_GUI_MAIN_BACKGROUND_TABS_MAX_HEIGHT  \
     ((PLATFORM_LCD_HEIGHT * 3U) / 5U)
 

@@ -19,30 +19,24 @@
 #define AXP2101_CONFIG_H
 
 /* Device identification ----------------------------------------------------*/
-/** @brief AXP2101 默认 7 位 I2C 地址，不包含读写位。 */
-#define AXP2101_SLAVE_ADDRESS                            (0x34)
+#define AXP2101_SLAVE_ADDRESS                            (0x34) /* AXP2101 默认 7 位 I2C 地址，不包含读写位。 */
 
-/** @brief REG03H 应返回的 AXP2101 芯片 ID。 */
-#define XPOWERS_AXP2101_CHIP_ID1                         (0x47)
+#define XPOWERS_AXP2101_CHIP_ID1                         (0x47) /* REG03H 应返回的 AXP2101 芯片 ID。 */
 #define XPOWERS_AXP2101_CHIP_ID2                         (0x4A)
 
 /* Status and data buffer registers -----------------------------------------*/
-/** @note 状态寄存器反映电源输入、充电和工作状态；读取不会修改配置。 */
-#define XPOWERS_AXP2101_STATUS1                          (0x00)
+#define XPOWERS_AXP2101_STATUS1                          (0x00) /* 状态寄存器反映电源输入、充电和工作状态；读取不会修改配置。 */
 #define XPOWERS_AXP2101_STATUS2                          (0x01)
-/** @brief 芯片型号寄存器，正常值为 XPOWERS_AXP2101_CHIP_ID。 */
-#define XPOWERS_AXP2101_IC_TYPE                          (0x03)
+#define XPOWERS_AXP2101_IC_TYPE                          (0x03) /* 芯片型号寄存器，正常值为 XPOWERS_AXP2101_CHIP_ID。 */
 
-/** @brief 4 字节通用数据缓冲区，可用于掉电保持的小量用户数据。 */
-#define XPOWERS_AXP2101_DATA_BUFFER1                     (0x04)
+#define XPOWERS_AXP2101_DATA_BUFFER1                     (0x04) /* 4 字节通用数据缓冲区，可用于掉电保持的小量用户数据。 */
 #define XPOWERS_AXP2101_DATA_BUFFER2                     (0x05)
 #define XPOWERS_AXP2101_DATA_BUFFER3                     (0x06)
 #define XPOWERS_AXP2101_DATA_BUFFER4                     (0x07)
 #define XPOWERS_AXP2101_DATA_BUFFER_SIZE                 (4u)
 
 /* Common, protection and input control registers ---------------------------*/
-/** @note 本组包含软件关机/重启等动作位，写入前必须核对位定义。 */
-#define XPOWERS_AXP2101_COMMON_CONFIG                    (0x10)
+#define XPOWERS_AXP2101_COMMON_CONFIG                    (0x10) /* 本组包含软件关机/重启等动作位，写入前必须核对位定义。 */
 #define XPOWERS_AXP2101_BATFET_CTRL                      (0x12)
 #define XPOWERS_AXP2101_DIE_TEMP_CTRL                    (0x13)
 #define XPOWERS_AXP2101_MIN_SYS_VOL_CTRL                 (0x14)
@@ -56,8 +50,7 @@
 #define XPOWERS_AXP2101_LOW_BAT_WARN_SET                 (0x1A)
 
 /* Power-on, power-off and sequence control registers -----------------------*/
-/** @note 本组决定开关机条件和电源时序，属于高风险策略寄存器。 */
-#define XPOWERS_AXP2101_PWRON_STATUS                     (0x20)
+#define XPOWERS_AXP2101_PWRON_STATUS                     (0x20) /* 本组决定开关机条件和电源时序，属于高风险策略寄存器。 */
 #define XPOWERS_AXP2101_PWROFF_STATUS                    (0x21)
 #define XPOWERS_AXP2101_PWROFF_EN                        (0x22)
 #define XPOWERS_AXP2101_DC_OVP_UVP_CTRL                  (0x23)
@@ -73,8 +66,7 @@
 #define XPOWERS_AXP2101_FAST_PWRON_CTRL                  (0x2B)
 
 /* ADC control and result registers -----------------------------------------*/
-/** @note ADC 结果通常跨多个寄存器组合，换算公式应由设备层语义函数实现。 */
-#define XPOWERS_AXP2101_ADC_CHANNEL_CTRL                 (0x30)
+#define XPOWERS_AXP2101_ADC_CHANNEL_CTRL                 (0x30) /* ADC 结果通常跨多个寄存器组合，换算公式应由设备层语义函数实现。 */
 #define XPOWERS_AXP2101_ADC_DATA_RESULT0                 (0x34)
 #define XPOWERS_AXP2101_ADC_DATA_RESULT1                 (0x35)
 #define XPOWERS_AXP2101_ADC_DATA_RESULT2                 (0x36)
@@ -92,17 +84,14 @@
 #define XPOWERS_AXP2101_INTEN3                           (0x42)
 
 /* Interrupt status registers -----------------------------------------------*/
-/** @note 向状态位写 1 清除对应的中断挂起状态。 */
-#define XPOWERS_AXP2101_INTSTS1                          (0x48)
+#define XPOWERS_AXP2101_INTSTS1                          (0x48) /* 向状态位写 1 清除对应的中断挂起状态。 */
 #define XPOWERS_AXP2101_INTSTS2                          (0x49)
 #define XPOWERS_AXP2101_INTSTS3                          (0x4A)
 #define XPOWERS_AXP2101_INTSTS_CNT                       (3)
 
 /* LDO control register bit definitions -------------------------------------*/
-/** @brief REG90H bit0：ALDO1 输出使能位，1 为开启，0 为关闭。 */
-#define AXP2101_LDO_CTRL0_ALDO1_ENABLE_MASK              (1u << 0)
-/** @brief REG90H bit1：ALDO2 输出使能位，1 为开启，0 为关闭。 */
-#define AXP2101_LDO_CTRL0_ALDO2_ENABLE_MASK              (1u << 1)
+#define AXP2101_LDO_CTRL0_ALDO1_ENABLE_MASK              (1u << 0) /* REG90H bit0：ALDO1 输出使能位，1 为开启，0 为关闭。 */
+#define AXP2101_LDO_CTRL0_ALDO2_ENABLE_MASK              (1u << 1) /* REG90H bit1：ALDO2 输出使能位，1 为开启，0 为关闭。 */
 
 /* Battery temperature sensing registers ------------------------------------*/
 #define XPOWERS_AXP2101_TS_PIN_CTRL                      (0x50)
@@ -122,8 +111,7 @@
 #define XPOWERS_AXP2101_JIETA_SET2                       (0x5B)
 
 /* Charger configuration registers ------------------------------------------*/
-/** @note 修改充电电流/电压前必须核对电池规格、热设计和输入能力。 */
-#define XPOWERS_AXP2101_IPRECHG_SET                      (0x61)
+#define XPOWERS_AXP2101_IPRECHG_SET                      (0x61) /* 修改充电电流/电压前必须核对电池规格、热设计和输入能力。 */
 #define XPOWERS_AXP2101_ICC_CHG_SET                      (0x62)
 #define XPOWERS_AXP2101_ITERM_CHG_SET_CTRL               (0x63)
 
@@ -136,19 +124,15 @@
 #define XPOWERS_AXP2101_CHGLED_SET_CTRL                  (0x69)
 
 /* Button battery charge voltage conversion range ---------------------------*/
-/** @brief 纽扣电池充电电压最小值，单位 mV。 */
-#define XPOWERS_AXP2101_BTN_VOL_MIN                      (2600)
-/** @brief 纽扣电池充电电压最大值，单位 mV。 */
-#define XPOWERS_AXP2101_BTN_VOL_MAX                      (3300)
-/** @brief 纽扣电池充电电压步进，单位 mV。 */
-#define XPOWERS_AXP2101_BTN_VOL_STEPS                    (100)
+#define XPOWERS_AXP2101_BTN_VOL_MIN                      (2600) /* 纽扣电池充电电压最小值，单位 mV。 */
+#define XPOWERS_AXP2101_BTN_VOL_MAX                      (3300) /* 纽扣电池充电电压最大值，单位 mV。 */
+#define XPOWERS_AXP2101_BTN_VOL_STEPS                    (100) /* 纽扣电池充电电压步进，单位 mV。 */
 
 
 #define XPOWERS_AXP2101_BTN_BAT_CHG_VOL_SET              (0x6A)
 
 /* DCDC enable, mode and voltage registers ----------------------------------*/
-/** @note DC_ONOFF 与 DC_VOLx 分别控制使能和目标电压，二者语义不能混淆。 */
-#define XPOWERS_AXP2101_DC_ONOFF_DVM_CTRL                (0x80)
+#define XPOWERS_AXP2101_DC_ONOFF_DVM_CTRL                (0x80) /* DC_ONOFF 与 DC_VOLx 分别控制使能和目标电压，二者语义不能混淆。 */
 #define XPOWERS_AXP2101_DC_FORCE_PWM_CTRL                (0x81)
 #define XPOWERS_AXP2101_DC_VOL0_CTRL                     (0x82)
 #define XPOWERS_AXP2101_DC_VOL1_CTRL                     (0x83)
@@ -157,8 +141,7 @@
 #define XPOWERS_AXP2101_DC_VOL4_CTRL                     (0x86)
 
 /* LDO enable and voltage registers -----------------------------------------*/
-/** @note LDO_ONOFF 与 LDO_VOLx 分别控制使能和预设电压，设电压不会自动开启。 */
-#define XPOWERS_AXP2101_LDO_ONOFF_CTRL0                  (0x90)
+#define XPOWERS_AXP2101_LDO_ONOFF_CTRL0                  (0x90) /* LDO_ONOFF 与 LDO_VOLx 分别控制使能和预设电压，设电压不会自动开启。 */
 #define XPOWERS_AXP2101_LDO_ONOFF_CTRL1                  (0x91)
 #define XPOWERS_AXP2101_LDO_VOL0_CTRL                    (0x92)
 #define XPOWERS_AXP2101_LDO_VOL1_CTRL                    (0x93)
@@ -171,8 +154,7 @@
 #define XPOWERS_AXP2101_LDO_VOL8_CTRL                    (0x9A)
 
 /* Fuel-gauge registers ------------------------------------------------------*/
-/** @note 电量计状态依赖芯片内部算法，不能只凭单次百分比读数判断电池健康。 */
-#define XPOWERS_AXP2101_BAT_PARAM                        (0xA1)
+#define XPOWERS_AXP2101_BAT_PARAM                        (0xA1) /* 电量计状态依赖芯片内部算法，不能只凭单次百分比读数判断电池健康。 */
 #define XPOWERS_AXP2101_FUEL_GAUGE_CTRL                  (0xA2)
 #define XPOWERS_AXP2101_BAT_PERCENT_DATA                 (0xA4)
 

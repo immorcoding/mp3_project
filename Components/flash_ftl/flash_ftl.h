@@ -9,10 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define FLASH_FTL_SECTOR_BYTES  512U  /**< FatFs 看到的逻辑扇区字节数。 */
-#define FLASH_FTL_BLOCK_BYTES   4096U /**< 一个组版本独占的物理块字节数。 */
-#define FLASH_FTL_PAGE_BYTES    256U  /**< 元数据与原始编程的页字节数。 */
-#define FLASH_FTL_GROUP_SECTORS 7U    /**< 同一组版本共同提交的逻辑扇区数。 */
+#include "Components/flash_ftl/flash_ftl_config.h"
 
 /**
  * @brief 逻辑请求的受理、推进和最终状态。

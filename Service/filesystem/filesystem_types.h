@@ -8,11 +8,8 @@
 
 #include <stdint.h>
 
-/** @brief 对外 UTF-8 相对路径的最大字节数，不含结尾 '\0'。 */
-#define SERVICE_FILESYSTEM_PATH_MAX_BYTES 255U
-
-/** @brief 单个目录项 UTF-8 名称的最大字节数，不含结尾 '\0'。 */
-#define SERVICE_FILESYSTEM_NAME_MAX_BYTES 255U
+#define SERVICE_FILESYSTEM_PATH_MAX_BYTES 255U /* 对外 UTF-8 相对路径最大字节数，不含结尾 '\0'。 */
+#define SERVICE_FILESYSTEM_NAME_MAX_BYTES 255U /* 单个目录项 UTF-8 名称最大字节数，不含结尾 '\0'。 */
 
 /**
  * @brief Filesystem 对外可见的逻辑卷。

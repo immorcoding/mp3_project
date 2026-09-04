@@ -8,8 +8,7 @@
 #ifndef STORAGE_TASK_H
 #define STORAGE_TASK_H
 
-/** @brief 无文件系统时是否自动格式化 Flash 卷 */
-#define STORAGE_FLASH_AUTO_FORMAT     1U
+#include "APP/tasks/storage/storage_task_config.h"
 
 /** @brief Storage 操作返回状态 */
 typedef enum{
@@ -25,6 +24,7 @@ typedef enum{
     STORAGE_NOTIFY_SD_DETECT = 0U,     /**< GPIO EXTI 卡检测边沿，由本任务主循环消抖。 */
     STORAGE_NOTIFY_SD_TRANSFER,        /**< SDMMC DMA 完成，由 Filesystem SD 执行器等待。 */
     STORAGE_NOTIFY_FLASH_OPERATION,    /**< QSPI/MDMA 异步完成，由 Filesystem Flash 执行器等待。 */
+    STORAGE_NOTIFY_LISTBUFFER,         /**< Queue 窗口 PENDING，由本任务主循环填槽。 */
     STORAGE_NOTIFY_COUNT               /**< 本任务占用的通知槽数量，不是可等待的事件。 */
 } Storage_NotifyIndexTypeDef;
 

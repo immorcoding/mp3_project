@@ -5,12 +5,13 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 ## 公开 Interface
 
 - `storage_task.h` 的 `Storage_StatusTypeDef`：本 Task 编排函数的成功/失败。Filesystem 的细粒度结果仍用 `Service_StatusTypeDef`，在 Storage 边界收成 `STORAGE_OK` / `STORAGE_ERROR`。
-- `storage_task.h` 的 `Storage_NotifyIndexTypeDef`：本任务私有通知槽。`STORAGE_NOTIFY_SD_DETECT` 由本任务主循环消抖；`STORAGE_NOTIFY_SD_TRANSFER` 与 `STORAGE_NOTIFY_FLASH_OPERATION` 在 `InitSD`/`InitFlash` 时注入 Filesystem Service。
+- `storage_task.h` 的 `Storage_NotifyIndexTypeDef`：本任务私有通知槽。`STORAGE_NOTIFY_SD_DETECT` 由本任务主循环消抖；`STORAGE_NOTIFY_SD_TRANSFER` 与 `STORAGE_NOTIFY_FLASH_OPERATION` 在 `InitSD`/`InitFlash` 时注入 Filesystem Service；`STORAGE_NOTIFY_LISTBUFFER` 由 GUI `request` 叫醒主循环 `load`。卡检测 ISR 同时给出 `SD_DETECT` 与 `LISTBUFFER`，以便主循环改等 `LISTBUFFER` 时插卡仍能立刻醒来。
 - `storage_task(void *argument)`：由 APP 创建的任务入口，保持 `void` 以满足 `TaskFunction_t`。
 - `storage_sd_*()`：SD 热插拔与挂载策略，仅供本 Task 调用；返回 `Storage_StatusTypeDef`。
 - `storage_flash_init()` / `storage_flash_reclaim()`：Flash 启动、挂载策略与空闲回收，仅供本 Task 调用，返回 `Storage_StatusTypeDef`。`storage_flash_init()` 必须传入当前 Storage Task 句柄，句柄为空或与当前任务不符时拒绝。
 - `storage_catalog_*()`：曲库扫描与作废，返回 `Storage_StatusTypeDef`。曲库是 SD `Music/` 的路径事实表（SDRAM `.storage_catalog` 字符串池 + 偏移/长度，不存卷字段）；公开头不暴露表结构。启动不把该段并入 `.bss` 清零；扫描前只重置表头。没有 `Music/` 时为空表成功。条数满或池满则截断已收录部分，仍 `STORAGE_OK`。`storage_catalog_books_init()` 是空桩，恒成功，当前不调用。拔卡先 `storage_catalog_invalidate()`，再卸载。技术事实见 [catalog_architecture.md](../../../docs/catalog_architecture.md)。
-- `storage_sheet_*()`：播放列表，与曲库同属 `catalog/`。首版是恒等下标序列 `SeqList[i] = i`，有效长度即建表时的 Catalog `IndexNum`，不另存 Count。`Generation` 记录对应的 Catalog 代次，`0` 表示已作废。表在 SDRAM `.music_sheet`（NOLOAD），作废不清整数组。曲库扫描成功后立即建表；`storage_catalog_invalidate()` 会一并作废。不向 GUI 暴露整表指针。带代次的窗口问询尚未实现。随机/心动序列尚未实现。
+- `storage_sheet_*()`：播放列表，与曲库同属 `catalog/`。首版是恒等下标序列 `SeqList[i] = i`，有效长度即建表时的 Catalog `IndexNum`，不另存 Count。`Generation` 记录对应的 Catalog 代次，`0` 表示已作废。表在 SDRAM `.music_sheet`（NOLOAD），作废不清整数组。曲库扫描成功后立即建表；`storage_catalog_invalidate()` 会一并作废。不向 GUI 暴露整表指针。随机/心动序列尚未实现。
+- `storage_listbuffer_*()`：Queue 窗口单槽。GUI Task 仅在 `IDLE` 时 `request`（代次/起点/条数 → `PENDING` 并通知 Storage）；Storage Task `load` 填路径拷贝后打 `READY`。GUI 轮询 `READY`，整窗读完后把 `Status` 写回 `IDLE`。`Service/gui` 不得包含此头。宏见 `storage_catalog_config.h`。
 - `storage_sd_benchmark_run()`：仅读写测试分支使用的内部诊断入口；成功挂载后由 `storage_sd_init()` 调用，不向其他任务公开。
 - `storage_sdram_benchmark_run()`：本 Task 启动阶段的内部 SDRAM 硬件诊断与基准入口；不向其他任务公开。是否编译进调用由 `STORAGE_SDRAM_BENCHMARK_ENABLE` 门控；宏定义在 `APP/app_config.h`，但 `storage_task.c` 当前未包含该头。
 - `storage_flash_benchmark_run()`：本 Task 启动阶段的 W25Q256 原始读取及可选双自检扇区破坏性基准入口；由 `storage_flash_init()` 在执行器绑定后调用，不向其他任务公开。

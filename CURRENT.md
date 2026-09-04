@@ -4,18 +4,17 @@
 
 ## 进度
 
-- 当前活动：文档按代码全库同步。GUI 播放列表已搁置，本场不启动。
-- 固件最近落地：曲库与顺序播放列表（2026/9/3）。技术事实见 [catalog_architecture.md](docs/catalog_architecture.md)；卷分工见 [ADR-0015](docs/adr/0015-volume-roles-and-resource-install.md)。
-- 活动 scratch：无。`.scratch/settings_backdrop_prototype/` 是旧 GUI 草稿，不是当前主线。
-- 阻塞：无。
-- 本主线必读：`docs/catalog_architecture.md`、`docs/adr/0014-filesystem-volume-aware-file-interface.md`、`docs/adr/0015-volume-roles-and-resource-install.md`、`APP/tasks/storage/README.md`、`Service/filesystem/README.md`。
-- 本主线之后：用户新开窗口继续 GUI 播放列表。尚未排期：Flash FTL 板级掉电验收（[flash_ftl_design.md](docs/flash_ftl_design.md)）、音频解码。
-- 按需查词：曲库 / 播放列表 → **曲库**、**播放列表**；存储 → **文件系统 Module**、**存储任务**。
+- 当前活动：暂停。Queue 窗口单槽已落地，GUI 播放列表未接线。
+- 固件最近落地：曲库、顺序播放列表、`storage_listbuffer` 单槽（`request`/`load`）。技术事实见 [catalog_architecture.md](docs/catalog_architecture.md)。
+- 活动 scratch：无。
+- 阻塞：无。等用户 SquareLine 导出 Queue 列表骨架后再涂行。
+- 本主线必读：`docs/gui_ui_design.md`、`docs/catalog_architecture.md`、`docs/coding_standard.md` 第 2 节、`APP/tasks/storage/README.md`、`APP/tasks/storage/catalog/storage_listbuffer.h`。
+- 按需查词：曲库 / 播放列表 → **曲库**、**播放列表**。
+- `verify.ps1`：已通过（分层 include、生成目录写保护、固件 Debug/Release、主机回归）。
 
 ## 本场交接
 
-- 分支：`main`。本场只改文档与 Module README，不改产品代码、不手改 `GUI/`。
-- 上场：用户搁置 GUI 播放列表，要求文档以代码为准。曲库不存来源卷（Flash 存歌已取消）；Flash 自动格式化由 `STORAGE_FLASH_AUTO_FORMAT` 控制。
-- 未决：无。
-- 下场第一刀：文档同步完成后，用户新开窗口做 GUI 播放列表；先核 [gui_ui_design.md](docs/gui_ui_design.md)（原型仍不接线真实扫描）。
-- `verify.ps1`：已通过（分层 include、生成目录写保护、固件 Debug/Release、主机回归）。
+- 分支：`main`。本场不手改 `GUI/`。
+- 上场：宏归入各目录 `config.h`（行末注释、按文件分组）；listbuffer 做成 GUI `request` + Storage `load`；通知数组扩到 4。用户要求暂停并提交。
+- 未决：滚动时上一窗未回是丢弃还是合并最新起点（当前非 `IDLE` 的 `request` 返回 `STORAGE_ERROR`）。
+- 下场第一刀：用户 SquareLine 建 Queue 行模板并导出；GUI Task 轮询 `READY` 涂 List，读完把 `Status` 写回 `IDLE`。`Service/gui` 不得包含 listbuffer 头。

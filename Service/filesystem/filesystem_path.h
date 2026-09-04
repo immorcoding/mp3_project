@@ -9,11 +9,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "Middlewares/Third_Party/FatFs/src/ff.h"
+#include "Service/filesystem/filesystem_config.h"
 #include "Service/filesystem/filesystem_types.h"
 #include "Service/service.h"
-
-/** @brief 含盘符前缀的 TCHAR 路径缓冲长度，覆盖最长 UTF-8 相对路径。 */
-#define FILESYSTEM_TCHAR_PATH_LENGTH (SERVICE_FILESYSTEM_PATH_MAX_BYTES + 4U)
 
 /**
  * @brief 将所选卷上的 UTF-8 相对路径转换为 FatFs TCHAR 路径。

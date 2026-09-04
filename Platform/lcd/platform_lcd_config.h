@@ -15,13 +15,9 @@
 
 #include "main.h"
 
-/** @brief LCD 电源打开后等待 LDO 和屏模块电源稳定的时间，单位为毫秒。 */
-#define PLATFORM_LCD_POWER_SETTLE_DELAY_MS     10u
-/** @brief 单个 SPI 阻塞命令或 ID 读取事务的最大等待时间，单位为毫秒。 */
-#define PLATFORM_LCD_SPI_TIMEOUT_MS            1000u
-/** @brief 本板 LCD 背光使能时的 GPIO 电平。 */
-#define PLATFORM_LCD_BACKLIGHT_ENABLED_STATE    GPIO_PIN_SET
-/** @brief 本板 LCD 背光关闭时的 GPIO 电平。 */
-#define PLATFORM_LCD_BACKLIGHT_DISABLED_STATE   GPIO_PIN_RESET
+#define PLATFORM_LCD_POWER_SETTLE_DELAY_MS     10u /* LCD 电源打开后等待 LDO 和屏模块电源稳定的时间，单位为毫秒。 */
+#define PLATFORM_LCD_SPI_TIMEOUT_MS            1000u /* 单个 SPI 阻塞命令或 ID 读取事务的最大等待时间，单位为毫秒。 */
+#define PLATFORM_LCD_BACKLIGHT_ENABLED_STATE    GPIO_PIN_SET /* 本板 LCD 背光使能时的 GPIO 电平。 */
+#define PLATFORM_LCD_BACKLIGHT_DISABLED_STATE   GPIO_PIN_RESET /* 本板 LCD 背光关闭时的 GPIO 电平。 */
 
 #endif /* PLATFORM_LCD_CONFIG_H */

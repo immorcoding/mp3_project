@@ -16,17 +16,10 @@
 #include "Components/log/log.h"
 
 /* Exported constants --------------------------------------------------------*/
-/** @brief 日志系统上电后的默认过滤等级。 */
-#define LOG_DEFAULT_LEVEL           LOG_LEVEL_INFO
+#define LOG_DEFAULT_LEVEL           LOG_LEVEL_INFO /* 日志系统上电后的默认过滤等级。 */
 
-/** @brief 单条格式化日志的最大缓冲区大小，包含结尾的 '\0'。 */
-#define LOG_FORMAT_BUFFER_SIZE      256U
+#define LOG_FORMAT_BUFFER_SIZE      256U /* 单条格式化日志的最大缓冲区大小，包含结尾的 '\0'。 */
 
-/**
-  * @brief RAM 日志队列可同时保存的完整日志条数。
-  * @note  队列主体约占 LOG_QUEUE_DEPTH * sizeof(LOG_MessageTypeDef)，当前
-  *        每个槽位都拥有自己的完整文本副本。
-  */
-#define LOG_QUEUE_DEPTH             5U
+#define LOG_QUEUE_DEPTH             5U /* RAM 日志队列可同时保存的完整日志条数。 队列主体约占 LOG_QUEUE_DEPTH * sizeof(LOG_MessageTypeDef)，当前 每个槽位都拥有自己的完整文本副本。 */
 
 #endif /* LOG_CONFIG_H */

@@ -11,6 +11,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "Components/st7789/st7789_config.h"
+
 /** @brief ST7789 Device API 的立即返回状态。 */
 typedef enum
 {
@@ -51,12 +53,6 @@ typedef enum
     ST7789_ERROR_TRANSFER_CALLBACK, /**< 异步传输完成回调未绑定或注册失败。 */
     ST7789_ERROR_START_TRANSFER /**< 像素 DMA 传输未能启动。 */
 } ST7789_ErrorTypeDef;
-
-/** @brief 当前 ST7789 模组可见区域的水平像素数。 */
-#define ST7789_WIDTH   240u
-
-/** @brief 当前 ST7789 模组可见区域的垂直像素数。 */
-#define ST7789_HEIGHT  320u
 
 /** @brief ST7789 的 24 位 RDDID 解码结果。 */
 typedef struct

@@ -16,32 +16,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "Components/w25qxx/w25qxx_config.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* W25Q 系列通过 0x9F Read JEDEC ID 返回的固定制造商代码。 */
-#define W25QXX_MANUFACTURER_ID_WINBOND       0xEFu
-
-/* W25Q 系列通过 0x9F Read JEDEC ID 返回的容量代码。 */
-#define W25QXX_CAPACITY_ID_1MBIT             0x11u
-#define W25QXX_CAPACITY_ID_2MBIT             0x12u
-#define W25QXX_CAPACITY_ID_4MBIT             0x13u
-#define W25QXX_CAPACITY_ID_8MBIT             0x14u
-#define W25QXX_CAPACITY_ID_16MBIT            0x15u
-#define W25QXX_CAPACITY_ID_32MBIT            0x16u
-#define W25QXX_CAPACITY_ID_64MBIT            0x17u
-#define W25QXX_CAPACITY_ID_128MBIT           0x18u
-#define W25QXX_CAPACITY_ID_256MBIT           0x19u
-
-/* W25Qxx Quad Input Page Program 的单页最大数据量，单位为字节。 */
-#define W25QXX_PAGE_PROGRAM_MAX_SIZE_BYTES   256u
-
-/* W25Q256 4-byte Sector Erase 的固定扇区粒度，单位为字节。 */
-#define W25QXX_SECTOR_ERASE_SIZE_BYTES       (4u * 1024u)
-
-/* 当前 W25Q256 的 0xEC Quad I/O Read 起始地址最低对齐要求，单位为字节。 */
-#define W25QXX_QUAD_READ_ADDRESS_ALIGNMENT_BYTES  4u
 
 /** @brief W25Qxx Device API 的立即返回状态。 */
 typedef enum
