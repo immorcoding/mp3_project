@@ -12,6 +12,7 @@
 #ifndef SDCARD_STM32_HAL_ADAPTER_CONFIG_H
 #define SDCARD_STM32_HAL_ADAPTER_CONFIG_H
 
-#define SD_STM32_HAL_DMA_LOGICAL_BLOCK_SIZE  512U /* SDMMC HAL DMA 使用的固定逻辑块大小，单位为字节。 */
+/* sd_stm32_hal_adapter.c */
+#define SD_STM32_HAL_DMA_LOGICAL_BLOCK_SIZE  512U  /* SDMMC HAL DMA 使用的固定逻辑块大小，单位为字节。 */
 
 #endif /* SDCARD_STM32_HAL_ADAPTER_CONFIG_H */

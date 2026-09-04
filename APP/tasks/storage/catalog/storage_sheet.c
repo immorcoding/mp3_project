@@ -28,6 +28,10 @@ __attribute__((section(".music_sheet"), aligned(32)));
 
 /**
  * @brief 按 Catalog 条数填写顺序下标，并记下 Catalog 代次。
+ * @param music_indexnum Catalog 条数
+ * @param generation Catalog 代次
+ * @return STORAGE_OK 成功
+ * @return STORAGE_ERROR 失败
  */
 Storage_StatusTypeDef storage_sheet_init(uint16_t music_indexnum, uint32_t generation)
 {
@@ -41,6 +45,8 @@ Storage_StatusTypeDef storage_sheet_init(uint16_t music_indexnum, uint32_t gener
 
 /**
  * @brief 作废播放列表：代次置 0，不清 SeqList。
+ * @return STORAGE_OK 成功
+ * @return STORAGE_ERROR 失败
  */
 Storage_StatusTypeDef storage_sheet_invalidate(void)
 {
@@ -50,6 +56,7 @@ Storage_StatusTypeDef storage_sheet_invalidate(void)
 
 /**
  * @brief 返回播放列表代次；0 表示已作废。
+ * @return 播放列表代次
  */
 uint32_t storage_sheet_generation(void)
 {
@@ -58,6 +65,8 @@ uint32_t storage_sheet_generation(void)
 
 /**
  * @brief 把播放列表位置映射为 Catalog 下标。
+ * @param sheet_index 播放列表位置
+ * @return Catalog 下标
  */
 uint16_t storage_sheet_catalog_index(uint16_t sheet_index)
 {

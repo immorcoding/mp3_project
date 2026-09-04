@@ -12,7 +12,8 @@
 #ifndef SDCARD_CONFIG_H
 #define SDCARD_CONFIG_H
 
-#define SDCARD_TRANSFER_TIMEOUT_MS  1000u /* 单次阻塞块传输允许的默认时间，单位为毫秒。 */
-#define SDCARD_SYNC_TIMEOUT_MS      1000u /* 等待卡完成内部编程并回到 TRANSFER 状态的默认时间，单位为毫秒。 */
+/* sd.c */
+#define SDCARD_TRANSFER_TIMEOUT_MS  1000u  /* 单次阻塞块传输允许的默认时间，单位为毫秒。 */
+#define SDCARD_SYNC_TIMEOUT_MS      1000u  /* 等待卡完成内部编程并回到 TRANSFER 状态的默认时间，单位为毫秒。 */
 
 #endif /* SDCARD_CONFIG_H */

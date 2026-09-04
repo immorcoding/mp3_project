@@ -1,6 +1,6 @@
 # 代码命名与注释规范
 
-> 适用范围：`version0.3.1` 及后续版本的自维护代码。本文是命名、注释与 Git 提交标题的唯一公共规范；目录 README 只补充各 Module 的专用 Interface，不重复本文件。
+> 适用范围：`version0.3.1` 及后续版本的自维护代码。本文是命名、注释、自维护 config 排版与 Git 提交标题的唯一公共规范；目录 README 只补充各 Module 的专用 Interface，不重复本文件。
 
 ## 1. 目标与适用范围
 
@@ -12,12 +12,21 @@
 
 - 目录、C 源文件、私有头文件使用小写 `snake_case`；例如 `monitor_task.c`、`filesystem_service.c`。
 - 一个目录应对应一个清晰 Module；其中的 README 说明职责、资源与抽象所有权、公开 Interface、编译期依赖、运行时请求路径、事件/ISR 路径、禁止依赖与生命周期约束。不得把这些内容笼统写成“调用的 Interface”。
-- 本目录只维护一份 `<module>_config.h`。打算出现在公开 `.h` 里的宏（条目上限、缓冲区长度、时序、测试规模、板级极性、策略位）以及芯片默认地址、寄存器和位掩码，都写进这份 config，并按所服务的 `.c` / `.h` 文件分组；不为每个源文件再拆一份 config，也不把这类宏散落在公开 `.h` 或 `.c` 顶部。
-- 宏用行末 `/* … */` 说明，不用 Doxygen（禁止 `/** @brief */`、`/**< */` 标宏）。文件头的 `@file` / `@brief` 仍保留。分组用单独一行 `/* filename */`。
+- 本目录只维护一份 `<module>_config.h`。打算出现在公开 `.h` 里的宏（条目上限、缓冲区长度、时序、测试规模、板级极性、策略位）以及芯片默认地址、寄存器和位掩码，都写进这份 config，并按所服务的 `.c` / `.h` 文件分组；不为每个源文件再拆一份 config，也不把这类宏散落在公开 `.h` 或 `.c` 顶部。排版见 2.1。
 - `<module>_config.h` 仍不是跨 Module Interface：其他 Module 不得直接包含它。本目录的公开 `.h` 若要用这些宏声明数组、槽位或尺寸，则包含本目录 config.h，由公开头再导出。
 - 跨 Module 的契约类型与「谁拥有这条上限」留在拥有方的公开类型头（例如 `SERVICE_FILESYSTEM_PATH_MAX_BYTES` 在 `filesystem_types.h`）。其他 Module 的 config 只引用，不复制一份数字。协议寄存在 config 中的细节不得经公开头泄漏给无关层直接依赖。
 - 任务入口文件使用 `<responsibility>_task.c`，入口函数同名；例如 `storage_task()`、`monitor_task()`。
 - CubeMX 或第三方目录不修改既有文件名；自维护代码只能使用其明确的 USER CODE 或桥接接缝。
+
+### 2.1 `<module>_config.h` 排版
+
+自维护 config（`APP`、`Service`、`Platform`、`Components`、`Adapters`，以及 `Tools/external_loader` 的项目头）按本节排版。FreeRTOS、FatFs、LVGL、CMSIS、CubeMX HAL 等移植/厂商配置保持既有风格，不按本节重排。范例：`Service/filesystem/flash/filesystem_flash_config.h`。
+
+- 每个宏都必须有行末 `/* … */`，写在取值之后；不把说明写在上一行，不用 Doxygen 标宏（禁止 `/** @brief */`、`/**< */`）。文件头的 `@file` / `@brief` 仍保留。
+- 按所服务的 `.c` / `.h` 分组：单独一行 `/* filename */`。不同文件的分组之间空一行。
+- 同一文件组内，不同用途的宏簇（例如开关、等待、超时）之间空一行。
+- 同一文件内对齐三列：宏名右缘、取值起点、行末注释起点。个别取值特别长时，该行注释紧跟取值，不要为对齐它把整列注释拖到右侧。
+- 过长表达式可用 `\` 续行；注释放在取值结束的那一行末尾。`#endif` 写成 `#endif /* GUARD */`。
 
 ## 3. 标识符命名
 
@@ -62,8 +71,9 @@
 3. 私有符号是否已经保持在本文件/本 Module，维持 Locality？
 4. 名称是否保留了必要的 Adapter、资源和并发语义，同时删除了重复层名？
 5. 每个函数定义是否都有 Doxygen，形参名称和返回语义是否准确，所有声明处是否保持干净，复杂流程是否解释关键约束？
-6. README 是否已经区分功能/抽象所有权、编译期依赖和运行时请求/事件路径？
-7. 若本次要提交：标题是否为 `YYYY/M/D HH:MM` + 一句中文，且没有自写的第二段正文？
+6. 若改了 `<module>_config.h`：是否按文件分组、行末注释、列对齐，且未改移植/厂商配置？
+7. README 是否已经区分功能/抽象所有权、编译期依赖和运行时请求/事件路径？
+8. 若本次要提交：标题是否为 `YYYY/M/D HH:MM` + 一句中文，且没有自写的第二段正文？
 
 ## 6. Git 提交标题
 

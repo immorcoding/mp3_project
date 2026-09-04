@@ -7,6 +7,6 @@
 #define LOG_SERVICE_CONFIG_H
 
 /* log_service.h */
-#define LOG_SERVICE_QUEUE_LENGTH 30U /* free/ready 队列深度，亦为静态消息块个数。 */
+#define LOG_SERVICE_QUEUE_LENGTH  30U  /* free/ready 队列深度，亦为静态消息块个数。 */
 
 #endif /* LOG_SERVICE_CONFIG_H */

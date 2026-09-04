@@ -23,7 +23,7 @@ ADR 不替代技术文档。技术文档引用相关 ADR，并保持对当前代
 - [../CONTEXT.md](../CONTEXT.md)：稳定领域术语、产品语义和职责归属（按条查阅）；
 - [architecture_standard.md](architecture_standard.md)：功能/抽象所有权、编译期依赖、运行时请求/事件路径、装配和中断规则的唯一总则；
 - [adr/README.md](adr/README.md)：长期架构决策记录；
-- [coding_standard.md](coding_standard.md)：命名、Doxygen、行内注释与 Git 提交标题；
+- [coding_standard.md](coding_standard.md)：命名、Doxygen、行内注释、自维护 config 排版与 Git 提交标题；
 - [verification.md](verification.md)：FAST/CHANGED/FULL/HARDWARE、Hook 快照、结果状态、Skill 与独立审校者；
 - [sd_architecture.md](sd_architecture.md)：SD、热插拔与 FatFs 接缝；
 - [w25q256_architecture.md](w25q256_architecture.md)：W25Q256 原始 NOR 现状与 Adapter 接缝；
