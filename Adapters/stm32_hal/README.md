@@ -20,8 +20,7 @@ FT6X36 Device 的 PortOps；其中 HAL 时基只在调度器启动前使用。�
 高低电平由 Platform 注入，因此 LED Device 和上层不需要知道本板 LED 的有效极性。
 
 `w25qxx_qspi/` 把 STM32 HAL QSPI 间接模式的同步命令读写、控制和小数据写实现为 W25Qxx Device 的
-`W25Qxx_BusOps`。当前支持启动 JEDEC ID、SR1/SR2、SFDP、W25Q256 `0xEC` Quad I/O 原始读取、`0x34` Quad 页数据传输，以及 QE 的按需安全置位；DMA、自动状态轮询、内存映射与 QSPI
-IRQ 回调将在原始 NOR 擦写状态机设计完成后再接入。
+`W25Qxx_BusOps`。当前支持启动 JEDEC ID、SR1/SR2、SFDP、W25Q256 `0xEC` Quad I/O 原始读取、`0x34` Quad 页数据传输、`0x21` 4 KiB 擦除，以及 QE 的按需安全置位；已接入 QSPI/MDMA 非阻塞读取、硬件自动状态轮询、只读内存映射和按 Handle 分发的 QSPI IRQ 回调。具体生命周期由 Platform Flash 收敛，真实写擦与掉电行为仍需板级验收。
 
 ## 编译期依赖
 

@@ -5,7 +5,7 @@ description: Route implementation, fixes, and refactors in this STM32H743 MP3 fi
 
 # MP3 固件变更路由
 
-先读根 `CURRENT.md`，再遵守根 `AGENTS.md`。只按需求与实际路径读取相关 Module README、`docs/*_architecture.md` 和 `CONTEXT.md` 对应词条；不要把这些事实复制进本 Skill。
+先读根 `CURRENT.md` 和根 `AGENTS.md`，再读取目标路径上最近的子 `AGENTS.md`。只按需求与实际路径读取相关 Module README、`docs/*_architecture.md` 和 `CONTEXT.md` 对应词条；不要把这些事实复制进本 Skill 或子 `AGENTS.md`。
 
 ## 路由
 

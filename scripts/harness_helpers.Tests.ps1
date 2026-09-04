@@ -42,13 +42,25 @@ Assert-HarnessSequence -Expected @('resource_pack') -Actual $resourceImpact.Host
 $docsImpact = Get-HarnessImpact -ChangedPath @('docs/verification.md')
 Assert-HarnessEqual -Expected 0 -Actual $docsImpact.HostModules.Count -Message '纯文档变化不跑主机测试'
 
+$loaderTestImpact = Get-HarnessImpact -ChangedPath @('Tools/external_loader/tests/loader_geometry_test.c')
+Assert-HarnessSequence -Expected @('external_loader') -Actual $loaderTestImpact.HostModules `
+    -Message '外部加载器几何变化必须选择对应主机测试'
+Assert-HarnessEqual -Expected $false -Actual $loaderTestImpact.RequiresHardware `
+    -Message '外部加载器纯主机测试变化不应要求上板'
+
+$loaderProductionImpact = Get-HarnessImpact -ChangedPath @('Tools/external_loader/src/loader_geometry.c')
+Assert-HarnessSequence -Expected @('external_loader') -Actual $loaderProductionImpact.HostModules `
+    -Message '外部加载器生产代码必须选择对应主机测试'
+Assert-HarnessEqual -Expected $true -Actual $loaderProductionImpact.RequiresHardware `
+    -Message '外部加载器生产代码仍必须要求上板'
+
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
-Assert-HarnessSequence -Expected @('flash_ftl', 'resource_pack', 'w25qxx') -Actual $harnessImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'resource_pack', 'w25qxx') -Actual $harnessImpact.HostModules `
     -Message 'Harness 变化必须回退全部主机测试'
 Assert-HarnessEqual -Expected $true -Actual $harnessImpact.RequiresAllHostTests -Message 'Harness 变化应标记全部测试'
 
 $unknownImpact = Get-HarnessImpact -ChangedPath @('Service/playback/player.c')
-Assert-HarnessSequence -Expected @('flash_ftl', 'resource_pack', 'w25qxx') -Actual $unknownImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'resource_pack', 'w25qxx') -Actual $unknownImpact.HostModules `
     -Message '未知生产路径不得以零测试通过'
 Assert-HarnessSequence -Expected @('Service/playback/player.c') -Actual $unknownImpact.UnknownPaths `
     -Message '应保留触发保守回退的路径证据'
@@ -78,10 +90,6 @@ foreach ($hardwarePath in $hardwarePaths) {
 $hardwareDocsImpact = Get-HarnessImpact -ChangedPath @('Platform/audio/README.md')
 Assert-HarnessEqual -Expected $false -Actual $hardwareDocsImpact.RequiresHardware `
     -Message '硬件目录中的纯文档变化不应要求上板'
-
-$externalLoaderHostTestImpact = Get-HarnessImpact -ChangedPath @('Tools/external_loader/tests/loader_geometry_test.c')
-Assert-HarnessEqual -Expected $false -Actual $externalLoaderHostTestImpact.RequiresHardware `
-    -Message '外部加载器的纯主机测试变化不应要求上板'
 
 $pushUpdates = @(ConvertFrom-HarnessPushInput -InputText (
         "refs/heads/main 0123456789012345678901234567890123456789 " +

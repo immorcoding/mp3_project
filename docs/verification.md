@@ -30,12 +30,14 @@ pre-push 从 Git 提供的 ref 更新读取提交范围。每个待推送 SHA �
 `scripts/rules/verification.psd1` 使用 Windows PowerShell 5.1 原生可读的数据格式，集中维护：
 
 - 所有 host 测试模块；
-- 生产/测试路径到 `flash_ftl`、`w25qxx`、`resource_pack` 的多对多映射；
+- 生产/测试路径到 `external_loader`、`flash_ftl`、`w25qxx`、`resource_pack` 的多对多映射；
 - 纯文档和 Agent 配置的跳过规则；
 - Harness、构建系统等强制全部 host 测试的规则；
 - MCU/板级敏感路径。
 
 一条路径可命中多个模块。例如 `Components/flash_ftl/` 同时进入 `flash_ftl` 和 `w25qxx`，因为两个测试工程都编译 FTL 实现。未识别的非文档路径必须记录证据并回退全部 host 测试，禁止以“零测试”通过。
+
+`external_loader` host 模块只验证地址窗口几何；生产 Loader 变化还必须按目录 README 交叉构建 `.stldr`，并保留 CubeProgrammer 真机验证状态。
 
 修改映射时同步修改 `scripts/harness_helpers.Tests.ps1`，并先运行 FAST。不要在 Hook、Skill 或 Agent 配置中复制路径表。
 
@@ -63,6 +65,8 @@ pre-push 从 Git 提供的 ref 更新读取提交范围。每个待推送 SHA �
 它只设置本仓库的 `core.hooksPath=.githooks`。`pre-commit` 使用索引快照跑 FAST；`pre-push` 对实际推送提交跑 CHANGED。现有 `ALLOW_GENERATED_UPDATE` 规则保持不变，助手禁止设置该变量。
 
 ## Agent 路由与独立审校
+
+根 `AGENTS.md` 保存全局工作合同；主要自维护层、host 测试、Harness 脚本和 external loader 的子 `AGENTS.md` 只补充所在目录的本地 Seam、必读指针与完成条件。进入目标路径时读取最近的子文件，不把 Module README、领域词典或本页的路径映射复制进去。生成目录不放子 `AGENTS.md`。
 
 项目级 Skill 位于 `.agents/skills/`：
 

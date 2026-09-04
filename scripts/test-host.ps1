@@ -2,8 +2,8 @@
 param(
     [string]$HostCompiler,
 
-    [ValidateSet('flash_ftl', 'w25qxx', 'resource_pack')]
-    [string[]]$Module = @('flash_ftl', 'w25qxx', 'resource_pack')
+    [ValidateSet('external_loader', 'flash_ftl', 'w25qxx', 'resource_pack')]
+    [string[]]$Module = @('external_loader', 'flash_ftl', 'w25qxx', 'resource_pack')
 )
 
 Set-StrictMode -Version Latest

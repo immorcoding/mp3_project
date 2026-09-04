@@ -1,5 +1,6 @@
 ﻿@{
     AllHostModules = @(
+        'external_loader'
         'flash_ftl'
         'w25qxx'
         'resource_pack'
@@ -7,6 +8,13 @@
 
     # 每条规则描述一个主机测试工程真正编译或覆盖的生产路径。
     HostModuleRules = @(
+        @{
+            Name = 'external_loader'
+            PathPatterns = @(
+                '^Tools/external_loader/'
+                '^Tests/external_loader/'
+            )
+        }
         @{
             Name = 'flash_ftl'
             PathPatterns = @(

@@ -1,8 +1,8 @@
 # W25Qxx Component
 
-本 Module 是 W25Q 系列串行 NOR Flash 的可复用芯片协议与状态机。当前已实现阻塞式 JEDEC ID 识别、实例注入式兼容性校验、SFDP 签名探测、SR1/SR2 的同步读取与 WIP/WEL/QE 位解析、启动期 QE 的安全置位与回读核验，以及 W25Q256 固定 4-byte Quad I/O 的同步/非阻塞原始读取、非阻塞 Quad 页编程和 4 KiB Sector Erase。页编程与擦除命令送达后，Component 通过自身拥有的状态匹配 Bus Ops 等待 `(SR1 & WIP) == 0`；具体硬件自动轮询由 Adapter 实现。它还能把当前已识别器件的固定数组读取协议作为纯描述返回给 Platform；Adapter 据此配置 H7 内存映射。DMA、自动轮询和映射窗口的实际生命周期均不属于 Component；FTL 仍未实现。
+本 Module 是 W25Q 系列串行 NOR Flash 的可复用芯片协议与状态机。当前已实现阻塞式 JEDEC ID 识别、实例注入式兼容性校验、SFDP 签名探测、SR1/SR2 的同步读取与 WIP/WEL/QE 位解析、启动期 QE 的安全置位与回读核验，以及 W25Q256 固定 4-byte Quad I/O 的同步/非阻塞原始读取、非阻塞 Quad 页编程和 4 KiB Sector Erase。页编程与擦除命令送达后，Component 通过自身拥有的状态匹配 Bus Ops 等待 `(SR1 & WIP) == 0`；具体硬件自动轮询由 Adapter 实现。它还能把当前已识别器件的固定数组读取协议作为纯描述返回给 Platform；Adapter 据此配置 H7 内存映射。DMA、自动轮询和映射窗口的实际生命周期均不属于 Component；已实现的 Flash FTL 只经跨 Component Bridge 使用本 Module 的公开 Interface。
 
-## 预期公开 Interface
+## 公开 Interface
 
 - `W25Qxx_Init()`：读取并缓存三字节 JEDEC ID，并比较实例注入的制造商、容量期望值；
 - `W25Qxx_GetJedecID()`：读取初始化成功后缓存的 JEDEC ID，不重新访问总线；
@@ -28,7 +28,7 @@
 
 ## 运行时请求路径
 
-W25Qxx Device 经自身拥有的 Bus Ops 发起 JEDEC ID、SR1/SR2、SFDP 和数组读写/擦除事务。`SR1.WIP` 即 Write In Progress，只在页编程、擦除或状态寄存器写入等 NOR 内部改写期间有效；普通 `0xEC` 数组读取不会改变该位。读取期间 Device 的 `BUSY`、QSPI 接收忙和 MDMA 传输中是不同层次的状态，不能被解释为 WIP。启动期 QE 为 0 时，Component 在确认 WIP=0 后发送 `0x06`、回读 WEL、以 `0x31` 写入保留原值的 `SR2 | QE`，并在 20 ms 内轮询 WIP 再核验 QE；`Adapters/stm32_hal/w25qxx_qspi` 实现这组 Ops。`0xEC` 读取在 32-bit 四线地址之后以四线发送模式字节 `0xFF`，再发送 4 个 dummy clock；`0x34` 页编程以 32-bit 单线地址和四线数据输入传输，`0x21` 以 32-bit 单线地址发起 4 KiB 扇区擦除。`W25Qxx_GetArrayReadProtocol()` 复用同一固定协议常量，只返回描述以避免 Adapter 重复硬编码 W25Q 指令。非阻塞 `0xEC` 不访问状态寄存器：Adapter 的完成 IRQ 先把读取状态从 `BUSY` 改为成功或失败，调用者再于普通上下文调用 `W25Qxx_Process()`；成功路径在 Adapter 内失效 D-Cache 后才让 CPU 消费缓冲。页编程和擦除提交后，Component 要求 Adapter 自动轮询 `0x05` 的 WIP 位；Status Match IRQ 只更新 Adapter 私有结果，`Process()` 在普通上下文查询结果并置 Device 为 READY，绝不反复发出 `0x05`。H7 内存映射属于已接入的 Adapter/Platform 生命周期能力：它不能与自动轮询并存，且只能由 Platform 在确认 WIP=0 时开放。目标字节是否已擦除、任意长度拆页、掉电一致性与逻辑地址映射仍属于后续 FTL。Flash FTL 若需要原始存储能力，只能经 `Adapters/bridge/flash_ftl_w25qxx` 调用本 Component 的公开 Interface。
+W25Qxx Device 经自身拥有的 Bus Ops 发起 JEDEC ID、SR1/SR2、SFDP 和数组读写/擦除事务。`SR1.WIP` 即 Write In Progress，只在页编程、擦除或状态寄存器写入等 NOR 内部改写期间有效；普通 `0xEC` 数组读取不会改变该位。读取期间 Device 的 `BUSY`、QSPI 接收忙和 MDMA 传输中是不同层次的状态，不能被解释为 WIP。启动期 QE 为 0 时，Component 在确认 WIP=0 后发送 `0x06`、回读 WEL、以 `0x31` 写入保留原值的 `SR2 | QE`，并在 20 ms 内轮询 WIP 再核验 QE；`Adapters/stm32_hal/w25qxx_qspi` 实现这组 Ops。`0xEC` 读取在 32-bit 四线地址之后以四线发送模式字节 `0xFF`，再发送 4 个 dummy clock；`0x34` 页编程以 32-bit 单线地址和四线数据输入传输，`0x21` 以 32-bit 单线地址发起 4 KiB 扇区擦除。`W25Qxx_GetArrayReadProtocol()` 复用同一固定协议常量，只返回描述以避免 Adapter 重复硬编码 W25Q 指令。非阻塞 `0xEC` 不访问状态寄存器：Adapter 的完成 IRQ 先把读取状态从 `BUSY` 改为成功或失败，调用者再于普通上下文调用 `W25Qxx_Process()`；成功路径在 Adapter 内失效 D-Cache 后才让 CPU 消费缓冲。页编程和擦除提交后，Component 要求 Adapter 自动轮询 `0x05` 的 WIP 位；Status Match IRQ 只更新 Adapter 私有结果，`Process()` 在普通上下文查询结果并置 Device 为 READY，绝不反复发出 `0x05`。H7 内存映射属于已接入的 Adapter/Platform 生命周期能力：它不能与自动轮询并存，且只能由 Platform 在确认 WIP=0 时开放。目标字节擦除判定、任意长度拆页、掉电一致性与逻辑地址映射由已实现但仍待真实掉电验收的 Flash FTL 负责；它只能经 `Adapters/bridge/flash_ftl_w25qxx` 调用本 Component 的公开 Interface。
 
 ## 生命周期与约束
 

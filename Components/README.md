@@ -5,7 +5,7 @@
 ## 公开 Interface
 
 - `audio`、`axp2101`、`ft6x36`、`led`、`log`、`sd`、`soft_i2c`、`st7789`、`w25qxx` 各自的公开类型、状态和函数；
-- `w25qxx` 当前实现启动阶段 JEDEC ID 识别；`flash_ftl` 逻辑扇区 Component 仍为预留目录。两者的 Interface 所有权见 [../docs/w25q256_architecture.md](../docs/w25q256_architecture.md)。
+- `w25qxx` 已实现 W25Q256 识别、同步/异步原始访问与写擦状态机；`flash_ftl` 已实现逻辑组映射、异地提交、扫描恢复与 GC。两者的 Interface 所有权和集成状态见 [../docs/w25q256_architecture.md](../docs/w25q256_architecture.md) 与 [../docs/flash_ftl_design.md](../docs/flash_ftl_design.md)。
 - `resource_pack` 实现 RPKC1 Core、BINARY 与 IMAGE Metadata 的只读解析和校验，不认识具体存储介质。
 - 每个 Module 自己定义的 `*_OpsTypeDef` 或回调类型。
 

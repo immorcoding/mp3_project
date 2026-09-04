@@ -56,3 +56,12 @@
 - 冷启动与 ADR 范围：`docs/agents/domain.md`
 - 本地事项：`docs/agents/issue-tracker.md`；状态：`docs/agents/triage-labels.md`
 - 命名、注释与提交标题：`docs/coding_standard.md`
+
+## 目录级约定
+
+进入下列目录工作时，继续读取路径上最近的子 `AGENTS.md`；子文件只补充本地 Seam 和验证要求，不覆盖本章程：
+
+- `Components/`、`Adapters/`、`Platform/`、`Service/`、`APP/`、`Tests/`、`scripts/`；
+- 独立板级产物 `Tools/external_loader/`。
+
+不在 CubeMX、Vendor、`GUI/` 或 `SquareLineProject/` 生成目录放置子 `AGENTS.md`；这些目录继续遵守本文件的生成边界和写保护。
