@@ -15,6 +15,6 @@
 ## 本场交接
 
 - 分支：`main`。本场不手改 `GUI/`。
-- 上场：宏归入各目录 `config.h`（行末注释、按文件分组）；listbuffer 做成 GUI `request` + Storage `load`；通知数组扩到 4。用户要求暂停并提交。
+- 上场：用户要求把提交标题格式写入规范后再提交一次。
 - 未决：滚动时上一窗未回是丢弃还是合并最新起点（当前非 `IDLE` 的 `request` 返回 `STORAGE_ERROR`）。
 - 下场第一刀：用户 SquareLine 建 Queue 行模板并导出；GUI Task 轮询 `READY` 涂 List，读完把 `Status` 写回 `IDLE`。`Service/gui` 不得包含 listbuffer 头。

@@ -34,7 +34,7 @@
 
 未运行且通过 `./scripts/verify.ps1`，不得声称完成。该命令先做分层 `#include` 检查和生成目录写保护，再构建固件 Debug/Release 并跑主机回归。只改 `Components/`、`Adapters/`、`Platform/` 或 `Service/` 的包含关系时，可先跑 `./scripts/check-layer-includes.ps1`。只核对应保护生成目录是否被手改时，可先跑 `./scripts/check-generated-write.ps1`。
 
-克隆后在仓库根执行一次 `./scripts/install-git-hooks.ps1`。`pre-commit` 跑分层检查和生成目录写保护，失败则拒绝提交。
+克隆后在仓库根执行一次 `./scripts/install-git-hooks.ps1`。`pre-commit` 跑分层检查和生成目录写保护，失败则拒绝提交。`git commit` 标题必须为 `YYYY/M/D HH:MM` + 一句中文，不要另写正文；细则见 [coding_standard.md](docs/coding_standard.md) 第 6 节。
 
 ## 三份根文档限制
 
@@ -54,4 +54,4 @@
 - 文档地图：`docs/README.md`
 - 冷启动与 ADR 范围：`docs/agents/domain.md`
 - 本地事项：`docs/agents/issue-tracker.md`；状态：`docs/agents/triage-labels.md`
-- 命名与注释：`docs/coding_standard.md`
+- 命名、注释与提交标题：`docs/coding_standard.md`
