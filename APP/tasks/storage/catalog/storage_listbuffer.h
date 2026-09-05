@@ -31,5 +31,6 @@ Storage_StatusTypeDef storage_listbuffer_request(uint16_t index_offset,
                                                  uint16_t index_num,
                                                  uint32_t generation);
 Storage_StatusTypeDef storage_listbuffer_load(void);
+void storage_listbuffer_complete_unavailable(void);
 
 #endif /* STORAGE_LISTBUFFER_H */

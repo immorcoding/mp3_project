@@ -30,12 +30,17 @@ void storage_listbuffer_bind(void *storage_task)
 }
 
 /**
- * @brief GUI Task 在 IDLE 时写入窗口请求并打成 PENDING。
+ * @brief GUI Task 在 SD 就绪且 IDLE 时写入窗口请求并打成 PENDING。
  */
 Storage_StatusTypeDef storage_listbuffer_request(uint16_t index_offset,
                                                  uint16_t index_num,
                                                  uint32_t generation)
 {
+    if (!storage_task_sd_is_ready())
+    {
+        return STORAGE_ERROR;
+    }
+
     if ((index_num == 0U) || (index_num > STORAGE_LISTBUFFER_MAX_ENTRIES))
     {
         return STORAGE_ERROR;
@@ -53,8 +58,10 @@ Storage_StatusTypeDef storage_listbuffer_request(uint16_t index_offset,
 
     if (storage_listbuffer_task != NULL)
     {
-        (void)xTaskNotifyGiveIndexed(storage_listbuffer_task,
-                                     STORAGE_NOTIFY_LISTBUFFER);
+        (void)xTaskNotifyIndexed(storage_listbuffer_task,
+                                 STORAGE_NOTIFY_EVENT,
+                                 STORAGE_NOTIFY_FLAG_LISTBUFFER,
+                                 eSetBits);
     }
 
     return STORAGE_OK;
@@ -121,4 +128,19 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
     storage_listbuffer.Generation = sheet_generation;
     storage_listbuffer.Status = STORAGE_LISTBUFFER_READY;
     return STORAGE_OK;
+}
+
+/**
+ * @brief 若窗口仍为 PENDING，则打成空窗 READY，避免未就绪后槽位卡死。
+ */
+void storage_listbuffer_complete_unavailable(void)
+{
+    if (storage_listbuffer.Status != STORAGE_LISTBUFFER_PENDING)
+    {
+        return;
+    }
+
+    storage_listbuffer.Length = 0U;
+    storage_listbuffer.Generation = 0U;
+    storage_listbuffer.Status = STORAGE_LISTBUFFER_READY;
 }

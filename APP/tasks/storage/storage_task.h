@@ -8,6 +8,8 @@
 #ifndef STORAGE_TASK_H
 #define STORAGE_TASK_H
 
+#include <stdbool.h>
+
 #include "APP/tasks/storage/storage_task_config.h"
 
 /** @brief Storage 操作返回状态 */
@@ -21,13 +23,13 @@ typedef enum{
  * @note  索引只在本任务的通知数组内有效；GUI Task 可独立复用数值 0。
  */
 typedef enum{
-    STORAGE_NOTIFY_SD_DETECT = 0U,     /**< GPIO EXTI 卡检测边沿，由本任务主循环消抖。 */
+    STORAGE_NOTIFY_EVENT = 0U,         /**< 主循环事件槽：卡检测与窗口请求以 FLAG 共存。 */
     STORAGE_NOTIFY_SD_TRANSFER,        /**< SDMMC DMA 完成，由 Filesystem SD 执行器等待。 */
     STORAGE_NOTIFY_FLASH_OPERATION,    /**< QSPI/MDMA 异步完成，由 Filesystem Flash 执行器等待。 */
-    STORAGE_NOTIFY_LISTBUFFER,         /**< Queue 窗口 PENDING，由本任务主循环填槽。 */
     STORAGE_NOTIFY_COUNT               /**< 本任务占用的通知槽数量，不是可等待的事件。 */
 } Storage_NotifyIndexTypeDef;
 
 void storage_task(void *handle);
+bool storage_task_sd_is_ready(void);
 
 #endif /* STORAGE_TASK_H */

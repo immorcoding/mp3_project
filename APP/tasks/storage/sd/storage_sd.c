@@ -26,6 +26,9 @@
 /** @brief Storage Task 发送 SD 子系统日志时使用的稳定标签。 */
 static const char storage_sd_log_tag[] = "SD";
 
+/** @brief SD FatFs 卷当前是否已挂载；与播放列表代次无关。 */
+static bool storage_sd_volume_mounted;
+
 /**
  * @brief 将 Filesystem Service 结果收成 Storage 状态。
  * @param[in] status Service 返回值。
@@ -125,16 +128,19 @@ static Storage_StatusTypeDef storage_sd_mount(void)
     result = Service_Filesystem_MountSD();
     if (result == SERVICE_OK)
     {
+        storage_sd_volume_mounted = true;
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, storage_sd_log_tag, "Filesystem mounted.");
     }
     else if (result == SERVICE_NO_FILESYSTEM)
     {
+        storage_sd_volume_mounted = false;
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
                                storage_sd_log_tag,
                                "No FAT filesystem found.");
     }
     else
     {
+        storage_sd_volume_mounted = false;
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_sd_log_tag,
                                "Filesystem mount failed.");
@@ -153,6 +159,8 @@ static Storage_StatusTypeDef storage_sd_unmount(void)
 {
     Service_StatusTypeDef result;
 
+    storage_sd_volume_mounted = false;
+
     if (storage_sd_prepare_filesystem() != STORAGE_OK)
     {
         return STORAGE_ERROR;
@@ -170,6 +178,16 @@ static Storage_StatusTypeDef storage_sd_unmount(void)
 }
 
 /**
+ * @brief  SD FatFs 卷是否已挂载。
+ * @return true 已成功 MountSD，可供曲库扫描与窗口填槽。
+ * @note   不表示播放列表代次有效；空目录仍可为 true。仅 Storage Task 普通上下文写入。
+ */
+bool storage_sd_volume_is_mounted(void)
+{
+    return storage_sd_volume_mounted;
+}
+
+/**
   * @brief  在 SD_CD GPIO EXTI ISR 中通知 Storage Task。
   * @param  context 注册时传入的 Storage TaskHandle_t。
   * @note   EXTI9_5 的 NVIC 抢占优先级当前为 10，满足 FreeRTOS FromISR 调用条件。
@@ -181,12 +199,11 @@ static void storage_sd_detect_callback(void *context)
 
     if (task_handle != NULL)
     {
-        vTaskNotifyGiveIndexedFromISR(task_handle,
-                                      STORAGE_NOTIFY_SD_DETECT,
-                                      &higher_priority_task_woken);
-        vTaskNotifyGiveIndexedFromISR(task_handle,
-                                      STORAGE_NOTIFY_LISTBUFFER,
-                                      &higher_priority_task_woken);
+        (void)xTaskNotifyIndexedFromISR(task_handle,
+                                        STORAGE_NOTIFY_EVENT,
+                                        STORAGE_NOTIFY_FLAG_SD_DETECT,
+                                        eSetBits,
+                                        &higher_priority_task_woken);
         portYIELD_FROM_ISR(higher_priority_task_woken);
     }
 }

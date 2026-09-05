@@ -427,8 +427,8 @@ SDMMC1_IRQHandler()
   -> FatFs 同步桥接等待返回后调用 Platform_SD_CompleteTransfer()
 ```
 
-卡检测边沿使用 `STORAGE_NOTIFY_SD_DETECT`，DMA 完成使用 `STORAGE_NOTIFY_SD_TRANSFER`；
-两类事件的含义、消抖规则和等待方式不同，不得共用同一个无类型通知。
+卡检测边沿与 Queue 窗口请求共用 `STORAGE_NOTIFY_EVENT`，以 `STORAGE_NOTIFY_FLAG_*` 区分；DMA 完成使用 `STORAGE_NOTIFY_SD_TRANSFER`。
+EVENT 与 TRANSFER 的含义、消抖规则和等待方式不同，不得共用同一个无类型通知。
 槽位由 Storage Task 枚举持有，并在 `InitSD` 时注入 Filesystem Service。`Adapters/stm32_hal/irq` 只集中 HAL 全局回调的唯一所有权，GPIO EXTI 和
 SDMMC 仍保留各自的强类型 Interface，不能收敛为 `IRQ_ID + void *` 的通用分发器。
 
@@ -497,7 +497,7 @@ DMA Stream TC 只表示 DMA 已把数据交给 SPI FIFO，不能作为本次 RAM
 SPI EOT，才可安全续发下一块或释放 CS。当前只有一个 SPI1 异步使用者，STM32 HAL ST7789 SPI
 Adapter 可直接注册该 Handle 的回调；第二个真实异步使用者出现后，才按 Handle 提取强类型 SPI
 IRQ 分发 Module。任务通知槽属于每个 Task 自己的数组；GUI Task 的 `GUI_NOTIFY_LCD_TRANSFER`
-与 Storage Task 的 `STORAGE_NOTIFY_SD_DETECT` 数值都可以是 0，语义互不相关。
+与 Storage Task 的 `STORAGE_NOTIFY_EVENT` 数值都可以是 0，语义互不相关。
 
 ISR 禁止：
 

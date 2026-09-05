@@ -21,7 +21,7 @@
 | `storage_catalog_invalidate()` | 作废 Catalog，并作废播放列表 |
 | `storage_sheet_init(index_num, generation)` | 填写恒等 `SeqList[i] = i`，记下 Catalog 代次 |
 | `storage_sheet_invalidate()` | 只把 Sheet `Generation` 置 0，不清数组 |
-| `storage_listbuffer_request()` | GUI Task：仅 `IDLE` 时写入起点/条数/代次，打成 `PENDING` 并通知 Storage |
+| `storage_listbuffer_request()` | GUI Task：仅 `storage_task_sd_is_ready()` 且 `IDLE` 时写入起点/条数/代次，打成 `PENDING` 并置 `STORAGE_NOTIFY_FLAG_LISTBUFFER` |
 | `storage_listbuffer_load()` | Storage Task：仅 `PENDING` 时填路径拷贝；代次不符则 `Generation=0`、空窗，最后打 `READY` |
 
 公开头不暴露字符串池、条目数组或 `SeqList`。窗口载荷在 `storage_listbuffer` 单槽：`Index` + `Length` + `Generation` + `Buffer[][]`。GUI 看见 `READY` 后整窗消费，再把 `Status` 写回 `IDLE`。`0` 代次表示请求方无快照或应答已作废。

@@ -169,21 +169,23 @@ EXTI9_5_IRQHandler()
   -> PinMask 匹配 DetectIRQCallback
   -> platform_sd_detect_irq_cb(SD_CD_Pin, &hplatform_sd)
      -> storage_sd_detect_callback(StorageTaskHandle)
-        -> vTaskNotifyGiveIndexedFromISR(STORAGE_NOTIFY_SD_DETECT)
+        -> xTaskNotifyIndexedFromISR(STORAGE_NOTIFY_EVENT, STORAGE_NOTIFY_FLAG_SD_DETECT, eSetBits)
 
 Storage Task
-  -> ulTaskNotifyTakeIndexed(STORAGE_NOTIFY_SD_DETECT, portMAX_DELAY) 取得边沿通知
-  -> 以 30 ms 超时再次 ulTaskNotifyTakeIndexed(STORAGE_NOTIFY_SD_DETECT)
-     -> 有新边沿：重新开始完整 30 ms 静默期
-     -> 超时：Platform_SD_Process(&event)
+  -> SD 状态：未就绪 / 消抖中 / 就绪；消抖与回收各记 start tick
+  -> xTaskNotifyWaitIndexed(STORAGE_NOTIFY_EVENT) 超时取两路剩余较小值
+  -> 若置 STORAGE_NOTIFY_FLAG_SD_DETECT：立刻进消抖中，重开 30 ms 起点（离开就绪）
+  -> 消抖截止到点：Platform_SD_Process(&event)
         -> Platform_SD_Refresh()
         -> 仅在持续状态变化时产生 INSERTED 或 REMOVED
-  -> Storage Task 根据 event 记录日志，并挂载或注销 FatFs 卷
+        -> 按 SD 是否已挂载回到就绪或未就绪
+  -> 非消抖中：若有 PENDING 则 storage_listbuffer_load()
+  -> 回收截止到点：storage_flash_reclaim()
 ```
 
-### 5.1 为什么使用二值通知
+### 5.1 为什么使用 FLAG 而不是计数
 
-卡座触点抖动可能产生多个边沿，但边沿次数没有业务意义。系统只关心“检测输入发生过变化，请在稳定后重新读取”。Storage Task 将任务通知视为重新开始消抖窗口的信号，不把通知计数解释为插拔次数。
+卡座触点抖动可能产生多个边沿，但边沿次数没有业务意义。系统只关心“检测输入发生过变化，请在稳定后重新读取”。Storage Task 将 `STORAGE_NOTIFY_FLAG_SD_DETECT` 视为重新开始消抖窗口的信号，不把通知值解释为插拔次数。Queue 窗口请求与卡检测共用 `STORAGE_NOTIFY_EVENT` 槽，靠 FLAG 区分，避免主循环轮流阻塞两个 indexed 槽。
 
 ### 5.2 为什么由 Platform SD 持有 GPIO EXTI Callback
 
@@ -192,7 +194,7 @@ GPIO EXTI Adapter 只认识 STM32 HAL 的 GPIO PinMask，不认识 SD、PMIC 或
 回调上下文直接指回自己的私有 Handle。Platform 的原始 ISR 回调再调用
 `Platform_SD_Init()` 注入的 `DetectCallback`；当前该回调由 Storage Task 的
 `storage_sd_detect_callback()` 实现为
-`vTaskNotifyGiveIndexedFromISR(..., STORAGE_NOTIFY_SD_DETECT)`，但 Platform 本身不包含 FreeRTOS。
+`xTaskNotifyIndexedFromISR(..., STORAGE_NOTIFY_EVENT, STORAGE_NOTIFY_FLAG_SD_DETECT, eSetBits)`，但 Platform 本身不包含 FreeRTOS。
 
 因此不再需要额外的 `Platform_IRQ_SourceTypeDef`、GPIO 到逻辑源的映射表或
 Platform IRQ 二次分发。以后新增按键或 PMIC 中断时，由各自模块持有并注册新的
@@ -202,7 +204,7 @@ Callback 对象，GPIO EXTI Adapter 的实现不需要修改。
 
 `volatile` 只保证每次都真实访问内存，不保证“读取并清除”这个复合操作不可被 ISR 打断。直接任务通知由 FreeRTOS 原子维护，且 Storage Task 是唯一接收者；它既没有额外队列存储，也不需要跨文件全局初始化标志。
 
-ISR 只调用 `vTaskNotifyGiveIndexedFromISR(..., STORAGE_NOTIFY_SD_DETECT)`，Storage Task 使用 `ulTaskNotifyTakeIndexed()` 等待。每次收到新边沿后，任务重新等待完整的 30 ms；只有该时间内没有新通知，才执行后续刷新。
+ISR 只调用 `xTaskNotifyIndexedFromISR(..., STORAGE_NOTIFY_EVENT, STORAGE_NOTIFY_FLAG_SD_DETECT, eSetBits)`，Storage Task 使用 `xTaskNotifyWaitIndexed()` 等待同一槽。检测 FLAG 把 SD 状态切到消抖中并重开 `start` tick；经过 30 ms（无符号 tick 差）且无新边沿后才 `Platform_SD_Process()`。`wait` 超时是消抖剩余与回收剩余的较小值，不用 `vTaskSetTimeOutState`。窗口 `request` 仅 SD 就绪时成功。
 
 ### 5.4 FreeRTOS 实现
 
@@ -224,7 +226,7 @@ Storage Task 上下文中的 Filesystem DMA executor
   -> Platform_SD_CompleteTransfer(event)
 ```
 
-`STORAGE_NOTIFY_SD_TRANSFER` 保存的是一次 DMA 的完整事件值，不是计数；它只能由正在执行 DiskIO 的 Storage Task 等待。卡检测边沿仍留在 `STORAGE_NOTIFY_SD_DETECT`，因此拔卡边沿不会被误当作 DMA 传输完成，也不会被 30 ms 消抖延迟为传输结果。槽位由 APP 枚举注入；`MountSD`/`UnmountSD` 不得把未绑定的执行器默认到检测槽。
+`STORAGE_NOTIFY_SD_TRANSFER` 保存的是一次 DMA 的完整事件值，不是计数；它只能由正在执行 DiskIO 的 Storage Task 等待。卡检测边沿与窗口请求留在 `STORAGE_NOTIFY_EVENT` 的 FLAG 上，因此拔卡边沿不会被误当作 DMA 传输完成，也不会被 30 ms 消抖延迟为传输结果。槽位由 APP 枚举注入；`MountSD`/`UnmountSD` 不得把未绑定的执行器默认到事件槽。
 
 ## 6. 状态、返回值与诊断
 

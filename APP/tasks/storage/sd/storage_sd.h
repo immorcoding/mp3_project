@@ -13,6 +13,8 @@
 #ifndef STORAGE_SD_H
 #define STORAGE_SD_H
 
+#include <stdbool.h>
+
 #include "APP/tasks/storage/storage_task.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
@@ -25,7 +27,7 @@ typedef enum
 } Storage_SD_EventTypeDef;
 
 Storage_StatusTypeDef storage_sd_init(TaskHandle_t task_handle);
-
 Storage_StatusTypeDef storage_sd_process(void);
+bool storage_sd_volume_is_mounted(void);
 
 #endif /* STORAGE_SD_H */
