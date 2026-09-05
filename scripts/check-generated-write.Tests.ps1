@@ -117,6 +117,8 @@ function Invoke-InTempGitRepository {
     $git = Get-ExternalCommand -Name 'git'
     $previousAllow = $env:ALLOW_GENERATED_UPDATE
     try {
+        Remove-Item -Path Env:ALLOW_GENERATED_UPDATE -ErrorAction SilentlyContinue
+
         Invoke-InDirectory -Path $repositoryRoot -Action {
             Invoke-ExternalCommand -CommandPath $git -Arguments @('init')
             Set-Content -LiteralPath (Join-Path -Path $repositoryRoot -ChildPath 'tracked.txt') -Value 'seed' -Encoding ascii
@@ -160,6 +162,35 @@ Invoke-InTempGitRepository -Action {
         if ($_.Exception.Message -notmatch 'GUI/ui\.c') {
             throw "未跟踪 GUI 文件的失败信息应包含路径，实际：$($_.Exception.Message)"
         }
+    }
+}
+
+$previousAllowForLeakTest = $env:ALLOW_GENERATED_UPDATE
+$env:ALLOW_GENERATED_UPDATE = '1'
+try {
+    Invoke-InTempGitRepository -Action {
+        param($RepositoryRoot)
+
+        New-Item -ItemType Directory -Path (Join-Path -Path $RepositoryRoot -ChildPath 'GUI') -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path -Path $RepositoryRoot -ChildPath 'GUI/ui.c') -Value 'generated' -Encoding ascii
+
+        try {
+            Invoke-GeneratedWriteCheck -RepositoryRoot $RepositoryRoot
+            throw '外层 ALLOW_GENERATED_UPDATE 不得让夹具里的未跟踪 GUI 检查被跳过。'
+        }
+        catch {
+            if ($_.Exception.Message -notmatch 'GUI/ui\.c') {
+                throw "外层允许更新时夹具仍应报告路径，实际：$($_.Exception.Message)"
+            }
+        }
+    }
+}
+finally {
+    if ($null -eq $previousAllowForLeakTest) {
+        Remove-Item -Path Env:ALLOW_GENERATED_UPDATE -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:ALLOW_GENERATED_UPDATE = $previousAllowForLeakTest
     }
 }
 

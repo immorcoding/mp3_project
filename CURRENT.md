@@ -4,19 +4,19 @@
 
 ## 进度
 
-- 当前活动：Queue 播放列表 UI 设计。假数据行骨架；本场不接线 `storage_listbuffer`。
-- 固件已落地：曲库、顺序播放列表、Queue 窗口单槽、SD 三态（未就绪 / 消抖中 / 就绪）。事实见 [catalog_architecture.md](docs/catalog_architecture.md)、[sd_architecture.md](docs/sd_architecture.md)、`APP/tasks/storage/README.md`。
-- 活动 scratch：无。
-- 阻塞：无。热插拔仍欠上板，不挡本场 SquareLine。QueueTab 现为空白内容区。
-- 本主线必读：`docs/gui_ui_design.md` 第 6.1、10.5（尤其 QueueTab）、`docs/catalog_architecture.md`、`docs/coding_standard.md` 第 2 节、ADR-0007。
-- 按需查词：播放列表 / 曲库 / GUI → **播放列表**、**曲库**。Queue 可见行 ≠ 播放列表整表。
-- `verify.ps1`：Storage 最近一次 FULL 为 `PASS_HOST_ONLY`。本场是 UI 设计，不冒充固件验收。
+- 刚收口：Queue 假数据行已上板确认。`Service/gui/main/queue` 把 `GUI/screens/ui_Main.c` 的 `SongPanel1` 构造摘进 for 循环；导出范本隐藏。
+- 当前/非当前：Border Opa、符号 Opa、曲名色、Long mode。不改 Border Width。符号不 HIDDEN。
+- 假窗口仍是 4 行、第 0 行当当前曲。尚未接线 `storage_listbuffer`。游标未做。
+- 下一活动：GUI Task 消费 READY 窗口，按真实 `Length`/`Buffer[i]` 生成行。
+- 本主线必读：10.5.3、`catalog_architecture.md`、ADR-0007。
+- 按需查词：**播放列表**、**曲库**。Queue 可见行 ≠ 整表。
+- `Service/gui` 不得包含 `storage_listbuffer.h`。
 
 ## 本场交接
 
-- 分支：`main`。任务已替换：Storage SD 状态机收口 → Queue 播放列表 UI。
-- Storage 收口：`Storage_TaskSdStateTypeDef`；`storage_task_sd_is_ready()`；`request` 仅 SD 已挂载；状态不由播放列表代次决定。工作树若仍脏，只应是无关的 `.vscode/` 或 `AGENTS.md`。
-- 本场可写：先改 `docs/gui_ui_design.md`，再给 SquareLine 步骤。禁止手改 `GUI/`、`SquareLineProject/`。
-- 设计约束：Queue 只绑可见窗口（宏 `STORAGE_LISTBUFFER_MAX_ENTRIES` 现为 12，行数待设计确认）；不把整表指针交给 GUI；首版仍用假数据，不接 `storage_listbuffer_*`。
-- 现况：`NowPlayingTab` / `QueueTab` / `LibraryTab` 均为空内容区；播放器区已有假 Slider 与三按钮。SquareLine 导出工具仍为 1.6.1。
-- 下场第一刀：在 `gui_ui_design.md` 写明 Queue 行层级与假数据内容，用户再在 SquareLine 里搭 `QueueTab`。
+- 分支：`main`。硬切：Queue 假数据视觉已确认，进入 listbuffer 接线。
+- SquareLine：只留单行范本。禁止手改 `GUI/`。范本构造变了对照 `ui_Main.c` 更新 `service_gui_main_queue_create_row()`。
+- 工作树可能仍有未提交的 SquareLine 导出；`verify.ps1` 会因生成目录写保护 FAIL。改动在 `Service/`，上板状态未当验收。
+- 下场第一刀：GUI Task `request` → 等 READY → 填 Queue 槽位 → 写回 IDLE。公开 `Service_GUI` 仍只有 Init/Process；若要加绑定 Interface，先问。
+- `listbuffer` 保持线性窗（`Index` + `Buffer[0..Length)`）。Queue **panel 做成固定槽位**：最多 8 个，不够的 Hidden，滑窗以后再转 head 回收，不在 Storage 里做环形数组。
+- 游标未落地；接线后暂可继续第 0 行当当前曲，或先不标。歌手元数据没有，曲名先用路径。

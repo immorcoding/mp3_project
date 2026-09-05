@@ -74,6 +74,7 @@ Service/gui/
 ├─ main/                             Main Screen 的运行时编排
 │  ├─ gui_service_main.c / .h
 │  ├─ pager/                         循环分页、吸附、重排与圆点动画
+│  ├─ queue/                         按 Length 用范本构造生成 Queue 行
 │  ├─ background/                    壁纸模糊、局部裁剪与 Tabview 兼容
 │  └─ README.md
 └─ canvas/                           可复用的 Canvas 离屏处理
@@ -98,11 +99,15 @@ Service/gui/
   缓冲中执行清晰/模糊帧的矩形、圆角矩形和圆形区域合成，也提供严格或带透明越界填充的连续
   图片裁剪；Canvas 不拥有页面级背景。
 - `main/gui_service_main.c`：Main Screen 的私有编排入口。它先调用 Pager Module 解析布局、
-  定位 MusicPage 至中间物理槽位并绑定循环分页，再调用 Background Module 建立局部毛玻璃；
-  入口本身不持有 UI 状态或离屏图像。
+  定位 MusicPage 至中间物理槽位并绑定循环分页，再调用 Queue Module 按 Length 用
+  `SongPanel1` 范本构造生成可见行，最后调用 Background Module 建立局部毛玻璃；入口本身不持有
+  UI 状态或离屏图像。
 - `main/pager/`：只持有三张 Main Page 的物理槽位、程序化吸附状态和逻辑圆点状态。它监听
   `MainPageContainer` 的 `LV_EVENT_SCROLL_END`，以 50% 阈值吸附至相邻槽位，并在两端轮换既有
   Page 后无动画回中实现循环。它不依赖 Canvas、Platform LCD 或壁纸资源。
+- `main/queue/`：只持有 Queue 可见行对象。它把 SquareLine 单行范本的构造序列摘进
+  for 循环，按 Length 写入 `QueueTab`，并套用当前/非当前样式（Border Opa，不改
+  Width）。不包含 `storage_listbuffer.h`。
 - `main/background/`：只持有 Main 的长期模糊壁纸和 `MusicModeTabs` SDRAM 裁剪背景。它使
   SquareLine 未公开的 Tabview 内部 Content 透明、禁用其横滑，并监听 `MainPageContainer` 的
   `LV_EVENT_SCROLL`，按目标控件当前坐标重裁剪背景。它不维护分页槽位、吸附或圆点状态。除

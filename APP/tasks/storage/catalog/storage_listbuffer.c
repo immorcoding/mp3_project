@@ -18,7 +18,9 @@ static TaskHandle_t storage_listbuffer_task;
 Storage_ListBufferTypeDef storage_listbuffer;
 
 /**
- * @brief 记下 Storage Task 句柄，供 request 叫醒填窗。
+ * @brief 记下 Storage Task 句柄，并把窗口槽位复位为空闲。
+ * @param[in] storage_task Storage Task 句柄，供 request 发 LISTBUFFER 通知；允许为 NULL（仅自测）。
+ * @note 必须在 Storage Task 创建之后、首次 request 之前调用。不从 ISR 调用。
  */
 void storage_listbuffer_bind(void *storage_task)
 {
@@ -30,7 +32,14 @@ void storage_listbuffer_bind(void *storage_task)
 }
 
 /**
- * @brief GUI Task 在 SD 就绪且 IDLE 时写入窗口请求并打成 PENDING。
+ * @brief GUI Task 在 SD 就绪且槽位 IDLE 时提交窗口请求。
+ * @param[in] index_offset 播放列表起点，写入 Index；不是本窗条数。
+ * @param[in] index_num 请求条数，范围 1..STORAGE_LISTBUFFER_MAX_ENTRIES，先写入 Length。
+ * @param[in] generation Catalog/Sheet 代次。0 表示请求方无快照，load 按当前有效 Sheet 填窗。
+ * @return STORAGE_OK 已写入 PENDING，并置 STORAGE_NOTIFY_FLAG_LISTBUFFER。
+ * @retval STORAGE_ERROR SD 未就绪、条数非法、或槽位不是 IDLE。
+ * @note 只允许 GUI Task 普通上下文调用，不得从 ISR 或 Service/gui 直接包含本模块。
+ * @note load 成功后 Length 会改成实际填入条数，可能小于 index_num。当前播放游标不在本槽。
  */
 Storage_StatusTypeDef storage_listbuffer_request(uint16_t index_offset,
                                                  uint16_t index_num,
@@ -69,6 +78,9 @@ Storage_StatusTypeDef storage_listbuffer_request(uint16_t index_offset,
 
 /**
  * @brief Storage Task 在 PENDING 时按代次填整窗路径拷贝，最后打成 READY。
+ * @return STORAGE_OK 已处理或槽位不是 PENDING（后者视为无事可做）。
+ * @note 仅 Storage Task 在 SD 就绪路径调用。Sheet 代次为 0、与 Catalog 不一致、或与请求代次不一致（请求非 0）时，Length 与 Generation 置 0 仍打 READY，避免槽位卡在 PENDING。
+ * @note 循环在列表末尾或拷贝失败处停止，Length 写成实际 filled；Buffer 其余槽位保持 memset 后的空串。
  */
 Storage_StatusTypeDef storage_listbuffer_load(void)
 {
@@ -132,6 +144,7 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
 
 /**
  * @brief 若窗口仍为 PENDING，则打成空窗 READY，避免未就绪后槽位卡死。
+ * @note 拔卡或 SD 离开就绪时由 Storage Task 调用。Length 与 Generation 置 0；已是 IDLE/READY 则不动。
  */
 void storage_listbuffer_complete_unavailable(void)
 {
