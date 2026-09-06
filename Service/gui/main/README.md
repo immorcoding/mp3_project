@@ -14,14 +14,14 @@ Main 的循环分页与局部毛玻璃。APP、其他 Service 和 `GUI/` 生成�
 main/
 ├─ gui_service_main.c / .h      仅编排初始化顺序的私有入口
 ├─ pager/                       Page 槽位、吸附、循环重排、分页指示器动画
-├─ queue/                       按 Length 用范本构造生成 Queue 可见行
+├─ queue/                       按 QueueApply 的 Length 用范本构造 Queue 可见行
 └─ background/                  壁纸模糊、局部裁剪、Tabview 内部 Content 兼容
 ~~~
 
 - `pager/` 不依赖 Canvas、Platform LCD 或壁纸图像；它只读取 SquareLine 公开对象并维护
   三个既有 Page 的物理槽位与逻辑圆点状态。
 - `queue/` 不依赖 Canvas 或分页状态；它把 `SongPanel1` 范本构造摘进 for 循环。
-  当前使用假数据，不包含 `storage_listbuffer.h`。
+  可见行由 `Service_GUI_QueueApply()` 按 Length 填入，不包含 `storage_listbuffer.h`。
 - `background/` 不维护当前页、吸附阈值、循环映射、圆点动画或 Queue 行；它长期持有页面级
   SDRAM 图像缓冲，并在 MainPageContainer 滚动时更新 MusicModeTabs 的局部背景。
 - 子 Module 可以向同一个 `MainPageContainer` 注册不同 LVGL 事件，但不共享私有状态：
@@ -47,12 +47,17 @@ GUI Task
             -> 解析布局、绑定三页、无动画居中 Music
             -> 注册吸附、循环重排和圆点动画
        -> queue/service_gui_main_queue_prepare()
-            -> 隐藏 SongPanel1 范本，for 循环按范本构造 Length 行并填假数据
+            -> 隐藏 SongPanel1 范本，打开 QueueTab 滚动
        -> background/service_gui_main_background_prepare(clear_wallpaper)
             -> 使 Tabview 内部 Content 透明并禁用其横滑
             -> Canvas 生成全屏模糊工作帧
             -> 复制为 Main 长期模糊壁纸
             -> 裁剪 MusicModeTabs 首帧并注册滚动同步
+GUI Task 循环
+  -> storage_listbuffer_request() / 看见 READY
+  -> Service_GUI_QueueApply(titles, Length)
+  -> 写回 IDLE
+  -> Service_GUI_Process()
 ~~~
 
 Pager 必须先完成初始居中；Background 随后读取的 MusicModeTabs 坐标才是实际显示位置。

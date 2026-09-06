@@ -54,13 +54,21 @@ Assert-HarnessSequence -Expected @('external_loader') -Actual $loaderProductionI
 Assert-HarnessEqual -Expected $true -Actual $loaderProductionImpact.RequiresHardware `
     -Message '外部加载器生产代码仍必须要求上板'
 
+$guiTaskImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/gui/gui_task.c')
+Assert-HarnessSequence -Expected @('gui_task') -Actual $guiTaskImpact.HostModules `
+    -Message 'GUI Task 窗口协议变化必须选择对应主机测试'
+
+$queueImpact = Get-HarnessImpact -ChangedPath @('Service/gui/main/queue/gui_service_main_queue.c')
+Assert-HarnessSequence -Expected @('gui_task') -Actual $queueImpact.HostModules `
+    -Message 'Queue 行 Module 变化必须选择 GUI Task 主机测试'
+
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'resource_pack', 'w25qxx') -Actual $harnessImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_task', 'resource_pack', 'w25qxx') -Actual $harnessImpact.HostModules `
     -Message 'Harness 变化必须回退全部主机测试'
 Assert-HarnessEqual -Expected $true -Actual $harnessImpact.RequiresAllHostTests -Message 'Harness 变化应标记全部测试'
 
 $unknownImpact = Get-HarnessImpact -ChangedPath @('Service/playback/player.c')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'resource_pack', 'w25qxx') -Actual $unknownImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_task', 'resource_pack', 'w25qxx') -Actual $unknownImpact.HostModules `
     -Message '未知生产路径不得以零测试通过'
 Assert-HarnessSequence -Expected @('Service/playback/player.c') -Actual $unknownImpact.UnknownPaths `
     -Message '应保留触发保守回退的路径证据'

@@ -7,8 +7,9 @@
   *          构造序列从 GUI/screens/ui_Main.c 的 SongPanel1 范本摘出，for 循环
   *          写入 QueueTab。不对手上的 LVGL 对象做样式拷贝。SquareLine 导出的
   *          那一行隐藏，避免和循环行叠在一起。当前/非当前只改 Border Opa、
-  *          曲名色、Long mode 和右侧符号 Opa，不改 Border Width。假数据填
-  *          Buffer[i]；不得包含 storage_listbuffer.h。
+  *          曲名色、Long mode 和右侧符号 Opa，不改 Border Width。可见行数跟
+  *          Apply 传入的 Length 走，至多 8；曲名是 GUI Task 传入的窗口文本。
+  *          不得包含 storage_listbuffer.h。
   ******************************************************************************
   */
 
@@ -26,41 +27,26 @@
 typedef struct
 {
     lv_obj_t *panel;    /**< 行根 Panel。 */
-    lv_obj_t *name;     /**< 曲名 Label，对应 Buffer[i]。 */
-    lv_obj_t *creator;  /**< 歌手 Label；真数据接入前用假数据。 */
+    lv_obj_t *name;     /**< 曲名 Label。 */
+    lv_obj_t *creator;  /**< 歌手 Label；元数据未落地前为空串。 */
     lv_obj_t *status;   /**< 右侧符号。 */
 } Service_GUI_MainQueueRowTypeDef;
 
-/**
- * @brief 本场假窗口的一首：曲名站位 Buffer[i]，歌手站位尚未落地的元数据。
- */
-typedef struct
-{
-    const char *title;   /**< 曲名，对应 READY 后的 Buffer[i]。 */
-    const char *artist;  /**< 歌手假数据。 */
-} Service_GUI_MainQueueFakeTrackTypeDef;
-
-/** @brief 游标未落地前的假窗口内容；Length 取本表条数。 */
-static const Service_GUI_MainQueueFakeTrackTypeDef
-    service_gui_main_queue_fake_tracks[] =
-{
-    { "Night Drive On The Glass Harbor", "Aurora Lane" },
-    { "Glass Harbor", "North Station" },
-    { "Quiet Motors", "Low Tide" },
-    { "Indigo Room", "Paper Birds" },
-};
-
-/** @brief 已生成的可见行；未使用槽位保持 NULL。 */
+/** @brief 已按范本构造的行；未创建槽位保持 NULL。 */
 static Service_GUI_MainQueueRowTypeDef service_gui_main_queue_rows[
     SERVICE_GUI_MAIN_QUEUE_MAX_ROWS];
+
+/** @brief 已构造的行数，Apply 只增不毁，多余的 Hidden。 */
+static uint16_t service_gui_main_queue_created;
 
 /**
  * @brief 按 SquareLine 范本构造一行，父对象为 QueueTab。
  * @param[out] row 新行对象指针。
  * @retval SERVICE_OK 已按范本构造。
- * @retval SERVICE_ERROR LVGL 未能创建对象。
+ * @retval SERVICE_ERROR LVGL 未能创建对象；已挂到 QueueTab 的半成品 panel 会删除。
  * @note 须与 GUI/screens/ui_Main.c 中 SongPanel1 及其子对象的构造保持同步；
  *       SquareLine 重新导出后对照更新本函数，不得手改 GUI/。
+ *       SongStatus 范本仍是占位 `S`；运行时写 `LV_SYMBOL_AUDIO`（montserrat_14 含该字形）。
  */
 static Service_StatusTypeDef service_gui_main_queue_create_row(
     Service_GUI_MainQueueRowTypeDef *row)
@@ -106,6 +92,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     info = lv_obj_create(panel);
     if (info == NULL)
     {
+        lv_obj_del(panel);
         return SERVICE_ERROR;
     }
 
@@ -122,6 +109,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     status = lv_label_create(panel);
     if ((name == NULL) || (creator == NULL) || (status == NULL))
     {
+        lv_obj_del(panel);
         return SERVICE_ERROR;
     }
 
@@ -148,7 +136,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_width(status, LV_SIZE_CONTENT);
     lv_obj_set_height(status, LV_SIZE_CONTENT);
     lv_obj_set_align(status, LV_ALIGN_CENTER);
-    lv_label_set_text(status, "S");
+    lv_label_set_text(status, LV_SYMBOL_AUDIO);
     lv_obj_clear_flag(status, LV_OBJ_FLAG_SCROLLABLE);
     ui_object_set_themeable_style_property(status, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
                                            _ui_theme_color_Blue1);
@@ -224,10 +212,12 @@ static void service_gui_main_queue_set_current_border_visible(
 /**
  * @brief 填写一行文字并套用当前/非当前样式。
  * @param[in,out] row 已按范本构造的行。
- * @param[in] title 曲名，对应 Buffer[i]。
+ * @param[in] title 曲名显示文本。
  * @param[in] artist 歌手文本。
  * @param[in] is_current 是否为窗口内正在播放的那一行。
  * @note 只改文字、Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width。
+ *       曲名高度一律锁成一行：LVGL 8 的 DOT 看高度溢出；SCROLL_CIRCULAR 靠宽度
+ *       上限横向滚，不需要 SIZE_CONTENT。
  */
 static void service_gui_main_queue_apply_row(
     Service_GUI_MainQueueRowTypeDef *row,
@@ -235,10 +225,14 @@ static void service_gui_main_queue_apply_row(
     const char *artist,
     bool is_current)
 {
-    lv_label_set_text(row->name, title);
-    lv_label_set_text(row->creator, artist);
+    const lv_font_t *name_font;
+
     service_gui_main_queue_set_current_border_visible(row->panel, is_current);
     service_gui_main_queue_set_status_visible(row->status, is_current);
+
+    lv_obj_set_width(row->name, lv_pct(100));
+    name_font = lv_obj_get_style_text_font(row->name, LV_PART_MAIN);
+    lv_obj_set_height(row->name, lv_font_get_line_height(name_font));
 
     if (is_current)
     {
@@ -258,6 +252,9 @@ static void service_gui_main_queue_apply_row(
             _ui_theme_color_White1);
         lv_label_set_long_mode(row->name, LV_LABEL_LONG_DOT);
     }
+
+    lv_label_set_text(row->name, title);
+    lv_label_set_text(row->creator, artist);
 }
 
 /**
@@ -270,56 +267,106 @@ static void service_gui_main_queue_hide_template(void)
 }
 
 /**
- * @brief 按假数据 Length 用范本构造生成 Queue 可见行。
- * @retval SERVICE_OK 已按 Length 生成行，或 Length 为 0 已隐藏范本。
+ * @brief 显示或隐藏已构造的一行，不销毁对象。
+ * @param[in,out] row 已按范本构造的行。
+ * @param[in] hidden 为真则 Hidden，为假则参与 QueueTab Flex。
+ */
+static void service_gui_main_queue_set_row_hidden(
+    Service_GUI_MainQueueRowTypeDef *row,
+    bool hidden)
+{
+    if (row->panel == NULL)
+    {
+        return;
+    }
+
+    if (hidden)
+    {
+        lv_obj_add_flag(row->panel, LV_OBJ_FLAG_HIDDEN);
+    }
+    else
+    {
+        lv_obj_clear_flag(row->panel, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+/**
+ * @brief 隐藏范本并打开 QueueTab 竖向滚动，不预先造行。
+ * @retval SERVICE_OK 范本已隐藏。
  * @retval SERVICE_NOT_READY QueueTab 或范本尚未导出。
- * @retval SERVICE_ERROR 构造行时 LVGL 未能创建对象。
  * @note 必须在 ui_init() 之后、Boot 占用 Canvas 之前由 Main 编排入口调用。
- *       竖向滚动交给 QueueTab；不打开 Tabview 内部 Content 的滚动。
+ *       可见行等 GUI Task 经 QueueApply 按 Length 填入。
  */
 Service_StatusTypeDef service_gui_main_queue_prepare(void)
 {
+    if ((ui_QueueTab == NULL) || (ui_SongPanel1 == NULL))
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    lv_obj_add_flag(ui_QueueTab, LV_OBJ_FLAG_SCROLLABLE);
+    service_gui_main_queue_hide_template();
+    return SERVICE_OK;
+}
+
+/**
+ * @brief 按 Length 填 Queue 可见行；不够的 Hidden，不够用的按范本补造。
+ * @param[in] titles 曲名字符串指针表，Length 为 0 时允许为 NULL。
+ * @param[in] length 本窗实际条数，0..SERVICE_GUI_MAIN_QUEUE_MAX_ROWS。
+ * @retval SERVICE_OK 已按 Length 显示行，或 Length 为 0 已全部 Hidden。
+ * @retval SERVICE_INVALID_PARAM Length 超上限，或 Length 非 0 但 titles 为空。
+ * @retval SERVICE_NOT_READY QueueTab 或范本尚未导出。
+ * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
+ * @note 游标未落地：Length 非 0 时第 0 行当当前曲。歌手空串。不包含
+ *       storage_listbuffer.h。
+ */
+Service_StatusTypeDef service_gui_main_queue_apply(
+    const char **titles,
+    uint16_t length)
+{
     Service_StatusTypeDef status;
-    uint16_t length;
     uint16_t i;
-    uint16_t fake_count;
 
     if ((ui_QueueTab == NULL) || (ui_SongPanel1 == NULL))
     {
         return SERVICE_NOT_READY;
     }
 
-    fake_count = (uint16_t)(
-        sizeof(service_gui_main_queue_fake_tracks) /
-        sizeof(service_gui_main_queue_fake_tracks[0]));
-    length = fake_count;
-    if (length > SERVICE_GUI_MAIN_QUEUE_MAX_ROWS)
+    if ((length > SERVICE_GUI_MAIN_QUEUE_MAX_ROWS) ||
+        ((length > 0U) && (titles == NULL)))
     {
-        length = SERVICE_GUI_MAIN_QUEUE_MAX_ROWS;
-    }
-
-    lv_obj_add_flag(ui_QueueTab, LV_OBJ_FLAG_SCROLLABLE);
-    service_gui_main_queue_hide_template();
-
-    if (length == 0U)
-    {
-        return SERVICE_OK;
+        return SERVICE_INVALID_PARAM;
     }
 
     for (i = 0U; i < length; i++)
     {
-        status = service_gui_main_queue_create_row(
-            &service_gui_main_queue_rows[i]);
-        if (status != SERVICE_OK)
+        if (i >= service_gui_main_queue_created)
         {
-            return status;
+            status = service_gui_main_queue_create_row(
+                &service_gui_main_queue_rows[i]);
+            if (status != SERVICE_OK)
+            {
+                return status;
+            }
+
+            service_gui_main_queue_created = (uint16_t)(i + 1U);
         }
 
+        service_gui_main_queue_set_row_hidden(
+            &service_gui_main_queue_rows[i],
+            false);
         service_gui_main_queue_apply_row(
             &service_gui_main_queue_rows[i],
-            service_gui_main_queue_fake_tracks[i].title,
-            service_gui_main_queue_fake_tracks[i].artist,
+            (titles[i] != NULL) ? titles[i] : "",
+            "",
             (i == 0U));
+    }
+
+    for (i = length; i < service_gui_main_queue_created; i++)
+    {
+        service_gui_main_queue_set_row_hidden(
+            &service_gui_main_queue_rows[i],
+            true);
     }
 
     return SERVICE_OK;

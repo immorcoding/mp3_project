@@ -247,7 +247,7 @@ Platform 对 APP 隐藏：
 
 Service 表达跨模块产品流程，例如：
 
-- Playback Module：文件读取、解码、音频缓冲和播放状态机；
+- Playback Module：编排读文件、容器/标签解析、解码、音频缓冲和播放状态机。MP3 **解析器**（ID3、帧边界）与 **解码器**（Helix 等）分开，前者是待建 Component，后者是另一 Component 或 Vendor 库包装；Playback 把解析输出交给解码器。现有 `Components/audio` 只发送 PCM，不是解析器或解码器。未落地，不建空目录。见 [catalog_architecture.md](catalog_architecture.md) 第 5 节。
 - 未来的 Storage Module：跨任务存储命令和文件打开状态协调。
 
 Service 可以在编译期依赖 Platform、Component 和必要 Middleware 的公开 Interface，但不直接依赖 HAL。它在运行时编排产品流程；进入硬件通常经 Platform，外部事件只能经 Platform 声明的回调接缝到达其持有的任务逻辑。
@@ -255,7 +255,7 @@ Service 可以在编译期依赖 Platform、Component 和必要 Middleware 的�
 当前的 `Service/log` 负责 RTOS 日志消息块的投递与消费，`Service/filesystem`
 负责 Storage Task 独占期间的 FatFs 操作。SD 生命周期、热插拔消抖、卷调用时序、
 曲库扫描与顺序播放列表目前属于 `APP/tasks/storage` 的 Storage Task，不等同于
-未来的 `Service/storage` Module。曲库只存 SD `Music/` 相对路径，无曲目元数据；
+未来的 `Service/storage` Module。曲库只存 SD `Music/` 相对路径，无曲目元数据（标题/歌手/封面等 MP3 解析组件，不以文件名切开）；
 Flash FTL 不作曲库。壁纸/模型的设备侧更新先暂存 FTL 再写入 Resource Pack
 （安装路径尚未实现），见 [ADR-0015](adr/0015-volume-roles-and-resource-install.md)
 与 [catalog_architecture.md](catalog_architecture.md)。

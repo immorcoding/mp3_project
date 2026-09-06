@@ -31,5 +31,6 @@ typedef enum{
 
 void storage_task(void *handle);
 bool storage_task_sd_is_ready(void);
+bool storage_task_sd_is_mounted(void);
 
 #endif /* STORAGE_TASK_H */

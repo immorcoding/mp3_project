@@ -174,6 +174,17 @@ bool storage_task_sd_is_ready(void)
 }
 
 /**
+ * @brief  SD FatFs 卷是否仍挂载。
+ * @return true 卷对象仍在；消抖中只要尚未卸载也为 true。
+ * @note   GUI Task 可调用；ISR 不可调用。与 `storage_task_sd_is_ready()` 不同：
+ *         后者在消抖中为 false，只表示此时不能 request，不表示卡已拔走。
+ */
+bool storage_task_sd_is_mounted(void)
+{
+    return storage_sd_volume_is_mounted();
+}
+
+/**
  * @brief  运行 Storage Task 的存储协调与 SD 卡热插拔调度循环。
  * @param  handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
  * @note   SDRAM 破坏性自检必须早于 Flash 挂载使用的 FTL 表。随后 Flash 完成

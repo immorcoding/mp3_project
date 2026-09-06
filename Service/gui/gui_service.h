@@ -13,5 +13,8 @@
 
 Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index);
 void Service_GUI_Process(void);
+Service_StatusTypeDef Service_GUI_QueueApply(
+    const char **titles,
+    uint16_t length);
 
 #endif /* GUI_SERVICE_H */

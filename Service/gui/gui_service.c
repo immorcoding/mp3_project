@@ -15,6 +15,7 @@
 #include "Service/gui/boot/gui_service_boot.h"
 #include "Service/gui/gui_service_config.h"
 #include "Service/gui/main/gui_service_main.h"
+#include "Service/gui/main/queue/gui_service_main_queue.h"
 
 #include <stdint.h>
 
@@ -276,4 +277,22 @@ void Service_GUI_Process(void)
     }
 
     (void)lv_timer_handler();
+}
+
+/**
+ * @brief 把一窗曲名填进 Queue 可见行，不包含 storage_listbuffer。
+ * @param[in] titles 曲名字符串指针表；length 为 0 时允许为 NULL。
+ * @param[in] length 本窗实际条数，至多 SERVICE_GUI_MAIN_QUEUE_MAX_ROWS。
+ * @retval SERVICE_OK 已按 Length 显示，或 Length 为 0 已全部 Hidden。
+ * @retval SERVICE_INVALID_PARAM Length 超上限，或 Length 非 0 但 titles 为空。
+ * @retval SERVICE_NOT_READY Queue 范本尚未准备。
+ * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
+ * @note 只能由完成 Service_GUI_Init() 的同一 GUI Task 调用。曲名由调用方持有，
+ *       Label 会拷贝文本，调用返回后调用方可把 listbuffer 写回 IDLE。
+ */
+Service_StatusTypeDef Service_GUI_QueueApply(
+    const char **titles,
+    uint16_t length)
+{
+    return service_gui_main_queue_apply(titles, length);
 }

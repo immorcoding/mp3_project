@@ -2,6 +2,7 @@
     AllHostModules = @(
         'external_loader'
         'flash_ftl'
+        'gui_task'
         'w25qxx'
         'resource_pack'
     )
@@ -33,6 +34,14 @@
                 '^Components/flash_ftl/'
                 '^Adapters/bridge/flash_ftl_w25qxx/'
                 '^Tests/w25qxx/'
+            )
+        }
+        @{
+            Name = 'gui_task'
+            PathPatterns = @(
+                '^APP/tasks/gui/'
+                '^Service/gui/main/queue/'
+                '^Tests/gui_task/'
             )
         }
         @{

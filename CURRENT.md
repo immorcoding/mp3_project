@@ -4,19 +4,17 @@
 
 ## 进度
 
-- 刚收口：Queue 假数据行已上板确认。`Service/gui/main/queue` 把 `GUI/screens/ui_Main.c` 的 `SongPanel1` 构造摘进 for 循环；导出范本隐藏。
-- 当前/非当前：Border Opa、符号 Opa、曲名色、Long mode。不改 Border Width。符号不 HIDDEN。
-- 假窗口仍是 4 行、第 0 行当当前曲。尚未接线 `storage_listbuffer`。游标未做。
-- 下一活动：GUI Task 消费 READY 窗口，按真实 `Length`/`Buffer[i]` 生成行。
+- 刚收口：Queue 已接线 `storage_listbuffer` 第一窗。`request(Index=0, 至多 8)`；READY 后 `QueueApply` 按 `Length` 填行，写回 IDLE。拔卡清空。
+- 曲名暂为路径原文，歌手空。`request` 只带 Index/条数/代次。ID3 等 `load` 调解析器，见 `catalog_architecture.md` 第 5 节。游标未做，第 0 行当当前曲。
+- 下一活动：**Queue 滑窗**（滚动后再 `request` 新 `Index`）。不要做 ID3、不要做播放列表游标。
 - 本主线必读：10.5.3、`catalog_architecture.md`、ADR-0007。
 - 按需查词：**播放列表**、**曲库**。Queue 可见行 ≠ 整表。
-- `Service/gui` 不得包含 `storage_listbuffer.h`。
 
 ## 本场交接
 
-- 分支：`main`。硬切：Queue 假数据视觉已确认，进入 listbuffer 接线。
-- SquareLine：只留单行范本。禁止手改 `GUI/`。范本构造变了对照 `ui_Main.c` 更新 `service_gui_main_queue_create_row()`。
-- 工作树可能仍有未提交的 SquareLine 导出；`verify.ps1` 会因生成目录写保护 FAIL。改动在 `Service/`，上板状态未当验收。
-- 下场第一刀：GUI Task `request` → 等 READY → 填 Queue 槽位 → 写回 IDLE。公开 `Service_GUI` 仍只有 Init/Process；若要加绑定 Interface，先问。
-- `listbuffer` 保持线性窗（`Index` + `Buffer[0..Length)`）。Queue **panel 做成固定槽位**：最多 8 个，不够的 Hidden，滑窗以后再转 head 回收，不在 Storage 里做环形数组。
-- 游标未落地；接线后暂可继续第 0 行当当前曲，或先不标。歌手元数据没有，曲名先用路径。
+- 分支：`main`。硬切去滑窗。`gui_task.c` 的 REQUEST 仍写死 `Index=0`。
+- 滑窗：`QueueTab` 竖滑后改 `Index` 再 `request`；已有行转 head 改字，不无限 `create`。不要把 listbuffer 改成环形数组。`Service/gui` 不得包含 `storage_listbuffer.h`。
+- SquareLine：只留单行范本。禁止手改 `GUI/`。范本变了对照 `ui_Main.c` 更新 `create_row()`。
+- 行高已锁一行：当前行循环滚，其它行 Dot。当前行右侧是 `LV_SYMBOL_AUDIO`，范本 `S` 只占位。拔卡看卷是否挂载；QueueApply 失败重试。
+- 不要裁 `Music/` / `.mp3`，不要按文件名切歌手。重插跳回当前曲要记路径，不要歌名哈希。
+- 上板：第一窗路径原文；滑窗未做。Host `verify.ps1` 曾 `PASS_HOST_ONLY`，不能当板级验收。

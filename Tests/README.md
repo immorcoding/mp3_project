@@ -1,6 +1,6 @@
 # 主机回归
 
-`external_loader`、`flash_ftl`、`w25qxx` 与 `resource_pack` 是四个独立的 CMake 工程，共 19 个 CTest：`external_loader` 1 个，`flash_ftl` 16 个（3 个固定测试、12 个文件场景测试、1 个卷感知 Service 测试），`w25qxx` 1 个，`resource_pack` 1 个。
+`external_loader`、`flash_ftl`、`gui_task`、`w25qxx` 与 `resource_pack` 是五个独立的 CMake 工程，共 20 个 CTest：`external_loader` 1 个，`flash_ftl` 16 个（3 个固定测试、12 个文件场景测试、1 个卷感知 Service 测试），`gui_task` 1 个，`w25qxx` 1 个，`resource_pack` 1 个。
 
 ## 环境
 

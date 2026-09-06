@@ -8,12 +8,12 @@
 
 当前基线为 LVGL 8.3.11、SquareLine Studio 和 240 x 320 RGB565 LCD。
 
-本阶段 SquareLine 原型**不包含**真实扫描与解码，歌曲与专辑仍可用固定假数据。Storage Task 已有曲库与顺序播放列表，本原型仍不接线。产品侧已确认：首版曲库只扫 SD `Music/`，Queue 以后只绑定可见行；壁纸/模型的设备更新经 Settings 发起、FTL 暂存后再写 Resource Pack（安装未实现）。实现这些数据路径前不必改 SquareLine 导出。详见 [ADR-0015](adr/0015-volume-roles-and-resource-install.md)、[catalog_architecture.md](catalog_architecture.md)。
+本阶段 SquareLine 原型**不包含**解码。Queue 已接线 `storage_listbuffer` 第一窗；Now Playing、Library、状态栏等仍可用固定假数据。产品侧已确认：首版曲库只扫 SD `Music/`，Queue 只绑定可见行；壁纸/模型的设备更新经 Settings 发起、FTL 暂存后再写 Resource Pack（安装未实现）。实现这些数据路径前不必改 SquareLine 导出。详见 [ADR-0015](adr/0015-volume-roles-and-resource-install.md)、[catalog_architecture.md](catalog_architecture.md)。
 
 本阶段原型**仍不包含**：
 
 - SD 卡扫描、文件排序、媒体库建立的 GUI 接线；
-- MP3 解码、真实播放队列、ID3 标签或专辑封面读取；
+- MP3 解码、真实播放队列、ID3 标签或专辑封面读取（等解析组件；`load` 填窗时解析，见 [catalog_architecture.md](catalog_architecture.md) 第 5 节）；
 - 真实背光 PWM、亮度调节和设置持久化；
 - 书签持久化、真实电子书解析和排版；
 - 中文字库、多语言切换和密码锁。
@@ -140,7 +140,7 @@ MusicPage 每次作为 MainPageContainer 内容页显示时默认展示 `Now Pla
 完整播放器区           y = 210 ~ 312
 ```
 
-`Now Playing` 内容区显示较大的方形假封面、曲名和歌手。`Queue` 显示当前及后续曲目的简化列表。接入真实数据后，Queue 只绑定 `storage_listbuffer` 单槽窗口：SquareLine 只保留一份行范本，运行时按 READY 后的 `Length` 复制行（上限 `STORAGE_LISTBUFFER_MAX_ENTRIES`，现为 8）。完整播放列表由 Storage 持有，不把整表指针交给 GUI。行样式与对象层级见第 10.5.3 节。`Library` 显示两列专辑封面网格；首版每张专辑都使用固定标题、歌手和占位封面。产品曲库首版只来自 SD `Music/`，不展示空的 Flash 分区。
+`Now Playing` 内容区显示较大的方形假封面、曲名和歌手。`Queue` 显示当前及后续曲目的简化列表。Queue 只绑定 `storage_listbuffer` 单槽窗口：SquareLine 只保留一份行范本，运行时按 READY 后的 `Length` 复制行（上限 `STORAGE_LISTBUFFER_MAX_ENTRIES`，现为 8）。完整播放列表由 Storage 持有，不把整表指针交给 GUI。行样式与对象层级见第 10.5.3 节。`Library` 显示两列专辑封面网格；首版每张专辑都使用固定标题、歌手和占位封面。产品曲库首版只来自 SD `Music/`，不展示空的 Flash 分区。
 
 ### 6.2 专辑详情
 
@@ -466,7 +466,7 @@ Viewport 内始终只保留同一组三张 Page 实例，不复制首尾页。�
 
 `MusicModeTabs` 位于 MusicPage 顶部，使用 MusicPage 内嵌的 Tabview 实现，当前宽度为页面的 `90%`、高度为有效页面高度的 `66%`，默认 Tab 按钮栏高度以实际观感为准。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `White1` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Blue1` 文字，并仅在底边显示一条细 `Blue1` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Now Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPageContainer 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
 
-当前 `NowPlayingTab` 与 `LibraryTab` 仍为空白内容区。`QueueTab` 只保留 SquareLine 单行范本；`Service/gui/main/queue` 把该范本构造摘进 for 循环，按假数据 `Length` 生成可见行。本阶段仍不接线 `storage_listbuffer`。`MusicPlayerControlContainer` 是 `MusicPage` 的直接子对象，位于 MusicModeTabs 下方，当前宽度为页面的 `90%`、高度为 `28%`，上、下 Padding 均为 `2 px`；它承载一条假进度条与上一首/播放暂停/下一首三个静态控件。`MusicPlayingSlider` 宽度为播放器区的 `90%`、高度 `7%`，相对顶部下移 `5%`。当前尚未创建 `MusicPlayerCard`、假曲名或专辑封面。
+当前 `NowPlayingTab` 与 `LibraryTab` 仍为空白内容区。`QueueTab` 只保留 SquareLine 单行范本；`Service/gui/main/queue` 把该范本构造摘进 for 循环，GUI Task 在 `storage_listbuffer` READY 后经 `Service_GUI_QueueApply()` 按 `Length` 填行。`MusicPlayerControlContainer` 是 `MusicPage` 的直接子对象，位于 MusicModeTabs 下方，当前宽度为页面的 `90%`、高度为 `28%`，上、下 Padding 均为 `2 px`；它承载一条假进度条与上一首/播放暂停/下一首三个静态控件。`MusicPlayingSlider` 宽度为播放器区的 `90%`、高度 `7%`，相对顶部下移 `5%`。当前尚未创建 `MusicPlayerCard`、假曲名或专辑封面。
 
 `DotPanelContainer` 是 `Main` 的固定底部子对象，使用居中的 Flex Row 布局，列间距为 `5 px`，自身不接受点击或滚动。它包含按页面物理顺序创建的 `DotSettings`、`DotMusic` 与 `DotBooks`。非当前页圆点为 `5 x 5 px`、圆角 `3 px`、`White1` 且背景透明度 `180`；当前页指示器为 `14 x 5 px` 的水平胶囊、同一 `White1` 且背景透明度 `220`。初始当前页是 Music，因此初态由 `DotMusic` 显示胶囊。
 
@@ -514,9 +514,9 @@ MusicPage
 
 多个 Main Page 的玻璃区域不能共用一张固定局部裁剪图而不加管理：当前只在 Music 页面实施；BooksPage、SettingsPage 后续需要各自的裁剪图与更新时机。MainPageContainer 的滑动回调只会更新 MusicModeTabs，且只做从长期模糊壁纸到局部输出缓冲的像素复制，不将软件模糊放入动画路径。当前可复用的私有 Canvas Interface 接收完整模糊图、对象区域和调用方持有的输出缓冲；未来页面可复用裁剪算法，但仍必须各自持有页面级背景与决定重建时机。新增页面级玻璃区域前必须先经用户审校。
 
-#### 10.5.3 Queue 行模板（运行时按 Length 复制，假数据未接 listbuffer）
+#### 10.5.3 Queue 行模板（运行时按 Length 复制）
 
-SquareLine 1.6.1 没有 List 控件。Queue 不用 `lv_list`。SquareLine 只保留**一份**行范本（当前导出名为 `SongPanel1` 及其子对象）；不要在编辑器里 Duplicate 成 8 行。`Service/gui/main/queue` 把 `GUI/screens/ui_Main.c` 里该范本的构造序列摘进 for 循环。可见行是 **固定槽位**（上限 `SERVICE_GUI_MAIN_QUEUE_MAX_ROWS`，须与 `STORAGE_LISTBUFFER_MAX_ENTRIES` 同为 8），不是按整表无限 `create`。本阶段假数据按 `Length` 生成行；接入后槽位对应窗口条目，多出的 Hidden。以后窗口沿播放列表移动时，在这些 panel 上转 head 回收改字，不把 `storage_listbuffer` 改成环形数组。导出的范本行隐藏。不得手改 `GUI/`。竖向滚动由 `QueueTab` 承担；不得打开 Tabview 内部 Content 的滚动。SquareLine 重新导出后若范本构造变了，对照更新 create 函数。
+SquareLine 1.6.1 没有 List 控件。Queue 不用 `lv_list`。SquareLine 只保留**一份**行范本（当前导出名为 `SongPanel1` 及其子对象）；不要在编辑器里 Duplicate 成 8 行。`Service/gui/main/queue` 把 `GUI/screens/ui_Main.c` 里该范本的构造序列摘进 for 循环。可见行数跟 READY 后的 `Length` 走，**至多** `SERVICE_GUI_MAIN_QUEUE_MAX_ROWS`（须与 `STORAGE_LISTBUFFER_MAX_ENTRIES` 同为 8），不是按整表无限 `create`，也不预先造满 8 个空行。已构造行在后续 `Length` 变短时 Hidden。以后窗口沿播放列表移动时，在这些 panel 上转 head 回收改字，不把 `storage_listbuffer` 改成环形数组。导出的范本行隐藏。不得手改 `GUI/`。竖向滚动由 `QueueTab` 承担；不得打开 Tabview 内部 Content 的滚动。SquareLine 重新导出后若范本构造变了，对照更新 create 函数。
 
 范本层级：
 
@@ -531,14 +531,14 @@ QueueTab                         透明；Flex Column；纵向 Scrollable
 
 | | 窗口内正在播放的那一行 | 其它行 |
 | --- | --- | --- |
-| 曲名过长 | Long mode 跟范本（当前导出 **Scroll circular**）；标签须有上限宽度 | **Dot** |
+| 曲名过长 | **Scroll circular**；宽 `pct(100)`，高度锁成一行 | **Dot**；同一行高（LVGL 8 的 DOT 看高度溢出） |
 | 左边条 | Border 仅 Left、4 px、`Blue1` Opa 跟范本 | 同一 Width/Side，**Border Opa 0**（不改 Width，避免文字漂移） |
-| 右侧符号 | 范本字形（当前导出为 `S`），`Blue1`，可见 | 同一 Label，Opa 0 占位，不从布局移除 |
+| 右侧符号 | 音乐标 `LV_SYMBOL_AUDIO`，`Blue1`，可见。范本仍可占位 `S`，运行时替换 | 同一 Label，Opa 0 占位，不从布局移除 |
 | 曲名颜色 | `Blue1` | `White1` |
 
 点按（所有行）：`PRESSED` 只提高底 Opa（约 70～80）并加 **Outline** 1 px `White1`（Pad 0）。不要在 PRESSED 或非当前态里改 Border Width，以免文字漂移。非当前行只把左边条 Border Opa 打到 0。Panel 开 Clickable，不开 Checkable。
 
-接入 `storage_listbuffer` 后：READY 时按 `Length` 用范本构造生成行并填 `Buffer[i]`（对应播放列表 `Index + i`）；`Length == 0` 则不生成可见行。正在播放行由「播放列表游标」判定，游标与 Catalog 同代次，见 [catalog_architecture.md](catalog_architecture.md)。复制行只改文字、Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width。字形、字体、圆角、底色以 SquareLine 范本构造为准。当前循环生成已用假数据落地：4 行，第 0 行当当前曲；`Service/gui` 仍不得包含 `storage_listbuffer.h`。Queue 行不放封面；封面属于 Now Playing。
+READY 时 GUI Task 按 `Length` 把 `Buffer[i]` 原样交给 `Service_GUI_QueueApply()`（播放列表 `Index + i`）。当前 `Buffer` 仍是曲库路径；标题/歌手由以后的 `load` 调解析器写入窗口，见 [catalog_architecture.md](catalog_architecture.md) 第 5 节。未落地前歌手 Label 为空串。GUI 不裁 `Music/`、不裁 `.mp3`、不按文件名切开。`Length == 0` 则没有可见行。正在播放行由「播放列表游标」判定，游标与 Catalog 同代次，见 [catalog_architecture.md](catalog_architecture.md)；游标未落地前第 0 行当当前曲。复制行只改文字、Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width。右侧音乐标是运行时写入的 `LV_SYMBOL_AUDIO`，不要把 SquareLine 里的占位 `S` 抄回固件。字形、字体、圆角、底色以 SquareLine 范本构造为准。`Service/gui` 不得包含 `storage_listbuffer.h`。Queue 行不放封面；封面属于 Now Playing。
 
 `QueueTab` 在 SquareLine 模拟器里仍可能看到 Tabview 默认白底；真机由第 10.5.2 节的 Content 透明与毛玻璃处理。行底用浅白薄片，不要再做成 `#13223D` 实心卡。
 

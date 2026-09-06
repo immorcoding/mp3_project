@@ -5,8 +5,9 @@
   *
   * @details
   *          本 Module 只定义 Main Screen 运行时准备的稳定顺序：先由 Pager 完成
-  *          布局、初始 Music 页面定位和循环分页事件绑定，再由 Queue 按 Length
-  *          用 SongPanel1 范本构造生成可见行，最后由 Background 根据已稳定的对象坐标
+  *          布局、初始 Music 页面定位和循环分页事件绑定，再由 Queue 隐藏行范本
+  *          并打开 QueueTab 滚动（可见行由后续 QueueApply 按 Length 填入），
+  *          最后由 Background 根据已稳定的对象坐标
   *          构建局部毛玻璃。具体分页状态、Queue 行和图像资源均由各自子 Module
   *          私有持有；本文件不直接操作 SquareLine 对象或 Canvas 缓冲。
   ******************************************************************************
@@ -23,11 +24,12 @@
  * @param clear_wallpaper 当前清晰系统壁纸。
  * @retval SERVICE_OK Main Pager、Queue 与 Background Module 均已完成初始化。
  * @retval SERVICE_NOT_READY SquareLine Main 对象、Queue 范本、布局或内部 Tabview 尚未就绪。
- * @retval SERVICE_ERROR Queue 按范本构造行时 LVGL 未能创建对象。
+ * @retval SERVICE_ERROR Background 生成毛玻璃或裁剪失败。
  * @retval SERVICE_INVALID_PARAM 壁纸图片、局部裁剪区域或 Canvas 参数不满足约束。
  * @note 必须在 `ui_init()` 后、Boot 背景准备前由 GUI Service 调用一次。先初始化
  *       Pager 可保证 Background 的首帧裁剪以居中的 MusicPage 实际坐标为准；Queue
- *       在 Pager 之后、Background 之前按范本构造 Queue 行。调用者
+ *       在 Pager 之后、Background 之前隐藏 Queue 范本。可见行由 GUI Task 经
+ *       QueueApply 填入。调用者
  *       不需要也不得直接调用任何 Main 子 Module。
  */
 Service_StatusTypeDef service_gui_main_prepare(

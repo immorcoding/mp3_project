@@ -29,7 +29,7 @@ ADR 不替代技术文档。技术文档引用相关 ADR，并保持对当前代
 - [w25q256_architecture.md](w25q256_architecture.md)：W25Q256 原始 NOR 现状与 Adapter 接缝；
 - [flash_ftl_design.md](flash_ftl_design.md)：已实现、待硬件验收的首版 FTL 链路、分组提交、恢复、GC、配置和逐文件实施/验收清单；
 - [filesystem_service_reshape.md](filesystem_service_reshape.md)：Filesystem 公开接缝切开、Maintain 改名 Reclaim；后续卷感知文件/目录见 ADR-0014；
-- [catalog_architecture.md](catalog_architecture.md)：曲库扫描与顺序播放列表的代码事实（APP Storage Task）；
+- [catalog_architecture.md](catalog_architecture.md)：曲库扫描、顺序播放列表，以及未落地的 MP3 解析/ID3 边界；
 - [resource_pack_design.md](resource_pack_design.md)：RPKC1 资源包格式与启动加载；设备侧安装见 ADR-0015（未实现）；
 - [adr/0013-usb-msc-product-scope.md](adr/0013-usb-msc-product-scope.md)：主线 USB MSC 产品范围决定；
 - [adr/0014-filesystem-volume-aware-file-interface.md](adr/0014-filesystem-volume-aware-file-interface.md)：SD/Flash 统一为 Volume + UTF-8 相对路径；Flash 自动格式化由 Storage 宏控制；

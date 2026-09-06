@@ -2,7 +2,7 @@
 param(
     [string]$HostCompiler,
 
-    [ValidateSet('external_loader', 'flash_ftl', 'w25qxx', 'resource_pack')]
+    [ValidateSet('external_loader', 'flash_ftl', 'gui_task', 'w25qxx', 'resource_pack')]
     [string[]]$Module,
 
     [switch]$AllowGeneratedUpdate
