@@ -6,7 +6,8 @@
 
 ## 公开 Interface
 
-- `Service_GUI_Init(notify_index)`：仅由 GUI Task 调用一次。`notify_index` 是本任务 `Gui_NotifyIndexTypeDef` 给出的 LCD DMA 完成槽。初始化 LVGL，注册 v8 显示驱动与 Pointer 输入驱动，绑定 LCD DMA 最终回调，并调用 SquareLine 的 `ui_init()`。
+- `Service_GUI_Init(notify_index)`：仅由 GUI Task 调用一次。`notify_index` 是本任务 `Gui_NotifyIndexTypeDef` 给出的 LCD DMA 完成槽。初始化 LVGL，注册 v8 显示驱动与 Pointer 输入驱动，绑定 LCD DMA 最终回调，调用 SquareLine 的 `ui_init()`，再挂上占位色过滤器（生成代码会覆盖 display theme），并对 STARTUP 外观调用 `Service_GUI_ThemeApply()`。
+- `Service_GUI_ThemeApply(id)`：仅由同一 GUI Task 调用。切换 Default/Solid 调色板并 invalidate；更新 Boot/BootReveal/Lock/Main 壁纸显隐与 Music Tab 薄层。不扫对象改 hex，不调用 `ui_theme_set()`。运行时切到 Default 时若尚未生成毛玻璃，不会在此处补做 Canvas 模糊。
 - `Service_GUI_Process()`：仅在同一 GUI Task 上下文周期调用。按 FreeRTOS Tick 推进 LVGL 时间，并调用 `lv_timer_handler()` 处理刷新、动画和输入。
 - `Service_GUI_QueueApply(titles, length, window_index, current_index)`：仅由同一 GUI Task 调用。把一窗曲名填进 Queue 可见行；`length` 为 0 时全部 Hidden，`titles` 可为 NULL。`window_index` 是本窗在播放列表上的起点，用于已有行转 head。`current_index` 是正在播放的播放列表下标；无当前曲时为 `SERVICE_GUI_QUEUE_NO_CURRENT`。不包含 `storage_listbuffer.h`。Label 会拷贝文本。
 - `Service_GUI_QueueConsumeSelect(sheet_index)`：仅由同一 GUI Task 调用。取走一次 Queue 行点按对应的播放列表下标；无点击为 `SERVICE_NOT_READY`。不包含 `storage_listbuffer.h` / `storage_playback_cursor.h`。点击发生在 `Process()` 内，下一圈再 Consume。
@@ -61,7 +62,7 @@ LVGL Pointer read_cb
 
 ## 私有 Modules 与配置
 
-对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_QueueConsumeSelect()` 与 `Service_GUI_QueueApply()`；
+对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_QueueConsumeSelect()`、`Service_GUI_QueueApply()` 与 `Service_GUI_ThemeApply()`；
 以下是 `Service/gui` 内部的实现拆分，不得被 APP 或其他 Service 直接包含或调用。
 SquareLine 生成代码唯一允许的例外是由 `GUI/ui_events.h` 声明、GUI Service 实现的
 `Service_GUI_Boot_RequestLock()`：它是 BootReveal 的窄事件交接点，不属于供上层调用的
@@ -70,6 +71,7 @@ SquareLine 生成代码唯一允许的例外是由 `GUI/ui_events.h` 声明、GU
 ```text
 Service/gui/
 ├─ gui_service.c / .h / _config.h    GUI Task 生命周期、显示/触摸和 DMA 桥接
+├─ theme/                            调色板、占位色过滤器、壁纸/毛玻璃副作用
 ├─ boot/                             仅属于启动视觉序列
 │  ├─ gui_service_boot.c / .h
 │  ├─ gui_service_boot_config.h
@@ -88,6 +90,10 @@ Service/gui/
 
 - `gui_service.c`：GUI Task 生命周期、LVGL 显示/输入驱动注册，以及 LCD DMA
   刷新桥接。它只编排内部 Module，不持有离屏 Canvas 工作区或启动动画细节。
+  在 `ui_init()` 之后调用 `theme/` 挂过滤器（生成代码会先装 basic theme），再对 STARTUP 外观调用 `ThemeApply`。
+- `theme/`：持有 Default/Solid 调色板与当前索引。过滤器把五个占位 hex 映射成当前
+  RGB；`ThemeApply` 负责 Lock/Main 壁纸显隐和 Solid 下 Music Tab 的半透明 Wash。
+  不是状态机，不与电量/时间混装。Boot Arc 动画本轮不改；Solid 下开机页也关壁纸。
 - `boot/gui_service_boot.c`：启动视觉序列 Module。它在 `ui_init()` 后调用通用 Canvas
   Module 生成并绑定 Boot 的模糊背景，再显式启动 Arc 相位动画。BootReveal 的
   `SCREEN_LOADED` 事件调用 `Service_GUI_Boot_RequestLock()` 时，本 Module 以
@@ -103,8 +109,8 @@ Service/gui/
   图片裁剪；Canvas 不拥有页面级背景。
 - `main/gui_service_main.c`：Main Screen 的私有编排入口。它先调用 Pager Module 解析布局、
   定位 MusicPage 至中间物理槽位并绑定循环分页，再调用 Queue Module 按 Length 用
-  `SongPanel1` 范本构造生成可见行，最后调用 Background Module 建立局部毛玻璃；入口本身不持有
-  UI 状态或离屏图像。
+  `SongPanel1` 范本构造生成可见行，最后调用 Background Module；Solid 下 Background 跳过
+  毛玻璃。入口本身不持有 UI 状态或离屏图像。
 - `main/pager/`：只持有三张 Main Page 的物理槽位、程序化吸附状态和逻辑圆点状态。它监听
   `MainPageContainer` 的 `LV_EVENT_SCROLL_END`，以 50% 阈值吸附至相邻槽位，并在两端轮换既有
   Page 后无动画回中实现循环。它不依赖 Canvas、Platform LCD 或壁纸资源。
@@ -115,8 +121,9 @@ Service/gui/
   不包含 `storage_listbuffer.h` 或 `storage_playback_cursor.h`。
 - `main/background/`：只持有 Main 的长期模糊壁纸和 `MusicModeTabs` SDRAM 裁剪背景。它使
   SquareLine 未公开的 Tabview 内部 Content 透明、禁用其横滑，并监听 `MainPageContainer` 的
-  `LV_EVENT_SCROLL`，按目标控件当前坐标重裁剪背景。它不维护分页槽位、吸附或圆点状态。除
-  `ui_MusicModeTabs` 的运行时 Background image 外，不覆盖 SquareLine 导出对象的视觉 Style。
+  `LV_EVENT_SCROLL`，按目标控件当前坐标重裁剪背景。仅 Default 才生成模糊与裁剪图；Solid 不算
+  模糊。它不维护分页槽位、吸附或圆点状态。除 `ui_MusicModeTabs` 的运行时 Background image
+  外，不覆盖 SquareLine 导出对象的视觉 Style。
 
 `gui_service_config.h` 保存绘制缓冲行数。改变该值会同时影响 SDRAM 占用、SPI
 刷新分块数量和 LVGL 的双缓冲等待行为，必须结合显示帧率与 D-Cache 约束验证。

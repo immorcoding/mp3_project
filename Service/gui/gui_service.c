@@ -16,6 +16,7 @@
 #include "Service/gui/gui_service_config.h"
 #include "Service/gui/main/gui_service_main.h"
 #include "Service/gui/main/queue/gui_service_main_queue.h"
+#include "Service/gui/theme/gui_service_theme_apply.h"
 
 #include <stdint.h>
 
@@ -165,8 +166,12 @@ static void service_gui_flush_wait_callback(
  * @retval SERVICE_INVALID_PARAM 通知槽越界，或壁纸资源不满足当前 Canvas 视觉处理约束。
  * @retval SERVICE_ERROR 显示、输入或启动视觉资源的注册/生成失败。
  * @retval SERVICE_NOT_READY GUI 生成对象或内部 Canvas 尚未就绪。
- * @note   只能由 GUI Task 调用一次。当前 GUI Task 将任何非 SERVICE_OK 视为致命
- *         初始化故障并进入 Error_Handler()；本 Module 尚未提供失败后的回滚或重试。
+ * @note   只能由 GUI Task 调用一次。SquareLine `ui_init()` 会 `lv_theme_basic_init`
+ *         覆盖 display theme，因此占位色过滤器必须在 `ui_init()` 之后重新挂上，
+ *         再对已创建 Screen 整树绑定。随后对 STARTUP 外观调用 ThemeApply，再准备
+ *         Main 与 Boot。
+ *         当前 GUI Task 将任何非 SERVICE_OK 视为致命初始化故障并进入
+ *         Error_Handler()；本 Module 尚未提供失败后的回滚或重试。
  */
 Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
 {
@@ -234,6 +239,20 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
     service_gui_last_tick = xTaskGetTickCount();
     ui_init();
 
+    gui_status = service_gui_theme_attach(service_gui_display);
+    if (gui_status != SERVICE_OK)
+    {
+        return gui_status;
+    }
+
+    service_gui_theme_bind_screens();
+
+    gui_status = Service_GUI_ThemeApply(SERVICE_GUI_THEME_STARTUP);
+    if (gui_status != SERVICE_OK)
+    {
+        return gui_status;
+    }
+
     gui_status = service_gui_main_prepare(
         &ui_img_wallpaper_indigo_mist_soft_dark_png);
 
@@ -241,6 +260,8 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
     {
         return gui_status;
     }
+
+    service_gui_theme_bind_screens();
 
     gui_status = service_gui_boot_prepare_background(
         &ui_img_wallpaper_indigo_mist_soft_dark_png);
@@ -255,6 +276,10 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
      * Service 持有的动画。后续动画在此处显式启动，确保背景资源已完成运行时绑定。
      */
     service_gui_boot_start();
+
+    /* Init 期间没有跑 timer_handler，不能把这段墙钟一次性灌进 lv_tick，
+     * 否则 Boot 的切屏延迟会在第一圈 Process 立刻到期。 */
+    service_gui_last_tick = xTaskGetTickCount();
 
     return SERVICE_OK;
 }

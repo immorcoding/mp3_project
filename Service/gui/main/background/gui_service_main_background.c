@@ -23,6 +23,7 @@
 #include "Platform/lcd/platform_lcd.h"
 #include "Service/gui/canvas/gui_service_canvas.h"
 #include "Service/gui/canvas/gui_service_canvas_compositor.h"
+#include "Service/gui/theme/gui_service_theme.h"
 
 #include "GUI/ui.h"
 
@@ -291,9 +292,10 @@ static Service_StatusTypeDef service_gui_main_background_bind_scroll_event(void)
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_NOT_READY Main Screen、Tabview 或目标控件尚未就绪。
  * @retval SERVICE_INVALID_PARAM 壁纸图片、布局区域或裁剪缓冲不满足 Canvas 约束。
- * @note 调用前 Pager 必须已完成布局和初始回中。当前只构建 MusicModeTabs 的局部
- *       裁剪图；Books 与 Settings 后续各自拥有背景与生命周期，不能在此处复用
- *       Music 的运行时缓冲。
+ * @note 调用前 Pager 必须已完成布局和初始回中。Default 才构建 MusicModeTabs 的
+ *       局部裁剪图；Solid 只做 Tabview Content 透明与禁横滑，不算模糊。
+ *       Books 与 Settings 后续各自拥有背景与生命周期，不能在此处复用 Music
+ *       的运行时缓冲。
  */
 Service_StatusTypeDef service_gui_main_background_prepare(
     const lv_img_dsc_t *clear_wallpaper)
@@ -324,6 +326,11 @@ Service_StatusTypeDef service_gui_main_background_prepare(
     if (status != SERVICE_OK)
     {
         return status;
+    }
+
+    if (!service_gui_theme_uses_glass())
+    {
+        return SERVICE_OK;
     }
 
     status = service_gui_canvas_blur_image(

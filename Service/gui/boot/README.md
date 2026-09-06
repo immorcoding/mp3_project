@@ -19,9 +19,9 @@ Interface，也不要求 `GUI/` 包含任何 Service 头文件。
 
 ## 背景与 Canvas 生命周期
 
-`service_gui_boot_prepare_background()` 调用 `canvas/` 生成当前壁纸的模糊帧，并将返回的
+`service_gui_boot_prepare_background()` 在 **Default** 下调用 `canvas/` 生成当前壁纸的模糊帧，并将返回的
 共享 Canvas 描述符直接绑定到 `ui_Boot` 的 Background image。该描述符只在下一次 Canvas
-模糊操作前有效。
+模糊操作前有效。**Solid** 跳过模糊，沿用 `ThemeApply` 铺上的 Ground，不再写背景图。
 
 当前初始化顺序固定为：
 

@@ -3,6 +3,7 @@
         'external_loader'
         'flash_ftl'
         'gui_task'
+        'gui_theme'
         'w25qxx'
         'resource_pack'
         'storage_catalog'
@@ -43,6 +44,16 @@
                 '^APP/tasks/gui/'
                 '^Service/gui/main/queue/'
                 '^Tests/gui_task/'
+            )
+        }
+        @{
+            Name = 'gui_theme'
+            PathPatterns = @(
+                '^Service/gui/theme/'
+                '^Service/gui/gui_service\.c$'
+                '^Service/gui/gui_service\.h$'
+                '^Service/gui/main/background/'
+                '^Tests/gui_theme/'
             )
         }
         @{

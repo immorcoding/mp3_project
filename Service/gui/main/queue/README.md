@@ -9,6 +9,8 @@ Flex 排布。窗口滑动时在已有 panel 上转 head 改字，不按整表�
 把窗口 `Buffer` 原样传入；当前仍是路径。标题/歌手等 `load` 调解析器后，窗口载荷改成
 曲名与歌手，见 `docs/catalog_architecture.md` 第 5 节。`Length` 为 0 则没有可见行。
 SquareLine 重新导出后若范本构造变了，对照更新本目录的 create 函数，不得手改 `GUI/`。
+行颜色写死占位 hex（Accent `#00B0DE` 青蓝、Ink `#F1F6FF` 近白、Wash `#E7E7E7` 浅灰），由 GUI 调色板过滤器映射；
+造行末尾对 panel 整树再绑过滤器。不得调用 `ui_object_set_themeable_style_property`。
 
 当前/非当前只改 Border Opa、曲名色、Long mode 和右侧符号 Opa。不改 Border Width，
 以免文字漂移。点按 `CLICKED` 立刻只刷新这些样式，并把窗内槽位换成播放列表下标；

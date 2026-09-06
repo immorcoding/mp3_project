@@ -268,7 +268,10 @@ void ui_Main_screen_init(void)
     lv_obj_set_align(ui_MusicPlayingSlider, LV_ALIGN_TOP_MID);
     lv_obj_set_style_radius(ui_MusicPlayingSlider, 10000, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_MusicPlayingSlider, lv_color_hex(0x404040), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_MusicPlayingSlider, 70, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_MusicPlayingSlider, 150, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_color(ui_MusicPlayingSlider, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_opa(ui_MusicPlayingSlider, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(ui_MusicPlayingSlider, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_set_style_radius(ui_MusicPlayingSlider, 1000, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(ui_MusicPlayingSlider, LV_PART_INDICATOR | LV_STATE_DEFAULT, LV_STYLE_BG_COLOR,

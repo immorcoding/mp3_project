@@ -12,8 +12,8 @@ Background image，因为该图像由本 Module 动态裁剪生成。
 ## 私有 Interface
 
 - `service_gui_main_background_prepare(clear_wallpaper)`：仅由 `main/gui_service_main.c` 调用。
-  调用前 Pager 必须已经完成布局和初始回中。该函数创建全屏模糊副本、裁剪首帧背景、绑定图像，
-  并向 MainPageContainer 注册 `LV_EVENT_SCROLL`。
+  调用前 Pager 必须已经完成布局和初始回中。始终使 Tabview Content 透明并禁用横滑。
+  Default 才创建全屏模糊副本、裁剪首帧背景、绑定图像并注册滚动。Solid 不算模糊，不绑裁剪图。
 
 ## 资源与滚动路径
 

@@ -1,6 +1,6 @@
 # 主机回归
 
-`external_loader`、`flash_ftl`、`gui_task`、`w25qxx`、`resource_pack` 与 `storage_catalog` 是六个独立的 CMake 工程，共 21 个 CTest：`external_loader` 1 个，`flash_ftl` 16 个（3 个固定测试、12 个文件场景测试、1 个卷感知 Service 测试），`gui_task` 1 个，`w25qxx` 1 个，`resource_pack` 1 个，`storage_catalog` 1 个。
+`external_loader`、`flash_ftl`、`gui_task`、`gui_theme`、`w25qxx`、`resource_pack` 与 `storage_catalog` 是七个独立的 CMake 工程，共 22 个 CTest：`external_loader` 1 个，`flash_ftl` 16 个（3 个固定测试、12 个文件场景测试、1 个卷感知 Service 测试），`gui_task` 1 个，`gui_theme` 1 个，`w25qxx` 1 个，`resource_pack` 1 个，`storage_catalog` 1 个。
 
 ## 环境
 

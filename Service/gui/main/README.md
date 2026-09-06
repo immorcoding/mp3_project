@@ -2,7 +2,7 @@
 
 `main/` 是 Main Screen 的私有运行时编排 Module。它只向 `Service/gui` 发布
 `service_gui_main_prepare()`：在 SquareLine 的 `ui_init()` 完成后，按稳定顺序准备
-Main 的循环分页与局部毛玻璃。APP、其他 Service 和 `GUI/` 生成代码不得包含或调用
+Main 的循环分页与 Background（Default 才做局部毛玻璃）。APP、其他 Service 和 `GUI/` 生成代码不得包含或调用
 本目录中的任何头文件。
 
 它不创建、删除或修改 SquareLine 导出的文件。Queue 可见行由 `queue/` 在运行时从
@@ -25,7 +25,8 @@ main/
   并从当前 `scroll_y` 扣整行高度；不包含 `storage_listbuffer.h`。
   Queue 滚动不是 Pager，不要等 `SCROLL_END` 吸附。
 - `background/` 不维护当前页、吸附阈值、循环映射、圆点动画或 Queue 行；它长期持有页面级
-  SDRAM 图像缓冲，并在 MainPageContainer 滚动时更新 MusicModeTabs 的局部背景。
+  SDRAM 图像缓冲，并在 MainPageContainer 滚动时更新 MusicModeTabs 的局部背景。仅 Default
+  才会填充这些缓冲。
 - 子 Module 可以向同一个 `MainPageContainer` 注册不同 LVGL 事件，但不共享私有状态：
   Pager 处理 `LV_EVENT_SCROLL_END`，Background 处理 `LV_EVENT_SCROLL`。
 
@@ -44,6 +45,7 @@ main/
 GUI Task
   -> Service_GUI_Init()
   -> ui_init()
+  -> Service_GUI_ThemeApply(STARTUP)
   -> service_gui_main_prepare(clear_wallpaper)
        -> pager/service_gui_main_pager_prepare()
             -> 解析布局、绑定三页、无动画居中 Music
@@ -52,9 +54,8 @@ GUI Task
             -> 隐藏 SongPanel1 范本，打开 QueueTab 滚动
        -> background/service_gui_main_background_prepare(clear_wallpaper)
             -> 使 Tabview 内部 Content 透明并禁用其横滑
-            -> Canvas 生成全屏模糊工作帧
-            -> 复制为 Main 长期模糊壁纸
-            -> 裁剪 MusicModeTabs 首帧并注册滚动同步
+            -> 仅 Default：Canvas 生成全屏模糊工作帧、复制长期壁纸、裁剪并注册滚动同步
+            -> Solid：不模糊、不绑裁剪图
 GUI Task 循环
   -> Service_GUI_QueueConsumeSelect() / cursor_set（假切歌）
   -> Service_GUI_QueueScrollLead() / 按滚动改 Index

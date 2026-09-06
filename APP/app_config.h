@@ -28,9 +28,9 @@
 /* app_tasks.h */
 #define APP_BOOT_TASK_STACK_WORDS       128U   /* Boot Task 栈深度，单位为 word。 */
 #define APP_LOG_TASK_STACK_WORDS        512U   /* Log Task 栈深度，单位为 word。 */
-#define APP_STORAGE_TASK_STACK_WORDS    512U   /* Storage Task 栈深度，单位为 word。 */
+#define APP_STORAGE_TASK_STACK_WORDS    1024U   /* Storage Task 栈深度，单位为 word。 */
 #define APP_MONITOR_TASK_STACK_WORDS    256U   /* Monitor Task 栈深度，单位为 word。 */
-#define APP_GUI_TASK_STACK_WORDS        2048U  /* GUI Task 栈深度，单位为 word。 */
+#define APP_GUI_TASK_STACK_WORDS        2048U  /* GUI Task 栈深度，单位为 word。768 word 会在 Default 解锁 Fade 时溢出。 */
 
 #define APP_BOOT_TASK_PRIORITY          0U     /* Boot Task 优先级。 */
 #define APP_LOG_TASK_PRIORITY           1U     /* Log Task 优先级。 */

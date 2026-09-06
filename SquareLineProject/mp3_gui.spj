@@ -4560,9 +4560,27 @@
                                               64,
                                               64,
                                               64,
-                                              70
+                                              150
                                             ],
                                             "InheritedType": 7
+                                          },
+                                          {
+                                            "nid": 10710,
+                                            "flags": 4096,
+                                            "strtype": "_style/Border_Color",
+                                            "intarray": [
+                                              231,
+                                              231,
+                                              231,
+                                              40
+                                            ],
+                                            "InheritedType": 7
+                                          },
+                                          {
+                                            "nid": 10720,
+                                            "strtype": "_style/Border width",
+                                            "integer": 1,
+                                            "InheritedType": 6
                                           }
                                         ],
                                         "InheritedType": 1
@@ -9630,7 +9648,7 @@
                                 "nid": 10410,
                                 "flags": 4096,
                                 "strtype": "_style/Text_Color",
-                                "strval": "White1",
+                                "strval": "Ink",
                                 "integer": 1000385,
                                 "intarray": [
                                   241,
@@ -9942,7 +9960,7 @@
                                 "nid": 10410,
                                 "flags": 4096,
                                 "strtype": "_style/Text_Color",
-                                "strval": "White1",
+                                "strval": "Ink",
                                 "integer": 1000385,
                                 "intarray": [
                                   241,
@@ -10285,7 +10303,7 @@
                                     "nid": 10810,
                                     "flags": 4096,
                                     "strtype": "_style/Outline_Color",
-                                    "strval": "White1",
+                                    "strval": "Ink",
                                     "integer": 1000385,
                                     "intarray": [
                                       241,
@@ -10344,7 +10362,7 @@
                                     "nid": 10520,
                                     "flags": 4096,
                                     "strtype": "_style/Bg_Color",
-                                    "strval": "Blue1",
+                                    "strval": "Accent",
                                     "integer": 1000334,
                                     "intarray": [
                                       0,
@@ -10517,7 +10535,7 @@
                                     "nid": 10410,
                                     "flags": 4096,
                                     "strtype": "_style/Text_Color",
-                                    "strval": "White1",
+                                    "strval": "Ink",
                                     "integer": 1000385,
                                     "intarray": [
                                       241,
@@ -11244,7 +11262,7 @@
                                         "nid": 20410,
                                         "flags": 4096,
                                         "strtype": "_style/Text_Color",
-                                        "strval": "White1",
+                                        "strval": "Ink",
                                         "integer": 1000385,
                                         "intarray": [
                                           241,
@@ -12079,7 +12097,7 @@
                                     "nid": 10410,
                                     "flags": 4096,
                                     "strtype": "_style/Text_Color",
-                                    "strval": "White1",
+                                    "strval": "Ink",
                                     "integer": 1000385,
                                     "intarray": [
                                       241,
@@ -12122,7 +12140,7 @@
                                     "nid": 10410,
                                     "flags": 4096,
                                     "strtype": "_style/Text_Color",
-                                    "strval": "White1",
+                                    "strval": "Ink",
                                     "integer": 1000385,
                                     "intarray": [
                                       241,
@@ -12162,7 +12180,7 @@
                                     "nid": 20410,
                                     "flags": 4096,
                                     "strtype": "_style/Text_Color",
-                                    "strval": "Blue1",
+                                    "strval": "Accent",
                                     "integer": 1000334,
                                     "intarray": [
                                       0,
@@ -12188,7 +12206,7 @@
                                     "nid": 20710,
                                     "flags": 4096,
                                     "strtype": "_style/Border_Color",
-                                    "strval": "Blue1",
+                                    "strval": "Accent",
                                     "integer": 1000334,
                                     "intarray": [
                                       0,
@@ -12414,7 +12432,7 @@
                                         "nid": 10520,
                                         "flags": 4096,
                                         "strtype": "_style/Bg_Color",
-                                        "strval": "Blue1",
+                                        "strval": "Accent",
                                         "integer": 1000334,
                                         "intarray": [
                                           0,
@@ -12477,7 +12495,7 @@
                                         "nid": 30520,
                                         "flags": 4096,
                                         "strtype": "_style/Bg_Color",
-                                        "strval": "Blue1",
+                                        "strval": "Accent",
                                         "integer": 1000334,
                                         "intarray": [
                                           0,
@@ -12660,7 +12678,7 @@
                                             "nid": 10410,
                                             "flags": 4096,
                                             "strtype": "_style/Text_Color",
-                                            "strval": "White1",
+                                            "strval": "Ink",
                                             "integer": 1000385,
                                             "intarray": [
                                               241,
@@ -13017,7 +13035,7 @@
                                             "nid": 10410,
                                             "flags": 4096,
                                             "strtype": "_style/Text_Color",
-                                            "strval": "White1",
+                                            "strval": "Ink",
                                             "integer": 1000385,
                                             "intarray": [
                                               241,
@@ -13373,7 +13391,7 @@
                                             "nid": 10410,
                                             "flags": 4096,
                                             "strtype": "_style/Text_Color",
-                                            "strval": "White1",
+                                            "strval": "Ink",
                                             "integer": 1000385,
                                             "intarray": [
                                               241,
@@ -15256,7 +15274,7 @@
     }
   ],
   "selected_theme": "Default",
-  "selected_screen": "GUID81098339-173735S2155237",
+  "selected_screen": "GUID34512570-170325S213145236",
   "info": {
     "name": "mp3_gui.spj",
     "depth": 1,
@@ -15285,7 +15303,7 @@
     "separate_screen_save": false,
     "hierarchy_state_save": false,
     "reverse_event_order": false,
-    "backup_cnt": 663,
+    "backup_cnt": 677,
     "autosave_cnt": 0,
     "group_color_cnt": 0,
     "imagebytearrayprefix": "",

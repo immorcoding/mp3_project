@@ -4,15 +4,15 @@
 
 ## 进度
 
-- 刚收口：Queue 假切歌已在 `main` `97d315a`。
-- 本场：`gui-theme`。SquareLine 五全局色已改名并导出。Queue 运行时已跟 `Accent`/`Ink`。`ThemeApply` 与纯色背景尚未做。
-- 本主线必读：`docs/gui_ui_design.md` **4.1**（占位 hex）、**10.5.3**、ADR-0007。
+- 刚收口：Default/Solid 过滤器外观；LVGL 堆 256 KiB；GUI 栈 2048 word。进度条按现导出：Muted Opa 150 + 1px Wash 边 Opa 40。
+- 下一活动：提交本分支（生成目录需维护者会话 `ALLOW_GENERATED_UPDATE`）。未接电量/时间。
+- 本主线必读：`Service/gui/theme/README.md`、`docs/gui_ui_design.md` **4.1**、ADR-0007 第 6 条。
 - 按需查词：**平台电源**。
 
 ## 本场交接
 
-- 分支：`gui-theme`。禁止手改 `GUI/`。`Service/gui` 不得包含 `storage_listbuffer.h` / `storage_playback_cursor.h`。
-- 占位：`Accent=#00B0DE`、`Ink=#F1F6FF`、`Muted=#404040`、`Wash=#E7E7E7`、`Ground=#000000`。真值将放 Service 表；不在 SquareLine 加 Theme 2。
-- 已赞成：纯色关壁纸、Tab 只留色层；Boot 本轮不改；不要 `gui_system` 装电量/时间。
-- `Ground=#000000` 与 LVGL 默认黑相同；按 hex 匹配前建议在 SquareLine 改成更独特占位（如 `#13223D`）再导出。
-- 下场第一刀：Service 调色板宏 + `ThemeApply`（刷占位色、壁纸显隐、毛玻璃）。先不要做电量/时间。
+- 分支：`gui-theme`。禁止手改 `GUI/`。不调用 `ui_theme_set()`。不要 `gui_system`。
+- 公开：`Service_GUI_ThemeApply(id)`。`SERVICE_GUI_THEME_STARTUP` 现为 Solid。
+- Default 五色宏等于占位 hex；Solid 另表。主机：`Tests/gui_theme/`。
+- Init 结束后重对 `lv_tick`。Boot→Reveal / Reveal→Lock 仍走 SquareLine Fade。
+- 768 word GUI 栈会在 Default 解锁 Fade 溢出。Boot Arc 未改。

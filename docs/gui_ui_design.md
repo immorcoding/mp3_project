@@ -70,25 +70,31 @@ Lock Screen
 
 ### 4.1 色彩与背景
 
-SquareLine 免费版最多 5 个全局色、2 套主题。工程只用一套 SquareLine 主题；五个全局色是占位名，导出 hex 冻结为查找键。多套外观的 RGB 真值由 GUI Service 调色板提供（尚未落地），不在编辑器里加第二套主题。
+SquareLine 不再承担主题切换（不调用 `ui_theme_set()`）。编辑器里的颜色写成**冻结占位 hex**；各态 Opa 仍写在对象上。多套外观的 RGB 真值、当前索引、壁纸显隐和 Music 毛玻璃由 GUI Service 管理。LVGL 8.3 绘制取色走 `*_filtered()`：SquareLine `ui_init()` 会 `lv_theme_basic_init` 覆盖 display theme，因此 GUI Service 在 `ui_init()` 之后重新注册带 `color_filter_dsc` 的 display theme，并对已创建对象整树再绑，把占位 hex 映射成当前调色板；不是五个占位之一的颜色原样放行（尤其 `#FFFFFF` 且 Opa 0 的透明壳）。切主题只换当前调色板指针并 invalidate，不扫对象改 style。这不是状态机，也不装电量/时间。
 
-| 名字 | 占位 hex | 职责 |
+导出已去掉 SquareLine 全局色绑定。`GUI/ui.h` 不再包含 `ui_themes.h`。磁盘上若仍有 `ui_themes.*` / `ui_theme_manager.*`，以 `GUI/CMakeLists.txt` 为准，不编进固件；Queue `create_row()` 必须对照范本写死占位 hex，不得再调用 `ui_object_set_themeable_style_property`。
+
+| 槽 | 占位 hex | 职责 |
 | --- | --- | --- |
 | `Accent` | `#00B0DE` | 进度、当前行、Tab 选中、电池填充。 |
 | `Ink` | `#F1F6FF` | 主文字、浅轮廓、图标。 |
 | `Muted` | `#404040` | 非活动轨道等低对比元素；不作为小字号正文。 |
-| `Wash` | `#E7E7E7`（主题 Alpha 40） | 按钮 / Queue 行薄填充；对象还可另设 Opa。 |
-| `Ground` | `#000000` | 纯色页底占位；壁纸主题被图盖住。此 hex 与 LVGL 默认黑相同，按色匹配前宜改成更独特的占位。 |
+| `Wash` | `#E7E7E7` | 按钮 / Queue 行薄填充、进度条轨道 1px 描边；Opa 分态写在对象上，不进调色板。 |
+| `Ground` | `#13223D` | 纯色页底。Default 下被壁纸盖住；Solid 由 `ThemeApply` 把 Boot/BootReveal/Lock/Main 的底 Opa 拉到 COVER 并关掉壁纸图。 |
 
-次级文字仍用 `Ink` + 对象级低透明度，不另占全局色。下列渐变色只作壁纸绘制参考，不是全局色：顶部 `#173B63`、中段 `#1B2B58`、底部 `#2B2050`；旧卡片实心底 `#13223D` 同样不是全局色。
+次级文字仍用 `Ink` 占位 + 对象级低透明度。`#FFFFFF` + Opa 0 不是五槽之一。下列渐变色只作壁纸绘制参考：顶部 `#173B63`、中段 `#1B2B58`、底部 `#2B2050`。
+
+首版两套外观：**Default**（占位 hex 原样、壁纸、Music 毛玻璃）与 **Solid**（近黑底 + 品红强调、关壁纸、Music Tab 只留半透明 `Wash`、不算模糊）。上电采用 Solid，由 `SERVICE_GUI_THEME_STARTUP` 指定。Default / Solid RGB 写入 Service 表；Solid 建议起点：`Ground #18181B`、`Accent #D946A8`、`Ink #F4F4F5`、`Muted #71717A`、`Wash #E4E4E7`。
+
+Boot Arc 动画本轮不改。Solid 下 `Boot` / `BootReveal` 与 Lock/Main 一样关掉壁纸、铺 `Ground`；Default 仍走模糊→清晰壁纸。开机环走当前主题 `Accent`。
 
 背景的两色纵向线性渐变在当前 SquareLine 模拟器和真机中均已验证会产生明显色带，因此不作为最终视觉方案。目标固件保持 `LV_DITHER_GRADIENT = 0`；运行时渐变抖动已经在真机测试，色带虽可变成颗粒，但不能形成干净的雾状层次，故不采用。
 
-首版正式采用**系统级静态壁纸图**：壁纸目标规格为 `240 x 320` 的全屏资源，先在图像工具中以深蓝到靛紫底色叠加三处大范围、低对比的蓝紫模糊光团，再导入 SquareLine。当前选中的 `Indigo Mist Soft Dark` 含少量半透明像素，因此导出为带 Alpha 的资源；其余技术细节和后续不透明化条件见第 10 节。Image Dither 是否启用及其强度以 RGB565 真机观感为准。壁纸图只承担背景雾感，不烘焙固定信息卡；卡片仍由 SquareLine 组件叠加，以便页面内容和布局独立调整。
+Default 外观采用**系统级静态壁纸图**：壁纸目标规格为 `240 x 320` 的全屏资源，先在图像工具中以深蓝到靛紫底色叠加三处大范围、低对比的蓝紫模糊光团，再导入 SquareLine。当前选中的 `Indigo Mist Soft Dark` 含少量半透明像素，因此导出为带 Alpha 的资源；其余技术细节和后续不透明化条件见第 10 节。Image Dither 是否启用及其强度以 RGB565 真机观感为准。壁纸图只承担背景雾感，不烘焙固定信息卡；卡片仍由 SquareLine 组件叠加，以便页面内容和布局独立调整。
 
-普通应用内容页的大型卡片首版仍只模拟为半透明深色底、弱描边与上/左侧更亮的细边，不使用运行时背景模糊。`MusicModeTabs` 是已确认的例外：它使用第 10.5.2 节定义的运行时局部毛玻璃。这样把软件模糊限制在单一主要视觉区域，既保留玻璃质感，也避免将整页所有卡片都变为高成本动态模糊。`Boot` 的全屏壁纸模糊是第 10.3 节定义的独立启动视觉效果，不属于普通卡片样式。
+普通应用内容页的大型卡片首版仍只模拟为半透明深色底、弱描边与上/左侧更亮的细边，不使用运行时背景模糊。`MusicModeTabs` 的运行时局部毛玻璃（第 10.5.2 节）只属于 **Default**。Solid 不算模糊壁纸。`Boot` 的全屏壁纸模糊是第 10.3 节的独立启动效果，也只属于 **Default**。
 
-壁纸是系统级外观：Lock Screen 与 Main Screen 使用同一个当前选中壁纸；MusicPage、BooksPage、SettingsPage 通过透明背景露出 Main 的壁纸。首版不做随机壁纸、动态壁纸或每帧变化的渐变。
+Default 下壁纸仍是系统级外观：Lock 与 Main 共用当前壁纸；MusicPage、BooksPage、SettingsPage 透过透明背景露出。Solid 下 Boot/BootReveal/Lock/Main 铺 `Ground`，关掉壁纸 Image。首版不做随机壁纸、动态壁纸或每帧变化的渐变。
 
 默认壁纸随 SquareLine 导出为只读 GUI 资源，并跟随固件存放在内部 Flash；首版不从 SD 卡或外部 SPI Flash 读取它。后续只有用户新增或替换的壁纸，才在文件系统与外部存储方案完成后评审 SD 卡或 SPI Flash 的资源加载方式。
 
@@ -200,7 +206,7 @@ Settings 使用 2 x 2 方形卡片，而不是长列表：
 
 ### 8.1 Wallpaper
 
-`Settings → Display → Wallpaper` 是系统壁纸的选择页。它展示多张静态壁纸预览卡；点击预览后切换该页内的选中态，选中项以强调色细边与勾选标记表示。首版只验证视觉选择和页面跳转，不接 Flash 持久化、真实资源切换或动态壁纸；候选壁纸数量、缩略图布局和默认壁纸以首张 `Indigo Mist` 导入后的实际观感为准，尚待下一步确认。
+`Settings → Display → Wallpaper` 是系统壁纸的选择页。它展示多张静态壁纸预览卡；点击预览后切换该页内的选中态，选中项以强调色细边与勾选标记表示。首版只验证视觉选择和页面跳转，不接 Flash 持久化、真实资源切换、主题索引或动态壁纸。Solid 外观不显示当前壁纸。候选数量、缩略图和默认壁纸以 `Indigo Mist` 导入后的观感为准，尚待下一步确认。
 
 ## 9. 锁屏
 
@@ -303,9 +309,9 @@ BootReveal --（SquareLine：SCREEN_LOADED → Call function）--> GUI Service
 GUI Service --（lv_async_call 延后一轮 LVGL 调度）--> Lock
 ```
 
-`Boot → BootReveal` 保留 SquareLine 的普通切屏事件；当前 SquareLine 导出的视觉基准为 `4000 ms` 停留后
-以 `400 ms` `FADE_OUT` 切入。各 Screen 根背景色 Alpha 均为 `0`，仅由根 Background
-image 显示壁纸，避免 Screen Fade 中混入默认黑色或白色底。
+`Boot → BootReveal` 仍由 SquareLine 的 `SCREEN_LOADED` 切屏：约 `4000 ms` 后 `400 ms`
+`FADE_OUT`。`gui_service.c` 在 Init 结束后重对 `lv_tick`，避免把初始化墙钟一次性灌进切屏延迟。
+Solid 下根背景是 `Ground`；Default 下仍是壁纸图。
 
 `BootReveal` 的 `SCREEN_LOADED` **不得**直接再添加 `Change Screen → Lock`。在 LVGL v8
 中，前一个 Screen Fade 的 `SCREEN_LOADED` 回调仍处于前一次切屏的收尾过程；此时嵌套调用
@@ -391,7 +397,7 @@ H743 的 DMA2D 可协助像素格式转换、拷贝、填充和 Alpha 混合，�
 
 第一轮 Canvas 验证直接复用当前 SquareLine 导出的 `LV_IMG_CF_TRUE_COLOR_ALPHA` 默认壁纸：按源描述符的 `data_size` 复制到同格式 Canvas，再调用 `lv_canvas_blur_hor(canvas, NULL, radius)` 与 `lv_canvas_blur_ver(canvas, NULL, radius)`；该 Canvas 缓冲约 `225 KiB`。这是为了以最少的格式转换证明视觉链路，Canvas 的实现可处理 Alpha。正式可换壁纸缓存再统一为已预合成、全不透明 RGB565：将清晰壁纸复制到 RGB565 Canvas 后执行同一组调用，必要时以较小半径重复一到两轮，使视觉更接近高斯模糊。Canvas 只解决“怎样算出模糊帧”，并不替代按壁纸内容缓存结果的机制。
 
-正式 RGB565 路径至少保留 Clear 与 Blur Canvas 两个 `240 x 320 RGB565` SDRAM 缓冲，合计约 `300 KiB`；若 Canvas 实现或后续手写 Box Blur 回退方案需要乒乓缓冲，再增加第三个缓冲，总计约 `450 KiB`。首轮 Alpha 资源验证仅额外持有一块约 `225 KiB` 的通用视觉效果 Canvas 工作缓冲，清晰源继续位于内部 Flash。Canvas 对象本身可由 LVGL 小堆动态创建，但当前 LVGL 堆仅 `48 KiB`、FreeRTOS 堆仅 `32 KiB`，不得用 `lv_mem_alloc()`、`pvPortMalloc()` 或未审计的 `malloc()` 分配此大像素缓冲。所有 Canvas 缓冲禁止放入 DTCM。由 DMA 写入的壁纸源在 CPU 读取前需要失效对应 D-Cache 区间；CPU 生成的 Blur 帧在被 DMA2D 或外设 DMA 读取前需要清理对应 D-Cache 区间。若最终由 LVGL 软件渲染直接读取该帧，则同一 CPU 缓存域内不额外做无意义的清理。当前原型使用 `service_gui_effect_canvas_buffer` 与 `canvas/gui_service_canvas` Module；正式缓存的长期资源 Interface 仍须在实现前审校。
+正式 RGB565 路径至少保留 Clear 与 Blur Canvas 两个 `240 x 320 RGB565` SDRAM 缓冲，合计约 `300 KiB`；若 Canvas 实现或后续手写 Box Blur 回退方案需要乒乓缓冲，再增加第三个缓冲，总计约 `450 KiB`。首轮 Alpha 资源验证仅额外持有一块约 `225 KiB` 的通用视觉效果 Canvas 工作缓冲，清晰源继续位于内部 Flash。Canvas 对象本身可由 LVGL 小堆动态创建，但当前 LVGL 堆为 `256 KiB`、FreeRTOS 堆为 `32 KiB`，不得用 `lv_mem_alloc()`、`pvPortMalloc()` 或未审计的 `malloc()` 分配此大像素缓冲。所有 Canvas 缓冲禁止放入 DTCM。由 DMA 写入的壁纸源在 CPU 读取前需要失效对应 D-Cache 区间；CPU 生成的 Blur 帧在被 DMA2D 或外设 DMA 读取前需要清理对应 D-Cache 区间。若最终由 LVGL 软件渲染直接读取该帧，则同一 CPU 缓存域内不额外做无意义的清理。当前原型使用 `service_gui_effect_canvas_buffer` 与 `canvas/gui_service_canvas` Module；正式缓存的长期资源 Interface 仍须在实现前审校。
 
 ### 10.4 Settings 局部毛玻璃资源模型（设计已验证，功能待实现）
 
@@ -476,7 +482,7 @@ BooksPage 和 SettingsPage 已直接共用 Main 的单一 StatusBar；它们后�
 
 #### 10.5.2 Music 局部毛玻璃（已实现，待真机验收）
 
-`MusicModeTabs` 需要真实局部毛玻璃：目标区域内显示从系统壁纸**当前屏幕坐标**裁剪出的模糊像素，区域外壁纸保持清晰。播放器的圆形控制按钮不使用毛玻璃：在 240 px 宽屏上的可见收益不足以抵消额外缓冲与裁剪复杂度，仍使用 SquareLine 的半透明染色、弱描边和图标。该效果不能直接赋给 SquareLine 组件的背景色，也不为每个组件建立独立 Canvas。
+`MusicModeTabs` 需要真实局部毛玻璃：目标区域内显示从系统壁纸**当前屏幕坐标**裁剪出的模糊像素，区域外壁纸保持清晰。该路径只在 **Default** 下建立；Solid 不生成模糊壁纸、不绑定裁剪图，Tab 只留半透明 `Wash`。播放器的圆形控制按钮不使用毛玻璃：在 240 px 宽屏上的可见收益不足以抵消额外缓冲与裁剪复杂度，仍使用 SquareLine 的半透明染色、弱描边和图标。该效果不能直接赋给 SquareLine 组件的背景色，也不为每个组件建立独立 Canvas。
 
 运行时实现由 `Service/gui/canvas/` 与 `Service/gui/main/` 共同负责，不修改 `GUI/`：
 
@@ -497,7 +503,7 @@ MusicPage
 └─ MusicModeTabs
    ├─ NowPlayingTab
    │  └─ MusicPlayerControlContainer  透明、水平布局、不滚动
-   │     ├─ MusicPlayingSlider         Muted 轨道、Accent 进度
+   │     ├─ MusicPlayingSlider         Muted 轨道、Wash 细边、Accent 进度
    │     ├─ MusicPreviousButton       圆形半透明控制按钮
    │     │  └─ MusicPreviousIcon      上一首符号 Label
    │     ├─ MusicPlayPauseButton      圆形半透明控制按钮，视觉略强
@@ -508,7 +514,7 @@ MusicPage
    └─ LibraryTab                  当前为空白内容区
 ```
 
-`MusicPlayingSlider` 位于控制按钮上方。当前导出中，主轨道为低 Alpha `Muted`，Indicator 使用 `Accent`；`DEFAULT` 状态的 Knob 透明，`PRESSED` 状态才显示 `Accent` Knob，并通过 `STYLE (KNOB) → Paddings` 增大。LVGL v8 的 Slider Knob 默认边长等于 Slider 较短边，因此若将来改为常显 Knob，仍应通过 Padding 调整其大小，而非修改 Slider 本体的宽高。三个 Button 当前使用 `Wash` 的低 Alpha 填充，按下态提高 Alpha；不设置独立边框，图标使用 `Ink`。当前不在 SquareLine 中添加播放事件。每个图标均由 Button 的独立 Label 子对象承载并居中对齐，以便后续 Service 将 `MusicPlayPauseIcon` 的播放符号替换为暂停符号；不得用 ImageButton 或导入图标图片资源。项目已启用的 `lv_font_montserrat_16` 包含 LVGL 的 `PREV`、`PLAY`、`PAUSE` 与 `NEXT` 符号；用户优先从 SquareLine 的符号选择器使用它们，不新增图标图片资源。三个按钮与外层 `MusicPlayerControlContainer` 均不是毛玻璃区域。
+`MusicPlayingSlider` 位于控制按钮上方。当前导出中，主轨道为 `Muted`、Opa `150`，并带 1px 满圈 `Wash` 边（Opa `40`）；Indicator 使用 `Accent`。`DEFAULT` 状态的 Knob 透明，`PRESSED` 状态才显示 `Accent` Knob，并通过 `STYLE (KNOB) → Paddings` 增大。LVGL v8 的 Slider Knob 默认边长等于 Slider 较短边，因此若将来改为常显 Knob，仍应通过 Padding 调整其大小，而非修改 Slider 本体的宽高。三个 Button 当前使用 `Wash` 的低 Alpha 填充，按下态提高 Alpha；不设置独立边框，图标使用 `Ink`。当前不在 SquareLine 中添加播放事件。每个图标均由 Button 的独立 Label 子对象承载并居中对齐，以便后续 Service 将 `MusicPlayPauseIcon` 的播放符号替换为暂停符号；不得用 ImageButton 或导入图标图片资源。项目已启用的 `lv_font_montserrat_16` 包含 LVGL 的 `PREV`、`PLAY`、`PAUSE` 与 `NEXT` 符号；用户优先从 SquareLine 的符号选择器使用它们，不新增图标图片资源。三个按钮与外层 `MusicPlayerControlContainer` 均不是毛玻璃区域。
 
 当前导出的壁纸为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，一张全屏帧约 `230400 B`。Music 运行时会同时持有共享 Canvas 工作区、一张 Main 长期全屏 Blur 壁纸和一张最大 `240 x 320` 的 MusicModeTabs 裁剪背景，三者峰值上限约 `675 KiB`；实际 MusicModeTabs 略矮于整屏（状态栏与圆点之外），但静态缓冲按整屏高度预留，避免再把 SquareLine 百分比写进 Service。壁纸切换时才重新执行全屏模糊；静态显示、文字更新和每次 `Service_GUI_Process()` 都不得重复模糊。MainPageContainer 横滑的 `LV_EVENT_SCROLL` 只更新局部裁剪图；SquareLine 重新导出导致对象尺寸或位置改变后，会在下一次初始化按新布局重新建立首帧裁剪。裁剪上限见 `main/background/gui_service_main_background_config.h`。未来切换到 RGB565 缓存资源后，三帧合计约 `450 KiB`。
 
@@ -516,7 +522,7 @@ MusicPage
 
 #### 10.5.3 Queue 行模板（运行时按 Length 复制）
 
-SquareLine 1.6.1 没有 List 控件。Queue 不用 `lv_list`。SquareLine 只保留**一份**行范本（当前导出名为 `SongPanel1` 及其子对象）；不要在编辑器里 Duplicate 成满窗行。`Service/gui/main/queue` 把 `GUI/screens/ui_Main.c` 里该范本的构造序列摘进 for 循环。可见行数跟 READY 后的 `Length` 走，**至多** `SERVICE_GUI_MAIN_QUEUE_MAX_ROWS`（须与 `STORAGE_LISTBUFFER_MAX_ENTRIES` 同为 12），不是按整表无限 `create`，也不预先造满空行。已构造行在后续 `Length` 变短时 Hidden。窗口沿播放列表移动时，在这些 panel 上转 head 回收改字，不把 `storage_listbuffer` 改成环形数组。导出的范本行隐藏。不得手改 `GUI/`。竖向滚动由 `QueueTab` 承担；不得打开 Tabview 内部 Content 的滚动。GUI Task 在滑动过程中根据 `Service_GUI_QueueScrollLead()` 改 `Index` 再 `request`：Index=0 不留上一窗，其余留一行给回滑。换窗从当前 `scroll_y` 扣整行高度，保留手指剩下的像素，不吸回整页，也不像 MainPager 那样等 `SCROLL_END` 吸附。SquareLine 重新导出后若范本构造变了，对照更新 create 函数。当前范本行高为 QueueTab 的 `17%`。
+SquareLine 1.6.1 没有 List 控件。Queue 不用 `lv_list`。SquareLine 只保留**一份**行范本（当前导出名为 `SongPanel1` 及其子对象）；不要在编辑器里 Duplicate 成满窗行。`Service/gui/main/queue` 把 `GUI/screens/ui_Main.c` 里该范本的构造序列摘进 for 循环。可见行数跟 READY 后的 `Length` 走，**至多** `SERVICE_GUI_MAIN_QUEUE_MAX_ROWS`（须与 `STORAGE_LISTBUFFER_MAX_ENTRIES` 同为 12），不是按整表无限 `create`，也不预先造满空行。已构造行在后续 `Length` 变短时 Hidden。窗口沿播放列表移动时，在这些 panel 上转 head 回收改字，不把 `storage_listbuffer` 改成环形数组。导出的范本行隐藏。不得手改 `GUI/`。竖向滚动由 `QueueTab` 承担；不得打开 Tabview 内部 Content 的滚动。GUI Task 在滑动过程中根据 `Service_GUI_QueueScrollLead()` 改 `Index` 再 `request`：Index=0 不留上一窗，其余留一行给回滑。换窗从当前 `scroll_y` 扣整行高度，保留手指剩下的像素，不吸回整页，也不像 MainPager 那样等 `SCROLL_END` 吸附。SquareLine 重新导出后若范本构造变了，对照更新 create 函数。当前范本行高为 QueueTab 的 `17%`。复制行写死与范本相同的占位 hex，颜色由过滤器换成当前调色板；不要使用 `ui_object_set_themeable_style_property`。
 
 范本层级：
 

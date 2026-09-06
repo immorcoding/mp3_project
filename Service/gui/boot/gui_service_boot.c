@@ -16,6 +16,7 @@
 #include "Service/gui/boot/gui_service_boot.h"
 #include "Service/gui/boot/gui_service_boot_config.h"
 #include "Service/gui/canvas/gui_service_canvas.h"
+#include "Service/gui/theme/gui_service_theme.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -149,12 +150,12 @@ static void service_gui_boot_set_arc_phase(void *target, int32_t value)
 /**
  * @brief 为 Boot Screen 生成并绑定当前清晰壁纸的模糊背景。
  * @param clear_wallpaper 当前系统壁纸的清晰图片描述符。
- * @retval SERVICE_OK 成功。
+ * @retval SERVICE_OK 成功；Solid 下跳过模糊并保持 ThemeApply 的 Ground。
  * @retval SERVICE_NOT_READY Boot Screen 或 Canvas 工作对象尚不可用。
  * @retval SERVICE_INVALID_PARAM 壁纸格式或尺寸不满足当前 Canvas 原型约束。
- * @note  该函数直接绑定 Canvas 的共享工作帧；Canvas 工作区本身归 canvas Module
- *        持有，不依附于 Boot Screen，因而可被后续壁纸相关功能复用。故 Boot
- *        显示期间不能再次调用 Canvas 模糊 Interface，否则此处背景像素会被覆盖。
+ * @note  Default 才绑定 Canvas 共享工作帧。Solid 不得再写 Background image，
+ *        否则会盖掉 ThemeApply 关掉的壁纸。Boot 显示期间不能再次调用 Canvas
+ *        模糊 Interface。
  */
 Service_StatusTypeDef service_gui_boot_prepare_background(
     const lv_img_dsc_t *clear_wallpaper)
@@ -165,6 +166,11 @@ Service_StatusTypeDef service_gui_boot_prepare_background(
     if (ui_Boot == NULL)
     {
         return SERVICE_NOT_READY;
+    }
+
+    if (!service_gui_theme_uses_wallpaper())
+    {
+        return SERVICE_OK;
     }
 
     status = service_gui_canvas_blur_image(

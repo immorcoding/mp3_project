@@ -30,7 +30,7 @@ pre-push 从 Git 提供的 ref 更新读取提交范围。每个待推送 SHA �
 `scripts/rules/verification.psd1` 使用 Windows PowerShell 5.1 原生可读的数据格式，集中维护：
 
 - 所有 host 测试模块；
-- 生产/测试路径到 `external_loader`、`flash_ftl`、`gui_task`、`w25qxx`、`resource_pack`、`storage_catalog` 的多对多映射；
+- 生产/测试路径到 `external_loader`、`flash_ftl`、`gui_task`、`gui_theme`、`w25qxx`、`resource_pack`、`storage_catalog` 的多对多映射；
 - 纯文档和 Agent 配置的跳过规则；
 - Harness、构建系统等强制全部 host 测试的规则；
 - MCU/板级敏感路径。
