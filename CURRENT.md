@@ -4,15 +4,15 @@
 
 ## 进度
 
-- 刚收口：Queue 假切歌（行样式 + `cursor_set`）。Playback 打开/预开只留 GUI Task 注释位。
-- 下一活动：**讨论**更强颜色方案；未达成前不改 SquareLine、不改固件。先前约定要新开分支再做。
-- 本主线必读：`docs/gui_ui_design.md` **4.1**（现用 White1/Blue1/Gray1 与壁纸）、**10.5.3**（Queue 行运行时改色）、ADR-0007。
-- 按需查词：**播放列表**。
+- 刚收口：Queue 假切歌已在 `main` `97d315a`。
+- 本场：`gui-theme`。SquareLine 五全局色已改名并导出。Queue 运行时已跟 `Accent`/`Ink`。`ThemeApply` 与纯色背景尚未做。
+- 本主线必读：`docs/gui_ui_design.md` **4.1**（占位 hex）、**10.5.3**、ADR-0007。
+- 按需查词：**平台电源**。
 
 ## 本场交接
 
-- 分支：`main`。HEAD `e28a808`。未提交：游标/假切歌、全高 Tab、窗口 8→12、SquareLine 导出（`GUI/`、`SquareLineProject/`）、`storage_playback_cursor.*`、`Tests/storage_catalog/`。
-- `Service/gui` 不得包含 `storage_listbuffer.h` / `storage_playback_cursor.h`。禁止手改 `GUI/`。Queue `create_row()` 须对照导出的 `SongPanel1`。
-- 假切歌：`CLICKED` 只刷新当前/非当前样式；GUI Task 每圈先 `ConsumeSelect` 再 `cursor_set`。不解码。点按/滑窗后高亮待上板。
-- verify：`storage_catalog`、`gui_task` host PASS。FULL FAIL：生成目录写保护（用户导出相对 HEAD）。Debug hex 已含假切歌。助手禁止设 `ALLOW_GENERATED_UPDATE`。
-- 下场第一刀：只讨论 4.1 与要动哪些主题色/对象；先更新 `gui_ui_design.md`，再由用户在 SquareLine 改并导出。运行时 `Blue1`/`White1` 也在 Queue 当前行里。
+- 分支：`gui-theme`。禁止手改 `GUI/`。`Service/gui` 不得包含 `storage_listbuffer.h` / `storage_playback_cursor.h`。
+- 占位：`Accent=#00B0DE`、`Ink=#F1F6FF`、`Muted=#404040`、`Wash=#E7E7E7`、`Ground=#000000`。真值将放 Service 表；不在 SquareLine 加 Theme 2。
+- 已赞成：纯色关壁纸、Tab 只留色层；Boot 本轮不改；不要 `gui_system` 装电量/时间。
+- `Ground=#000000` 与 LVGL 默认黑相同；按 hex 匹配前建议在 SquareLine 改成更独特占位（如 `#13223D`）再导出。
+- 下场第一刀：Service 调色板宏 + `ThemeApply`（刷占位色、壁纸显隐、毛玻璃）。先不要做电量/时间。

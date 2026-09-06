@@ -74,9 +74,9 @@ void ui_Main_screen_init(void)
     lv_obj_set_align(ui_TimeLabel, LV_ALIGN_LEFT_MID);
     lv_label_set_text(ui_TimeLabel, "10:42");
     ui_object_set_themeable_style_property(ui_TimeLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_TimeLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
     lv_obj_set_style_text_font(ui_TimeLabel, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_StatusBarDateContainer = lv_obj_create(ui_StatusBarContainer);
@@ -92,9 +92,9 @@ void ui_Main_screen_init(void)
     lv_obj_set_align(ui_DateLabel, LV_ALIGN_CENTER);
     lv_label_set_text(ui_DateLabel, "AUG 24");
     ui_object_set_themeable_style_property(ui_DateLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_DateLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
     lv_obj_set_style_text_font(ui_DateLabel, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_StatusBarBatteryContainer = lv_obj_create(ui_StatusBarContainer);
@@ -128,9 +128,9 @@ void ui_Main_screen_init(void)
     lv_obj_set_style_bg_color(ui_StatusBarBatteryBar, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_StatusBarBatteryBar, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(ui_StatusBarBatteryBar, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_OUTLINE_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_StatusBarBatteryBar, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_OUTLINE_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
     lv_obj_set_style_outline_width(ui_StatusBarBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(ui_StatusBarBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_left(ui_StatusBarBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -140,9 +140,9 @@ void ui_Main_screen_init(void)
 
     lv_obj_set_style_radius(ui_StatusBarBatteryBar, 2, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(ui_StatusBarBatteryBar, LV_PART_INDICATOR | LV_STATE_DEFAULT, LV_STYLE_BG_COLOR,
-                                           _ui_theme_color_Blue1);
+                                           _ui_theme_color_Accent);
     ui_object_set_themeable_style_property(ui_StatusBarBatteryBar, LV_PART_INDICATOR | LV_STATE_DEFAULT, LV_STYLE_BG_OPA,
-                                           _ui_theme_alpha_Blue1);
+                                           _ui_theme_alpha_Accent);
 
     ui_StatusBarBatteryLabel = lv_label_create(ui_StatusBarBatteryBarLabelContainer);
     lv_obj_set_width(ui_StatusBarBatteryLabel, LV_SIZE_CONTENT);   /// 1
@@ -151,9 +151,9 @@ void ui_Main_screen_init(void)
     lv_label_set_text(ui_StatusBarBatteryLabel, "84");
     lv_obj_clear_flag(ui_StatusBarBatteryLabel, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     ui_object_set_themeable_style_property(ui_StatusBarBatteryLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_StatusBarBatteryLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
     lv_obj_set_style_text_font(ui_StatusBarBatteryLabel, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_MainPageContainer = lv_obj_create(ui_Main);
@@ -197,40 +197,40 @@ void ui_Main_screen_init(void)
     lv_obj_set_style_bg_opa(ui_MusicModeTabs, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_MAIN | LV_STATE_DEFAULT,
-                                           LV_STYLE_TEXT_COLOR, _ui_theme_color_White1);
+                                           LV_STYLE_TEXT_COLOR, _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_MAIN | LV_STATE_DEFAULT,
-                                           LV_STYLE_TEXT_OPA, _ui_theme_alpha_White1);
+                                           LV_STYLE_TEXT_OPA, _ui_theme_alpha_Ink);
     lv_obj_set_style_radius(lv_tabview_get_tab_btns(ui_MusicModeTabs), 3,  LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(lv_tabview_get_tab_btns(ui_MusicModeTabs), lv_color_hex(0xE7E7E7),
                               LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(lv_tabview_get_tab_btns(ui_MusicModeTabs), 20,  LV_PART_MAIN | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_MAIN | LV_STATE_DEFAULT,
-                                           LV_STYLE_BORDER_COLOR, _ui_theme_color_WhiteMask1);
+                                           LV_STYLE_BORDER_COLOR, _ui_theme_color_Wash);
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_MAIN | LV_STATE_DEFAULT,
-                                           LV_STYLE_BORDER_OPA, _ui_theme_alpha_WhiteMask1);
+                                           LV_STYLE_BORDER_OPA, _ui_theme_alpha_Wash);
     lv_obj_set_style_border_side(lv_tabview_get_tab_btns(ui_MusicModeTabs), LV_BORDER_SIDE_TOP,
                                  LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_ITEMS | LV_STATE_DEFAULT,
-                                           LV_STYLE_TEXT_COLOR, _ui_theme_color_White1);
+                                           LV_STYLE_TEXT_COLOR, _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_ITEMS | LV_STATE_DEFAULT,
-                                           LV_STYLE_TEXT_OPA, _ui_theme_alpha_White1);
+                                           LV_STYLE_TEXT_OPA, _ui_theme_alpha_Ink);
     lv_obj_set_style_text_font(lv_tabview_get_tab_btns(ui_MusicModeTabs), &lv_font_montserrat_12,
                                LV_PART_ITEMS | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(lv_tabview_get_tab_btns(ui_MusicModeTabs), lv_color_hex(0xFFFFFF),
                               LV_PART_ITEMS | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(lv_tabview_get_tab_btns(ui_MusicModeTabs), 0,  LV_PART_ITEMS | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_ITEMS | LV_STATE_CHECKED,
-                                           LV_STYLE_TEXT_COLOR, _ui_theme_color_Blue1);
+                                           LV_STYLE_TEXT_COLOR, _ui_theme_color_Accent);
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_ITEMS | LV_STATE_CHECKED,
-                                           LV_STYLE_TEXT_OPA, _ui_theme_alpha_Blue1);
+                                           LV_STYLE_TEXT_OPA, _ui_theme_alpha_Accent);
     lv_obj_set_style_bg_color(lv_tabview_get_tab_btns(ui_MusicModeTabs), lv_color_hex(0xFFFFFF),
                               LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_obj_set_style_bg_opa(lv_tabview_get_tab_btns(ui_MusicModeTabs), 0,  LV_PART_ITEMS | LV_STATE_CHECKED);
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_ITEMS | LV_STATE_CHECKED,
-                                           LV_STYLE_BORDER_COLOR, _ui_theme_color_Blue1);
+                                           LV_STYLE_BORDER_COLOR, _ui_theme_color_Accent);
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_ITEMS | LV_STATE_CHECKED,
-                                           LV_STYLE_BORDER_OPA, _ui_theme_alpha_Blue1);
+                                           LV_STYLE_BORDER_OPA, _ui_theme_alpha_Accent);
     lv_obj_set_style_border_width(lv_tabview_get_tab_btns(ui_MusicModeTabs), 2,  LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_obj_set_style_border_side(lv_tabview_get_tab_btns(ui_MusicModeTabs), LV_BORDER_SIDE_BOTTOM,
                                  LV_PART_ITEMS | LV_STATE_CHECKED);
@@ -239,9 +239,9 @@ void ui_Main_screen_init(void)
     lv_obj_set_style_bg_color(ui_NowPlayingTab, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_NowPlayingTab, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(ui_NowPlayingTab, LV_PART_MAIN | LV_STATE_CHECKED, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_NowPlayingTab, LV_PART_MAIN | LV_STATE_CHECKED, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
 
     lv_obj_set_style_bg_color(ui_NowPlayingTab, lv_color_hex(0xFFFFFF), LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_NowPlayingTab, 0, LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
@@ -272,18 +272,18 @@ void ui_Main_screen_init(void)
 
     lv_obj_set_style_radius(ui_MusicPlayingSlider, 1000, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(ui_MusicPlayingSlider, LV_PART_INDICATOR | LV_STATE_DEFAULT, LV_STYLE_BG_COLOR,
-                                           _ui_theme_color_Blue1);
+                                           _ui_theme_color_Accent);
     ui_object_set_themeable_style_property(ui_MusicPlayingSlider, LV_PART_INDICATOR | LV_STATE_DEFAULT, LV_STYLE_BG_OPA,
-                                           _ui_theme_alpha_Blue1);
+                                           _ui_theme_alpha_Accent);
 
     lv_obj_set_style_radius(ui_MusicPlayingSlider, 1000, LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_MusicPlayingSlider, lv_color_hex(0x00B0DE), LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_MusicPlayingSlider, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(ui_MusicPlayingSlider, 1000, LV_PART_KNOB | LV_STATE_PRESSED);
     ui_object_set_themeable_style_property(ui_MusicPlayingSlider, LV_PART_KNOB | LV_STATE_PRESSED, LV_STYLE_BG_COLOR,
-                                           _ui_theme_color_Blue1);
+                                           _ui_theme_color_Accent);
     ui_object_set_themeable_style_property(ui_MusicPlayingSlider, LV_PART_KNOB | LV_STATE_PRESSED, LV_STYLE_BG_OPA,
-                                           _ui_theme_alpha_Blue1);
+                                           _ui_theme_alpha_Accent);
     lv_obj_set_style_pad_left(ui_MusicPlayingSlider, 4, LV_PART_KNOB | LV_STATE_PRESSED);
     lv_obj_set_style_pad_right(ui_MusicPlayingSlider, 4, LV_PART_KNOB | LV_STATE_PRESSED);
     lv_obj_set_style_pad_top(ui_MusicPlayingSlider, 4, LV_PART_KNOB | LV_STATE_PRESSED);
@@ -313,9 +313,9 @@ void ui_Main_screen_init(void)
     lv_obj_set_align(ui_MusicPreviousIcon, LV_ALIGN_CENTER);
     lv_label_set_text(ui_MusicPreviousIcon, "");
     ui_object_set_themeable_style_property(ui_MusicPreviousIcon, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_MusicPreviousIcon, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
 
     ui_MusicNextButton = lv_btn_create(ui_MusicPlayerControlContainer);
     lv_obj_set_width(ui_MusicNextButton, 35);
@@ -341,9 +341,9 @@ void ui_Main_screen_init(void)
     lv_obj_set_align(ui_MusicNextIcon, LV_ALIGN_CENTER);
     lv_label_set_text(ui_MusicNextIcon, "");
     ui_object_set_themeable_style_property(ui_MusicNextIcon, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_MusicNextIcon, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
 
     ui_MusicPlayPauseButton = lv_btn_create(ui_MusicPlayerControlContainer);
     lv_obj_set_width(ui_MusicPlayPauseButton, 44);
@@ -369,9 +369,9 @@ void ui_Main_screen_init(void)
     lv_obj_set_align(ui_MusicPlayPauseIcon, LV_ALIGN_CENTER);
     lv_label_set_text(ui_MusicPlayPauseIcon, "");
     ui_object_set_themeable_style_property(ui_MusicPlayPauseIcon, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_MusicPlayPauseIcon, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
 
     ui_QueueTab = lv_tabview_add_tab(ui_MusicModeTabs, "Queue");
     lv_obj_set_flex_flow(ui_QueueTab, LV_FLEX_FLOW_COLUMN);
@@ -399,9 +399,9 @@ void ui_Main_screen_init(void)
     lv_obj_set_style_bg_color(ui_SongPanel1, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_SongPanel1, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(ui_SongPanel1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_BORDER_COLOR,
-                                           _ui_theme_color_Blue1);
+                                           _ui_theme_color_Accent);
     ui_object_set_themeable_style_property(ui_SongPanel1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_BORDER_OPA,
-                                           _ui_theme_alpha_Blue1);
+                                           _ui_theme_alpha_Accent);
     lv_obj_set_style_border_width(ui_SongPanel1, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_side(ui_SongPanel1, LV_BORDER_SIDE_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_left(ui_SongPanel1, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -432,9 +432,9 @@ void ui_Main_screen_init(void)
     lv_label_set_text(ui_SongName1, "SongLongggggggggggggName1");
     lv_obj_clear_flag(ui_SongName1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     ui_object_set_themeable_style_property(ui_SongName1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_Blue1);
+                                           _ui_theme_color_Accent);
     ui_object_set_themeable_style_property(ui_SongName1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_Blue1);
+                                           _ui_theme_alpha_Accent);
     lv_obj_set_style_text_font(ui_SongName1, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_SongCreator1 = lv_label_create(ui_SongInfoContainer1);
@@ -455,9 +455,9 @@ void ui_Main_screen_init(void)
     lv_label_set_text(ui_SongStatus1, "S");
     lv_obj_clear_flag(ui_SongStatus1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     ui_object_set_themeable_style_property(ui_SongStatus1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_Blue1);
+                                           _ui_theme_color_Accent);
     ui_object_set_themeable_style_property(ui_SongStatus1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_Blue1);
+                                           _ui_theme_alpha_Accent);
     lv_obj_set_style_text_font(ui_SongStatus1, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_LibraryTab = lv_tabview_add_tab(ui_MusicModeTabs, "Library");

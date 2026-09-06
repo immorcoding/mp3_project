@@ -70,18 +70,17 @@ Lock Screen
 
 ### 4.1 色彩与背景
 
-首版只使用一组稳定主题，不在运行时随机改变配色。
+SquareLine 免费版最多 5 个全局色、2 套主题。工程只用一套 SquareLine 主题；五个全局色是占位名，导出 hex 冻结为查找键。多套外观的 RGB 真值由 GUI Service 调色板提供（尚未落地），不在编辑器里加第二套主题。
 
-| 用途 | 建议颜色 | 说明 |
+| 名字 | 占位 hex | 职责 |
 | --- | --- | --- |
-| 页面背景顶部 | `#173B63` | 深蓝，使用纵向线性渐变起点。 |
-| 页面背景中段 | `#1B2B58` | 保留为渐变过渡色。 |
-| 页面背景底部 | `#2B2050` | 靛紫，形成低调层次。 |
-| 卡片底色 | `#13223D` | 比背景更深，避免纯黑。 |
-| 主文字与浅色轮廓（`White1`） | `#F1F6FF` | 冷白，保证小尺寸文字、状态栏轮廓和图标可读。 |
-| 次级文字 | `#F1F6FF` + 对象级低透明度 | 首版不额外占用主题色；通过字号、字重和对象透明度建立次级层级。 |
-| 强调色（`Blue1`） | `#00B0DE` | 播放、进度、激活状态和电池容量填充。 |
-| 非活动轨道（`Gray1`） | `#404040` | 加载环的静态轨道等低对比、非交互元素；不作为小字号正文文字色。 |
+| `Accent` | `#00B0DE` | 进度、当前行、Tab 选中、电池填充。 |
+| `Ink` | `#F1F6FF` | 主文字、浅轮廓、图标。 |
+| `Muted` | `#404040` | 非活动轨道等低对比元素；不作为小字号正文。 |
+| `Wash` | `#E7E7E7`（主题 Alpha 40） | 按钮 / Queue 行薄填充；对象还可另设 Opa。 |
+| `Ground` | `#000000` | 纯色页底占位；壁纸主题被图盖住。此 hex 与 LVGL 默认黑相同，按色匹配前宜改成更独特的占位。 |
+
+次级文字仍用 `Ink` + 对象级低透明度，不另占全局色。下列渐变色只作壁纸绘制参考，不是全局色：顶部 `#173B63`、中段 `#1B2B58`、底部 `#2B2050`；旧卡片实心底 `#13223D` 同样不是全局色。
 
 背景的两色纵向线性渐变在当前 SquareLine 模拟器和真机中均已验证会产生明显色带，因此不作为最终视觉方案。目标固件保持 `LV_DITHER_GRADIENT = 0`；运行时渐变抖动已经在真机测试，色带虽可变成颗粒，但不能形成干净的雾状层次，故不采用。
 
@@ -248,11 +247,11 @@ Settings 使用 2 x 2 方形卡片，而不是长列表：
 
 初始布局采用相对约束，而非固定像素坐标：大时间位于屏幕上半部并作为全页视觉焦点；日期直接位于时间下方；电量提示与日期共同构成次级信息，位于日期下方并保留一段较短留白。时间和日期直接作为 `Lock` 的子对象；电池图标与百分比使用一个仅包围二者的小型 `BatteryGroup` 透明 Container，保证整组始终水平居中。该 Container 不承载业务事件，也不需要滚动。此前“Container 会吃掉手势”的判断已被实测推翻：锁屏滑动不灵敏的根因是触摸采样率过高，调整后已恢复正常，因此普通布局 Container 不需要为规避手势额外开启 Gesture Bubble。屏幕下半部预留给后续的 Mini Player 与 `Swipe up to unlock`，因此首版不把电量放到底部。
 
-日期固定使用三字母星期与月份缩写，例如当前导出的 `SUN, AUG 24`，避免 `THURSDAY, NOVEMBER 28` 一类文本在 240 px 屏幕上溢出。日期使用约 `14–18 px` 的 `White1`（`#F1F6FF`）；它与大时间通过字号、字重和后续按需设置的对象透明度形成层级，而不再保留独立的次级文字主题色。大时间使用当前 SquareLine 可选的最大或接近最大的英文字体，建议约 `42–52 px`，主文字色同为 `#F1F6FF`。
+日期固定使用三字母星期与月份缩写，例如当前导出的 `SUN, AUG 24`，避免 `THURSDAY, NOVEMBER 28` 一类文本在 240 px 屏幕上溢出。日期使用约 `14–18 px` 的 `Ink`（`#F1F6FF`）；它与大时间通过字号、字重和后续按需设置的对象透明度形成层级，而不再保留独立的次级文字主题色。大时间使用当前 SquareLine 可选的最大或接近最大的英文字体，建议约 `42–52 px`，主文字色同为 `#F1F6FF`。
 
 电量提示由一个简洁的 `LockBatteryBar` 与 `82%` 短文本组成，二者置于 `BatteryGroup` 中，以 Row 布局作为同一行视觉组水平居中，位于日期下方；`LockBatteryBar` 使用 SquareLine 的 LVGL Bar 控件绘制细轮廓与容量填充，而非导入 SVG 或使用 LVGL 字符图标。首版不使用电池正极突起：在当前屏幕尺寸上，额外的窄 Panel 会削弱图标的简洁性，保留圆角轮廓和容量填充即可。
 
-`BatteryGroup` 背景、边框与阴影均透明，Padding 仅保留电量条和文字之间的窄间距。电量条轮廓与百分比使用 `White1`（`#F1F6FF`），填充使用强调色 `Blue1`（`#00B0DE`），文字字号约 `12–14 px`；固定假数据时，Bar 的填充值必须与显示百分比一致，例如 `84%` 对应值 `84`。首版不表现实时电量、充电状态或低电量告警。以 SquareLine 模拟器的视觉平衡为最终依据，优先调整信息层的相对间距与留白，不因本文档强行固定坐标。若导出后固件缺少对应字体，再单独评审并由用户手动调整 `lv_conf.h`，助手不修改生成目录。
+`BatteryGroup` 背景、边框与阴影均透明，Padding 仅保留电量条和文字之间的窄间距。电量条轮廓与百分比使用 `Ink`（`#F1F6FF`），填充使用强调色 `Accent`（`#00B0DE`），文字字号约 `12–14 px`；固定假数据时，Bar 的填充值必须与显示百分比一致，例如 `84%` 对应值 `84`。首版不表现实时电量、充电状态或低电量告警。以 SquareLine 模拟器的视觉平衡为最终依据，优先调整信息层的相对间距与留白，不因本文档强行固定坐标。若导出后固件缺少对应字体，再单独评审并由用户手动调整 `lv_conf.h`，助手不修改生成目录。
 
 锁屏底部解锁提示采用 iPhone 风格的“文字 + Home indicator”：`LockUnlockHint` 显示 `Swipe up to unlock`，其下方为短圆角横条 `LockHomeIndicator`；二者水平居中并靠近屏幕底部安全区。首版不使用箭头或可见容器；向上手势由 `Lock` 根对象处理，底部提示 Group 不承担事件。二者与上部的时间/日期/电量信息保持足够大留白，Mini Player 仍留待后续单独设计与接入。
 
@@ -463,11 +462,11 @@ Viewport 内始终只保留同一组三张 Page 实例，不复制首尾页。�
 
 `LV_EVENT_SCROLL` 只承担 MusicModeTabs 局部毛玻璃的实时坐标更新；翻页判定只在 `LV_EVENT_SCROLL_END` 执行。当前 `MusicPlayingSlider` 依赖 LVGL 原生命中与拖动行为，真机验证中不会触发 MainPageContainer 翻页，因此不额外创建手势仲裁回调或临时修改外层 Scrollable Flag。若未来出现可复现的 Slider 与全局分页竞争，再以实测问题为依据单独诊断。播放器按钮维持 LVGL 原生点击语义，不为它们创建额外的全局手势屏蔽层。
 
-`MusicModeTabs` 位于 MusicPage 内，使用内嵌 Tabview 实现，当前宽高均为页面的 `100%`，铺满状态栏与底部圆点之间的 Music 内容区；Tab 按钮栏高度以导出为准（当前 `20 px`）。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `White1` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Blue1` 文字，并仅在底边显示一条细 `Blue1` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPageContainer 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
+`MusicModeTabs` 位于 MusicPage 内，使用内嵌 Tabview 实现，当前宽高均为页面的 `100%`，铺满状态栏与底部圆点之间的 Music 内容区；Tab 按钮栏高度以导出为准（当前 `20 px`）。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `Ink` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Accent` 文字，并仅在底边显示一条细 `Accent` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPageContainer 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
 
 当前 `LibraryTab` 仍为空白内容区。`NowPlayingTab` 底部承载 `MusicPlayerControlContainer`（宽 `90%`、高 `28%`，上/下 Padding `2 px`）：假进度条与上一首/播放暂停/下一首。`QueueTab` 只保留 SquareLine 单行范本；`Service/gui/main/queue` 把该范本构造摘进 for 循环，GUI Task 在 `storage_listbuffer` READY 后经 `Service_GUI_QueueApply()` 按 `Length` 填行。`MusicPlayingSlider` 宽度为播放器区的 `90%`、高度 `7%`，相对顶部下移 `5%`。当前尚未创建 `MusicPlayerCard`、假曲名或专辑封面。Queue 与 Library 不复制这组控制。
 
-`DotPanelContainer` 是 `Main` 的固定底部子对象，使用居中的 Flex Row 布局，列间距为 `5 px`，自身不接受点击或滚动。它包含按页面物理顺序创建的 `DotSettings`、`DotMusic` 与 `DotBooks`。非当前页圆点为 `5 x 5 px`、圆角 `3 px`、`White1` 且背景透明度 `180`；当前页指示器为 `14 x 5 px` 的水平胶囊、同一 `White1` 且背景透明度 `220`。初始当前页是 Music，因此初态由 `DotMusic` 显示胶囊。
+`DotPanelContainer` 是 `Main` 的固定底部子对象，使用居中的 Flex Row 布局，列间距为 `5 px`，自身不接受点击或滚动。它包含按页面物理顺序创建的 `DotSettings`、`DotMusic` 与 `DotBooks`。非当前页圆点为 `5 x 5 px`、圆角 `3 px`、`Ink` 且背景透明度 `180`；当前页指示器为 `14 x 5 px` 的水平胶囊、同一 `Ink` 且背景透明度 `220`。初始当前页是 Music，因此初态由 `DotMusic` 显示胶囊。
 
 分页控制器确认切页后，旧当前页指示器动画收缩为圆点（宽度 `14 → 5`、透明度 `220 → 180`），新当前页圆点同时伸展为胶囊（宽度 `5 → 14`、透明度 `180 → 220`）；高度始终为 `5 px`。该动画与页面吸附同步，首轮时长为 `160 ms`、使用 ease-out；手势未达到翻页阈值而回到原页时，不触发圆点状态切换动画。SquareLine 仍是圆点的唯一静态样式来源：`Service/gui/main` 初始化时从 `DotSettings` 和 `DotMusic` 读取非活动与活动的实际宽度、透明度基线，切页时只对 `DotSettings`、`DotMusic`、`DotBooks` 执行这两项运行时动画，不覆盖其颜色、圆角或布局。快速连续切页会取消同一圆点的旧动画，并从当前已绘制状态继续过渡。
 
@@ -498,7 +497,7 @@ MusicPage
 └─ MusicModeTabs
    ├─ NowPlayingTab
    │  └─ MusicPlayerControlContainer  透明、水平布局、不滚动
-   │     ├─ MusicPlayingSlider         Gray1 轨道、Blue1 进度
+   │     ├─ MusicPlayingSlider         Muted 轨道、Accent 进度
    │     ├─ MusicPreviousButton       圆形半透明控制按钮
    │     │  └─ MusicPreviousIcon      上一首符号 Label
    │     ├─ MusicPlayPauseButton      圆形半透明控制按钮，视觉略强
@@ -509,7 +508,7 @@ MusicPage
    └─ LibraryTab                  当前为空白内容区
 ```
 
-`MusicPlayingSlider` 位于控制按钮上方。当前导出中，主轨道为低 Alpha `Gray1`，Indicator 使用 `Blue1`；`DEFAULT` 状态的 Knob 透明，`PRESSED` 状态才显示 `Blue1` Knob，并通过 `STYLE (KNOB) → Paddings` 增大。LVGL v8 的 Slider Knob 默认边长等于 Slider 较短边，因此若将来改为常显 Knob，仍应通过 Padding 调整其大小，而非修改 Slider 本体的宽高。三个 Button 当前使用 `WhiteMask1` 的低 Alpha 填充，按下态提高 Alpha；不设置独立边框，图标使用 `White1`。当前不在 SquareLine 中添加播放事件。每个图标均由 Button 的独立 Label 子对象承载并居中对齐，以便后续 Service 将 `MusicPlayPauseIcon` 的播放符号替换为暂停符号；不得用 ImageButton 或导入图标图片资源。项目已启用的 `lv_font_montserrat_16` 包含 LVGL 的 `PREV`、`PLAY`、`PAUSE` 与 `NEXT` 符号；用户优先从 SquareLine 的符号选择器使用它们，不新增图标图片资源。三个按钮与外层 `MusicPlayerControlContainer` 均不是毛玻璃区域。
+`MusicPlayingSlider` 位于控制按钮上方。当前导出中，主轨道为低 Alpha `Muted`，Indicator 使用 `Accent`；`DEFAULT` 状态的 Knob 透明，`PRESSED` 状态才显示 `Accent` Knob，并通过 `STYLE (KNOB) → Paddings` 增大。LVGL v8 的 Slider Knob 默认边长等于 Slider 较短边，因此若将来改为常显 Knob，仍应通过 Padding 调整其大小，而非修改 Slider 本体的宽高。三个 Button 当前使用 `Wash` 的低 Alpha 填充，按下态提高 Alpha；不设置独立边框，图标使用 `Ink`。当前不在 SquareLine 中添加播放事件。每个图标均由 Button 的独立 Label 子对象承载并居中对齐，以便后续 Service 将 `MusicPlayPauseIcon` 的播放符号替换为暂停符号；不得用 ImageButton 或导入图标图片资源。项目已启用的 `lv_font_montserrat_16` 包含 LVGL 的 `PREV`、`PLAY`、`PAUSE` 与 `NEXT` 符号；用户优先从 SquareLine 的符号选择器使用它们，不新增图标图片资源。三个按钮与外层 `MusicPlayerControlContainer` 均不是毛玻璃区域。
 
 当前导出的壁纸为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，一张全屏帧约 `230400 B`。Music 运行时会同时持有共享 Canvas 工作区、一张 Main 长期全屏 Blur 壁纸和一张最大 `240 x 320` 的 MusicModeTabs 裁剪背景，三者峰值上限约 `675 KiB`；实际 MusicModeTabs 略矮于整屏（状态栏与圆点之外），但静态缓冲按整屏高度预留，避免再把 SquareLine 百分比写进 Service。壁纸切换时才重新执行全屏模糊；静态显示、文字更新和每次 `Service_GUI_Process()` 都不得重复模糊。MainPageContainer 横滑的 `LV_EVENT_SCROLL` 只更新局部裁剪图；SquareLine 重新导出导致对象尺寸或位置改变后，会在下一次初始化按新布局重新建立首帧裁剪。裁剪上限见 `main/background/gui_service_main_background_config.h`。未来切换到 RGB565 缓存资源后，三帧合计约 `450 KiB`。
 
@@ -523,21 +522,21 @@ SquareLine 1.6.1 没有 List 控件。Queue 不用 `lv_list`。SquareLine 只保
 
 ```text
 QueueTab                         透明；Flex Column；纵向 Scrollable
- └─ SongPanel1                   范本；WhiteMask1 底 Opa 40，圆角 8，无 Shadow
+ └─ SongPanel1                   范本；Wash 底 Opa 40，圆角 8，无 Shadow
       ├─ SongInfoContainer1      左侧文字组，固定宽度，勿用 Content 撑开
       │    ├─ SongName1          曲名
-      │    └─ SongCreator1       歌手，White1 约 Opa 160
+      │    └─ SongCreator1       歌手，Ink 约 Opa 160
       └─ SongStatus1             右侧符号 Label；非当前行 Opa 0 占位，不 HIDDEN
 ```
 
 | | 窗口内正在播放的那一行 | 其它行 |
 | --- | --- | --- |
 | 曲名过长 | **Scroll circular**；宽 `pct(100)`，高度锁成一行 | **Dot**；同一行高（LVGL 8 的 DOT 看高度溢出） |
-| 左边条 | Border 仅 Left、4 px、`Blue1` Opa 跟范本 | 同一 Width/Side，**Border Opa 0**（不改 Width，避免文字漂移） |
-| 右侧符号 | 音乐标 `LV_SYMBOL_AUDIO`，`Blue1`，可见。范本仍可占位 `S`，运行时替换 | 同一 Label，Opa 0 占位，不从布局移除 |
-| 曲名颜色 | `Blue1` | `White1` |
+| 左边条 | Border 仅 Left、4 px、`Accent` Opa 跟范本 | 同一 Width/Side，**Border Opa 0**（不改 Width，避免文字漂移） |
+| 右侧符号 | 音乐标 `LV_SYMBOL_AUDIO`，`Accent`，可见。范本仍可占位 `S`，运行时替换 | 同一 Label，Opa 0 占位，不从布局移除 |
+| 曲名颜色 | `Accent` | `Ink` |
 
-点按（所有行）：`PRESSED` 只提高底 Opa（约 70～80）并加 **Outline** 1 px `White1`（Pad 0）。`CLICKED` 假切歌：立刻只改本窗当前/非当前行样式（左边条、音符、蓝/白字、circular vs dot），并把该行播放列表下标交给 GUI Task；`cursor_set` 后滑窗再 Apply 才不会跳回旧当前行。不打开文件、不解码。Playback 打开/预开的交接点留在 GUI Task 注释框。不要在 PRESSED 或非当前态里改 Border Width，以免文字漂移。非当前行只把左边条 Border Opa 打到 0。Panel 开 Clickable，子对象关掉 Clickable，不开 Checkable。
+点按（所有行）：`PRESSED` 只提高底 Opa（约 70～80）并加 **Outline** 1 px `Ink`（Pad 0）。`CLICKED` 假切歌：立刻只改本窗当前/非当前行样式（左边条、音符、Accent/Ink 字、circular vs dot），并把该行播放列表下标交给 GUI Task；`cursor_set` 后滑窗再 Apply 才不会跳回旧当前行。不打开文件、不解码。Playback 打开/预开的交接点留在 GUI Task 注释框。不要在 PRESSED 或非当前态里改 Border Width，以免文字漂移。非当前行只把左边条 Border Opa 打到 0。Panel 开 Clickable，子对象关掉 Clickable，不开 Checkable。
 
 READY 时 GUI Task 按 `Length` 把 `Buffer[i]` 原样交给 `Service_GUI_QueueApply()`（播放列表 `Index + i`）。当前 `Buffer` 仍是曲库路径；标题/歌手由以后的 `load` 调解析器写入窗口，见 [catalog_architecture.md](catalog_architecture.md) 第 5 节。未落地前歌手 Label 为空串。GUI 不裁 `Music/`、不裁 `.mp3`、不按文件名切开。`Length == 0` 则没有可见行。正在播放行由播放列表游标判定，游标与 Catalog 同代次，见 [catalog_architecture.md](catalog_architecture.md)；代次不符或游标作废则本窗没有当前行。复制行只改文字、Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width。右侧音乐标是运行时写入的 `LV_SYMBOL_AUDIO`，不要把 SquareLine 里的占位 `S` 抄回固件。字形、字体、圆角、底色以 SquareLine 范本构造为准。`Service/gui` 不得包含 `storage_listbuffer.h`。Queue 行不放封面；封面属于 Now Playing。
 

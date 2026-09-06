@@ -5,7 +5,7 @@
       {
         "nid": 1000334,
         "strtype": "THEME_COLOR",
-        "strval": "Blue1",
+        "strval": "Accent",
         "intarray": [
           0,
           176,
@@ -17,7 +17,7 @@
       {
         "nid": 1000385,
         "strtype": "THEME_COLOR",
-        "strval": "White1",
+        "strval": "Ink",
         "intarray": [
           241,
           246,
@@ -29,7 +29,7 @@
       {
         "nid": 1000386,
         "strtype": "THEME_COLOR",
-        "strval": "Gray1",
+        "strval": "Muted",
         "intarray": [
           64,
           64,
@@ -41,12 +41,24 @@
       {
         "nid": 1000621,
         "strtype": "THEME_COLOR",
-        "strval": "WhiteMask1",
+        "strval": "Wash",
         "intarray": [
           231,
           231,
           231,
           40
+        ],
+        "InheritedType": 0
+      },
+      {
+        "nid": 1000642,
+        "strtype": "THEME_COLOR",
+        "strval": "Ground",
+        "intarray": [
+          19,
+          34,
+          61,
+          255
         ],
         "InheritedType": 0
       }

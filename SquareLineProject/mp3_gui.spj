@@ -180,7 +180,7 @@
                             "nid": 10310,
                             "flags": 4096,
                             "strtype": "_style/Arc_Color",
-                            "strval": "Gray1",
+                            "strval": "Muted",
                             "integer": 1000386,
                             "intarray": [
                               64,
@@ -229,8 +229,6 @@
                             "nid": 10310,
                             "flags": 4096,
                             "strtype": "_style/Arc_Color",
-                            "strval": "Blue1",
-                            "integer": 1000334,
                             "intarray": [
                               0,
                               176,
@@ -508,7 +506,7 @@
                             "nid": 10410,
                             "flags": 4096,
                             "strtype": "_style/Text_Color",
-                            "strval": "White1",
+                            "strval": "Ink",
                             "integer": 1000385,
                             "intarray": [
                               241,
@@ -1247,7 +1245,7 @@
                         "nid": 10410,
                         "flags": 4096,
                         "strtype": "_style/Text_Color",
-                        "strval": "White1",
+                        "strval": "Ink",
                         "integer": 1000385,
                         "intarray": [
                           241,
@@ -1426,7 +1424,7 @@
                         "nid": 10410,
                         "flags": 4096,
                         "strtype": "_style/Text_Color",
-                        "strval": "White1",
+                        "strval": "Ink",
                         "integer": 1000385,
                         "intarray": [
                           241,
@@ -1631,7 +1629,7 @@
                             "nid": 10810,
                             "flags": 4096,
                             "strtype": "_style/Outline_Color",
-                            "strval": "White1",
+                            "strval": "Ink",
                             "integer": 1000385,
                             "intarray": [
                               241,
@@ -1690,7 +1688,7 @@
                             "nid": 10520,
                             "flags": 4096,
                             "strtype": "_style/Bg_Color",
-                            "strval": "Blue1",
+                            "strval": "Accent",
                             "integer": 1000334,
                             "intarray": [
                               0,
@@ -1864,7 +1862,7 @@
                             "nid": 10410,
                             "flags": 4096,
                             "strtype": "_style/Text_Color",
-                            "strval": "White1",
+                            "strval": "Ink",
                             "integer": 1000385,
                             "intarray": [
                               241,
@@ -2197,7 +2195,7 @@
                             "nid": 10410,
                             "flags": 4096,
                             "strtype": "_style/Text_Color",
-                            "strval": "White1",
+                            "strval": "Ink",
                             "integer": 1000385,
                             "intarray": [
                               241,
@@ -2354,7 +2352,7 @@
                             "nid": 10520,
                             "flags": 4096,
                             "strtype": "_style/Bg_Color",
-                            "strval": "White1",
+                            "strval": "Ink",
                             "integer": 1000385,
                             "intarray": [
                               241,
@@ -3048,7 +3046,7 @@
                                 "nid": 10410,
                                 "flags": 4096,
                                 "strtype": "_style/Text_Color",
-                                "strval": "White1",
+                                "strval": "Ink",
                                 "integer": 1000385,
                                 "intarray": [
                                   241,
@@ -3360,7 +3358,7 @@
                                 "nid": 10410,
                                 "flags": 4096,
                                 "strtype": "_style/Text_Color",
-                                "strval": "White1",
+                                "strval": "Ink",
                                 "integer": 1000385,
                                 "intarray": [
                                   241,
@@ -3703,7 +3701,7 @@
                                     "nid": 10810,
                                     "flags": 4096,
                                     "strtype": "_style/Outline_Color",
-                                    "strval": "White1",
+                                    "strval": "Ink",
                                     "integer": 1000385,
                                     "intarray": [
                                       241,
@@ -3762,7 +3760,7 @@
                                     "nid": 10520,
                                     "flags": 4096,
                                     "strtype": "_style/Bg_Color",
-                                    "strval": "Blue1",
+                                    "strval": "Accent",
                                     "integer": 1000334,
                                     "intarray": [
                                       0,
@@ -3935,7 +3933,7 @@
                                     "nid": 10410,
                                     "flags": 4096,
                                     "strtype": "_style/Text_Color",
-                                    "strval": "White1",
+                                    "strval": "Ink",
                                     "integer": 1000385,
                                     "intarray": [
                                       241,
@@ -4593,7 +4591,7 @@
                                             "nid": 10520,
                                             "flags": 4096,
                                             "strtype": "_style/Bg_Color",
-                                            "strval": "Blue1",
+                                            "strval": "Accent",
                                             "integer": 1000334,
                                             "intarray": [
                                               0,
@@ -4656,7 +4654,7 @@
                                             "nid": 30520,
                                             "flags": 4096,
                                             "strtype": "_style/Bg_Color",
-                                            "strval": "Blue1",
+                                            "strval": "Accent",
                                             "integer": 1000334,
                                             "intarray": [
                                               0,
@@ -4839,7 +4837,7 @@
                                                 "nid": 10410,
                                                 "flags": 4096,
                                                 "strtype": "_style/Text_Color",
-                                                "strval": "White1",
+                                                "strval": "Ink",
                                                 "integer": 1000385,
                                                 "intarray": [
                                                   241,
@@ -5196,7 +5194,7 @@
                                                 "nid": 10410,
                                                 "flags": 4096,
                                                 "strtype": "_style/Text_Color",
-                                                "strval": "White1",
+                                                "strval": "Ink",
                                                 "integer": 1000385,
                                                 "intarray": [
                                                   241,
@@ -5552,7 +5550,7 @@
                                                 "nid": 10410,
                                                 "flags": 4096,
                                                 "strtype": "_style/Text_Color",
-                                                "strval": "White1",
+                                                "strval": "Ink",
                                                 "integer": 1000385,
                                                 "intarray": [
                                                   241,
@@ -6176,7 +6174,7 @@
                                     "nid": 20410,
                                     "flags": 4096,
                                     "strtype": "_style/Text_Color",
-                                    "strval": "White1",
+                                    "strval": "Ink",
                                     "integer": 1000385,
                                     "intarray": [
                                       241,
@@ -6387,7 +6385,7 @@
                                                 "nid": 10410,
                                                 "flags": 4096,
                                                 "strtype": "_style/Text_Color",
-                                                "strval": "Blue1",
+                                                "strval": "Accent",
                                                 "integer": 1000334,
                                                 "intarray": [
                                                   0,
@@ -6878,7 +6876,7 @@
                                             "nid": 10410,
                                             "flags": 4096,
                                             "strtype": "_style/Text_Color",
-                                            "strval": "Blue1",
+                                            "strval": "Accent",
                                             "integer": 1000334,
                                             "intarray": [
                                               0,
@@ -7046,7 +7044,7 @@
                                         "nid": 10710,
                                         "flags": 4096,
                                         "strtype": "_style/Border_Color",
-                                        "strval": "Blue1",
+                                        "strval": "Accent",
                                         "integer": 1000334,
                                         "intarray": [
                                           0,
@@ -7917,7 +7915,7 @@
                                 "nid": 10410,
                                 "flags": 4096,
                                 "strtype": "_style/Text_Color",
-                                "strval": "White1",
+                                "strval": "Ink",
                                 "integer": 1000385,
                                 "intarray": [
                                   241,
@@ -7949,7 +7947,7 @@
                                 "nid": 10710,
                                 "flags": 4096,
                                 "strtype": "_style/Border_Color",
-                                "strval": "WhiteMask1",
+                                "strval": "Wash",
                                 "integer": 1000621,
                                 "intarray": [
                                   231,
@@ -7986,7 +7984,7 @@
                                 "nid": 10410,
                                 "flags": 4096,
                                 "strtype": "_style/Text_Color",
-                                "strval": "White1",
+                                "strval": "Ink",
                                 "integer": 1000385,
                                 "intarray": [
                                   241,
@@ -8026,7 +8024,7 @@
                                 "nid": 20410,
                                 "flags": 4096,
                                 "strtype": "_style/Text_Color",
-                                "strval": "Blue1",
+                                "strval": "Accent",
                                 "integer": 1000334,
                                 "intarray": [
                                   0,
@@ -8052,7 +8050,7 @@
                                 "nid": 20710,
                                 "flags": 4096,
                                 "strtype": "_style/Border_Color",
-                                "strval": "Blue1",
+                                "strval": "Accent",
                                 "integer": 1000334,
                                 "intarray": [
                                   0,
@@ -15258,7 +15256,7 @@
     }
   ],
   "selected_theme": "Default",
-  "selected_screen": "GUID34512570-170325S213145236",
+  "selected_screen": "GUID81098339-173735S2155237",
   "info": {
     "name": "mp3_gui.spj",
     "depth": 1,
@@ -15287,7 +15285,7 @@
     "separate_screen_save": false,
     "hierarchy_state_save": false,
     "reverse_event_order": false,
-    "backup_cnt": 659,
+    "backup_cnt": 663,
     "autosave_cnt": 0,
     "group_color_cnt": 0,
     "imagebytearrayprefix": "",
@@ -15298,7 +15296,7 @@
     "naming": "Name",
     "naming_force_lowercase": false,
     "naming_add_subcomponent": false,
-    "nidcnt": 1000642,
+    "nidcnt": 1000643,
     "BitDepth": 16,
     "Name": "mp3_gui"
   }

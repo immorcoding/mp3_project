@@ -56,9 +56,9 @@ void ui_Lock_screen_init(void)
     lv_label_set_text(ui_LockTimeLabel, "10:42");
     lv_obj_clear_flag(ui_LockTimeLabel, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     ui_object_set_themeable_style_property(ui_LockTimeLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_LockTimeLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
     lv_obj_set_style_text_font(ui_LockTimeLabel, &lv_font_montserrat_48, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_LockDateLabel = lv_label_create(ui_Lock);
@@ -70,9 +70,9 @@ void ui_Lock_screen_init(void)
     lv_label_set_text(ui_LockDateLabel, "SUN, AUG 24");
     lv_obj_clear_flag(ui_LockDateLabel, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     ui_object_set_themeable_style_property(ui_LockDateLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_LockDateLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
     lv_obj_set_style_text_font(ui_LockDateLabel, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_LockBatteryContainer = lv_obj_create(ui_Lock);
@@ -103,9 +103,9 @@ void ui_Lock_screen_init(void)
     lv_obj_set_style_bg_color(ui_LockBatteryBar, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_LockBatteryBar, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(ui_LockBatteryBar, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_OUTLINE_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_LockBatteryBar, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_OUTLINE_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
     lv_obj_set_style_outline_width(ui_LockBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(ui_LockBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_left(ui_LockBatteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -115,9 +115,9 @@ void ui_Lock_screen_init(void)
 
     lv_obj_set_style_radius(ui_LockBatteryBar, 2, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(ui_LockBatteryBar, LV_PART_INDICATOR | LV_STATE_DEFAULT, LV_STYLE_BG_COLOR,
-                                           _ui_theme_color_Blue1);
+                                           _ui_theme_color_Accent);
     ui_object_set_themeable_style_property(ui_LockBatteryBar, LV_PART_INDICATOR | LV_STATE_DEFAULT, LV_STYLE_BG_OPA,
-                                           _ui_theme_alpha_Blue1);
+                                           _ui_theme_alpha_Accent);
 
     ui_LockBatteryLabel = lv_label_create(ui_LockBatteryContainer);
     lv_obj_set_width(ui_LockBatteryLabel, LV_SIZE_CONTENT);   /// 1
@@ -128,9 +128,9 @@ void ui_Lock_screen_init(void)
     lv_label_set_text(ui_LockBatteryLabel, "84%");
     lv_obj_clear_flag(ui_LockBatteryLabel, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     ui_object_set_themeable_style_property(ui_LockBatteryLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_LockBatteryLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
     lv_obj_set_style_text_font(ui_LockBatteryLabel, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_LockUnlockGroup = lv_obj_create(ui_Lock);
@@ -146,9 +146,9 @@ void ui_Lock_screen_init(void)
     lv_obj_set_align(ui_LockUnlockHint, LV_ALIGN_TOP_MID);
     lv_label_set_text(ui_LockUnlockHint, "Swipe up to unlock");
     ui_object_set_themeable_style_property(ui_LockUnlockHint, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_LockUnlockHint, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
     lv_obj_set_style_text_font(ui_LockUnlockHint, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_LockHomeIndicator = lv_obj_create(ui_LockUnlockGroup);
@@ -160,9 +160,9 @@ void ui_Lock_screen_init(void)
     lv_obj_clear_flag(ui_LockHomeIndicator, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_radius(ui_LockHomeIndicator, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
     ui_object_set_themeable_style_property(ui_LockHomeIndicator, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_BG_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_LockHomeIndicator, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_BG_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
     lv_obj_set_style_border_width(ui_LockHomeIndicator, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_add_event_cb(ui_LockUnlockGroup, ui_event_LockUnlockGroup, LV_EVENT_ALL, NULL);

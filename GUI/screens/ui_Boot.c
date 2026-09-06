@@ -53,19 +53,17 @@ void ui_Boot_screen_init(void)
     lv_arc_set_value(ui_BootOrbitRing, 50);
     lv_arc_set_bg_angles(ui_BootOrbitRing, 0, 360);
     ui_object_set_themeable_style_property(ui_BootOrbitRing, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_ARC_COLOR,
-                                           _ui_theme_color_Gray1);
+                                           _ui_theme_color_Muted);
     ui_object_set_themeable_style_property(ui_BootOrbitRing, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_ARC_OPA,
-                                           _ui_theme_alpha_Gray1);
+                                           _ui_theme_alpha_Muted);
     lv_obj_set_style_arc_width(ui_BootOrbitRing, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_set_style_pad_left(ui_BootOrbitRing, 2, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_right(ui_BootOrbitRing, 2, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_top(ui_BootOrbitRing, 2, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_bottom(ui_BootOrbitRing, 2, LV_PART_INDICATOR | LV_STATE_DEFAULT);
-    ui_object_set_themeable_style_property(ui_BootOrbitRing, LV_PART_INDICATOR | LV_STATE_DEFAULT, LV_STYLE_ARC_COLOR,
-                                           _ui_theme_color_Blue1);
-    ui_object_set_themeable_style_property(ui_BootOrbitRing, LV_PART_INDICATOR | LV_STATE_DEFAULT, LV_STYLE_ARC_OPA,
-                                           _ui_theme_alpha_Blue1);
+    lv_obj_set_style_arc_color(ui_BootOrbitRing, lv_color_hex(0x00B0DE), LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_opa(ui_BootOrbitRing, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_width(ui_BootOrbitRing, 6, LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
     lv_obj_set_style_bg_color(ui_BootOrbitRing, lv_color_hex(0xFFFFFF), LV_PART_KNOB | LV_STATE_DEFAULT);
@@ -77,9 +75,9 @@ void ui_Boot_screen_init(void)
     lv_obj_set_align(ui_BootOrbitLabel, LV_ALIGN_CENTER);
     lv_label_set_text(ui_BootOrbitLabel, "LOADING");
     ui_object_set_themeable_style_property(ui_BootOrbitLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_White1);
+                                           _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_BootOrbitLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_White1);
+                                           _ui_theme_alpha_Ink);
 
     lv_obj_add_event_cb(ui_Boot, ui_event_Boot, LV_EVENT_ALL, NULL);
 
