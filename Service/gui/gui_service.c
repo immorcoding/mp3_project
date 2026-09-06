@@ -290,10 +290,26 @@ uint16_t Service_GUI_QueueScrollLead(void)
 }
 
 /**
+ * @brief 取走一次 Queue 行点按对应的播放列表下标。
+ * @param[out] sheet_index 被点行对应的播放列表下标。
+ * @retval SERVICE_OK 有一次待处理点击。
+ * @retval SERVICE_NOT_READY 没有待处理点击。
+ * @retval SERVICE_INVALID_PARAM sheet_index 为空。
+ * @note 只能由同一 GUI Task 调用。不包含 storage_listbuffer.h。
+ *       点击发生在 Process() 的 LVGL 调度里，下一圈循环再 Consume。
+ */
+Service_StatusTypeDef Service_GUI_QueueConsumeSelect(uint16_t *sheet_index)
+{
+    return service_gui_main_queue_consume_select(sheet_index);
+}
+
+/**
  * @brief 把一窗曲名填进 Queue 可见行，不包含 storage_listbuffer。
  * @param[in] titles 曲名字符串指针表；length 为 0 时允许为 NULL。
  * @param[in] length 本窗实际条数，至多 SERVICE_GUI_MAIN_QUEUE_MAX_ROWS。
- * @param[in] window_index 本窗在播放列表上的起点，用于转 head 与当前行判定。
+ * @param[in] window_index 本窗在播放列表上的起点，用于转 head。
+ * @param[in] current_index 正在播放的播放列表下标；无当前曲时为
+ *            SERVICE_GUI_QUEUE_NO_CURRENT。
  * @retval SERVICE_OK 已按 Length 显示，或 Length 为 0 已全部 Hidden。
  * @retval SERVICE_INVALID_PARAM Length 超上限，或 Length 非 0 但 titles 为空。
  * @retval SERVICE_NOT_READY Queue 范本尚未准备。
@@ -305,7 +321,8 @@ uint16_t Service_GUI_QueueScrollLead(void)
 Service_StatusTypeDef Service_GUI_QueueApply(
     const char **titles,
     uint16_t length,
-    uint16_t window_index)
+    uint16_t window_index,
+    uint16_t current_index)
 {
-    return service_gui_main_queue_apply(titles, length, window_index);
+    return service_gui_main_queue_apply(titles, length, window_index, current_index);
 }

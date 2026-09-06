@@ -413,6 +413,42 @@ static void test_clear_resets_request_index_to_zero(void)
 }
 
 /**
+ * @brief 游标有效且与窗口代次一致时，高亮用播放列表下标。
+ */
+static void test_current_index_follows_cursor_when_generation_matches(void)
+{
+    assert(gui_task_queue_window_current_index(true, 0U, 3U, 3U) == 0U);
+    assert(gui_task_queue_window_current_index(true, 7U, 3U, 3U) == 7U);
+}
+
+/**
+ * @brief 游标无效时 Queue 没有当前行。
+ */
+static void test_current_index_is_none_when_cursor_invalid(void)
+{
+    assert(gui_task_queue_window_current_index(false, 0U, 3U, 3U) ==
+           GUI_TASK_QUEUE_WINDOW_NO_CURRENT);
+}
+
+/**
+ * @brief 游标代次为 0 表示已作废。
+ */
+static void test_current_index_is_none_when_generation_is_zero(void)
+{
+    assert(gui_task_queue_window_current_index(true, 0U, 0U, 0U) ==
+           GUI_TASK_QUEUE_WINDOW_NO_CURRENT);
+}
+
+/**
+ * @brief 窗口代次与游标不一致时不得高亮旧下标。
+ */
+static void test_current_index_is_none_when_generation_mismatches(void)
+{
+    assert(gui_task_queue_window_current_index(true, 0U, 4U, 5U) ==
+           GUI_TASK_QUEUE_WINDOW_NO_CURRENT);
+}
+
+/**
  * @brief 运行全部窗口状态机测试。
  * @return 成功时返回 0。
  */
@@ -440,6 +476,10 @@ int main(void)
     test_note_lead_requests_when_desired_index_moves();
     test_note_lead_does_not_rerequest_for_slack_row();
     test_clear_resets_request_index_to_zero();
+    test_current_index_follows_cursor_when_generation_matches();
+    test_current_index_is_none_when_cursor_invalid();
+    test_current_index_is_none_when_generation_is_zero();
+    test_current_index_is_none_when_generation_mismatches();
 
     puts("gui_task_queue_window_tests: all tests passed");
     return 0;

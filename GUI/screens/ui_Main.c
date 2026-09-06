@@ -19,13 +19,6 @@ lv_obj_t * ui_MainPageContainer = NULL;
 lv_obj_t * ui_MusicPageContainer = NULL;
 lv_obj_t * ui_MusicModeTabs = NULL;
 lv_obj_t * ui_NowPlayingTab = NULL;
-lv_obj_t * ui_QueueTab = NULL;
-lv_obj_t * ui_SongPanel1 = NULL;
-lv_obj_t * ui_SongInfoContainer1 = NULL;
-lv_obj_t * ui_SongName1 = NULL;
-lv_obj_t * ui_SongCreator1 = NULL;
-lv_obj_t * ui_SongStatus1 = NULL;
-lv_obj_t * ui_LibraryTab = NULL;
 lv_obj_t * ui_MusicPlayerControlContainer = NULL;
 lv_obj_t * ui_MusicPlayingSlider = NULL;
 lv_obj_t * ui_MusicPreviousButton = NULL;
@@ -34,6 +27,13 @@ lv_obj_t * ui_MusicNextButton = NULL;
 lv_obj_t * ui_MusicNextIcon = NULL;
 lv_obj_t * ui_MusicPlayPauseButton = NULL;
 lv_obj_t * ui_MusicPlayPauseIcon = NULL;
+lv_obj_t * ui_QueueTab = NULL;
+lv_obj_t * ui_SongPanel1 = NULL;
+lv_obj_t * ui_SongInfoContainer1 = NULL;
+lv_obj_t * ui_SongName1 = NULL;
+lv_obj_t * ui_SongCreator1 = NULL;
+lv_obj_t * ui_SongStatus1 = NULL;
+lv_obj_t * ui_LibraryTab = NULL;
 lv_obj_t * ui_BooksPageContainer = NULL;
 lv_obj_t * ui_SettingsPageContainer = NULL;
 lv_obj_t * ui_DotPanelContainer = NULL;
@@ -183,27 +183,33 @@ void ui_Main_screen_init(void)
     lv_obj_set_align(ui_MusicPageContainer, LV_ALIGN_TOP_MID);
     lv_obj_clear_flag(ui_MusicPageContainer, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_scroll_dir(ui_MusicPageContainer, LV_DIR_HOR);
+    lv_obj_set_style_pad_left(ui_MusicPageContainer, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_right(ui_MusicPageContainer, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_top(ui_MusicPageContainer, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_bottom(ui_MusicPageContainer, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_MusicModeTabs = lv_tabview_create(ui_MusicPageContainer, LV_DIR_TOP, 20);
-    lv_obj_set_width(ui_MusicModeTabs, lv_pct(90));
-    lv_obj_set_height(ui_MusicModeTabs, lv_pct(66));
+    lv_obj_set_width(ui_MusicModeTabs, lv_pct(100));
+    lv_obj_set_height(ui_MusicModeTabs, lv_pct(100));
     lv_obj_set_align(ui_MusicModeTabs, LV_ALIGN_TOP_MID);
     lv_obj_clear_flag(ui_MusicModeTabs, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    lv_obj_set_style_radius(ui_MusicModeTabs, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_MusicModeTabs, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_MusicModeTabs, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_color(ui_MusicModeTabs, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_opa(ui_MusicModeTabs, 20, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(ui_MusicModeTabs, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_side(ui_MusicModeTabs, LV_BORDER_SIDE_FULL, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_MAIN | LV_STATE_DEFAULT,
                                            LV_STYLE_TEXT_COLOR, _ui_theme_color_White1);
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_MAIN | LV_STATE_DEFAULT,
                                            LV_STYLE_TEXT_OPA, _ui_theme_alpha_White1);
+    lv_obj_set_style_radius(lv_tabview_get_tab_btns(ui_MusicModeTabs), 3,  LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(lv_tabview_get_tab_btns(ui_MusicModeTabs), lv_color_hex(0xE7E7E7),
                               LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(lv_tabview_get_tab_btns(ui_MusicModeTabs), 20,  LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_MAIN | LV_STATE_DEFAULT,
+                                           LV_STYLE_BORDER_COLOR, _ui_theme_color_WhiteMask1);
+    ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_MAIN | LV_STATE_DEFAULT,
+                                           LV_STYLE_BORDER_OPA, _ui_theme_alpha_WhiteMask1);
+    lv_obj_set_style_border_side(lv_tabview_get_tab_btns(ui_MusicModeTabs), LV_BORDER_SIDE_TOP,
+                                 LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_object_set_themeable_style_property(lv_tabview_get_tab_btns(ui_MusicModeTabs),  LV_PART_ITEMS | LV_STATE_DEFAULT,
                                            LV_STYLE_TEXT_COLOR, _ui_theme_color_White1);
@@ -240,101 +246,7 @@ void ui_Main_screen_init(void)
     lv_obj_set_style_bg_color(ui_NowPlayingTab, lv_color_hex(0xFFFFFF), LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_NowPlayingTab, 0, LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
 
-    ui_QueueTab = lv_tabview_add_tab(ui_MusicModeTabs, "Queue");
-    lv_obj_set_flex_flow(ui_QueueTab, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(ui_QueueTab, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_bg_color(ui_QueueTab, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_QueueTab, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_left(ui_QueueTab, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_right(ui_QueueTab, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_top(ui_QueueTab, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_bottom(ui_QueueTab, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_row(ui_QueueTab, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_column(ui_QueueTab, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    lv_obj_set_style_bg_color(ui_QueueTab, lv_color_hex(0xFFFFFF), LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_QueueTab, 0, LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
-
-    ui_SongPanel1 = lv_obj_create(ui_QueueTab);
-    lv_obj_set_width(ui_SongPanel1, lv_pct(100));
-    lv_obj_set_height(ui_SongPanel1, lv_pct(25));
-    lv_obj_set_align(ui_SongPanel1, LV_ALIGN_CENTER);
-    lv_obj_set_flex_flow(ui_SongPanel1, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(ui_SongPanel1, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_clear_flag(ui_SongPanel1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    lv_obj_set_style_radius(ui_SongPanel1, 8, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_SongPanel1, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_SongPanel1, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
-    ui_object_set_themeable_style_property(ui_SongPanel1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_BORDER_COLOR,
-                                           _ui_theme_color_Blue1);
-    ui_object_set_themeable_style_property(ui_SongPanel1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_BORDER_OPA,
-                                           _ui_theme_alpha_Blue1);
-    lv_obj_set_style_border_width(ui_SongPanel1, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_side(ui_SongPanel1, LV_BORDER_SIDE_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_left(ui_SongPanel1, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_right(ui_SongPanel1, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_top(ui_SongPanel1, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_bottom(ui_SongPanel1, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_SongPanel1, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(ui_SongPanel1, 80, LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_outline_color(ui_SongPanel1, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_outline_opa(ui_SongPanel1, 80, LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_outline_width(ui_SongPanel1, 1, LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_outline_pad(ui_SongPanel1, 0, LV_PART_MAIN | LV_STATE_PRESSED);
-
-    ui_SongInfoContainer1 = lv_obj_create(ui_SongPanel1);
-    lv_obj_remove_style_all(ui_SongInfoContainer1);
-    lv_obj_set_width(ui_SongInfoContainer1, lv_pct(80));
-    lv_obj_set_height(ui_SongInfoContainer1, lv_pct(100));
-    lv_obj_set_align(ui_SongInfoContainer1, LV_ALIGN_CENTER);
-    lv_obj_set_flex_flow(ui_SongInfoContainer1, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(ui_SongInfoContainer1, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    lv_obj_clear_flag(ui_SongInfoContainer1, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-
-    ui_SongName1 = lv_label_create(ui_SongInfoContainer1);
-    lv_obj_set_width(ui_SongName1, lv_pct(100));
-    lv_obj_set_height(ui_SongName1, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_align(ui_SongName1, LV_ALIGN_CENTER);
-    lv_label_set_long_mode(ui_SongName1, LV_LABEL_LONG_SCROLL_CIRCULAR);
-    lv_label_set_text(ui_SongName1, "SongLongggggggggggggName1");
-    lv_obj_clear_flag(ui_SongName1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    ui_object_set_themeable_style_property(ui_SongName1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_Blue1);
-    ui_object_set_themeable_style_property(ui_SongName1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_Blue1);
-    lv_obj_set_style_text_font(ui_SongName1, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    ui_SongCreator1 = lv_label_create(ui_SongInfoContainer1);
-    lv_obj_set_width(ui_SongCreator1, lv_pct(100));
-    lv_obj_set_height(ui_SongCreator1, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_align(ui_SongCreator1, LV_ALIGN_CENTER);
-    lv_label_set_long_mode(ui_SongCreator1, LV_LABEL_LONG_DOT);
-    lv_label_set_text(ui_SongCreator1, "SongCreator1");
-    lv_obj_clear_flag(ui_SongCreator1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    lv_obj_set_style_text_color(ui_SongCreator1, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(ui_SongCreator1, 180, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_SongCreator1, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    ui_SongStatus1 = lv_label_create(ui_SongPanel1);
-    lv_obj_set_width(ui_SongStatus1, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_SongStatus1, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_align(ui_SongStatus1, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_SongStatus1, "S");
-    lv_obj_clear_flag(ui_SongStatus1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    ui_object_set_themeable_style_property(ui_SongStatus1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
-                                           _ui_theme_color_Blue1);
-    ui_object_set_themeable_style_property(ui_SongStatus1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
-                                           _ui_theme_alpha_Blue1);
-    lv_obj_set_style_text_font(ui_SongStatus1, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    ui_LibraryTab = lv_tabview_add_tab(ui_MusicModeTabs, "Library");
-    lv_obj_set_style_bg_color(ui_LibraryTab, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_LibraryTab, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    lv_obj_set_style_bg_color(ui_LibraryTab, lv_color_hex(0xFFFFFF), LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_LibraryTab, 0, LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
-
-    ui_MusicPlayerControlContainer = lv_obj_create(ui_MusicPageContainer);
+    ui_MusicPlayerControlContainer = lv_obj_create(ui_NowPlayingTab);
     lv_obj_remove_style_all(ui_MusicPlayerControlContainer);
     lv_obj_set_width(ui_MusicPlayerControlContainer, lv_pct(90));
     lv_obj_set_height(ui_MusicPlayerControlContainer, lv_pct(28));
@@ -461,6 +373,100 @@ void ui_Main_screen_init(void)
     ui_object_set_themeable_style_property(ui_MusicPlayPauseIcon, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
                                            _ui_theme_alpha_White1);
 
+    ui_QueueTab = lv_tabview_add_tab(ui_MusicModeTabs, "Queue");
+    lv_obj_set_flex_flow(ui_QueueTab, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(ui_QueueTab, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_color(ui_QueueTab, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_QueueTab, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_left(ui_QueueTab, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_right(ui_QueueTab, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_top(ui_QueueTab, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_bottom(ui_QueueTab, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_row(ui_QueueTab, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_column(ui_QueueTab, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_set_style_bg_color(ui_QueueTab, lv_color_hex(0xFFFFFF), LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_QueueTab, 0, LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
+
+    ui_SongPanel1 = lv_obj_create(ui_QueueTab);
+    lv_obj_set_width(ui_SongPanel1, lv_pct(100));
+    lv_obj_set_height(ui_SongPanel1, lv_pct(17));
+    lv_obj_set_align(ui_SongPanel1, LV_ALIGN_CENTER);
+    lv_obj_set_flex_flow(ui_SongPanel1, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(ui_SongPanel1, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(ui_SongPanel1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_radius(ui_SongPanel1, 8, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_SongPanel1, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_SongPanel1, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_object_set_themeable_style_property(ui_SongPanel1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_BORDER_COLOR,
+                                           _ui_theme_color_Blue1);
+    ui_object_set_themeable_style_property(ui_SongPanel1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_BORDER_OPA,
+                                           _ui_theme_alpha_Blue1);
+    lv_obj_set_style_border_width(ui_SongPanel1, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_side(ui_SongPanel1, LV_BORDER_SIDE_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_left(ui_SongPanel1, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_right(ui_SongPanel1, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_top(ui_SongPanel1, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_bottom(ui_SongPanel1, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_SongPanel1, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(ui_SongPanel1, 80, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_outline_color(ui_SongPanel1, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_outline_opa(ui_SongPanel1, 80, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_outline_width(ui_SongPanel1, 1, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_outline_pad(ui_SongPanel1, 0, LV_PART_MAIN | LV_STATE_PRESSED);
+
+    ui_SongInfoContainer1 = lv_obj_create(ui_SongPanel1);
+    lv_obj_remove_style_all(ui_SongInfoContainer1);
+    lv_obj_set_width(ui_SongInfoContainer1, lv_pct(80));
+    lv_obj_set_height(ui_SongInfoContainer1, lv_pct(100));
+    lv_obj_set_align(ui_SongInfoContainer1, LV_ALIGN_CENTER);
+    lv_obj_set_flex_flow(ui_SongInfoContainer1, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(ui_SongInfoContainer1, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_clear_flag(ui_SongInfoContainer1, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+
+    ui_SongName1 = lv_label_create(ui_SongInfoContainer1);
+    lv_obj_set_width(ui_SongName1, lv_pct(100));
+    lv_obj_set_height(ui_SongName1, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_align(ui_SongName1, LV_ALIGN_CENTER);
+    lv_label_set_long_mode(ui_SongName1, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_label_set_text(ui_SongName1, "SongLongggggggggggggName1");
+    lv_obj_clear_flag(ui_SongName1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    ui_object_set_themeable_style_property(ui_SongName1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
+                                           _ui_theme_color_Blue1);
+    ui_object_set_themeable_style_property(ui_SongName1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
+                                           _ui_theme_alpha_Blue1);
+    lv_obj_set_style_text_font(ui_SongName1, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_SongCreator1 = lv_label_create(ui_SongInfoContainer1);
+    lv_obj_set_width(ui_SongCreator1, lv_pct(100));
+    lv_obj_set_height(ui_SongCreator1, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_align(ui_SongCreator1, LV_ALIGN_CENTER);
+    lv_label_set_long_mode(ui_SongCreator1, LV_LABEL_LONG_DOT);
+    lv_label_set_text(ui_SongCreator1, "SongCreator1");
+    lv_obj_clear_flag(ui_SongCreator1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_text_color(ui_SongCreator1, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_SongCreator1, 180, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_SongCreator1, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_SongStatus1 = lv_label_create(ui_SongPanel1);
+    lv_obj_set_width(ui_SongStatus1, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_SongStatus1, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_align(ui_SongStatus1, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_SongStatus1, "S");
+    lv_obj_clear_flag(ui_SongStatus1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    ui_object_set_themeable_style_property(ui_SongStatus1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
+                                           _ui_theme_color_Blue1);
+    ui_object_set_themeable_style_property(ui_SongStatus1, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
+                                           _ui_theme_alpha_Blue1);
+    lv_obj_set_style_text_font(ui_SongStatus1, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_LibraryTab = lv_tabview_add_tab(ui_MusicModeTabs, "Library");
+    lv_obj_set_style_bg_color(ui_LibraryTab, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_LibraryTab, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_set_style_bg_color(ui_LibraryTab, lv_color_hex(0xFFFFFF), LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_LibraryTab, 0, LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
+
     ui_BooksPageContainer = lv_obj_create(ui_MainPageContainer);
     lv_obj_remove_style_all(ui_BooksPageContainer);
     lv_obj_set_width(ui_BooksPageContainer, lv_pct(100));
@@ -544,13 +550,6 @@ void ui_Main_screen_destroy(void)
     ui_MusicPageContainer = NULL;
     ui_MusicModeTabs = NULL;
     ui_NowPlayingTab = NULL;
-    ui_QueueTab = NULL;
-    ui_SongPanel1 = NULL;
-    ui_SongInfoContainer1 = NULL;
-    ui_SongName1 = NULL;
-    ui_SongCreator1 = NULL;
-    ui_SongStatus1 = NULL;
-    ui_LibraryTab = NULL;
     ui_MusicPlayerControlContainer = NULL;
     ui_MusicPlayingSlider = NULL;
     ui_MusicPreviousButton = NULL;
@@ -559,6 +558,13 @@ void ui_Main_screen_destroy(void)
     ui_MusicNextIcon = NULL;
     ui_MusicPlayPauseButton = NULL;
     ui_MusicPlayPauseIcon = NULL;
+    ui_QueueTab = NULL;
+    ui_SongPanel1 = NULL;
+    ui_SongInfoContainer1 = NULL;
+    ui_SongName1 = NULL;
+    ui_SongCreator1 = NULL;
+    ui_SongStatus1 = NULL;
+    ui_LibraryTab = NULL;
     ui_BooksPageContainer = NULL;
     ui_SettingsPageContainer = NULL;
     ui_DotPanelContainer = NULL;

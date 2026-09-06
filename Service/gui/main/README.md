@@ -56,10 +56,11 @@ GUI Task
             -> 复制为 Main 长期模糊壁纸
             -> 裁剪 MusicModeTabs 首帧并注册滚动同步
 GUI Task 循环
+  -> Service_GUI_QueueConsumeSelect() / cursor_set（假切歌）
   -> Service_GUI_QueueScrollLead() / 按滚动改 Index
   -> storage_listbuffer_request(Index, Length)
   -> 看见 READY
-  -> Service_GUI_QueueApply(titles, Length, Index)
+  -> Service_GUI_QueueApply(titles, Length, Index, current_index)
   -> 写回 IDLE
   -> Service_GUI_Process()
 ~~~

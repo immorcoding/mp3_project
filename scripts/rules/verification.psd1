@@ -5,6 +5,7 @@
         'gui_task'
         'w25qxx'
         'resource_pack'
+        'storage_catalog'
     )
 
     # 每条规则描述一个主机测试工程真正编译或覆盖的生产路径。
@@ -49,6 +50,13 @@
             PathPatterns = @(
                 '^Components/resource_pack/'
                 '^Tests/resource_pack/'
+            )
+        }
+        @{
+            Name = 'storage_catalog'
+            PathPatterns = @(
+                '^APP/tasks/storage/catalog/'
+                '^Tests/storage_catalog/'
             )
         }
     )

@@ -11,12 +11,16 @@
 #include <stdint.h>
 #include "Service/service.h"
 
+#define SERVICE_GUI_QUEUE_NO_CURRENT  0xFFFFU  /* 无有效播放游标时 QueueApply 的 current_index。 */
+
 Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index);
 void Service_GUI_Process(void);
 uint16_t Service_GUI_QueueScrollLead(void);
+Service_StatusTypeDef Service_GUI_QueueConsumeSelect(uint16_t *sheet_index);
 Service_StatusTypeDef Service_GUI_QueueApply(
     const char **titles,
     uint16_t length,
-    uint16_t window_index);
+    uint16_t window_index,
+    uint16_t current_index);
 
 #endif /* GUI_SERVICE_H */

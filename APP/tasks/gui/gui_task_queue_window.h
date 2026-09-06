@@ -14,6 +14,7 @@
 #define GUI_TASK_QUEUE_WINDOW_IDLE    0U  /* 与 STORAGE_LISTBUFFER_IDLE 同值。 */
 #define GUI_TASK_QUEUE_WINDOW_PENDING 1U  /* 与 STORAGE_LISTBUFFER_PENDING 同值。 */
 #define GUI_TASK_QUEUE_WINDOW_READY   2U  /* 与 STORAGE_LISTBUFFER_READY 同值。 */
+#define GUI_TASK_QUEUE_WINDOW_NO_CURRENT  0xFFFFU  /* 无有效游标或代次不符；与 QueueApply 无当前曲同值。 */
 
 typedef enum
 {
@@ -53,5 +54,10 @@ Gui_QueueWindowActionTypeDef gui_task_queue_window_poll(
     bool sd_ready,
     bool sd_mounted,
     uint32_t status);
+uint16_t gui_task_queue_window_current_index(
+    bool cursor_valid,
+    uint16_t cursor_index,
+    uint32_t cursor_generation,
+    uint32_t window_generation);
 
 #endif /* GUI_TASK_QUEUE_WINDOW_H */

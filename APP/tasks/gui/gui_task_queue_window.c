@@ -167,3 +167,28 @@ Gui_QueueWindowActionTypeDef gui_task_queue_window_poll(
 
     return GUI_TASK_QUEUE_WINDOW_ACTION_NONE;
 }
+
+/**
+ * @brief 把 Storage 游标收成 QueueApply 可用的当前下标。
+ * @param[in] cursor_valid `storage_playback_cursor_get` 是否成功。
+ * @param[in] cursor_index 播放列表下标。
+ * @param[in] cursor_generation 游标代次。
+ * @param[in] window_generation 本窗 READY 载荷的代次。
+ * @return 代次一致时的播放列表下标；否则 `GUI_TASK_QUEUE_WINDOW_NO_CURRENT`。
+ * @note 不判断该下标是否落在本窗内；QueueApply 只高亮窗内匹配行。
+ */
+uint16_t gui_task_queue_window_current_index(
+    bool cursor_valid,
+    uint16_t cursor_index,
+    uint32_t cursor_generation,
+    uint32_t window_generation)
+{
+    if (!cursor_valid ||
+        (cursor_generation == 0U) ||
+        (cursor_generation != window_generation))
+    {
+        return GUI_TASK_QUEUE_WINDOW_NO_CURRENT;
+    }
+
+    return cursor_index;
+}

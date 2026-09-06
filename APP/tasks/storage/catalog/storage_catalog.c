@@ -4,6 +4,7 @@
  */
 
 #include "storage_catalog.h"
+#include "storage_playback_cursor.h"
 #include "storage_sheet.h"
 
 #include <stdbool.h>
@@ -279,6 +280,15 @@ Storage_StatusTypeDef storage_catalog_music_init(void)
                                "Music sheet initialization failed.");
         return STORAGE_ERROR;
     }
+
+    if (storage_playback_cursor_init(MusicCatalogPool.IndexNum,
+                                     MusicCatalogPool.Generation) != STORAGE_OK)
+    {
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                               storage_catalog_log_tag,
+                               "Music playback cursor initialization failed.");
+        return STORAGE_ERROR;
+    }
     return STORAGE_OK;
 }
 
@@ -317,12 +327,13 @@ Storage_StatusTypeDef storage_catalog_init(void)
 }
 
 /**
- * @brief 拔卡或卸载时作废 Catalog，并作废对应的播放列表。
+ * @brief 拔卡或卸载时作废 Catalog，并作废对应的播放列表与游标。
  * @return STORAGE_OK。
  */
 Storage_StatusTypeDef storage_catalog_invalidate(void)
 {
     storage_catalog_music_reset();
+    (void)storage_playback_cursor_invalidate();
     return storage_sheet_invalidate();
 }
 

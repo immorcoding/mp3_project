@@ -7,8 +7,9 @@
  *          构造序列从 GUI/screens/ui_Main.c 的 SongPanel1 范本摘出，for 循环
  *          写入 QueueTab。不对手上的 LVGL 对象做样式拷贝。SquareLine 导出的
  *          那一行隐藏，避免和循环行叠在一起。当前/非当前只改 Border Opa、
- *          曲名色、Long mode 和右侧符号 Opa，不改 Border Width。可见行数跟
- *          Apply 传入的 Length 走，至多 8；曲名是 GUI Task 传入的窗口文本。
+ *          曲名色、Long mode 和右侧符号 Opa，不改 Border Width。点按 CLICKED
+ *          只刷新行样式并记下播放列表下标，不打开文件。可见行数跟 Apply
+ *          传入的 Length 走，至多 SERVICE_GUI_MAIN_QUEUE_MAX_ROWS；曲名是 GUI Task 传入的窗口文本。
  *          窗口滑动时在已有 panel 上转 head 改字，不无限 create。不得包含
  *          storage_listbuffer.h。
   ******************************************************************************
@@ -16,6 +17,7 @@
 
 #include "Service/gui/main/queue/gui_service_main_queue.h"
 #include "Service/gui/main/queue/gui_service_main_queue_config.h"
+#include "Service/gui/gui_service.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -43,6 +45,17 @@ static uint16_t service_gui_main_queue_created;
 /** @brief 上一窗在播放列表上的起点，供转 head 与滚动补偿。 */
 static uint16_t service_gui_main_queue_applied_index;
 
+/** @brief 上一窗实际可见条数，供点击把窗内槽位换成播放列表下标。 */
+static uint16_t service_gui_main_queue_applied_length;
+
+/** @brief 有一次尚未被 GUI Task 取走的点按选曲。 */
+static bool service_gui_main_queue_select_pending;
+
+/** @brief 待取走的播放列表下标；仅在 pending 为真时有效。 */
+static uint16_t service_gui_main_queue_select_index;
+
+static void service_gui_main_queue_on_panel_clicked(lv_event_t *e);
+
 /**
  * @brief 按 SquareLine 范本构造一行，父对象为 QueueTab。
  * @param[out] row 新行对象指针。
@@ -68,7 +81,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     }
 
     lv_obj_set_width(panel, lv_pct(100));
-    lv_obj_set_height(panel, lv_pct(25));
+    lv_obj_set_height(panel, lv_pct(17));
     lv_obj_set_align(panel, LV_ALIGN_CENTER);
     lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -121,7 +134,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_height(name, LV_SIZE_CONTENT);
     lv_obj_set_align(name, LV_ALIGN_CENTER);
     lv_label_set_long_mode(name, LV_LABEL_LONG_SCROLL_CIRCULAR);
-    lv_obj_clear_flag(name, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(name, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     ui_object_set_themeable_style_property(name, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
                                            _ui_theme_color_Blue1);
     ui_object_set_themeable_style_property(name, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
@@ -132,7 +145,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_height(creator, LV_SIZE_CONTENT);
     lv_obj_set_align(creator, LV_ALIGN_CENTER);
     lv_label_set_long_mode(creator, LV_LABEL_LONG_DOT);
-    lv_obj_clear_flag(creator, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(creator, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_text_color(creator, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(creator, 180, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(creator, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -141,12 +154,19 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_height(status, LV_SIZE_CONTENT);
     lv_obj_set_align(status, LV_ALIGN_CENTER);
     lv_label_set_text(status, LV_SYMBOL_AUDIO);
-    lv_obj_clear_flag(status, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(status, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     ui_object_set_themeable_style_property(status, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
                                            _ui_theme_color_Blue1);
     ui_object_set_themeable_style_property(status, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
                                            _ui_theme_alpha_Blue1);
     lv_obj_set_style_text_font(status, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_add_flag(panel, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(
+        panel,
+        service_gui_main_queue_on_panel_clicked,
+        LV_EVENT_CLICKED,
+        NULL);
 
     row->panel = panel;
     row->name = name;
@@ -214,19 +234,15 @@ static void service_gui_main_queue_set_current_border_visible(
 }
 
 /**
- * @brief 填写一行文字并套用当前/非当前样式。
+ * @brief 套用当前/非当前样式，不改曲名与歌手文字。
  * @param[in,out] row 已按范本构造的行。
- * @param[in] title 曲名显示文本。
- * @param[in] artist 歌手文本。
  * @param[in] is_current 是否为窗口内正在播放的那一行。
- * @note 只改文字、Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width。
+ * @note 只改 Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width。
  *       曲名高度一律锁成一行：LVGL 8 的 DOT 看高度溢出；SCROLL_CIRCULAR 靠宽度
- *       上限横向滚，不需要 SIZE_CONTENT。
+ *       上限横向滚，不需要 SIZE_CONTENT。点按切当前行时只走本函数，避免整窗改字。
  */
-static void service_gui_main_queue_apply_row(
+static void service_gui_main_queue_apply_row_style(
     Service_GUI_MainQueueRowTypeDef *row,
-    const char *title,
-    const char *artist,
     bool is_current)
 {
     const lv_font_t *name_font;
@@ -256,9 +272,105 @@ static void service_gui_main_queue_apply_row(
             _ui_theme_color_White1);
         lv_label_set_long_mode(row->name, LV_LABEL_LONG_DOT);
     }
+}
 
+/**
+ * @brief 填写一行文字并套用当前/非当前样式。
+ * @param[in,out] row 已按范本构造的行。
+ * @param[in] title 曲名显示文本。
+ * @param[in] artist 歌手文本。
+ * @param[in] is_current 是否为窗口内正在播放的那一行。
+ */
+static void service_gui_main_queue_apply_row(
+    Service_GUI_MainQueueRowTypeDef *row,
+    const char *title,
+    const char *artist,
+    bool is_current)
+{
+    service_gui_main_queue_apply_row_style(row, is_current);
     lv_label_set_text(row->name, title);
     lv_label_set_text(row->creator, artist);
+}
+
+/**
+ * @brief 只刷新本窗各行的当前/非当前样式，不改文字、不转 head。
+ * @param[in] current_index 新的播放列表下标。
+ */
+static void service_gui_main_queue_refresh_current(uint16_t current_index)
+{
+    uint16_t i;
+
+    for (i = 0U; i < service_gui_main_queue_applied_length; i++)
+    {
+        service_gui_main_queue_apply_row_style(
+            &service_gui_main_queue_rows[i],
+            (current_index != SERVICE_GUI_QUEUE_NO_CURRENT) &&
+                (((uint32_t)service_gui_main_queue_applied_index +
+                  (uint32_t)i) == (uint32_t)current_index));
+    }
+}
+
+/**
+ * @brief 点按可见行时立刻改样式，并记下播放列表下标供 GUI Task 取走。
+ * @param[in] e LVGL 点按事件。
+ * @note 子对象已关掉 Clickable，命中落在 Panel。不打开文件、不解码。
+ */
+static void service_gui_main_queue_on_panel_clicked(lv_event_t *e)
+{
+    lv_obj_t *panel;
+    uint16_t i;
+    uint16_t sheet_index;
+
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED)
+    {
+        return;
+    }
+
+    panel = lv_event_get_current_target(e);
+    if ((panel == NULL) || (service_gui_main_queue_applied_length == 0U))
+    {
+        return;
+    }
+
+    for (i = 0U; i < service_gui_main_queue_applied_length; i++)
+    {
+        if (service_gui_main_queue_rows[i].panel != panel)
+        {
+            continue;
+        }
+
+        sheet_index = (uint16_t)((uint32_t)service_gui_main_queue_applied_index +
+                                 (uint32_t)i);
+        service_gui_main_queue_refresh_current(sheet_index);
+        service_gui_main_queue_select_pending = true;
+        service_gui_main_queue_select_index = sheet_index;
+        return;
+    }
+}
+
+/**
+ * @brief 取走一次点按选中的播放列表下标。
+ * @param[out] sheet_index 被点行对应的播放列表下标。
+ * @retval SERVICE_OK 有一次待处理点击。
+ * @retval SERVICE_NOT_READY 没有待处理点击。
+ * @retval SERVICE_INVALID_PARAM sheet_index 为空。
+ */
+Service_StatusTypeDef service_gui_main_queue_consume_select(
+    uint16_t *sheet_index)
+{
+    if (sheet_index == NULL)
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    if (!service_gui_main_queue_select_pending)
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    *sheet_index = service_gui_main_queue_select_index;
+    service_gui_main_queue_select_pending = false;
+    return SERVICE_OK;
 }
 
 /**
@@ -479,17 +591,19 @@ Service_StatusTypeDef service_gui_main_queue_prepare(void)
  * @param[in] titles 曲名字符串指针表，Length 为 0 时允许为 NULL。
  * @param[in] length 本窗实际条数，0..SERVICE_GUI_MAIN_QUEUE_MAX_ROWS。
  * @param[in] window_index 本窗在播放列表上的起点。
+ * @param[in] current_index 正在播放的播放列表下标；无当前曲时为
+ *            SERVICE_GUI_QUEUE_NO_CURRENT。
  * @retval SERVICE_OK 已按 Length 显示行，或 Length 为 0 已全部 Hidden。
  * @retval SERVICE_INVALID_PARAM Length 超上限，或 Length 非 0 但 titles 为空。
  * @retval SERVICE_NOT_READY QueueTab 或范本尚未导出。
  * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
- * @note 游标未落地：列表下标 0 若在本窗则当当前曲。歌手空串。不包含
- *       storage_listbuffer.h。已有行转 head，不无限 create。
+ * @note 歌手空串。不包含 storage_listbuffer.h。已有行转 head，不无限 create。
  */
 Service_StatusTypeDef service_gui_main_queue_apply(
     const char **titles,
     uint16_t length,
-    uint16_t window_index)
+    uint16_t window_index,
+    uint16_t current_index)
 {
     Service_StatusTypeDef status;
     uint16_t i;
@@ -519,7 +633,10 @@ Service_StatusTypeDef service_gui_main_queue_apply(
         }
 
         service_gui_main_queue_applied_index = 0U;
+        service_gui_main_queue_applied_length = 0U;
+        service_gui_main_queue_select_pending = false;
         lv_obj_scroll_to_y(ui_QueueTab, 0, LV_ANIM_OFF);
+        (void)current_index;
         return SERVICE_OK;
     }
 
@@ -550,7 +667,9 @@ Service_StatusTypeDef service_gui_main_queue_apply(
             &service_gui_main_queue_rows[i],
             (titles[i] != NULL) ? titles[i] : "",
             "",
-            ((uint32_t)window_index + (uint32_t)i) == 0U);
+            (current_index != SERVICE_GUI_QUEUE_NO_CURRENT) &&
+                (((uint32_t)window_index + (uint32_t)i) ==
+                 (uint32_t)current_index));
     }
 
     for (i = length; i < service_gui_main_queue_created; i++)
@@ -562,5 +681,6 @@ Service_StatusTypeDef service_gui_main_queue_apply(
 
     service_gui_main_queue_adjust_scroll(delta);
     service_gui_main_queue_applied_index = window_index;
+    service_gui_main_queue_applied_length = length;
     return SERVICE_OK;
 }
