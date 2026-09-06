@@ -1,6 +1,6 @@
 # 曲库与播放列表
 
-> 状态：扫描、顺序表与 Queue 窗口单槽已落地；GUI Task 已接线 `storage_listbuffer`（Index=0 一窗，按 Length 填 Queue）；导航、元数据、滑窗未做。  
+> 状态：扫描、顺序表、Queue 窗口单槽与 GUI 滑窗已落地；导航、元数据未做。  
 > 相关决定：[ADR-0015](adr/0015-volume-roles-and-resource-install.md)  
 > 实现：[`APP/tasks/storage/catalog/`](../APP/tasks/storage/catalog/)  
 > 术语：[CONTEXT.md](../CONTEXT.md) **曲库**、**播放列表**
@@ -26,7 +26,7 @@
 
 公开头不暴露字符串池、条目数组或 `SeqList`。窗口载荷在 `storage_listbuffer` 单槽：`Index` + `Length` + `Generation` + `Buffer[][]`。`request` 只提交起点、条数和代次，不传路径也不传曲名。GUI 看见 `READY` 后整窗消费，再把 `Status` 写回 `IDLE`。当前 `Buffer` 仍是曲库路径，Queue 原样显示；标题/歌手等 `load` 调解析器，见第 5 节。曲库仍只存相对路径。`0` 代次表示请求方无快照或应答已作废。
 
-`Index` 是窗口在播放列表上的起点，不是条数。`request` 时 `Length` 为请求条数（1..`STORAGE_LISTBUFFER_MAX_ENTRIES`）；`load` 成功后改成实际写入 `Buffer` 的条数，可能更短。`Buffer[i]` 对应列表位置 `Index + i`。槽位容量现为 8。GUI Queue 用固定数量的 panel 槽显示这一窗；窗口滑动时回收 panel，不把本槽改成环形数组。`Index` 已是列表起点。
+`Index` 是窗口在播放列表上的起点，不是条数。`request` 时 `Length` 为请求条数（1..`STORAGE_LISTBUFFER_MAX_ENTRIES`）；`load` 成功后改成实际写入 `Buffer` 的条数，可能更短。`Buffer[i]` 对应列表位置 `Index + i`。槽位容量现为 8。GUI Queue 用固定数量的 panel 槽显示这一窗；窗口滑动时回收 panel，不把本槽改成环形数组。`Index` 已是列表起点。GUI Task 在滑动过程中按 `QueueTab` 滚出顶部的整行数改 `Index` 再 `request`：列表起点不留上一窗，其余留一行给回滑；末窗 `Length` 不足上限则不再往外推。换窗从当前 `scroll_y` 扣整行高度并保留剩余像素，不吸回整页，也不按 MainPager 那样等 `SCROLL_END` 吸附。
 
 当前播放位置是**播放列表下标**（与 `Index` 同一坐标系），必须携带与 Catalog/Sheet 相同的 `Generation`。拔卡或 `storage_catalog_invalidate()` 后 Sheet 代次为 0，游标作废，没有当前行。重新扫描成功后旧下标作废；非空库从 0 起，空库仍无当前曲。问询窗口与判定高亮行都要核代次。游标不放在 `storage_listbuffer` 里，实现尚未落地。
 
@@ -45,7 +45,7 @@ Music 扫描从相对路径 `Music` 递归子目录，同时只开一个目录�
 ## 4. 未落地
 
 - 带代次的上一首/下一首游标（生命周期已约定与 Catalog 相同，结构未做）、Playback 打开/预开
-- GUI Queue 滑窗与播放列表游标（第一窗已从 `Index = 0` 接入；`Service/gui` 不得包含 `storage_listbuffer.h`）
+- 播放列表游标（Queue 滑窗已从滚动改 `Index` 接入；`Service/gui` 不得包含 `storage_listbuffer.h`）
 - 随机列表、心动列表（结构体里已注释）
 - 标题/歌手/封面：等 MP3 **解析组件**，见第 5 节
 - Books Catalog 扫描

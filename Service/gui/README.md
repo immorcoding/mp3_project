@@ -8,7 +8,8 @@
 
 - `Service_GUI_Init(notify_index)`：仅由 GUI Task 调用一次。`notify_index` 是本任务 `Gui_NotifyIndexTypeDef` 给出的 LCD DMA 完成槽。初始化 LVGL，注册 v8 显示驱动与 Pointer 输入驱动，绑定 LCD DMA 最终回调，并调用 SquareLine 的 `ui_init()`。
 - `Service_GUI_Process()`：仅在同一 GUI Task 上下文周期调用。按 FreeRTOS Tick 推进 LVGL 时间，并调用 `lv_timer_handler()` 处理刷新、动画和输入。
-- `Service_GUI_QueueApply(titles, length)`：仅由同一 GUI Task 调用。把一窗曲名填进 Queue 可见行；`length` 为 0 时全部 Hidden，`titles` 可为 NULL。不包含 `storage_listbuffer.h`。Label 会拷贝文本。
+- `Service_GUI_QueueApply(titles, length, window_index)`：仅由同一 GUI Task 调用。把一窗曲名填进 Queue 可见行；`length` 为 0 时全部 Hidden，`titles` 可为 NULL。`window_index` 是本窗在播放列表上的起点，用于已有行转 head 与列表下标 0 的当前行判定。不包含 `storage_listbuffer.h`。Label 会拷贝文本。
+- `Service_GUI_QueueScrollLead()`：仅由同一 GUI Task 调用。返回 `QueueTab` 顶部已滚出的整行数，供窗口协议计算下一窗 `Index`。换窗时从当前 `scroll_y` 扣整行高度，不把列表吸回整页。
 
 重复调用 `Service_GUI_Init()` 返回 `SERVICE_BUSY`。当前 GUI Task 将初始化失败视为致命并调用
 `Error_Handler()`；GUI Service 尚未提供部分初始化后的回滚或重试 Interface。
@@ -59,7 +60,7 @@ LVGL Pointer read_cb
 
 ## 私有 Modules 与配置
 
-对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()` 与 `Service_GUI_QueueApply()`；
+对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()` 与 `Service_GUI_QueueApply()`；
 以下是 `Service/gui` 内部的实现拆分，不得被 APP 或其他 Service 直接包含或调用。
 SquareLine 生成代码唯一允许的例外是由 `GUI/ui_events.h` 声明、GUI Service 实现的
 `Service_GUI_Boot_RequestLock()`：它是 BootReveal 的窄事件交接点，不属于供上层调用的
@@ -107,8 +108,9 @@ Service/gui/
   `MainPageContainer` 的 `LV_EVENT_SCROLL_END`，以 50% 阈值吸附至相邻槽位，并在两端轮换既有
   Page 后无动画回中实现循环。它不依赖 Canvas、Platform LCD 或壁纸资源。
 - `main/queue/`：只持有 Queue 可见行对象。它把 SquareLine 单行范本的构造序列摘进
-  for 循环，按 Length 写入 `QueueTab`，并套用当前/非当前样式（Border Opa，不改
-  Width）。不包含 `storage_listbuffer.h`。
+  for 循环，按 Length 写入 `QueueTab`，窗口滑动时转 head 改字，并套用当前/非当前
+  样式（Border Opa，不改 Width）。用 `QueueScrollLead` 报告滚出顶部的整行数。
+  不包含 `storage_listbuffer.h`。
 - `main/background/`：只持有 Main 的长期模糊壁纸和 `MusicModeTabs` SDRAM 裁剪背景。它使
   SquareLine 未公开的 Tabview 内部 Content 透明、禁用其横滑，并监听 `MainPageContainer` 的
   `LV_EVENT_SCROLL`，按目标控件当前坐标重裁剪背景。它不维护分页槽位、吸附或圆点状态。除

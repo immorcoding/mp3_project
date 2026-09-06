@@ -4,11 +4,11 @@
   * @brief   GUI Task 的 FreeRTOS 运行循环。
   *
   * @details
-  *          本任务是 LVGL 的唯一执行上下文。它先初始化 GUI Service，随后持续
-  *          推进 LVGL 定时器、绘制与输入处理；SPI DMA 刷新期间的等待由 GUI
-  *          Service 注册给 LVGL 的 wait callback 完成。同一循环里消费
-  *          storage_listbuffer 窗口：IDLE 时 request，READY 时 QueueApply 后
-  *          写回 IDLE，不在 Process 内包含该头。
+ *          本任务是 LVGL 的唯一执行上下文。它先初始化 GUI Service，随后持续
+ *          推进 LVGL 定时器、绘制与输入处理；SPI DMA 刷新期间的等待由 GUI
+ *          Service 注册给 LVGL 的 wait callback 完成。同一循环里消费
+ *          storage_listbuffer 窗口：按 QueueTab 滚动更新 Index 后 request，
+ *          READY 时 QueueApply 后写回 IDLE，不在 Process 内包含该头。
   ******************************************************************************
   */
 
@@ -40,7 +40,7 @@ static Service_StatusTypeDef gui_task_apply_ready_window(void)
 
     if (!storage_task_sd_is_mounted())
     {
-        return Service_GUI_QueueApply(NULL, 0U);
+        return Service_GUI_QueueApply(NULL, 0U, 0U);
     }
 
     length = storage_listbuffer.Length;
@@ -56,10 +56,10 @@ static Service_StatusTypeDef gui_task_apply_ready_window(void)
 
     if (length == 0U)
     {
-        return Service_GUI_QueueApply(NULL, 0U);
+        return Service_GUI_QueueApply(NULL, 0U, 0U);
     }
 
-    return Service_GUI_QueueApply(titles, length);
+    return Service_GUI_QueueApply(titles, length, storage_listbuffer.Index);
 }
 
 /**
@@ -94,6 +94,11 @@ void gui_task(void *handle)
     {
         Gui_QueueWindowActionTypeDef action;
 
+        gui_task_queue_window_note_lead(
+            &gui_task_queue_window_client,
+            Service_GUI_QueueScrollLead(),
+            STORAGE_LISTBUFFER_MAX_ENTRIES);
+
         action = gui_task_queue_window_poll(
             &gui_task_queue_window_client,
             storage_task_sd_is_ready(),
@@ -107,7 +112,8 @@ void gui_task(void *handle)
 
             case GUI_TASK_QUEUE_WINDOW_ACTION_REQUEST:
                 (void)storage_listbuffer_request(
-                    0U,
+                    gui_task_queue_window_request_index(
+                        &gui_task_queue_window_client),
                     STORAGE_LISTBUFFER_MAX_ENTRIES,
                     0U);
                 break;
@@ -116,14 +122,31 @@ void gui_task(void *handle)
                 if ((gui_task_apply_ready_window() == SERVICE_OK) &&
                     storage_task_sd_is_mounted())
                 {
-                    gui_task_queue_window_mark_applied(&gui_task_queue_window_client);
+                    uint16_t applied_index;
+                    uint16_t applied_length;
+
+                    applied_length = storage_listbuffer.Length;
+                    applied_index = storage_listbuffer.Index;
+                    if (applied_length == 0U)
+                    {
+                        applied_index = 0U;
+                    }
+                    else if (applied_length > STORAGE_LISTBUFFER_MAX_ENTRIES)
+                    {
+                        applied_length = STORAGE_LISTBUFFER_MAX_ENTRIES;
+                    }
+
+                    gui_task_queue_window_mark_applied(
+                        &gui_task_queue_window_client,
+                        applied_index,
+                        applied_length);
                 }
 
                 storage_listbuffer.Status = STORAGE_LISTBUFFER_IDLE;
                 break;
 
             case GUI_TASK_QUEUE_WINDOW_ACTION_CLEAR:
-                (void)Service_GUI_QueueApply(NULL, 0U);
+                (void)Service_GUI_QueueApply(NULL, 0U, 0U);
                 break;
 
             default:

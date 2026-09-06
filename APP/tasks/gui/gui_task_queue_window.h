@@ -25,12 +25,29 @@ typedef enum
 
 typedef struct
 {
-    bool need_window; /**< 下一次 IDLE 且 SD 就绪时应 request。 */
-    bool displayed;   /**< 当前 Queue 仍展示上一窗，卸载后需要 CLEAR。 */
+    bool need_window;        /**< 下一次 IDLE 且 SD 就绪时应 request。 */
+    bool displayed;          /**< 当前 Queue 仍展示上一窗，卸载后需要 CLEAR。 */
+    uint16_t desired_index;  /**< 下一窗在播放列表上的起点。 */
+    uint16_t applied_index;  /**< 已成功填进 Queue 的窗口起点。 */
+    uint16_t applied_length; /**< 已成功填进 Queue 的本窗条数。 */
 } Gui_QueueWindowClientTypeDef;
 
 void gui_task_queue_window_client_init(Gui_QueueWindowClientTypeDef *client);
-void gui_task_queue_window_mark_applied(Gui_QueueWindowClientTypeDef *client);
+void gui_task_queue_window_mark_applied(
+    Gui_QueueWindowClientTypeDef *client,
+    uint16_t index,
+    uint16_t length);
+uint16_t gui_task_queue_window_desired_index(
+    uint16_t applied_index,
+    uint16_t applied_length,
+    uint16_t lead,
+    uint16_t max_entries);
+void gui_task_queue_window_note_lead(
+    Gui_QueueWindowClientTypeDef *client,
+    uint16_t lead,
+    uint16_t max_entries);
+uint16_t gui_task_queue_window_request_index(
+    const Gui_QueueWindowClientTypeDef *client);
 Gui_QueueWindowActionTypeDef gui_task_queue_window_poll(
     Gui_QueueWindowClientTypeDef *client,
     bool sd_ready,

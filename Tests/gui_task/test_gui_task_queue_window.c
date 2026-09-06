@@ -112,7 +112,7 @@ static void test_does_not_rerequest_after_apply(void)
         true,
         true,
         GUI_TASK_QUEUE_WINDOW_READY);
-    gui_task_queue_window_mark_applied(&client);
+    gui_task_queue_window_mark_applied(&client, 0U, 8U);
     action = gui_task_queue_window_poll(
         &client,
         true,
@@ -179,7 +179,7 @@ static void test_clears_displayed_window_when_sd_removed(void)
         true,
         true,
         GUI_TASK_QUEUE_WINDOW_READY);
-    gui_task_queue_window_mark_applied(&client);
+    gui_task_queue_window_mark_applied(&client, 0U, 8U);
     action = gui_task_queue_window_poll(
         &client,
         false,
@@ -202,7 +202,7 @@ static void test_does_not_clear_during_debounce_while_mounted(void)
         true,
         true,
         GUI_TASK_QUEUE_WINDOW_READY);
-    gui_task_queue_window_mark_applied(&client);
+    gui_task_queue_window_mark_applied(&client, 0U, 8U);
     action = gui_task_queue_window_poll(
         &client,
         false,
@@ -225,7 +225,7 @@ static void test_does_not_clear_twice_while_sd_absent(void)
         true,
         true,
         GUI_TASK_QUEUE_WINDOW_READY);
-    gui_task_queue_window_mark_applied(&client);
+    gui_task_queue_window_mark_applied(&client, 0U, 8U);
     (void)gui_task_queue_window_poll(
         &client,
         false,
@@ -253,7 +253,7 @@ static void test_requests_again_after_sd_reinserted(void)
         true,
         true,
         GUI_TASK_QUEUE_WINDOW_READY);
-    gui_task_queue_window_mark_applied(&client);
+    gui_task_queue_window_mark_applied(&client, 0U, 8U);
     (void)gui_task_queue_window_poll(
         &client,
         false,
@@ -285,6 +285,134 @@ static void test_applies_ready_before_clear_when_sd_removed(void)
 }
 
 /**
+ * @brief 第一窗 Index=0；滚动未满一行上沿缓冲时不改起点。
+ */
+static void test_scroll_one_row_keeps_index_zero_for_upward_slack(void)
+{
+    assert(gui_task_queue_window_desired_index(0U, 8U, 1U, 8U) == 0U);
+}
+
+/**
+ * @brief 滚过两行后窗口起点跟上可见行，并留一行给回滑。
+ */
+static void test_scroll_two_rows_requests_index_one(void)
+{
+    assert(gui_task_queue_window_desired_index(0U, 8U, 2U, 8U) == 1U);
+}
+
+/**
+ * @brief 窗口已含一行上沿缓冲且仍停在该缓冲时保持 Index。
+ */
+static void test_stable_when_lead_matches_upward_slack(void)
+{
+    assert(gui_task_queue_window_desired_index(4U, 8U, 1U, 8U) == 4U);
+}
+
+/**
+ * @brief 回到窗口顶部时 Index 减一，才能 request 上一窗。
+ */
+static void test_scroll_back_to_top_requests_previous_index(void)
+{
+    assert(gui_task_queue_window_desired_index(4U, 8U, 0U, 8U) == 3U);
+}
+
+/**
+ * @brief 末窗 Length 不足上限时，不得把 Index 再往列表外推。
+ */
+static void test_does_not_advance_index_when_window_is_short(void)
+{
+    assert(gui_task_queue_window_desired_index(5U, 3U, 2U, 8U) == 5U);
+}
+
+/**
+ * @brief 列表起点没有上一窗；lead 为 0 时保持 Index=0。
+ */
+static void test_index_zero_has_no_previous_window(void)
+{
+    assert(gui_task_queue_window_desired_index(0U, 8U, 0U, 8U) == 0U);
+}
+
+/**
+ * @brief 一次滚过多行只 request 目标 Index，不逐步 +1。
+ */
+static void test_jump_scroll_requests_target_index_in_one_shot(void)
+{
+    assert(gui_task_queue_window_desired_index(0U, 8U, 5U, 8U) == 4U);
+}
+
+/**
+ * @brief 已展示窗口上 lead 要求新起点时，IDLE 下重新 request。
+ */
+static void test_note_lead_requests_when_desired_index_moves(void)
+{
+    Gui_QueueWindowClientTypeDef client;
+    Gui_QueueWindowActionTypeDef action;
+
+    gui_task_queue_window_client_init(&client);
+    (void)gui_task_queue_window_poll(
+        &client,
+        true,
+        true,
+        GUI_TASK_QUEUE_WINDOW_READY);
+    gui_task_queue_window_mark_applied(&client, 0U, 8U);
+    gui_task_queue_window_note_lead(&client, 2U, 8U);
+    assert(gui_task_queue_window_request_index(&client) == 1U);
+    action = gui_task_queue_window_poll(
+        &client,
+        true,
+        true,
+        GUI_TASK_QUEUE_WINDOW_IDLE);
+    assert(action == GUI_TASK_QUEUE_WINDOW_ACTION_REQUEST);
+}
+
+/**
+ * @brief 上沿缓冲消耗完之前，不因为滚动就重新 request。
+ */
+static void test_note_lead_does_not_rerequest_for_slack_row(void)
+{
+    Gui_QueueWindowClientTypeDef client;
+    Gui_QueueWindowActionTypeDef action;
+
+    gui_task_queue_window_client_init(&client);
+    (void)gui_task_queue_window_poll(
+        &client,
+        true,
+        true,
+        GUI_TASK_QUEUE_WINDOW_READY);
+    gui_task_queue_window_mark_applied(&client, 0U, 8U);
+    gui_task_queue_window_note_lead(&client, 1U, 8U);
+    assert(gui_task_queue_window_request_index(&client) == 0U);
+    action = gui_task_queue_window_poll(
+        &client,
+        true,
+        true,
+        GUI_TASK_QUEUE_WINDOW_IDLE);
+    assert(action == GUI_TASK_QUEUE_WINDOW_ACTION_NONE);
+}
+
+/**
+ * @brief 拔卡清空后重插，仍从 Index=0 要第一窗。
+ */
+static void test_clear_resets_request_index_to_zero(void)
+{
+    Gui_QueueWindowClientTypeDef client;
+
+    gui_task_queue_window_client_init(&client);
+    (void)gui_task_queue_window_poll(
+        &client,
+        true,
+        true,
+        GUI_TASK_QUEUE_WINDOW_READY);
+    gui_task_queue_window_mark_applied(&client, 4U, 8U);
+    (void)gui_task_queue_window_poll(
+        &client,
+        false,
+        false,
+        GUI_TASK_QUEUE_WINDOW_IDLE);
+    assert(gui_task_queue_window_request_index(&client) == 0U);
+}
+
+/**
  * @brief 运行全部窗口状态机测试。
  * @return 成功时返回 0。
  */
@@ -302,6 +430,16 @@ int main(void)
     test_does_not_clear_twice_while_sd_absent();
     test_requests_again_after_sd_reinserted();
     test_applies_ready_before_clear_when_sd_removed();
+    test_scroll_one_row_keeps_index_zero_for_upward_slack();
+    test_scroll_two_rows_requests_index_one();
+    test_stable_when_lead_matches_upward_slack();
+    test_scroll_back_to_top_requests_previous_index();
+    test_does_not_advance_index_when_window_is_short();
+    test_index_zero_has_no_previous_window();
+    test_jump_scroll_requests_target_index_in_one_shot();
+    test_note_lead_requests_when_desired_index_moves();
+    test_note_lead_does_not_rerequest_for_slack_row();
+    test_clear_resets_request_index_to_zero();
 
     puts("gui_task_queue_window_tests: all tests passed");
     return 0;

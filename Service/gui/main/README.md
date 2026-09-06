@@ -21,7 +21,9 @@ main/
 - `pager/` 不依赖 Canvas、Platform LCD 或壁纸图像；它只读取 SquareLine 公开对象并维护
   三个既有 Page 的物理槽位与逻辑圆点状态。
 - `queue/` 不依赖 Canvas 或分页状态；它把 `SongPanel1` 范本构造摘进 for 循环。
-  可见行由 `Service_GUI_QueueApply()` 按 Length 填入，不包含 `storage_listbuffer.h`。
+  可见行由 `Service_GUI_QueueApply()` 按 Length 填入，窗口滑动时转 head，
+  并从当前 `scroll_y` 扣整行高度；不包含 `storage_listbuffer.h`。
+  Queue 滚动不是 Pager，不要等 `SCROLL_END` 吸附。
 - `background/` 不维护当前页、吸附阈值、循环映射、圆点动画或 Queue 行；它长期持有页面级
   SDRAM 图像缓冲，并在 MainPageContainer 滚动时更新 MusicModeTabs 的局部背景。
 - 子 Module 可以向同一个 `MainPageContainer` 注册不同 LVGL 事件，但不共享私有状态：
@@ -54,8 +56,10 @@ GUI Task
             -> 复制为 Main 长期模糊壁纸
             -> 裁剪 MusicModeTabs 首帧并注册滚动同步
 GUI Task 循环
-  -> storage_listbuffer_request() / 看见 READY
-  -> Service_GUI_QueueApply(titles, Length)
+  -> Service_GUI_QueueScrollLead() / 按滚动改 Index
+  -> storage_listbuffer_request(Index, Length)
+  -> 看见 READY
+  -> Service_GUI_QueueApply(titles, Length, Index)
   -> 写回 IDLE
   -> Service_GUI_Process()
 ~~~

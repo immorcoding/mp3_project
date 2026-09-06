@@ -2,7 +2,7 @@
 
 GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后持续推进定时器、绘制与输入；SPI DMA 刷新期间的等待由 GUI Service 的 wait callback 完成。本目录不拥有 SquareLine 生成代码，也不修改 `GUI/`。
 
-同一循环里消费 `storage_listbuffer` 单槽窗口：SD **就绪**且 `IDLE` 时 `request` 从播放列表 `Index = 0` 起至多 8 条；看见 `READY` 后把窗口文本交给 `Service_GUI_QueueApply()`，成功后再记已展示，再把 `Status` 写回 `IDLE`。`request` 只带起点/条数/代次。当前 `Buffer` 仍是路径，原样显示；标题/歌手等 `load` 调解析器，见 `docs/catalog_architecture.md` 第 5 节。QueueApply 失败保持 `need_window`，写回 IDLE 后重试。清空只看 **卷仍挂载**，不把卡检测消抖当成拔卡。`Service/gui` 仍不得包含 `storage_listbuffer.h`。协议状态机在 `gui_task_queue_window.c`，不阻塞等待 READY。
+同一循环里消费 `storage_listbuffer` 单槽窗口：SD **就绪**且 `IDLE` 时按 `QueueTab` 当前滚动改 `Index` 再 `request`（至多 8 条）；看见 `READY` 后把窗口文本和 `Index` 交给 `Service_GUI_QueueApply()`，成功后再记已展示，再把 `Status` 写回 `IDLE`。`request` 只带起点/条数/代次。当前 `Buffer` 仍是路径，原样显示；标题/歌手等 `load` 调解析器，见 `docs/catalog_architecture.md` 第 5 节。QueueApply 失败保持 `need_window`，写回 IDLE 后重试。清空只看 **卷仍挂载**，不把卡检测消抖当成拔卡。`Service/gui` 仍不得包含 `storage_listbuffer.h`。协议状态机在 `gui_task_queue_window.c`，不阻塞等待 READY。换窗只从当前 `scroll_y` 扣整行高度，不吸回整页。Index=0 不留上一窗，其余留一行给回滑。末窗 `Length` 不足 8 时不再往列表外推。
 
 ## 公开 Interface
 
@@ -11,7 +11,7 @@ GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后�
 
 ## 编译期依赖
 
-- `Service_GUI_Init()` / `Service_GUI_Process()` / `Service_GUI_QueueApply()`；
+- `Service_GUI_Init()` / `Service_GUI_Process()` / `Service_GUI_QueueScrollLead()` / `Service_GUI_QueueApply()`；
 - `storage_listbuffer_*()`、`storage_task_sd_is_ready()` 与 `storage_task_sd_is_mounted()`；
 - FreeRTOS Task 入口签名。
 
@@ -24,7 +24,7 @@ GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后�
 - 不创建第二个 LVGL 执行上下文；
 - 不手改 `GUI/` 或 `SquareLineProject/`；
 - 初始化失败没有部分回滚；
-- 第一刀窗口固定从 `Index = 0` 要一窗；滑窗与游标未做；
+- 滑窗已接线：`QueueTab` 竖滑后改 `Index` 再 `request`；播放列表游标未做（列表下标 0 若在窗内则当当前曲）；
 - 不裁路径、不按文件名切开；标题/歌手等 `load` 调解析器，见 `docs/catalog_architecture.md` 第 5 节。
 
 ## 命名

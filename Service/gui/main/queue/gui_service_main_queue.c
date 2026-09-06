@@ -4,12 +4,13 @@
   * @brief   按 Length 用 SquareLine 范本构造生成 Queue 可见行。
   *
   * @details
-  *          构造序列从 GUI/screens/ui_Main.c 的 SongPanel1 范本摘出，for 循环
-  *          写入 QueueTab。不对手上的 LVGL 对象做样式拷贝。SquareLine 导出的
-  *          那一行隐藏，避免和循环行叠在一起。当前/非当前只改 Border Opa、
-  *          曲名色、Long mode 和右侧符号 Opa，不改 Border Width。可见行数跟
-  *          Apply 传入的 Length 走，至多 8；曲名是 GUI Task 传入的窗口文本。
-  *          不得包含 storage_listbuffer.h。
+ *          构造序列从 GUI/screens/ui_Main.c 的 SongPanel1 范本摘出，for 循环
+ *          写入 QueueTab。不对手上的 LVGL 对象做样式拷贝。SquareLine 导出的
+ *          那一行隐藏，避免和循环行叠在一起。当前/非当前只改 Border Opa、
+ *          曲名色、Long mode 和右侧符号 Opa，不改 Border Width。可见行数跟
+ *          Apply 传入的 Length 走，至多 8；曲名是 GUI Task 传入的窗口文本。
+ *          窗口滑动时在已有 panel 上转 head 改字，不无限 create。不得包含
+ *          storage_listbuffer.h。
   ******************************************************************************
   */
 
@@ -38,6 +39,9 @@ static Service_GUI_MainQueueRowTypeDef service_gui_main_queue_rows[
 
 /** @brief 已构造的行数，Apply 只增不毁，多余的 Hidden。 */
 static uint16_t service_gui_main_queue_created;
+
+/** @brief 上一窗在播放列表上的起点，供转 head 与滚动补偿。 */
+static uint16_t service_gui_main_queue_applied_index;
 
 /**
  * @brief 按 SquareLine 范本构造一行，父对象为 QueueTab。
@@ -291,6 +295,167 @@ static void service_gui_main_queue_set_row_hidden(
 }
 
 /**
+ * @brief 一行加 QueueTab 行距，作为整行滚动的步长。
+ * @return 步长像素；尚无行或高度未布局时为 0。
+ */
+static lv_coord_t service_gui_main_queue_row_stride(void)
+{
+    lv_coord_t row_h;
+    lv_coord_t pad_row;
+
+    if ((service_gui_main_queue_created == 0U) ||
+        (service_gui_main_queue_rows[0].panel == NULL))
+    {
+        return 0;
+    }
+
+    row_h = lv_obj_get_height(service_gui_main_queue_rows[0].panel);
+    if (row_h <= 0)
+    {
+        return 0;
+    }
+
+    pad_row = lv_obj_get_style_pad_row(ui_QueueTab, LV_PART_MAIN);
+    return (lv_coord_t)(row_h + pad_row);
+}
+
+/**
+ * @brief 读取 QueueTab 顶部已滚出的整行数。
+ * @return 完整滚出顶部的行数；对象未就绪或尚无行时为 0。
+ */
+uint16_t service_gui_main_queue_scroll_lead(void)
+{
+    lv_coord_t stride;
+    lv_coord_t y;
+    uint16_t lead;
+
+    if ((ui_QueueTab == NULL) || (ui_SongPanel1 == NULL))
+    {
+        return 0U;
+    }
+
+    stride = service_gui_main_queue_row_stride();
+    if (stride <= 0)
+    {
+        return 0U;
+    }
+
+    y = lv_obj_get_scroll_y(ui_QueueTab);
+    if (y < 0)
+    {
+        y = 0;
+    }
+
+    lead = (uint16_t)(y / stride);
+    if ((service_gui_main_queue_created > 0U) &&
+        (lead >= service_gui_main_queue_created))
+    {
+        lead = (uint16_t)(service_gui_main_queue_created - 1U);
+    }
+
+    return lead;
+}
+
+/**
+ * @brief 把头行挪到队尾，Flex 顺序与数组一致。
+ * @param[in] count 参与回收的已构造行数。
+ */
+static void service_gui_main_queue_rotate_down(uint16_t count)
+{
+    Service_GUI_MainQueueRowTypeDef head;
+    uint16_t i;
+
+    head = service_gui_main_queue_rows[0];
+    for (i = 0U; i < (uint16_t)(count - 1U); i++)
+    {
+        service_gui_main_queue_rows[i] = service_gui_main_queue_rows[i + 1U];
+    }
+
+    service_gui_main_queue_rows[count - 1U] = head;
+    lv_obj_move_to_index(
+        head.panel,
+        (int32_t)lv_obj_get_child_cnt(ui_QueueTab) - 1);
+}
+
+/**
+ * @brief 把尾行挪到范本之后，作为新的头行。
+ * @param[in] count 参与回收的已构造行数。
+ */
+static void service_gui_main_queue_rotate_up(uint16_t count)
+{
+    Service_GUI_MainQueueRowTypeDef tail;
+    uint16_t i;
+
+    tail = service_gui_main_queue_rows[count - 1U];
+    for (i = (uint16_t)(count - 1U); i > 0U; i--)
+    {
+        service_gui_main_queue_rows[i] = service_gui_main_queue_rows[i - 1U];
+    }
+
+    service_gui_main_queue_rows[0] = tail;
+    lv_obj_move_to_index(
+        tail.panel,
+        (int32_t)lv_obj_get_index(ui_SongPanel1) + 1);
+}
+
+/**
+ * @brief 按窗口起点差转 head；跨度达到已构造行数时不转，整窗改字。
+ * @param[in] delta 新 Index 减旧 Index。
+ * @param[in] count 已构造行数。
+ */
+static void service_gui_main_queue_rotate(int32_t delta, uint16_t count)
+{
+    if ((count < 2U) || (delta == 0) ||
+        (delta >= (int32_t)count) || (delta <= -(int32_t)count))
+    {
+        return;
+    }
+
+    while (delta > 0)
+    {
+        service_gui_main_queue_rotate_down(count);
+        delta--;
+    }
+
+    while (delta < 0)
+    {
+        service_gui_main_queue_rotate_up(count);
+        delta++;
+    }
+}
+
+/**
+ * @brief 转掉几行就从当前 scroll_y 扣几行高度，保留手指剩下的像素，不吸回整页。
+ * @param[in] index_delta 新窗口起点减旧起点。
+ */
+static void service_gui_main_queue_adjust_scroll(int32_t index_delta)
+{
+    lv_coord_t stride;
+    lv_coord_t y;
+    int32_t next_y;
+
+    if (index_delta == 0)
+    {
+        return;
+    }
+
+    stride = service_gui_main_queue_row_stride();
+    if (stride <= 0)
+    {
+        return;
+    }
+
+    y = lv_obj_get_scroll_y(ui_QueueTab);
+    next_y = (int32_t)y - (index_delta * (int32_t)stride);
+    if (next_y < 0)
+    {
+        next_y = 0;
+    }
+
+    lv_obj_scroll_to_y(ui_QueueTab, (lv_coord_t)next_y, LV_ANIM_OFF);
+}
+
+/**
  * @brief 隐藏范本并打开 QueueTab 竖向滚动，不预先造行。
  * @retval SERVICE_OK 范本已隐藏。
  * @retval SERVICE_NOT_READY QueueTab 或范本尚未导出。
@@ -313,19 +478,23 @@ Service_StatusTypeDef service_gui_main_queue_prepare(void)
  * @brief 按 Length 填 Queue 可见行；不够的 Hidden，不够用的按范本补造。
  * @param[in] titles 曲名字符串指针表，Length 为 0 时允许为 NULL。
  * @param[in] length 本窗实际条数，0..SERVICE_GUI_MAIN_QUEUE_MAX_ROWS。
+ * @param[in] window_index 本窗在播放列表上的起点。
  * @retval SERVICE_OK 已按 Length 显示行，或 Length 为 0 已全部 Hidden。
  * @retval SERVICE_INVALID_PARAM Length 超上限，或 Length 非 0 但 titles 为空。
  * @retval SERVICE_NOT_READY QueueTab 或范本尚未导出。
  * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
- * @note 游标未落地：Length 非 0 时第 0 行当当前曲。歌手空串。不包含
- *       storage_listbuffer.h。
+ * @note 游标未落地：列表下标 0 若在本窗则当当前曲。歌手空串。不包含
+ *       storage_listbuffer.h。已有行转 head，不无限 create。
  */
 Service_StatusTypeDef service_gui_main_queue_apply(
     const char **titles,
-    uint16_t length)
+    uint16_t length,
+    uint16_t window_index)
 {
     Service_StatusTypeDef status;
     uint16_t i;
+    uint16_t old_index;
+    int32_t delta;
 
     if ((ui_QueueTab == NULL) || (ui_SongPanel1 == NULL))
     {
@@ -336,6 +505,22 @@ Service_StatusTypeDef service_gui_main_queue_apply(
         ((length > 0U) && (titles == NULL)))
     {
         return SERVICE_INVALID_PARAM;
+    }
+
+    old_index = service_gui_main_queue_applied_index;
+
+    if (length == 0U)
+    {
+        for (i = 0U; i < service_gui_main_queue_created; i++)
+        {
+            service_gui_main_queue_set_row_hidden(
+                &service_gui_main_queue_rows[i],
+                true);
+        }
+
+        service_gui_main_queue_applied_index = 0U;
+        lv_obj_scroll_to_y(ui_QueueTab, 0, LV_ANIM_OFF);
+        return SERVICE_OK;
     }
 
     for (i = 0U; i < length; i++)
@@ -351,7 +536,13 @@ Service_StatusTypeDef service_gui_main_queue_apply(
 
             service_gui_main_queue_created = (uint16_t)(i + 1U);
         }
+    }
 
+    delta = (int32_t)window_index - (int32_t)old_index;
+    service_gui_main_queue_rotate(delta, service_gui_main_queue_created);
+
+    for (i = 0U; i < length; i++)
+    {
         service_gui_main_queue_set_row_hidden(
             &service_gui_main_queue_rows[i],
             false);
@@ -359,7 +550,7 @@ Service_StatusTypeDef service_gui_main_queue_apply(
             &service_gui_main_queue_rows[i],
             (titles[i] != NULL) ? titles[i] : "",
             "",
-            (i == 0U));
+            ((uint32_t)window_index + (uint32_t)i) == 0U);
     }
 
     for (i = length; i < service_gui_main_queue_created; i++)
@@ -369,5 +560,7 @@ Service_StatusTypeDef service_gui_main_queue_apply(
             true);
     }
 
+    service_gui_main_queue_adjust_scroll(delta);
+    service_gui_main_queue_applied_index = window_index;
     return SERVICE_OK;
 }
