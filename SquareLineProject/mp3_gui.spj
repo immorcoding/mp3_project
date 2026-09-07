@@ -5459,8 +5459,8 @@
                                         "flags": 17,
                                         "strtype": "OBJECT/Position",
                                         "intarray": [
-                                          1,
-                                          1
+                                          0,
+                                          0
                                         ],
                                         "InheritedType": 7
                                       },
@@ -5577,6 +5577,12 @@
                                                   255
                                                 ],
                                                 "InheritedType": 7
+                                              },
+                                              {
+                                                "nid": 10450,
+                                                "strtype": "_style/Text_Font",
+                                                "strval": "montserrat_14",
+                                                "InheritedType": 3
                                               }
                                             ],
                                             "InheritedType": 1
@@ -15303,7 +15309,7 @@
     "separate_screen_save": false,
     "hierarchy_state_save": false,
     "reverse_event_order": false,
-    "backup_cnt": 677,
+    "backup_cnt": 684,
     "autosave_cnt": 0,
     "group_color_cnt": 0,
     "imagebytearrayprefix": "",

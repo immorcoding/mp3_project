@@ -143,6 +143,106 @@ static void test_set_fails_when_invalid(void)
 }
 
 /**
+ * @brief 上一首在列表中部减一，代次不变。
+ */
+static void test_previous_steps_back_within_library(void)
+{
+    uint16_t index = 99U;
+    uint32_t generation = 99U;
+
+    assert(storage_playback_cursor_init(12U, 5U) == STORAGE_OK);
+    assert(storage_playback_cursor_set(3U) == STORAGE_OK);
+    assert(storage_playback_cursor_previous() == STORAGE_OK);
+    assert(storage_playback_cursor_get(&index, &generation) == STORAGE_OK);
+    assert(index == 2U);
+    assert(generation == 5U);
+}
+
+/**
+ * @brief 在下标 0 再上一首则环到末首。
+ */
+static void test_previous_wraps_from_first_to_last(void)
+{
+    uint16_t index = 99U;
+    uint32_t generation = 99U;
+
+    assert(storage_playback_cursor_init(12U, 5U) == STORAGE_OK);
+    assert(storage_playback_cursor_previous() == STORAGE_OK);
+    assert(storage_playback_cursor_get(&index, &generation) == STORAGE_OK);
+    assert(index == 11U);
+    assert(generation == 5U);
+}
+
+/**
+ * @brief 下一首在列表中部加一，代次不变。
+ */
+static void test_next_steps_forward_within_library(void)
+{
+    uint16_t index = 99U;
+    uint32_t generation = 99U;
+
+    assert(storage_playback_cursor_init(12U, 5U) == STORAGE_OK);
+    assert(storage_playback_cursor_next() == STORAGE_OK);
+    assert(storage_playback_cursor_get(&index, &generation) == STORAGE_OK);
+    assert(index == 1U);
+    assert(generation == 5U);
+}
+
+/**
+ * @brief 在末首再下一首则环到 0。
+ */
+static void test_next_wraps_from_last_to_first(void)
+{
+    uint16_t index = 99U;
+    uint32_t generation = 99U;
+
+    assert(storage_playback_cursor_init(12U, 5U) == STORAGE_OK);
+    assert(storage_playback_cursor_set(11U) == STORAGE_OK);
+    assert(storage_playback_cursor_next() == STORAGE_OK);
+    assert(storage_playback_cursor_get(&index, &generation) == STORAGE_OK);
+    assert(index == 0U);
+    assert(generation == 5U);
+}
+
+/**
+ * @brief 单曲库上一首/下一首都停在 0。
+ */
+static void test_single_track_wraps_to_self(void)
+{
+    uint16_t index = 99U;
+    uint32_t generation = 99U;
+
+    assert(storage_playback_cursor_init(1U, 5U) == STORAGE_OK);
+    assert(storage_playback_cursor_previous() == STORAGE_OK);
+    assert(storage_playback_cursor_get(&index, &generation) == STORAGE_OK);
+    assert(index == 0U);
+    assert(storage_playback_cursor_next() == STORAGE_OK);
+    assert(storage_playback_cursor_get(&index, &generation) == STORAGE_OK);
+    assert(index == 0U);
+    assert(generation == 5U);
+}
+
+/**
+ * @brief 空库或作废时上一首/下一首失败且不造出当前曲。
+ */
+static void test_step_fails_when_invalid(void)
+{
+    uint16_t index = 99U;
+    uint32_t generation = 99U;
+
+    assert(storage_playback_cursor_init(0U, 4U) == STORAGE_OK);
+    assert(storage_playback_cursor_previous() == STORAGE_ERROR);
+    assert(storage_playback_cursor_next() == STORAGE_ERROR);
+    assert(storage_playback_cursor_get(&index, &generation) == STORAGE_ERROR);
+
+    assert(storage_playback_cursor_init(12U, 5U) == STORAGE_OK);
+    assert(storage_playback_cursor_invalidate() == STORAGE_OK);
+    assert(storage_playback_cursor_previous() == STORAGE_ERROR);
+    assert(storage_playback_cursor_next() == STORAGE_ERROR);
+    assert(storage_playback_cursor_get(&index, &generation) == STORAGE_ERROR);
+}
+
+/**
  * @brief 运行全部游标测试。
  * @return 成功时返回 0。
  */
@@ -158,6 +258,12 @@ int main(void)
     test_set_moves_current_within_library();
     test_set_rejects_out_of_range();
     test_set_fails_when_invalid();
+    test_previous_steps_back_within_library();
+    test_previous_wraps_from_first_to_last();
+    test_next_steps_forward_within_library();
+    test_next_wraps_from_last_to_first();
+    test_single_track_wraps_to_self();
+    test_step_fails_when_invalid();
 
     puts("storage_playback_cursor_tests: all tests passed");
     return 0;

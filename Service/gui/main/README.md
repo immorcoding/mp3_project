@@ -15,6 +15,7 @@ main/
 ├─ gui_service_main.c / .h      仅编排初始化顺序的私有入口
 ├─ pager/                       Page 槽位、吸附、循环重排、分页指示器动画
 ├─ queue/                       按 QueueApply 的 Length 用范本构造 Queue 可见行
+├─ transport/                   Now Playing 三键命令与 PLAY/PAUSE 符号
 └─ background/                  壁纸模糊、局部裁剪、Tabview 内部 Content 兼容
 ~~~
 
@@ -24,6 +25,7 @@ main/
   可见行由 `Service_GUI_QueueApply()` 按 Length 填入，窗口滑动时转 head，
   并从当前 `scroll_y` 扣整行高度；不包含 `storage_listbuffer.h`。
   Queue 滚动不是 Pager，不要等 `SCROLL_END` 吸附。
+- `transport/` 不依赖 Canvas 或 Queue 行；只绑三键并换播放符号。
 - `background/` 不维护当前页、吸附阈值、循环映射、圆点动画或 Queue 行；它长期持有页面级
   SDRAM 图像缓冲，并在 MainPageContainer 滚动时更新 MusicModeTabs 的局部背景。仅 Default
   才会填充这些缓冲。
@@ -36,7 +38,8 @@ main/
 - `background/` 依赖 `canvas/` 和 `Platform/lcd` 的公开 Interface；
 - `pager/` 只依赖 LVGL 与 `GUI/ui.h`；
 - `queue/` 只依赖 LVGL 与 `GUI/ui.h`，不得包含 APP 头；
-- 根 `gui_service_main.c` 只依赖三个子 Module 的私有 Interface，不直接访问 UI 对象或
+- `transport/` 只依赖 LVGL、`GUI/ui.h` 与 GUI 输入单槽，不得包含 APP 头；
+- 根 `gui_service_main.c` 只依赖四个子 Module 的私有 Interface，不直接访问 UI 对象或
   离屏缓冲。
 
 ## 运行时路径
@@ -52,17 +55,15 @@ GUI Task
             -> 注册吸附、循环重排和圆点动画
        -> queue/service_gui_main_queue_prepare()
             -> 隐藏 SongPanel1 范本，打开 QueueTab 滚动
+       -> transport/service_gui_main_transport_prepare()
+            -> 绑定上一首/播放暂停/下一首 CLICKED
        -> background/service_gui_main_background_prepare(clear_wallpaper)
             -> 使 Tabview 内部 Content 透明并禁用其横滑
             -> 仅 Default：Canvas 生成全屏模糊工作帧、复制长期壁纸、裁剪并注册滚动同步
             -> Solid：不模糊、不绑裁剪图
 GUI Task 循环
-  -> Service_GUI_QueueConsumeSelect() / cursor_set（假切歌）
-  -> Service_GUI_QueueScrollLead() / 按滚动改 Index
-  -> storage_listbuffer_request(Index, Length)
-  -> 看见 READY
-  -> Service_GUI_QueueApply(titles, Length, Index, current_index)
-  -> 写回 IDLE
+  -> Service_GUI_ConsumeInput()
+  -> gui_music_step() / 命令与窗口协议
   -> Service_GUI_Process()
 ~~~
 

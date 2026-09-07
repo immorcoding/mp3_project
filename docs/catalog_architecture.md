@@ -1,6 +1,6 @@
 # 曲库与播放列表
 
-> 状态：扫描、顺序表、Queue 窗口单槽、GUI 滑窗、播放列表游标与点按假切歌已落地；上一首/下一首、Playback 打开、元数据未做。  
+> 状态：扫描、顺序表、Queue 窗口单槽、GUI 滑窗、播放列表游标、点按假切歌与上一首/下一首环形步进已落地；Playback 打开、元数据未做。  
 > 相关决定：[ADR-0015](adr/0015-volume-roles-and-resource-install.md)  
 > 实现：[`APP/tasks/storage/catalog/`](../APP/tasks/storage/catalog/)  
 > 术语：[CONTEXT.md](../CONTEXT.md) **曲库**、**播放列表**
@@ -27,10 +27,12 @@
 | `storage_playback_cursor_invalidate()` | 作废游标 |
 | `storage_playback_cursor_get(index, generation)` | GUI Task：读当前播放列表下标与代次；无当前曲返回 `STORAGE_ERROR` |
 | `storage_playback_cursor_set(index)` | GUI Task：同一代次内改当前下标；作废、空库或越界失败。不打开文件 |
+| `storage_playback_cursor_previous()` | GUI Task：环形上一首；作废或空库失败。不打开文件 |
+| `storage_playback_cursor_next()` | GUI Task：环形下一首；作废或空库失败。不打开文件 |
 
 公开头不暴露字符串池、条目数组或 `SeqList`。窗口载荷在 `storage_listbuffer` 单槽：`Index` + `Length` + `Generation` + `Buffer[][]`。`request` 只提交起点、条数和代次，不传路径也不传曲名。GUI 看见 `READY` 后整窗消费，再把 `Status` 写回 `IDLE`。当前 `Buffer` 仍是曲库路径，Queue 原样显示；标题/歌手等 `load` 调解析器，见第 5 节。曲库仍只存相对路径。`0` 代次表示请求方无快照或应答已作废。
 
-`Index` 是窗口在播放列表上的起点，不是条数。`request` 时 `Length` 为请求条数（1..`STORAGE_LISTBUFFER_MAX_ENTRIES`）；`load` 成功后改成实际写入 `Buffer` 的条数，可能更短。`Buffer[i]` 对应列表位置 `Index + i`。槽位容量现为 12。GUI Queue 用固定数量的 panel 槽显示这一窗；窗口滑动时回收 panel，不把本槽改成环形数组。`Index` 已是列表起点。GUI Task 在滑动过程中按 `QueueTab` 滚出顶部的整行数改 `Index` 再 `request`：列表起点不留上一窗，其余留一行给回滑；末窗 `Length` 不足上限则不再往外推。换窗从当前 `scroll_y` 扣整行高度并保留剩余像素，不吸回整页，也不按 MainPager 那样等 `SCROLL_END` 吸附。
+`Index` 是窗口在播放列表上的起点，不是条数。`request` 时 `Length` 为请求条数（1..`STORAGE_LISTBUFFER_MAX_ENTRIES`）；`load` 成功后改成实际写入 `Buffer` 的条数，可能更短。`Buffer[i]` 对应列表位置 `Index + i`。槽位容量现为 12。GUI Queue 用固定数量的 panel 槽显示这一窗；窗口滑动时回收 panel，不把本槽改成环形数组。`Index` 已是列表起点。GUI Task 的 `music/` 分区在滑动过程中按 `QueueTab` 滚出顶部的整行数改 `Index` 再 `request`：列表起点不留上一窗，其余留一行给回滑；末窗 `Length` 不足上限则不再往外推。换窗从当前 `scroll_y` 扣整行高度并保留剩余像素，不吸回整页，也不按 MainPager 那样等 `SCROLL_END` 吸附。
 
 当前播放位置是**播放列表下标**（与 `Index` 同一坐标系），必须携带与 Catalog/Sheet 相同的 `Generation`。拔卡或 `storage_catalog_invalidate()` 后 Sheet 代次为 0，游标作废，没有当前行。重新扫描成功后旧下标作废；非空库从 0 起，空库仍无当前曲。问询窗口与判定高亮行都要核代次。游标不放在 `storage_listbuffer` 里，由 `storage_playback_cursor_*()` 持有。
 
@@ -48,7 +50,7 @@ Music 扫描从相对路径 `Music` 递归子目录，同时只开一个目录�
 
 ## 4. 未落地
 
-- 带代次的上一首/下一首、Playback 打开/预开（点 Queue 行已可 `set` 游标，仍不解码）
+- Playback 打开/预开（点 Queue 行、上一首/下一首已可改游标，仍不解码）
 - 随机列表、心动列表（结构体里已注释）
 - 标题/歌手/封面：等 MP3 **解析组件**，见第 5 节
 - Books Catalog 扫描
@@ -67,7 +69,7 @@ Queue 当前把 `Buffer` 里的曲库路径原样显示，歌手 Label 为空。
 - **解析器**（待建 Component）：读 MP3 文件结构，至少包括 ID3v2/ID3v1 标题与歌手；帧边界、时长等随解析组件一并设计。GUI 与曲库都不直接拆标签。
 - **解码器**（Helix 等）：只吃解析器给出的音频载荷，输出 PCM。现有 `Components/audio` 只做 PCM 发送，不是解码器，也不是解析器。`load` 只调解析器取标签，不走进解码器。
 - 流水线是 **解析器 → 解码器**，再进 Playback 缓冲与 I2S。不要把 Helix 和 ID3 揉进同一个 Module。
-- **何时读**：`storage_listbuffer_load()` 填这一窗（至多 `STORAGE_LISTBUFFER_MAX_ENTRIES` 条）时，用曲库路径打开文件并调解析器，把标题/歌手写入窗口载荷（槽位布局届时改，不再把路径交给 GUI）。不在全库扫描时为三万首写标题池。曲库仍只存路径。GUI Task 原样把窗口里的曲名/歌手交给 `Service_GUI_QueueApply`，仍不得打开文件，`Service/gui` 仍不得包含 `storage_listbuffer.h`。
+- **何时读**：`storage_listbuffer_load()` 填这一窗（至多 `STORAGE_LISTBUFFER_MAX_ENTRIES` 条）时，用曲库路径打开文件并调解析器，把标题/歌手写入窗口载荷（槽位布局届时改，不再把路径交给 GUI）。不在全库扫描时为三万首写标题池。曲库仍只存路径。GUI Task 的 `music/` 原样把窗口里的曲名/歌手交给 `Service_GUI_QueueApply`，仍不得打开文件，`Service/gui` 仍不得包含 `storage_listbuffer.h`。
 - **封面**（APIC 等）属于 Now Playing，不进 Queue 行。
 - 标签缺失或读失败时的显示文本由 `load`/解析器决定，不回到 GUI 裁路径。
 

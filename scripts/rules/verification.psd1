@@ -42,7 +42,10 @@
             Name = 'gui_task'
             PathPatterns = @(
                 '^APP/tasks/gui/'
+                '^Service/gui/gui_service_input'
+                '^Service/gui/gui_service\.(c|h)$'
                 '^Service/gui/main/queue/'
+                '^Service/gui/main/transport/'
                 '^Tests/gui_task/'
             )
         }

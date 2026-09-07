@@ -367,14 +367,13 @@ void ui_Main_screen_init(void)
     ui_MusicPlayPauseIcon = lv_label_create(ui_MusicPlayPauseButton);
     lv_obj_set_width(ui_MusicPlayPauseIcon, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_MusicPlayPauseIcon, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_x(ui_MusicPlayPauseIcon, 1);
-    lv_obj_set_y(ui_MusicPlayPauseIcon, 1);
     lv_obj_set_align(ui_MusicPlayPauseIcon, LV_ALIGN_CENTER);
     lv_label_set_text(ui_MusicPlayPauseIcon, "");
     ui_object_set_themeable_style_property(ui_MusicPlayPauseIcon, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
                                            _ui_theme_color_Ink);
     ui_object_set_themeable_style_property(ui_MusicPlayPauseIcon, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
                                            _ui_theme_alpha_Ink);
+    lv_obj_set_style_text_font(ui_MusicPlayPauseIcon, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_QueueTab = lv_tabview_add_tab(ui_MusicModeTabs, "Queue");
     lv_obj_set_flex_flow(ui_QueueTab, LV_FLEX_FLOW_COLUMN);

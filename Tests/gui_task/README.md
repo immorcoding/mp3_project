@@ -1,6 +1,12 @@
 # GUI Task 主机测试
 
-本目录通过 `APP/tasks/gui/gui_task_queue_window.h` 验证 GUI Task 对 `storage_listbuffer` 窗口的 request / APPLY / CLEAR 时机、按滚动整行数计算下一窗 `Index`，以及按游标代次决定当前行。只编译状态机源文件，不链接 LVGL、FreeRTOS、HAL 或 `Service/gui`。Host PASS 不证明真机 Queue 跟手滚动与插拔时序。
+本目录验证三块与 LVGL 无关的逻辑：
+
+- `gui_music_queue_window.h`：Queue 窗口 request / APPLY / CLEAR 与滚动换窗 Index；
+- `gui_music_transport.h`：paused/playing 策略；
+- `gui_service_input.h`：点击单槽 Consume，空闲为 `NONE`。
+
+不链接 LVGL、FreeRTOS、HAL。Host PASS 不证明真机跟手滚动、换标或插拔时序。
 
 从仓库根目录运行：
 

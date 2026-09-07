@@ -62,13 +62,25 @@ $queueImpact = Get-HarnessImpact -ChangedPath @('Service/gui/main/queue/gui_serv
 Assert-HarnessSequence -Expected @('gui_task') -Actual $queueImpact.HostModules `
     -Message 'Queue 行 Module 变化必须选择 GUI Task 主机测试'
 
+$musicImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/gui/music/gui_music.c')
+Assert-HarnessSequence -Expected @('gui_task') -Actual $musicImpact.HostModules `
+    -Message 'GUI Task 音乐分区变化必须选择对应主机测试'
+
+$inputImpact = Get-HarnessImpact -ChangedPath @('Service/gui/gui_service_input.c')
+Assert-HarnessSequence -Expected @('gui_task') -Actual $inputImpact.HostModules `
+    -Message 'GUI 输入单槽变化必须选择 GUI Task 主机测试'
+
+$transportImpact = Get-HarnessImpact -ChangedPath @('Service/gui/main/transport/gui_service_main_transport.c')
+Assert-HarnessSequence -Expected @('gui_task') -Actual $transportImpact.HostModules `
+    -Message 'Now Playing 三键 Module 变化必须选择 GUI Task 主机测试'
+
 $themeImpact = Get-HarnessImpact -ChangedPath @('Service/gui/theme/gui_service_theme.c')
 Assert-HarnessSequence -Expected @('gui_theme') -Actual $themeImpact.HostModules `
     -Message '调色板变化必须选择 GUI 主题主机测试'
 
 $guiServiceImpact = Get-HarnessImpact -ChangedPath @('Service/gui/gui_service.c')
-Assert-HarnessSequence -Expected @('gui_theme') -Actual $guiServiceImpact.HostModules `
-    -Message 'GUI Service 生命周期变化必须选择 GUI 主题主机测试'
+Assert-HarnessSequence -Expected @('gui_task', 'gui_theme') -Actual $guiServiceImpact.HostModules `
+    -Message 'GUI Service 公开输入接缝变化必须选择 GUI Task 与主题主机测试'
 
 $backgroundImpact = Get-HarnessImpact -ChangedPath @('Service/gui/main/background/gui_service_main_background.c')
 Assert-HarnessSequence -Expected @('gui_theme') -Actual $backgroundImpact.HostModules `

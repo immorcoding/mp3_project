@@ -12,10 +12,12 @@
   */
 
 #include "Service/gui/gui_service.h"
+#include "Service/gui/gui_service_input.h"
 #include "Service/gui/boot/gui_service_boot.h"
 #include "Service/gui/gui_service_config.h"
 #include "Service/gui/main/gui_service_main.h"
 #include "Service/gui/main/queue/gui_service_main_queue.h"
+#include "Service/gui/main/transport/gui_service_main_transport.h"
 #include "Service/gui/theme/gui_service_theme_apply.h"
 
 #include <stdint.h>
@@ -315,17 +317,28 @@ uint16_t Service_GUI_QueueScrollLead(void)
 }
 
 /**
- * @brief 取走一次 Queue 行点按对应的播放列表下标。
- * @param[out] sheet_index 被点行对应的播放列表下标。
- * @retval SERVICE_OK 有一次待处理点击。
- * @retval SERVICE_NOT_READY 没有待处理点击。
- * @retval SERVICE_INVALID_PARAM sheet_index 为空。
+ * @brief 取走上一圈 Process() 记下的一次点击。
+ * @param[out] input 命令与可选播放列表下标；无点击时 command 为 NONE。
+ * @retval SERVICE_OK 已写入 input。
+ * @retval SERVICE_INVALID_PARAM input 为空。
  * @note 只能由同一 GUI Task 调用。不包含 storage_listbuffer.h。
- *       点击发生在 Process() 的 LVGL 调度里，下一圈循环再 Consume。
+ *       空闲不是 NOT_READY。
  */
-Service_StatusTypeDef Service_GUI_QueueConsumeSelect(uint16_t *sheet_index)
+Service_StatusTypeDef Service_GUI_ConsumeInput(Service_GUI_InputTypeDef *input)
 {
-    return service_gui_main_queue_consume_select(sheet_index);
+    return service_gui_input_consume(input);
+}
+
+/**
+ * @brief 按 playing 更新 Now Playing 播放/暂停符号。
+ * @param[in] playing 为真显示 PAUSE，否则 PLAY。
+ * @retval SERVICE_OK 已改图标。
+ * @retval SERVICE_NOT_READY 图标对象尚未创建。
+ * @note 只能由同一 GUI Task 调用。
+ */
+Service_StatusTypeDef Service_GUI_TransportApply(bool playing)
+{
+    return service_gui_main_transport_apply(playing);
 }
 
 /**

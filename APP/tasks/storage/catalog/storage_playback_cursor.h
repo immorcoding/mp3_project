@@ -17,5 +17,7 @@ Storage_StatusTypeDef storage_playback_cursor_invalidate(void);
 Storage_StatusTypeDef storage_playback_cursor_get(uint16_t *index,
                                                   uint32_t *generation);
 Storage_StatusTypeDef storage_playback_cursor_set(uint16_t index);
+Storage_StatusTypeDef storage_playback_cursor_previous(void);
+Storage_StatusTypeDef storage_playback_cursor_next(void);
 
 #endif /* STORAGE_PLAYBACK_CURSOR_H */

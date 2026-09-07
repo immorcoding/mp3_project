@@ -14,8 +14,6 @@
 
 Service_StatusTypeDef service_gui_main_queue_prepare(void);
 uint16_t service_gui_main_queue_scroll_lead(void);
-Service_StatusTypeDef service_gui_main_queue_consume_select(
-    uint16_t *sheet_index);
 Service_StatusTypeDef service_gui_main_queue_apply(
     const char **titles,
     uint16_t length,

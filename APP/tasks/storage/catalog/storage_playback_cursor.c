@@ -95,3 +95,51 @@ Storage_StatusTypeDef storage_playback_cursor_set(uint16_t index)
     storage_playback_cursor.Index = index;
     return STORAGE_OK;
 }
+
+/**
+ * @brief 把当前曲移到上一首；在 0 则环到末首。
+ * @retval STORAGE_OK 已改当前下标，代次不变。
+ * @retval STORAGE_ERROR 已作废或空库；不改状态。
+ * @note 不打开文件、不解码。
+ */
+Storage_StatusTypeDef storage_playback_cursor_previous(void)
+{
+    if (storage_playback_cursor.Generation == 0U)
+    {
+        return STORAGE_ERROR;
+    }
+
+    if (storage_playback_cursor.Index == 0U)
+    {
+        storage_playback_cursor.Index =
+            (uint16_t)(storage_playback_cursor.Length - 1U);
+    }
+    else
+    {
+        storage_playback_cursor.Index--;
+    }
+
+    return STORAGE_OK;
+}
+
+/**
+ * @brief 把当前曲移到下一首；在末首则环到 0。
+ * @retval STORAGE_OK 已改当前下标，代次不变。
+ * @retval STORAGE_ERROR 已作废或空库；不改状态。
+ * @note 不打开文件、不解码。
+ */
+Storage_StatusTypeDef storage_playback_cursor_next(void)
+{
+    if (storage_playback_cursor.Generation == 0U)
+    {
+        return STORAGE_ERROR;
+    }
+
+    storage_playback_cursor.Index++;
+    if (storage_playback_cursor.Index >= storage_playback_cursor.Length)
+    {
+        storage_playback_cursor.Index = 0U;
+    }
+
+    return STORAGE_OK;
+}

@@ -18,6 +18,7 @@
 #include "Service/gui/main/queue/gui_service_main_queue.h"
 #include "Service/gui/main/queue/gui_service_main_queue_config.h"
 #include "Service/gui/gui_service.h"
+#include "Service/gui/gui_service_input.h"
 #include "Service/gui/theme/gui_service_theme_apply.h"
 
 #include <stdbool.h>
@@ -48,12 +49,6 @@ static uint16_t service_gui_main_queue_applied_index;
 
 /** @brief 上一窗实际可见条数，供点击把窗内槽位换成播放列表下标。 */
 static uint16_t service_gui_main_queue_applied_length;
-
-/** @brief 有一次尚未被 GUI Task 取走的点按选曲。 */
-static bool service_gui_main_queue_select_pending;
-
-/** @brief 待取走的播放列表下标；仅在 pending 为真时有效。 */
-static uint16_t service_gui_main_queue_select_index;
 
 static void service_gui_main_queue_on_panel_clicked(lv_event_t *e);
 
@@ -334,35 +329,11 @@ static void service_gui_main_queue_on_panel_clicked(lv_event_t *e)
         sheet_index = (uint16_t)((uint32_t)service_gui_main_queue_applied_index +
                                  (uint32_t)i);
         service_gui_main_queue_refresh_current(sheet_index);
-        service_gui_main_queue_select_pending = true;
-        service_gui_main_queue_select_index = sheet_index;
+        service_gui_input_post(
+            SERVICE_GUI_INPUT_MUSIC_QUEUE_SELECT,
+            sheet_index);
         return;
     }
-}
-
-/**
- * @brief 取走一次点按选中的播放列表下标。
- * @param[out] sheet_index 被点行对应的播放列表下标。
- * @retval SERVICE_OK 有一次待处理点击。
- * @retval SERVICE_NOT_READY 没有待处理点击。
- * @retval SERVICE_INVALID_PARAM sheet_index 为空。
- */
-Service_StatusTypeDef service_gui_main_queue_consume_select(
-    uint16_t *sheet_index)
-{
-    if (sheet_index == NULL)
-    {
-        return SERVICE_INVALID_PARAM;
-    }
-
-    if (!service_gui_main_queue_select_pending)
-    {
-        return SERVICE_NOT_READY;
-    }
-
-    *sheet_index = service_gui_main_queue_select_index;
-    service_gui_main_queue_select_pending = false;
-    return SERVICE_OK;
 }
 
 /**
@@ -626,7 +597,7 @@ Service_StatusTypeDef service_gui_main_queue_apply(
 
         service_gui_main_queue_applied_index = 0U;
         service_gui_main_queue_applied_length = 0U;
-        service_gui_main_queue_select_pending = false;
+        service_gui_input_drop_queue_select();
         lv_obj_scroll_to_y(ui_QueueTab, 0, LV_ANIM_OFF);
         (void)current_index;
         return SERVICE_OK;
