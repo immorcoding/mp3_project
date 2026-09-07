@@ -11,7 +11,7 @@
  * @brief 复位为「尚未要过窗」，下一窗从播放列表 0 起。
  * @param[out] client 音乐分区持有的窗口客户状态。
  */
-void gui_music_queue_window_client_init(Gui_MusicQueueWindowClientTypeDef *client)
+void gui_music_queue_window_client_init(GUI_MusicQueueWindowClientTypeDef *client)
 {
     client->need_window = true;
     client->displayed = false;
@@ -28,7 +28,7 @@ void gui_music_queue_window_client_init(Gui_MusicQueueWindowClientTypeDef *clien
  * @note 仅在 QueueApply 成功后调用。失败须保持 need_window，以便写回 IDLE 后重试。
  */
 void gui_music_queue_window_mark_applied(
-    Gui_MusicQueueWindowClientTypeDef *client,
+    GUI_MusicQueueWindowClientTypeDef *client,
     uint16_t index,
     uint16_t length)
 {
@@ -90,7 +90,7 @@ uint16_t gui_music_queue_window_desired_index(
  *       换窗只从当前 scroll_y 扣整行高度，不把列表吸回整页。
  */
 void gui_music_queue_window_note_lead(
-    Gui_MusicQueueWindowClientTypeDef *client,
+    GUI_MusicQueueWindowClientTypeDef *client,
     uint16_t lead,
     uint16_t max_entries)
 {
@@ -119,7 +119,7 @@ void gui_music_queue_window_note_lead(
  * @return `desired_index`；未滚动过时为 0。
  */
 uint16_t gui_music_queue_window_request_index(
-    const Gui_MusicQueueWindowClientTypeDef *client)
+    const GUI_MusicQueueWindowClientTypeDef *client)
 {
     return client->desired_index;
 }
@@ -134,8 +134,8 @@ uint16_t gui_music_queue_window_request_index(
  * @note 清空只看 sd_mounted，不把消抖当成拔卡。READY 不在此处清 need_window，
  *       须等 QueueApply 成功后再 mark_applied。拔卡把下一窗起点打回 0。
  */
-Gui_MusicQueueWindowActionTypeDef gui_music_queue_window_poll(
-    Gui_MusicQueueWindowClientTypeDef *client,
+GUI_MusicQueueWindowActionTypeDef gui_music_queue_window_poll(
+    GUI_MusicQueueWindowClientTypeDef *client,
     bool sd_ready,
     bool sd_mounted,
     uint32_t status)

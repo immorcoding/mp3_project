@@ -8,7 +8,7 @@
 
 当前基线为 LVGL 8.3.11、SquareLine Studio 和 240 x 320 RGB565 LCD。
 
-本阶段 SquareLine 原型**不包含**解码。Queue 已接线 `storage_listbuffer` 窗口；Now Playing 三键由 GUI Service 绑定 `CLICKED`，playing 仍是假状态。Library、状态栏、进度条、封面仍可用固定假数据。产品侧已确认：首版曲库只扫 SD `Music/`，Queue 只绑定可见行；壁纸/模型的设备更新经 Settings 发起、FTL 暂存后再写 Resource Pack（安装未实现）。实现这些数据路径前不必改 SquareLine 导出。详见 [ADR-0015](adr/0015-volume-roles-and-resource-install.md)、[catalog_architecture.md](catalog_architecture.md)。
+本阶段 SquareLine 原型**不包含**解码。Queue 已接线 `storage_listbuffer` 窗口；Now Playing 三键由 GUI Service 绑定 `CLICKED`，进度条绑定 `RELEASED`，playing 与进度仍是假状态。`MusicPlayerTimeLabel` 已导出，运行时尚未填时间。Library、状态栏、封面仍可用固定假数据。产品侧已确认：首版曲库只扫 SD `Music/`，Queue 只绑定可见行；壁纸/模型的设备更新经 Settings 发起、FTL 暂存后再写 Resource Pack（安装未实现）。实现这些数据路径前不必改 SquareLine 导出。详见 [ADR-0015](adr/0015-volume-roles-and-resource-install.md)、[catalog_architecture.md](catalog_architecture.md)。
 
 本阶段原型**仍不包含**：
 
@@ -54,7 +54,10 @@ Lock Screen
           │  ├─ MusicPageContainer
           │  │  └─ MusicModeTabs
           │  │     ├─ NowPlayingTab
+          │  │     │  ├─ MusicVinylDisc（待导出，见 10.5.4）
+          │  │     │  │  └─ MusicAlbumCover
           │  │     │  └─ MusicPlayerControlContainer
+          │  │     │     ├─ MusicPlayerTimeLabel
           │  │     │     ├─ MusicPlayingSlider
           │  │     │     ├─ MusicPreviousButton
           │  │     │     ├─ MusicPlayPauseButton
@@ -144,7 +147,7 @@ MusicModeTabs          铺满 Music 页（MainPage ~85%）
 底部圆点               屏幕高度 ~10%，Main 固定
 ```
 
-`Now Playing` 内容区预留较大的方形假封面、曲名和歌手；当前导出已把播放器控制放进该 Tab 底部。`Queue` 显示当前及后续曲目的简化列表。Queue 只绑定 `storage_listbuffer` 单槽窗口：SquareLine 只保留一份行范本，运行时按 READY 后的 `Length` 复制行（上限 `STORAGE_LISTBUFFER_MAX_ENTRIES`，现为 12）。完整播放列表由 Storage 持有，不把整表指针交给 GUI。行样式与对象层级见第 10.5.3 节。`Library` 显示两列专辑封面网格；首版每张专辑都使用固定标题、歌手和占位封面。产品曲库首版只来自 SD `Music/`，不展示空的 Flash 分区。
+`Now Playing` 内容区中间放圆形唱片（playing 旋转、paused 停止），中心叠假封面；无当前曲不拼封面、只转唱片。曲名和歌手本阶段仍可不做。当前导出已把时间 Label、进度条与三键放进该 Tab 底部。`Queue` 显示当前及后续曲目的简化列表。Queue 只绑定 `storage_listbuffer` 单槽窗口：SquareLine 只保留一份行范本，运行时按 READY 后的 `Length` 复制行（上限 `STORAGE_LISTBUFFER_MAX_ENTRIES`，现为 12）。完整播放列表由 Storage 持有，不把整表指针交给 GUI。行样式与对象层级见第 10.5.3 节。`Library` 显示两列专辑封面网格；首版每张专辑都使用固定标题、歌手和占位封面。产品曲库首版只来自 SD `Music/`，不展示空的 Flash 分区。
 
 ### 6.2 专辑详情
 
@@ -432,7 +435,10 @@ Main
 │  ├─ MusicPageContainer
 │  │  └─ MusicModeTabs      [ Playing ] [ Queue ] [ Library ]
 │  │     ├─ NowPlayingTab
+│  │     │  ├─ MusicVinylDisc（待导出，见 10.5.4）
+│  │     │  │  └─ MusicAlbumCover
 │  │     │  └─ MusicPlayerControlContainer
+│  │     │     ├─ MusicPlayerTimeLabel
 │  │     │     ├─ MusicPlayingSlider
 │  │     │     ├─ MusicPreviousButton
 │  │     │     ├─ MusicPlayPauseButton
@@ -470,7 +476,7 @@ Viewport 内始终只保留同一组三张 Page 实例，不复制首尾页。�
 
 `MusicModeTabs` 位于 MusicPage 内，使用内嵌 Tabview 实现，当前宽高均为页面的 `100%`，铺满状态栏与底部圆点之间的 Music 内容区；Tab 按钮栏高度以导出为准（当前 `20 px`）。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `Ink` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Accent` 文字，并仅在底边显示一条细 `Accent` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPageContainer 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
 
-当前 `LibraryTab` 仍为空白内容区。`NowPlayingTab` 底部承载 `MusicPlayerControlContainer`（宽 `90%`、高 `28%`，上/下 Padding `2 px`）：假进度条与上一首/播放暂停/下一首。三键事件不写在 SquareLine，由 `main/transport` 运行时绑定，经 `Service_GUI_ConsumeInput()` 交给 GUI Task 的 `music/` 分区。`QueueTab` 只保留 SquareLine 单行范本；`Service/gui/main/queue` 把该范本构造摘进 for 循环，GUI Task 的 `music/` 在 `storage_listbuffer` READY 后经 `Service_GUI_QueueApply()` 按 `Length` 填行。`MusicPlayingSlider` 宽度为播放器区的 `90%`、高度 `7%`，相对顶部下移 `5%`。当前尚未创建 `MusicPlayerCard`、假曲名或专辑封面。Queue 与 Library 不复制这组控制。
+当前 `LibraryTab` 仍为空白内容区。`NowPlayingTab` 底部承载 `MusicPlayerControlContainer`（宽 `90%`、高 `34%`，上/下 Padding `2 px`）：顶部 `MusicPlayerTimeLabel`、其下假进度条、再下上一首/播放暂停/下一首。三键与进度条事件不写在 SquareLine：`main/transport` 运行时绑定三键 `CLICKED` 与 Slider `RELEASED`，经 `Service_GUI_ConsumeInput()` 交给 GUI Task 的 `music/` 分区；`Service_GUI_ProgressApply()` 按假百分比写回 Slider，拖动中不覆盖。TimeLabel 仍显示 SquareLine 占位 `1:00/3:14`，运行时不改字。`QueueTab` 只保留 SquareLine 单行范本；`Service/gui/main/queue` 把该范本构造摘进 for 循环，GUI Task 的 `music/` 在 `storage_listbuffer` READY 后经 `Service_GUI_QueueApply()` 按 `Length` 填行。`MusicPlayerTimeLabel` 相对控制区顶部下移 `5%`；`MusicPlayingSlider` 宽度为播放器区的 `90%`、高度 `7%`，相对顶部下移 `20%`。唱片与中心封面见第 10.5.4 节，尚未导出。假曲名本阶段仍可不做。Queue 与 Library 不复制这组控制。
 
 `DotPanelContainer` 是 `Main` 的固定底部子对象，使用居中的 Flex Row 布局，列间距为 `5 px`，自身不接受点击或滚动。它包含按页面物理顺序创建的 `DotSettings`、`DotMusic` 与 `DotBooks`。非当前页圆点为 `5 x 5 px`、圆角 `3 px`、`Ink` 且背景透明度 `180`；当前页指示器为 `14 x 5 px` 的水平胶囊、同一 `Ink` 且背景透明度 `220`。初始当前页是 Music，因此初态由 `DotMusic` 显示胶囊。
 
@@ -502,7 +508,8 @@ BooksPage 和 SettingsPage 已直接共用 Main 的单一 StatusBar；它们后�
 MusicPage
 └─ MusicModeTabs
    ├─ NowPlayingTab
-   │  └─ MusicPlayerControlContainer  透明、水平布局、不滚动
+   │  └─ MusicPlayerControlContainer  透明、不滚动；高 34%
+   │     ├─ MusicPlayerTimeLabel      Ink、montserrat_10，占位 1:00/3:14
    │     ├─ MusicPlayingSlider         Muted 轨道、Wash 细边、Accent 进度
    │     ├─ MusicPreviousButton       圆形半透明控制按钮
    │     │  └─ MusicPreviousIcon      上一首符号 Label
@@ -514,7 +521,7 @@ MusicPage
    └─ LibraryTab                  当前为空白内容区
 ```
 
-`MusicPlayingSlider` 位于控制按钮上方。当前导出中，主轨道为 `Muted`、Opa `150`，并带 1px 满圈 `Wash` 边（Opa `40`）；Indicator 使用 `Accent`。`DEFAULT` 状态的 Knob 透明，`PRESSED` 状态才显示 `Accent` Knob，并通过 `STYLE (KNOB) → Paddings` 增大。LVGL v8 的 Slider Knob 默认边长等于 Slider 较短边，因此若将来改为常显 Knob，仍应通过 Padding 调整其大小，而非修改 Slider 本体的宽高。三个 Button 当前使用 `Wash` 的低 Alpha 填充，按下态提高 Alpha；不设置独立边框，图标使用 `Ink`。不在 SquareLine 中添加播放事件；运行时由 GUI Service 绑定 `CLICKED`，并把 `MusicPlayPauseIcon` 在 `LV_SYMBOL_PLAY` / `LV_SYMBOL_PAUSE` 之间替换。每个图标均由 Button 的独立 Label 子对象承载并居中对齐；不得用 ImageButton 或导入图标图片资源。`MusicPlayPauseIcon` 当前为 `lv_font_montserrat_14`，无额外 x/y 偏移。项目已启用的 Montserrat 字号包含 LVGL 的 `PREV`、`PLAY`、`PAUSE` 与 `NEXT` 符号；用户优先从 SquareLine 的符号选择器使用它们，不新增图标图片资源。三个按钮与外层 `MusicPlayerControlContainer` 均不是毛玻璃区域。
+`MusicPlayerTimeLabel` 位于 Slider 上方（`ALIGN_TOP_MID`，`y = 5%`）。`MusicPlayingSlider` 位于控制按钮上方（`y = 20%`）。当前导出中，主轨道为 `Muted`、Opa `150`，并带 1px 满圈 `Wash` 边（Opa `40`）；Indicator 使用 `Accent`。`DEFAULT` 状态的 Knob 透明，`PRESSED` 状态才显示 `Accent` Knob，并通过 `STYLE (KNOB) → Paddings` 增大。LVGL v8 的 Slider Knob 默认边长等于 Slider 较短边，因此若将来改为常显 Knob，仍应通过 Padding 调整其大小，而非修改 Slider 本体的宽高。三个 Button 当前使用 `Wash` 的低 Alpha 填充，按下态提高 Alpha；不设置独立边框，图标使用 `Ink`。不在 SquareLine 中添加播放事件；运行时由 GUI Service 绑定三键 `CLICKED` 与 `MusicPlayingSlider` 的 `RELEASED`，并把 `MusicPlayPauseIcon` 在 `LV_SYMBOL_PLAY` / `LV_SYMBOL_PAUSE` 之间替换。松手后 `post` 0..100 假 seek，拖动不改 playing；切歌与拔卡把条写回 0。playing 时不按墙钟自动走表；解码器时间对接前，条只停在松手或切歌后的值。每个图标均由 Button 的独立 Label 子对象承载并居中对齐；不得用 ImageButton 或导入图标图片资源。`MusicPlayPauseIcon` 当前为 `lv_font_montserrat_14`，无额外 x/y 偏移。项目已启用的 Montserrat 字号包含 LVGL 的 `PREV`、`PLAY`、`PAUSE` 与 `NEXT` 符号；用户优先从 SquareLine 的符号选择器使用它们，不新增图标图片资源。三个按钮与外层 `MusicPlayerControlContainer` 均不是毛玻璃区域。
 
 当前导出的壁纸为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，一张全屏帧约 `230400 B`。Music 运行时会同时持有共享 Canvas 工作区、一张 Main 长期全屏 Blur 壁纸和一张最大 `240 x 320` 的 MusicModeTabs 裁剪背景，三者峰值上限约 `675 KiB`；实际 MusicModeTabs 略矮于整屏（状态栏与圆点之外），但静态缓冲按整屏高度预留，避免再把 SquareLine 百分比写进 Service。壁纸切换时才重新执行全屏模糊；静态显示、文字更新和每次 `Service_GUI_Process()` 都不得重复模糊。MainPageContainer 横滑的 `LV_EVENT_SCROLL` 只更新局部裁剪图；SquareLine 重新导出导致对象尺寸或位置改变后，会在下一次初始化按新布局重新建立首帧裁剪。裁剪上限见 `main/background/gui_service_main_background_config.h`。未来切换到 RGB565 缓存资源后，三帧合计约 `450 KiB`。
 
@@ -548,11 +555,36 @@ READY 时 GUI Task 的 `music/` 按 `Length` 把 `Buffer[i]` 原样交给 `Servi
 
 `QueueTab` 在 SquareLine 模拟器里仍可能看到 Tabview 默认白底；真机由第 10.5.2 节的 Content 透明与毛玻璃处理。行底用浅白薄片，不要再做成 `#13223D` 实心卡。
 
+#### 10.5.4 Now Playing 唱片与假封面（待 SquareLine 导出）
+
+在 `NowPlayingTab` 中间、控制区之上放圆形唱片；`playing` 时旋转，`paused` 时停在当前角度。封面叠在唱片中心；无当前曲不拼封面，只转（或停）唱片。本阶段封面用固定假图，不读 ID3、不解码。不在 SquareLine 添加事件。导出前用本节对象名，导出后再接线。
+
+**唱片底图不长期编进 `GUI/` / 内部 Flash。** 下一版由 PC 打包进 Resource Pack 再烧录（IMAGE，走现有 Pack 加载，不经 FatFs）。本版 SquareLine 只用圆形 Container 或临时占位，不要导入大唱片 PNG。假封面仍可 SquareLine 占位。规格与 ResourceID 在下一次改 Pack 时写入 [resource_pack_design.md](resource_pack_design.md)，本刀不定像素。
+
+建议层级：
+
+```text
+NowPlayingTab
+ ├─ MusicVinylDisc          圆形唱片；父对象承担旋转
+ │   └─ MusicAlbumCover     更小的圆形假封面，居中
+ └─ MusicPlayerControlContainer
+```
+
+SquareLine 步骤：
+
+1. 在 `NowPlayingTab` 新建圆形 Container `MusicVinylDisc`（不要导入唱片底图 PNG）：水平居中，放在控制区上方剩余空间；关掉 Clickable / Scrollable，避免抢走 Slider 与三键。底图下一版从 Resource Pack 绑到该对象。
+2. 以唱片为父对象新建 Image `MusicAlbumCover`：居中、更小、圆角拉满成圆；本阶段可导入一张小的固定假封面。关掉 Clickable。
+3. 唱片与封面都不要加事件。控制区、TimeLabel、Slider、三键保持现状。
+4. 导出 `GUI/`。助手不手改生成代码。
+
+运行时（导出后，不在本刀）：`TransportApply(playing)` 时对 `MusicVinylDisc` 开/停无限旋转动画；封面是子对象，随父对象一起转。有当前曲则显示 `MusicAlbumCover`；CLEAR / 空表则 Hidden 封面，不合成。假封面始终是同一张占位图。不新增公开 Service Interface，除非接线时必须把 Apply 从 transport 拆开。
+
 ## 11. 原型验收标准
 
 - 用户可在三张 MainPageContainer 内容页间稳定循环左右切换，且 StatusBar 保持固定；
 - Music 内部标签只能通过点击顶部标签切换；在其内容区左右滑动时，手势只交给 MainPageContainer；
-- MusicPlayingSlider 与三个静态控制按钮的默认、按下视觉状态正确；
+- MusicPlayingSlider 与三个静态控制按钮的默认、按下视觉状态正确；`MusicPlayerTimeLabel` 在 Slider 上方可见；
+- 唱片导出后：playing 旋转、paused 停止；有当前曲显示中心假封面，无当前曲只显示唱片；
 - BooksPage、SettingsPage 当前保持空白占位，不误表现为已实现的阅读器、专辑详情或设置子页；
 - 后续新增 Album Detail、Mini Player、Reader、MainPagerDots 或 Settings 子页前，先同步本文档再在 SquareLine 中实现；
 - 首版无需真实歌曲、书籍、文件系统或背光硬件即可完整演示交互流程。

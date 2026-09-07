@@ -15,7 +15,7 @@
  */
 static void test_starts_paused(void)
 {
-    Gui_MusicTransportTypeDef transport;
+    GUI_MusicTransportTypeDef transport;
 
     gui_music_transport_init(&transport);
     assert(gui_music_transport_is_playing(&transport) == false);
@@ -26,7 +26,7 @@ static void test_starts_paused(void)
  */
 static void test_toggle_without_current_stays_paused(void)
 {
-    Gui_MusicTransportTypeDef transport;
+    GUI_MusicTransportTypeDef transport;
     bool changed;
 
     gui_music_transport_init(&transport);
@@ -40,7 +40,7 @@ static void test_toggle_without_current_stays_paused(void)
  */
 static void test_toggle_with_current_flips_playing(void)
 {
-    Gui_MusicTransportTypeDef transport;
+    GUI_MusicTransportTypeDef transport;
 
     gui_music_transport_init(&transport);
     assert(gui_music_transport_toggle(&transport, true) == true);
@@ -54,7 +54,7 @@ static void test_toggle_with_current_flips_playing(void)
  */
 static void test_force_paused_when_already_paused_is_unchanged(void)
 {
-    Gui_MusicTransportTypeDef transport;
+    GUI_MusicTransportTypeDef transport;
 
     gui_music_transport_init(&transport);
     assert(gui_music_transport_force_paused(&transport) == false);
@@ -66,7 +66,7 @@ static void test_force_paused_when_already_paused_is_unchanged(void)
  */
 static void test_force_paused_stops_playing(void)
 {
-    Gui_MusicTransportTypeDef transport;
+    GUI_MusicTransportTypeDef transport;
 
     gui_music_transport_init(&transport);
     (void)gui_music_transport_toggle(&transport, true);
@@ -82,7 +82,75 @@ static void test_null_handle_is_safe(void)
     assert(gui_music_transport_toggle(NULL, true) == false);
     assert(gui_music_transport_force_paused(NULL) == false);
     assert(gui_music_transport_is_playing(NULL) == false);
+    assert(gui_music_transport_set_progress(NULL, 10U) == false);
+    assert(gui_music_transport_reset_progress(NULL) == false);
+    assert(gui_music_transport_get_progress(NULL) == 0U);
     gui_music_transport_init(NULL);
+}
+
+/**
+ * @brief 上电假进度为 0。
+ */
+static void test_starts_at_zero_progress(void)
+{
+    GUI_MusicTransportTypeDef transport;
+
+    gui_music_transport_init(&transport);
+    assert(gui_music_transport_get_progress(&transport) == 0U);
+}
+
+/**
+ * @brief 记下百分比并报告变化；同值再写则不变。
+ */
+static void test_set_progress_reports_change(void)
+{
+    GUI_MusicTransportTypeDef transport;
+
+    gui_music_transport_init(&transport);
+    assert(gui_music_transport_set_progress(&transport, 40U) == true);
+    assert(gui_music_transport_get_progress(&transport) == 40U);
+    assert(gui_music_transport_set_progress(&transport, 40U) == false);
+    assert(gui_music_transport_is_playing(&transport) == false);
+}
+
+/**
+ * @brief 超过 100 的百分比被夹到 100。
+ */
+static void test_set_progress_clamps_to_hundred(void)
+{
+    GUI_MusicTransportTypeDef transport;
+
+    gui_music_transport_init(&transport);
+    assert(gui_music_transport_set_progress(&transport, 255U) == true);
+    assert(gui_music_transport_get_progress(&transport) == 100U);
+}
+
+/**
+ * @brief 复位进度为 0。
+ */
+static void test_reset_progress_clears_percent(void)
+{
+    GUI_MusicTransportTypeDef transport;
+
+    gui_music_transport_init(&transport);
+    (void)gui_music_transport_set_progress(&transport, 40U);
+    assert(gui_music_transport_reset_progress(&transport) == true);
+    assert(gui_music_transport_get_progress(&transport) == 0U);
+    assert(gui_music_transport_reset_progress(&transport) == false);
+}
+
+/**
+ * @brief 强制 paused 不改进度。
+ */
+static void test_force_paused_keeps_progress(void)
+{
+    GUI_MusicTransportTypeDef transport;
+
+    gui_music_transport_init(&transport);
+    (void)gui_music_transport_toggle(&transport, true);
+    (void)gui_music_transport_set_progress(&transport, 25U);
+    assert(gui_music_transport_force_paused(&transport) == true);
+    assert(gui_music_transport_get_progress(&transport) == 25U);
 }
 
 /**
@@ -97,6 +165,11 @@ int main(void)
     test_force_paused_when_already_paused_is_unchanged();
     test_force_paused_stops_playing();
     test_null_handle_is_safe();
+    test_starts_at_zero_progress();
+    test_set_progress_reports_change();
+    test_set_progress_clamps_to_hundred();
+    test_reset_progress_clears_percent();
+    test_force_paused_keeps_progress();
 
     puts("gui_music_transport_tests: all tests passed");
     return 0;

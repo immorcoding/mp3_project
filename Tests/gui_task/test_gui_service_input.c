@@ -19,11 +19,11 @@ static void test_idle_consume_writes_none(void)
     Service_GUI_InputTypeDef input;
 
     input.command = SERVICE_GUI_INPUT_MUSIC_NEXT;
-    input.sheet_index = 7U;
+    input.param = 7U;
 
     assert(service_gui_input_consume(&input) == SERVICE_OK);
     assert(input.command == SERVICE_GUI_INPUT_NONE);
-    assert(input.sheet_index == 0U);
+    assert(input.param == 0U);
 }
 
 /**
@@ -43,10 +43,10 @@ static void test_consume_takes_queue_select_once(void)
 
     service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_QUEUE_SELECT, 4U);
     input.command = SERVICE_GUI_INPUT_NONE;
-    input.sheet_index = 0U;
+    input.param = 0U;
     assert(service_gui_input_consume(&input) == SERVICE_OK);
     assert(input.command == SERVICE_GUI_INPUT_MUSIC_QUEUE_SELECT);
-    assert(input.sheet_index == 4U);
+    assert(input.param == 4U);
 
     assert(service_gui_input_consume(&input) == SERVICE_OK);
     assert(input.command == SERVICE_GUI_INPUT_NONE);
@@ -63,6 +63,38 @@ static void test_later_post_overwrites_pending(void)
     service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_PLAY_PAUSE, 0U);
     assert(service_gui_input_consume(&input) == SERVICE_OK);
     assert(input.command == SERVICE_GUI_INPUT_MUSIC_PLAY_PAUSE);
+}
+
+/**
+ * @brief 取走一次进度条假 seek 后槽位变空。
+ */
+static void test_consume_takes_seek_percent_once(void)
+{
+    Service_GUI_InputTypeDef input;
+
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK, 37U);
+    input.command = SERVICE_GUI_INPUT_NONE;
+    input.param = 0U;
+    assert(service_gui_input_consume(&input) == SERVICE_OK);
+    assert(input.command == SERVICE_GUI_INPUT_MUSIC_SEEK);
+    assert(input.param == 37U);
+
+    assert(service_gui_input_consume(&input) == SERVICE_OK);
+    assert(input.command == SERVICE_GUI_INPUT_NONE);
+}
+
+/**
+ * @brief 只丢掉 Queue 选曲，不误清进度条假 seek。
+ */
+static void test_drop_queue_select_keeps_seek(void)
+{
+    Service_GUI_InputTypeDef input;
+
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK, 12U);
+    service_gui_input_drop_queue_select();
+    assert(service_gui_input_consume(&input) == SERVICE_OK);
+    assert(input.command == SERVICE_GUI_INPUT_MUSIC_SEEK);
+    assert(input.param == 12U);
 }
 
 /**
@@ -93,6 +125,8 @@ int main(void)
     test_consume_rejects_null();
     test_consume_takes_queue_select_once();
     test_later_post_overwrites_pending();
+    test_consume_takes_seek_percent_once();
+    test_drop_queue_select_keeps_seek();
     test_drop_queue_select_keeps_other_commands();
 
     puts("gui_service_input_tests: all tests passed");

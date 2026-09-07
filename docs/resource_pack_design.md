@@ -4,7 +4,7 @@
 > 日期：2026-09-01。
 > 首版范围：实现 Core、BINARY 与 IMAGE；FONT、AUDIO、MODEL、FIRMWARE 先完成协议定义，类型解码器默认关闭。
 > 当前硬件：STM32H743ZG、32 MiB W25Q256、32 MiB SDRAM。
-> 当前资源：CP936 的 `uni2oem`、`oem2uni` 两张表和默认壁纸。
+> 当前资源：CP936 的 `uni2oem`、`oem2uni` 两张表和默认壁纸。下一版 Pack 增加 Now Playing 唱片底图 IMAGE（PC 烧录；本版不进 SquareLine 固件）。
 
 ## 1. 目标与边界
 
@@ -19,7 +19,7 @@ RPKC1 是与具体 MCU、Flash 和业务无关的只读资源容器格式。它�
 - Platform Flash 负责 W25Q256 装配和 QSPI 内存映射生命周期。
 - PC 端资源提取和打包继续位于 `Tools/package_maker/`，不属于固件 Component。
 - 首版资源包是不可变完整镜像，不支持设备运行时原地更新单个资源。设备侧整包更新的产品路径已由 [ADR-0015](adr/0015-volume-roles-and-resource-install.md) 约定：SD 上的安装包先完整落入 FTL 暂存并校验，再写入本 Pack 物理区；不得从 SD 流式编程。该路径尚未实现。
-- 生效中的壁纸与模型只认机内 Pack，不把 SD 或 FTL 上的普通文件当作长期资源源。
+- 生效中的壁纸、模型与（下一版）Now Playing 唱片底图只认机内 Pack，不把 SD 或 FTL 上的普通文件当作长期资源源。唱片底图本版尚未入包。
 - 首版不提供公共透明压缩或加密。对应能力以后通过新协议能力或外层机制增加。
 
 当前旧格式 `RPK1` 是固定三资源的临时格式。RPKC1 实现后必须重新生成并烧录外部资源包；旧包不与 RPKC1 兼容。
@@ -721,6 +721,10 @@ Tools/package_maker/
 - BINARY：CP936 `uni2oem`；
 - BINARY：CP936 `oem2uni`；
 - IMAGE：默认 240 × 320 LVGL TRUE_COLOR_ALPHA 壁纸。
+
+下一版计划增加（尚未入包、未定 ResourceID / 像素规格）：
+
+- IMAGE：Now Playing 唱片底图。由 PC 打包器写入 Pack 并烧录；GUI 运行时绑到 `MusicVinylDisc`，不把该 PNG 编进 SquareLine 导出的内部 Flash。假封面与真 ID3 封面不在本条。
 
 首版不实现：
 

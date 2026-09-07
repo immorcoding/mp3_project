@@ -6,12 +6,13 @@
 
 ## 公开 Interface
 
-- `Service_GUI_Init(notify_index)`：仅由 GUI Task 调用一次。`notify_index` 是本任务 `Gui_NotifyIndexTypeDef` 给出的 LCD DMA 完成槽。初始化 LVGL，注册 v8 显示驱动与 Pointer 输入驱动，绑定 LCD DMA 最终回调，调用 SquareLine 的 `ui_init()`，再挂上占位色过滤器（生成代码会覆盖 display theme），并对 STARTUP 外观调用 `Service_GUI_ThemeApply()`。
+- `Service_GUI_Init(notify_index)`：仅由 GUI Task 调用一次。`notify_index` 是本任务 `GUI_NotifyIndexTypeDef` 给出的 LCD DMA 完成槽。初始化 LVGL，注册 v8 显示驱动与 Pointer 输入驱动，绑定 LCD DMA 最终回调，调用 SquareLine 的 `ui_init()`，再挂上占位色过滤器（生成代码会覆盖 display theme），并对 STARTUP 外观调用 `Service_GUI_ThemeApply()`。
 - `Service_GUI_ThemeApply(id)`：仅由同一 GUI Task 调用。切换 Default/Solid 调色板并 invalidate；更新 Boot/BootReveal/Lock/Main 壁纸显隐与 Music Tab 薄层。不扫对象改 hex，不调用 `ui_theme_set()`。运行时切到 Default 时若尚未生成毛玻璃，不会在此处补做 Canvas 模糊。
 - `Service_GUI_Process()`：仅在同一 GUI Task 上下文周期调用。按 FreeRTOS Tick 推进 LVGL 时间，并调用 `lv_timer_handler()` 处理刷新、动画和输入。
 - `Service_GUI_QueueApply(titles, length, window_index, current_index)`：仅由同一 GUI Task 调用。把一窗曲名填进 Queue 可见行；`length` 为 0 时全部 Hidden，`titles` 可为 NULL。`window_index` 是本窗在播放列表上的起点，用于已有行转 head。`current_index` 是正在播放的播放列表下标；无当前曲时为 `SERVICE_GUI_QUEUE_NO_CURRENT`。不包含 `storage_listbuffer.h`。Label 会拷贝文本。
-- `Service_GUI_ConsumeInput(input)`：仅由同一 GUI Task 调用。取走上一圈 `Process()` 记下的一次点击。无点击时 `command` 为 `SERVICE_GUI_INPUT_NONE` 且返回 `SERVICE_OK`，不用 `SERVICE_NOT_READY` 表示空闲。`MUSIC_QUEUE_SELECT` 时 `sheet_index` 为播放列表下标。不包含 `storage_listbuffer.h` / `storage_playback_cursor.h`。
+- `Service_GUI_ConsumeInput(input)`：仅由同一 GUI Task 调用。取走上一圈 `Process()` 记下的一次点击。无点击时 `command` 为 `SERVICE_GUI_INPUT_NONE` 且返回 `SERVICE_OK`，不用 `SERVICE_NOT_READY` 表示空闲。`MUSIC_QUEUE_SELECT` 时 `param` 为播放列表下标；`MUSIC_SEEK` 时为 0..100 百分比。不包含 `storage_listbuffer.h` / `storage_playback_cursor.h`。
 - `Service_GUI_TransportApply(playing)`：仅由同一 GUI Task 调用。把 `MusicPlayPauseIcon` 换成 `LV_SYMBOL_PAUSE` 或 `LV_SYMBOL_PLAY`。
+- `Service_GUI_ProgressApply(percent)`：仅由同一 GUI Task 调用。把 `MusicPlayingSlider` 设为 0..100；Slider 处于 `PRESSED` 时不覆盖当前拖动。不解码、不真正 seek。
 - `Service_GUI_QueueScrollLead()`：仅由同一 GUI Task 调用。返回 `QueueTab` 顶部已滚出的整行数，供窗口协议计算下一窗 `Index`。换窗时从当前 `scroll_y` 扣整行高度，不把列表吸回整页。
 
 重复调用 `Service_GUI_Init()` 返回 `SERVICE_BUSY`。当前 GUI Task 将初始化失败视为致命并调用
@@ -63,7 +64,7 @@ LVGL Pointer read_cb
 
 ## 私有 Modules 与配置
 
-对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_ConsumeInput()`、`Service_GUI_TransportApply()`、`Service_GUI_QueueApply()` 与 `Service_GUI_ThemeApply()`；
+对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_ConsumeInput()`、`Service_GUI_TransportApply()`、`Service_GUI_ProgressApply()`、`Service_GUI_QueueApply()` 与 `Service_GUI_ThemeApply()`；
 以下是 `Service/gui` 内部的实现拆分，不得被 APP 或其他 Service 直接包含或调用。
 SquareLine 生成代码唯一允许的例外是由 `GUI/ui_events.h` 声明、GUI Service 实现的
 `Service_GUI_Boot_RequestLock()`：它是 BootReveal 的窄事件交接点，不属于供上层调用的
@@ -82,7 +83,7 @@ Service/gui/
 │  ├─ gui_service_main.c / .h
 │  ├─ pager/                         循环分页、吸附、重排与圆点动画
 │  ├─ queue/                         按 Length 用范本构造生成 Queue 行
-│  ├─ transport/                     Now Playing 三键命令与 PLAY/PAUSE 符号
+│  ├─ transport/                     Now Playing 三键、进度条假 seek 与 PLAY/PAUSE
 │  ├─ background/                    壁纸模糊、局部裁剪与 Tabview 兼容
 │  └─ README.md
 └─ canvas/                           可复用的 Canvas 离屏处理
@@ -112,7 +113,7 @@ Service/gui/
   图片裁剪；Canvas 不拥有页面级背景。
 - `main/gui_service_main.c`：Main Screen 的私有编排入口。它先调用 Pager Module 解析布局、
   定位 MusicPage 至中间物理槽位并绑定循环分页，再调用 Queue 隐藏范本，再绑定 Transport
-  三键，最后调用 Background Module；Solid 下 Background 跳过毛玻璃。入口本身不持有 UI
+  三键与进度条，最后调用 Background Module；Solid 下 Background 跳过毛玻璃。入口本身不持有 UI
   状态或离屏图像。
 - `main/pager/`：只持有三张 Main Page 的物理槽位、程序化吸附状态和逻辑圆点状态。它监听
   `MainPageContainer` 的 `LV_EVENT_SCROLL_END`，以 50% 阈值吸附至相邻槽位，并在两端轮换既有
@@ -122,8 +123,8 @@ Service/gui/
   样式（Border Opa，不改 Width）。点按 `CLICKED` 只刷新行样式并 `post` 选曲命令。
   用 `QueueScrollLead` 报告滚出顶部的整行数。
   不包含 `storage_listbuffer.h` 或 `storage_playback_cursor.h`。
-- `main/transport/`：给 Now Playing 三键挂 `CLICKED`，`post` 上一首/播放暂停/下一首；
-  `TransportApply` 只改播放符号。不包含游标头，也不写 SquareLine 事件。
+- `main/transport/`：给 Now Playing 三键挂 `CLICKED`、给进度条挂 `RELEASED`，`post` 上一首/播放暂停/下一首/假 seek；
+  `TransportApply` 只改播放符号，`ProgressApply` 改进度条（拖动中不写回）。不包含游标头，也不写 SquareLine 事件。
 - `main/background/`：只持有 Main 的长期模糊壁纸和 `MusicModeTabs` SDRAM 裁剪背景。它使
   SquareLine 未公开的 Tabview 内部 Content 透明、禁用其横滑，并监听 `MainPageContainer` 的
   `LV_EVENT_SCROLL`，按目标控件当前坐标重裁剪背景。仅 Default 才生成模糊与裁剪图；Solid 不算

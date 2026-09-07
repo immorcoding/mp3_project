@@ -4,16 +4,18 @@
 
 ## 进度
 
-- 刚收口：GUI Task `music/`；输入单槽；游标环形上一首/下一首；playing 假状态。准备提交。
-- 下一活动：`MusicPlayingSlider` 假命令（运行时绑事件 → 单槽 → `gui_music_step`）。不解码、不真正 seek。
-- 本主线必读：`APP/tasks/gui/music/README.md`、`Service/gui/main/transport/README.md`、ADR-0007 第 2 条、`docs/gui_ui_design.md` **10.5.2**。
+- 刚收口：Slider 假 SEEK；切歌/CLEAR 归零；墙钟假走表已裁。板上拖条/切歌/拔卡已确认。
+- 下一活动：Now Playing 唱片旋转（playing 转 / paused 停）+ 中心假封面（无当前曲只转唱片）。先 SquareLine 导出对象，禁止手改 `GUI/`。`MusicPlayerTimeLabel` 已导出，本刀不接线。
+- 本主线必读：`docs/gui_ui_design.md` **10.5.2 / 10.5.4**、`APP/tasks/gui/music/README.md`、`Service/gui/main/transport/README.md`、ADR-0007。
 - verify：上一刀 `PASS_HOST_ONLY`（FULL）。按需查词：**播放列表**。
 
 ## 本场交接
 
 - 分支：`main`。禁止手改 `GUI/`。SquareLine 不加事件。不建 `Service/playback/`。
-- 三键路径已通：`transport/` CLICKED → `ConsumeInput` → `gui_music_step` → `TransportApply`。进度条 `transport/` 明确不处理。
-- 输入仍一个单槽。无点击 `SERVICE_GUI_INPUT_NONE` + `SERVICE_OK`。扩 Slider 命令，不要新 Queue。
-- PLAY/PAUSE：SquareLine 已去掉 `x` 偏移，Label 为 `lv_font_montserrat_14`、居中。电量/时间、Library、打开文件仍不做。
-- 提交：助手不代提交。工作区含 `music/`、`gui_service_input`、`main/transport/`；若一并提交 `GUI/`/`SquareLineProject/`，须当前会话 `$env:ALLOW_GENERATED_UPDATE='1'`。
-- 下场第一刀：给 Slider 假 cmd（建议 `RELEASED` 再 post 百分比），`music/` 只记假进度；拖动不改 playing。
+- Slider 假命令已收口：`transport/` `RELEASED` → 单槽 `MUSIC_SEEK` → `gui_music_step` → `ProgressApply`。拖动不改 playing。切歌 / CLEAR 把进度写回 0；无当前曲的 SEEK 忽略并写回已存值。
+- 墙钟假走表已裁（`fake_accum_ms` / `advance_fake` 不进结构体）。自动刷新留在 `gui_music_step` 注释框，等 Playback 用解码器时间对接。
+- 输入仍一个单槽。`param`：QUEUE_SELECT=播放列表下标，SEEK=0..100。
+- 已导出：`MusicPlayerTimeLabel`（Slider 上方，占位 `1:00/3:14`）。控制区高 `34%`，Slider `y=20%`。运行时尚未 Apply。
+- 电量/时间栏、Library、打开文件、真解码/seek、ID3 封面仍不做。助手不代提交。
+- 唱片底图下一版 PC 烧进 Resource Pack，本版 SquareLine 不导入大 PNG。假封面仍可占位。
+- 下场：用户按 10.5.4 导出圆形 `MusicVinylDisc` + 假封面后，再接线旋转与封面显隐。

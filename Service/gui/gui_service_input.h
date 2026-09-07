@@ -12,7 +12,7 @@
 
 void service_gui_input_post(
     Service_GUI_InputCommandTypeDef command,
-    uint16_t sheet_index);
+    uint16_t param);
 void service_gui_input_drop_queue_select(void);
 Service_StatusTypeDef service_gui_input_consume(Service_GUI_InputTypeDef *input);
 

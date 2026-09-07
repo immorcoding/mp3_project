@@ -15,8 +15,8 @@
  */
 static void test_does_not_request_before_sd_ready(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     action = gui_music_queue_window_poll(
@@ -32,8 +32,8 @@ static void test_does_not_request_before_sd_ready(void)
  */
 static void test_requests_first_window_when_sd_ready_and_idle(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     action = gui_music_queue_window_poll(
@@ -49,8 +49,8 @@ static void test_requests_first_window_when_sd_ready_and_idle(void)
  */
 static void test_waits_while_pending(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(
@@ -71,8 +71,8 @@ static void test_waits_while_pending(void)
  */
 static void test_applies_ready_window(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(
@@ -98,8 +98,8 @@ static void test_applies_ready_window(void)
  */
 static void test_does_not_rerequest_after_apply(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(
@@ -126,8 +126,8 @@ static void test_does_not_rerequest_after_apply(void)
  */
 static void test_retries_request_if_apply_not_marked(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(
@@ -148,8 +148,8 @@ static void test_retries_request_if_apply_not_marked(void)
  */
 static void test_retries_request_if_still_idle(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(
@@ -170,8 +170,8 @@ static void test_retries_request_if_still_idle(void)
  */
 static void test_clears_displayed_window_when_sd_removed(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(
@@ -193,8 +193,8 @@ static void test_clears_displayed_window_when_sd_removed(void)
  */
 static void test_does_not_clear_during_debounce_while_mounted(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(
@@ -216,8 +216,8 @@ static void test_does_not_clear_during_debounce_while_mounted(void)
  */
 static void test_does_not_clear_twice_while_sd_absent(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(
@@ -244,8 +244,8 @@ static void test_does_not_clear_twice_while_sd_absent(void)
  */
 static void test_requests_again_after_sd_reinserted(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(
@@ -272,8 +272,8 @@ static void test_requests_again_after_sd_reinserted(void)
  */
 static void test_applies_ready_before_clear_when_sd_removed(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     action = gui_music_queue_window_poll(
@@ -345,8 +345,8 @@ static void test_jump_scroll_requests_target_index_in_one_shot(void)
  */
 static void test_note_lead_requests_when_desired_index_moves(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(
@@ -370,8 +370,8 @@ static void test_note_lead_requests_when_desired_index_moves(void)
  */
 static void test_note_lead_does_not_rerequest_for_slack_row(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowActionTypeDef action;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(
@@ -395,7 +395,7 @@ static void test_note_lead_does_not_rerequest_for_slack_row(void)
  */
 static void test_clear_resets_request_index_to_zero(void)
 {
-    Gui_MusicQueueWindowClientTypeDef client;
+    GUI_MusicQueueWindowClientTypeDef client;
 
     gui_music_queue_window_client_init(&client);
     (void)gui_music_queue_window_poll(

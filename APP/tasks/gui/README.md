@@ -2,16 +2,16 @@
 
 GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后循环：Consume 一次输入、调用各产品分区 `step`、再 `Service_GUI_Process()`。SPI DMA 刷新期间的等待由 GUI Service 的 wait callback 完成。本目录不拥有 SquareLine 生成代码，也不修改 `GUI/`。
 
-`gui_task.c` 不包含 `storage_listbuffer.h` 或 `storage_playback_cursor.h`。音乐播放器在 `music/`：窗口协议、playing 标志与游标步进都在该分区内。Books / Settings 以后各加一个 `step`，不要把它们的 `switch` 写回任务主循环。
+`gui_task.c` 不包含 `storage_listbuffer.h` 或 `storage_playback_cursor.h`。音乐播放器在 `music/`：窗口协议、playing、假进度与游标步进都在该分区内。Books / Settings 以后各加一个 `step`，不要把它们的 `switch` 写回任务主循环。
 
 ## 公开 Interface
 
 - `gui_task(void *handle)`：仅由 `APP/tasks/app_tasks.c` 创建。
-- `Gui_NotifyIndexTypeDef`：本任务私有通知槽。`GUI_NOTIFY_LCD_TRANSFER` 由 GUI Service 等待 LCD SPI DMA 完成；槽位编号只在本任务通知数组内有效，与 Storage Task 互不相关。
+- `GUI_NotifyIndexTypeDef`：本任务私有通知槽。`GUI_NOTIFY_LCD_TRANSFER` 由 GUI Service 等待 LCD SPI DMA 完成；槽位编号只在本任务通知数组内有效，与 Storage Task 互不相关。
 
 ## 编译期依赖
 
-- `Service_GUI_Init()` / `Service_GUI_Process()` / `Service_GUI_ConsumeInput()`；
+- `Service_GUI_Init()` / `Service_GUI_Process()` / `Service_GUI_ConsumeInput()` / `Service_GUI_TransportApply()` / `Service_GUI_ProgressApply()`；
 - `music/gui_music.h`；
 - FreeRTOS Task 入口签名。
 

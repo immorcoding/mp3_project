@@ -28,6 +28,7 @@ extern lv_obj_t * ui_MusicPageContainer;
 extern lv_obj_t * ui_MusicModeTabs;
 extern lv_obj_t * ui_NowPlayingTab;
 extern lv_obj_t * ui_MusicPlayerControlContainer;
+extern lv_obj_t * ui_MusicPlayerTimeLabel;
 extern lv_obj_t * ui_MusicPlayingSlider;
 extern lv_obj_t * ui_MusicPreviousButton;
 extern lv_obj_t * ui_MusicPreviousIcon;

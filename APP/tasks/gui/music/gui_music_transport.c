@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    gui_music_transport.c
-  * @brief   音乐播放/暂停标志：不打开文件、不解码。
+  * @brief   音乐播放/暂停标志与假进度：不打开文件、不解码。
   ******************************************************************************
   */
 
@@ -13,7 +13,7 @@
  * @brief 复位为 paused。
  * @param[out] transport 本分区持有的播放标志。
  */
-void gui_music_transport_init(Gui_MusicTransportTypeDef *transport)
+void gui_music_transport_init(GUI_MusicTransportTypeDef *transport)
 {
     if (transport == NULL)
     {
@@ -21,6 +21,7 @@ void gui_music_transport_init(Gui_MusicTransportTypeDef *transport)
     }
 
     transport->playing = false;
+    transport->progress_percent = 0U;
 }
 
 /**
@@ -30,7 +31,7 @@ void gui_music_transport_init(Gui_MusicTransportTypeDef *transport)
  * @return 标志是否相对调用前发生变化。
  */
 bool gui_music_transport_toggle(
-    Gui_MusicTransportTypeDef *transport,
+    GUI_MusicTransportTypeDef *transport,
     bool has_current)
 {
     bool was_playing;
@@ -56,7 +57,7 @@ bool gui_music_transport_toggle(
  * @param[in,out] transport 本分区持有的播放标志。
  * @return 调用前是否为 playing。
  */
-bool gui_music_transport_force_paused(Gui_MusicTransportTypeDef *transport)
+bool gui_music_transport_force_paused(GUI_MusicTransportTypeDef *transport)
 {
     bool was_playing;
 
@@ -75,7 +76,7 @@ bool gui_music_transport_force_paused(Gui_MusicTransportTypeDef *transport)
  * @param[in] transport 本分区持有的播放标志。
  * @return playing 为真；空指针视为 paused。
  */
-bool gui_music_transport_is_playing(const Gui_MusicTransportTypeDef *transport)
+bool gui_music_transport_is_playing(const GUI_MusicTransportTypeDef *transport)
 {
     if (transport == NULL)
     {
@@ -83,4 +84,66 @@ bool gui_music_transport_is_playing(const Gui_MusicTransportTypeDef *transport)
     }
 
     return transport->playing;
+}
+
+/**
+ * @brief 记下进度；超过 100 夹到 100。
+ * @param[in,out] transport 本分区持有的播放标志与进度。
+ * @param[in] percent 目标百分比。
+ * @return 百分比是否相对调用前发生变化。
+ */
+bool gui_music_transport_set_progress(
+    GUI_MusicTransportTypeDef *transport,
+    uint8_t percent)
+{
+    uint8_t clamped;
+
+    if (transport == NULL)
+    {
+        return false;
+    }
+
+    clamped = (percent > 100U) ? 100U : percent;
+    if (transport->progress_percent == clamped)
+    {
+        return false;
+    }
+
+    transport->progress_percent = clamped;
+    return true;
+}
+
+/**
+ * @brief 把进度清回 0。
+ * @param[in,out] transport 本分区持有的播放标志与进度。
+ * @return 调用前百分比是否非 0。
+ */
+bool gui_music_transport_reset_progress(GUI_MusicTransportTypeDef *transport)
+{
+    bool changed;
+
+    if (transport == NULL)
+    {
+        return false;
+    }
+
+    changed = (transport->progress_percent != 0U);
+    transport->progress_percent = 0U;
+    return changed;
+}
+
+/**
+ * @brief 读取进度百分比。
+ * @param[in] transport 本分区持有的播放标志与进度。
+ * @return 0..100；空指针视为 0。
+ */
+uint8_t gui_music_transport_get_progress(
+    const GUI_MusicTransportTypeDef *transport)
+{
+    if (transport == NULL)
+    {
+        return 0U;
+    }
+
+    return transport->progress_percent;
 }

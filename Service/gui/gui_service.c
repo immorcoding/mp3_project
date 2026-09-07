@@ -318,10 +318,11 @@ uint16_t Service_GUI_QueueScrollLead(void)
 
 /**
  * @brief 取走上一圈 Process() 记下的一次点击。
- * @param[out] input 命令与可选播放列表下标；无点击时 command 为 NONE。
+ * @param[out] input 命令与可选 param；无点击时 command 为 NONE。
  * @retval SERVICE_OK 已写入 input。
  * @retval SERVICE_INVALID_PARAM input 为空。
  * @note 只能由同一 GUI Task 调用。不包含 storage_listbuffer.h。
+ *       `MUSIC_QUEUE_SELECT` 时 param 为播放列表下标；`MUSIC_SEEK` 时为 0..100。
  *       空闲不是 NOT_READY。
  */
 Service_StatusTypeDef Service_GUI_ConsumeInput(Service_GUI_InputTypeDef *input)
@@ -339,6 +340,18 @@ Service_StatusTypeDef Service_GUI_ConsumeInput(Service_GUI_InputTypeDef *input)
 Service_StatusTypeDef Service_GUI_TransportApply(bool playing)
 {
     return service_gui_main_transport_apply(playing);
+}
+
+/**
+ * @brief 按百分比更新 Now Playing 进度条；按下拖动时不写回。
+ * @param[in] percent 0..100 的假进度；大于 100 时夹到 100。
+ * @retval SERVICE_OK 已写入，或拖动中已跳过。
+ * @retval SERVICE_NOT_READY 进度条对象尚未创建。
+ * @note 只能由同一 GUI Task 调用。不解码、不真正 seek。
+ */
+Service_StatusTypeDef Service_GUI_ProgressApply(uint8_t percent)
+{
+    return service_gui_main_transport_apply_progress(percent);
 }
 
 /**

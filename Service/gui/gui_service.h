@@ -21,16 +21,17 @@
 typedef enum
 {
     SERVICE_GUI_INPUT_NONE = 0U,                 /**< 本圈没有待处理点击。 */
-    SERVICE_GUI_INPUT_MUSIC_QUEUE_SELECT,        /**< Queue 行点按；sheet_index 有效。 */
+    SERVICE_GUI_INPUT_MUSIC_QUEUE_SELECT,        /**< Queue 行点按；param 有效。 */
     SERVICE_GUI_INPUT_MUSIC_PREVIOUS,            /**< Now Playing 上一首。 */
     SERVICE_GUI_INPUT_MUSIC_PLAY_PAUSE,          /**< Now Playing 播放/暂停。 */
-    SERVICE_GUI_INPUT_MUSIC_NEXT                 /**< Now Playing 下一首。 */
+    SERVICE_GUI_INPUT_MUSIC_NEXT,            /**< Now Playing 下一首。 */
+    SERVICE_GUI_INPUT_MUSIC_SEEK             /**< 进度条松手；param 为 0..100 百分比。 */
 } Service_GUI_InputCommandTypeDef;
 
 typedef struct
 {
     Service_GUI_InputCommandTypeDef command; /**< 本圈命令；无点击为 NONE。 */
-    uint16_t sheet_index;                    /**< 仅 QUEUE_SELECT 时为播放列表下标。 */
+    uint16_t param;                    /**< QUEUE_SELECT：播放列表下标。SEEK：0..100 百分比。 */
 } Service_GUI_InputTypeDef;
 
 Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index);
@@ -39,6 +40,7 @@ void Service_GUI_Process(void);
 uint16_t Service_GUI_QueueScrollLead(void);
 Service_StatusTypeDef Service_GUI_ConsumeInput(Service_GUI_InputTypeDef *input);
 Service_StatusTypeDef Service_GUI_TransportApply(bool playing);
+Service_StatusTypeDef Service_GUI_ProgressApply(uint8_t percent);
 Service_StatusTypeDef Service_GUI_QueueApply(
     const char **titles,
     uint16_t length,

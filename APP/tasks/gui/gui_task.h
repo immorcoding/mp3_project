@@ -16,7 +16,7 @@ typedef enum
 {
     GUI_NOTIFY_LCD_TRANSFER = 0U, /**< SPI DMA 刷新完成或错误，由 GUI Service 等待。 */
     GUI_NOTIFY_COUNT              /**< 本任务占用的通知槽数量，不是可等待的事件。 */
-} Gui_NotifyIndexTypeDef;
+} GUI_NotifyIndexTypeDef;
 
 void gui_task(void *handle);
 

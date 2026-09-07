@@ -22,7 +22,7 @@ typedef enum
     GUI_MUSIC_QUEUE_WINDOW_ACTION_REQUEST,   /**< SD 就绪且槽位 IDLE，应提交一窗。 */
     GUI_MUSIC_QUEUE_WINDOW_ACTION_APPLY,     /**< 槽位 READY，应整窗填行并写回 IDLE。 */
     GUI_MUSIC_QUEUE_WINDOW_ACTION_CLEAR      /**< 卷已卸载，应把 Queue 可见行清成空窗。 */
-} Gui_MusicQueueWindowActionTypeDef;
+} GUI_MusicQueueWindowActionTypeDef;
 
 typedef struct
 {
@@ -31,11 +31,11 @@ typedef struct
     uint16_t desired_index;  /**< 下一窗在播放列表上的起点。 */
     uint16_t applied_index;  /**< 已成功填进 Queue 的窗口起点。 */
     uint16_t applied_length; /**< 已成功填进 Queue 的本窗条数。 */
-} Gui_MusicQueueWindowClientTypeDef;
+} GUI_MusicQueueWindowClientTypeDef;
 
-void gui_music_queue_window_client_init(Gui_MusicQueueWindowClientTypeDef *client);
+void gui_music_queue_window_client_init(GUI_MusicQueueWindowClientTypeDef *client);
 void gui_music_queue_window_mark_applied(
-    Gui_MusicQueueWindowClientTypeDef *client,
+    GUI_MusicQueueWindowClientTypeDef *client,
     uint16_t index,
     uint16_t length);
 uint16_t gui_music_queue_window_desired_index(
@@ -44,13 +44,13 @@ uint16_t gui_music_queue_window_desired_index(
     uint16_t lead,
     uint16_t max_entries);
 void gui_music_queue_window_note_lead(
-    Gui_MusicQueueWindowClientTypeDef *client,
+    GUI_MusicQueueWindowClientTypeDef *client,
     uint16_t lead,
     uint16_t max_entries);
 uint16_t gui_music_queue_window_request_index(
-    const Gui_MusicQueueWindowClientTypeDef *client);
-Gui_MusicQueueWindowActionTypeDef gui_music_queue_window_poll(
-    Gui_MusicQueueWindowClientTypeDef *client,
+    const GUI_MusicQueueWindowClientTypeDef *client);
+GUI_MusicQueueWindowActionTypeDef gui_music_queue_window_poll(
+    GUI_MusicQueueWindowClientTypeDef *client,
     bool sd_ready,
     bool sd_mounted,
     uint32_t status);

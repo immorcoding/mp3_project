@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    gui_music.c
-  * @brief   音乐分区：消费本分区输入、窗口协议与 playing 标志。
+  * @brief   音乐分区：消费本分区输入、窗口协议、playing 与假进度。
   *
   * @details
   *          不打开文件、不解码。Playback 打开/预开仍只留注释。游标与
@@ -15,12 +15,13 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "APP/tasks/storage/catalog/storage_listbuffer.h"
 #include "APP/tasks/storage/catalog/storage_playback_cursor.h"
 
-static Gui_MusicQueueWindowClientTypeDef gui_music_queue_window_client;
-static Gui_MusicTransportTypeDef gui_music_transport;
+static GUI_MusicQueueWindowClientTypeDef gui_music_queue_window_client;
+static GUI_MusicTransportTypeDef gui_music_transport;
 
 /**
  * @brief 把 READY 窗口填进 Queue。
@@ -79,11 +80,13 @@ static Service_StatusTypeDef gui_music_apply_ready_window(void)
  * @param[in] input 本圈命令；NULL 视为 NONE。
  * @param[out] cursor_moved 游标是否被本圈命令改动。
  * @param[out] playing_changed playing 标志是否被本圈命令改动。
+ * @param[out] progress_changed 假进度是否需要写回进度条。
  */
 static void gui_music_dispatch_input(
     const Service_GUI_InputTypeDef *input,
     bool *cursor_moved,
-    bool *playing_changed)
+    bool *playing_changed,
+    bool *progress_changed)
 {
     Service_GUI_InputCommandTypeDef command;
     bool has_current;
@@ -92,14 +95,17 @@ static void gui_music_dispatch_input(
 
     *cursor_moved = false;
     *playing_changed = false;
+    *progress_changed = false;
     command = (input == NULL) ? SERVICE_GUI_INPUT_NONE : input->command;
 
     switch (command)
     {
         case SERVICE_GUI_INPUT_MUSIC_QUEUE_SELECT:
-            if (storage_playback_cursor_set(input->sheet_index) == STORAGE_OK)
+            if (storage_playback_cursor_set(input->param) == STORAGE_OK)
             {
                 *cursor_moved = true;
+                (void)gui_music_transport_reset_progress(&gui_music_transport);
+                *progress_changed = true;
             }
             /*
              * Playback Task（未落地）
@@ -114,6 +120,8 @@ static void gui_music_dispatch_input(
             if (storage_playback_cursor_previous() == STORAGE_OK)
             {
                 *cursor_moved = true;
+                (void)gui_music_transport_reset_progress(&gui_music_transport);
+                *progress_changed = true;
             }
             break;
 
@@ -121,6 +129,8 @@ static void gui_music_dispatch_input(
             if (storage_playback_cursor_next() == STORAGE_OK)
             {
                 *cursor_moved = true;
+                (void)gui_music_transport_reset_progress(&gui_music_transport);
+                *progress_changed = true;
             }
             break;
 
@@ -133,6 +143,24 @@ static void gui_music_dispatch_input(
                 has_current);
             break;
 
+        case SERVICE_GUI_INPUT_MUSIC_SEEK:
+            has_current = (storage_playback_cursor_get(
+                               &cursor_index,
+                               &cursor_generation) == STORAGE_OK);
+            if (has_current)
+            {
+                uint8_t percent;
+
+                percent = (input->param > 100U) ?
+                          100U :
+                          (uint8_t)input->param;
+                (void)gui_music_transport_set_progress(
+                    &gui_music_transport,
+                    percent);
+            }
+            *progress_changed = true;
+            break;
+
         case SERVICE_GUI_INPUT_NONE:
         default:
             break;
@@ -140,7 +168,7 @@ static void gui_music_dispatch_input(
 }
 
 /**
- * @brief 复位窗口客户与 playing，并把图标设为 PLAY。
+ * @brief 复位窗口客户、playing 与假进度，并刷新图标和进度条。
  */
 void gui_music_init(void)
 {
@@ -156,20 +184,26 @@ void gui_music_init(void)
     gui_music_queue_window_client_init(&gui_music_queue_window_client);
     gui_music_transport_init(&gui_music_transport);
     (void)Service_GUI_TransportApply(false);
+    (void)Service_GUI_ProgressApply(0U);
 }
 
 /**
- * @brief 推进音乐分区一步：命令、窗口协议、按需刷新高亮与图标。
+ * @brief 推进音乐分区一步：命令、窗口协议、按需刷新高亮、图标与进度条。
  * @param[in] input 本圈已 Consume 的输入；NULL 视为 NONE。
  */
 void gui_music_step(const Service_GUI_InputTypeDef *input)
 {
-    Gui_MusicQueueWindowActionTypeDef action;
+    GUI_MusicQueueWindowActionTypeDef action;
     bool cursor_moved;
     bool playing_changed;
+    bool progress_changed;
     bool displayed_window_idle;
 
-    gui_music_dispatch_input(input, &cursor_moved, &playing_changed);
+    gui_music_dispatch_input(
+        input,
+        &cursor_moved,
+        &playing_changed,
+        &progress_changed);
 
     gui_music_queue_window_note_lead(
         &gui_music_queue_window_client,
@@ -228,6 +262,8 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
             {
                 playing_changed = true;
             }
+            (void)gui_music_transport_reset_progress(&gui_music_transport);
+            progress_changed = true;
             break;
 
         default:
@@ -249,5 +285,20 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
     {
         (void)Service_GUI_TransportApply(
             gui_music_transport_is_playing(&gui_music_transport));
+    }
+
+    /*
+     * Playback 进度（未落地）
+     * ------------------------------------------------------------
+     * playing 且有当前曲时，向后台问 position_ms / duration_ms，换成
+     * 0..100 再 set_progress 并 ProgressApply。不要用 GUI 墙钟累加，
+     * 也不要把走表零头放进 transport 结构体。
+     * ------------------------------------------------------------
+     */
+
+    if (progress_changed)
+    {
+        (void)Service_GUI_ProgressApply(
+            gui_music_transport_get_progress(&gui_music_transport));
     }
 }

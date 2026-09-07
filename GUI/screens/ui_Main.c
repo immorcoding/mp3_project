@@ -20,6 +20,7 @@ lv_obj_t * ui_MusicPageContainer = NULL;
 lv_obj_t * ui_MusicModeTabs = NULL;
 lv_obj_t * ui_NowPlayingTab = NULL;
 lv_obj_t * ui_MusicPlayerControlContainer = NULL;
+lv_obj_t * ui_MusicPlayerTimeLabel = NULL;
 lv_obj_t * ui_MusicPlayingSlider = NULL;
 lv_obj_t * ui_MusicPreviousButton = NULL;
 lv_obj_t * ui_MusicPreviousIcon = NULL;
@@ -249,13 +250,26 @@ void ui_Main_screen_init(void)
     ui_MusicPlayerControlContainer = lv_obj_create(ui_NowPlayingTab);
     lv_obj_remove_style_all(ui_MusicPlayerControlContainer);
     lv_obj_set_width(ui_MusicPlayerControlContainer, lv_pct(90));
-    lv_obj_set_height(ui_MusicPlayerControlContainer, lv_pct(28));
+    lv_obj_set_height(ui_MusicPlayerControlContainer, lv_pct(34));
     lv_obj_set_align(ui_MusicPlayerControlContainer, LV_ALIGN_BOTTOM_MID);
     lv_obj_clear_flag(ui_MusicPlayerControlContainer, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_pad_left(ui_MusicPlayerControlContainer, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_right(ui_MusicPlayerControlContainer, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_top(ui_MusicPlayerControlContainer, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_bottom(ui_MusicPlayerControlContainer, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_MusicPlayerTimeLabel = lv_label_create(ui_MusicPlayerControlContainer);
+    lv_obj_set_width(ui_MusicPlayerTimeLabel, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_MusicPlayerTimeLabel, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_MusicPlayerTimeLabel, 0);
+    lv_obj_set_y(ui_MusicPlayerTimeLabel, lv_pct(5));
+    lv_obj_set_align(ui_MusicPlayerTimeLabel, LV_ALIGN_TOP_MID);
+    lv_label_set_text(ui_MusicPlayerTimeLabel, "1:00/3:14");
+    ui_object_set_themeable_style_property(ui_MusicPlayerTimeLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_COLOR,
+                                           _ui_theme_color_Ink);
+    ui_object_set_themeable_style_property(ui_MusicPlayerTimeLabel, LV_PART_MAIN | LV_STATE_DEFAULT, LV_STYLE_TEXT_OPA,
+                                           _ui_theme_alpha_Ink);
+    lv_obj_set_style_text_font(ui_MusicPlayerTimeLabel, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_MusicPlayingSlider = lv_slider_create(ui_MusicPlayerControlContainer);
     lv_slider_set_value(ui_MusicPlayingSlider, 0, LV_ANIM_OFF);
@@ -264,7 +278,7 @@ void ui_Main_screen_init(void)
     lv_obj_set_width(ui_MusicPlayingSlider, lv_pct(90));
     lv_obj_set_height(ui_MusicPlayingSlider, lv_pct(7));
     lv_obj_set_x(ui_MusicPlayingSlider, lv_pct(0));
-    lv_obj_set_y(ui_MusicPlayingSlider, lv_pct(5));
+    lv_obj_set_y(ui_MusicPlayingSlider, lv_pct(20));
     lv_obj_set_align(ui_MusicPlayingSlider, LV_ALIGN_TOP_MID);
     lv_obj_set_style_radius(ui_MusicPlayingSlider, 10000, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_MusicPlayingSlider, lv_color_hex(0x404040), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -296,7 +310,7 @@ void ui_Main_screen_init(void)
     lv_obj_set_width(ui_MusicPreviousButton, 35);
     lv_obj_set_height(ui_MusicPreviousButton, 35);
     lv_obj_set_x(ui_MusicPreviousButton, lv_pct(-30));
-    lv_obj_set_y(ui_MusicPreviousButton, lv_pct(17));
+    lv_obj_set_y(ui_MusicPreviousButton, lv_pct(19));
     lv_obj_set_align(ui_MusicPreviousButton, LV_ALIGN_CENTER);
     lv_obj_add_flag(ui_MusicPreviousButton, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
     lv_obj_clear_flag(ui_MusicPreviousButton, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
@@ -324,7 +338,7 @@ void ui_Main_screen_init(void)
     lv_obj_set_width(ui_MusicNextButton, 35);
     lv_obj_set_height(ui_MusicNextButton, 35);
     lv_obj_set_x(ui_MusicNextButton, lv_pct(30));
-    lv_obj_set_y(ui_MusicNextButton, lv_pct(17));
+    lv_obj_set_y(ui_MusicNextButton, lv_pct(19));
     lv_obj_set_align(ui_MusicNextButton, LV_ALIGN_CENTER);
     lv_obj_add_flag(ui_MusicNextButton, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
     lv_obj_clear_flag(ui_MusicNextButton, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
@@ -352,7 +366,7 @@ void ui_Main_screen_init(void)
     lv_obj_set_width(ui_MusicPlayPauseButton, 44);
     lv_obj_set_height(ui_MusicPlayPauseButton, 44);
     lv_obj_set_x(ui_MusicPlayPauseButton, lv_pct(0));
-    lv_obj_set_y(ui_MusicPlayPauseButton, lv_pct(17));
+    lv_obj_set_y(ui_MusicPlayPauseButton, lv_pct(18));
     lv_obj_set_align(ui_MusicPlayPauseButton, LV_ALIGN_CENTER);
     lv_obj_add_flag(ui_MusicPlayPauseButton, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
     lv_obj_clear_flag(ui_MusicPlayPauseButton, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
@@ -553,6 +567,7 @@ void ui_Main_screen_destroy(void)
     ui_MusicModeTabs = NULL;
     ui_NowPlayingTab = NULL;
     ui_MusicPlayerControlContainer = NULL;
+    ui_MusicPlayerTimeLabel = NULL;
     ui_MusicPlayingSlider = NULL;
     ui_MusicPreviousButton = NULL;
     ui_MusicPreviousIcon = NULL;

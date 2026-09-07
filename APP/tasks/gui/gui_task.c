@@ -44,7 +44,7 @@ void gui_task(void *handle)
         Service_GUI_InputTypeDef input;
 
         input.command = SERVICE_GUI_INPUT_NONE;
-        input.sheet_index = 0U;
+        input.param = 0U;
         (void)Service_GUI_ConsumeInput(&input);
 
         gui_music_step(&input);

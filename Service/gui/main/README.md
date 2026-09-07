@@ -15,7 +15,7 @@ main/
 ├─ gui_service_main.c / .h      仅编排初始化顺序的私有入口
 ├─ pager/                       Page 槽位、吸附、循环重排、分页指示器动画
 ├─ queue/                       按 QueueApply 的 Length 用范本构造 Queue 可见行
-├─ transport/                   Now Playing 三键命令与 PLAY/PAUSE 符号
+├─ transport/                   Now Playing 三键、进度条假 seek 与 PLAY/PAUSE 符号
 └─ background/                  壁纸模糊、局部裁剪、Tabview 内部 Content 兼容
 ~~~
 
@@ -25,7 +25,7 @@ main/
   可见行由 `Service_GUI_QueueApply()` 按 Length 填入，窗口滑动时转 head，
   并从当前 `scroll_y` 扣整行高度；不包含 `storage_listbuffer.h`。
   Queue 滚动不是 Pager，不要等 `SCROLL_END` 吸附。
-- `transport/` 不依赖 Canvas 或 Queue 行；只绑三键并换播放符号。
+- `transport/` 不依赖 Canvas 或 Queue 行；绑三键与进度条松手，并换播放符号 / 写回百分比。
 - `background/` 不维护当前页、吸附阈值、循环映射、圆点动画或 Queue 行；它长期持有页面级
   SDRAM 图像缓冲，并在 MainPageContainer 滚动时更新 MusicModeTabs 的局部背景。仅 Default
   才会填充这些缓冲。
@@ -56,7 +56,7 @@ GUI Task
        -> queue/service_gui_main_queue_prepare()
             -> 隐藏 SongPanel1 范本，打开 QueueTab 滚动
        -> transport/service_gui_main_transport_prepare()
-            -> 绑定上一首/播放暂停/下一首 CLICKED
+            -> 绑定上一首/播放暂停/下一首 CLICKED，以及进度条 RELEASED
        -> background/service_gui_main_background_prepare(clear_wallpaper)
             -> 使 Tabview 内部 Content 透明并禁用其横滑
             -> 仅 Default：Canvas 生成全屏模糊工作帧、复制长期壁纸、裁剪并注册滚动同步
