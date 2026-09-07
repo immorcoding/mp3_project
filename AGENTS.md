@@ -13,22 +13,36 @@
 
 ## 权限
 
-默认先问再写盘，不允许改动文件之前不做询问。许可只来自当前**未完成**的那条可执行任务。
+写文件、删文件、改 Git 状态（`add`/`commit`/`checkout`/`reset`/`stash`/`push`）、运行会改动仓库的脚本，统称**改动**。改动默认禁止，只有下面定义的许可能解禁；读、搜、编译、跑 `verify.ps1` 不算改动。
+
+**什么算许可。** 许可只来自用户**本条消息**里的可执行指令：有改/加/删/实现/修/同步这类动词，且点名了模块、文件或功能；范围以点名者为界。以下**都不是**许可：提问、描述现象、抱怨、「看看/分析/为什么/怎么办/评估」、对话历史里的旧任务、压缩摘要、`CURRENT.md` 里的计划或「下场第一刀」、助手自己发现的问题、编译或验证失败。遇到这些只交付判断和方案，本轮不改动。分不清属于哪一档，按更严的一档执行。
 
 | 档 | 规则 |
 | --- | --- |
-| 禁止 | 手改 `GUI/`、`SquareLineProject/`；`git commit --no-verify`；把 `ALLOW_GENERATED_UPDATE` 写入用户或系统环境变量；开场整本读 `CONTEXT.md`；范围外顺手重构 |
-| 先问 | 改 `AGENTS.md` / `CONTEXT.md`；改 `CURRENT.md` 的**进度**主线；新建或修改 ADR；当前任务范围外的文件；破坏性公开 Interface |
-| 当前任务可写 | 用户这条任务点名的模块/文件；因实现事实变化必须同步的对应 `*_architecture.md` 与该 Module `README.md` |
-| 必须写 | `CURRENT.md` 的**本场交接**（任务替换时、硬切前）；已成立决定同步进正式文档；声称完成前的 `./scripts/verify.ps1` |
+| 禁止（用户口头同意也不解禁，须由用户本人操作） | 手改生成目录（见下节）；`git commit --no-verify`；设置或写入 `ALLOW_GENERATED_UPDATE`；`git push`；开场整本读 `CONTEXT.md`；范围外顺手重构、格式化、改注释、改命名 |
+| 先问 | 改 `AGENTS.md` / `CONTEXT.md`；改 `CURRENT.md` 的**进度**节；新建或修改 ADR；点名范围之外的任何文件；破坏性公开 Interface；`git commit`；CubeMX 文件 `USER CODE` 区；`lv_conf.h`、`FreeRTOSConfig.h`、`ffconf.h` 等生成器配置头 |
+| 当前任务可写 | 点名的模块/文件；因实现事实变化必须同步的对应 `*_architecture.md`、该 Module `README.md` 与 `Tests/` 中对应 host 测试 |
+| 必须写 | `CURRENT.md` 的**本场交接**（任务替换时、硬切前）；已成立决定同步进正式文档；声称完成前跑通 `./scripts/verify.ps1` |
 
-许可生命周期：新的可执行改动**替换**旧许可；「继续」「可以」或回答确认**不替换**；「顺便改 X」在当前许可上**追加**。硬切由用户发起；建议硬切前必须先写本场交接。
+**先问怎么执行。** 「先问」= 用问题**结束本轮回复**，本轮零改动，等用户下一条消息明确回答后才动。问题必须列出将改动的文件与一句理由。禁止：同一轮自问自答、「先做了再说」、把问题写进回复却继续改、只问其中一部分却改全部、用「用户应该会同意」替代询问。
 
-## 严禁与 GUI
+**改动前自检。** 每轮首次改动前，先在回复里写出：(1) 许可来自用户哪条消息、哪个动词、点名了什么；(2) 本轮将改动的文件清单及各自所属档；(3) 任一文件落在「先问」或「禁止」→ 整轮不改动，转为提问。自检写不出来就没有许可。
 
-`GUI/` 与 `SquareLineProject/` 以 SquareLine 工程为唯一事实来源。助手只给编辑器中的组件、布局、样式和事件步骤，由用户编辑、验证并导出。GUI 设计每推进一步，必须先更新 `docs/gui_ui_design.md`。生成目录写保护见完成前验收。
+**许可生命周期。** 新的可执行改动**替换**旧许可；「继续」「可以」「好」或回答确认**不替换也不扩大**；「顺便改 X」在当前许可上**追加** X。任务完成（verify 通过并汇报）后许可失效，后续改动重新申请。硬切由用户发起；建议硬切前必须先写本场交接。
 
-仅维护者本人可在本机命令行对生成目录提交使用 `--no-verify`，或在当前 PowerShell 会话设置 `$env:ALLOW_GENERATED_UPDATE = '1'` 后提交 SquareLine / CubeMX 重新导出。不要把该变量写入用户或系统环境变量；Git Graph 带不上它。
+## 严禁：生成目录只认生成器
+
+两套生成器与 Vendor 代码都是**唯一事实来源**，助手一律不手改，只给配置步骤，由用户修改、导出、验证：
+
+| 来源 | 事实源 | 产物 | 助手能做的 |
+| --- | --- | --- | --- |
+| SquareLine | `SquareLineProject/` | `GUI/` | 给组件、布局、样式、事件步骤；每推进一步先更新 `docs/gui_ui_design.md` |
+| CubeMX | `io_sheet.ioc` | 文件头带 ST 生成声明或含 `USER CODE BEGIN/END` 的文件：`Core/`、`FATFS/`、`USB_DEVICE/` 中的生成文件，`cmake/stm32cubemx/`、`startup_*.s`、`*.ld`、`.mxproject`、`FreeRTOSConfig.h`、`stm32h7xx_hal_conf.h` | 给外设、引脚、时钟、NVIC、DMA/MDMA 参数的配置步骤；参数落到对应架构文档 |
+| Vendor（HAL/CMSIS/中间件） | 上游发布 | `Drivers/STM32H7xx_HAL_Driver/`、`Drivers/CMSIS/`、`Middlewares/ST/`、`Middlewares/Third_Party/{LVGL,FreeRTOS/Source,FatFs}` | **无任何例外**，没有 `USER CODE` 区；HAL 行为不合适一律在 `Adapters/stm32_hal/` 包一层或改 `hal_conf`/`.ioc` 配置；升级由用户整体替换 |
+
+唯一例外：CubeMX 文件中 `USER CODE BEGIN`/`END` 之间。这里只准放对自维护入口的调用或转发，不放产品逻辑（见 `docs/architecture_standard.md` 3.1）；属「先问」档，且任务必须点名该文件。标记之外一个字符也不改，「修复导出结果」「临时原型」「只是加个 include」「改一行参数」「HAL 有 bug 打个补丁」都不是理由——参数改 `.ioc` 后重新生成，HAL 缺陷在 Adapter 层绕过并记入架构文档。`FATFS/Target/bsp_driver_user_diskio.*` 是自维护文件，不在此列。
+
+写保护由 `scripts/check-generated-write.ps1` 在 FAST 执行，但它**不覆盖** `Core/`、`FATFS/`、`USB_DEVICE/`、`.ioc`、`.ld`、`startup_*.s`；这些路径同样受本节约束，不得以「Hook 没拦」为准。仅维护者本人可在本机命令行对生成目录提交使用 `--no-verify`，或在当前 PowerShell 会话设置 `$env:ALLOW_GENERATED_UPDATE = '1'` 后提交 SquareLine / CubeMX 重新导出。不要把该变量写入用户或系统环境变量；Git Graph 带不上它。
 
 ## 完成前验收
 
