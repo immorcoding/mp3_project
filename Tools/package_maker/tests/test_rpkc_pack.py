@@ -11,7 +11,7 @@ PACKAGE_MAKER_DIRECTORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_MAKER_DIRECTORY))
 
 from rpkc_pack import build_package
-from extract_project_resources import extract_project_resources
+from extract_project_resources import extract_byte_array, extract_project_resources
 from main import generate_project_package
 
 
@@ -185,7 +185,21 @@ class BuildPackageTests(unittest.TestCase):
 
 class ExtractProjectResourcesTests(unittest.TestCase):
 
-    def test_extracts_current_cp936_tables_and_wallpaper(self) -> None:
+    def test_vinyl_pack_source_keeps_only_true_color_alpha_16bit(self) -> None:
+        project_root = Path(__file__).resolve().parents[3]
+        source_path = (
+            project_root / "Resources" / "imgs" / "vinyl_original_144px.c"
+        )
+        source = source_path.read_text(encoding="utf-8")
+
+        self.assertNotIn("LV_COLOR_DEPTH", source)
+        self.assertNotIn("LV_COLOR_16_SWAP", source)
+        self.assertIn("TRUE_COLOR_ALPHA", source)
+
+        data = extract_byte_array(source, "vinyl_original_144px_map")
+        self.assertEqual(len(data), 144 * 144 * 3)
+
+    def test_extracts_cp936_tables_and_sorted_imgs_c_arrays(self) -> None:
         project_root = Path(__file__).resolve().parents[3]
 
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -194,13 +208,27 @@ class ExtractProjectResourcesTests(unittest.TestCase):
                 output_directory=Path(temporary_directory),
             )
 
-            uni2oem = extracted["uni2oem"].read_bytes()
-            oem2uni = extracted["oem2uni"].read_bytes()
-            wallpaper = extracted["wallpaper"].read_bytes()
+            uni2oem = extracted.binaries["uni2oem"].read_bytes()
+            oem2uni = extracted.binaries["oem2uni"].read_bytes()
+            image_names = [image.name for image in extracted.images]
+            wallpaper = extracted.images[0].output_path.read_bytes()
+            vinyl = extracted.images[1].output_path.read_bytes()
 
             self.assertEqual(len(uni2oem), 87172)
             self.assertEqual(len(oem2uni), 87172)
+            self.assertEqual(
+                image_names,
+                [
+                    "ui_img_wallpaper_indigo_mist_soft_dark_png",
+                    "vinyl_original_144px",
+                ],
+            )
+            self.assertEqual(extracted.images[0].width, 240)
+            self.assertEqual(extracted.images[0].height, 320)
+            self.assertEqual(extracted.images[1].width, 144)
+            self.assertEqual(extracted.images[1].height, 144)
             self.assertEqual(len(wallpaper), 240 * 320 * 3)
+            self.assertEqual(len(vinyl), 144 * 144 * 3)
             self.assertEqual(binascii.crc32(uni2oem) & 0xFFFFFFFF, 0xFBAAB4D2)
             self.assertEqual(binascii.crc32(oem2uni) & 0xFFFFFFFF, 0x60F7F8F0)
             self.assertEqual(binascii.crc32(wallpaper) & 0xFFFFFFFF, 0xBBB21D5D)
@@ -224,13 +252,15 @@ class ExtractProjectResourcesTests(unittest.TestCase):
                 )
             )
 
-            self.assertEqual(len(package), 0x67000)
+            self.assertEqual(len(package), 0x77000)
             self.assertEqual(package[:4], b"RPKC")
-            self.assertEqual(struct.unpack_from("<H", package, 0x14)[0], 3)
+            self.assertEqual(struct.unpack_from("<H", package, 0x14)[0], 4)
+            self.assertEqual(manifest["package_version"], 2)
 
             first_entry = struct.unpack_from("<IHHQIIIIII", package, 0x40)
             second_entry = struct.unpack_from("<IHHQIIIIII", package, 0x68)
             third_entry = struct.unpack_from("<IHHQIIIIII", package, 0x90)
+            fourth_entry = struct.unpack_from("<IHHQIIIIII", package, 0xB8)
 
             self.assertEqual(first_entry[0], 1)
             self.assertEqual(first_entry[4], 0x2000)
@@ -243,11 +273,25 @@ class ExtractProjectResourcesTests(unittest.TestCase):
             self.assertEqual(third_entry[4], 0x2E000)
             self.assertEqual(third_entry[7], 0x2D484)
             self.assertEqual(third_entry[8], 40)
+            self.assertEqual(fourth_entry[0], 4)
+            self.assertEqual(fourth_entry[4], 0x67000)
+            self.assertEqual(fourth_entry[5], 144 * 144 * 3)
+            self.assertEqual(fourth_entry[7], 0x66400)
+            self.assertEqual(fourth_entry[8], 40)
 
             self.assertEqual(manifest["deployment"]["mapped_address"], "0x90401000")
             self.assertEqual(
                 [resource["id"] for resource in manifest["resources"]],
-                [1, 2, 3],
+                [1, 2, 3, 4],
+            )
+            self.assertEqual(
+                [resource["name"] for resource in manifest["resources"]],
+                [
+                    "cp936_uni2oem",
+                    "cp936_oem2uni",
+                    "ui_img_wallpaper_indigo_mist_soft_dark_png",
+                    "vinyl_original_144px",
+                ],
             )
 
 

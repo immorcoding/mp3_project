@@ -4,7 +4,7 @@
 > 日期：2026-09-01。
 > 首版范围：实现 Core、BINARY 与 IMAGE；FONT、AUDIO、MODEL、FIRMWARE 先完成协议定义，类型解码器默认关闭。
 > 当前硬件：STM32H743ZG、32 MiB W25Q256、32 MiB SDRAM。
-> 当前资源：CP936 的 `uni2oem`、`oem2uni` 两张表和默认壁纸。下一版 Pack 增加 Now Playing 唱片底图 IMAGE（PC 烧录；本版不进 SquareLine 固件）。
+> 当前资源：CP936 的 `uni2oem`、`oem2uni` 两张表、默认壁纸，以及 Now Playing 唱片底图 IMAGE（PC 烧录进 Pack；不进 SquareLine / 内部 Flash）。固件启动仍只加载 ID 1–3；ID 4 已入包、尚未接线到 `MusicPlayerVinylImage`。
 
 ## 1. 目标与边界
 
@@ -19,7 +19,7 @@ RPKC1 是与具体 MCU、Flash 和业务无关的只读资源容器格式。它�
 - Platform Flash 负责 W25Q256 装配和 QSPI 内存映射生命周期。
 - PC 端资源提取和打包继续位于 `Tools/package_maker/`，不属于固件 Component。
 - 首版资源包是不可变完整镜像，不支持设备运行时原地更新单个资源。设备侧整包更新的产品路径已由 [ADR-0015](adr/0015-volume-roles-and-resource-install.md) 约定：SD 上的安装包先完整落入 FTL 暂存并校验，再写入本 Pack 物理区；不得从 SD 流式编程。该路径尚未实现。
-- 生效中的壁纸、模型与（下一版）Now Playing 唱片底图只认机内 Pack，不把 SD 或 FTL 上的普通文件当作长期资源源。唱片底图本版尚未入包。
+- 生效中的壁纸、模型与 Now Playing 唱片底图只认机内 Pack，不把 SD 或 FTL 上的普通文件当作长期资源源。唱片底图已作为 ResourceID 4 入包，固件尚未加载该 ID。
 - 首版不提供公共透明压缩或加密。对应能力以后通过新协议能力或外层机制增加。
 
 当前旧格式 `RPK1` 是固定三资源的临时格式。RPKC1 实现后必须重新生成并烧录外部资源包；旧包不与 RPKC1 兼容。
@@ -327,6 +327,21 @@ StrideBytes = 720
 FrameCount  = 1
 DataLength  = 230400
 ```
+
+Now Playing 唱片底图为：
+
+```text
+ResourceID  = 4
+ImageFormat = LVGL_NATIVE
+PixelFormat = TRUE_COLOR_ALPHA
+Width       = 144
+Height      = 144
+StrideBytes = 432
+FrameCount  = 1
+DataLength  = 62208
+```
+
+像素为小端 RGB565 + 直通 Alpha（3 B/px）。源文件是 `Resources/imgs/` 下按文件名排序的 `.c`，忽略同目录 PNG；唱盘 C 只保留 `COLOR_DEPTH 16` 且无 16-bit swap 的一段。
 
 ## 10. FONT Metadata V1
 
@@ -656,10 +671,10 @@ Tools/package_maker/
   main.py
 ```
 
-- `extract_project_resources.py`：项目专用，从 FatFs `cc936.c` 和 SquareLine 壁纸 C 数组提取原始 `.bin`。
-- `rpkc_pack.py`：通用 RPKC1 打包器，不认识 FatFs、SquareLine 或当前文件路径。
-- `resource_pack.json`：资源身份、类型、版本、输入文件和 Metadata 描述。
-- `main.py`：依次执行提取和组包。
+- `extract_project_resources.py`：项目专用。BINARY 仍从 FatFs `cc936.c` 抽取；IMAGE 扫描 `Resources/imgs/*.c`（按文件名排序，忽略 PNG），从每个文件的第一个 `uint8_t` 数组和 `lv_img_dsc_t` 抽出 `.bin` 与宽高。
+- `rpkc_pack.py`：通用 RPKC1 打包器，不认识 FatFs、LVGL C 数组或当前文件路径。
+- `resource_pack.json`：只声明 BINARY 身份、类型、版本和输入文件；IMAGE 由 `main.py` 按扫描结果追加。
+- `main.py`：依次执行提取、追加 IMAGE、组包，并打印打包顺序。
 
 以后直接打包 MP3、模型或固件文件时，不需要增加 C 数组提取逻辑。
 
@@ -669,7 +684,7 @@ Tools/package_maker/
 {
   "vendor_id": 1,
   "product_id": 1,
-  "package_version": 1,
+  "package_version": 2,
   "header_size": 4096,
   "data_alignment": 4096,
   "metadata_alignment": 4,
@@ -711,20 +726,17 @@ Tools/package_maker/
 - Header CRC、范围、对齐、排序、重复和重叠校验；
 - BINARY Metadata V1；
 - IMAGE Metadata V1；
-- 当前三个资源的 JSON、提取和组包；
-- Resource Service 启动期一次性加载；
+- 当前四个资源的 JSON、扫描提取和组包；
+- Resource Service 启动期一次性加载 ID 1–3；
 - Vendor/Product/PackageVersion 日志；
 - SDRAM 目标 CRC 和 Cache Clean。
 
-首版只打包：
+当前 Pack（`package_version` 2）打包：
 
-- BINARY：CP936 `uni2oem`；
-- BINARY：CP936 `oem2uni`；
-- IMAGE：默认 240 × 320 LVGL TRUE_COLOR_ALPHA 壁纸。
-
-下一版计划增加（尚未入包、未定 ResourceID / 像素规格）：
-
-- IMAGE：Now Playing 唱片底图。由 PC 打包器写入 Pack 并烧录；GUI 运行时绑到 `MusicPlayerVinylImage`，不把该 PNG 编进 SquareLine 导出的内部 Flash。假封面与真 ID3 封面不在本条。
+- BINARY ResourceID 1：CP936 `uni2oem`；
+- BINARY ResourceID 2：CP936 `oem2uni`；
+- IMAGE ResourceID 3：默认 240 × 320 LVGL TRUE_COLOR_ALPHA 壁纸；
+- IMAGE ResourceID 4：Now Playing 唱片底图 144 × 144 LVGL TRUE_COLOR_ALPHA。由 PC 打包器写入 Pack 并烧录；不把该 PNG 编进 SquareLine 导出的内部 Flash。固件尚未把 ID 4 拷到 SDRAM 或绑到 `MusicPlayerVinylImage`。假封面与真 ID3 封面不在本条。
 
 首版不实现：
 

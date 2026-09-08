@@ -4,7 +4,11 @@ import argparse
 import json
 from pathlib import Path
 
-from extract_project_resources import extract_project_resources
+from extract_project_resources import (
+    TRUE_COLOR_ALPHA_BYTES_PER_PIXEL,
+    ExtractedImage,
+    extract_project_resources,
+)
 from rpkc_pack import build_package
 
 
@@ -40,6 +44,54 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def append_scanned_images(
+    configuration: dict,
+    images: list[ExtractedImage],
+) -> None:
+    """把扫描到的 IMAGE 接到 JSON 中的 BINARY 之后，ID 从现有最大编号加一。"""
+
+    if configuration["resources"]:
+        next_id = max(resource["id"] for resource in configuration["resources"]) + 1
+    else:
+        next_id = 1
+
+    for image in images:
+        configuration["resources"].append(
+            {
+                "id": next_id,
+                "name": image.name,
+                "type": "IMAGE",
+                "version": 1,
+                "data": f"generated/{image.output_path.name}",
+                "metadata": {
+                    "version": 1,
+                    "image_format": "LVGL_NATIVE",
+                    "pixel_format": "TRUE_COLOR_ALPHA",
+                    "width": image.width,
+                    "height": image.height,
+                    "stride_bytes": image.width * TRUE_COLOR_ALPHA_BYTES_PER_PIXEL,
+                    "frame_count": 1,
+                    "color_space": "SRGB",
+                    "alpha_mode": "STRAIGHT",
+                },
+            }
+        )
+        next_id += 1
+
+
+def print_packing_order(configuration: dict) -> None:
+    """按 ResourceID 打印本次实际入包顺序。"""
+
+    print("打包顺序：")
+    ordered = sorted(configuration["resources"], key=lambda resource: resource["id"])
+    for resource in ordered:
+        extra = ""
+        if resource["type"] == "IMAGE":
+            metadata = resource["metadata"]
+            extra = f"  {metadata['width']}x{metadata['height']}"
+        print(f"  ID {resource['id']} {resource['type']}  {resource['name']}{extra}")
+
+
 def generate_project_package(
     project_root: Path,
     configuration_path: Path,
@@ -48,12 +100,14 @@ def generate_project_package(
     """依次提取工程资源、组装 RPKC1，并输出便于核对的结果摘要。"""
 
     generated_directory = output_directory / "generated"
-    extracted_paths = extract_project_resources(
+    extracted = extract_project_resources(
         project_root=project_root,
         output_directory=generated_directory,
     )
 
     configuration = json.loads(configuration_path.read_text(encoding="utf-8"))
+    append_scanned_images(configuration, extracted.images)
+
     output_binary = output_directory / "resource_pack.bin"
     output_manifest = output_directory / "resource_pack_manifest.json"
 
@@ -67,9 +121,13 @@ def generate_project_package(
     print(f"已生成：{output_binary}")
     print(f"资源包长度：{result.pack_size} B / 0x{result.pack_size:X}")
     print(f"Header CRC32：0x{result.header_crc32:08X}")
+    print_packing_order(configuration)
 
-    for resource_name, resource_path in extracted_paths.items():
+    for resource_name, resource_path in extracted.binaries.items():
         print(f"已提取 {resource_name}：{resource_path}")
+
+    for image in extracted.images:
+        print(f"已提取 {image.name}：{image.output_path}")
 
 
 def main() -> None:

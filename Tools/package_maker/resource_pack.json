@@ -5,7 +5,7 @@
   "metadata_alignment": 4,
   "vendor_id": 1,
   "product_id": 1,
-  "package_version": 1,
+  "package_version": 2,
   "maximum_pack_size": "0x003FE000",
   "deployment": {
     "nor_chip_offset": "0x00401000",
@@ -38,24 +38,6 @@
         "byte_order": "LITTLE_ENDIAN",
         "element_size": 2,
         "element_count": 43586
-      }
-    },
-    {
-      "id": 3,
-      "name": "default_wallpaper",
-      "type": "IMAGE",
-      "version": 1,
-      "data": "generated/wallpaper.bin",
-      "metadata": {
-        "version": 1,
-        "image_format": "LVGL_NATIVE",
-        "pixel_format": "TRUE_COLOR_ALPHA",
-        "width": 240,
-        "height": 320,
-        "stride_bytes": 720,
-        "frame_count": 1,
-        "color_space": "SRGB",
-        "alpha_mode": "STRAIGHT"
       }
     }
   ]
