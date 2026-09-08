@@ -5,12 +5,13 @@
 硬切或新开对话后：
 
 1. `AGENTS.md` 由产品注入；立即读完整 `CURRENT.md`；
-2. 只跟随 `CURRENT.md` 给出的路径（`.scratch/`、ADR、架构文档、术语名）；
-3. 跨层、改边界或改公开 Interface 时，读 `docs/architecture_standard.md` 与相关模块文档；
-4. 术语按 `CURRENT.md` 指出的名字、或在上述文档中碰到的名字，到 `CONTEXT.md` **查条**；
-5. 对会影响长期边界的新增决定，完成后新增一份 ADR。
+2. `CURRENT.md` 点了活动 slug，就读 `.scratch/<slug>/` 下存在的 `freeze.md` 与 `board.md`；
+3. 只跟随上述文件给出的路径（`.scratch/`、ADR、架构文档、术语名）；
+4. 跨层、改边界或改公开 Interface 时，读 `docs/architecture_standard.md` 与相关模块文档；
+5. 术语按 `CURRENT.md` 指出的名字、或在上述文档中碰到的名字，到 `CONTEXT.md` **查条**；
+6. 对会影响长期边界的新增决定，完成后新增一份 ADR。
 
-`CONTEXT.md` 只放稳定的领域语言、边界和入口信息；具体实现细节放在模块文档或 ADR 中。进度与本场交接只在 `CURRENT.md`。
+`CONTEXT.md` 只放稳定的领域语言、边界和入口信息；具体实现细节放在模块文档或 ADR 中。进度与本场交接只在 `CURRENT.md`，本刀合同与板上事实只在活动 slug 目录，文件约定见 [issue-tracker.md](issue-tracker.md)。
 
 ## ADR 记录范围
 

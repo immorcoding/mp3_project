@@ -7,15 +7,16 @@
 ## 开场
 
 1. 读完整 `CURRENT.md`。
-2. 只跟随其中给出的路径（`.scratch/`、ADR、架构文档、术语名）。
-3. 术语到 `CONTEXT.md` **按条**查阅；禁止开场整本阅读。
-4. 跨层、改边界或改公开 Interface 前，读 `docs/architecture_standard.md` 与相关模块文档。分别判断：功能/抽象所有权、编译期 `#include` 所有权、运行时请求/回调路径。禁止从功能分层图推导 `#include` 方向。
+2. 点了活动 slug，就读 `.scratch/<slug>/` 下存在的 `freeze.md` 与 `board.md`；本刀范围、非目标、禁止与资源账以 `freeze.md` 为准。没点 slug 才允许只靠本场交接开工。
+3. 只跟随上述文件给出的路径（`.scratch/`、ADR、架构文档、术语名）。
+4. 术语到 `CONTEXT.md` **按条**查阅；禁止开场整本阅读。
+5. 跨层、改边界或改公开 Interface 前，读 `docs/architecture_standard.md` 与相关模块文档。分别判断：功能/抽象所有权、编译期 `#include` 所有权、运行时请求/回调路径。禁止从功能分层图推导 `#include` 方向。
 
 ## 权限
 
 写文件、删文件、改 Git 状态（`add`/`commit`/`checkout`/`reset`/`stash`/`push`）、运行会改动仓库的脚本，统称**改动**。改动默认禁止，只有下面定义的许可能解禁；读、搜、编译、跑 `verify.ps1` 不算改动。
 
-**什么算许可。** 许可只来自用户**本条消息**里的可执行指令：有且仅有 **执行**，且点名了模块、文件或功能；范围以点名者为界。以下**都不是**许可：提问、描述现象、抱怨、「看看/分析/为什么/怎么办/评估」、其他的修改类的动词、对话历史里的旧任务、压缩摘要、`CURRENT.md` 里的计划或「下场第一刀」、助手自己发现的问题、编译或验证失败。遇到这些只交付判断和方案，本轮不改动。分不清属于哪一档，按更严的一档执行。
+**什么算许可。** 许可只来自用户**本条消息**里的可执行指令：有且仅有 **执行**，且点名了模块、文件或功能；范围以点名者为界。以下**都不是**许可：提问、描述现象、抱怨、「看看/分析/为什么/怎么办/评估」、其他的修改类的动词、对话历史里的旧任务、压缩摘要、`CURRENT.md` 里的计划或「下场第一刀」、`freeze.md` 的冻结范围（它只定范围，不点火）、助手自己发现的问题、编译或验证失败。遇到这些只交付判断和方案，本轮不改动。分不清属于哪一档，按更严的一档执行。
 
 | 档 | 规则 |
 | --- | --- |
@@ -50,21 +51,23 @@
 
 克隆后执行一次 `./scripts/install-git-hooks.ps1`。`pre-commit` 对 Git 索引运行 FAST，`pre-push` 对实际推送提交运行 CHANGED。非 trivial 变化完成后用只读 `independent-verifier`；DMA、Cache、ISR、RTOS、HAL、Platform、链接段或硬件生命周期变化再用只读 `embedded-reviewer`。两者不进入 Hook。`git commit` 标题必须为 `YYYY/M/D HH:MM` + 一句中文，不写正文；细则见 [coding_standard.md](docs/coding_standard.md) 第 6 节。
 
-## 三份根文档限制
+## 重要文件限制
 
 | 文件 | 篇幅 | 只准 | 不准 |
 | --- | --- | --- | --- |
 | `AGENTS.md` | 约 100 行 | 开场协议、权限、严禁、验收、路径 | 功能清单、领域定义、进度、分层图、ADR/架构正文 |
 | `CONTEXT.md` | 全文可长；单条约 25 行 | 稳定术语、职责边界、相关术语、一句示例 | 进度、脏文件、`#include` 方向、寄存器/坐标/缓存大小 |
-| `CURRENT.md` | 合计约 80 行，单节约 40 行 | 主线、路径、阻塞、下场第一刀、分支/脏文件名、verify、未落盘未决项 | 抄 ADR/架构/`CONTEXT` 正文、贴 diff、功能清单 |
+| `CURRENT.md` | 合计约 80 行，单节约 40 行 | 主线、活动 slug、阻塞、下场第一刀一句、分支/脏文件名、verify 与板上各一句、未落盘未决项 | 抄 ADR/架构/`CONTEXT` 正文、贴 diff、功能清单；资源账、地址与几何、非目标长列表、必读清单正文 |
+| `.scratch/<slug>/freeze.md` | 合计约 50 行 | 目标、非目标、接缝与禁止、资源账、必读指针、验收 | 抄架构/`CONTEXT` 正文；当改动许可；倒灌 `CURRENT.md` |
+| `.scratch/<slug>/board.md` | 合计约 25 行 | 已写入、已确认、待确认 | 格式正文、未下板的工作树细节长文 |
 
-超限：从本文件删回指针；`CONTEXT.md` 单条下沉到 `*_architecture.md` 或 Module README；`CURRENT.md` 外溢到 `.scratch/` / ADR / 架构文档。
+超限：从本文件删回指针；`CONTEXT.md` 单条下沉到 `*_architecture.md` 或 Module README；`CURRENT.md` 外溢到 `.scratch/` / ADR / 架构文档。`freeze.md` / `board.md` 超限则拆下一刀或下沉到架构文档，禁止倒灌 `CURRENT.md`。稳定事实仍只进架构文档与 Module README。约定见 `docs/agents/issue-tracker.md`。
 
 ## 指针
 
 - 功能清单（给人看，非必要不读）：根 `README.md`
 - 术语词典：`CONTEXT.md`（按条查）
-- 现场：`CURRENT.md`
+- 现场索引：`CURRENT.md`；本刀合同与板上事实：`.scratch/<slug>/{freeze.md,board.md}`
 - 文档地图：`docs/README.md`
 - 分层验证与 Agent Harness：`docs/verification.md`
 - 冷启动与 ADR 范围：`docs/agents/domain.md`

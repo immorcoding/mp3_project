@@ -89,28 +89,34 @@ SECTIONS
       . = ALIGN(32);
 
       __external_resource_uni2oem_start__ = .;
-      KEEP(*(.rodata.uni2oem))
+      *(.rodata.uni2oem)
       __external_resource_uni2oem_end__ = .;
 
       . = ALIGN(32);
       __external_resource_oem2uni_start__ = .;
-      KEEP(*(.rodata.oem2uni))
+      *(.rodata.oem2uni)
       __external_resource_oem2uni_end__ = .;
 
       . = ALIGN(32);
       __external_resource_wallpaper_start__ = .;
-      KEEP(*(.rodata.ui_img_wallpaper_indigo_mist_soft_dark_png_data))
+      *(.rodata.ui_img_wallpaper_indigo_mist_soft_dark_png_data)
       __external_resource_wallpaper_end__ = .;
 
+      . = ALIGN(32);
+      __external_resource_vinyl_start__ = .;
+      . += 0xF300;
+      __external_resource_vinyl_end__ = .;
       . = ALIGN(32);
   } >SDRAM
 
   ASSERT((__external_resource_uni2oem_end__ - __external_resource_uni2oem_start__) == 0x15484,
-         "External resource uni2oem size mismatch")
+        "External resource uni2oem size mismatch")
   ASSERT((__external_resource_oem2uni_end__ - __external_resource_oem2uni_start__) == 0x15484,
-         "External resource oem2uni size mismatch")
+        "External resource oem2uni size mismatch")
   ASSERT((__external_resource_wallpaper_end__ - __external_resource_wallpaper_start__) == 0x38400,
-         "External resource wallpaper size mismatch")
+        "External resource wallpaper size mismatch")
+  ASSERT((__external_resource_vinyl_end__ - __external_resource_vinyl_start__) == 0xF300,
+        "External resource vinyl size mismatch")
 
   /*
   * 提前取走存储测试代码放到FLASH2
