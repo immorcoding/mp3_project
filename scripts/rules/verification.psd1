@@ -4,6 +4,7 @@
         'flash_ftl'
         'gui_task'
         'gui_theme'
+        'gui_canvas'
         'w25qxx'
         'resource_pack'
         'storage_catalog'
@@ -57,6 +58,15 @@
                 '^Service/gui/gui_service\.h$'
                 '^Service/gui/main/background/'
                 '^Tests/gui_theme/'
+            )
+        }
+        @{
+            Name = 'gui_canvas'
+            PathPatterns = @(
+                '^Service/gui/canvas/'
+                '^Service/gui/main/vinyl/'
+                '^Service/gui/gui_service\.h$'
+                '^Tests/gui_canvas/'
             )
         }
         @{

@@ -33,7 +33,7 @@
 /* filesystem_sd_transfer.c */
 #define FILESYSTEM_SD_BLOCK_SIZE             512U    /* FATFS 与当前 SD Card Device 使用的单个逻辑块大小，单位为字节。 */
 #define FILESYSTEM_SD_DMA_BLOCK_COUNT        64U     /* 单次 SDMMC DMA 最多合并的逻辑块数，64 块即 32 KiB 中转缓冲区。 */
-#define FILESYSTEM_SD_DMA_BUFFER_ALIGNMENT   PLATFORM_DMA_BUFFER_ALIGNMENT  /* CPU/DMA 共享缓冲区对齐要求，复用 Platform SD 的公开 Cache 约束。 */
+#define FILESYSTEM_SD_DMA_BUFFER_ALIGNMENT   PLATFORM_DCACHE_LINE_SIZE  /* SDMMC DMA 中转对齐，复用 Platform 公开的 D-Cache 行大小。 */
 
 /* filesystem_sd_bsp.c */
 #define FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS  30000U  /* 同步 FatFs DiskIO Bridge 等待一次 SDMMC DMA 事件的最大时间，单位为毫秒。 */

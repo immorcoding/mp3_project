@@ -16,12 +16,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/**
- * @brief Cortex-M7 一级数据 Cache 的单条 Cache line 大小，单位为字节。
- * @note  严格对齐 Interface 要求首地址和有效长度均为该值的整数倍，避免 Cache
- *        维护操作扩大到相邻变量所在的 Cache line。
- */
-#define CORTEX_M7_DCACHE_LINE_SIZE  32U
+#include "Adapters/cortex/cache/cortex_m7_dcache_adapter_config.h"
 
 /* 严格对齐：首地址与长度都必须按 Cache line 对齐。 */
 bool CortexM7DCache_Clean_Aligned(const void *buffer, uint32_t byte_count);

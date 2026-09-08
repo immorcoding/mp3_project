@@ -37,7 +37,7 @@ static uint8_t service_gui_main_background_tabs_buffer[
         SERVICE_GUI_MAIN_BACKGROUND_TABS_MAX_WIDTH,
         SERVICE_GUI_MAIN_BACKGROUND_TABS_MAX_HEIGHT)]
     __attribute__((section(".sdram_framebuffer"),
-                   aligned(PLATFORM_DMA_BUFFER_ALIGNMENT)));
+                   aligned(PLATFORM_DCACHE_LINE_SIZE)));
 
 /** @brief 绑定 MusicModeTabs 局部背景的长期 LVGL 图片描述符。 */
 static lv_img_dsc_t service_gui_main_background_tabs_image;
@@ -52,7 +52,7 @@ static uint8_t service_gui_main_background_blurred_wallpaper_buffer[
         PLATFORM_LCD_WIDTH,
         PLATFORM_LCD_HEIGHT)]
     __attribute__((section(".sdram_framebuffer"),
-                   aligned(PLATFORM_DMA_BUFFER_ALIGNMENT)));
+                   aligned(PLATFORM_DCACHE_LINE_SIZE)));
 
 /** @brief 绑定 Main Screen 长期模糊壁纸缓冲的 LVGL 图片描述符。 */
 static lv_img_dsc_t service_gui_main_background_blurred_wallpaper;

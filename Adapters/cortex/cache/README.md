@@ -8,7 +8,7 @@
 - `CortexM7DCache_Invalidate_Aligned()`：严格按完整 Cache line 使 CPU Cache 副本失效；
 - `CortexM7DCache_CleanInvalidate_Aligned()`：严格按完整 Cache line 先提交脏数据，再使副本失效；
 - `CortexM7DCache_Clean_Rounded()`：首地址对齐时向后覆盖至 Cache line 末尾后提交脏数据；
-- `CORTEX_M7_DCACHE_LINE_SIZE`：Cortex-M7 D-Cache line 大小。
+- `CORTEX_M7_DCACHE_LINE_SIZE`：写在 `cortex_m7_dcache_adapter_config.h`。Platform 只包含该 config 并发布 `PLATFORM_DCACHE_LINE_SIZE`；Service 对齐缓冲用 Platform 宏。需要 Clean/Invalidate 时才包含 `cortex_m7_dcache_adapter.h`。
 
 ## 编译期依赖
 

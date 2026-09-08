@@ -724,7 +724,7 @@ Tools/package_maker/
 
 下一版计划增加（尚未入包、未定 ResourceID / 像素规格）：
 
-- IMAGE：Now Playing 唱片底图。由 PC 打包器写入 Pack 并烧录；GUI 运行时绑到 `MusicVinylDisc`，不把该 PNG 编进 SquareLine 导出的内部 Flash。假封面与真 ID3 封面不在本条。
+- IMAGE：Now Playing 唱片底图。由 PC 打包器写入 Pack 并烧录；GUI 运行时绑到 `MusicPlayerVinylImage`，不把该 PNG 编进 SquareLine 导出的内部 Flash。假封面与真 ID3 封面不在本条。
 
 首版不实现：
 

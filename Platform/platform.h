@@ -8,7 +8,9 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-#define PLATFORM_DMA_BUFFER_ALIGNMENT  32U /* Cortex-M7 D-Cache line；CPU 与 DMA 共享缓冲应对齐。 */
+#include "Adapters/cortex/cache/cortex_m7_dcache_adapter_config.h"
+
+#define PLATFORM_DCACHE_LINE_SIZE  CORTEX_M7_DCACHE_LINE_SIZE  /* 对上发布的 D-Cache 行；与 Adapter config 同一份，不含 Cache 函数。 */
 
 /**
  * @brief Platform 层函数使用的统一状态码。

@@ -37,12 +37,12 @@
 static lv_color_t service_gui_draw_buffer_1[
     PLATFORM_LCD_WIDTH * SERVICE_GUI_DRAW_BUFFER_LINES]
     __attribute__((section(".sdram_framebuffer"),
-                   aligned(PLATFORM_DMA_BUFFER_ALIGNMENT)));
+                   aligned(PLATFORM_DCACHE_LINE_SIZE)));
 
 static lv_color_t service_gui_draw_buffer_2[
     PLATFORM_LCD_WIDTH * SERVICE_GUI_DRAW_BUFFER_LINES]
     __attribute__((section(".sdram_framebuffer"),
-                   aligned(PLATFORM_DMA_BUFFER_ALIGNMENT)));
+                   aligned(PLATFORM_DCACHE_LINE_SIZE)));
 
 static lv_disp_draw_buf_t service_gui_draw_buffer;
 static lv_disp_drv_t service_gui_display_driver;

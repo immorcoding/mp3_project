@@ -82,6 +82,14 @@ $guiServiceImpact = Get-HarnessImpact -ChangedPath @('Service/gui/gui_service.c'
 Assert-HarnessSequence -Expected @('gui_task', 'gui_theme') -Actual $guiServiceImpact.HostModules `
     -Message 'GUI Service 公开输入接缝变化必须选择 GUI Task 与主题主机测试'
 
+$canvasImpact = Get-HarnessImpact -ChangedPath @('Service/gui/canvas/gui_service_canvas_compositor.c')
+Assert-HarnessSequence -Expected @('gui_canvas') -Actual $canvasImpact.HostModules `
+    -Message 'Canvas 合成变化必须选择 GUI Canvas 主机测试'
+
+$vinylImpact = Get-HarnessImpact -ChangedPath @('Service/gui/main/vinyl/gui_service_main_vinyl.c')
+Assert-HarnessSequence -Expected @('gui_canvas') -Actual $vinylImpact.HostModules `
+    -Message '假唱盘绑定变化必须选择 GUI Canvas 主机测试'
+
 $backgroundImpact = Get-HarnessImpact -ChangedPath @('Service/gui/main/background/gui_service_main_background.c')
 Assert-HarnessSequence -Expected @('gui_theme') -Actual $backgroundImpact.HostModules `
     -Message 'Main 毛玻璃开关变化必须选择 GUI 主题主机测试'
@@ -91,12 +99,12 @@ Assert-HarnessSequence -Expected @('storage_catalog') -Actual $catalogImpact.Hos
     -Message '播放列表游标变化必须选择 Catalog 主机测试'
 
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_task', 'gui_theme', 'resource_pack', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'resource_pack', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
     -Message 'Harness 变化必须回退全部主机测试'
 Assert-HarnessEqual -Expected $true -Actual $harnessImpact.RequiresAllHostTests -Message 'Harness 变化应标记全部测试'
 
 $unknownImpact = Get-HarnessImpact -ChangedPath @('Service/playback/player.c')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_task', 'gui_theme', 'resource_pack', 'storage_catalog', 'w25qxx') -Actual $unknownImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'resource_pack', 'storage_catalog', 'w25qxx') -Actual $unknownImpact.HostModules `
     -Message '未知生产路径不得以零测试通过'
 Assert-HarnessSequence -Expected @('Service/playback/player.c') -Actual $unknownImpact.UnknownPaths `
     -Message '应保留触发保守回退的路径证据'

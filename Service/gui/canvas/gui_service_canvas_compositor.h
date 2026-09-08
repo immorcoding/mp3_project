@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    gui_service_canvas_compositor.h
-  * @brief   GUI Service 私有局部毛玻璃合成 Interface。
+  * @brief   GUI Service 私有裁剪与合成 Interface。
   ******************************************************************************
   */
 
@@ -52,5 +52,14 @@ Service_StatusTypeDef service_gui_canvas_compose_blurred_regions(
     uint8_t *composite_buffer,
     uint32_t composite_buffer_size,
     lv_img_dsc_t *composite_image);
+
+Service_StatusTypeDef service_gui_canvas_compose_solid_circles(
+    uint16_t diameter,
+    uint32_t disc_rgb,
+    uint16_t cover_diameter,
+    uint32_t cover_rgb,
+    uint8_t *buffer,
+    uint32_t buffer_size,
+    lv_img_dsc_t *image);
 
 #endif /* GUI_SERVICE_CANVAS_COMPOSITOR_H */

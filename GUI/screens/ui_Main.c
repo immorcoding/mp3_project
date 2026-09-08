@@ -19,6 +19,7 @@ lv_obj_t * ui_MainPageContainer = NULL;
 lv_obj_t * ui_MusicPageContainer = NULL;
 lv_obj_t * ui_MusicModeTabs = NULL;
 lv_obj_t * ui_NowPlayingTab = NULL;
+lv_obj_t * ui_MusicPlayerVinylImage = NULL;
 lv_obj_t * ui_MusicPlayerControlContainer = NULL;
 lv_obj_t * ui_MusicPlayerTimeLabel = NULL;
 lv_obj_t * ui_MusicPlayingSlider = NULL;
@@ -246,6 +247,15 @@ void ui_Main_screen_init(void)
 
     lv_obj_set_style_bg_color(ui_NowPlayingTab, lv_color_hex(0xFFFFFF), LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_NowPlayingTab, 0, LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
+
+    ui_MusicPlayerVinylImage = lv_img_create(ui_NowPlayingTab);
+    lv_obj_set_width(ui_MusicPlayerVinylImage, 144);
+    lv_obj_set_height(ui_MusicPlayerVinylImage, 144);
+    lv_obj_set_x(ui_MusicPlayerVinylImage, 0);
+    lv_obj_set_y(ui_MusicPlayerVinylImage, 15);
+    lv_obj_set_align(ui_MusicPlayerVinylImage, LV_ALIGN_TOP_MID);
+    lv_obj_add_flag(ui_MusicPlayerVinylImage, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_MusicPlayerVinylImage, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
     ui_MusicPlayerControlContainer = lv_obj_create(ui_NowPlayingTab);
     lv_obj_remove_style_all(ui_MusicPlayerControlContainer);
@@ -566,6 +576,7 @@ void ui_Main_screen_destroy(void)
     ui_MusicPageContainer = NULL;
     ui_MusicModeTabs = NULL;
     ui_NowPlayingTab = NULL;
+    ui_MusicPlayerVinylImage = NULL;
     ui_MusicPlayerControlContainer = NULL;
     ui_MusicPlayerTimeLabel = NULL;
     ui_MusicPlayingSlider = NULL;

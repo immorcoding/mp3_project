@@ -10,13 +10,21 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+
 #include "Service/service.h"
+#include "Platform/platform.h"
+#include "Platform/lcd/platform_lcd.h"
 
 #define SERVICE_GUI_QUEUE_NO_CURRENT  0xFFFFU  /* 无有效播放游标时 QueueApply 的 current_index。 */
 
 #define SERVICE_GUI_THEME_DEFAULT   0U  /* 原外观：五色等于占位 hex，开壁纸、开 Music 毛玻璃。 */
 #define SERVICE_GUI_THEME_SOLID     1U  /* 近黑纯色：关壁纸、关 Music 毛玻璃。 */
 #define SERVICE_GUI_THEME_STARTUP   SERVICE_GUI_THEME_SOLID  /* 上电采用的外观。 */
+
+#define SERVICE_GUI_WIDTH           PLATFORM_LCD_WIDTH  /* 当前产品 LCD 可见宽度，单位为像素。 */
+#define SERVICE_GUI_HEIGHT          PLATFORM_LCD_HEIGHT  /* 当前产品 LCD 可见高度，单位为像素。 */
+
+#define SERVICE_GUI_MUSIC_VINYL_DIAMETER   144U  /* 须与 MusicPlayerVinylImage 宽高一致，单位为像素。 */
 
 typedef enum
 {

@@ -29,7 +29,7 @@
 
 ## 资源与运行时路径
 
-两块完整 RGB565 绘制缓冲由本 Module 静态持有，并通过 `.sdram_framebuffer` 放入外部 SDRAM。缓冲首地址按 `PLATFORM_DMA_BUFFER_ALIGNMENT` 对齐；SPI DMA 发起前的 D-Cache Clean 仍由下层 LCD Adapter 负责。
+两块完整 RGB565 绘制缓冲由本 Module 静态持有，并通过 `.sdram_framebuffer` 放入外部 SDRAM。缓冲首地址按 `PLATFORM_DCACHE_LINE_SIZE` 对齐；SPI DMA 发起前的 D-Cache Clean 仍由下层 LCD Adapter 负责。
 
 ```text
 GUI Task
@@ -84,11 +84,13 @@ Service/gui/
 │  ├─ pager/                         循环分页、吸附、重排与圆点动画
 │  ├─ queue/                         按 Length 用范本构造生成 Queue 行
 │  ├─ transport/                     Now Playing 三键、进度条假 seek 与 PLAY/PAUSE
+│  ├─ vinyl/                         假唱盘第一帧绑到 MusicPlayerVinylImage
 │  ├─ background/                    壁纸模糊、局部裁剪与 Tabview 兼容
 │  └─ README.md
 └─ canvas/                           可复用的 Canvas 离屏处理
    ├─ gui_service_canvas.c / .h
    ├─ gui_service_canvas_compositor.c / .h
+   ├─ gui_service_canvas_config.h
    └─ README.md
 ```
 
@@ -105,15 +107,13 @@ Service/gui/
   前一次 Screen 切换。Boot 直接使用共享 Canvas 工作帧作为背景，故启动期间不得再次
   执行 Canvas 模糊；GUI Service 先调用 Main Module 复制其长期模糊壁纸，再调用本
   Module 占用共享工作帧，MainPager 的滚动更新只读取 Main 自己的副本，不会改写 Boot。
-- `canvas/gui_service_canvas.c`：通用 Canvas Module。它独占可复用的 SDRAM 工作区，接收
-  调用方给定的图片和模糊半径，返回模糊图像描述符；目前被 Boot 全屏模糊与 Main 局部毛玻璃
-  依次复用，后续也可用于壁纸更新和 Settings 局部毛玻璃生成。其隐藏 Canvas 对象挂在 display
-  top layer，因而不随短生命周期的 Boot Screen 销毁。`gui_service_canvas_compositor.c` 在调用方提供的长期
-  缓冲中执行清晰/模糊帧的矩形、圆角矩形和圆形区域合成，也提供严格或带透明越界填充的连续
-  图片裁剪；Canvas 不拥有页面级背景。
+- `canvas/gui_service_canvas.c`：通用 Canvas Module。它独占可复用的全屏 SDRAM 模糊工作区，另持有
+  Now Playing 假唱盘独立缓冲。模糊接收调用方给定的图片和半径；假唱盘由 compositor 写入纯色圆。
+  隐藏 Canvas 对象挂在 display top layer，不随 Boot Screen 销毁。`gui_service_canvas_compositor.c`
+  提供裁剪、毛玻璃区域合成和纯色圆合成；Canvas 不把图片绑到 SquareLine 对象。
 - `main/gui_service_main.c`：Main Screen 的私有编排入口。它先调用 Pager Module 解析布局、
   定位 MusicPage 至中间物理槽位并绑定循环分页，再调用 Queue 隐藏范本，再绑定 Transport
-  三键与进度条，最后调用 Background Module；Solid 下 Background 跳过毛玻璃。入口本身不持有 UI
+  三键与进度条，再绑假唱盘第一帧，最后调用 Background Module；Solid 下 Background 跳过毛玻璃。入口本身不持有 UI
   状态或离屏图像。
 - `main/pager/`：只持有三张 Main Page 的物理槽位、程序化吸附状态和逻辑圆点状态。它监听
   `MainPageContainer` 的 `LV_EVENT_SCROLL_END`，以 50% 阈值吸附至相邻槽位，并在两端轮换既有
@@ -125,6 +125,7 @@ Service/gui/
   不包含 `storage_listbuffer.h` 或 `storage_playback_cursor.h`。
 - `main/transport/`：给 Now Playing 三键挂 `CLICKED`、给进度条挂 `RELEASED`，`post` 上一首/播放暂停/下一首/假 seek；
   `TransportApply` 只改播放符号，`ProgressApply` 改进度条（拖动中不写回）。不包含游标头，也不写 SquareLine 事件。
+- `main/vinyl/`：把 Canvas 假唱盘第一帧绑到 `MusicPlayerVinylImage`。本刀不旋转。
 - `main/background/`：只持有 Main 的长期模糊壁纸和 `MusicModeTabs` SDRAM 裁剪背景。它使
   SquareLine 未公开的 Tabview 内部 Content 透明、禁用其横滑，并监听 `MainPageContainer` 的
   `LV_EVENT_SCROLL`，按目标控件当前坐标重裁剪背景。仅 Default 才生成模糊与裁剪图；Solid 不算

@@ -4,19 +4,24 @@
   * @brief   GUI Service 的共享 Canvas 离屏处理实现。
   *
   * @details
- *          本 Module 持有唯一的全屏 Canvas 工作区。它将一张全屏 LVGL 真彩
- *          图像复制至外部 SDRAM 后执行横向、纵向软件模糊，并将 Canvas 的
- *          图像描述符返回给调用方。该描述符指向可复用工作区：短生命周期的
- *          Boot 可直接绑定为运行时背景；Main 等跨事件使用者必须复制像素后再
- *          长期绑定，不能把共享工作帧当作页面级资源。
+ *          本 Module 持有全屏模糊工作区和一块独立的 Now Playing 假唱盘缓冲。
+ *          模糊路径把全屏真彩图复制到 SDRAM 后做横/纵软件模糊；描述符指向可复用
+ *          工作区，Boot 可直接绑定，Main 必须先复制。假唱盘路径把纯色圆写入独立
+ *          缓冲，可长期绑到 SquareLine Image，且不会被模糊覆写。
   ******************************************************************************
   */
 
 #include "Service/gui/canvas/gui_service_canvas.h"
+#include "Service/gui/canvas/gui_service_canvas_compositor.h"
+#include "Service/gui/canvas/gui_service_canvas_config.h"
+#include "Service/gui/gui_service.h"
 
 #include <stdint.h>
 
-#include "Platform/lcd/platform_lcd.h"
+#if SERVICE_GUI_MUSIC_VINYL_COVER_DIAMETER > SERVICE_GUI_MUSIC_VINYL_DIAMETER
+#error "假封面直径必须小于或等于唱盘直径。"
+#endif
+
 
 /**
  * @brief GUI 离屏视觉效果的可复用 Canvas 像素工作区。
@@ -26,10 +31,25 @@
  */
 static uint8_t service_gui_effect_canvas_buffer[
     LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(
-        PLATFORM_LCD_WIDTH,
-        PLATFORM_LCD_HEIGHT)]
+        SERVICE_GUI_WIDTH,
+        SERVICE_GUI_HEIGHT)]
     __attribute__((section(".sdram_framebuffer"),
-                   aligned(PLATFORM_DMA_BUFFER_ALIGNMENT)));
+                   aligned(PLATFORM_DCACHE_LINE_SIZE)));
+
+/**
+ * @brief Now Playing 假唱盘合成像素缓冲。
+ * @note  按唱盘直径分配 TRUE_COLOR_ALPHA，位于外部 SDRAM。与全屏模糊工作区独立；
+ *        绑定到 Image 后必须保持有效，不得被模糊路径覆写。
+ */
+static uint8_t service_gui_music_vinyl_canvas_buffer[
+    LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(
+        SERVICE_GUI_MUSIC_VINYL_DIAMETER,
+        SERVICE_GUI_MUSIC_VINYL_DIAMETER)]
+    __attribute__((section(".sdram_framebuffer"),
+                   aligned(PLATFORM_DCACHE_LINE_SIZE)));
+
+/** @brief 绑定假唱盘缓冲的图片描述符。 */
+static lv_img_dsc_t service_gui_music_vinyl_image;
 
 /**
  * @brief 与共享工作区绑定的运行时 Canvas 对象。
@@ -131,6 +151,44 @@ Service_StatusTypeDef service_gui_canvas_blur_image(
 
     *blurred_image = &service_gui_effect_blurred_image;
     lv_img_cache_invalidate_src(*blurred_image);
+
+    return SERVICE_OK;
+}
+
+/**
+ * @brief 用两块纯色圆合成假唱盘，并返回绑定内部缓冲的描述符。
+ * @param[out] image 返回假唱盘图片描述符。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_INVALID_PARAM image 为空，或合成参数不满足约束。
+ * @note 输出像素指向本 Module 的唱盘缓冲，可长期绑到 SquareLine Image。
+ *       不读 ID3，不导入 PNG。
+ */
+Service_StatusTypeDef service_gui_canvas_compose_music_vinyl_fake(
+    lv_img_dsc_t **image)
+{
+    Service_StatusTypeDef status;
+
+    if (image == NULL)
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    status = service_gui_canvas_compose_solid_circles(
+        SERVICE_GUI_MUSIC_VINYL_DIAMETER,
+        SERVICE_GUI_MUSIC_VINYL_FAKE_DISC_RGB,
+        SERVICE_GUI_MUSIC_VINYL_COVER_DIAMETER,
+        SERVICE_GUI_MUSIC_VINYL_FAKE_COVER_RGB,
+        service_gui_music_vinyl_canvas_buffer,
+        (uint32_t)sizeof(service_gui_music_vinyl_canvas_buffer),
+        &service_gui_music_vinyl_image);
+
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
+
+    *image = &service_gui_music_vinyl_image;
+    lv_img_cache_invalidate_src(*image);
 
     return SERVICE_OK;
 }

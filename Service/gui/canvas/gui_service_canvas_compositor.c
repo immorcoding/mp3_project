@@ -534,3 +534,159 @@ Service_StatusTypeDef service_gui_canvas_compose_blurred_regions(
 
     return SERVICE_OK;
 }
+
+/**
+ * @brief 把 0xRRGGBB 收成 RGB565。
+ * @param[in] rgb 24-bit RGB。
+ * @return RGB565。
+ */
+static uint16_t service_gui_canvas_rgb888_to_rgb565(uint32_t rgb)
+{
+    uint32_t red = (rgb >> 16) & 0xFFU;
+    uint32_t green = (rgb >> 8) & 0xFFU;
+    uint32_t blue = rgb & 0xFFU;
+
+    return (uint16_t)(((red & 0xF8U) << 8) | ((green & 0xFCU) << 3) | (blue >> 3));
+}
+
+/**
+ * @brief 写入一个 TRUE_COLOR_ALPHA 像素。
+ * @param[in,out] buffer 连续像素缓冲。
+ * @param[in] width 图片宽度。
+ * @param[in] x 列。
+ * @param[in] y 行。
+ * @param[in] rgb565 RGB565。
+ * @param[in] alpha Alpha。
+ */
+static void service_gui_canvas_write_true_color_alpha_pixel(
+    uint8_t *buffer,
+    uint32_t width,
+    int32_t x,
+    int32_t y,
+    uint16_t rgb565,
+    uint8_t alpha)
+{
+    uint32_t offset =
+        (((uint32_t)y * width) + (uint32_t)x) * 3U;
+
+    buffer[offset] = (uint8_t)(rgb565 & 0xFFU);
+    buffer[offset + 1U] = (uint8_t)((rgb565 >> 8) & 0xFFU);
+    buffer[offset + 2U] = alpha;
+}
+
+/**
+ * @brief 在正方形缓冲里合成唱盘纯色圆，并可叠中心假封面圆。
+ * @param[in] diameter 输出正方形边长，也是唱盘直径，单位为像素。
+ * @param[in] disc_rgb 唱盘 0xRRGGBB。
+ * @param[in] cover_diameter 中心封面直径；0 表示不叠封面。
+ * @param[in] cover_rgb 封面 0xRRGGBB。
+ * @param[out] buffer 调用方持有的输出像素缓冲。
+ * @param[in] buffer_size 输出缓冲字节数。
+ * @param[out] image 绑定输出缓冲的 TRUE_COLOR_ALPHA 描述符。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_INVALID_PARAM 尺寸、封面直径或缓冲不满足约束。
+ * @note 圆外像素 Alpha 为 0。失败时不改 image。
+ */
+Service_StatusTypeDef service_gui_canvas_compose_solid_circles(
+    uint16_t diameter,
+    uint32_t disc_rgb,
+    uint16_t cover_diameter,
+    uint32_t cover_rgb,
+    uint8_t *buffer,
+    uint32_t buffer_size,
+    lv_img_dsc_t *image)
+{
+    uint32_t required_bytes;
+    uint16_t disc_rgb565;
+    uint16_t cover_rgb565;
+    Service_GUI_CanvasBlurRegionTypeDef disc_region;
+    Service_GUI_CanvasBlurRegionTypeDef cover_region;
+    int32_t y;
+    uint16_t cover_margin;
+
+    if ((diameter == 0U) ||
+        (cover_diameter > diameter) ||
+        (buffer == NULL) ||
+        (image == NULL))
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    required_bytes = (uint32_t)diameter * (uint32_t)diameter * 3U;
+
+    if (buffer_size < required_bytes)
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    disc_rgb565 = service_gui_canvas_rgb888_to_rgb565(disc_rgb);
+    cover_rgb565 = service_gui_canvas_rgb888_to_rgb565(cover_rgb);
+    cover_margin = (uint16_t)((diameter - cover_diameter) / 2U);
+
+    disc_region.Area.x1 = 0;
+    disc_region.Area.y1 = 0;
+    disc_region.Area.x2 = (lv_coord_t)(diameter - 1U);
+    disc_region.Area.y2 = (lv_coord_t)(diameter - 1U);
+    disc_region.Radius = 0U;
+    disc_region.Shape = SERVICE_GUI_CANVAS_REGION_CIRCLE;
+
+    cover_region.Area.x1 = (lv_coord_t)cover_margin;
+    cover_region.Area.y1 = (lv_coord_t)cover_margin;
+    cover_region.Area.x2 =
+        (lv_coord_t)((uint16_t)(cover_margin + cover_diameter) - 1U);
+    cover_region.Area.y2 =
+        (lv_coord_t)((uint16_t)(cover_margin + cover_diameter) - 1U);
+    cover_region.Radius = 0U;
+    cover_region.Shape = SERVICE_GUI_CANVAS_REGION_CIRCLE;
+
+    for (y = 0; y < (int32_t)diameter; y++)
+    {
+        int32_t x;
+
+        for (x = 0; x < (int32_t)diameter; x++)
+        {
+            if (!service_gui_canvas_is_inside_circle(&disc_region, x, y))
+            {
+                service_gui_canvas_write_true_color_alpha_pixel(
+                    buffer,
+                    (uint32_t)diameter,
+                    x,
+                    y,
+                    0U,
+                    0U);
+                continue;
+            }
+
+            if ((cover_diameter != 0U) &&
+                service_gui_canvas_is_inside_circle(&cover_region, x, y))
+            {
+                service_gui_canvas_write_true_color_alpha_pixel(
+                    buffer,
+                    (uint32_t)diameter,
+                    x,
+                    y,
+                    cover_rgb565,
+                    255U);
+            }
+            else
+            {
+                service_gui_canvas_write_true_color_alpha_pixel(
+                    buffer,
+                    (uint32_t)diameter,
+                    x,
+                    y,
+                    disc_rgb565,
+                    255U);
+            }
+        }
+    }
+
+    memset(image, 0, sizeof(*image));
+    image->header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
+    image->header.w = diameter;
+    image->header.h = diameter;
+    image->data_size = required_bytes;
+    image->data = buffer;
+
+    return SERVICE_OK;
+}

@@ -54,8 +54,7 @@ Lock Screen
           │  ├─ MusicPageContainer
           │  │  └─ MusicModeTabs
           │  │     ├─ NowPlayingTab
-          │  │     │  ├─ MusicVinylDisc（待导出，见 10.5.4）
-          │  │     │  │  └─ MusicAlbumCover
+          │  │     │  ├─ MusicPlayerVinylImage（Canvas 假唱盘第一帧，见 10.5.4）
           │  │     │  └─ MusicPlayerControlContainer
           │  │     │     ├─ MusicPlayerTimeLabel
           │  │     │     ├─ MusicPlayingSlider
@@ -147,7 +146,7 @@ MusicModeTabs          铺满 Music 页（MainPage ~85%）
 底部圆点               屏幕高度 ~10%，Main 固定
 ```
 
-`Now Playing` 内容区中间放圆形唱片（playing 旋转、paused 停止），中心叠假封面；无当前曲不拼封面、只转唱片。曲名和歌手本阶段仍可不做。当前导出已把时间 Label、进度条与三键放进该 Tab 底部。`Queue` 显示当前及后续曲目的简化列表。Queue 只绑定 `storage_listbuffer` 单槽窗口：SquareLine 只保留一份行范本，运行时按 READY 后的 `Length` 复制行（上限 `STORAGE_LISTBUFFER_MAX_ENTRIES`，现为 12）。完整播放列表由 Storage 持有，不把整表指针交给 GUI。行样式与对象层级见第 10.5.3 节。`Library` 显示两列专辑封面网格；首版每张专辑都使用固定标题、歌手和占位封面。产品曲库首版只来自 SD `Music/`，不展示空的 Flash 分区。
+`Now Playing` 内容区中间是 `MusicPlayerVinylImage`：Canvas 用两块纯色圆合成假唱盘（深灰盘 + 青色中心封面）并显示第一帧。旋转尚未接线。无 ID3、无导入 PNG。曲名和歌手本阶段仍可不做。当前导出已把时间 Label、进度条与三键放进该 Tab 底部。`Queue` 显示当前及后续曲目的简化列表。Queue 只绑定 `storage_listbuffer` 单槽窗口：SquareLine 只保留一份行范本，运行时按 READY 后的 `Length` 复制行（上限 `STORAGE_LISTBUFFER_MAX_ENTRIES`，现为 12）。完整播放列表由 Storage 持有，不把整表指针交给 GUI。行样式与对象层级见第 10.5.3 节。`Library` 显示两列专辑封面网格；首版每张专辑都使用固定标题、歌手和占位封面。产品曲库首版只来自 SD `Music/`，不展示空的 Flash 分区。
 
 ### 6.2 专辑详情
 
@@ -435,8 +434,7 @@ Main
 │  ├─ MusicPageContainer
 │  │  └─ MusicModeTabs      [ Playing ] [ Queue ] [ Library ]
 │  │     ├─ NowPlayingTab
-│  │     │  ├─ MusicVinylDisc（待导出，见 10.5.4）
-│  │     │  │  └─ MusicAlbumCover
+│  │     │  ├─ MusicPlayerVinylImage（Canvas 假唱盘第一帧，见 10.5.4）
 │  │     │  └─ MusicPlayerControlContainer
 │  │     │     ├─ MusicPlayerTimeLabel
 │  │     │     ├─ MusicPlayingSlider
@@ -555,36 +553,30 @@ READY 时 GUI Task 的 `music/` 按 `Length` 把 `Buffer[i]` 原样交给 `Servi
 
 `QueueTab` 在 SquareLine 模拟器里仍可能看到 Tabview 默认白底；真机由第 10.5.2 节的 Content 透明与毛玻璃处理。行底用浅白薄片，不要再做成 `#13223D` 实心卡。
 
-#### 10.5.4 Now Playing 唱片与假封面（待 SquareLine 导出）
+#### 10.5.4 Now Playing 唱片与假封面（假合成第一帧已接线）
 
-在 `NowPlayingTab` 中间、控制区之上放圆形唱片；`playing` 时旋转，`paused` 时停在当前角度。封面叠在唱片中心；无当前曲不拼封面，只转（或停）唱片。本阶段封面用固定假图，不读 ID3、不解码。不在 SquareLine 添加事件。导出前用本节对象名，导出后再接线。
+`NowPlayingTab` 已导出 144×144 Image `MusicPlayerVinylImage`（`ALIGN_TOP_MID`，`y = 15`），无事件、无 PNG。运行时 `main/vinyl/` 调用 Canvas 把深灰唱盘圆与青色中心封面圆合成进独立 SDRAM 缓冲，再 `lv_img_set_src` 到该 Image，只显示第一帧。圆外 Alpha 为 0。不读 ID3。旋转未做。
 
-**唱片底图不长期编进 `GUI/` / 内部 Flash。** 下一版由 PC 打包进 Resource Pack 再烧录（IMAGE，走现有 Pack 加载，不经 FatFs）。本版 SquareLine 只用圆形 Container 或临时占位，不要导入大唱片 PNG。假封面仍可 SquareLine 占位。规格与 ResourceID 在下一次改 Pack 时写入 [resource_pack_design.md](resource_pack_design.md)，本刀不定像素。
+**唱片底图不长期编进 `GUI/` / 内部 Flash。** 下一版由 PC 打包进 Resource Pack 再烧录（IMAGE，走现有 Pack 加载，不经 FatFs）。假封面目前是合成纯色，不是子控件。规格与 ResourceID 在下一次改 Pack 时写入 [resource_pack_design.md](resource_pack_design.md)。
 
-建议层级：
+当前层级：
 
 ```text
 NowPlayingTab
- ├─ MusicVinylDisc          圆形唱片；父对象承担旋转
- │   └─ MusicAlbumCover     更小的圆形假封面，居中
+ ├─ MusicPlayerVinylImage   Canvas 假唱盘；以后在此对象上旋转
  └─ MusicPlayerControlContainer
 ```
 
-SquareLine 步骤：
+直径宏 `SERVICE_GUI_MUSIC_VINYL_DIAMETER` 必须与导出 Image 宽高一致。SquareLine 不要加事件，不要导入大唱片 PNG。
 
-1. 在 `NowPlayingTab` 新建圆形 Container `MusicVinylDisc`（不要导入唱片底图 PNG）：水平居中，放在控制区上方剩余空间；关掉 Clickable / Scrollable，避免抢走 Slider 与三键。底图下一版从 Resource Pack 绑到该对象。
-2. 以唱片为父对象新建 Image `MusicAlbumCover`：居中、更小、圆角拉满成圆；本阶段可导入一张小的固定假封面。关掉 Clickable。
-3. 唱片与封面都不要加事件。控制区、TimeLabel、Slider、三键保持现状。
-4. 导出 `GUI/`。助手不手改生成代码。
-
-运行时（导出后，不在本刀）：`TransportApply(playing)` 时对 `MusicVinylDisc` 开/停无限旋转动画；封面是子对象，随父对象一起转。有当前曲则显示 `MusicAlbumCover`；CLEAR / 空表则 Hidden 封面，不合成。假封面始终是同一张占位图。不新增公开 Service Interface，除非接线时必须把 Apply 从 transport 拆开。
+以后：`playing` 时旋转、`paused` 时停在当前角；有当前曲才把封面圆拼进缓冲，CLEAR/空表只拼唱盘。不把旋转塞进 `transport/`。
 
 ## 11. 原型验收标准
 
 - 用户可在三张 MainPageContainer 内容页间稳定循环左右切换，且 StatusBar 保持固定；
 - Music 内部标签只能通过点击顶部标签切换；在其内容区左右滑动时，手势只交给 MainPageContainer；
 - MusicPlayingSlider 与三个静态控制按钮的默认、按下视觉状态正确；`MusicPlayerTimeLabel` 在 Slider 上方可见；
-- 唱片导出后：playing 旋转、paused 停止；有当前曲显示中心假封面，无当前曲只显示唱片；
+- 唱片：假合成第一帧可见（深灰盘 + 青色中心）；旋转尚未接线；
 - BooksPage、SettingsPage 当前保持空白占位，不误表现为已实现的阅读器、专辑详情或设置子页；
 - 后续新增 Album Detail、Mini Player、Reader、MainPagerDots 或 Settings 子页前，先同步本文档再在 SquareLine 中实现；
 - 首版无需真实歌曲、书籍、文件系统或背光硬件即可完整演示交互流程。

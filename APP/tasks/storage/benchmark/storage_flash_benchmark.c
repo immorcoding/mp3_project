@@ -36,7 +36,7 @@
  *        Cache，因而这块缓冲区在同一时间只能服务一条 Flash 读取。
  */
 static uint8_t storage_flash_benchmark_buffer[STORAGE_FLASH_BENCHMARK_READ_CHUNK_BYTES]
-    __attribute__((section(".flash_write_buffer"), aligned(PLATFORM_DMA_BUFFER_ALIGNMENT)));
+    __attribute__((section(".flash_write_buffer"), aligned(PLATFORM_DCACHE_LINE_SIZE)));
 
 /** @brief 本 Module 的稳定日志标签。 */
 static const char storage_flash_benchmark_log_tag[] = "FLASH";

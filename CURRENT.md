@@ -12,10 +12,8 @@
 ## 本场交接
 
 - 分支：`main`。禁止手改 `GUI/`。SquareLine 不加事件。不建 `Service/playback/`。
-- Slider 假命令已收口：`transport/` `RELEASED` → 单槽 `MUSIC_SEEK` → `gui_music_step` → `ProgressApply`。拖动不改 playing。切歌 / CLEAR 把进度写回 0；无当前曲的 SEEK 忽略并写回已存值。
-- 墙钟假走表已裁（`fake_accum_ms` / `advance_fake` 不进结构体）。自动刷新留在 `gui_music_step` 注释框，等 Playback 用解码器时间对接。
-- 输入仍一个单槽。`param`：QUEUE_SELECT=播放列表下标，SEEK=0..100。
-- 已导出：`MusicPlayerTimeLabel`（Slider 上方，占位 `1:00/3:14`）。控制区高 `34%`，Slider `y=20%`。运行时尚未 Apply。
-- 电量/时间栏、Library、打开文件、真解码/seek、ID3 封面仍不做。助手不代提交。
-- 唱片底图下一版 PC 烧进 Resource Pack，本版 SquareLine 不导入大 PNG。假封面仍可占位。
-- 下场：用户按 10.5.4 导出圆形 `MusicVinylDisc` + 假封面后，再接线旋转与封面显隐。
+- 已导出：`MusicPlayerVinylImage` 144×144。Canvas 纯色圆假合成（盘 `#202020`、封面 `#00B0DE`）写入独立唱盘缓冲，`vinyl/` 绑第一帧。旋转未做。
+- 直径宏 `SERVICE_GUI_MUSIC_VINYL_DIAMETER` 须与 Image 宽高一致。不读 ID3、不导入 PNG。
+- Slider 假 SEEK、切歌/CLEAR 归零仍有效。TimeLabel 仍不接线。
+- 电量/时间栏、Library、真解码/seek、ID3 封面仍不做。助手不代提交。
+- 下场：板上确认 Now Playing 假唱盘第一帧；再接线旋转。
