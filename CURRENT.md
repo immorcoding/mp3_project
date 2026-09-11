@@ -4,16 +4,16 @@
 
 ## 进度
 
-- 主线：真底图叠假封面已接线，未上板；旋转不做。
-- 活动 slug：`.scratch/vinyl-id4/`。范围见 `freeze.md`；板上状态见 `board.md`。
-- 阻塞：`./scripts/verify.ps1` FULL 被工作树 SquareLine 脏文件挡住；ID 4 显示待上板。
-- verify：分层 include、固件 Debug/Release、全部 host 通过。打包器 6/6 仍为提交 `9087794`。FULL 入口未通过。
+- 主线：真底图叠假封面已上板通过；下一刀旋转，不进 `transport/`。
+- 活动 slug：`.scratch/vinyl-id4/`（本刀已收）。范围见 `freeze.md`；板上状态见 `board.md`。
+- 阻塞：无。
+- verify：`./scripts/verify.ps1` FULL 为 `PASS_HOST_ONLY`。打包器 6/6 仍为提交 `9087794`。板上 ID 4 已确认。
 - 按需查词：**资源包**。
 
 ## 本场交接
 
-- 分支：`main`，与 `origin/main` 对齐。助手不代提交。
-- 脏文件：用户 SquareLine 三文件（生成目录，助手不改）。本刀 Resource/Canvas/vinyl 已纳入本提交。
-- 固件已加载 ID 1–4；Canvas 复制 ID 4 底图再叠假封面，`main/vinyl/` `set_src`。Pack v2 已在 NOR。新固件未下板。
-- `./scripts/verify.ps1` FULL 被工作树 SquareLine 脏文件挡住。分层 include、固件 Debug/Release、全部 host 测试已通过。
-- 下一动作：烧录本刀固件，上板看真底图叠假封面，证据记 `board.md`。
+- 分支：`main`，领先 `origin/main` 3 提交。助手不代推送。
+- 脏文件：无。
+- 固件加载 ID 1–4；Canvas 复制 ID 4 底图再叠假封面，`main/vinyl/` `set_src`。Pack v2 在 NOR。用户已烧录并确认显示。
+- FULL：`PASS_HOST_ONLY`。
+- 下一动作：旋转另开 slug，不进 `transport/`。新会话读本索引后写新 `freeze.md`，再点名执行。
