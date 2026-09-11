@@ -4,16 +4,16 @@
 
 ## 进度
 
-- 主线：假唱盘第一帧已上板通过；下一刀换真唱片底图，旋转不做。
+- 主线：真底图叠假封面已接线，未上板；旋转不做。
 - 活动 slug：`.scratch/vinyl-id4/`。范围见 `freeze.md`；板上状态见 `board.md`。
-- 阻塞：无。
-- verify：打包器 `Tools/package_maker/tests/test_rpkc_pack.py` 6/6 PASS（提交 `9087794`）。FULL 自那之后未复跑。
+- 阻塞：`./scripts/verify.ps1` FULL 被工作树 SquareLine 脏文件挡住；ID 4 显示待上板。
+- verify：分层 include、固件 Debug/Release、全部 host 通过。打包器 6/6 仍为提交 `9087794`。FULL 入口未通过。
 - 按需查词：**资源包**。
 
 ## 本场交接
 
-- 分支：`main`，领先 `origin/main` 3 提交。助手不代提交。
-- 脏文件：`AGENTS.md`、`CURRENT.md`、`docs/agents/{domain.md,issue-tracker.md}`、未跟踪 `.scratch/vinyl-id4/{freeze.md,board.md}`；另有用户在改的 `stm32h743zgtx_flash.ld`（生成目录，助手不改）。
-- `.ld` 现状：外部资源去掉 `KEEP`；vinyl 槽为 `. += 0xF300` 并带尺寸 `ASSERT`；cp936/壁纸仍按 section 放入并 `ASSERT`。未提交、未随固件下板。
-- 固件仍只加载 ID 1–3；`canvas/` 仍假圆。Pack v2 已在 NOR，见 `board.md`。
-- 下场第一刀：Resource 加载 ID 4 → Canvas 底图合成叠假封面 → `main/vinyl/` `set_src`。新会话从本索引进 slug，约束以 `freeze.md` 为准。
+- 分支：`main`，与 `origin/main` 对齐。助手不代提交。
+- 脏文件：用户 SquareLine 三文件（生成目录，助手不改）。本刀 Resource/Canvas/vinyl 已纳入本提交。
+- 固件已加载 ID 1–4；Canvas 复制 ID 4 底图再叠假封面，`main/vinyl/` `set_src`。Pack v2 已在 NOR。新固件未下板。
+- `./scripts/verify.ps1` FULL 被工作树 SquareLine 脏文件挡住。分层 include、固件 Debug/Release、全部 host 测试已通过。
+- 下一动作：烧录本刀固件，上板看真底图叠假封面，证据记 `board.md`。

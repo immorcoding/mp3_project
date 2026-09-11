@@ -4,7 +4,7 @@
 > 日期：2026-09-01。
 > 首版范围：实现 Core、BINARY 与 IMAGE；FONT、AUDIO、MODEL、FIRMWARE 先完成协议定义，类型解码器默认关闭。
 > 当前硬件：STM32H743ZG、32 MiB W25Q256、32 MiB SDRAM。
-> 当前资源：CP936 的 `uni2oem`、`oem2uni` 两张表、默认壁纸，以及 Now Playing 唱片底图 IMAGE（PC 烧录进 Pack；不进 SquareLine / 内部 Flash）。固件启动仍只加载 ID 1–3；ID 4 已入包、尚未接线到 `MusicPlayerVinylImage`。
+> 当前资源：CP936 的 `uni2oem`、`oem2uni` 两张表、默认壁纸，以及 Now Playing 唱片底图 IMAGE（PC 烧录进 Pack；不进 SquareLine / 内部 Flash）。固件启动加载 ID 1–4；Canvas 用 ID 4 底图叠假封面后绑到 `MusicPlayerVinylImage`。
 
 ## 1. 目标与边界
 
@@ -19,7 +19,7 @@ RPKC1 是与具体 MCU、Flash 和业务无关的只读资源容器格式。它�
 - Platform Flash 负责 W25Q256 装配和 QSPI 内存映射生命周期。
 - PC 端资源提取和打包继续位于 `Tools/package_maker/`，不属于固件 Component。
 - 首版资源包是不可变完整镜像，不支持设备运行时原地更新单个资源。设备侧整包更新的产品路径已由 [ADR-0015](adr/0015-volume-roles-and-resource-install.md) 约定：SD 上的安装包先完整落入 FTL 暂存并校验，再写入本 Pack 物理区；不得从 SD 流式编程。该路径尚未实现。
-- 生效中的壁纸、模型与 Now Playing 唱片底图只认机内 Pack，不把 SD 或 FTL 上的普通文件当作长期资源源。唱片底图已作为 ResourceID 4 入包，固件尚未加载该 ID。
+- 生效中的壁纸、模型与 Now Playing 唱片底图只认机内 Pack，不把 SD 或 FTL 上的普通文件当作长期资源源。唱片底图作为 ResourceID 4 入包，启动时加载到 SDRAM 唱盘槽。
 - 首版不提供公共透明压缩或加密。对应能力以后通过新协议能力或外层机制增加。
 
 当前旧格式 `RPK1` 是固定三资源的临时格式。RPKC1 实现后必须重新生成并烧录外部资源包；旧包不与 RPKC1 兼容。
@@ -727,7 +727,7 @@ Tools/package_maker/
 - BINARY Metadata V1；
 - IMAGE Metadata V1；
 - 当前四个资源的 JSON、扫描提取和组包；
-- Resource Service 启动期一次性加载 ID 1–3；
+- Resource Service 启动期一次性加载 ID 1–4；
 - Vendor/Product/PackageVersion 日志；
 - SDRAM 目标 CRC 和 Cache Clean。
 
@@ -736,7 +736,7 @@ Tools/package_maker/
 - BINARY ResourceID 1：CP936 `uni2oem`；
 - BINARY ResourceID 2：CP936 `oem2uni`；
 - IMAGE ResourceID 3：默认 240 × 320 LVGL TRUE_COLOR_ALPHA 壁纸；
-- IMAGE ResourceID 4：Now Playing 唱片底图 144 × 144 LVGL TRUE_COLOR_ALPHA。由 PC 打包器写入 Pack 并烧录；不把该 PNG 编进 SquareLine 导出的内部 Flash。固件尚未把 ID 4 拷到 SDRAM 或绑到 `MusicPlayerVinylImage`。假封面与真 ID3 封面不在本条。
+- IMAGE ResourceID 4：Now Playing 唱片底图 144 × 144 LVGL TRUE_COLOR_ALPHA。由 PC 打包器写入 Pack 并烧录；不把该 PNG 编进 SquareLine 导出的内部 Flash。固件把 ID 4 拷到 SDRAM 唱盘槽，Canvas 叠假封面后绑到 `MusicPlayerVinylImage`。真 ID3 封面不在本条。
 
 首版不实现：
 
@@ -774,10 +774,10 @@ FONT、AUDIO、MODEL 和 FIRMWARE 的格式已经在本文定义。以后实际�
 ### 18.3 固件集成
 
 - `Service_Resource_Init()` 只在 Platform SDRAM/Flash 成功后调用。
-- 当前三个链接器符号仍位于 SDRAM NOLOAD 段。
+- 当前四个链接器符号仍位于 SDRAM NOLOAD 段。
 - 复制前核对目标容量，复制后核对 SDRAM CRC。
 - Cache Clean 范围满足 32 B 首地址对齐和归属约束。
-- 任何失败均不得启动使用未初始化 CP936 或壁纸的任务。
+- 任何失败均不得启动使用未初始化 CP936、壁纸或唱盘底图的任务。
 - 初始化结束后不保留或发布 NOR 映射 View。
 
 ### 18.4 烧录

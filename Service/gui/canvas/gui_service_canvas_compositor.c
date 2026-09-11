@@ -9,6 +9,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
 /**
@@ -676,6 +677,125 @@ Service_StatusTypeDef service_gui_canvas_compose_solid_circles(
                     x,
                     y,
                     disc_rgb565,
+                    255U);
+            }
+        }
+    }
+
+    memset(image, 0, sizeof(*image));
+    image->header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
+    image->header.w = diameter;
+    image->header.h = diameter;
+    image->data_size = required_bytes;
+    image->data = buffer;
+
+    return SERVICE_OK;
+}
+
+/**
+ * @brief 判断两段缓冲是否在地址上相交。
+ * @param[in] first 第一段起点。
+ * @param[in] first_size 第一段字节数。
+ * @param[in] second 第二段起点。
+ * @param[in] second_size 第二段字节数。
+ * @return 相交时返回 true。
+ */
+static bool service_gui_canvas_buffers_overlap(
+    const uint8_t *first,
+    uint32_t first_size,
+    const uint8_t *second,
+    uint32_t second_size)
+{
+    const uintptr_t first_start = (uintptr_t)first;
+    const uintptr_t second_start = (uintptr_t)second;
+    const uintptr_t first_end = first_start + (uintptr_t)first_size;
+    const uintptr_t second_end = second_start + (uintptr_t)second_size;
+
+    return (first_start < second_end) && (second_start < first_end);
+}
+
+/**
+ * @brief 把正方形底图复制到调用方缓冲，并可叠中心假封面圆。
+ * @param[in] base_image 唱盘底图，必须是正方形 TRUE_COLOR_ALPHA。
+ * @param[in] cover_diameter 中心封面直径；0 表示不叠封面。
+ * @param[in] cover_rgb 封面 0xRRGGBB。
+ * @param[out] buffer 调用方持有的输出像素缓冲，不得与底图像素重叠。
+ * @param[in] buffer_size 输出缓冲字节数。
+ * @param[out] image 绑定输出缓冲的 TRUE_COLOR_ALPHA 描述符。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_INVALID_PARAM 底图、封面直径、缓冲或重叠不满足约束。
+ * @note 只改封面圆内的像素；圆外（含底图已有的透明角）原样保留。失败时不改 image。
+ */
+Service_StatusTypeDef service_gui_canvas_compose_image_with_cover_circle(
+    const lv_img_dsc_t *base_image,
+    uint16_t cover_diameter,
+    uint32_t cover_rgb,
+    uint8_t *buffer,
+    uint32_t buffer_size,
+    lv_img_dsc_t *image)
+{
+    uint32_t required_bytes;
+    uint16_t diameter;
+    uint16_t cover_rgb565;
+    uint16_t cover_margin;
+    Service_GUI_CanvasBlurRegionTypeDef cover_region;
+    int32_t y;
+
+    if (!service_gui_canvas_is_supported_image(base_image) ||
+        (base_image->header.w != base_image->header.h) ||
+        (cover_diameter > base_image->header.w) ||
+        (buffer == NULL) ||
+        (image == NULL))
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    diameter = (uint16_t)base_image->header.w;
+    required_bytes = (uint32_t)diameter * (uint32_t)diameter * 3U;
+
+    if ((buffer_size < required_bytes) ||
+        (base_image->data_size != required_bytes) ||
+        service_gui_canvas_buffers_overlap(
+            buffer,
+            required_bytes,
+            base_image->data,
+            base_image->data_size))
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    memcpy(buffer, base_image->data, required_bytes);
+
+    if (cover_diameter != 0U)
+    {
+        cover_rgb565 = service_gui_canvas_rgb888_to_rgb565(cover_rgb);
+        cover_margin = (uint16_t)((diameter - cover_diameter) / 2U);
+        cover_region.Area.x1 = (lv_coord_t)cover_margin;
+        cover_region.Area.y1 = (lv_coord_t)cover_margin;
+        cover_region.Area.x2 =
+            (lv_coord_t)((uint16_t)(cover_margin + cover_diameter) - 1U);
+        cover_region.Area.y2 =
+            (lv_coord_t)((uint16_t)(cover_margin + cover_diameter) - 1U);
+        cover_region.Radius = 0U;
+        cover_region.Shape = SERVICE_GUI_CANVAS_REGION_CIRCLE;
+
+        for (y = cover_region.Area.y1; y <= cover_region.Area.y2; y++)
+        {
+            int32_t x;
+
+            for (x = cover_region.Area.x1; x <= cover_region.Area.x2; x++)
+            {
+                if (!service_gui_canvas_is_inside_circle(&cover_region, x, y))
+                {
+                    continue;
+                }
+
+                service_gui_canvas_write_true_color_alpha_pixel(
+                    buffer,
+                    (uint32_t)diameter,
+                    x,
+                    y,
+                    cover_rgb565,
                     255U);
             }
         }

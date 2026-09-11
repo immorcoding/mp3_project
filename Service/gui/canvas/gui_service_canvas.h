@@ -6,7 +6,7 @@
  * @details
  *          该头仅供 Service/gui 内部 Module 调用。它隐藏 Canvas 工作区、SDRAM
  *          放置、对象生命周期和 LVGL 图像格式校验；不属于 Service 层的公开
- *          Interface。全屏模糊工作帧仍是可复用临时缓冲；假唱盘缓冲独立，可长期
+ *          Interface。全屏模糊工作帧仍是可复用临时缓冲；唱盘缓冲独立，可长期
  *          绑到 SquareLine Image。
   ******************************************************************************
   */
@@ -25,7 +25,8 @@ Service_StatusTypeDef service_gui_canvas_blur_image(
     uint16_t blur_radius,
     lv_img_dsc_t **blurred_image);
 
-Service_StatusTypeDef service_gui_canvas_compose_music_vinyl_fake(
+Service_StatusTypeDef service_gui_canvas_compose_music_vinyl(
+    const lv_img_dsc_t *base_image,
     lv_img_dsc_t **image);
 
 #endif /* GUI_SERVICE_CANVAS_H */

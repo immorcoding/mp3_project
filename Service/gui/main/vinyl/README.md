@@ -1,8 +1,8 @@
-# Now Playing 假唱盘
+# Now Playing 唱盘
 
-`vinyl/` 是 Main Screen 的私有 Now Playing 唱盘 Module。它在 `ui_init()` 之后把 Canvas 合成的假唱盘第一帧绑到 `MusicPlayerVinylImage`。
+`vinyl/` 是 Main Screen 的私有 Now Playing 唱盘 Module。它在 `ui_init()` 之后把 Canvas 合成的唱盘第一帧绑到 `MusicPlayerVinylImage`。
 
-不旋转。不包含 `storage_playback_cursor.h`。不在 SquareLine 里添加事件。唱盘底图下一版从 Resource Pack 绑定；本刀用两块纯色圆做假唱盘与假封面。
+不旋转。不包含 `storage_playback_cursor.h`。不在 SquareLine 里添加事件。底图来自 Resource Pack ID 4 的 SDRAM 槽；Canvas 复制后再叠假封面。不把唱盘 C 数组编进内部 Flash。
 
 ## 私有 Interface
 

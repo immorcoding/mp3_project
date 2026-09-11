@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    gui_service_main_vinyl.h
- * @brief   Main Screen 私有 Now Playing 假唱盘绑定 Interface。
+ * @brief   Main Screen 私有 Now Playing 唱盘绑定 Interface。
  ******************************************************************************
  */
 

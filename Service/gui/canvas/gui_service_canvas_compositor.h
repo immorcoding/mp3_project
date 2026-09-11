@@ -62,4 +62,12 @@ Service_StatusTypeDef service_gui_canvas_compose_solid_circles(
     uint32_t buffer_size,
     lv_img_dsc_t *image);
 
+Service_StatusTypeDef service_gui_canvas_compose_image_with_cover_circle(
+    const lv_img_dsc_t *base_image,
+    uint16_t cover_diameter,
+    uint32_t cover_rgb,
+    uint8_t *buffer,
+    uint32_t buffer_size,
+    lv_img_dsc_t *image);
+
 #endif /* GUI_SERVICE_CANVAS_COMPOSITOR_H */

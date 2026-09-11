@@ -4,10 +4,10 @@
   * @brief   GUI Service 的共享 Canvas 离屏处理实现。
   *
   * @details
- *          本 Module 持有全屏模糊工作区和一块独立的 Now Playing 假唱盘缓冲。
+ *          本 Module 持有全屏模糊工作区和一块独立的 Now Playing 唱盘缓冲。
  *          模糊路径把全屏真彩图复制到 SDRAM 后做横/纵软件模糊；描述符指向可复用
- *          工作区，Boot 可直接绑定，Main 必须先复制。假唱盘路径把纯色圆写入独立
- *          缓冲，可长期绑到 SquareLine Image，且不会被模糊覆写。
+ *          工作区，Boot 可直接绑定，Main 必须先复制。唱盘路径把 Resource 底图复制
+ *          进独立缓冲并叠假封面，可长期绑到 SquareLine Image，且不会被模糊覆写。
   ******************************************************************************
   */
 
@@ -37,7 +37,7 @@ static uint8_t service_gui_effect_canvas_buffer[
                    aligned(PLATFORM_DCACHE_LINE_SIZE)));
 
 /**
- * @brief Now Playing 假唱盘合成像素缓冲。
+ * @brief Now Playing 唱盘合成像素缓冲。
  * @note  按唱盘直径分配 TRUE_COLOR_ALPHA，位于外部 SDRAM。与全屏模糊工作区独立；
  *        绑定到 Image 后必须保持有效，不得被模糊路径覆写。
  */
@@ -48,7 +48,7 @@ static uint8_t service_gui_music_vinyl_canvas_buffer[
     __attribute__((section(".sdram_framebuffer"),
                    aligned(PLATFORM_DCACHE_LINE_SIZE)));
 
-/** @brief 绑定假唱盘缓冲的图片描述符。 */
+/** @brief 绑定唱盘缓冲的图片描述符。 */
 static lv_img_dsc_t service_gui_music_vinyl_image;
 
 /**
@@ -156,14 +156,16 @@ Service_StatusTypeDef service_gui_canvas_blur_image(
 }
 
 /**
- * @brief 用两块纯色圆合成假唱盘，并返回绑定内部缓冲的描述符。
- * @param[out] image 返回假唱盘图片描述符。
+ * @brief 用 Resource 唱盘底图合成，叠中心假封面，并返回绑定内部缓冲的描述符。
+ * @param[in] base_image 已加载到 SDRAM 的正方形 TRUE_COLOR_ALPHA 底图，边长须为唱盘直径。
+ * @param[out] image 返回唱盘图片描述符。
  * @retval SERVICE_OK 成功。
- * @retval SERVICE_INVALID_PARAM image 为空，或合成参数不满足约束。
+ * @retval SERVICE_INVALID_PARAM image 或底图为空，或合成参数不满足约束。
  * @note 输出像素指向本 Module 的唱盘缓冲，可长期绑到 SquareLine Image。
  *       不读 ID3，不导入 PNG。
  */
-Service_StatusTypeDef service_gui_canvas_compose_music_vinyl_fake(
+Service_StatusTypeDef service_gui_canvas_compose_music_vinyl(
+    const lv_img_dsc_t *base_image,
     lv_img_dsc_t **image)
 {
     Service_StatusTypeDef status;
@@ -173,9 +175,15 @@ Service_StatusTypeDef service_gui_canvas_compose_music_vinyl_fake(
         return SERVICE_INVALID_PARAM;
     }
 
-    status = service_gui_canvas_compose_solid_circles(
-        SERVICE_GUI_MUSIC_VINYL_DIAMETER,
-        SERVICE_GUI_MUSIC_VINYL_FAKE_DISC_RGB,
+    if ((base_image == NULL) ||
+        (base_image->header.w != SERVICE_GUI_MUSIC_VINYL_DIAMETER) ||
+        (base_image->header.h != SERVICE_GUI_MUSIC_VINYL_DIAMETER))
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    status = service_gui_canvas_compose_image_with_cover_circle(
+        base_image,
         SERVICE_GUI_MUSIC_VINYL_COVER_DIAMETER,
         SERVICE_GUI_MUSIC_VINYL_FAKE_COVER_RGB,
         service_gui_music_vinyl_canvas_buffer,

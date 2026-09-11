@@ -6,9 +6,9 @@
 
 当前包含两部分：
 
-- `gui_service_canvas.c / .h`：持有全屏模糊工作区和一块独立的 Now Playing 假唱盘缓冲；
+- `gui_service_canvas.c / .h`：持有全屏模糊工作区和一块独立的 Now Playing 唱盘缓冲；
 - `gui_service_canvas_compositor.c / .h`：对调用方持有的图片缓冲执行严格裁剪、带透明
-  越界填充的裁剪、清晰/模糊区域合成，以及纯色圆假唱盘合成。
+  越界填充的裁剪、清晰/模糊区域合成、纯色圆合成，以及底图叠中心假封面。
 
 ## 资源与生命周期
 
@@ -17,8 +17,8 @@
 layer，因此不随 Boot 这类临时 Screen 销毁；但它不参与可见层级绘制。实际调用时 Canvas 沿用
 输入图片的颜色格式，因此工作区的额外容量不改变输出图片格式。
 
-`service_gui_canvas_compose_music_vinyl_fake()` 把两块纯色圆写进**独立唱盘缓冲**并返回描述符。
-该缓冲与全屏模糊工作区分开，可长期绑到 `MusicPlayerVinylImage`。下一次假合成会覆盖唱盘像素，
+`service_gui_canvas_compose_music_vinyl()` 把 Resource 底图复制进**独立唱盘缓冲**并叠假封面后返回描述符。
+该缓冲与全屏模糊工作区分开，可长期绑到 `MusicPlayerVinylImage`。下一次合成会覆盖唱盘像素，
 但不会碰模糊工作区。
 
 `service_gui_canvas_blur_image()` 返回的描述符和像素指向这块**共享工作区**。下一次调用
@@ -59,7 +59,9 @@ Canvas 工作缓冲按当前 `240 x 320` 显示规格分配，约为 `225 KiB`�
   或圆形区域合成为调用方持有的长期背景。当前 Music 未使用该全图合成路径，保留给后续
   多卡片局部模糊等经审校的需求；
 - `service_gui_canvas_compose_solid_circles()`：在调用方正方形缓冲里画唱盘纯色圆，并可叠中心
-  假封面圆；圆外 Alpha 为 0。`compose_music_vinyl_fake()` 把它写进独立唱盘缓冲。
+  假封面圆；圆外 Alpha 为 0。主机测试仍覆盖该路径。
+- `service_gui_canvas_compose_image_with_cover_circle()`：复制正方形底图再叠中心假封面圆；
+  圆外像素（含底图透明角）原样保留。`compose_music_vinyl()` 把它写进独立唱盘缓冲。
 
 裁剪和合成的输入、输出像素缓冲不得重叠。Interface 不负责对象坐标、页面生命周期或将图片
 绑定到某个 SquareLine 对象；这些属于 `boot/`、`main/vinyl/` 等调用 Module。
@@ -70,7 +72,7 @@ Canvas 工作缓冲按当前 `240 x 320` 显示规格分配，约为 `225 KiB`�
 Service_GUI_Init()
   -> ui_init()
   -> main/service_gui_main_prepare()
-       -> Vinyl：纯色圆假唱盘写入独立缓冲并绑到 MusicPlayerVinylImage
+       -> Vinyl：Resource 底图写入独立缓冲并叠假封面，绑到 MusicPlayerVinylImage
        -> Canvas 模糊当前壁纸
        -> Main 复制长期全屏模糊帧并建立 MusicModeTabs 首帧裁剪
   -> boot/gui_service_boot_prepare_background()

@@ -31,6 +31,10 @@ extern uint8_t __external_resource_oem2uni_end__[];
 extern uint8_t __external_resource_wallpaper_start__[];
 /** @brief 链接器为默认壁纸数据预留的 SDRAM 终点。 */
 extern uint8_t __external_resource_wallpaper_end__[];
+/** @brief 链接器为唱盘底图数据预留的 SDRAM 起点。 */
+extern uint8_t __external_resource_vinyl_start__[];
+/** @brief 链接器为唱盘底图数据预留的 SDRAM 终点。 */
+extern uint8_t __external_resource_vinyl_end__[];
 
 /** @brief 单个启动资源的产品约束和 SDRAM 目标。 */
 typedef struct
@@ -60,7 +64,7 @@ static const Service_ResourceSourceConfigTypeDef resource_source_config = {
     .ProductID = SERVICE_RESOURCE_PRODUCT_ID
 };
 
-/** @brief 当前启动前必须加载完成的三项资源。 */
+/** @brief 当前启动前必须加载完成的四项资源。 */
 static const Service_ResourceTargetTypeDef resource_targets[] = {
     {
         .ResourceID = SERVICE_RESOURCE_ID_CP936_UNI2OEM,
@@ -83,6 +87,14 @@ static const Service_ResourceTargetTypeDef resource_targets[] = {
         .ExpectedType = RESOURCE_PACK_TYPE_IMAGE,
         .DestinationStart = __external_resource_wallpaper_start__,
         .DestinationEnd = __external_resource_wallpaper_end__,
+        .Required = true,
+        .VerifyAfterCopy = true
+    },
+    {
+        .ResourceID = SERVICE_RESOURCE_ID_VINYL_DISC,
+        .ExpectedType = RESOURCE_PACK_TYPE_IMAGE,
+        .DestinationStart = __external_resource_vinyl_start__,
+        .DestinationEnd = __external_resource_vinyl_end__,
         .Required = true,
         .VerifyAfterCopy = true
     }
@@ -185,14 +197,22 @@ static ResourcePack_StatusTypeDef resource_validate_cp936_metadata(
 }
 
 /**
- * @brief 校验当前产品对默认壁纸 IMAGE Metadata 的额外约束。
+ * @brief 校验当前产品对 LVGL TRUE_COLOR_ALPHA 图片 Metadata 的额外约束。
  * @param entry 当前 IMAGE Entry。
  * @param view 当前包内 View。
+ * @param width 期望宽度，单位为像素。
+ * @param height 期望高度，单位为像素。
+ * @param stride_bytes 期望一行字节数。
+ * @param data_bytes 期望载荷字节数。
  * @return Component 风格的约束校验状态。
  */
-static ResourcePack_StatusTypeDef resource_validate_wallpaper_metadata(
+static ResourcePack_StatusTypeDef resource_validate_true_color_alpha_image(
     const ResourcePack_EntryTypeDef *entry,
-    const ResourcePack_EntryViewTypeDef *view)
+    const ResourcePack_EntryViewTypeDef *view,
+    uint32_t width,
+    uint32_t height,
+    uint32_t stride_bytes,
+    uint32_t data_bytes)
 {
     ResourcePack_ImageMetadataTypeDef metadata;
     ResourcePack_StatusTypeDef status = ResourcePack_DecodeImageMetadata(
@@ -207,13 +227,13 @@ static ResourcePack_StatusTypeDef resource_validate_wallpaper_metadata(
 
     if ((metadata.ImageFormat != RESOURCE_PACK_IMAGE_FORMAT_LVGL_NATIVE) ||
         (metadata.PixelFormat != RESOURCE_PACK_PIXEL_FORMAT_TRUE_COLOR_ALPHA) ||
-        (metadata.Width != SERVICE_RESOURCE_WALLPAPER_WIDTH) ||
-        (metadata.Height != SERVICE_RESOURCE_WALLPAPER_HEIGHT) ||
-        (metadata.StrideBytes != SERVICE_RESOURCE_WALLPAPER_STRIDE_BYTES) ||
+        (metadata.Width != width) ||
+        (metadata.Height != height) ||
+        (metadata.StrideBytes != stride_bytes) ||
         (metadata.FrameCount != 1U) ||
         (metadata.ColorSpace != RESOURCE_PACK_COLOR_SPACE_SRGB) ||
         (metadata.AlphaMode != RESOURCE_PACK_ALPHA_MODE_STRAIGHT) ||
-        (entry->DataLength != SERVICE_RESOURCE_WALLPAPER_BYTES))
+        (entry->DataLength != data_bytes))
     {
         return RESOURCE_PACK_FORMAT_ERROR;
     }
@@ -241,7 +261,24 @@ static ResourcePack_StatusTypeDef resource_validate_target_metadata(
 
     if (target->ResourceID == SERVICE_RESOURCE_ID_DEFAULT_WALLPAPER)
     {
-        return resource_validate_wallpaper_metadata(entry, view);
+        return resource_validate_true_color_alpha_image(
+            entry,
+            view,
+            SERVICE_RESOURCE_WALLPAPER_WIDTH,
+            SERVICE_RESOURCE_WALLPAPER_HEIGHT,
+            SERVICE_RESOURCE_WALLPAPER_STRIDE_BYTES,
+            SERVICE_RESOURCE_WALLPAPER_BYTES);
+    }
+
+    if (target->ResourceID == SERVICE_RESOURCE_ID_VINYL_DISC)
+    {
+        return resource_validate_true_color_alpha_image(
+            entry,
+            view,
+            SERVICE_RESOURCE_VINYL_WIDTH,
+            SERVICE_RESOURCE_VINYL_HEIGHT,
+            SERVICE_RESOURCE_VINYL_STRIDE_BYTES,
+            SERVICE_RESOURCE_VINYL_BYTES);
     }
 
     return RESOURCE_PACK_UNSUPPORTED_TYPE;
@@ -347,7 +384,7 @@ static Service_StatusTypeDef resource_load_target(
 
 /**
  * @brief 在任务启动前打开 RPKC1 并加载当前产品全部必需资源。
- * @retval SERVICE_OK 三项资源已校验并加载到 SDRAM。
+ * @retval SERVICE_OK 四项资源已校验并加载到 SDRAM。
  * @retval SERVICE_ERROR 映射、协议、身份、资源或目标校验失败。
  * @note 初始化成功后不保留或向外发布 NOR 映射 View。
  */
@@ -478,7 +515,7 @@ Service_StatusTypeDef Service_Resource_Init(void)
 }
 
 /**
- * @brief 查询当前三项启动资源是否全部可用。
+ * @brief 查询当前四项启动资源是否全部可用。
  * @retval true 初始化已经完整成功。
  * @retval false 尚未初始化或初始化失败。
  */
