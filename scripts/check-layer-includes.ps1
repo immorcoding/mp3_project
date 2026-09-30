@@ -131,6 +131,75 @@ function Get-RelativeRepositoryPath {
     return $normalizedFullPath
 }
 
+# 扫描根与层级类型的唯一映射；全量扫描与 Agent Hook 的单文件检查共用。
+$script:LayerScanRootTable = @(
+    @{ Prefix = 'Components/'; Kind = 'component' }
+    @{ Prefix = 'Adapters/bridge/'; Kind = 'bridge' }
+    @{ Prefix = 'Adapters/stm32_hal/'; Kind = 'stm32_hal' }
+    @{ Prefix = 'Adapters/cortex/'; Kind = 'cortex' }
+    @{ Prefix = 'Platform/'; Kind = 'platform' }
+    @{ Prefix = 'Service/'; Kind = 'service' }
+)
+
+# 非 .c/.h 或不在扫描根内时返回 $null。
+function Get-LayerSourceKind {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$RelativePath
+    )
+
+    $normalized = (Get-NormalizedIncludePath -IncludePath $RelativePath).TrimStart('/')
+    if ($normalized -notmatch '(?i)\.[ch]$') {
+        return $null
+    }
+
+    foreach ($entry in $script:LayerScanRootTable) {
+        if ($normalized.StartsWith($entry.Prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $entry.Kind
+        }
+    }
+
+    return $null
+}
+
+# 单文件越层检查，供编辑后 Agent Hook 调用；返回 `path:line: 原因` 数组。
+function Get-LayerFileIncludeViolation {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$RepositoryRoot,
+
+        [Parameter(Mandatory)]
+        [string]$RelativePath
+    )
+
+    $kind = Get-LayerSourceKind -RelativePath $RelativePath
+    $fullPath = Join-Path -Path $RepositoryRoot -ChildPath $RelativePath
+    if (($null -eq $kind) -or -not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+        return @()
+    }
+
+    $normalized = (Get-NormalizedIncludePath -IncludePath $RelativePath).TrimStart('/')
+    $violations = New-Object System.Collections.Generic.List[string]
+    $lineNumber = 0
+    foreach ($line in Get-Content -LiteralPath $fullPath) {
+        $lineNumber += 1
+        $includePath = Get-CIncludeDirective -Line $line
+        if ([string]::IsNullOrWhiteSpace($includePath)) {
+            continue
+        }
+
+        $violation = Get-LayerIncludeViolation -SourceKind $kind -IncludePath $includePath
+        if (-not [string]::IsNullOrWhiteSpace($violation)) {
+            [void]$violations.Add("${normalized}:${lineNumber}: $violation")
+        }
+    }
+
+    return $violations.ToArray()
+}
+
 function Invoke-LayerIndexIncludeCheck {
     [CmdletBinding()]
     param(
@@ -169,14 +238,9 @@ function Invoke-LayerIncludeCheck {
         [string]$RepositoryRoot
     )
 
-    $scanRoots = @(
-        @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Components'; Kind = 'component' }
-        @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Adapters/bridge'; Kind = 'bridge' }
-        @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Adapters/stm32_hal'; Kind = 'stm32_hal' }
-        @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Adapters/cortex'; Kind = 'cortex' }
-        @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Platform'; Kind = 'platform' }
-        @{ Path = Join-Path -Path $RepositoryRoot -ChildPath 'Service'; Kind = 'service' }
-    )
+    $scanRoots = @($script:LayerScanRootTable | ForEach-Object {
+        @{ Path = Join-Path -Path $RepositoryRoot -ChildPath $_.Prefix.TrimEnd('/'); Kind = $_.Kind }
+    })
 
     $violations = New-Object System.Collections.Generic.List[string]
     $scannedFileCount = 0

@@ -28,6 +28,7 @@ function Invoke-FastWorkingTreeCheck {
         'harness_helpers.Tests.ps1'
         'check-layer-includes.Tests.ps1'
         'check-generated-write.Tests.ps1'
+        'hooks/agent_hooks.Tests.ps1'
     )
     foreach ($selfTest in $selfTests) {
         Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath $selfTest)
