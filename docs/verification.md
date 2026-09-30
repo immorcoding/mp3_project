@@ -6,7 +6,7 @@
 
 | 层级 | 入口 | 自动时机 | 验证范围 |
 | --- | --- | --- | --- |
-| FAST | `./scripts/check_fast.ps1` | pre-commit | Harness 自测、分层 include、生成目录写保护 |
+| FAST | `./scripts/check_fast.ps1` | pre-commit | Harness 与 Agent Hook 自测、分层 include、生成目录写保护、Agent 配置一致性 |
 | CHANGED | `./scripts/verify_changed.ps1` | pre-push | FAST + 由变更路径选出的 host fake/mock 测试 |
 | FULL | `./scripts/verify_full.ps1` | 手动 | FAST + 固件 Debug/Release + 全部 host fake/mock 测试 |
 | HARDWARE | 对应模块的板级清单 | 手动 | 中断、DMA、Cache、时序、掉电和真实外设行为 |
@@ -62,19 +62,34 @@ pre-push 从 Git 提供的 ref 更新读取提交范围。每个待推送 SHA �
 ./scripts/install-git-hooks.ps1
 ```
 
-它只设置本仓库的 `core.hooksPath=.githooks`。`pre-commit` 使用索引快照跑 FAST；`pre-push` 对实际推送提交跑 CHANGED。现有 `ALLOW_GENERATED_UPDATE` 规则保持不变，助手禁止设置该变量。
+它只设置本仓库的 `core.hooksPath=.githooks`。`pre-commit` 使用索引快照跑 FAST；`commit-msg` 用 `scripts/check-commit-msg.ps1` 校验 Conventional Commits 标题（GIT-2）；`pre-push` 对实际推送提交跑 CHANGED。现有 `ALLOW_GENERATED_UPDATE` 规则保持不变，助手禁止设置该变量。
+
+## Agent Hook
+
+Claude Code（`.claude/settings.json`）与 Codex（`.codex/hooks.json`）调用同一组 `scripts/hooks/*.ps1`，标准见 `docs/shape/harness.md` HAR-3/HAR-4：
+
+| 事件 | 脚本 | 行为 |
+| --- | --- | --- |
+| PreToolUse（编辑） | `guard.ps1 -Mode edit` | 生成/Vendor 目录与 CubeMX 源拒绝；USER CODE 文件与生成器配置头在 Claude 走 ask、在 Codex 拒绝 |
+| PreToolUse（Shell） | `guard.ps1 -Mode shell` | 拒绝 `--no-verify`、强推、设置 `ALLOW_GENERATED_UPDATE`、改写 `core.hooksPath` |
+| PostToolUse（编辑） | `check-edited.ps1` | 只对刚编辑的源文件做分层 include 检查，越层以退出码 2 反馈 |
+| SessionStart | `session-brief.ps1` | 注入分支、脏文件数与 `ready-for-agent` / `hw:pending` 事项 |
+
+受保护路径复用 `check-generated-write.ps1`，分层映射复用 `check-layer-includes.ps1`；不在 Hook 配置中复制路径表。Agent Hook 是提前拦截，Git Hook 仍是最终闸门。Codex 项目级 Hook 首次使用需在 Codex 内信任一次，Hook 改动后需重新确认。
 
 ## Agent 路由与独立审校
 
-根 `AGENTS.md` 保存全局工作合同；主要自维护层、host 测试、Harness 脚本和 external loader 的子 `AGENTS.md` 只补充所在目录的本地 Seam、必读指针与完成条件。进入目标路径时读取最近的子文件，不把 Module README、领域词典或本页的路径映射复制进去。生成目录不放子 `AGENTS.md`。
+根 `AGENTS.md` 是 Claude Code 与 Codex 共用的章程；主要自维护层、host 测试、Harness 脚本和 external loader 的子 `AGENTS.md` 只补充所在目录的本地 Seam、必读指针与完成条件，同目录 `CLAUDE.md` 只写 `@AGENTS.md`。进入目标路径时读取最近的子文件，不把 Module README、领域词典或本页的路径映射复制进去。生成目录不放子 `AGENTS.md`。
 
-项目级 Skill 位于 `.agents/skills/`：
+Skill 正文位于 `.agents/skills/`，审阅者正文位于 `.agents/reviewers/`（HAR-2）。`.claude/skills/`、`.claude/agents/` 与 `.codex/agents/` 由 `./scripts/sync-agent-config.ps1` 生成，勿手改；改正文后运行它，FAST 以 `-Check` 校验一致。
+
+项目级 Skill：
 
 - `mp3-firmware-change`：根据需求和实际路径读取相关模块文档，不复制领域词典；
 - `verify-firmware-change`：选择 FAST、CHANGED、FULL、HARDWARE；
 - `review-embedded-change`：处理 DMA、Cache、ISR、RTOS、HAL、Platform、链接段和硬件生命周期风险。
 
-项目级只读审校者位于 `.codex/agents/`：
+项目级只读审校者：
 
 - `independent-verifier`：非 trivial 功能、修复、重构、Harness 修改完成后自动调用；纯文档、拼写和显然无行为影响的小配置可跳过；
 - `embedded-reviewer`：命中硬件敏感行为时自动调用；用户可随时明确强制两者之一。
