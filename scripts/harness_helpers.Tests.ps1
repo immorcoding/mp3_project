@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path -Path $PSScriptRoot -ChildPath 'harness_helpers.ps1')
 
+$inheritedGitEnvironment = Suspend-InheritedGitEnvironment
+
 function Assert-HarnessEqual {
     param(
         [Parameter(Mandatory)]
@@ -210,5 +212,15 @@ finally {
         Remove-Item -LiteralPath $pushFixtureRoot -Recurse -Force
     }
 }
+
+$env:GIT_DIR = 'Z:/hook-fixture/.git'
+$probeEnvironment = Suspend-InheritedGitEnvironment
+Assert-HarnessEqual -Expected 'absent' -Actual $(if ($null -eq $env:GIT_DIR) { 'absent' } else { $env:GIT_DIR }) `
+    -Message '挂起后夹具不得继承 Hook 导出的 GIT_DIR。'
+Restore-InheritedGitEnvironment -Saved $probeEnvironment
+Assert-HarnessEqual -Expected 'Z:/hook-fixture/.git' -Actual $env:GIT_DIR -Message '恢复后应还原 GIT_DIR。'
+Remove-Item -Path Env:GIT_DIR
+
+Restore-InheritedGitEnvironment -Saved $inheritedGitEnvironment
 
 Write-Output 'harness_helpers 路由测试通过。'

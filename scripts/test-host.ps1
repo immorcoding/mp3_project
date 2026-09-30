@@ -21,8 +21,9 @@ function Get-HostCompiler {
         return Get-ExternalCommand -Name $RequestedCompiler
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($env:CC)) {
-        return Get-ExternalCommand -Name $env:CC
+    # 不读通用 CC：本机其他项目常把 CC 设为 Clang，会误伤本仓库只认 GCC 的主机测试。
+    if (-not [string]::IsNullOrWhiteSpace($env:MP3_HOST_CC)) {
+        return Get-ExternalCommand -Name $env:MP3_HOST_CC
     }
 
     return Get-ExternalCommand -Name 'gcc'

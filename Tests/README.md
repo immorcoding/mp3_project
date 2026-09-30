@@ -10,8 +10,8 @@
 -HostCompiler E:/mingw64/bin/gcc.exe
 ```
 
-未指定时，脚本依次使用 `CC` 和 `PATH` 中的 `gcc`。仅接受 Windows x86/x64 本机 GCC：目标三元组须包含 `mingw`、`msys`、`cygwin` 或 `windows`，且 CPU 须为 `x86_64`、`amd64`、`x64`、`i386`、`i486`、`i586`、`i686` 或 `x86`。拒绝 ARM 交叉 GCC、RISC-V、MIPS、Clang 与其他目标，因为它们不能在当前 Windows x86/x64 主机运行。
-编译器选择优先级固定为：显式 `-HostCompiler` 优先；其次为已设置且非空白的 `CC`；仅当 `CC` 未设置或为空白时，才回退到 `PATH` 中的 `gcc`。显式 `-HostCompiler` 或非空白 `CC` 无法解析或不符合上述要求时立即失败，绝不回退到其他工具链。
+未指定时，脚本依次使用 `MP3_HOST_CC` 和 `PATH` 中的 `gcc`；不读通用的 `CC`，以免本机其他项目设置的 Clang 误伤本仓库。仅接受 Windows x86/x64 本机 GCC：目标三元组须包含 `mingw`、`msys`、`cygwin` 或 `windows`，且 CPU 须为 `x86_64`、`amd64`、`x64`、`i386`、`i486`、`i586`、`i686` 或 `x86`。拒绝 ARM 交叉 GCC、RISC-V、MIPS、Clang 与其他目标，因为它们不能在当前 Windows x86/x64 主机运行。
+编译器选择优先级固定为：显式 `-HostCompiler` 优先；其次为已设置且非空白的 `MP3_HOST_CC`；仅当 `MP3_HOST_CC` 未设置或为空白时，才回退到 `PATH` 中的 `gcc`。显式 `-HostCompiler` 或非空白 `MP3_HOST_CC` 无法解析或不符合上述要求时立即失败，绝不回退到其他工具链。
 
 每个模块构建到 `build/host/<module>/`。在仓库根目录执行：
 

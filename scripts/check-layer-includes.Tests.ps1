@@ -8,6 +8,8 @@ if (-not (Test-Path -LiteralPath $checkerScript -PathType Leaf)) {
 
 . $checkerScript
 
+$inheritedGitEnvironment = Suspend-InheritedGitEnvironment
+
 function Assert-Equal {
     param(
         [Parameter(Mandatory)]
@@ -240,5 +242,7 @@ finally {
         Remove-Item -LiteralPath $indexFixtureRoot -Recurse -Force
     }
 }
+
+Restore-InheritedGitEnvironment -Saved $inheritedGitEnvironment
 
 Write-Output 'check-layer-includes 函数测试通过。'

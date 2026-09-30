@@ -10,6 +10,8 @@ if (-not (Test-Path -LiteralPath $checkerScript -PathType Leaf)) {
 
 . $checkerScript
 
+$inheritedGitEnvironment = Suspend-InheritedGitEnvironment
+
 function Assert-True {
     param(
         [Parameter(Mandatory)]
@@ -232,6 +234,8 @@ Invoke-InTempGitRepository -Action {
         }
     }
 }
+
+Restore-InheritedGitEnvironment -Saved $inheritedGitEnvironment
 
 if (-not $skipRepositoryCheck) {
     $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $checkerScript

@@ -211,3 +211,39 @@ function Invoke-PowerShellScript {
         throw "脚本执行失败：$ScriptPath，退出码：$exitCode。"
     }
 }
+
+$script:InheritedGitEnvironmentNames = @(
+    'GIT_DIR'
+    'GIT_WORK_TREE'
+    'GIT_INDEX_FILE'
+    'GIT_COMMON_DIR'
+    'GIT_PREFIX'
+    'GIT_OBJECT_DIRECTORY'
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES'
+)
+
+function Suspend-InheritedGitEnvironment {
+    # Git Hook（worktree 中尤甚）以绝对路径导出 GIT_DIR / GIT_INDEX_FILE；
+    # 自测夹具的 git -C <临时目录> init/commit 会被它们带回真实仓库。
+    $saved = @{}
+    foreach ($name in $script:InheritedGitEnvironmentNames) {
+        $value = [Environment]::GetEnvironmentVariable($name, 'Process')
+        if ($null -ne $value) {
+            $saved[$name] = $value
+            Remove-Item -Path "Env:$name"
+        }
+    }
+    return $saved
+}
+
+function Restore-InheritedGitEnvironment {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [hashtable]$Saved
+    )
+
+    foreach ($name in $Saved.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $Saved[$name], 'Process')
+    }
+}
