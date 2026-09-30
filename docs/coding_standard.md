@@ -1,6 +1,6 @@
 # 代码命名与注释规范
 
-> 适用范围：`version0.3.1` 及后续版本的自维护代码。本文是命名、注释、自维护 config 排版与 Git 提交标题的唯一公共规范；目录 README 只补充各 Module 的专用 Interface，不重复本文件。
+> 适用范围：`version0.3.1` 及后续版本的自维护代码。本文是命名、注释与自维护 config 排版的唯一公共规范（提交格式见 `docs/shape/git.md` GIT-2）；目录 README 只补充各 Module 的专用 Interface，不重复本文件。
 
 ## 1. 目标与适用范围
 
@@ -73,15 +73,11 @@
 5. 每个函数定义是否都有 Doxygen，形参名称和返回语义是否准确，所有声明处是否保持干净，复杂流程是否解释关键约束？
 6. 若改了 `<module>_config.h`：是否按文件分组、行末注释、列对齐，且未改移植/厂商配置？
 7. README 是否已经区分功能/抽象所有权、编译期依赖和运行时请求/事件路径？
-8. 若本次要提交：标题是否为 `YYYY/M/D HH:MM` + 一句中文，且没有自写的第二段正文？
+8. 若本次要提交：标题是否符合 `type(scope): 中文描述`（`docs/shape/git.md` GIT-2）？
 
 ## 6. Git 提交标题
 
-提交只写一行标题。不要另起一段说明正文（环境自动附加的 `Co-authored-by` 除外）。
+使用 Conventional Commits 1.0.0，描述用中文：`type(scope): 中文描述`。type 列表、scope 取法与理由只维护在 `docs/shape/git.md` 的 GIT-2，由 `.githooks/commit-msg` 校验。
 
-格式：`YYYY/M/D HH:MM` + 空格 + 一句中文。月、日不补零；时、分两位。时间为提交当时的本地时间。
-
-例：`2026/9/4 16:35 Queue窗口单槽与config宏归位`
-
-不准：`feat:` / `fix:` 一类 Conventional Commits 前缀；无日期时间；把 why/what 写成第二段正文。
+例：`feat(gui): 唱盘随播放状态旋转`、`fix(harness): 主机测试改读 MP3_HOST_CC`
 

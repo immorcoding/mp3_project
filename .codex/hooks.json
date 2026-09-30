@@ -1,0 +1,49 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for /f \"delims=\" %r in ('git rev-parse --show-toplevel') do @powershell -NoProfile -ExecutionPolicy Bypass -File \"%r/scripts/hooks/guard.ps1\" -Mode edit",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for /f \"delims=\" %r in ('git rev-parse --show-toplevel') do @powershell -NoProfile -ExecutionPolicy Bypass -File \"%r/scripts/hooks/guard.ps1\" -Mode shell",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for /f \"delims=\" %r in ('git rev-parse --show-toplevel') do @powershell -NoProfile -ExecutionPolicy Bypass -File \"%r/scripts/hooks/check-edited.ps1\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for /f \"delims=\" %r in ('git rev-parse --show-toplevel') do @powershell -NoProfile -ExecutionPolicy Bypass -File \"%r/scripts/hooks/session-brief.ps1\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

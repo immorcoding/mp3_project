@@ -52,6 +52,8 @@ Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Middlewares
     -Message 'LVGL 源码应受保护'
 Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Middlewares/Third_Party/FreeRTOS/Source/tasks.c') `
     -Message 'FreeRTOS 内核源码应受保护'
+Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Middlewares/Third_Party/FatFs/src/ff.c') `
+    -Message 'FatFs 上游源码应受保护'
 Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'cmake/stm32cubemx/CMakeLists.txt') `
     -Message 'CubeMX CMake 应受保护'
 

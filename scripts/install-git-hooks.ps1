@@ -9,15 +9,13 @@ $ErrorActionPreference = 'Stop'
 Complete-Utf8EntryScript -Action {
     $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
     $hooksPath = Join-Path -Path $repositoryRoot -ChildPath '.githooks'
-    $preCommitPath = Join-Path -Path $hooksPath -ChildPath 'pre-commit'
-    $prePushPath = Join-Path -Path $hooksPath -ChildPath 'pre-push'
     $git = Get-ExternalCommand -Name 'git'
 
-    if (-not (Test-Path -LiteralPath $preCommitPath -PathType Leaf)) {
-        throw "缺少 Git hook：$preCommitPath"
-    }
-    if (-not (Test-Path -LiteralPath $prePushPath -PathType Leaf)) {
-        throw "缺少 Git hook：$prePushPath"
+    foreach ($hookName in @('pre-commit', 'commit-msg', 'pre-push')) {
+        $hookPath = Join-Path -Path $hooksPath -ChildPath $hookName
+        if (-not (Test-Path -LiteralPath $hookPath -PathType Leaf)) {
+            throw "缺少 Git hook：$hookPath"
+        }
     }
 
     Invoke-ExternalCommand -CommandPath $git -Arguments @(
@@ -28,5 +26,5 @@ Complete-Utf8EntryScript -Action {
         '.githooks'
     )
 
-    Write-NativeUtf8Line -Text '已启用 .githooks：pre-commit 验证索引快照，pre-push 按实际推送提交运行受影响主机测试。'
+    Write-NativeUtf8Line -Text '已启用 .githooks：pre-commit 验证索引快照，commit-msg 校验 Conventional Commits 标题，pre-push 按实际推送提交运行受影响主机测试。'
 }

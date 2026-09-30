@@ -87,8 +87,8 @@
 
     # 这些文件不会改变固件或验证器行为，可在 CHANGED 层不跑主机测试。
     NoHostTestPathPatterns = @(
-        '^(?:docs|\.agents|\.codex)/'
-        '^(?:AGENTS|CONTEXT|CURRENT|README)\.md$'
+        '^(?:docs|\.agents|\.codex|\.claude)/'
+        '^(?:AGENTS|CLAUDE|CONTEXT|README)\.md$'
         '^Tests/README\.md$'
         '\.md$'
         '^\.gitignore$'

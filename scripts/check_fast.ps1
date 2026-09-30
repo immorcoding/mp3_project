@@ -28,10 +28,15 @@ function Invoke-FastWorkingTreeCheck {
         'harness_helpers.Tests.ps1'
         'check-layer-includes.Tests.ps1'
         'check-generated-write.Tests.ps1'
+        'hooks/agent_hooks.Tests.ps1'
+        'sync-agent-config.Tests.ps1'
     )
     foreach ($selfTest in $selfTests) {
         Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath $selfTest)
     }
+
+    Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'sync-agent-config.ps1') `
+        -Parameters @{ Check = $true }
 
     Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'check-layer-includes.ps1') `
         -Parameters @{ Snapshot = 'WorkingTree' }
