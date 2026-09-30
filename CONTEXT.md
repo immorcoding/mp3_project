@@ -1,6 +1,6 @@
 # 项目领域上下文
 
-> 章程：稳定领域词典。按条查阅，禁止开场整本阅读。不写进度、本场文件名单或实现参数。单条超过约 25 行且夹带寄存器/坐标/缓存大小时，下沉到对应 `docs/*_architecture.md` 或 Module README。现场见 `CURRENT.md`，工作方式见 `AGENTS.md`。
+> 章程：稳定领域词典。按条查阅，禁止开场整本阅读。不写进度、本场文件名单或实现参数。单条超过约 25 行且夹带寄存器/坐标/缓存大小时，下沉到对应 `docs/*_architecture.md` 或 Module README。进度见 GitHub Issues，工作方式见 `AGENTS.md`。
 
 本文档只定义 Module 之间反复使用的领域词汇、职责边界和产品语义。路径、字段、调用链、寄存器和硬件参数由 `docs/` 与各 Module README 维护；长期取舍由 `docs/adr/` 记录。新增 Module、改变职责归属或改变产品语义时，必须同步核对本文档与对应技术文档；若同时形成可复用的长期架构取舍，还必须新增或更新对应 ADR。
 
@@ -402,7 +402,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **FTL 格式化**建立底层卷与空闲块，**FatFs 格式化**在其逻辑扇区上建立文件系统。Filesystem Service 与 FTL 都不因挂载失败而自动执行格式化；Storage Task 可用宏决定是否显式调用 `FormatAndMountFlash`。
 
-规则见 [flash_ftl_design.md](docs/flash_ftl_design.md) 与 [ADR-0011](docs/adr/0011-ftl-copy-on-write-and-recovery.md)。板级掉电验收状态见该设计文档，不写在 `CURRENT.md`。
+规则见 [flash_ftl_design.md](docs/flash_ftl_design.md) 与 [ADR-0011](docs/adr/0011-ftl-copy-on-write-and-recovery.md)。板级掉电验收状态见该设计文档，不写在 issue 或章程里。
 
 相关术语：**W25Qxx 设备**、**平台 Flash**。
 

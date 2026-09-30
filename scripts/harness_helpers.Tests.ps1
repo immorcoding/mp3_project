@@ -44,6 +44,9 @@ Assert-HarnessSequence -Expected @('resource_pack') -Actual $resourceImpact.Host
 $docsImpact = Get-HarnessImpact -ChangedPath @('docs/verification.md')
 Assert-HarnessEqual -Expected 0 -Actual $docsImpact.HostModules.Count -Message '纯文档变化不跑主机测试'
 
+$agentConfigImpact = Get-HarnessImpact -ChangedPath @('CLAUDE.md', 'Service/CLAUDE.md', '.claude/settings.json', '.codex/hooks.json')
+Assert-HarnessEqual -Expected 0 -Actual $agentConfigImpact.HostModules.Count -Message 'Agent 配置变化不跑主机测试'
+
 $loaderTestImpact = Get-HarnessImpact -ChangedPath @('Tools/external_loader/tests/loader_geometry_test.c')
 Assert-HarnessSequence -Expected @('external_loader') -Actual $loaderTestImpact.HostModules `
     -Message '外部加载器几何变化必须选择对应主机测试'

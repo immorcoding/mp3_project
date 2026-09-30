@@ -1,33 +1,43 @@
-# 本地 Issue 约定
+# Issue tracker：GitHub
 
-本项目不依赖外部 issue 平台。需求、PRD 和可执行 issue 均以本地 Markdown 文件维护。
+本仓库的事项、spec、ticket 与 wayfinder 地图都是 GitHub Issues（`immorcoding/mp3_project`），一律用 `gh` CLI 操作；`gh` 在仓库内会从 `git remote -v` 推断仓库。标准见 `docs/shape/workflow.md`。
 
-- 每项功能使用目录 `.scratch/<feature-slug>/`。
-- 需求说明写在 `.scratch/<feature-slug>/PRD.md`。
-- 本刀合同写在 `.scratch/<feature-slug>/freeze.md`：目标、非目标、接缝与禁止、资源账、必读指针、验收。
-- 这台设备此刻的状态写在 `.scratch/<feature-slug>/board.md`：已写入什么、已确认什么、待确认什么。
-- 可执行 issue 写在 `.scratch/<feature-slug>/issues/<NN>-<slug>.md`。
-- 每个 issue 必须有 `Status:` 行，使用 `docs/agents/triage-labels.md` 中定义的状态。
-- 评审意见、进展和结论追加在对应 Markdown 文件中，避免只留在对话里。
+## 约定
 
-`.scratch/` 是工作区资料，不等同于正式项目文档；稳定的架构决策应整理到 `docs/adr/`。
+- **新建**：`gh issue create --title "..." --body "..."`；多行正文用 heredoc。
+- **读取**：`gh issue view <number> --comments`，同时取标签。
+- **列表**：`gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`，按需加 `--label`、`--state`。
+- **评论**：`gh issue comment <number> --body "..."`
+- **标签**：`gh issue edit <number> --add-label "..."` / `--remove-label "..."`；标签表见 [triage-labels.md](triage-labels.md)。
+- **关闭**：`gh issue close <number> --comment "..."`
 
-## 三处落点
+## 固件专有约定
 
-同一件事的信息按寿命分开放，不要挤进 `CURRENT.md`：
+- 需要上板的 ticket 在软件验证通过后挂 `hw:pending`；板上证据（固件版本、观察现象、日志）作为评论贴出后移除标签并关闭。
+- 置顶 issue「板上状态」只记设备此刻的事实：已烧录的固件提交、NOR 中的资源包版本、待上板项列表。每次烧录后更新正文，不写过程。
+- 稳定事实仍进架构文档、Module README 与 ADR；issue 只放进度、决定过程与证据。
 
-| 寿命 | 载体 | 篇幅 | 内容 |
-| --- | --- | --- | --- |
-| 跨会话索引 | 根 `CURRENT.md` | 合计约 80 行，单节约 40 行 | 主线、活动 slug、阻塞、分支与脏文件名、verify 与板上各一句、下场第一刀一句 |
-| 本刀合同 | `freeze.md` | 合计约 50 行 | 目标、非目标、接缝与禁止、资源账、必读指针、验收 |
-| 这台设备此刻 | `board.md` | 合计约 25 行 | 已写入的版本与地址、已确认的板级证据、待确认项 |
+## PR 作为请求入口
 
-稳定格式、分层与术语仍只在 `docs/*_architecture.md`、ADR、Module README 和 `CONTEXT.md`；`freeze.md` 只给指针，不抄正文。`freeze.md` 定范围，不构成改动许可；许可仍只来自用户本条消息，见 `AGENTS.md`。`freeze.md` / `board.md` 超限则拆下一刀或下沉到架构文档，禁止倒灌 `CURRENT.md`。
+**PRs as a request surface: no.**（若要让 `/triage` 处理外部 PR，改为 `yes`。）
 
-## 何时写入
+为 `yes` 时，PR 与 issue 共用标签和状态：`gh pr view <number> --comments`、`gh pr diff <number>`；外部 PR 用 `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments` 后只保留 `authorAssociation` 为 `CONTRIBUTOR`、`FIRST_TIME_CONTRIBUTOR` 或 `NONE` 的项。GitHub 的 issue 与 PR 共用编号，裸 `#42` 先 `gh pr view 42`，失败再 `gh issue view 42`。
 
-会跨多场、且需要验收标准的功能，先建立 `.scratch/<feature-slug>/`。一场内能做完、约束十几行内说得完的改动，只更新 `CURRENT.md` 本场交接，不必开 scratch。一旦出现资源账、地址与几何、跨场必读清单或成串非目标，必须建 slug 并把它们放进 `freeze.md`。
+## Skill 说「发布到 issue tracker」时
 
-助手不得在用户明确要求拆 PRD/issue 之前擅自新建 `.scratch/` 目录。`CURRENT.md` 进度只指向活动 slug，不把 issue 正文抄过去。
+新建一个 GitHub issue。
 
-对话里形成的可执行切片应写入 `issues/`，避免只留在 `CURRENT.md`（交接节约 40 行上限）。
+## Skill 说「读取相关 ticket」时
+
+`gh issue view <number> --comments`。
+
+## Wayfinding operations
+
+供 `/wayfinder` 使用。**map** 是一个 issue，ticket 是它的 **child** issue。
+
+- **Map**：一个带 `wayfinder:map` 标签的 issue，正文含 Destination / Notes / Decisions so far / Not yet specified / Out of scope。`gh issue create --label wayfinder:map`。
+- **Child ticket**：以 GitHub sub-issue 挂到 map（`gh api` 的 sub-issues 端点）。未启用 sub-issue 时，把 child 列进 map 正文的任务列表，并在 child 正文首行写 `Part of #<map>`。标签 `wayfinder:<type>`（`research` / `prototype` / `grilling` / `task`）。认领后指派给驱动者。
+- **Blocking**：用 GitHub 原生 issue dependencies：`gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`，其中 `<blocker-db-id>` 是阻塞方的数字 **database id**（`gh api repos/<owner>/<repo>/issues/<n> --jq .id`），不是 `#number` 或 `node_id`。`issue_dependencies_summary.blocked_by` 给出仍开着的阻塞数。不可用时在 child 正文首行写 `Blocked by: #<n>, #<n>`。所有阻塞方关闭即解除阻塞。
+- **Frontier 查询**：列出 map 的开放 child，去掉有开放阻塞方或已有指派人的，按 map 顺序取第一个。
+- **认领**：`gh issue edit <n> --add-assignee @me`，作为本场第一次写入。
+- **解决**：`gh issue comment <n> --body "<answer>"`，再 `gh issue close <n>`，然后在 map 的 Decisions so far 追加一行要点加链接。
