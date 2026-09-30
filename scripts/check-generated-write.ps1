@@ -66,6 +66,7 @@ function Test-GeneratedWriteProtectedPath {
         'Middlewares/ST/'
         'Middlewares/Third_Party/LVGL/'
         'Middlewares/Third_Party/FreeRTOS/Source/'
+        'Middlewares/Third_Party/FatFs/'
         'cmake/stm32cubemx/'
     )
 

@@ -44,6 +44,14 @@ $inside = ConvertTo-AgentHookRelativePath -RepositoryRoot 'E:\Projects\x' -Path 
 Assert-HookEqual -Expected 'Service/a.c' -Actual $inside -Message '仓库内绝对路径应转相对'
 $outside = ConvertTo-AgentHookRelativePath -RepositoryRoot 'E:\Projects\x' -Path 'E:\Projects\xy\Service\a.c'
 Assert-HookEqual -Expected '' -Actual $outside -Message '同前缀的仓库外路径不得误判为仓库内'
+$dotDot = ConvertTo-AgentHookRelativePath -RepositoryRoot 'E:\Projects\x' -Path 'E:\Projects\x\APP\..\GUI\ui.c'
+Assert-HookEqual -Expected 'GUI/ui.c' -Actual $dotDot -Message '绝对路径中的 .. 应先规范化'
+$relativeDotDot = ConvertTo-AgentHookRelativePath -RepositoryRoot 'E:\Projects\x' -Path 'APP/../GUI/ui.c'
+Assert-HookEqual -Expected 'GUI/ui.c' -Actual $relativeDotDot -Message '相对路径中的 .. 应先规范化'
+$fromSubdirectory = ConvertTo-AgentHookRelativePath -RepositoryRoot 'E:\Projects\x' -Path '../GUI/x.c' -BaseDirectory 'E:\Projects\x\Service'
+Assert-HookEqual -Expected 'GUI/x.c' -Actual $fromSubdirectory -Message '相对路径应以 Hook 输入的 cwd 为基准'
+$gitBash = ConvertTo-AgentHookRelativePath -RepositoryRoot 'E:\Projects\x' -Path '/e/Projects/x/GUI/ui.c'
+Assert-HookEqual -Expected 'GUI/ui.c' -Actual $gitBash -Message 'Git Bash 形式的绝对路径应识别为仓库内'
 
 # 编辑决策：Claude 可 ask；Codex 的 ask 会放行，须降为 deny。
 $cases = @(
@@ -53,9 +61,15 @@ $cases = @(
     @{ Path = 'io_sheet.ioc'; Tool = 'Edit'; Expected = 'deny' }
     @{ Path = 'stm32h743zgtx_flash.ld'; Tool = 'apply_patch'; Expected = 'deny' }
     @{ Path = 'startup_stm32h743xx.s'; Tool = 'Edit'; Expected = 'deny' }
-    @{ Path = 'Core/Inc/FreeRTOSConfig.h'; Tool = 'Edit'; Expected = 'ask' }
-    @{ Path = 'Core/Inc/FreeRTOSConfig.h'; Tool = 'apply_patch'; Expected = 'deny' }
+    @{ Path = 'Middlewares/Third_Party/FreeRTOS/Config/FreeRTOSConfig.h'; Tool = 'Edit'; Expected = 'ask' }
+    @{ Path = 'Middlewares/Third_Party/FreeRTOS/Config/FreeRTOSConfig.h'; Tool = 'apply_patch'; Expected = 'deny' }
     @{ Path = 'Middlewares/Third_Party/LVGL/lv_conf.h'; Tool = 'Edit'; Expected = 'ask' }
+    @{ Path = 'FATFS/Target/ffconf.h'; Tool = 'Edit'; Expected = 'ask' }
+    @{ Path = 'Core/Inc/stm32h7xx_hal_conf.h'; Tool = 'Edit'; Expected = 'ask' }
+    @{ Path = 'Tools/external_loader/include/stm32h7xx_hal_conf.h'; Tool = 'apply_patch'; Expected = 'allow' }
+    @{ Path = 'Core/Src/system_stm32h7xx.c'; Tool = 'Edit'; Expected = 'deny' }
+    @{ Path = 'Core/Src/syscalls.c'; Tool = 'Edit'; Expected = 'deny' }
+    @{ Path = 'Middlewares/Third_Party/FatFs/src/ff.c'; Tool = 'Edit'; Expected = 'deny' }
     @{ Path = 'Core/Src/main.c'; Tool = 'Edit'; Expected = 'ask' }
     @{ Path = 'Core/Src/main.c'; Tool = 'apply_patch'; Expected = 'deny' }
     @{ Path = 'Core/Src/brand_new_file.c'; Tool = 'Write'; Expected = 'allow' }
@@ -75,8 +89,15 @@ $blocked = @(
     'git push -f'
     'git push --force-with-lease=main:abc origin main'
     'git push origin +main'
+    'git push --force-with-lease origin my-feature'
+    'git commit "--no-verify" -m x'
+    'git commit ''--no-verify'' -m x'
+    'git commit --no-veri -m x'
+    'git commit -m "a|b" --no-verify'
     '$env:ALLOW_GENERATED_UPDATE = ''1''; git commit -m x'
     'setx ALLOW_GENERATED_UPDATE 1'
+    'Set-Item env:ALLOW_GENERATED_UPDATE 1'
+    'export ALLOW_GENERATED_UPDATE=1'
     'git config core.hooksPath /tmp/none'
 )
 foreach ($command in $blocked) {
@@ -88,6 +109,10 @@ $allowed = @(
     'git status -sb'
     'git commit -m "feat(gui): 唱盘旋转"'
     'git commit --amend -m "fix(fs): 修复"'
+    'git commit --amend --no-edit'
+    'git commit -m "docs: 说明 -name 用法"'
+    'git commit -m "fix: 去掉 -n 参数"'
+    'git push --follow-tags origin main'
     'git push origin main'
     'git push -u origin v0.5.0-reshape'
     './scripts/verify.ps1'

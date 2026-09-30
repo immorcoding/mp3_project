@@ -10,9 +10,10 @@ try {
     }
 
     $repositoryRoot = Get-AgentHookRepositoryRoot
+    $baseDirectory = [string](Get-AgentHookProperty -Object $hookInput -Name 'cwd')
     $violations = New-Object System.Collections.Generic.List[string]
     foreach ($path in @(Get-AgentHookEditPath -ToolInput (Get-AgentHookProperty -Object $hookInput -Name 'tool_input'))) {
-        $relativePath = ConvertTo-AgentHookRelativePath -RepositoryRoot $repositoryRoot -Path $path
+        $relativePath = ConvertTo-AgentHookRelativePath -RepositoryRoot $repositoryRoot -Path $path -BaseDirectory $baseDirectory
         if ($null -eq $relativePath) {
             continue
         }

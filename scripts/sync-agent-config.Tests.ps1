@@ -44,17 +44,37 @@ try {
     [System.IO.File]::WriteAllText($skillCopy, ([System.IO.File]::ReadAllText($skillCopy) -replace "`n", "`r`n"))
     Assert-SyncEqual -Expected 0 -Actual @(Get-AgentConfigDrift -RepositoryRoot $fixtureRoot).Count -Message 'CRLF 不应视为漂移'
 
-    # 手改生成物与多余文件都是漂移。
+    $skillText = [System.IO.File]::ReadAllText($skillCopy) -replace "`r`n", "`n"
+    if ($skillText -notmatch "(?s)^---\nname: demo\n---\n\n<!-- 由 scripts/sync-agent-config\.ps1 .*? -->\n\n技能正文\n$") {
+        throw "Skill 副本应在 frontmatter 后插入生成标记：$skillText"
+    }
+
+    # 不带标记的本地私有 agent / skill 不算漂移，也不被删除。
+    Write-FixtureText -Root $fixtureRoot -Relative '.claude/agents/my-private.md' -Text "---`nname: mine`n---`n私有`n"
+    Write-FixtureText -Root $fixtureRoot -Relative '.claude/skills/my-skill/SKILL.md' -Text "---`nname: my-skill`n---`n私有`n"
+    Assert-SyncEqual -Expected 0 -Actual @(Get-AgentConfigDrift -RepositoryRoot $fixtureRoot).Count -Message '本地私有配置不应视为漂移'
+
+    # 手改生成物、带标记的多余文件都是漂移。
+    $managedPrivate = [System.IO.File]::ReadAllText((Join-Path $fixtureRoot '.codex/agents/probe.toml')) -replace 'name = "probe"', 'name = "stale"'
     Write-FixtureText -Root $fixtureRoot -Relative '.claude/agents/probe.md' -Text '手改'
-    Write-FixtureText -Root $fixtureRoot -Relative '.codex/agents/stale.toml' -Text 'name = "stale"'
+    Write-FixtureText -Root $fixtureRoot -Relative '.codex/agents/stale.toml' -Text $managedPrivate
     $drift = @(Get-AgentConfigDrift -RepositoryRoot $fixtureRoot)
-    Assert-SyncEqual -Expected 2 -Actual $drift.Count -Message '手改与多余文件应各报一处'
+    Assert-SyncEqual -Expected 2 -Actual $drift.Count -Message '手改与带标记的多余文件应各报一处'
 
     [void](Invoke-AgentConfigSync -RepositoryRoot $fixtureRoot)
     Assert-SyncEqual -Expected 0 -Actual @(Get-AgentConfigDrift -RepositoryRoot $fixtureRoot).Count -Message '重新同步应恢复并清掉多余文件'
     if (Test-Path -LiteralPath (Join-Path $fixtureRoot '.codex/agents/stale.toml')) {
-        throw '重新同步后多余文件应被删除'
+        throw '重新同步后带标记的多余文件应被删除'
     }
+    if (-not (Test-Path -LiteralPath (Join-Path $fixtureRoot '.claude/skills/my-skill/SKILL.md'))) {
+        throw '重新同步不得删除本地私有 Skill'
+    }
+
+    # 正文 Skill 删除后，残留的受管副本被检出并在同步时清掉。
+    Remove-Item -LiteralPath (Join-Path $fixtureRoot '.agents/skills/demo') -Recurse -Force
+    Assert-SyncEqual -Expected 2 -Actual @(Get-AgentConfigDrift -RepositoryRoot $fixtureRoot).Count -Message '已删 Skill 的两个副本文件应报漂移'
+    [void](Invoke-AgentConfigSync -RepositoryRoot $fixtureRoot)
+    Assert-SyncEqual -Expected 0 -Actual @(Get-AgentConfigDrift -RepositoryRoot $fixtureRoot).Count -Message '同步后应清掉已删 Skill 的副本'
 
     # 定义不合法时拒绝生成。
     Write-FixtureText -Root $fixtureRoot -Relative '.agents/reviewers/bad.md' -Text "---`nname: bad`n---`n正文`n"

@@ -75,7 +75,7 @@ Claude Code（`.claude/settings.json`）与 Codex（`.codex/hooks.json`）调用
 | PostToolUse（编辑） | `check-edited.ps1` | 只对刚编辑的源文件做分层 include 检查，越层以退出码 2 反馈 |
 | SessionStart | `session-brief.ps1` | 注入分支、脏文件数与 `ready-for-agent` / `hw:pending` 事项 |
 
-受保护路径复用 `check-generated-write.ps1`，分层映射复用 `check-layer-includes.ps1`；不在 Hook 配置中复制路径表。Agent Hook 是提前拦截，Git Hook 仍是最终闸门。Codex 项目级 Hook 首次使用需在 Codex 内信任一次，Hook 改动后需重新确认。
+生成/Vendor 前缀复用 `check-generated-write.ps1`，分层映射复用 `check-layer-includes.ps1`；Hook 专有的 CubeMX 源、配置头与 USER CODE 根只在 `agent_hook_helpers.ps1` 定义，`.claude/settings.json` 与 `.codex/hooks.json` 不写路径。经 Shell 直接写文件（`Set-Content`、`sed -i`）不经过编辑守卫，仍由 FAST 的写保护兜底。Agent Hook 是提前拦截，Git Hook 仍是最终闸门。Codex 项目级 Hook 首次使用需在 Codex 内信任一次，Hook 改动后需重新确认。
 
 ## Agent 路由与独立审校
 

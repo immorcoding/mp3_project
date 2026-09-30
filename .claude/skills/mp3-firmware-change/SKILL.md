@@ -3,6 +3,8 @@ name: mp3-firmware-change
 description: Route implementation, fixes, and refactors in this STM32H743 MP3 firmware to the affected Module documentation and verification without duplicating the domain dictionary. Use for changes under APP, Service, Platform, Components, Adapters, FATFS, FreeRTOS configuration, or firmware build integration; do not use for unrelated repository prose edits.
 ---
 
+<!-- 由 scripts/sync-agent-config.ps1 从 .agents/skills/mp3-firmware-change/SKILL.md 生成，勿手改。 -->
+
 # MP3 固件变更路由
 
 任务来自 GitHub issue 时先读该 issue 及评论；再读目标路径上最近的子 `AGENTS.md` 与相关 `docs/shape/` 领域文件。只按需求与实际路径读取相关 Module README、`docs/*_architecture.md` 和 `CONTEXT.md` 对应词条；不要把这些事实复制进本 Skill 或子 `AGENTS.md`。

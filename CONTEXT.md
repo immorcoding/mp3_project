@@ -402,7 +402,7 @@ Device 错误表示“哪个语义步骤失败”，归一化传输状态表示�
 
 **FTL 格式化**建立底层卷与空闲块，**FatFs 格式化**在其逻辑扇区上建立文件系统。Filesystem Service 与 FTL 都不因挂载失败而自动执行格式化；Storage Task 可用宏决定是否显式调用 `FormatAndMountFlash`。
 
-规则见 [flash_ftl_design.md](docs/flash_ftl_design.md) 与 [ADR-0011](docs/adr/0011-ftl-copy-on-write-and-recovery.md)。板级掉电验收状态见该设计文档，不写在 issue 或章程里。
+规则见 [flash_ftl_design.md](docs/flash_ftl_design.md) 与 [ADR-0011](docs/adr/0011-ftl-copy-on-write-and-recovery.md)。板级掉电验收的判据与结论见该设计文档；验收过程与证据按 WF-3 贴在对应 issue。
 
 相关术语：**W25Qxx 设备**、**平台 Flash**。
 

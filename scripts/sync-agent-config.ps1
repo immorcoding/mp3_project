@@ -9,7 +9,8 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path -Path $PSScriptRoot -ChildPath 'build_helpers.ps1')
 
 # HAR-2：Skill 与审阅 Agent 的正文只在 .agents/；.claude/ 与 .codex/ 下的对应文件由本脚本生成。
-$script:AgentConfigGeneratedRoots = @('.claude/agents', '.claude/skills', '.codex/agents')
+# 生成物带标记；不带标记的文件视为用户本地私有配置，不纳入漂移检查也不删除。
+$script:AgentConfigMarker = '由 scripts/sync-agent-config.ps1'
 
 function ConvertTo-AgentConfigText {
     param(
@@ -103,13 +104,24 @@ function Get-AgentConfigExpectedFile {
         $skillPrefix = (Resolve-Path -LiteralPath $skillRoot).Path.TrimEnd('\') + '\'
         foreach ($file in @(Get-ChildItem -LiteralPath $skillRoot -Recurse -File | Sort-Object FullName)) {
             $relative = $file.FullName.Substring($skillPrefix.Length) -replace '\\', '/'
-            $expected[".claude/skills/$relative"] = Read-AgentConfigText -Path $file.FullName
+            $text = Read-AgentConfigText -Path $file.FullName
+            if ($relative -match '^[^/]+/SKILL\.md$') {
+                $marker = "<!-- $($script:AgentConfigMarker) 从 .agents/skills/$relative 生成，勿手改。 -->"
+                if ($text -match '(?s)^(---\n.*?\n---\n)(.*)$') {
+                    $text = $Matches[1] + "`n" + $marker + "`n" + $Matches[2]
+                }
+                else {
+                    $text = $marker + "`n`n" + $text
+                }
+            }
+            $expected[".claude/skills/$relative"] = $text
         }
     }
 
     return $expected
 }
 
+# 列出目标目录中带生成标记的受管文件（Skill 以目录为单位：其 SKILL.md 带标记则整目录受管）。
 function Get-AgentConfigActualPath {
     param(
         [Parameter(Mandatory)][string]$RepositoryRoot
@@ -117,13 +129,30 @@ function Get-AgentConfigActualPath {
 
     $rootPrefix = (Resolve-Path -LiteralPath $RepositoryRoot).Path.TrimEnd('\') + '\'
     $paths = New-Object System.Collections.Generic.List[string]
-    foreach ($generatedRoot in $script:AgentConfigGeneratedRoots) {
-        $fullRoot = Join-Path -Path $RepositoryRoot -ChildPath $generatedRoot
+
+    foreach ($agentRoot in @('.claude/agents', '.codex/agents')) {
+        $fullRoot = Join-Path -Path $RepositoryRoot -ChildPath $agentRoot
         if (-not (Test-Path -LiteralPath $fullRoot -PathType Container)) {
             continue
         }
         foreach ($file in @(Get-ChildItem -LiteralPath $fullRoot -Recurse -File)) {
-            [void]$paths.Add(($file.FullName.Substring($rootPrefix.Length) -replace '\\', '/'))
+            if ((Read-AgentConfigText -Path $file.FullName).Contains($script:AgentConfigMarker)) {
+                [void]$paths.Add(($file.FullName.Substring($rootPrefix.Length) -replace '\\', '/'))
+            }
+        }
+    }
+
+    $skillRoot = Join-Path -Path $RepositoryRoot -ChildPath '.claude/skills'
+    if (Test-Path -LiteralPath $skillRoot -PathType Container) {
+        foreach ($skillDirectory in @(Get-ChildItem -LiteralPath $skillRoot -Directory)) {
+            $skillFile = Join-Path -Path $skillDirectory.FullName -ChildPath 'SKILL.md'
+            if (-not (Test-Path -LiteralPath $skillFile -PathType Leaf) -or
+                -not (Read-AgentConfigText -Path $skillFile).Contains($script:AgentConfigMarker)) {
+                continue
+            }
+            foreach ($file in @(Get-ChildItem -LiteralPath $skillDirectory.FullName -Recurse -File)) {
+                [void]$paths.Add(($file.FullName.Substring($rootPrefix.Length) -replace '\\', '/'))
+            }
         }
     }
 

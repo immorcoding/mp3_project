@@ -26,7 +26,9 @@ function Invoke-BriefCommand {
     $startInfo.CreateNoWindow = $true
 
     $process = [System.Diagnostics.Process]::Start($startInfo)
+    # stdout 与 stderr 都异步读空，避免任一管道缓冲写满导致子进程阻塞。
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    [void]$process.StandardError.ReadToEndAsync()
     if (-not $process.WaitForExit($TimeoutMilliseconds)) {
         try { $process.Kill() } catch { }
         return $null

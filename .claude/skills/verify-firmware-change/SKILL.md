@@ -3,6 +3,8 @@ name: verify-firmware-change
 description: Select and run FAST, CHANGED, FULL, and HARDWARE validation for this repository. Use when completing a non-trivial firmware change, checking commit or push readiness, changing harness rules/tests, refactoring, changing a public interface, or preparing a release; do not substitute it for diagnosing a specific failing test.
 ---
 
+<!-- 由 scripts/sync-agent-config.ps1 从 .agents/skills/verify-firmware-change/SKILL.md 生成，勿手改。 -->
+
 # 固件变更验证
 
 验证入口和状态语义以 `docs/verification.md` 为准，不在 Skill 内复制路径映射。

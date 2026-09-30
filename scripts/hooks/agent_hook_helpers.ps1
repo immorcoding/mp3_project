@@ -15,11 +15,12 @@ $script:AgentHookCubeMxSourcePatterns = @(
     '(?i)^\.mxproject$'
 )
 
+# 完整路径：Tools/external_loader 下的同名头文件是自维护的，不能按文件名匹配。
 $script:AgentHookGeneratorConfigHeaders = @(
     'Middlewares/Third_Party/LVGL/lv_conf.h'
-    'FreeRTOSConfig.h'
-    'ffconf.h'
-    'stm32h7xx_hal_conf.h'
+    'Middlewares/Third_Party/FreeRTOS/Config/FreeRTOSConfig.h'
+    'FATFS/Target/ffconf.h'
+    'Core/Inc/stm32h7xx_hal_conf.h'
 )
 
 $script:AgentHookUserCodeRoots = @('Core/', 'FATFS/', 'USB_DEVICE/')
@@ -67,34 +68,43 @@ function Get-AgentHookEditPath {
     return $paths.ToArray()
 }
 
-# 仓库外路径返回 $null，不归本仓库 Hook 管。
+# 相对路径以 BaseDirectory（Hook 输入的 cwd，缺省为仓库根）为基准；规范化后消去 `..`。
+# Git Bash 形式 /e/... 视为 E:/...。仓库外路径返回 $null，不归本仓库 Hook 管。
 function ConvertTo-AgentHookRelativePath {
     param(
         [Parameter(Mandatory)][string]$RepositoryRoot,
-        [Parameter(Mandatory)][string]$Path
+        [Parameter(Mandatory)][string]$Path,
+        [string]$BaseDirectory
     )
 
-    $normalized = ($Path -replace '\\', '/').Trim()
-    if (-not [System.IO.Path]::IsPathRooted($Path)) {
-        return $normalized.TrimStart('/') -replace '^\./', ''
+    $candidate = ($Path.Trim() -replace '^/([a-zA-Z])/', '$1:/')
+    if ([string]::IsNullOrWhiteSpace($BaseDirectory)) {
+        $BaseDirectory = $RepositoryRoot
+    }
+    $BaseDirectory = ($BaseDirectory -replace '^/([a-zA-Z])/', '$1:/')
+    if (-not [System.IO.Path]::IsPathRooted($candidate)) {
+        $candidate = Join-Path -Path $BaseDirectory -ChildPath $candidate
     }
 
-    $rootPrefix = (($RepositoryRoot -replace '\\', '/').TrimEnd('/')) + '/'
-    if ($normalized.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $normalized.Substring($rootPrefix.Length)
+    $full = [System.IO.Path]::GetFullPath($candidate) -replace '\\', '/'
+    $rootPrefix = ([System.IO.Path]::GetFullPath($RepositoryRoot) -replace '\\', '/').TrimEnd('/') + '/'
+    if ($full.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $full.Substring($rootPrefix.Length)
     }
 
     return $null
 }
 
-function Test-AgentHookUserCodeFile {
+# Core/、FATFS/、USB_DEVICE/ 下的已有文件：含 USER CODE 区返回 'usercode'，
+# 仅带 ST 生成声明返回 'generated'，其余（含新文件与自维护的 bsp_driver_user_diskio.*）返回 $null。
+function Get-AgentHookCubeMxFileKind {
     param(
         [Parameter(Mandatory)][string]$RepositoryRoot,
         [Parameter(Mandatory)][string]$RelativePath
     )
 
     if ($RelativePath -match '(?i)^FATFS/Target/bsp_driver_user_diskio\.') {
-        return $false
+        return $null
     }
 
     $underRoot = $false
@@ -105,15 +115,23 @@ function Test-AgentHookUserCodeFile {
         }
     }
     if (-not $underRoot) {
-        return $false
+        return $null
     }
 
     $fullPath = Join-Path -Path $RepositoryRoot -ChildPath $RelativePath
     if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
-        return $false
+        return $null
     }
 
-    return [bool](Select-String -LiteralPath $fullPath -Pattern 'USER CODE BEGIN' -SimpleMatch -Quiet)
+    if (Select-String -LiteralPath $fullPath -Pattern 'USER CODE BEGIN' -SimpleMatch -Quiet) {
+        return 'usercode'
+    }
+    $header = @(Get-Content -LiteralPath $fullPath -TotalCount 40) -join "`n"
+    if ($header -match 'STMicroelectronics') {
+        return 'generated'
+    }
+
+    return $null
 }
 
 # 返回 @{ Decision = 'allow'|'ask'|'deny'; Reason = '...' }。
@@ -127,11 +145,8 @@ function Get-AgentHookEditDecision {
     $normalized = ($RelativePath -replace '\\', '/').TrimStart('/')
     $askOrDeny = if ($script:AgentHookAskUnsupportedTools -contains $ToolName) { 'deny' } else { 'ask' }
 
-    foreach ($header in $script:AgentHookGeneratorConfigHeaders) {
-        $leaf = ($header -split '/')[-1]
-        if (($normalized -ieq $header) -or ($normalized -match ('(?i)(^|/)' + [regex]::Escape($leaf) + '$'))) {
-            return @{ Decision = $askOrDeny; Reason = "$normalized 是生成器配置头，改动前须经用户确认（AGENTS.md 硬规则）。" }
-        }
+    if ($script:AgentHookGeneratorConfigHeaders -icontains $normalized) {
+        return @{ Decision = $askOrDeny; Reason = "$normalized 是生成器配置头，改动前须经用户确认（AGENTS.md 硬规则）。" }
     }
 
     if (Test-GeneratedWriteProtectedPath -RelativePath $normalized) {
@@ -144,8 +159,12 @@ function Get-AgentHookEditDecision {
         }
     }
 
-    if (Test-AgentHookUserCodeFile -RepositoryRoot $RepositoryRoot -RelativePath $normalized) {
+    $cubeMxKind = Get-AgentHookCubeMxFileKind -RepositoryRoot $RepositoryRoot -RelativePath $normalized
+    if ($cubeMxKind -eq 'usercode') {
         return @{ Decision = $askOrDeny; Reason = "$normalized 是 CubeMX 生成文件，只准在 USER CODE 区放对自维护入口的调用或转发（ARC-3），须经用户确认。" }
+    }
+    if ($cubeMxKind -eq 'generated') {
+        return @{ Decision = 'deny'; Reason = "$normalized 带 ST 生成声明且没有 USER CODE 区，只认生成器（ARC-2）。" }
     }
 
     return @{ Decision = 'allow'; Reason = '' }
@@ -161,21 +180,32 @@ function Get-AgentHookShellViolation {
         return $null
     }
 
-    $segment = '[^;&|\r\n]*'
-    if ($Command -match "\bgit\b$segment\s--no-verify\b" -or $Command -match "\bgit\b$segment\bcommit\b$segment\s-[a-zA-Z]*n[a-zA-Z]*\b") {
-        return '禁止跳过 Git Hook（--no-verify / commit -n）：FAST/CHANGED 是唯一自动闸门（GIT-4）。'
+    # --no-verify：git 接受唯一前缀（--no-veri…），也可能带引号；宁可误拦含该字样的提交信息。
+    if ($Command -match '\bgit\b' -and $Command -match '(?i)(^|[\s''"=])--no-veri') {
+        return '禁止跳过 Git Hook（--no-verify）：FAST/CHANGED 是唯一自动闸门（GIT-4）。'
     }
 
-    if ($Command -match "\bgit\b$segment\bpush\b$segment(\s--force(-with-lease)?\b|\s-[a-zA-Z]*f[a-zA-Z]*\b|\s\+\S)") {
-        return '禁止 Agent 强推（GIT-4）；确需覆盖远端时由用户本人执行。'
+    # 其余规则先去掉引号内的内容（提交信息等），再按 ; & | 换行 切分命令段。
+    $unquoted = $Command -replace '"(?:[^"\\]|\\.)*"', '""' -replace "'[^']*'", "''"
+    foreach ($segment in ($unquoted -split '[;&|\r\n]+')) {
+        if ($segment -notmatch '\bgit\b') {
+            continue
+        }
+        if ($segment -match '\bcommit\b' -and $segment -cmatch '\s-[a-zA-Z]*n[a-zA-Z]*(\s|$)') {
+            return '禁止跳过 Git Hook（commit -n）：FAST/CHANGED 是唯一自动闸门（GIT-4）。'
+        }
+        if ($segment -match '\bpush\b' -and $segment -match '(\s--force(-with-lease|-if-includes)?\b|\s-[a-zA-Z]*f[a-zA-Z]*(\s|$)|\s\+\S)') {
+            return '禁止 Agent 强推任何分支（GIT-4）；确需覆盖远端时由用户本人执行。'
+        }
+        if ($segment -match '\bcore\.hooksPath\b') {
+            return '禁止改写 core.hooksPath；Hook 安装只走 scripts/install-git-hooks.ps1。'
+        }
     }
 
-    if ($Command -match '(?i)ALLOW_GENERATED_UPDATE\s*=|setx\s+ALLOW_GENERATED_UPDATE|SetEnvironmentVariable\(\s*[''"]ALLOW_GENERATED_UPDATE') {
+    # 只放行对 ALLOW_GENERATED_UPDATE 的读取；任何赋值、setx、Set-Item/New-Item env:、export、cmd set 都拦。
+    if ($Command -match '(?i)ALLOW_GENERATED_UPDATE' -and
+        $Command -match '(?i)ALLOW_GENERATED_UPDATE\s*=|\bsetx\b|\bSet-Item\b|\bNew-Item\b|\bSet-Content\b|SetEnvironmentVariable|\bexport\b|(^|[\s;&])set\s+ALLOW_GENERATED_UPDATE') {
         return '禁止 Agent 设置 ALLOW_GENERATED_UPDATE；只有维护者本人在当前会话为重新导出设置。'
-    }
-
-    if ($Command -match "\bgit\b$segment\bcore\.hooksPath\b") {
-        return '禁止改写 core.hooksPath；Hook 安装只走 scripts/install-git-hooks.ps1。'
     }
 
     return $null
