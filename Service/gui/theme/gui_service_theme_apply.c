@@ -16,7 +16,7 @@
 #include "Service/gui/theme/gui_service_theme.h"
 #include "Service/gui/theme/gui_service_theme_config.h"
 
-#include "GUI/ui.h"
+#include "Service/gui/view/gui_service_view.h"
 
 static lv_theme_t service_gui_theme_instance;
 static lv_style_t service_gui_theme_filter_style;
@@ -160,10 +160,12 @@ void service_gui_theme_bind_tree(lv_obj_t *root)
  */
 void service_gui_theme_bind_screens(void)
 {
-    service_gui_theme_bind_tree(ui_Boot);
-    service_gui_theme_bind_tree(ui_BootReveal);
-    service_gui_theme_bind_tree(ui_Lock);
-    service_gui_theme_bind_tree(ui_Main);
+    const Service_GUI_ViewTypeDef *view = service_gui_view_get();
+
+    service_gui_theme_bind_tree(view->boot.screen);
+    service_gui_theme_bind_tree(view->boot_reveal);
+    service_gui_theme_bind_tree(view->lock);
+    service_gui_theme_bind_tree(view->main.screen);
 }
 
 /**
@@ -198,32 +200,32 @@ static void service_gui_theme_apply_screen_chrome(lv_obj_t *screen)
  * @note Default 的裁剪图由 background_prepare 绑定，此处不写 src，以免运行时切回
  *       Default 时丢掉已生成的图。Solid 清除 src，避免残留毛玻璃。
  */
-static void service_gui_theme_apply_tabs_chrome(void)
+static void service_gui_theme_apply_tabs_chrome(lv_obj_t *tabs)
 {
     if (service_gui_theme_uses_glass())
     {
         lv_obj_set_style_bg_opa(
-            ui_MusicModeTabs,
+            tabs,
             LV_OPA_TRANSP,
             LV_PART_MAIN | LV_STATE_DEFAULT);
     }
     else
     {
         lv_obj_set_style_bg_img_src(
-            ui_MusicModeTabs,
+            tabs,
             NULL,
             LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_bg_img_opa(
-            ui_MusicModeTabs,
+            tabs,
             LV_OPA_TRANSP,
             LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_bg_opa(
-            ui_MusicModeTabs,
+            tabs,
             SERVICE_GUI_THEME_SOLID_TABS_WASH_OPA,
             LV_PART_MAIN | LV_STATE_DEFAULT);
     }
 
-    lv_obj_invalidate(ui_MusicModeTabs);
+    lv_obj_invalidate(tabs);
 }
 
 /**
@@ -290,6 +292,7 @@ Service_StatusTypeDef service_gui_theme_attach(lv_disp_t *disp)
  */
 Service_StatusTypeDef Service_GUI_ThemeApply(uint8_t id)
 {
+    const Service_GUI_ViewTypeDef *view = service_gui_view_get();
     Service_StatusTypeDef status;
 
     status = service_gui_theme_select(id);
@@ -298,17 +301,17 @@ Service_StatusTypeDef Service_GUI_ThemeApply(uint8_t id)
         return status;
     }
 
-    if ((ui_Boot == NULL) || (ui_BootReveal == NULL) ||
-        (ui_Lock == NULL) || (ui_Main == NULL) || (ui_MusicModeTabs == NULL))
+    if ((view->boot.screen == NULL) || (view->boot_reveal == NULL) ||
+        (view->lock == NULL) || (view->main.screen == NULL) || (view->music.tabs == NULL))
     {
         return SERVICE_NOT_READY;
     }
 
-    service_gui_theme_apply_screen_chrome(ui_Boot);
-    service_gui_theme_apply_screen_chrome(ui_BootReveal);
-    service_gui_theme_apply_screen_chrome(ui_Lock);
-    service_gui_theme_apply_screen_chrome(ui_Main);
-    service_gui_theme_apply_tabs_chrome();
+    service_gui_theme_apply_screen_chrome(view->boot.screen);
+    service_gui_theme_apply_screen_chrome(view->boot_reveal);
+    service_gui_theme_apply_screen_chrome(view->lock);
+    service_gui_theme_apply_screen_chrome(view->main.screen);
+    service_gui_theme_apply_tabs_chrome(view->music.tabs);
     service_gui_theme_bind_screens();
 
     if (lv_scr_act() != NULL)

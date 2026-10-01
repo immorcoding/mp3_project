@@ -19,6 +19,7 @@
 #include "Service/gui/main/queue/gui_service_main_queue.h"
 #include "Service/gui/main/transport/gui_service_main_transport.h"
 #include "Service/gui/theme/gui_service_theme_apply.h"
+#include "Service/gui/view/gui_service_view.h"
 
 #include <stdint.h>
 
@@ -28,8 +29,6 @@
 #include "Platform/touch/platform_touch.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
-
-#include "GUI/ui.h"
 
 /**
  * @brief LVGL v8 仅保存两块绘制缓冲的指针，故其存储期必须覆盖显示驱动的整个生命周期。
@@ -239,7 +238,11 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
     }
 
     service_gui_last_tick = xTaskGetTickCount();
-    ui_init();
+    gui_status = service_gui_view_create();
+    if (gui_status != SERVICE_OK)
+    {
+        return gui_status;
+    }
 
     gui_status = service_gui_theme_attach(service_gui_display);
     if (gui_status != SERVICE_OK)
@@ -256,7 +259,7 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
     }
 
     gui_status = service_gui_main_prepare(
-        &ui_img_wallpaper_indigo_mist_soft_dark_png);
+        service_gui_view_wallpaper());
 
     if (gui_status != SERVICE_OK)
     {
@@ -266,7 +269,7 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
     service_gui_theme_bind_screens();
 
     gui_status = service_gui_boot_prepare_background(
-        &ui_img_wallpaper_indigo_mist_soft_dark_png);
+        service_gui_view_wallpaper());
 
     if (gui_status != SERVICE_OK)
     {

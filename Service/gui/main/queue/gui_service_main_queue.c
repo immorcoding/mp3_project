@@ -24,7 +24,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "GUI/ui.h"
+#include "Service/gui/view/gui_service_view.h"
 
 /**
  * @brief 已生成到 QueueTab 的一行对象。
@@ -36,6 +36,9 @@ typedef struct
     lv_obj_t *creator;  /**< 歌手 Label；元数据未落地前为空串。 */
     lv_obj_t *status;   /**< 右侧符号。 */
 } Service_GUI_MainQueueRowTypeDef;
+
+/** @brief Music 页对象句柄，prepare 时取得。 */
+static const Service_GUI_ViewMusicTypeDef *service_gui_main_queue_music;
 
 /** @brief 已按范本构造的行；未创建槽位保持 NULL。 */
 static Service_GUI_MainQueueRowTypeDef service_gui_main_queue_rows[
@@ -70,7 +73,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_t *creator;
     lv_obj_t *status;
 
-    panel = lv_obj_create(ui_QueueTab);
+    panel = lv_obj_create(service_gui_main_queue_music->queue_tab);
     if (panel == NULL)
     {
         return SERVICE_ERROR;
@@ -337,15 +340,6 @@ static void service_gui_main_queue_on_panel_clicked(lv_event_t *e)
 }
 
 /**
- * @brief 隐藏 SquareLine 单行范本，避免它占掉 QueueTab 的一个 Flex 槽。
- * @note 范本仍由 ui_init() 创建，本 Module 不删除、不改 GUI/。
- */
-static void service_gui_main_queue_hide_template(void)
-{
-    lv_obj_add_flag(ui_SongPanel1, LV_OBJ_FLAG_HIDDEN);
-}
-
-/**
  * @brief 显示或隐藏已构造的一行，不销毁对象。
  * @param[in,out] row 已按范本构造的行。
  * @param[in] hidden 为真则 Hidden，为假则参与 QueueTab Flex。
@@ -390,7 +384,7 @@ static lv_coord_t service_gui_main_queue_row_stride(void)
         return 0;
     }
 
-    pad_row = lv_obj_get_style_pad_row(ui_QueueTab, LV_PART_MAIN);
+    pad_row = lv_obj_get_style_pad_row(service_gui_main_queue_music->queue_tab, LV_PART_MAIN);
     return (lv_coord_t)(row_h + pad_row);
 }
 
@@ -404,7 +398,8 @@ uint16_t service_gui_main_queue_scroll_lead(void)
     lv_coord_t y;
     uint16_t lead;
 
-    if ((ui_QueueTab == NULL) || (ui_SongPanel1 == NULL))
+    if ((service_gui_main_queue_music == NULL) ||
+        (service_gui_main_queue_music->queue_tab == NULL))
     {
         return 0U;
     }
@@ -415,7 +410,7 @@ uint16_t service_gui_main_queue_scroll_lead(void)
         return 0U;
     }
 
-    y = lv_obj_get_scroll_y(ui_QueueTab);
+    y = lv_obj_get_scroll_y(service_gui_main_queue_music->queue_tab);
     if (y < 0)
     {
         y = 0;
@@ -449,28 +444,28 @@ static void service_gui_main_queue_rotate_down(uint16_t count)
     service_gui_main_queue_rows[count - 1U] = head;
     lv_obj_move_to_index(
         head.panel,
-        (int32_t)lv_obj_get_child_cnt(ui_QueueTab) - 1);
+        (int32_t)lv_obj_get_child_cnt(service_gui_main_queue_music->queue_tab) - 1);
 }
 
 /**
- * @brief 把尾行挪到范本之后，作为新的头行。
+ * @brief 把尾行挪到原头行的位置，作为新的头行。
  * @param[in] count 参与回收的已构造行数。
  */
 static void service_gui_main_queue_rotate_up(uint16_t count)
 {
     Service_GUI_MainQueueRowTypeDef tail;
+    int32_t head_index;
     uint16_t i;
 
     tail = service_gui_main_queue_rows[count - 1U];
+    head_index = (int32_t)lv_obj_get_index(service_gui_main_queue_rows[0].panel);
     for (i = (uint16_t)(count - 1U); i > 0U; i--)
     {
         service_gui_main_queue_rows[i] = service_gui_main_queue_rows[i - 1U];
     }
 
     service_gui_main_queue_rows[0] = tail;
-    lv_obj_move_to_index(
-        tail.panel,
-        (int32_t)lv_obj_get_index(ui_SongPanel1) + 1);
+    lv_obj_move_to_index(tail.panel, head_index);
 }
 
 /**
@@ -520,32 +515,33 @@ static void service_gui_main_queue_adjust_scroll(int32_t index_delta)
         return;
     }
 
-    y = lv_obj_get_scroll_y(ui_QueueTab);
+    y = lv_obj_get_scroll_y(service_gui_main_queue_music->queue_tab);
     next_y = (int32_t)y - (index_delta * (int32_t)stride);
     if (next_y < 0)
     {
         next_y = 0;
     }
 
-    lv_obj_scroll_to_y(ui_QueueTab, (lv_coord_t)next_y, LV_ANIM_OFF);
+    lv_obj_scroll_to_y(service_gui_main_queue_music->queue_tab, (lv_coord_t)next_y, LV_ANIM_OFF);
 }
 
 /**
- * @brief 隐藏范本并打开 QueueTab 竖向滚动，不预先造行。
- * @retval SERVICE_OK 范本已隐藏。
- * @retval SERVICE_NOT_READY QueueTab 或范本尚未导出。
- * @note 必须在 ui_init() 之后、Boot 占用 Canvas 之前由 Main 编排入口调用。
+ * @brief 打开 QueueTab 竖向滚动，不预先造行。
+ * @retval SERVICE_OK 已就绪。
+ * @retval SERVICE_NOT_READY QueueTab 尚未创建。
+ * @note 必须在界面创建之后、Boot 占用 Canvas 之前由 Main 编排入口调用。
  *       可见行等 GUI Task 经 QueueApply 按 Length 填入。
  */
 Service_StatusTypeDef service_gui_main_queue_prepare(void)
 {
-    if ((ui_QueueTab == NULL) || (ui_SongPanel1 == NULL))
+    service_gui_main_queue_music = &service_gui_view_get()->music;
+
+    if (service_gui_main_queue_music->queue_tab == NULL)
     {
         return SERVICE_NOT_READY;
     }
 
-    lv_obj_add_flag(ui_QueueTab, LV_OBJ_FLAG_SCROLLABLE);
-    service_gui_main_queue_hide_template();
+    lv_obj_add_flag(service_gui_main_queue_music->queue_tab, LV_OBJ_FLAG_SCROLLABLE);
     return SERVICE_OK;
 }
 
@@ -573,7 +569,8 @@ Service_StatusTypeDef service_gui_main_queue_apply(
     uint16_t old_index;
     int32_t delta;
 
-    if ((ui_QueueTab == NULL) || (ui_SongPanel1 == NULL))
+    if ((service_gui_main_queue_music == NULL) ||
+        (service_gui_main_queue_music->queue_tab == NULL))
     {
         return SERVICE_NOT_READY;
     }
@@ -598,7 +595,7 @@ Service_StatusTypeDef service_gui_main_queue_apply(
         service_gui_main_queue_applied_index = 0U;
         service_gui_main_queue_applied_length = 0U;
         service_gui_input_drop_queue_select();
-        lv_obj_scroll_to_y(ui_QueueTab, 0, LV_ANIM_OFF);
+        lv_obj_scroll_to_y(service_gui_main_queue_music->queue_tab, 0, LV_ANIM_OFF);
         (void)current_index;
         return SERVICE_OK;
     }

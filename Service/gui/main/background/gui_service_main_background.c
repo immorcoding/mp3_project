@@ -7,7 +7,7 @@
   *          本 Module 不修改 SquareLine 导出的视觉设计。它在 Pager 完成布局和
   *          初始回中后读取对象实际屏幕坐标，以 Main Screen 为原点换算为壁纸坐标；
   *          随后从长期持有的全屏模糊壁纸裁剪出与 MusicModeTabs 等大的局部背景，并
-  *          仅将该运行时 Background image 绑定到 ui_MusicModeTabs。MainPageContainer
+  *          仅将该运行时 Background image 绑定到 MusicModeTabs。MainPageContainer
   *          滚动期间会按控件当帧坐标重裁剪，确保玻璃区域始终采样其下方壁纸；
   *          除此以外，本 Module 只处理 SquareLine 无法访问的 Tabview 内部 Content
   *          container，且绝不在滚动回调中重复执行全屏软件模糊。
@@ -25,7 +25,7 @@
 #include "Service/gui/canvas/gui_service_canvas_compositor.h"
 #include "Service/gui/theme/gui_service_theme.h"
 
-#include "GUI/ui.h"
+#include "Service/gui/view/gui_service_view.h"
 
 /**
  * @brief Main Screen 长期持有的 MusicModeTabs 局部毛玻璃裁剪像素缓冲。
@@ -38,6 +38,9 @@ static uint8_t service_gui_main_background_tabs_buffer[
         SERVICE_GUI_MAIN_BACKGROUND_TABS_MAX_HEIGHT)]
     __attribute__((section(".sdram_framebuffer"),
                    aligned(PLATFORM_DCACHE_LINE_SIZE)));
+
+/** @brief 界面对象句柄，prepare 时取得。 */
+static const Service_GUI_ViewTypeDef *service_gui_main_background_view;
 
 /** @brief 绑定 MusicModeTabs 局部背景的长期 LVGL 图片描述符。 */
 static lv_img_dsc_t service_gui_main_background_tabs_image;
@@ -207,16 +210,16 @@ static Service_StatusTypeDef service_gui_main_background_refresh_tabs(void)
     lv_area_t tabs_image_area;
 
     if (!service_gui_main_background_blurred_wallpaper_ready ||
-        (ui_Main == NULL) ||
-        (ui_MusicModeTabs == NULL))
+        (service_gui_main_background_view->main.screen == NULL) ||
+        (service_gui_main_background_view->music.tabs == NULL))
     {
         return SERVICE_NOT_READY;
     }
 
-    lv_obj_get_coords(ui_Main, &main_area);
+    lv_obj_get_coords(service_gui_main_background_view->main.screen, &main_area);
 
     status = service_gui_main_background_get_object_image_area(
-        ui_MusicModeTabs,
+        service_gui_main_background_view->music.tabs,
         &main_area,
         &tabs_image_area);
 
@@ -238,7 +241,7 @@ static Service_StatusTypeDef service_gui_main_background_refresh_tabs(void)
     }
 
     lv_img_cache_invalidate_src(&service_gui_main_background_tabs_image);
-    lv_obj_invalidate(ui_MusicModeTabs);
+    lv_obj_invalidate(service_gui_main_background_view->music.tabs);
 
     return SERVICE_OK;
 }
@@ -268,19 +271,19 @@ static void service_gui_main_background_page_scroll_event(lv_event_t *event)
  */
 static Service_StatusTypeDef service_gui_main_background_bind_scroll_event(void)
 {
-    if (ui_MainPageContainer == NULL)
+    if (service_gui_main_background_view->main.page_container == NULL)
     {
         return SERVICE_NOT_READY;
     }
 
-    if (ui_MainPageContainer != service_gui_main_background_page_container)
+    if (service_gui_main_background_view->main.page_container != service_gui_main_background_page_container)
     {
         lv_obj_add_event_cb(
-            ui_MainPageContainer,
+            service_gui_main_background_view->main.page_container,
             service_gui_main_background_page_scroll_event,
             LV_EVENT_SCROLL,
             NULL);
-        service_gui_main_background_page_container = ui_MainPageContainer;
+        service_gui_main_background_page_container = service_gui_main_background_view->main.page_container;
     }
 
     return SERVICE_OK;
@@ -304,16 +307,18 @@ Service_StatusTypeDef service_gui_main_background_prepare(
     lv_img_dsc_t *blurred_wallpaper;
     lv_area_t full_wallpaper_area;
 
+    service_gui_main_background_view = service_gui_view_get();
+
     if ((clear_wallpaper == NULL) ||
-        (ui_Main == NULL) ||
-        (ui_MainPageContainer == NULL) ||
-        (ui_MusicModeTabs == NULL))
+        (service_gui_main_background_view->main.screen == NULL) ||
+        (service_gui_main_background_view->main.page_container == NULL) ||
+        (service_gui_main_background_view->music.tabs == NULL))
     {
         return SERVICE_NOT_READY;
     }
 
     status = service_gui_main_background_make_tabview_content_transparent(
-        ui_MusicModeTabs);
+        service_gui_main_background_view->music.tabs);
 
     if (status != SERVICE_OK)
     {
@@ -321,7 +326,7 @@ Service_StatusTypeDef service_gui_main_background_prepare(
     }
 
     status = service_gui_main_background_disable_tabview_content_scroll(
-        ui_MusicModeTabs);
+        service_gui_main_background_view->music.tabs);
 
     if (status != SERVICE_OK)
     {
@@ -370,11 +375,11 @@ Service_StatusTypeDef service_gui_main_background_prepare(
     }
 
     lv_obj_set_style_bg_img_src(
-        ui_MusicModeTabs,
+        service_gui_main_background_view->music.tabs,
         &service_gui_main_background_tabs_image,
         LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_img_opa(
-        ui_MusicModeTabs,
+        service_gui_main_background_view->music.tabs,
         LV_OPA_COVER,
         LV_PART_MAIN | LV_STATE_DEFAULT);
 

@@ -17,13 +17,12 @@
 #include "Service/gui/boot/gui_service_boot_config.h"
 #include "Service/gui/canvas/gui_service_canvas.h"
 #include "Service/gui/theme/gui_service_theme.h"
+#include "Service/gui/view/gui_service_view.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "lvgl.h"
-
-#include "GUI/ui.h"
 
 #define SERVICE_GUI_BOOT_ARC_FULL_CIRCLE_DEG  (360U)
 #define SERVICE_GUI_BOOT_ARC_PHASE_MAX        (LV_BEZIER_VAL_MAX)
@@ -160,10 +159,11 @@ static void service_gui_boot_set_arc_phase(void *target, int32_t value)
 Service_StatusTypeDef service_gui_boot_prepare_background(
     const lv_img_dsc_t *clear_wallpaper)
 {
+    lv_obj_t *boot = service_gui_view_get()->boot.screen;
     Service_StatusTypeDef status;
     lv_img_dsc_t *blurred_wallpaper;
 
-    if (ui_Boot == NULL)
+    if (boot == NULL)
     {
         return SERVICE_NOT_READY;
     }
@@ -184,11 +184,11 @@ Service_StatusTypeDef service_gui_boot_prepare_background(
     }
 
     lv_obj_set_style_bg_img_src(
-        ui_Boot,
+        boot,
         blurred_wallpaper,
         LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_img_opa(
-        ui_Boot,
+        boot,
         LV_OPA_COVER,
         LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -203,22 +203,24 @@ Service_StatusTypeDef service_gui_boot_prepare_background(
  */
 static void service_gui_boot_load_lock_async(void *user_data)
 {
+    const Service_GUI_ViewTypeDef *view = service_gui_view_get();
+
     (void)user_data;
 
     service_gui_boot_lock_request_pending = false;
 
     if (service_gui_boot_lock_transition_started ||
-        (ui_BootReveal == NULL) ||
-        (ui_Lock == NULL))
+        (view->boot_reveal == NULL) ||
+        (view->lock == NULL))
     {
         return;
     }
 
     service_gui_boot_lock_transition_started = true;
 
-    /* SquareLine 持有 Screen 对象，不能让 LVGL 自动删除旧 Screen。 */
+    /* view/ 持有 Screen 对象，不能让 LVGL 自动删除旧 Screen。 */
     lv_scr_load_anim(
-        ui_Lock,
+        view->lock,
         LV_SCR_LOAD_ANIM_FADE_OUT,
         SERVICE_GUI_BOOT_LOCK_FADE_TIME_MS,
         SERVICE_GUI_BOOT_REVEAL_HOLD_TIME_MS,
@@ -236,7 +238,7 @@ void Service_GUI_Boot_RequestLock(lv_event_t *event)
 {
     if ((event == NULL) ||
         (lv_event_get_code(event) != LV_EVENT_SCREEN_LOADED) ||
-        (lv_event_get_target(event) != ui_BootReveal) ||
+        (lv_event_get_target(event) != service_gui_view_get()->boot_reveal) ||
         service_gui_boot_lock_request_pending ||
         service_gui_boot_lock_transition_started)
     {
@@ -259,12 +261,13 @@ void Service_GUI_Boot_RequestLock(lv_event_t *event)
  */
 void service_gui_boot_start(void)
 {
+    lv_obj_t *orbit_ring = service_gui_view_get()->boot.orbit_ring;
     lv_anim_t phase_animation;
 
     service_gui_boot_lock_request_pending = false;
     service_gui_boot_lock_transition_started = false;
 
-    if (ui_BootOrbitRing == NULL)
+    if (orbit_ring == NULL)
     {
         return;
     }
@@ -274,16 +277,16 @@ void service_gui_boot_start(void)
      * 删除同类动画，确保以后支持重新进入 Boot 时不会叠加重复动画。
      */
     (void)lv_anim_del(
-        ui_BootOrbitRing,
+        orbit_ring,
         service_gui_boot_set_arc_phase);
 
     /* MAIN 保持完整轨道，统一相位负责 INDICATOR 的转动和伸缩。 */
-    lv_arc_set_bg_angles(ui_BootOrbitRing, 0U, 360U);
-    lv_arc_set_rotation(ui_BootOrbitRing, 0U);
-    service_gui_boot_set_arc_phase(ui_BootOrbitRing, 0);
+    lv_arc_set_bg_angles(orbit_ring, 0U, 360U);
+    lv_arc_set_rotation(orbit_ring, 0U);
+    service_gui_boot_set_arc_phase(orbit_ring, 0);
 
     lv_anim_init(&phase_animation);
-    lv_anim_set_var(&phase_animation, ui_BootOrbitRing);
+    lv_anim_set_var(&phase_animation, orbit_ring);
     lv_anim_set_exec_cb(
         &phase_animation,
         service_gui_boot_set_arc_phase);

@@ -17,7 +17,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "GUI/ui.h"
+#include "Service/gui/view/gui_service_view.h"
 
 /**
  * @brief MainPageContainer 内三张 Page 的物理槽位编号。
@@ -40,6 +40,9 @@ typedef enum
     SERVICE_GUI_MAIN_PAGER_PAGE_BOOKS,        /**< 阅读页。 */
     SERVICE_GUI_MAIN_PAGER_PAGE_COUNT,        /**< 逻辑页数量，不是可滑动槽位。 */
 } Service_GUI_MainPagerPageTypeDef;
+
+/** @brief Main Screen 对象句柄，prepare 时取得。 */
+static const Service_GUI_ViewMainTypeDef *service_gui_main_pager_view;
 
 /** @brief 当前已完成吸附的物理槽位。 */
 static Service_GUI_MainPagerSlotTypeDef service_gui_main_pager_slot =
@@ -90,20 +93,20 @@ static lv_obj_t *service_gui_main_pager_container;
  */
 static Service_StatusTypeDef service_gui_main_pager_bind_slots(void)
 {
-    if ((ui_MainPageContainer == NULL) ||
-        (ui_SettingsPageContainer == NULL) ||
-        (ui_MusicPageContainer == NULL) ||
-        (ui_BooksPageContainer == NULL))
+    if ((service_gui_main_pager_view->page_container == NULL) ||
+        (service_gui_main_pager_view->settings_page == NULL) ||
+        (service_gui_main_pager_view->music_page == NULL) ||
+        (service_gui_main_pager_view->books_page == NULL))
     {
         return SERVICE_NOT_READY;
     }
 
     service_gui_main_pager_slots[SERVICE_GUI_MAIN_PAGER_SLOT_LEFT] =
-        ui_SettingsPageContainer;
+        service_gui_main_pager_view->settings_page;
     service_gui_main_pager_slots[SERVICE_GUI_MAIN_PAGER_SLOT_CENTER] =
-        ui_MusicPageContainer;
+        service_gui_main_pager_view->music_page;
     service_gui_main_pager_slots[SERVICE_GUI_MAIN_PAGER_SLOT_RIGHT] =
-        ui_BooksPageContainer;
+        service_gui_main_pager_view->books_page;
 
     return SERVICE_OK;
 }
@@ -117,26 +120,26 @@ static Service_StatusTypeDef service_gui_main_pager_bind_slots(void)
  */
 static Service_StatusTypeDef service_gui_main_pager_bind_dots(void)
 {
-    if ((ui_DotSettings == NULL) ||
-        (ui_DotMusic == NULL) ||
-        (ui_DotBooks == NULL))
+    if ((service_gui_main_pager_view->dot_settings == NULL) ||
+        (service_gui_main_pager_view->dot_music == NULL) ||
+        (service_gui_main_pager_view->dot_books == NULL))
     {
         return SERVICE_NOT_READY;
     }
 
     service_gui_main_pager_dots[SERVICE_GUI_MAIN_PAGER_PAGE_SETTINGS] =
-        ui_DotSettings;
+        service_gui_main_pager_view->dot_settings;
     service_gui_main_pager_dots[SERVICE_GUI_MAIN_PAGER_PAGE_MUSIC] =
-        ui_DotMusic;
+        service_gui_main_pager_view->dot_music;
     service_gui_main_pager_dots[SERVICE_GUI_MAIN_PAGER_PAGE_BOOKS] =
-        ui_DotBooks;
-    service_gui_main_pager_inactive_dot_width = lv_obj_get_width(ui_DotSettings);
+        service_gui_main_pager_view->dot_books;
+    service_gui_main_pager_inactive_dot_width = lv_obj_get_width(service_gui_main_pager_view->dot_settings);
     service_gui_main_pager_inactive_dot_opa = lv_obj_get_style_bg_opa(
-        ui_DotSettings,
+        service_gui_main_pager_view->dot_settings,
         LV_PART_MAIN | LV_STATE_DEFAULT);
-    service_gui_main_pager_active_dot_width = lv_obj_get_width(ui_DotMusic);
+    service_gui_main_pager_active_dot_width = lv_obj_get_width(service_gui_main_pager_view->dot_music);
     service_gui_main_pager_active_dot_opa = lv_obj_get_style_bg_opa(
-        ui_DotMusic,
+        service_gui_main_pager_view->dot_music,
         LV_PART_MAIN | LV_STATE_DEFAULT);
 
     if ((service_gui_main_pager_inactive_dot_width <= 0) ||
@@ -145,7 +148,7 @@ static Service_StatusTypeDef service_gui_main_pager_bind_dots(void)
         return SERVICE_NOT_READY;
     }
 
-    service_gui_main_pager_active_page = ui_MusicPageContainer;
+    service_gui_main_pager_active_page = service_gui_main_pager_view->music_page;
 
     return SERVICE_OK;
 }
@@ -157,19 +160,19 @@ static Service_StatusTypeDef service_gui_main_pager_bind_dots(void)
  */
 static lv_obj_t *service_gui_main_pager_get_dot(const lv_obj_t *page)
 {
-    if (page == ui_SettingsPageContainer)
+    if (page == service_gui_main_pager_view->settings_page)
     {
         return service_gui_main_pager_dots[
             SERVICE_GUI_MAIN_PAGER_PAGE_SETTINGS];
     }
 
-    if (page == ui_MusicPageContainer)
+    if (page == service_gui_main_pager_view->music_page)
     {
         return service_gui_main_pager_dots[
             SERVICE_GUI_MAIN_PAGER_PAGE_MUSIC];
     }
 
-    if (page == ui_BooksPageContainer)
+    if (page == service_gui_main_pager_view->books_page)
     {
         return service_gui_main_pager_dots[
             SERVICE_GUI_MAIN_PAGER_PAGE_BOOKS];
@@ -296,7 +299,7 @@ static void service_gui_main_pager_update_dot(lv_obj_t *next_page)
  */
 static Service_StatusTypeDef service_gui_main_pager_apply_slots(void)
 {
-    if ((ui_MainPageContainer == NULL) ||
+    if ((service_gui_main_pager_view->page_container == NULL) ||
         (service_gui_main_pager_slots[SERVICE_GUI_MAIN_PAGER_SLOT_LEFT] == NULL) ||
         (service_gui_main_pager_slots[SERVICE_GUI_MAIN_PAGER_SLOT_CENTER] == NULL) ||
         (service_gui_main_pager_slots[SERVICE_GUI_MAIN_PAGER_SLOT_RIGHT] == NULL))
@@ -370,8 +373,8 @@ static Service_StatusTypeDef service_gui_main_pager_recenter_loop(void)
     }
 
     /* 确保新百分比槽位已解析，再按一个 Viewport 宽度回到中间。 */
-    lv_obj_update_layout(ui_Main);
-    viewport_width = lv_obj_get_width(ui_MainPageContainer);
+    lv_obj_update_layout(service_gui_main_pager_view->screen);
+    viewport_width = lv_obj_get_width(service_gui_main_pager_view->page_container);
 
     if (viewport_width <= 0)
     {
@@ -382,7 +385,7 @@ static Service_StatusTypeDef service_gui_main_pager_recenter_loop(void)
     service_gui_main_pager_pending_slot = SERVICE_GUI_MAIN_PAGER_SLOT_CENTER;
     service_gui_main_pager_recenter_in_progress = true;
     lv_obj_scroll_to_x(
-        ui_MainPageContainer,
+        service_gui_main_pager_view->page_container,
         viewport_width,
         LV_ANIM_OFF);
 
@@ -407,7 +410,7 @@ static void service_gui_main_pager_scroll_end_event(lv_event_t *event)
 
     if ((event == NULL) ||
         (lv_event_get_code(event) != LV_EVENT_SCROLL_END) ||
-        (lv_event_get_target(event) != ui_MainPageContainer))
+        (lv_event_get_target(event) != service_gui_main_pager_view->page_container))
     {
         return;
     }
@@ -426,14 +429,14 @@ static void service_gui_main_pager_scroll_end_event(lv_event_t *event)
         return;
     }
 
-    viewport_width = lv_obj_get_width(ui_MainPageContainer);
+    viewport_width = lv_obj_get_width(service_gui_main_pager_view->page_container);
 
     if (viewport_width <= 0)
     {
         return;
     }
 
-    current_scroll_x = lv_obj_get_scroll_x(ui_MainPageContainer);
+    current_scroll_x = lv_obj_get_scroll_x(service_gui_main_pager_view->page_container);
     current_slot_scroll_x =
         (lv_coord_t)(service_gui_main_pager_slot * viewport_width);
     switch_threshold =
@@ -471,7 +474,7 @@ static void service_gui_main_pager_scroll_end_event(lv_event_t *event)
     service_gui_main_pager_update_dot(
         service_gui_main_pager_slots[target_slot]);
     lv_obj_scroll_to_x(
-        ui_MainPageContainer,
+        service_gui_main_pager_view->page_container,
         target_scroll_x,
         LV_ANIM_ON);
 }
@@ -485,19 +488,19 @@ static void service_gui_main_pager_scroll_end_event(lv_event_t *event)
  */
 static Service_StatusTypeDef service_gui_main_pager_bind_scroll_end_event(void)
 {
-    if (ui_MainPageContainer == NULL)
+    if (service_gui_main_pager_view->page_container == NULL)
     {
         return SERVICE_NOT_READY;
     }
 
-    if (ui_MainPageContainer != service_gui_main_pager_container)
+    if (service_gui_main_pager_view->page_container != service_gui_main_pager_container)
     {
         lv_obj_add_event_cb(
-            ui_MainPageContainer,
+            service_gui_main_pager_view->page_container,
             service_gui_main_pager_scroll_end_event,
             LV_EVENT_SCROLL_END,
             NULL);
-        service_gui_main_pager_container = ui_MainPageContainer;
+        service_gui_main_pager_container = service_gui_main_pager_view->page_container;
     }
 
     return SERVICE_OK;
@@ -514,12 +517,12 @@ static Service_StatusTypeDef service_gui_main_pager_center_music_page(void)
 {
     lv_coord_t viewport_width;
 
-    if (ui_MainPageContainer == NULL)
+    if (service_gui_main_pager_view->page_container == NULL)
     {
         return SERVICE_NOT_READY;
     }
 
-    viewport_width = lv_obj_get_width(ui_MainPageContainer);
+    viewport_width = lv_obj_get_width(service_gui_main_pager_view->page_container);
 
     if (viewport_width <= 0)
     {
@@ -527,7 +530,7 @@ static Service_StatusTypeDef service_gui_main_pager_center_music_page(void)
     }
 
     lv_obj_scroll_to_x(
-        ui_MainPageContainer,
+        service_gui_main_pager_view->page_container,
         viewport_width,
         LV_ANIM_OFF);
     service_gui_main_pager_slot = SERVICE_GUI_MAIN_PAGER_SLOT_CENTER;
@@ -550,14 +553,16 @@ Service_StatusTypeDef service_gui_main_pager_prepare(void)
 {
     Service_StatusTypeDef status;
 
-    if ((ui_Main == NULL) ||
-        (ui_MainPageContainer == NULL))
+    service_gui_main_pager_view = &service_gui_view_get()->main;
+
+    if ((service_gui_main_pager_view->screen == NULL) ||
+        (service_gui_main_pager_view->page_container == NULL))
     {
         return SERVICE_NOT_READY;
     }
 
     /* 先触发布局，确保百分比尺寸和 Flex 布局均已解析为实际坐标。 */
-    lv_obj_update_layout(ui_Main);
+    lv_obj_update_layout(service_gui_main_pager_view->screen);
 
     status = service_gui_main_pager_bind_slots();
 
