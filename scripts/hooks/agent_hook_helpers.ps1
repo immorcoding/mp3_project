@@ -150,7 +150,7 @@ function Get-AgentHookEditDecision {
     }
 
     if (Test-GeneratedWriteProtectedPath -RelativePath $normalized) {
-        return @{ Decision = 'deny'; Reason = "$normalized 属于 SquareLine/CubeMX/Vendor 生成目录，只认生成器（ARC-2）；请给出源工程配置步骤，由用户导出。" }
+        return @{ Decision = 'deny'; Reason = "$normalized 属于 CubeMX/Vendor 生成目录，只认生成器（ARC-2）；请给出源工程配置步骤，由用户导出。" }
     }
 
     foreach ($pattern in $script:AgentHookCubeMxSourcePatterns) {

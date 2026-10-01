@@ -40,10 +40,6 @@ function Assert-False {
     }
 }
 
-Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'GUI/ui.c') `
-    -Message 'GUI 导出文件应受保护'
-Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'SquareLineProject/mp3_gui.spj') `
-    -Message 'SquareLine 工程应受保护'
 Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal.c') `
     -Message 'Drivers 应受保护'
 Assert-True -Actual (Test-GeneratedWriteProtectedPath -RelativePath 'Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c') `
@@ -155,16 +151,16 @@ function Invoke-InTempGitRepository {
 Invoke-InTempGitRepository -Action {
     param($RepositoryRoot)
 
-    New-Item -ItemType Directory -Path (Join-Path -Path $RepositoryRoot -ChildPath 'GUI') -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path -Path $RepositoryRoot -ChildPath 'GUI/ui.c') -Value 'generated' -Encoding ascii
+    New-Item -ItemType Directory -Path (Join-Path -Path $RepositoryRoot -ChildPath 'Drivers') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path -Path $RepositoryRoot -ChildPath 'Drivers/vendor.c') -Value 'generated' -Encoding ascii
 
     try {
         Invoke-GeneratedWriteCheck -RepositoryRoot $RepositoryRoot
-        throw '未跟踪的 GUI 文件应让写保护失败。'
+        throw '未跟踪的 Vendor 文件应让写保护失败。'
     }
     catch {
-        if ($_.Exception.Message -notmatch 'GUI/ui\.c') {
-            throw "未跟踪 GUI 文件的失败信息应包含路径，实际：$($_.Exception.Message)"
+        if ($_.Exception.Message -notmatch 'Drivers/vendor\.c') {
+            throw "未跟踪 Vendor 文件的失败信息应包含路径，实际：$($_.Exception.Message)"
         }
     }
 }
@@ -175,15 +171,15 @@ try {
     Invoke-InTempGitRepository -Action {
         param($RepositoryRoot)
 
-        New-Item -ItemType Directory -Path (Join-Path -Path $RepositoryRoot -ChildPath 'GUI') -Force | Out-Null
-        Set-Content -LiteralPath (Join-Path -Path $RepositoryRoot -ChildPath 'GUI/ui.c') -Value 'generated' -Encoding ascii
+        New-Item -ItemType Directory -Path (Join-Path -Path $RepositoryRoot -ChildPath 'Drivers') -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path -Path $RepositoryRoot -ChildPath 'Drivers/vendor.c') -Value 'generated' -Encoding ascii
 
         try {
             Invoke-GeneratedWriteCheck -RepositoryRoot $RepositoryRoot
-            throw '外层 ALLOW_GENERATED_UPDATE 不得让夹具里的未跟踪 GUI 检查被跳过。'
+            throw '外层 ALLOW_GENERATED_UPDATE 不得让夹具里的未跟踪 Vendor 检查被跳过。'
         }
         catch {
-            if ($_.Exception.Message -notmatch 'GUI/ui\.c') {
+            if ($_.Exception.Message -notmatch 'Drivers/vendor\.c') {
                 throw "外层允许更新时夹具仍应报告路径，实际：$($_.Exception.Message)"
             }
         }
@@ -209,8 +205,8 @@ Invoke-InTempGitRepository -Action {
 Invoke-InTempGitRepository -Action {
     param($RepositoryRoot)
 
-    New-Item -ItemType Directory -Path (Join-Path -Path $RepositoryRoot -ChildPath 'GUI') -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path -Path $RepositoryRoot -ChildPath 'GUI/ui.c') -Value 'generated' -Encoding ascii
+    New-Item -ItemType Directory -Path (Join-Path -Path $RepositoryRoot -ChildPath 'Drivers') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path -Path $RepositoryRoot -ChildPath 'Drivers/vendor.c') -Value 'generated' -Encoding ascii
     $env:ALLOW_GENERATED_UPDATE = '1'
     Invoke-GeneratedWriteCheck -RepositoryRoot $RepositoryRoot
 }
@@ -218,20 +214,20 @@ Invoke-InTempGitRepository -Action {
 Invoke-InTempGitRepository -Action {
     param($RepositoryRoot)
 
-    $guiDirectory = Join-Path -Path $RepositoryRoot -ChildPath 'GUI'
-    $generatedFile = Join-Path -Path $guiDirectory -ChildPath 'ui.c'
-    New-Item -ItemType Directory -Path $guiDirectory -Force | Out-Null
+    $vendorDirectory = Join-Path -Path $RepositoryRoot -ChildPath 'Drivers'
+    $generatedFile = Join-Path -Path $vendorDirectory -ChildPath 'vendor.c'
+    New-Item -ItemType Directory -Path $vendorDirectory -Force | Out-Null
     Set-Content -LiteralPath $generatedFile -Value 'staged generated content' -Encoding ascii
     $git = Get-ExternalCommand -Name 'git'
-    Invoke-ExternalCommand -CommandPath $git -Arguments @('-C', $RepositoryRoot, 'add', '--', 'GUI/ui.c')
+    Invoke-ExternalCommand -CommandPath $git -Arguments @('-C', $RepositoryRoot, 'add', '--', 'Drivers/vendor.c')
     Remove-Item -LiteralPath $generatedFile -Force
 
     try {
         Invoke-GeneratedWriteCheck -RepositoryRoot $RepositoryRoot -Snapshot Index
-        throw '索引中已暂存、工作树中已删除的 GUI 文件仍应让写保护失败。'
+        throw '索引中已暂存、工作树中已删除的 Vendor 文件仍应让写保护失败。'
     }
     catch {
-        if ($_.Exception.Message -notmatch 'GUI/ui\.c') {
+        if ($_.Exception.Message -notmatch 'Drivers/vendor\.c') {
             throw "索引快照失败信息应包含暂存路径，实际：$($_.Exception.Message)"
         }
     }

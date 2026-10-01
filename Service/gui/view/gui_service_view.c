@@ -7,8 +7,7 @@
 
 #include "Service/gui/view/gui_service_view.h"
 #include "Service/gui/view/gui_service_view_screens.h"
-
-extern const lv_img_dsc_t ui_img_wallpaper_indigo_mist_soft_dark_png;
+#include "Service/gui/view/gui_service_view_wallpaper.h"
 
 static Service_GUI_ViewTypeDef service_gui_view;
 
@@ -70,5 +69,5 @@ const Service_GUI_ViewTypeDef *service_gui_view_get(void)
  */
 const lv_img_dsc_t *service_gui_view_wallpaper(void)
 {
-    return &ui_img_wallpaper_indigo_mist_soft_dark_png;
+    return &service_gui_view_wallpaper_image;
 }

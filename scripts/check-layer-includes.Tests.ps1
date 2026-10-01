@@ -90,8 +90,6 @@ Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'service' -IncludePat
     -Message 'Service 允许 FreeRTOS'
 Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'service' -IncludePath 'FATFS/App/fatfs.h') `
     -Message 'Service 允许 FatFs Glue'
-Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'service' -IncludePath 'GUI/ui.h') `
-    -Message 'Service 允许 SquareLine 导出头'
 Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'service' -IncludePath 'lvgl.h') `
     -Message 'Service 允许 LVGL'
 Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'service' -IncludePath 'Platform/lcd/platform_lcd.h') `
