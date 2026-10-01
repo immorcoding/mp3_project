@@ -28,7 +28,7 @@ extern uint8_t __external_resource_vinyl_end__[];
 /**
  * @brief 用 Resource 底图合成唱盘并绑到 Now Playing Image。
  * @retval SERVICE_OK 第一帧已可见。
- * @retval SERVICE_NOT_READY Image 尚未导出。
+ * @retval SERVICE_NOT_READY 唱盘 Image 尚未创建。
  * @retval SERVICE_INVALID_PARAM 对象尺寸与唱盘直径宏不一致，槽容量不匹配，或合成失败。
  * @note 仅由 service_gui_main_prepare() 在 Transport 之后、Background 之前调用一次。
  *       本刀不加旋转动画。

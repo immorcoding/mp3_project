@@ -67,9 +67,13 @@ foreach ($file in $scenarioFiles) {
     }
 
     $mismatches = @()
+    if ($expected.Count -eq 0) { $mismatches += '（基线为空）' }
     foreach ($key in $expected.Keys) {
         if (-not $actual.Contains($key)) { $mismatches += "$key（缺失）" }
         elseif ($actual[$key] -ne $expected[$key]) { $mismatches += $key }
+    }
+    foreach ($key in $actual.Keys) {
+        if (-not $expected.Contains($key)) { $mismatches += "$key（基线中没有）" }
     }
 
     if ($mismatches.Count -eq 0) {

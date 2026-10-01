@@ -176,7 +176,7 @@ static void service_gui_main_background_page_scroll_event(lv_event_t *event)
  * @brief 为 MainPageContainer 安装局部背景同步回调。
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_NOT_READY MainPageContainer 尚未创建。
- * @note 同一导出 Viewport 只注册一次。Pager 也会向同一对象注册独立的
+ * @note 同一 Viewport 只注册一次。Pager 也会向同一对象注册独立的
  *       LV_EVENT_SCROLL_END 回调；两者只共享 LVGL 事件源，不共享状态。
  */
 static Service_StatusTypeDef service_gui_main_background_bind_scroll_event(void)

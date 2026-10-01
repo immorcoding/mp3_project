@@ -142,7 +142,7 @@ MusicModeTabs          铺满 Music 页（MainPage ~85%）
 底部圆点               屏幕高度 ~10%，Main 固定
 ```
 
-`Now Playing` 内容区中间是 `MusicPlayerVinylImage`：Canvas 用 Resource ID 4 底图叠青色中心假封面并显示第一帧。旋转尚未接线。无 ID3、无导入 PNG。曲名和歌手本阶段仍可不做。当前导出已把时间 Label、进度条与三键放进该 Tab 底部。`Queue` 显示当前及后续曲目的简化列表。Queue 只绑定 `storage_listbuffer` 单槽窗口：SquareLine 只保留一份行范本，运行时按 READY 后的 `Length` 复制行（上限 `STORAGE_LISTBUFFER_MAX_ENTRIES`，现为 12）。完整播放列表由 Storage 持有，不把整表指针交给 GUI。行样式与对象层级见第 10.5.3 节。`Library` 显示两列专辑封面网格；首版每张专辑都使用固定标题、歌手和占位封面。产品曲库首版只来自 SD `Music/`，不展示空的 Flash 分区。
+`Now Playing` 内容区中间是 `MusicPlayerVinylImage`：Canvas 用 Resource ID 4 底图叠青色中心假封面并显示第一帧。旋转尚未接线。无 ID3、无导入 PNG。曲名和歌手本阶段仍可不做。当前界面已把时间 Label、进度条与三键放进该 Tab 底部。`Queue` 显示当前及后续曲目的简化列表。Queue 只绑定 `storage_listbuffer` 单槽窗口：`main/queue` 的行工厂按 READY 后的 `Length` 构造行（上限 `STORAGE_LISTBUFFER_MAX_ENTRIES`，现为 12）。完整播放列表由 Storage 持有，不把整表指针交给 GUI。行样式与对象层级见第 10.5.3 节。`Library` 显示两列专辑封面网格；首版每张专辑都使用固定标题、歌手和占位封面。产品曲库首版只来自 SD `Music/`，不展示空的 Flash 分区。
 
 ### 6.2 专辑详情
 
@@ -353,7 +353,7 @@ Canvas 模糊。MainPageContainer 的局部毛玻璃滚动只裁剪 Main 的长�
 2. **Minimal wordmark**：近黑靛蓝底上仅出现产品字标或单字母标记，短暂停留后淡出，再进入 Lock。层级最克制，但需要先确定项目的显示名称或 Logo。
 3. **Music signal**：近黑底上以三到五根细竖条完成一次简短的“由静到动再归零”的节奏动画，随后切入 Lock。产品属性最直观，但会更偏播放器/科技感。
 
-这些历史候选共同确认了独立 `Boot` Screen、一次性启动序列和短淡入切换的方向。当前实现不再使用该阶段提出的 `Initial actions` 或 `1.0–1.5 s` 时序；实际启动事件、停留时间和 Fade 参数只以第 10.3.1 节及导出的 SquareLine 代码为准。产品正常流程不得重新进入 Boot，Lock 的底部解锁呼吸提示只应在切换完成后启动。
+这些历史候选共同确认了独立 `Boot` Screen、一次性启动序列和短淡入切换的方向。当前实现不再使用该阶段提出的 `Initial actions` 或 `1.0–1.5 s` 时序；实际启动事件、停留时间和 Fade 参数只以第 10.3.1 节及 `view/`、`boot/` 代码为准。产品正常流程不得重新进入 Boot，Lock 的底部解锁呼吸提示只应在切换完成后启动。
 
 参考评估：高质感移动端 Splash 常将单个抽象标记置于深色留白中心，避免在启动阶段堆叠播放器内容、均衡器或 Loading 文案。此前的 LVGL v9 SquareLine `Smart_Gadget` 示例也采用同一节奏结构：Logo 与两行文本按 `100 / 200 / 300 ms` 错峰上移淡入，并在约 `1.4 s` 后用短 Fade 切入主 Screen。当前 `Orbital ignition` 借用其“错峰显现 + 快速淡入切屏”的结构，不复制其白底、Logo 或文字视觉；若未来重新设计启动视觉，应以实际硬件时序和资源占用重新评审，而不是直接恢复本节的历史候选。
 
@@ -438,17 +438,17 @@ Main
    └─ DotBooks
 ```
 
-壁纸只绑定到 `Main` 根对象。`MainPageContainer` 与三张 Page Container 的背景、边框、阴影均保持透明，使滑动时始终露出同一张固定系统壁纸；不得为 MusicPage、BooksPage、SettingsPage 分别再设置壁纸。`MusicModeTabs` 的内部 Content container 是唯一无法由 SquareLine 直接公开的对象：`Service/gui/main` 在运行时将其背景、背景图、边框、轮廓和阴影置为透明，以消除 LVGL Simplified Theme 默认白底。除该内部对象与 `ui_MusicModeTabs` 的运行时裁剪背景源外，Service 不得覆盖任何 SquareLine 导出对象的视觉 Style。
+壁纸只绑定到 `Main` 根对象。`MainPageContainer` 与三张 Page Container 的背景、边框、阴影均保持透明，使滑动时始终露出同一张固定系统壁纸；不得为 MusicPage、BooksPage、SettingsPage 分别再设置壁纸。`MusicModeTabs` 的内部 Content container 是 LVGL 内部对象：`Service/gui/main` 在运行时将其背景、背景图、边框、轮廓和阴影置为透明，以消除 LVGL Simplified Theme 默认白底。除该内部对象与 `ui_MusicModeTabs` 的运行时裁剪背景源外，Service 不得覆盖任何 `view/` 创建对象的视觉 Style。
 
 `StatusBar` 为透明的横向 Container，位于 Main 最顶端，当前高度采用屏幕高度的较小比例。左侧为短时间文本；中间为简短日期提示；右侧为电池轮廓与百分比。它不绘制独立卡片底色、不承载点击事件，也不与 Lock Screen 复用对象：Lock 的大时间、电量信息仍是独立的居中信息层。首版所有数值均为固定假数据。
 
-Main 的纵向固定分区为：顶部 `StatusBarContainer` 占屏幕高度 `5%`，中部 `MainPageContainer` 占 `85%`，底部 `DotPanelContainer` 占 `10%`。`MainPageContainer` 使用 SquareLine 的普通 `Container` 承担横滑内容区，不使用 Tabview 或隐藏的 Tab 按钮栏。它是 Main 中唯一允许横向滚动的普通视口：透明、无边框、无阴影、关闭 Scrollbar，不启用 Flex 或 Grid 布局；左、右、下 Padding 为 `0 px`，顶部保留 `3 px` 的轻微留白，使内容页与 StatusBar 视觉分离。其可视范围裁剪子对象，子 Page 不得溢出可视范围绘制。三张 Page 均填满 Viewport 的有效内容宽高。
+Main 的纵向固定分区为：顶部 `StatusBarContainer` 占屏幕高度 `5%`，中部 `MainPageContainer` 占 `85%`，底部 `DotPanelContainer` 占 `10%`。`MainPageContainer` 使用普通 `Container` 承担横滑内容区，不使用 Tabview 或隐藏的 Tab 按钮栏。它是 Main 中唯一允许横向滚动的普通视口：透明、无边框、无阴影、关闭 Scrollbar，不启用 Flex 或 Grid 布局；左、右、下 Padding 为 `0 px`，顶部保留 `3 px` 的轻微留白，使内容页与 StatusBar 视觉分离。其可视范围裁剪子对象，子 Page 不得溢出可视范围绘制。三张 Page 均填满 Viewport 的有效内容宽高。
 
 三张 Page Container 自身保持不可滚动，但都必须开启 **Horizontal Scroll Chain**：LVGL 命中一个不可滚动的子 Page 后，只有该 Flag 才会继续向父级寻找可横滑的 `MainPageContainer`。`MainPageContainer` 自身保持关闭 Scroll Chain，防止全局分页继续传递给 `Main`。同时，`MainPageContainer` 必须保留 **Clickable** 与 **Scrollable** Flag：在 LVGL v8 中，指针命中测试只会把 Clickable 对象作为活动对象；若关闭 Clickable，即使对象开启 Scrollable，触摸也不会选中该视口，横向滚动无法开始。该 Flag 仅表示可接收指针命中，不会把视口变成视觉上的按钮。不得手改 `GUI/` 生成代码绕过这一结构。
 
 #### 10.5.1 MainPageContainer 循环分页（已实现）
 
-Viewport 内始终只保留同一组三张 Page 实例，不复制首尾页。初始槽位从左到右为：`SettingsPage` 位于 `0%`、`MusicPage` 位于 `100%`、`BooksPage` 位于 `200%`；每张 Page 的宽高均填满 Viewport。GUI Service 在对象布局完成后无动画滚动到一个 Viewport 宽度，因此真机初始可见的是位于中间槽位的 MusicPage。SquareLine 模拟器默认从滚动起点显示 SettingsPage 属于预期限制；完整初始定位以导出后的 GUI Service 为准。
+Viewport 内始终只保留同一组三张 Page 实例，不复制首尾页。初始槽位从左到右为：`SettingsPage` 位于 `0%`、`MusicPage` 位于 `100%`、`BooksPage` 位于 `200%`；每张 Page 的宽高均填满 Viewport。GUI Service 在对象布局完成后无动画滚动到一个 Viewport 宽度，因此真机初始可见的是位于中间槽位的 MusicPage。初始定位由 `main/pager` 在界面创建后完成。
 
 横向手势结束后，不通过 Tabview 索引切换，而是计算当前水平滚动位置相对当前物理槽位的偏移 `delta`：
 
@@ -460,13 +460,13 @@ Viewport 内始终只保留同一组三张 Page 实例，不复制首尾页。�
 
 `LV_EVENT_SCROLL` 只承担 MusicModeTabs 局部毛玻璃的实时坐标更新；翻页判定只在 `LV_EVENT_SCROLL_END` 执行。当前 `MusicPlayingSlider` 依赖 LVGL 原生命中与拖动行为，真机验证中不会触发 MainPageContainer 翻页，因此不额外创建手势仲裁回调或临时修改外层 Scrollable Flag。若未来出现可复现的 Slider 与全局分页竞争，再以实测问题为依据单独诊断。播放器按钮维持 LVGL 原生点击语义，不为它们创建额外的全局手势屏蔽层。
 
-`MusicModeTabs` 位于 MusicPage 内，使用内嵌 Tabview 实现，当前宽高均为页面的 `100%`，铺满状态栏与底部圆点之间的 Music 内容区；Tab 按钮栏高度以导出为准（当前 `20 px`）。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `Ink` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Accent` 文字，并仅在底边显示一条细 `Accent` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPageContainer 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
+`MusicModeTabs` 位于 MusicPage 内，使用内嵌 Tabview 实现，当前宽高均为页面的 `100%`，铺满状态栏与底部圆点之间的 Music 内容区；Tab 按钮栏高度当前为 `20 px`。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `Ink` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Accent` 文字，并仅在底边显示一条细 `Accent` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPageContainer 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
 
-当前 `LibraryTab` 仍为空白内容区。`NowPlayingTab` 底部承载 `MusicPlayerControlContainer`（宽 `90%`、高 `34%`，上/下 Padding `2 px`）：顶部 `MusicPlayerTimeLabel`、其下假进度条、再下上一首/播放暂停/下一首。三键与进度条事件不写在 SquareLine：`main/transport` 运行时绑定三键 `CLICKED` 与 Slider `RELEASED`，经 `Service_GUI_ConsumeInput()` 交给 GUI Task 的 `music/` 分区；`Service_GUI_ProgressApply()` 按假百分比写回 Slider，拖动中不覆盖。TimeLabel 仍显示 SquareLine 占位 `1:00/3:14`，运行时不改字。`QueueTab` 只保留 SquareLine 单行范本；`Service/gui/main/queue` 把该范本构造摘进 for 循环，GUI Task 的 `music/` 在 `storage_listbuffer` READY 后经 `Service_GUI_QueueApply()` 按 `Length` 填行。`MusicPlayerTimeLabel` 相对控制区顶部下移 `5%`；`MusicPlayingSlider` 宽度为播放器区的 `90%`、高度 `7%`，相对顶部下移 `20%`。唱片与中心封面见第 10.5.4 节，尚未导出。假曲名本阶段仍可不做。Queue 与 Library 不复制这组控制。
+当前 `LibraryTab` 仍为空白内容区。`NowPlayingTab` 底部承载 `MusicPlayerControlContainer`（宽 `90%`、高 `34%`，上/下 Padding `2 px`）：顶部 `MusicPlayerTimeLabel`、其下假进度条、再下上一首/播放暂停/下一首。三键与进度条事件不在 `view/` 绑定：`main/transport` 运行时绑定三键 `CLICKED` 与 Slider `RELEASED`，经 `Service_GUI_ConsumeInput()` 交给 GUI Task 的 `music/` 分区；`Service_GUI_ProgressApply()` 按假百分比写回 Slider，拖动中不覆盖。TimeLabel 仍显示占位文本 `1:00/3:14`，运行时不改字。`view/` 只创建空的 `QueueTab`；`Service/gui/main/queue` 的行工厂按需构造行，GUI Task 的 `music/` 在 `storage_listbuffer` READY 后经 `Service_GUI_QueueApply()` 按 `Length` 填行。`MusicPlayerTimeLabel` 相对控制区顶部下移 `5%`；`MusicPlayingSlider` 宽度为播放器区的 `90%`、高度 `7%`，相对顶部下移 `20%`。唱片与中心封面见第 10.5.4 节。假曲名本阶段仍可不做。Queue 与 Library 不复制这组控制。
 
 `DotPanelContainer` 是 `Main` 的固定底部子对象，使用居中的 Flex Row 布局，列间距为 `5 px`，自身不接受点击或滚动。它包含按页面物理顺序创建的 `DotSettings`、`DotMusic` 与 `DotBooks`。非当前页圆点为 `5 x 5 px`、圆角 `3 px`、`Ink` 且背景透明度 `180`；当前页指示器为 `14 x 5 px` 的水平胶囊、同一 `Ink` 且背景透明度 `220`。初始当前页是 Music，因此初态由 `DotMusic` 显示胶囊。
 
-分页控制器确认切页后，旧当前页指示器动画收缩为圆点（宽度 `14 → 5`、透明度 `220 → 180`），新当前页圆点同时伸展为胶囊（宽度 `5 → 14`、透明度 `180 → 220`）；高度始终为 `5 px`。该动画与页面吸附同步，首轮时长为 `160 ms`、使用 ease-out；手势未达到翻页阈值而回到原页时，不触发圆点状态切换动画。SquareLine 仍是圆点的唯一静态样式来源：`Service/gui/main` 初始化时从 `DotSettings` 和 `DotMusic` 读取非活动与活动的实际宽度、透明度基线，切页时只对 `DotSettings`、`DotMusic`、`DotBooks` 执行这两项运行时动画，不覆盖其颜色、圆角或布局。快速连续切页会取消同一圆点的旧动画，并从当前已绘制状态继续过渡。
+分页控制器确认切页后，旧当前页指示器动画收缩为圆点（宽度 `14 → 5`、透明度 `220 → 180`），新当前页圆点同时伸展为胶囊（宽度 `5 → 14`、透明度 `180 → 220`）；高度始终为 `5 px`。该动画与页面吸附同步，首轮时长为 `160 ms`、使用 ease-out；手势未达到翻页阈值而回到原页时，不触发圆点状态切换动画。`view/` 仍是圆点的唯一静态样式来源：`Service/gui/main` 初始化时从 `DotSettings` 和 `DotMusic` 读取非活动与活动的实际宽度、透明度基线，切页时只对 `DotSettings`、`DotMusic`、`DotBooks` 执行这两项运行时动画，不覆盖其颜色、圆角或布局。快速连续切页会取消同一圆点的旧动画，并从当前已绘制状态继续过渡。
 
 分页控制、局部毛玻璃和 Main 初始化在当前原型阶段继续保留于 `Service/gui/main/` 的同一 Module：它们共用对象句柄、物理槽位映射与滚动事件时序，暂不为了目录形式拆成多个浅 Module。待循环分页与圆点动画均完成并通过真机验证后，再审视是否按职责拆出 `main/pager/`（吸附、循环、圆点）与 `main/background/`（壁纸与局部毛玻璃）；届时 Interface 必须隐藏 LVGL 回调顺序和对象映射细节，确保拆分能够提升 Locality 与 Leverage，而非只移动文件。
 
@@ -474,7 +474,7 @@ BooksPage 和 SettingsPage 已直接共用 Main 的单一 StatusBar；它们后�
 
 #### 10.5.2 Music 局部毛玻璃（已实现，待真机验收）
 
-`MusicModeTabs` 需要真实局部毛玻璃：目标区域内显示从系统壁纸**当前屏幕坐标**裁剪出的模糊像素，区域外壁纸保持清晰。该路径只在 **Default** 下建立；Solid 不生成模糊壁纸、不绑定裁剪图，Tab 只留半透明 `Wash`。播放器的圆形控制按钮不使用毛玻璃：在 240 px 宽屏上的可见收益不足以抵消额外缓冲与裁剪复杂度，仍使用 SquareLine 的半透明染色、弱描边和图标。该效果不能直接赋给 SquareLine 组件的背景色，也不为每个组件建立独立 Canvas。
+`MusicModeTabs` 需要真实局部毛玻璃：目标区域内显示从系统壁纸**当前屏幕坐标**裁剪出的模糊像素，区域外壁纸保持清晰。该路径只在 **Default** 下建立；Solid 不生成模糊壁纸、不绑定裁剪图，Tab 只留半透明 `Wash`。播放器的圆形控制按钮不使用毛玻璃：在 240 px 宽屏上的可见收益不足以抵消额外缓冲与裁剪复杂度，仍使用 `view/` 设定的半透明染色、弱描边和图标。该效果不能直接赋给组件的背景色，也不为每个组件建立独立 Canvas。
 
 运行时实现由 `Service/gui/canvas/` 与 `Service/gui/main/` 共同负责：
 
@@ -537,7 +537,7 @@ QueueTab                         透明；Flex Column；纵向 Scrollable
 
 点按（所有行）：`PRESSED` 只提高底 Opa（约 70～80）并加 **Outline** 1 px `Ink`（Pad 0）。`CLICKED` 假切歌：立刻只改本窗当前/非当前行样式（左边条、音符、Accent/Ink 字、circular vs dot），并 `post` 该行播放列表下标；`gui_music_step` 里 `cursor_set` 后滑窗再 Apply 才不会跳回旧当前行。不打开文件、不解码。Playback 打开/预开的交接点留在 `gui_music.c` 注释框。不要在 PRESSED 或非当前态里改 Border Width，以免文字漂移。非当前行只把左边条 Border Opa 打到 0。Panel 开 Clickable，子对象关掉 Clickable，不开 Checkable。
 
-READY 时 GUI Task 的 `music/` 按 `Length` 把 `Buffer[i]` 原样交给 `Service_GUI_QueueApply()`（播放列表 `Index + i`）。当前 `Buffer` 仍是曲库路径；标题/歌手由以后的 `load` 调解析器写入窗口，见 [catalog_architecture.md](catalog_architecture.md) 第 5 节。未落地前歌手 Label 为空串。GUI 不裁 `Music/`、不裁 `.mp3`、不按文件名切开。`Length == 0` 则没有可见行。正在播放行由播放列表游标判定，游标与 Catalog 同代次，见 [catalog_architecture.md](catalog_architecture.md)；代次不符或游标作废则本窗没有当前行。复制行只改文字、Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width。右侧音乐标是运行时写入的 `LV_SYMBOL_AUDIO`，不要把 SquareLine 里的占位 `S` 抄回固件。字形、字体、圆角、底色以 SquareLine 范本构造为准。`Service/gui` 不得包含 `storage_listbuffer.h`。Queue 行不放封面；封面属于 Now Playing。
+READY 时 GUI Task 的 `music/` 按 `Length` 把 `Buffer[i]` 原样交给 `Service_GUI_QueueApply()`（播放列表 `Index + i`）。当前 `Buffer` 仍是曲库路径；标题/歌手由以后的 `load` 调解析器写入窗口，见 [catalog_architecture.md](catalog_architecture.md) 第 5 节。未落地前歌手 Label 为空串。GUI 不裁 `Music/`、不裁 `.mp3`、不按文件名切开。`Length == 0` 则没有可见行。正在播放行由播放列表游标判定，游标与 Catalog 同代次，见 [catalog_architecture.md](catalog_architecture.md)；代次不符或游标作废则本窗没有当前行。复制行只改文字、Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width。右侧音乐标是运行时写入的 `LV_SYMBOL_AUDIO`，字形、字体、圆角、底色以 `main/queue` 的行工厂为准。`Service/gui` 不得包含 `storage_listbuffer.h`。Queue 行不放封面；封面属于 Now Playing。
 
 行底用浅白薄片，不要做成 `#13223D` 实心卡。
 

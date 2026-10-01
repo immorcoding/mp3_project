@@ -44,6 +44,10 @@ Assert-HarnessSequence -Expected @('resource_pack') -Actual $resourceImpact.Host
 $docsImpact = Get-HarnessImpact -ChangedPath @('docs/verification.md')
 Assert-HarnessEqual -Expected 0 -Actual $docsImpact.HostModules.Count -Message '纯文档变化不跑主机测试'
 
+$simulatorImpact = Get-HarnessImpact -ChangedPath @('Tools/gui_simulator/sim_main.c')
+Assert-HarnessEqual -Expected 0 -Actual $simulatorImpact.HostModules.Count -Message 'GUI 模拟器变化不跑固件主机测试'
+Assert-HarnessEqual -Expected $false -Actual $simulatorImpact.RequiresAllHostTests -Message 'GUI 模拟器变化不应回退全部测试'
+
 $agentConfigImpact = Get-HarnessImpact -ChangedPath @('CLAUDE.md', 'Service/CLAUDE.md', '.claude/settings.json', '.codex/hooks.json')
 Assert-HarnessEqual -Expected 0 -Actual $agentConfigImpact.HostModules.Count -Message 'Agent 配置变化不跑主机测试'
 

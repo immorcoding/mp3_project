@@ -90,6 +90,8 @@
         '^(?:docs|\.agents|\.codex|\.claude)/'
         '^(?:AGENTS|CLAUDE|CONTEXT|README)\.md$'
         '^Tests/README\.md$'
+        # PC GUI 模拟器只在 host 上运行，由 run-scenarios.ps1 单独回归，不进固件。
+        '^Tools/gui_simulator/'
         '\.md$'
         '^\.gitignore$'
     )
