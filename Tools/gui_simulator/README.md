@@ -18,22 +18,37 @@ cmake --build build/gui_simulator
 
 ## 脚本参数（无人值守截图）
 
-时间以 `Service_GUI_Init()` 完成为 0，单位为 ms；坐标为 LCD 像素。给出任一动作时，最后一个动作完成后自动退出。
+时间以 `Service_GUI_Init()` 完成为 0，单位为 ms；坐标为 LCD 像素。给出任一动作时，默认改用**确定性虚拟时钟**（每圈主循环固定推进 5 ms，与墙钟无关，同样输入总得到逐像素相同的帧），最后一个动作完成后自动退出。
 
 | 参数 | 含义 |
 | --- | --- |
-| `--shot T:file.bmp` | T 时把帧缓冲存为 BMP |
+| `--shot T:name` | T 时保存 `<out-dir>/name.bmp`，并打印 `[shot] name <帧哈希>` |
 | `--tap T:x,y` | T 时点按（按住 80 ms） |
 | `--drag T:x0,y0:x1,y1:D` | T 时按下，D ms 内线性拖动后松开 |
 | `--key T:c` | T 时触发按键 `c` |
+| `--out-dir DIR` | 截图目录，默认当前目录 |
+| `--hidden` | 不显示窗口 |
+| `--realtime` | 脚本模式下仍按墙钟运行 |
 
 示例（解锁、播放、切到 Queue 并截图）：
 
 ```powershell
 ./build/gui_simulator/gui_simulator.exe `
-  --drag 7200:120,290:120,80:250 --tap 9000:120,260 `
-  --tap 11500:125,28 --shot 12500:queue.bmp
+  --drag 6000:120,290:120,80:250 --tap 7500:120,260 `
+  --tap 9000:125,28 --shot 9500:queue
 ```
+
+## 场景回归
+
+`scenarios/*.args` 每行一个参数（`#` 开头为注释），`scenarios/*.expected` 记录每张截图的帧哈希。
+
+```powershell
+./Tools/gui_simulator/run-scenarios.ps1              # 全部场景与基线比对
+./Tools/gui_simulator/run-scenarios.ps1 -Scenario queue
+./Tools/gui_simulator/run-scenarios.ps1 -Update      # 有意的视觉变化确认后重写基线
+```
+
+截图保存在 `build/gui_simulator/shots/<场景>/`。哈希不一致时打开对应 BMP 与上一版比对；只有确认变化是有意的，才用 `-Update` 重写基线，并在提交说明里写明原因。PC 上 FPS/内存浮层已关闭，避免实现细节让基线漂移。
 
 ## 替身边界
 
@@ -45,7 +60,7 @@ cmake --build build/gui_simulator
 | `Platform/touch`：`IsAvailable` / `ReadRawPoint` | `fakes/platform_touch_sim.c`：鼠标左键或脚本触点 |
 | FreeRTOS `FreeRTOS.h` / `task.h` | `shim/` 同路径头 + `fakes/freertos_sim.c`：Tick 取 `SDL_GetTicks()`，通知为计数器 |
 | 链接脚本资源区 `__external_resource_vinyl_*` | `fakes/resource_sim.c`：asm 定义同名符号，启动时拷入 `Resources/imgs/vinyl_original_144px.c` |
-| `lv_conf.h` | `config/sim_lv_conf.h`：包装产品配置，只关 DMA2D 与 `.lvgl_large_ram_array` 段 |
+| `lv_conf.h` | `config/sim_lv_conf.h`：包装产品配置，只关 DMA2D、`.lvgl_large_ram_array` 段与 FPS/内存浮层 |
 | APP `gui_music`（依赖 Storage） | `sim_main.c` 内最小演示分区：10 首固定曲目、播放/暂停、上一首/下一首、假进度、选曲 |
 
 ## 已知差异

@@ -1,0 +1,10 @@
+# 运行时切主题（当前 Default 返回 NOT_READY，基线如实记录现状）
+--key 5600:t
+--shot 6000:lock_default
+--drag 6200:120,290:120,80:250
+--shot 7500:main_default
+--key 7700:t
+--shot 8000:main_solid_again
+--key 8200:t
+--tap 8400:125,28
+--shot 8800:queue_default

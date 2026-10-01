@@ -1,0 +1,4 @@
+# Lock 向上解锁 -> Main Music/Playing
+--drag 6000:120,290:120,80:250
+--shot 6500:unlock_fade
+--shot 7300:main_music

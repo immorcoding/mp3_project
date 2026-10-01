@@ -17,7 +17,8 @@
 /** @brief 窗口相对 240x320 LCD 的放大倍数。 */
 #define SIM_DISPLAY_ZOOM  2
 
-bool sim_display_init(void);
+/** @param hidden 为真时不显示窗口，仅维护帧缓冲（无人值守比对）。 */
+bool sim_display_init(bool hidden);
 void sim_display_deinit(void);
 
 void sim_display_write(uint16_t x_start,
@@ -28,6 +29,9 @@ void sim_display_write(uint16_t x_start,
 
 /** @brief 帧缓冲有变化时上传纹理并呈现。 */
 void sim_display_present(void);
+
+/** @brief 当前帧缓冲的 FNV-1a 哈希。 */
+uint32_t sim_display_hash(void);
 
 /** @brief 把当前帧缓冲保存为 BMP。 */
 bool sim_display_save_bmp(const char *path);

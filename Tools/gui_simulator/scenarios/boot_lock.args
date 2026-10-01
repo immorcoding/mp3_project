@@ -1,0 +1,9 @@
+# 开机：Boot Arc 动画 -> Fade -> BootReveal -> Fade -> Lock 呼吸提示
+--shot 0:boot_t0
+--shot 700:boot_arc_mid
+--shot 3990:boot_arc_late
+--shot 4200:boot_fade_reveal
+--shot 4500:reveal_hold
+--shot 4900:reveal_fade_lock
+--shot 5600:lock
+--shot 6400:lock_breath

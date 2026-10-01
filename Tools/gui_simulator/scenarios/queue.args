@@ -1,0 +1,13 @@
+# Queue：切 Tab、选曲、竖向滚动；Library 空白页
+--drag 6000:120,290:120,80:250
+--tap 7500:125,28
+--shot 7800:queue
+--tap 8000:120,110
+--shot 8100:queue_row_pressed
+--shot 8400:queue_selected
+--drag 8600:120,250:120,90:400
+--shot 9200:queue_scrolled
+--tap 9400:195,28
+--shot 9700:library
+--tap 9900:60,28
+--shot 10200:playing_again

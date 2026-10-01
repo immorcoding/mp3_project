@@ -37,6 +37,7 @@ typedef struct
     bool done;
 } sim_action_t;
 
+static const char *sim_out_dir = ".";
 static sim_action_t sim_actions[SIM_SCRIPT_MAX_ACTIONS];
 static int sim_action_count;
 
@@ -52,9 +53,13 @@ static bool sim_script_add(const sim_action_t *action)
     return true;
 }
 
-bool sim_script_parse(int argc, char *argv[])
+bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
 {
     int i;
+    bool realtime = false;
+
+    options->hidden = false;
+    options->deterministic = false;
 
     for (i = 1; i < argc; i++)
     {
@@ -65,12 +70,30 @@ bool sim_script_parse(int argc, char *argv[])
 
         memset(&action, 0, sizeof(action));
 
+        if (strcmp(argv[i], "--hidden") == 0)
+        {
+            options->hidden = true;
+            continue;
+        }
+        if (strcmp(argv[i], "--realtime") == 0)
+        {
+            realtime = true;
+            continue;
+        }
+
         if (i + 1 >= argc)
         {
             fprintf(stderr, "missing value for %s\n", argv[i]);
             return false;
         }
         value = argv[i + 1];
+
+        if (strcmp(argv[i], "--out-dir") == 0)
+        {
+            sim_out_dir = value;
+            i++;
+            continue;
+        }
 
         if (strcmp(argv[i], "--shot") == 0)
         {
@@ -131,6 +154,7 @@ bool sim_script_parse(int argc, char *argv[])
         i++;
     }
 
+    options->deterministic = (sim_action_count > 0) && !realtime;
     return true;
 }
 
@@ -162,9 +186,16 @@ bool sim_script_step(uint32_t elapsed_ms, sim_script_key_handler_t on_key)
         switch (action->kind)
         {
         case SIM_ACTION_SHOT:
-            printf("[script] shot %s: %s\n", action->path,
-                   sim_display_save_bmp(action->path) ? "ok" : "FAILED");
+        {
+            char path[512];
+
+            (void)snprintf(path, sizeof(path), "%s/%s.bmp", sim_out_dir, action->path);
+            printf("[shot] %s %08lx%s\n",
+                   action->path,
+                   (unsigned long)sim_display_hash(),
+                   sim_display_save_bmp(path) ? "" : " (save failed)");
             action->done = true;
+        }
             break;
 
         case SIM_ACTION_KEY:

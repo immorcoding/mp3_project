@@ -1,13 +1,13 @@
 /**
   ******************************************************************************
   * @file    freertos_sim.c
-  * @brief   FreeRTOS 任务替身：Tick 取 SDL 毫秒计数，通知为单线程计数器。
+  * @brief   FreeRTOS 任务替身：Tick 取模拟器时钟，通知为单线程计数器。
   ******************************************************************************
   */
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
-#include <SDL.h>
+#include "sim_clock.h"
 
 /** @brief 唯一的模拟 GUI Task 句柄；只用作非空标识。 */
 static int sim_gui_task;
@@ -15,7 +15,7 @@ static uint32_t sim_notify_count[configTASK_NOTIFICATION_ARRAY_ENTRIES];
 
 TickType_t xTaskGetTickCount(void)
 {
-    return (TickType_t)SDL_GetTicks();
+    return (TickType_t)sim_clock_now();
 }
 
 TaskHandle_t xTaskGetCurrentTaskHandle(void)

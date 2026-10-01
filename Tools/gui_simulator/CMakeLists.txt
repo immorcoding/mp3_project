@@ -72,6 +72,7 @@ file(GLOB_RECURSE SERVICE_GUI_SOURCES CONFIGURE_DEPENDS
 
 add_executable(gui_simulator
     sim_main.c
+    sim_clock.c
     sim_display.c
     sim_script.c
     fakes/platform_lcd_sim.c

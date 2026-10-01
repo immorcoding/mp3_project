@@ -24,7 +24,7 @@ static bool sim_pointer_pressed;
 static uint16_t sim_pointer_x;
 static uint16_t sim_pointer_y;
 
-bool sim_display_init(void)
+bool sim_display_init(bool hidden)
 {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0)
     {
@@ -37,7 +37,7 @@ bool sim_display_init(void)
                                   SDL_WINDOWPOS_CENTERED,
                                   (int)PLATFORM_LCD_WIDTH * SIM_DISPLAY_ZOOM,
                                   (int)PLATFORM_LCD_HEIGHT * SIM_DISPLAY_ZOOM,
-                                  0);
+                                  hidden ? SDL_WINDOW_HIDDEN : 0);
     if (sim_window == NULL)
     {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -124,6 +124,22 @@ void sim_display_present(void)
     SDL_RenderCopy(sim_renderer, sim_texture, NULL, NULL);
     SDL_RenderPresent(sim_renderer);
     sim_dirty = false;
+}
+
+uint32_t sim_display_hash(void)
+{
+    const uint8_t *bytes = (const uint8_t *)sim_framebuffer;
+    uint32_t hash = 2166136261U;
+    size_t i;
+
+    /* FNV-1a：只用于判断两帧是否逐像素相同。 */
+    for (i = 0; i < sizeof(sim_framebuffer); i++)
+    {
+        hash ^= bytes[i];
+        hash *= 16777619U;
+    }
+
+    return hash;
 }
 
 bool sim_display_save_bmp(const char *path)

@@ -21,6 +21,7 @@
 #include "Service/gui/gui_service.h"
 #include "Service/gui/main/queue/gui_service_main_queue_config.h"
 #include "fakes/resource_sim.h"
+#include "sim_clock.h"
 #include "sim_display.h"
 #include "sim_script.h"
 
@@ -77,7 +78,7 @@ static void sim_demo_init(void)
     sim_demo_current = 0U;
     sim_demo_playing = false;
     sim_demo_progress = 0U;
-    sim_demo_last_progress_ms = SDL_GetTicks();
+    sim_demo_last_progress_ms = sim_clock_now();
     sim_demo_apply_queue();
     (void)Service_GUI_TransportApply(sim_demo_playing);
     (void)Service_GUI_ProgressApply(sim_demo_progress);
@@ -85,7 +86,7 @@ static void sim_demo_init(void)
 
 static void sim_demo_step(const Service_GUI_InputTypeDef *input)
 {
-    const uint32_t now = SDL_GetTicks();
+    const uint32_t now = sim_clock_now();
 
     switch (input->command)
     {
@@ -201,14 +202,16 @@ static bool sim_pump_events(void)
 int main(int argc, char *argv[])
 {
     Service_StatusTypeDef status;
+    sim_script_options_t options;
     uint32_t start_ms;
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    if (!sim_script_parse(argc, argv))
+    if (!sim_script_parse(argc, argv, &options))
     {
         return 2;
     }
+    sim_clock_set_deterministic(options.deterministic);
 
     if (!sim_resource_install())
     {
@@ -216,7 +219,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if (!sim_display_init())
+    if (!sim_display_init(options.hidden))
     {
         return 1;
     }
@@ -231,16 +234,16 @@ int main(int argc, char *argv[])
 
     sim_demo_init();
     printf("[sim] running. T: toggle theme, Esc: quit\n");
-    start_ms = SDL_GetTicks();
+    start_ms = sim_clock_now();
 
     while (sim_pump_events())
     {
-        if (sim_script_step(SDL_GetTicks() - start_ms, sim_handle_key))
+        Service_GUI_InputTypeDef input;
+
+        if (sim_script_step(sim_clock_now() - start_ms, sim_handle_key))
         {
             break;
         }
-
-        Service_GUI_InputTypeDef input;
 
         input.command = SERVICE_GUI_INPUT_NONE;
         input.param = 0U;
@@ -249,8 +252,21 @@ int main(int argc, char *argv[])
         sim_demo_step(&input);
 
         Service_GUI_Process();
-        sim_display_present();
-        SDL_Delay(5);
+
+        if (!options.hidden)
+        {
+            sim_display_present();
+        }
+
+        /* 虚拟时钟下不等墙钟，场景以最快速度跑完且结果可复现。 */
+        if (sim_clock_is_deterministic())
+        {
+            sim_clock_tick();
+        }
+        else
+        {
+            SDL_Delay(SIM_CLOCK_STEP_MS);
+        }
     }
 
     sim_display_deinit();
