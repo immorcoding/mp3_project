@@ -67,101 +67,6 @@ static bool service_gui_main_background_blurred_wallpaper_ready;
 static lv_obj_t *service_gui_main_background_page_container;
 
 /**
- * @brief 清除 LVGL 内部 Content container 的默认视觉层。
- * @param object 仅限由 LVGL 内部创建、SquareLine 未导出的 Content container。
- * @note 该函数不得用于 SquareLine 导出的对象。Border、Outline、Shadow、Radius
- *       等根对象视觉设计完全由 SquareLine 管理；此处只处理用户无法在
- *       SquareLine Inspector 中访问的 Tabview 内部 Content container。
- */
-static void service_gui_main_background_make_internal_content_transparent(
-    lv_obj_t *object)
-{
-    lv_obj_set_style_bg_opa(
-        object,
-        LV_OPA_TRANSP,
-        LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_img_opa(
-        object,
-        LV_OPA_TRANSP,
-        LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(
-        object,
-        0,
-        LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_outline_width(
-        object,
-        0,
-        LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_shadow_width(
-        object,
-        0,
-        LV_PART_MAIN | LV_STATE_DEFAULT);
-}
-
-/**
- * @brief 使一个 SquareLine Tabview 的 LVGL 内部 Content container 透明。
- * @param tabview SquareLine 导出的 Tabview 对象。
- * @retval SERVICE_OK 成功。
- * @retval SERVICE_NOT_READY Tabview 或其内部 Content container 尚未创建。
- * @note SquareLine v1.6.1 未暴露 Tabview 的内部 Content container 样式；该对象
- *       在 Simplified Theme 下默认具有不透明白底，必须由 GUI Service 补充处理。
- *       Tabview 本体仍完整保留 SquareLine 导出的 Border、Shadow、Radius 和背景
- *       设计，不能在本 Module 中覆盖。
- */
-static Service_StatusTypeDef
-service_gui_main_background_make_tabview_content_transparent(lv_obj_t *tabview)
-{
-    lv_obj_t *content;
-
-    if (tabview == NULL)
-    {
-        return SERVICE_NOT_READY;
-    }
-
-    content = lv_tabview_get_content(tabview);
-
-    if (content == NULL)
-    {
-        return SERVICE_NOT_READY;
-    }
-
-    service_gui_main_background_make_internal_content_transparent(content);
-
-    return SERVICE_OK;
-}
-
-/**
- * @brief 禁用一个 SquareLine Tabview 内部 Content container 的手势滚动。
- * @param tabview SquareLine 导出的 Tabview 对象。
- * @retval SERVICE_OK 成功。
- * @retval SERVICE_NOT_READY Tabview 或其内部 Content container 尚未创建。
- * @note 仅用于 MusicModeTabs。顶部 Tab Button 仍通过 lv_tabview_set_act() 切换页面；
- *       禁用内部 Content 的 Scrollable Flag 后，内容区的左右拖动不再切换模式，
- *       从而让父级 MainPageContainer 独占全局页面横滑手势。
- */
-static Service_StatusTypeDef
-service_gui_main_background_disable_tabview_content_scroll(lv_obj_t *tabview)
-{
-    lv_obj_t *content;
-
-    if (tabview == NULL)
-    {
-        return SERVICE_NOT_READY;
-    }
-
-    content = lv_tabview_get_content(tabview);
-
-    if (content == NULL)
-    {
-        return SERVICE_NOT_READY;
-    }
-
-    lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
-
-    return SERVICE_OK;
-}
-
-/**
  * @brief 按 Main Screen 原点将对象坐标转换为壁纸坐标区域。
  * @param object SquareLine 导出的目标对象。
  * @param main_area Main Screen 的实际屏幕区域。
@@ -315,22 +220,6 @@ Service_StatusTypeDef service_gui_main_background_prepare(
         (service_gui_main_background_view->music.tabs == NULL))
     {
         return SERVICE_NOT_READY;
-    }
-
-    status = service_gui_main_background_make_tabview_content_transparent(
-        service_gui_main_background_view->music.tabs);
-
-    if (status != SERVICE_OK)
-    {
-        return status;
-    }
-
-    status = service_gui_main_background_disable_tabview_content_scroll(
-        service_gui_main_background_view->music.tabs);
-
-    if (status != SERVICE_OK)
-    {
-        return status;
     }
 
     if (!service_gui_theme_uses_glass())

@@ -4,12 +4,11 @@
   * @brief   GUI Service 启动视觉序列的实现入口。
   *
   * @details
-  *          该 Module 在 SquareLine 静态 Boot Arc 之上叠加运行时动画。
-  *          ui_init() 完成且模糊背景绑定后，GUI Task 显式进入本 Module，创建
-  *          一组角度伸缩动画。该动画作用于普通 LVGL Arc，不改变 SquareLine
-  *          导出的轨道样式和 Indicator 内缩 Padding。BootReveal 通过 SquareLine
-  *          Call Function 进入本 Module；本 Module 使用 lv_async_call() 避免在
-  *          前一次 Screen 切换的 SCREEN_LOADED 回调中嵌套发起下一次切换。
+  *          该 Module 持有整段启动视觉序列：Boot（模糊壁纸 + 启动环）保持后淡出到
+  *          BootReveal（清晰壁纸），BootReveal 停留后淡出到 Lock。view/ 只创建对象；
+  *          界面创建且模糊背景绑定后，GUI Task 显式进入本 Module，启动 Arc 相位
+  *          动画并排定 Screen 切换。BootReveal 的 SCREEN_LOADED 回调使用
+  *          lv_async_call() 延后一轮，避免在前一次切换尚未收尾时嵌套发起下一次切换。
   ******************************************************************************
   */
 
@@ -228,13 +227,12 @@ static void service_gui_boot_load_lock_async(void *user_data)
 }
 
 /**
- * @brief SquareLine 的 BootReveal SCREEN_LOADED 事件回调。
- * @param event SquareLine 传入的 LVGL Screen Loaded 事件。
- * @note  此函数由 GUI/ 生成代码按链接符号调用，但实现及状态均归 GUI Service。
- *        它不直接切屏，只投递一次 lv_async_call()，从而避免在 LVGL 前一段
+ * @brief BootReveal 的 SCREEN_LOADED 事件回调。
+ * @param event LVGL Screen Loaded 事件。
+ * @note  它不直接切屏，只投递一次 lv_async_call()，从而避免在 LVGL 前一段
  *        Screen 切换尚未清理内部状态时重入 lv_scr_load_anim()。
  */
-void Service_GUI_Boot_RequestLock(lv_event_t *event)
+static void service_gui_boot_on_reveal_loaded(lv_event_t *event)
 {
     if ((event == NULL) ||
         (lv_event_get_code(event) != LV_EVENT_SCREEN_LOADED) ||
@@ -255,17 +253,30 @@ void Service_GUI_Boot_RequestLock(lv_event_t *event)
 
 /**
  * @brief 启动 Boot 视觉序列。
- * @note  仅允许由 GUI Task 在 ui_init() 和 Boot 背景资源绑定后调用。
- *        局部 lv_anim_t 描述符在 lv_anim_start() 后会被 LVGL 复制，因此不需要
- *        静态保存。Boot Arc 被删除时，LVGL 会自动删除以该对象为目标的动画。
+ * @note  仅允许由 GUI Task 在界面创建（Boot 已加载）和 Boot 背景资源绑定后调用。
+ *        先排定 Boot 保持后淡出到 BootReveal（Boot 随切换结束由 LVGL 删除），再启动
+ *        Arc 相位动画。局部 lv_anim_t 描述符在 lv_anim_start() 后会被 LVGL 复制，
+ *        因此不需要静态保存。Boot Arc 被删除时，LVGL 会自动删除以该对象为目标的动画。
  */
 void service_gui_boot_start(void)
 {
-    lv_obj_t *orbit_ring = service_gui_view_get()->boot.orbit_ring;
+    const Service_GUI_ViewTypeDef *view = service_gui_view_get();
+    lv_obj_t *orbit_ring = view->boot.orbit_ring;
     lv_anim_t phase_animation;
 
     service_gui_boot_lock_request_pending = false;
     service_gui_boot_lock_transition_started = false;
+
+    if (view->boot_reveal != NULL)
+    {
+        lv_obj_add_event_cb(view->boot_reveal, service_gui_boot_on_reveal_loaded,
+                            LV_EVENT_SCREEN_LOADED, NULL);
+        lv_scr_load_anim(view->boot_reveal,
+                         LV_SCR_LOAD_ANIM_FADE_OUT,
+                         SERVICE_GUI_BOOT_REVEAL_FADE_TIME_MS,
+                         SERVICE_GUI_BOOT_HOLD_TIME_MS,
+                         true);
+    }
 
     if (orbit_ring == NULL)
     {

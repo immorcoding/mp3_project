@@ -1,17 +1,14 @@
 /**
   ******************************************************************************
   * @file    gui_service_view.c
-  * @brief   GUI Service 私有界面层实现。
-  *
-  * @details
-  *          当前对象仍由 SquareLine 导出的 ui_init() 创建，本 Module 只把导出对象
-  *          收拢为句柄，使行为 Module 不再直接包含 GUI/ui.h。
+  * @brief   GUI Service 私有界面层实现：按顺序创建全部 Screen 并加载 Boot。
   ******************************************************************************
   */
 
 #include "Service/gui/view/gui_service_view.h"
+#include "Service/gui/view/gui_service_view_screens.h"
 
-#include "GUI/ui.h"
+extern const lv_img_dsc_t ui_img_wallpaper_indigo_mist_soft_dark_png;
 
 static Service_GUI_ViewTypeDef service_gui_view;
 
@@ -31,49 +28,30 @@ static void service_gui_view_on_boot_deleted(lv_event_t *event)
 /**
  * @brief 创建全部 Screen、加载 Boot，并填写对象句柄。
  * @retval SERVICE_OK 全部对象已创建。
- * @retval SERVICE_ERROR 任一关键对象创建失败。
- * @note 只能由 GUI Task 在 LVGL 显示驱动注册后调用一次。
+ * @retval SERVICE_ERROR 任一 Screen 创建失败。
+ * @note 只能由 GUI Task 在 LVGL 显示驱动注册后调用一次。先装 basic theme，
+ *       之后创建的对象都以它为默认样式；Main 先于 Lock 创建，因为 Lock 解锁以 Main 为目标。
  */
 Service_StatusTypeDef service_gui_view_create(void)
 {
-    ui_init();
+    lv_disp_t *disp = lv_disp_get_default();
+    const lv_img_dsc_t *wallpaper = service_gui_view_wallpaper();
 
-    service_gui_view.boot.screen = ui_Boot;
-    service_gui_view.boot.orbit_ring = ui_BootOrbitRing;
-    service_gui_view.boot_reveal = ui_BootReveal;
-    service_gui_view.lock = ui_Lock;
+    lv_disp_set_theme(disp, lv_theme_basic_init(disp));
 
-    service_gui_view.main.screen = ui_Main;
-    service_gui_view.main.page_container = ui_MainPageContainer;
-    service_gui_view.main.settings_page = ui_SettingsPageContainer;
-    service_gui_view.main.music_page = ui_MusicPageContainer;
-    service_gui_view.main.books_page = ui_BooksPageContainer;
-    service_gui_view.main.dot_settings = ui_DotSettings;
-    service_gui_view.main.dot_music = ui_DotMusic;
-    service_gui_view.main.dot_books = ui_DotBooks;
+    service_gui_view_boot_create(&service_gui_view, wallpaper);
+    service_gui_view_main_create(&service_gui_view, wallpaper);
+    service_gui_view_lock_create(&service_gui_view, wallpaper);
 
-    service_gui_view.music.tabs = ui_MusicModeTabs;
-    service_gui_view.music.queue_tab = ui_QueueTab;
-    service_gui_view.music.vinyl_image = ui_MusicPlayerVinylImage;
-    service_gui_view.music.slider = ui_MusicPlayingSlider;
-    service_gui_view.music.previous_button = ui_MusicPreviousButton;
-    service_gui_view.music.play_pause_button = ui_MusicPlayPauseButton;
-    service_gui_view.music.play_pause_icon = ui_MusicPlayPauseIcon;
-    service_gui_view.music.next_button = ui_MusicNextButton;
-
-    if ((ui_Boot == NULL) || (ui_BootReveal == NULL) ||
-        (ui_Lock == NULL) || (ui_Main == NULL))
+    if ((service_gui_view.boot.screen == NULL) || (service_gui_view.boot_reveal == NULL) ||
+        (service_gui_view.lock == NULL) || (service_gui_view.main.screen == NULL))
     {
         return SERVICE_ERROR;
     }
 
-    lv_obj_add_event_cb(ui_Boot, service_gui_view_on_boot_deleted, LV_EVENT_DELETE, NULL);
-
-    /* Queue 行由 queue/ 运行时构造，导出的单行范本不参与显示。 */
-    if (ui_SongPanel1 != NULL)
-    {
-        lv_obj_add_flag(ui_SongPanel1, LV_OBJ_FLAG_HIDDEN);
-    }
+    lv_obj_add_event_cb(service_gui_view.boot.screen, service_gui_view_on_boot_deleted,
+                        LV_EVENT_DELETE, NULL);
+    lv_disp_load_scr(service_gui_view.boot.screen);
 
     return SERVICE_OK;
 }
