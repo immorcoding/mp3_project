@@ -4,7 +4,7 @@
 > 日期：2026-09-01。
 > 首版范围：实现 Core、BINARY 与 IMAGE；FONT、AUDIO、MODEL、FIRMWARE 先完成协议定义，类型解码器默认关闭。
 > 当前硬件：STM32H743ZG、32 MiB W25Q256、32 MiB SDRAM。
-> 当前资源：CP936 的 `uni2oem`、`oem2uni` 两张表、默认壁纸，以及 Now Playing 唱片底图 IMAGE（PC 烧录进 Pack；不进 SquareLine / 内部 Flash）。固件启动加载 ID 1–4；Canvas 用 ID 4 底图叠假封面后绑到 `MusicPlayerVinylImage`。
+> 当前资源：CP936 的 `uni2oem`、`oem2uni` 两张表、默认壁纸，以及 Now Playing 唱片底图 IMAGE（PC 烧录进 Pack；不进内部 Flash）。固件启动加载 ID 1–4；Canvas 用 ID 4 底图叠假封面后绑到 Now Playing 唱盘 Image。
 
 ## 1. 目标与边界
 
@@ -639,6 +639,8 @@ typedef struct
 | CP936 `oem2uni` | `0xC00154A0` | `0x15484` |
 | 默认壁纸 Data | `0xC002A940` | `0x38400` |
 
+默认壁纸 Data 由 `Service/gui/view/gui_service_view_wallpaper_region.c` 的像素数组占位（输入段名沿用 `.rodata.ui_img_wallpaper_indigo_mist_soft_dark_png_data`），GUI 经 `view/` 的壁纸描述符读取；模拟器从 `Resources/imgs/` 的打包源装入同一数组。
+
 三个目标首地址均按 32 B 对齐；两个 CP936 表后的 28 B Padding 允许 `Clean_Rounded()` 安全覆盖最后一条 Cache Line。
 
 ### 15.3 状态、失败和日志
@@ -736,7 +738,7 @@ Tools/package_maker/
 - BINARY ResourceID 1：CP936 `uni2oem`；
 - BINARY ResourceID 2：CP936 `oem2uni`；
 - IMAGE ResourceID 3：默认 240 × 320 LVGL TRUE_COLOR_ALPHA 壁纸；
-- IMAGE ResourceID 4：Now Playing 唱片底图 144 × 144 LVGL TRUE_COLOR_ALPHA。由 PC 打包器写入 Pack 并烧录；不把该 PNG 编进 SquareLine 导出的内部 Flash。固件把 ID 4 拷到 SDRAM 唱盘槽，Canvas 叠假封面后绑到 `MusicPlayerVinylImage`。真 ID3 封面不在本条。
+- IMAGE ResourceID 4：Now Playing 唱片底图 144 × 144 LVGL TRUE_COLOR_ALPHA。由 PC 打包器写入 Pack 并烧录；不把该 PNG 编进内部 Flash。固件把 ID 4 拷到 SDRAM 唱盘槽，Canvas 叠假封面后绑到 Now Playing 唱盘 Image。真 ID3 封面不在本条。
 
 首版不实现：
 

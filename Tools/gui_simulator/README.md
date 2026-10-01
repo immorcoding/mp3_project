@@ -1,6 +1,6 @@
-# GUI 模拟器（实验）
+# GUI 模拟器
 
-在 Windows PC 上运行**真实的** LVGL v8.3.11、SquareLine 导出的 `GUI/` 与 `Service/gui`，用 SDL2 窗口替代 ST7789 + FT6X36。目的是在不烧录的情况下迭代 GUI 运行时（Canvas、Pager、主题、Queue、Transport）。
+在 Windows PC 上运行**真实的** LVGL v8.3.11 与 `Service/gui`（含手写界面 `view/`），用 SDL2 窗口替代 ST7789 + FT6X36。目的是在不烧录的情况下迭代界面与 GUI 运行时（Canvas、Pager、主题、Queue、Transport），并用场景回归守住界面等价性（ADR-0016）。
 
 本工程是独立 host CMake 工程，不进入目标固件，不是板级验收（`PASS_HOST_ONLY` 也不算，见 `docs/verification.md`）。
 
@@ -14,7 +14,7 @@ cmake --build build/gui_simulator
 ./build/gui_simulator/gui_simulator.exe
 ```
 
-窗口为 240×320 的 2 倍放大（`SIM_DISPLAY_ZOOM`）。鼠标左键 = 触摸；`T` 切换 Default/Solid 主题；`Esc` 退出。启动后约 7 s 进入 Lock，向上拖动解锁。
+窗口为 240×320 的 2 倍放大（`SIM_DISPLAY_ZOOM`）。鼠标左键 = 触摸；`T` 切换 Default/Solid 主题；`Esc` 退出。启动后约 5 s 进入 Lock，向上拖动解锁。
 
 ## 脚本参数（无人值守截图）
 
@@ -40,7 +40,7 @@ cmake --build build/gui_simulator
 
 ## 场景回归
 
-`scenarios/*.args` 每行一个参数（`#` 开头为注释），`scenarios/*.expected` 记录每张截图的帧哈希。
+`scenarios/*.args` 每行一个参数（`#` 开头为注释），`scenarios/*.expected` 记录每张截图的帧哈希。当前场景：`boot_lock`（开机序列）、`unlock_main`、`music_transport`（播放/切歌/拖进度）、`queue`（选曲、滚动、Library）、`pager`（循环翻页与回弹）、`theme_toggle`（运行时切主题）、`theme_default`（Default 毛玻璃随横滑重裁剪）。改动 `Service/gui/` 后必须跑；新增界面时补场景。
 
 ```powershell
 ./Tools/gui_simulator/run-scenarios.ps1              # 全部场景与基线比对
@@ -58,8 +58,8 @@ cmake --build build/gui_simulator
 | --- | --- |
 | `Platform/lcd`：`SetTransferCallback` / `StartWrite` | `fakes/platform_lcd_sim.c`：同步拷入 SDL 帧缓冲，随即发布 `TRANSFER_COMPLETE` |
 | `Platform/touch`：`IsAvailable` / `ReadRawPoint` | `fakes/platform_touch_sim.c`：鼠标左键或脚本触点 |
-| FreeRTOS `FreeRTOS.h` / `task.h` | `shim/` 同路径头 + `fakes/freertos_sim.c`：Tick 取 `SDL_GetTicks()`，通知为计数器 |
-| 链接脚本资源区 `__external_resource_vinyl_*` | `fakes/resource_sim.c`：asm 定义同名符号，启动时拷入 `Resources/imgs/vinyl_original_144px.c` |
+| FreeRTOS `FreeRTOS.h` / `task.h` | `shim/` 同路径头 + `fakes/freertos_sim.c`：Tick 取模拟器时钟（`sim_clock.c`，交互时为 `SDL_GetTicks()`，脚本时为虚拟时钟），通知为计数器 |
+| 链接脚本资源区 `__external_resource_vinyl_*` 与壁纸像素区 | `fakes/resource_sim.c`：asm 定义 vinyl 同名符号、定义 `service_gui_view_wallpaper_pixels`，启动时拷入 `Resources/imgs/` 的唱盘与壁纸打包源；固件专用的 `gui_service_view_wallpaper_region.c` 不编译 |
 | `lv_conf.h` | `config/sim_lv_conf.h`：包装产品配置，只关 DMA2D、`.lvgl_large_ram_array` 段与 FPS/内存浮层 |
 | APP `gui_music`（依赖 Storage） | `sim_main.c` 内最小演示分区：10 首固定曲目、播放/暂停、上一首/下一首、假进度、选曲 |
 

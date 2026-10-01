@@ -1,6 +1,6 @@
 # GUI Task
 
-GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后循环：Consume 一次输入、调用各产品分区 `step`、再 `Service_GUI_Process()`。SPI DMA 刷新期间的等待由 GUI Service 的 wait callback 完成。本目录不拥有 SquareLine 生成代码，也不修改 `GUI/`。
+GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后循环：Consume 一次输入、调用各产品分区 `step`、再 `Service_GUI_Process()`。SPI DMA 刷新期间的等待由 GUI Service 的 wait callback 完成。本目录不创建界面对象；界面由 `Service/gui/view/` 手写。
 
 `gui_task.c` 不包含 `storage_listbuffer.h` 或 `storage_playback_cursor.h`。音乐播放器在 `music/`：窗口协议、playing、假进度与游标步进都在该分区内。Books / Settings 以后各加一个 `step`，不要把它们的 `switch` 写回任务主循环。
 
@@ -22,7 +22,7 @@ GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后�
 ## 资源与约束
 
 - 不创建第二个 LVGL 执行上下文；
-- 不手改 `GUI/` 或 `SquareLineProject/`；
+- 不直接创建或修改 LVGL 对象，经 `Service_GUI_*` 公开 Interface 交互；
 - 初始化失败没有部分回滚；
 - 不裁路径、不按文件名切开；标题/歌手等 `load` 调解析器，见 `docs/catalog_architecture.md` 第 5 节。
 

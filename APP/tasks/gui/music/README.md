@@ -9,7 +9,7 @@
 - `gui_music_queue_window_*()`：listbuffer 窗口 request / APPLY / CLEAR 时机。
 - `gui_music_transport_*()`：playing 与 0..100 进度；无当前曲不能开播；CLEAR 强制 paused 且进度归零。
 - 自动走表未实现：等 Playback 后台用解码器时间对接，见 `gui_music_step` 注释框。
-- `MusicPlayerTimeLabel` 已由 SquareLine 导出，本分区尚未填时间。假唱盘第一帧见 `docs/gui_ui_design.md` 10.5.4，旋转尚未接线。
+- Now Playing 时间 Label 已由 `view/` 创建，本分区尚未填时间。假唱盘第一帧见 `docs/gui_ui_design.md` 10.5.4，旋转尚未接线。
 
 ## 编译期依赖
 
