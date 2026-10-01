@@ -5,7 +5,7 @@
  *
  * @details
  *          不旋转、不读 ID3、不导入 PNG。底图来自 Resource 加载到 SDRAM 槽的
- *          ID 4；Canvas 复制后再叠假封面。本 Module 只负责核对 SquareLine 槽位
+ *          ID 4；Canvas 复制后再叠假封面。本 Module 只负责核对 Image 尺寸
  *          并 set_src。
  ******************************************************************************
  */
@@ -28,7 +28,7 @@ extern uint8_t __external_resource_vinyl_end__[];
 /**
  * @brief 用 Resource 底图合成唱盘并绑到 Now Playing Image。
  * @retval SERVICE_OK 第一帧已可见。
- * @retval SERVICE_NOT_READY SquareLine Image 尚未导出。
+ * @retval SERVICE_NOT_READY Image 尚未导出。
  * @retval SERVICE_INVALID_PARAM 对象尺寸与唱盘直径宏不一致，槽容量不匹配，或合成失败。
  * @note 仅由 service_gui_main_prepare() 在 Transport 之后、Background 之前调用一次。
  *       本刀不加旋转动画。

@@ -1,12 +1,11 @@
 /**
   ******************************************************************************
   * @file    gui_service_main_queue.c
-  * @brief   按 Length 用 SquareLine 范本构造生成 Queue 可见行。
+  * @brief   按 Length 构造 Queue 可见行，并在窗口滑动时复用。
   *
   * @details
- *          构造序列从 GUI/screens/ui_Main.c 的 SongPanel1 范本摘出，for 循环
- *          写入 QueueTab。不对手上的 LVGL 对象做样式拷贝。SquareLine 导出的
- *          那一行隐藏，避免和循环行叠在一起。当前/非当前只改 Border Opa、
+ *          行由本 Module 的行工厂按需构造进 QueueTab（view/ 只创建空的 QueueTab）。
+ *          当前/非当前只改 Border Opa、
  *          曲名色、Long mode 和右侧符号 Opa，不改 Border Width。点按 CLICKED
  *          只刷新行样式并记下播放列表下标，不打开文件。可见行数跟 Apply
  *          传入的 Length 走，至多 SERVICE_GUI_MAIN_QUEUE_MAX_ROWS；曲名是 GUI Task 传入的窗口文本。
@@ -40,7 +39,7 @@ typedef struct
 /** @brief Music 页对象句柄，prepare 时取得。 */
 static const Service_GUI_ViewMusicTypeDef *service_gui_main_queue_music;
 
-/** @brief 已按范本构造的行；未创建槽位保持 NULL。 */
+/** @brief 已构造的行；未创建槽位保持 NULL。 */
 static Service_GUI_MainQueueRowTypeDef service_gui_main_queue_rows[
     SERVICE_GUI_MAIN_QUEUE_MAX_ROWS];
 
@@ -56,13 +55,12 @@ static uint16_t service_gui_main_queue_applied_length;
 static void service_gui_main_queue_on_panel_clicked(lv_event_t *e);
 
 /**
- * @brief 按 SquareLine 范本构造一行，父对象为 QueueTab。
+ * @brief 构造一行 Queue 行，父对象为 QueueTab。
  * @param[out] row 新行对象指针。
- * @retval SERVICE_OK 已按范本构造。
+ * @retval SERVICE_OK 已构造。
  * @retval SERVICE_ERROR LVGL 未能创建对象；已挂到 QueueTab 的半成品 panel 会删除。
- * @note 须与 GUI/screens/ui_Main.c 中 SongPanel1 及其子对象的构造保持同步；
- *       SquareLine 重新导出后对照更新本函数，不得手改 GUI/。
- *       SongStatus 范本仍是占位 `S`；运行时写 `LV_SYMBOL_AUDIO`（montserrat_14 含该字形）。
+ * @note 行结构：Wash 薄底圆角 Panel（左侧 Accent 边条）→ 80% 宽文字组（曲名、歌手）
+ *       + 右侧 `LV_SYMBOL_AUDIO` 符号（montserrat_14 含该字形）。颜色经共享主题 style。
  */
 static Service_StatusTypeDef service_gui_main_queue_create_row(
     Service_GUI_MainQueueRowTypeDef *row)
@@ -173,7 +171,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
  * @brief 非当前行把右侧符号做成透明，但仍留在 Flex 里占位。
  * @param[in,out] status 行内 SongStatus Label。
  * @param[in] visible 当前行可见，非当前行透明。
- * @note 不得使用 HIDDEN：范本信息组宽度是 80%，Panel 是 SPACE_BETWEEN，拿掉
+ * @note 不得使用 HIDDEN：信息组宽度是 80%，Panel 是 SPACE_BETWEEN，拿掉
  *       右侧符号会把文字组拉开，左侧多出一块空。
  */
 static void service_gui_main_queue_set_status_visible(
@@ -226,7 +224,7 @@ static void service_gui_main_queue_set_current_border_visible(
 
 /**
  * @brief 套用当前/非当前样式，不改曲名与歌手文字。
- * @param[in,out] row 已按范本构造的行。
+ * @param[in,out] row 已构造的行。
  * @param[in] is_current 是否为窗口内正在播放的那一行。
  * @note 只改 Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width。
  *       曲名高度一律锁成一行：LVGL 8 的 DOT 看高度溢出；SCROLL_CIRCULAR 靠宽度
@@ -267,7 +265,7 @@ static void service_gui_main_queue_apply_row_style(
 
 /**
  * @brief 填写一行文字并套用当前/非当前样式。
- * @param[in,out] row 已按范本构造的行。
+ * @param[in,out] row 已构造的行。
  * @param[in] title 曲名显示文本。
  * @param[in] artist 歌手文本。
  * @param[in] is_current 是否为窗口内正在播放的那一行。
@@ -342,7 +340,7 @@ static void service_gui_main_queue_on_panel_clicked(lv_event_t *e)
 
 /**
  * @brief 显示或隐藏已构造的一行，不销毁对象。
- * @param[in,out] row 已按范本构造的行。
+ * @param[in,out] row 已构造的行。
  * @param[in] hidden 为真则 Hidden，为假则参与 QueueTab Flex。
  */
 static void service_gui_main_queue_set_row_hidden(
@@ -547,7 +545,7 @@ Service_StatusTypeDef service_gui_main_queue_prepare(void)
 }
 
 /**
- * @brief 按 Length 填 Queue 可见行；不够的 Hidden，不够用的按范本补造。
+ * @brief 按 Length 填 Queue 可见行；不够的 Hidden，不够用的补造。
  * @param[in] titles 曲名字符串指针表，Length 为 0 时允许为 NULL。
  * @param[in] length 本窗实际条数，0..SERVICE_GUI_MAIN_QUEUE_MAX_ROWS。
  * @param[in] window_index 本窗在播放列表上的起点。
@@ -555,7 +553,7 @@ Service_StatusTypeDef service_gui_main_queue_prepare(void)
  *            SERVICE_GUI_QUEUE_NO_CURRENT。
  * @retval SERVICE_OK 已按 Length 显示行，或 Length 为 0 已全部 Hidden。
  * @retval SERVICE_INVALID_PARAM Length 超上限，或 Length 非 0 但 titles 为空。
- * @retval SERVICE_NOT_READY QueueTab 或范本尚未导出。
+ * @retval SERVICE_NOT_READY QueueTab 尚未创建。
  * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
  * @note 歌手空串。不包含 storage_listbuffer.h。已有行转 head，不无限 create。
  */

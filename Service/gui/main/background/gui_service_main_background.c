@@ -1,16 +1,16 @@
 /**
   ******************************************************************************
   * @file    gui_service_main_background.c
-  * @brief   Main Screen 的局部毛玻璃与 Tabview 内部 Content 兼容实现。
+  * @brief   Main Screen 的 MusicModeTabs 局部毛玻璃与 Solid 薄层。
   *
   * @details
-  *          本 Module 不修改 SquareLine 导出的视觉设计。它在 Pager 完成布局和
-  *          初始回中后读取对象实际屏幕坐标，以 Main Screen 为原点换算为壁纸坐标；
-  *          随后从长期持有的全屏模糊壁纸裁剪出与 MusicModeTabs 等大的局部背景，并
-  *          仅将该运行时 Background image 绑定到 MusicModeTabs。MainPageContainer
-  *          滚动期间会按控件当帧坐标重裁剪，确保玻璃区域始终采样其下方壁纸；
-  *          除此以外，本 Module 只处理 SquareLine 无法访问的 Tabview 内部 Content
-  *          container，且绝不在滚动回调中重复执行全屏软件模糊。
+  *          本 Module 不修改 view/ 创建的静态视觉。Default 外观下，它在 Pager 完成
+  *          布局和初始回中后读取对象实际屏幕坐标，以 Main Screen 为原点换算为壁纸
+  *          坐标；随后从长期持有的全屏模糊壁纸裁剪出与 MusicModeTabs 等大的局部
+  *          背景，并只把该运行时 Background image 绑定到 MusicModeTabs。
+  *          MainPageContainer 滚动期间按控件当帧坐标重裁剪，确保玻璃区域始终采样
+  *          其下方壁纸，且绝不在滚动回调中重复执行全屏软件模糊。Solid 外观改用
+  *          半透明 Wash 薄层。
   ******************************************************************************
   */
 
@@ -67,17 +67,17 @@ static lv_img_dsc_t service_gui_main_background_blurred_wallpaper;
 /** @brief 当前长期模糊壁纸是否已成功构建。 */
 static bool service_gui_main_background_blurred_wallpaper_ready;
 
-/** @brief 已绑定局部背景同步回调的 SquareLine MainPageContainer。 */
+/** @brief 已绑定局部背景同步回调的 MainPageContainer。 */
 static lv_obj_t *service_gui_main_background_page_container;
 
 /**
  * @brief 按 Main Screen 原点将对象坐标转换为壁纸坐标区域。
- * @param object SquareLine 导出的目标对象。
+ * @param object view/ 创建的目标对象。
  * @param main_area Main Screen 的实际屏幕区域。
  * @param image_area 返回的壁纸内闭区间裁剪区域。
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_NOT_READY 对象或输出区域为空。
- * @note 坐标来自布局后的对象实际区域，故 SquareLine 中调整相对位置、百分比尺寸
+ * @note 坐标来自布局后的对象实际区域，故 view/ 中调整相对位置、百分比尺寸
  *       或 MAIN Radius 后，无需同步维护任何 Service 内像素常量。横滑时返回区域
  *       可以部分越出壁纸；调用方使用带透明越界填充的裁剪 Interface。输出尺寸仍
  *       必须不超过 gui_service_main_background_config.h 中的局部背景容量上限。

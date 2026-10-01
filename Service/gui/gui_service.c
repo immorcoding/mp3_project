@@ -360,7 +360,7 @@ Service_StatusTypeDef Service_GUI_ProgressApply(uint8_t percent)
  *            SERVICE_GUI_QUEUE_NO_CURRENT。
  * @retval SERVICE_OK 已按 Length 显示，或 Length 为 0 已全部 Hidden。
  * @retval SERVICE_INVALID_PARAM Length 超上限，或 Length 非 0 但 titles 为空。
- * @retval SERVICE_NOT_READY Queue 范本尚未准备。
+ * @retval SERVICE_NOT_READY QueueTab 尚未创建。
  * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
  * @note 只能由完成 Service_GUI_Init() 的同一 GUI Task 调用。曲名由调用方持有，
  *       Label 会拷贝文本，调用返回后调用方可把 listbuffer 写回 IDLE。

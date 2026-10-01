@@ -74,7 +74,7 @@ static uint16_t service_gui_boot_ease_in_out(uint16_t progress)
 
 /**
  * @brief 按统一相位设置活动弧的两个端点。
- * @param target SquareLine 导出的 Boot Arc。
+ * @param target view/ 创建的 Boot Arc。
  * @param value 线性循环相位，范围为 0 至 LV_BEZIER_VAL_MAX。
  * @details
  *          前半周期让前端加速向前而后端匀速前进，以延长活动弧；后半周期保持

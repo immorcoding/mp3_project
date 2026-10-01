@@ -5,8 +5,8 @@
   *
   * @details
   *          本 Module 只管理 MainPageContainer 的物理槽位、松手吸附、首尾循环
-  *          重排以及逻辑页面对应的底部圆点动画。它不创建或销毁 SquareLine 对象，
-  *          不读取壁纸像素、不持有 Canvas 缓冲，也不覆盖 SquareLine 定义的颜色、
+  *          重排以及逻辑页面对应的底部圆点动画。它不创建或销毁界面对象，
+  *          不读取壁纸像素、不持有 Canvas 缓冲，也不覆盖 view/ 定义的颜色、
   *          圆角、布局或其他静态视觉样式。
   ******************************************************************************
   */
@@ -59,36 +59,36 @@ static bool service_gui_main_pager_snap_in_progress;
 static bool service_gui_main_pager_recenter_in_progress;
 
 /**
- * @brief 当前物理槽位到 SquareLine Page 对象的映射。
+ * @brief 当前物理槽位到 Page 对象的映射。
  * @note 下标只表达物理位置；对象映射会在循环切页后轮换，故逻辑 Page 不依赖
  *       固定像素坐标或固定槽位。
  */
 static lv_obj_t *service_gui_main_pager_slots[
     SERVICE_GUI_MAIN_PAGER_SLOT_COUNT];
 
-/** @brief 逻辑 Page 到 SquareLine 导出分页指示器对象的固定映射。 */
+/** @brief 逻辑 Page 到分页指示器对象的固定映射。 */
 static lv_obj_t *service_gui_main_pager_dots[
     SERVICE_GUI_MAIN_PAGER_PAGE_COUNT];
 
 /** @brief 当前逻辑活动页，用于确认应收缩的旧分页指示器。 */
 static lv_obj_t *service_gui_main_pager_active_page;
 
-/** @brief SquareLine 导出的非活动圆点宽度与背景透明度基线。 */
+/** @brief view/ 创建的非活动圆点宽度与背景透明度基线。 */
 static lv_coord_t service_gui_main_pager_inactive_dot_width;
 static lv_opa_t service_gui_main_pager_inactive_dot_opa;
 
-/** @brief SquareLine 导出的活动胶囊宽度与背景透明度基线。 */
+/** @brief view/ 创建的活动胶囊宽度与背景透明度基线。 */
 static lv_coord_t service_gui_main_pager_active_dot_width;
 static lv_opa_t service_gui_main_pager_active_dot_opa;
 
-/** @brief 已绑定分页回调的 SquareLine MainPageContainer。 */
+/** @brief 已绑定分页回调的 MainPageContainer。 */
 static lv_obj_t *service_gui_main_pager_container;
 
 /**
- * @brief 绑定 SquareLine 导出的三张 Main Page 到初始物理槽位。
+ * @brief 绑定 view/ 创建的三张 Main Page 到初始物理槽位。
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_NOT_READY MainPageContainer 或任一 Page 尚未创建。
- * @note 此函数只在 Main 重建后恢复 SquareLine 导出的初始顺序。正常循环期间由
+ * @note 此函数只在 Main 重建后恢复 view/ 创建的初始顺序。正常循环期间由
  *       service_gui_main_pager_recenter_loop() 维护该映射，不能在滚动回调中重复调用。
  */
 static Service_StatusTypeDef service_gui_main_pager_bind_slots(void)
@@ -112,10 +112,10 @@ static Service_StatusTypeDef service_gui_main_pager_bind_slots(void)
 }
 
 /**
- * @brief 绑定 SquareLine 导出的逻辑 Page 与底部分页指示器。
+ * @brief 绑定 view/ 创建的逻辑 Page 与底部分页指示器。
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_NOT_READY 任一指示器未创建，或其初始视觉尺寸无效。
- * @note 本函数从 SquareLine 导出的 Settings、Music 指示器读取非活动与活动视觉
+ * @note 本函数从 view/ 创建的 Settings、Music 指示器读取非活动与活动视觉
  *       基线。后续动画只使用这些运行时读取值，避免将 UI 色彩或尺寸复制进 Service。
  */
 static Service_StatusTypeDef service_gui_main_pager_bind_dots(void)
@@ -154,7 +154,7 @@ static Service_StatusTypeDef service_gui_main_pager_bind_dots(void)
 }
 
 /**
- * @brief 获取指定逻辑 Page 对应的 SquareLine 分页指示器。
+ * @brief 获取指定逻辑 Page 对应的 分页指示器。
  * @param page MainPageContainer 内的一个逻辑 Page 对象。
  * @return 对应指示器；若 Page 不属于当前 Main 分页结构则返回 NULL。
  */
@@ -256,7 +256,7 @@ static void service_gui_main_pager_animate_dot(
 /**
  * @brief 切换当前逻辑 Page 对应的分页指示器视觉状态。
  * @param next_page 已判定为下一页的逻辑 Page 对象。
- * @note 旧页胶囊收缩为 SquareLine 定义的圆点，新页圆点伸展为 SquareLine 定义的
+ * @note 旧页胶囊收缩为 view/ 定义的圆点，新页圆点伸展为 view/ 定义的
  *       胶囊。没有逻辑页变化时不启动动画。
  */
 static void service_gui_main_pager_update_dot(lv_obj_t *next_page)
@@ -291,10 +291,10 @@ static void service_gui_main_pager_update_dot(lv_obj_t *next_page)
 }
 
 /**
- * @brief 将当前 Page 槽位映射写回 SquareLine 分页视口的位置。
+ * @brief 将当前 Page 槽位映射写回 分页视口的位置。
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_NOT_READY MainPageContainer 或槽位对象尚未就绪。
- * @note 位置使用与 SquareLine 初始导出一致的百分比语义，避免将显示分辨率或
+ * @note 位置使用与 view/ 初始创建一致的百分比语义，避免将显示分辨率或
  *       Viewport 像素宽度固定写入 Page 重排逻辑。
  */
 static Service_StatusTypeDef service_gui_main_pager_apply_slots(void)
@@ -510,7 +510,7 @@ static Service_StatusTypeDef service_gui_main_pager_bind_scroll_end_event(void)
  * @brief 无动画定位 MainPageContainer 到中间的 MusicPage 槽位。
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_NOT_READY MainPageContainer 尚未创建或布局宽度无效。
- * @note SquareLine 中初始 Settings、Music、Books 三页分别位于 LEFT、CENTER、RIGHT
+ * @note view/ 创建时 Settings、Music、Books 三页分别位于 LEFT、CENTER、RIGHT
  *       槽位。以一个 Viewport 宽度作为水平滚动位置即可显示中间的 Music Page。
  */
 static Service_StatusTypeDef service_gui_main_pager_center_music_page(void)
@@ -544,9 +544,9 @@ static Service_StatusTypeDef service_gui_main_pager_center_music_page(void)
 /**
  * @brief 初始化 Main Screen 的循环分页和底部分页指示器。
  * @retval SERVICE_OK 成功。
- * @retval SERVICE_NOT_READY SquareLine Main 对象、布局或指示器尚未就绪。
- * @note 本函数在 ui_init() 后执行。它只使用 SquareLine 公开对象；静态视觉样式仍由
- *       SquareLine 定义。Background Module 必须在本函数成功完成后初始化，以便首次
+ * @retval SERVICE_NOT_READY Main 对象、布局或指示器尚未就绪。
+ * @note 本函数在 view/ 创建界面后执行。它只经句柄使用对象；静态视觉样式仍由
+ *       view/ 定义。Background Module 必须在本函数成功完成后初始化，以便首次
  *       毛玻璃裁剪基于已经居中的 MusicPage 坐标。
  */
 Service_StatusTypeDef service_gui_main_pager_prepare(void)

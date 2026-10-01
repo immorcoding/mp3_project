@@ -295,7 +295,7 @@ static bool service_gui_canvas_is_inside_circle(
  * @param x 待判断像素的 X 坐标。
  * @param y 待判断像素的 Y 坐标。
  * @return 位于矩形可见区域内时返回 true。
- * @note Radius 大于区域短边的一半时会被钳制，以兼容 SquareLine 的大 Radius
+ * @note Radius 大于区域短边的一半时会被钳制，以兼容 `LV_RADIUS_CIRCLE` 等大 Radius
  *       样式值；零 Radius 等价于普通矩形。
  */
 static bool service_gui_canvas_is_inside_rounded_rect(

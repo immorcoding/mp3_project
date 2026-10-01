@@ -84,7 +84,7 @@ static void service_gui_main_transport_on_slider_released(lv_event_t *e)
 }
 
 /**
- * @brief 绑定 Now Playing 三键点击与进度条松手；不写 SquareLine 事件。
+ * @brief 绑定 Now Playing 三键点击与进度条松手；事件只在本 Module 绑定。
  * @retval SERVICE_OK 已绑定。
  * @retval SERVICE_NOT_READY 导出按钮、播放图标或进度条尚未创建。
  */
