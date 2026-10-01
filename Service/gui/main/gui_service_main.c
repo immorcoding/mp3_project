@@ -68,3 +68,15 @@ Service_StatusTypeDef service_gui_main_prepare(
 
     return service_gui_main_background_prepare(clear_wallpaper);
 }
+
+/**
+ * @brief 按当前外观更新 Main 的运行时外观（MusicModeTabs 毛玻璃或薄层）。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_NOT_READY Main 尚未 prepare。
+ * @retval SERVICE_INVALID_PARAM 首次生成毛玻璃失败。
+ * @note 只能由 GUI Task 在 service_gui_main_prepare() 成功后调用。
+ */
+Service_StatusTypeDef service_gui_main_apply_theme(void)
+{
+    return service_gui_main_background_apply();
+}

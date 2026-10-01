@@ -1,0 +1,12 @@
+# Default 外观：Lock 上切到 Default 后解锁，验证毛玻璃随横滑重裁剪、Queue 与 Transport
+--key 5600:t
+--drag 6000:120,290:120,80:250
+--shot 7300:main_default
+--drag 7500:200,160:120,160:150
+--shot 7600:glass_dragging
+--shot 8200:glass_back
+--tap 8400:125,28
+--shot 8700:queue_default
+--tap 8900:60,28
+--tap 9200:120,260
+--shot 9500:playing_default

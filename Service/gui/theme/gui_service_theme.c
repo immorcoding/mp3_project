@@ -1,11 +1,11 @@
 /**
   ******************************************************************************
   * @file    gui_service_theme.c
-  * @brief   GUI 外观调色板：占位 hex 映射、当前索引与壁纸/毛玻璃标志。
+  * @brief   GUI 外观调色板：角色色值、当前索引与壁纸/毛玻璃标志。
   *
   * @details
-  *          不含 LVGL。绘制过滤器把对象上的占位 hex 交给本文件映射；切外观只
-  *          换当前表项，不扫对象改 style。
+  *          不含 LVGL。gui_service_theme_style.c 按本文件的角色色值刷新共享 style；
+  *          切外观只换当前表项。
   ******************************************************************************
   */
 
@@ -84,43 +84,30 @@ Service_StatusTypeDef service_gui_theme_select(uint8_t id)
 }
 
 /**
- * @brief 把 SquareLine 占位 hex 映射成当前调色板 RGB。
- * @param[in] hex 24-bit RGB；高字节忽略。
- * @return 当前外观对应的 RGB；不是五个占位之一则原样返回。
- * @note 不解释 Opa。`#FFFFFF` 不是占位槽。
+ * @brief 读取当前外观下某个角色的 RGB。
+ * @param[in] role 调色板角色。
+ * @return 24-bit RGB；非法角色返回 0（黑）。
+ * @note 不解释 Opa；Opa 写在各对象上。
  */
-uint32_t service_gui_theme_map_placeholder(uint32_t hex)
+uint32_t service_gui_theme_role_color(Service_GUI_ThemeRoleTypeDef role)
 {
     const Service_GUI_ThemePaletteTypeDef *palette = service_gui_theme_current_palette();
 
-    hex &= 0x00FFFFFFU;
-
-    if (hex == SERVICE_GUI_THEME_PLACEHOLDER_ACCENT)
+    switch (role)
     {
+    case SERVICE_GUI_THEME_ACCENT:
         return palette->accent;
-    }
-
-    if (hex == SERVICE_GUI_THEME_PLACEHOLDER_INK)
-    {
+    case SERVICE_GUI_THEME_INK:
         return palette->ink;
-    }
-
-    if (hex == SERVICE_GUI_THEME_PLACEHOLDER_MUTED)
-    {
+    case SERVICE_GUI_THEME_MUTED:
         return palette->muted;
-    }
-
-    if (hex == SERVICE_GUI_THEME_PLACEHOLDER_WASH)
-    {
+    case SERVICE_GUI_THEME_WASH:
         return palette->wash;
-    }
-
-    if (hex == SERVICE_GUI_THEME_PLACEHOLDER_GROUND)
-    {
+    case SERVICE_GUI_THEME_GROUND:
         return palette->ground;
+    default:
+        return 0U;
     }
-
-    return hex;
 }
 
 /**

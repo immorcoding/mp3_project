@@ -12,7 +12,7 @@
 
 #include "Service/gui/view/gui_service_view_screens.h"
 
-#include "Service/gui/theme/gui_service_theme_config.h"
+#include "Service/gui/theme/gui_service_theme_style.h"
 
 #define SERVICE_GUI_VIEW_MUSIC_TAB_BAR_HEIGHT  (20)   /* 顶部标签栏高度，像素。 */
 #define SERVICE_GUI_VIEW_MUSIC_VINYL_SIZE      (144)  /* 唱盘 Image 边长；须等于 SERVICE_GUI_MUSIC_VINYL_DIAMETER。 */
@@ -23,32 +23,24 @@
  */
 static void service_gui_view_music_style_tab_buttons(lv_obj_t *buttons)
 {
-    lv_obj_set_style_text_color(buttons, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                                LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(buttons, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(buttons, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(buttons, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(buttons, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_WASH),
-                              LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(buttons, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(buttons, 20, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_color(buttons, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_WASH),
-                                  LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(buttons, SERVICE_GUI_THEME_BORDER, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_opa(buttons, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_side(buttons, LV_BORDER_SIDE_TOP, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_set_style_text_color(buttons, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                                LV_PART_ITEMS | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(buttons, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_ITEMS | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(buttons, LV_OPA_COVER, LV_PART_ITEMS | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(buttons, &lv_font_montserrat_12, LV_PART_ITEMS | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(buttons, lv_color_hex(0xFFFFFF), LV_PART_ITEMS | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(buttons, LV_OPA_TRANSP, LV_PART_ITEMS | LV_STATE_DEFAULT);
 
-    lv_obj_set_style_text_color(buttons, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_ACCENT),
-                                LV_PART_ITEMS | LV_STATE_CHECKED);
+    service_gui_theme_style_add(buttons, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_obj_set_style_text_opa(buttons, LV_OPA_COVER, LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_bg_color(buttons, lv_color_hex(0xFFFFFF), LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_obj_set_style_bg_opa(buttons, LV_OPA_TRANSP, LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_border_color(buttons, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_ACCENT),
-                                  LV_PART_ITEMS | LV_STATE_CHECKED);
+    service_gui_theme_style_add(buttons, SERVICE_GUI_THEME_BORDER, SERVICE_GUI_THEME_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_obj_set_style_border_opa(buttons, LV_OPA_COVER, LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_obj_set_style_border_width(buttons, 2, LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_obj_set_style_border_side(buttons, LV_BORDER_SIDE_BOTTOM, LV_PART_ITEMS | LV_STATE_CHECKED);
@@ -80,9 +72,7 @@ static lv_obj_t *service_gui_view_music_add_tab(lv_obj_t *tabs, const char *name
 {
     lv_obj_t *tab = lv_tabview_add_tab(tabs, name);
 
-    lv_obj_set_style_bg_color(tab, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(tab, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(tab, lv_color_hex(0xFFFFFF), LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(tab, LV_OPA_TRANSP, LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
     return tab;
 }
@@ -112,12 +102,10 @@ static lv_obj_t *service_gui_view_music_create_control(lv_obj_t *parent,
     lv_obj_add_flag(button, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
     lv_obj_clear_flag(button, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(button, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_WASH),
-                              LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(button, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(button, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_transform_zoom(button, LV_IMG_ZOOM_NONE, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(button, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_WASH),
-                              LV_PART_MAIN | LV_STATE_PRESSED);
+    service_gui_theme_style_add(button, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(button, 80, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_transform_zoom(button, LV_IMG_ZOOM_NONE, LV_PART_MAIN | LV_STATE_PRESSED);
 
@@ -125,8 +113,7 @@ static lv_obj_t *service_gui_view_music_create_control(lv_obj_t *parent,
     lv_obj_set_size(label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_align(label, LV_ALIGN_CENTER);
     lv_label_set_text(label, symbol);
-    lv_obj_set_style_text_color(label, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                                LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(label, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     if (icon != NULL)
@@ -149,8 +136,7 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
     lv_obj_t *slider;
     lv_obj_t *icon;
 
-    lv_obj_set_style_text_color(tab, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                                LV_PART_MAIN | LV_STATE_CHECKED);
+    service_gui_theme_style_add(tab, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_CHECKED);
     lv_obj_set_style_text_opa(tab, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_CHECKED);
 
     music->vinyl_image = lv_img_create(tab);
@@ -173,8 +159,7 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
     lv_obj_set_pos(label, 0, lv_pct(5));
     lv_obj_set_align(label, LV_ALIGN_TOP_MID);
     lv_label_set_text(label, "1:00/3:14");
-    lv_obj_set_style_text_color(label, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                                LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(label, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -185,24 +170,19 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
     lv_obj_set_pos(slider, lv_pct(0), lv_pct(20));
     lv_obj_set_align(slider, LV_ALIGN_TOP_MID);
     lv_obj_set_style_radius(slider, LV_RADIUS_CIRCLE, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(slider, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_MUTED),
-                              LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(slider, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_MUTED, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(slider, 150, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_color(slider, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_WASH),
-                                  LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(slider, SERVICE_GUI_THEME_BORDER, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_opa(slider, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(slider, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(slider, 1000, LV_PART_INDICATOR | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(slider, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_ACCENT),
-                              LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(slider, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_ACCENT, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(slider, 1000, LV_PART_KNOB | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(slider, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_ACCENT),
-                              LV_PART_KNOB | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(slider, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_ACCENT, LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(slider, LV_OPA_TRANSP, LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(slider, 1000, LV_PART_KNOB | LV_STATE_PRESSED);
-    lv_obj_set_style_bg_color(slider, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_ACCENT),
-                              LV_PART_KNOB | LV_STATE_PRESSED);
+    service_gui_theme_style_add(slider, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_ACCENT, LV_PART_KNOB | LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, LV_PART_KNOB | LV_STATE_PRESSED);
     lv_obj_set_style_pad_all(slider, 4, LV_PART_KNOB | LV_STATE_PRESSED);
     music->slider = slider;
@@ -247,8 +227,7 @@ void service_gui_view_music_create(Service_GUI_ViewTypeDef *view, lv_obj_t *page
     lv_obj_set_size(tabs, lv_pct(100), lv_pct(100));
     lv_obj_set_align(tabs, LV_ALIGN_TOP_MID);
     lv_obj_clear_flag(tabs, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(tabs, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_WASH),
-                              LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(tabs, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
     service_gui_view_music_style_tab_buttons(lv_tabview_get_tab_btns(tabs));
     service_gui_view_music_style_tab_content(tabs);

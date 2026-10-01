@@ -1,4 +1,4 @@
-# 运行时切主题（当前 Default 返回 NOT_READY，基线如实记录现状）
+# 运行时切主题：Lock 上切 Default、Main 上切回 Solid 再切 Default
 --key 5600:t
 --shot 6000:lock_default
 --drag 6200:120,290:120,80:250

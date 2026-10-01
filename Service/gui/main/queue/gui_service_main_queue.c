@@ -19,7 +19,7 @@
 #include "Service/gui/main/queue/gui_service_main_queue_config.h"
 #include "Service/gui/gui_service.h"
 #include "Service/gui/gui_service_input.h"
-#include "Service/gui/theme/gui_service_theme_apply.h"
+#include "Service/gui/theme/gui_service_theme_style.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -86,9 +86,9 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(panel, 8, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(panel, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(panel, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(panel, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_color(panel, lv_color_hex(0x00B0DE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(panel, SERVICE_GUI_THEME_BORDER, SERVICE_GUI_THEME_ACCENT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_opa(panel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(panel, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_side(panel, LV_BORDER_SIDE_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -96,9 +96,9 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_style_pad_right(panel, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_top(panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_bottom(panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(panel, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_PRESSED);
+    service_gui_theme_style_add(panel, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(panel, 80, LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_outline_color(panel, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_PRESSED);
+    service_gui_theme_style_add(panel, SERVICE_GUI_THEME_OUTLINE, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_outline_opa(panel, 80, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_outline_width(panel, 1, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_outline_pad(panel, 0, LV_PART_MAIN | LV_STATE_PRESSED);
@@ -132,7 +132,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_align(name, LV_ALIGN_CENTER);
     lv_label_set_long_mode(name, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_obj_clear_flag(name, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_text_color(name, lv_color_hex(0x00B0DE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(name, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_ACCENT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(name, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(name, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -141,7 +141,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_align(creator, LV_ALIGN_CENTER);
     lv_label_set_long_mode(creator, LV_LABEL_LONG_DOT);
     lv_obj_clear_flag(creator, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_text_color(creator, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(creator, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(creator, 180, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(creator, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -150,7 +150,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_align(status, LV_ALIGN_CENTER);
     lv_label_set_text(status, LV_SYMBOL_AUDIO);
     lv_obj_clear_flag(status, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_text_color(status, lv_color_hex(0x00B0DE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(status, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_ACCENT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(status, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(status, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -165,7 +165,6 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     row->name = name;
     row->creator = creator;
     row->status = status;
-    service_gui_theme_bind_tree(panel);
 
     return SERVICE_OK;
 }
@@ -248,17 +247,19 @@ static void service_gui_main_queue_apply_row_style(
 
     if (is_current)
     {
-        lv_obj_set_style_text_color(
+        service_gui_theme_style_replace(
             row->name,
-            lv_color_hex(0x00B0DE),
+            SERVICE_GUI_THEME_TEXT,
+            SERVICE_GUI_THEME_ACCENT,
             LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_label_set_long_mode(row->name, LV_LABEL_LONG_SCROLL_CIRCULAR);
     }
     else
     {
-        lv_obj_set_style_text_color(
+        service_gui_theme_style_replace(
             row->name,
-            lv_color_hex(0xF1F6FF),
+            SERVICE_GUI_THEME_TEXT,
+            SERVICE_GUI_THEME_INK,
             LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_label_set_long_mode(row->name, LV_LABEL_LONG_DOT);
     }

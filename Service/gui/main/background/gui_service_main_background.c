@@ -24,6 +24,7 @@
 #include "Service/gui/canvas/gui_service_canvas.h"
 #include "Service/gui/canvas/gui_service_canvas_compositor.h"
 #include "Service/gui/theme/gui_service_theme.h"
+#include "Service/gui/theme/gui_service_theme_config.h"
 
 #include "Service/gui/view/gui_service_view.h"
 
@@ -41,6 +42,9 @@ static uint8_t service_gui_main_background_tabs_buffer[
 
 /** @brief 界面对象句柄，prepare 时取得。 */
 static const Service_GUI_ViewTypeDef *service_gui_main_background_view;
+
+/** @brief 清晰系统壁纸，首次需要毛玻璃时作为模糊源。 */
+static const lv_img_dsc_t *service_gui_main_background_clear_wallpaper;
 
 /** @brief 绑定 MusicModeTabs 局部背景的长期 LVGL 图片描述符。 */
 static lv_img_dsc_t service_gui_main_background_tabs_image;
@@ -154,12 +158,13 @@ static Service_StatusTypeDef service_gui_main_background_refresh_tabs(void)
 /**
  * @brief 在 MainPageContainer 横滑时重新裁剪 MusicModeTabs 下方的模糊壁纸。
  * @param event LVGL 发送的滚动事件。
- * @note 回调直接绑定到 SquareLine 导出的 MainPageContainer。该普通 Container
- *       本身就是实际横向滚动的 Viewport，不存在需额外取得的内部 Content container。
+ * @note 回调直接绑定到 MainPageContainer，它本身就是实际横向滚动的 Viewport。
+ *       Solid 外观不显示毛玻璃，跳过裁剪。
  */
 static void service_gui_main_background_page_scroll_event(lv_event_t *event)
 {
-    if ((event == NULL) || (lv_event_get_code(event) != LV_EVENT_SCROLL))
+    if ((event == NULL) || (lv_event_get_code(event) != LV_EVENT_SCROLL) ||
+        !service_gui_theme_uses_glass())
     {
         return;
     }
@@ -195,40 +200,26 @@ static Service_StatusTypeDef service_gui_main_background_bind_scroll_event(void)
 }
 
 /**
- * @brief 为 MusicModeTabs 构建实时局部毛玻璃数据源并限定其手势归属。
- * @param clear_wallpaper 当前清晰系统壁纸。
- * @retval SERVICE_OK 成功。
- * @retval SERVICE_NOT_READY Main Screen、Tabview 或目标控件尚未就绪。
- * @retval SERVICE_INVALID_PARAM 壁纸图片、布局区域或裁剪缓冲不满足 Canvas 约束。
- * @note 调用前 Pager 必须已完成布局和初始回中。Default 才构建 MusicModeTabs 的
- *       局部裁剪图；Solid 只做 Tabview Content 透明与禁横滑，不算模糊。
- *       Books 与 Settings 后续各自拥有背景与生命周期，不能在此处复用 Music
- *       的运行时缓冲。
+ * @brief 从清晰壁纸生成 Main 长期持有的全屏模糊壁纸。
+ * @retval SERVICE_OK 成功，或此前已生成。
+ * @retval SERVICE_INVALID_PARAM 壁纸图片或缓冲不满足 Canvas 约束。
+ * @note 借用 Canvas 共享工作区后立即复制到本 Module 缓冲。只在首次需要毛玻璃时
+ *       执行一次：Default 上电时在 Boot 占用工作区之前；Solid 上电后运行时切到
+ *       Default 时，Boot 不曾绑定工作区，借用同样安全。
  */
-Service_StatusTypeDef service_gui_main_background_prepare(
-    const lv_img_dsc_t *clear_wallpaper)
+static Service_StatusTypeDef service_gui_main_background_build_glass(void)
 {
     Service_StatusTypeDef status;
     lv_img_dsc_t *blurred_wallpaper;
     lv_area_t full_wallpaper_area;
 
-    service_gui_main_background_view = service_gui_view_get();
-
-    if ((clear_wallpaper == NULL) ||
-        (service_gui_main_background_view->main.screen == NULL) ||
-        (service_gui_main_background_view->main.page_container == NULL) ||
-        (service_gui_main_background_view->music.tabs == NULL))
-    {
-        return SERVICE_NOT_READY;
-    }
-
-    if (!service_gui_theme_uses_glass())
+    if (service_gui_main_background_blurred_wallpaper_ready)
     {
         return SERVICE_OK;
     }
 
     status = service_gui_canvas_blur_image(
-        clear_wallpaper,
+        service_gui_main_background_clear_wallpaper,
         SERVICE_GUI_MAIN_BACKGROUND_WALLPAPER_BLUR_RADIUS,
         &blurred_wallpaper);
 
@@ -255,6 +246,46 @@ Service_StatusTypeDef service_gui_main_background_prepare(
     }
 
     service_gui_main_background_blurred_wallpaper_ready = true;
+    return SERVICE_OK;
+}
+
+/**
+ * @brief 按当前外观设置 MusicModeTabs 背景：Default 毛玻璃，Solid 半透明 Wash。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_NOT_READY 尚未 prepare，或 Main/Tabview 尚未创建。
+ * @retval SERVICE_INVALID_PARAM 首次生成毛玻璃时壁纸或裁剪缓冲不满足约束。
+ * @note 只能由 GUI Task 调用。首次切到 Default 时按需生成长期模糊壁纸，之后切换
+ *       只换背景源，不重复模糊。
+ */
+Service_StatusTypeDef service_gui_main_background_apply(void)
+{
+    Service_StatusTypeDef status;
+    lv_obj_t *tabs;
+
+    if ((service_gui_main_background_view == NULL) ||
+        (service_gui_main_background_clear_wallpaper == NULL) ||
+        (service_gui_main_background_view->music.tabs == NULL))
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    tabs = service_gui_main_background_view->music.tabs;
+
+    if (!service_gui_theme_uses_glass())
+    {
+        lv_obj_set_style_bg_img_src(tabs, NULL, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_img_opa(tabs, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(tabs, SERVICE_GUI_THEME_SOLID_TABS_WASH_OPA, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_invalidate(tabs);
+        return SERVICE_OK;
+    }
+
+    status = service_gui_main_background_build_glass();
+
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
 
     status = service_gui_main_background_refresh_tabs();
 
@@ -263,14 +294,45 @@ Service_StatusTypeDef service_gui_main_background_prepare(
         return status;
     }
 
-    lv_obj_set_style_bg_img_src(
-        service_gui_main_background_view->music.tabs,
-        &service_gui_main_background_tabs_image,
-        LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_img_opa(
-        service_gui_main_background_view->music.tabs,
-        LV_OPA_COVER,
-        LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_img_src(tabs, &service_gui_main_background_tabs_image, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_img_opa(tabs, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_invalidate(tabs);
 
-    return service_gui_main_background_bind_scroll_event();
+    return SERVICE_OK;
+}
+
+/**
+ * @brief 记录壁纸、绑定滚动同步，并按当前外观设置 MusicModeTabs 背景。
+ * @param clear_wallpaper 当前清晰系统壁纸。
+ * @retval SERVICE_OK 成功。
+ * @retval SERVICE_NOT_READY Main Screen、分页视口或 Tabview 尚未就绪。
+ * @retval SERVICE_INVALID_PARAM 壁纸图片、布局区域或裁剪缓冲不满足 Canvas 约束。
+ * @note 调用前 Pager 必须已完成布局和初始回中。Books 与 Settings 后续各自拥有
+ *       背景与生命周期，不能在此处复用 Music 的运行时缓冲。
+ */
+Service_StatusTypeDef service_gui_main_background_prepare(
+    const lv_img_dsc_t *clear_wallpaper)
+{
+    Service_StatusTypeDef status;
+
+    service_gui_main_background_view = service_gui_view_get();
+    service_gui_main_background_clear_wallpaper = clear_wallpaper;
+
+    if ((clear_wallpaper == NULL) ||
+        (service_gui_main_background_view->main.screen == NULL) ||
+        (service_gui_main_background_view->main.page_container == NULL) ||
+        (service_gui_main_background_view->music.tabs == NULL))
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    status = service_gui_main_background_bind_scroll_event();
+
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
+
+    return service_gui_main_background_apply();
 }

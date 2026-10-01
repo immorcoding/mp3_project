@@ -11,7 +11,7 @@
 
 #include "Service/gui/view/gui_service_view_screens.h"
 
-#include "Service/gui/theme/gui_service_theme_config.h"
+#include "Service/gui/theme/gui_service_theme_style.h"
 
 #define SERVICE_GUI_VIEW_LOCK_BREATH_TIME_MS      (1400U)  /* 解锁提示由亮变暗的时长。 */
 #define SERVICE_GUI_VIEW_LOCK_BREATH_BACK_MS      (1500U)  /* 解锁提示由暗回亮的时长。 */
@@ -87,8 +87,7 @@ static lv_obj_t *service_gui_view_lock_create_label(lv_obj_t *parent,
 
     lv_obj_set_size(label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_label_set_text(label, text);
-    lv_obj_set_style_text_color(label, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                                LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(label, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     if (font != NULL)
     {
@@ -114,7 +113,7 @@ void service_gui_view_lock_create(Service_GUI_ViewTypeDef *view, const lv_img_ds
 
     lock = lv_obj_create(NULL);
     lv_obj_clear_flag(lock, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(lock, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(lock, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_GROUND, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(lock, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_img_src(lock, wallpaper, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -147,17 +146,14 @@ void service_gui_view_lock_create(Service_GUI_ViewTypeDef *view, const lv_img_ds
     lv_obj_set_align(bar, LV_ALIGN_CENTER);
     lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(bar, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(bar, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_outline_color(bar, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                                   LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(bar, SERVICE_GUI_THEME_OUTLINE, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_opa(bar, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_width(bar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(bar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_all(bar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(bar, 2, LV_PART_INDICATOR | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_ACCENT),
-                              LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(bar, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_ACCENT, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
     label = service_gui_view_lock_create_label(battery, "84%", &lv_font_montserrat_12);
@@ -180,8 +176,7 @@ void service_gui_view_lock_create(Service_GUI_ViewTypeDef *view, const lv_img_ds
     lv_obj_set_align(indicator, LV_ALIGN_BOTTOM_MID);
     lv_obj_clear_flag(indicator, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(indicator, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(indicator, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                              LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(indicator, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(indicator, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(indicator, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 

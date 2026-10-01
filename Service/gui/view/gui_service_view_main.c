@@ -12,7 +12,7 @@
 
 #include "Service/gui/view/gui_service_view_screens.h"
 
-#include "Service/gui/theme/gui_service_theme_config.h"
+#include "Service/gui/theme/gui_service_theme_style.h"
 
 /**
  * @brief 创建一个去除主题样式、不可点击不可滚动的透明容器。
@@ -41,8 +41,7 @@ static lv_obj_t *service_gui_view_main_create_status_label(lv_obj_t *parent, con
 
     lv_obj_set_size(label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_label_set_text(label, text);
-    lv_obj_set_style_text_color(label, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                                LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(label, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
     return label;
@@ -91,17 +90,14 @@ static void service_gui_view_main_create_status_bar(lv_obj_t *screen)
     lv_obj_set_align(battery, LV_ALIGN_CENTER);
     lv_obj_clear_flag(battery, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(battery, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(battery, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(battery, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_outline_color(battery, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                                   LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(battery, SERVICE_GUI_THEME_OUTLINE, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_opa(battery, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_width(battery, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(battery, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_all(battery, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(battery, 2, LV_PART_INDICATOR | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(battery, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_ACCENT),
-                              LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(battery, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_ACCENT, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(battery, LV_OPA_COVER, LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
     label = service_gui_view_main_create_status_label(battery_box, "84");
@@ -139,8 +135,7 @@ static lv_obj_t *service_gui_view_main_create_dot(lv_obj_t *parent, lv_coord_t w
     lv_obj_set_align(dot, LV_ALIGN_CENTER);
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(dot, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(dot, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                              LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(dot, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(dot, opa, LV_PART_MAIN | LV_STATE_DEFAULT);
     return dot;
 }
@@ -158,7 +153,7 @@ void service_gui_view_main_create(Service_GUI_ViewTypeDef *view, const lv_img_ds
 
     screen = lv_obj_create(NULL);
     lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(screen, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(screen, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_GROUND, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(screen, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_img_src(screen, wallpaper, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -174,7 +169,6 @@ void service_gui_view_main_create(Service_GUI_ViewTypeDef *view, const lv_img_ds
                       LV_OBJ_FLAG_SCROLL_ELASTIC | LV_OBJ_FLAG_SCROLL_MOMENTUM | LV_OBJ_FLAG_SCROLL_CHAIN);
     lv_obj_set_scrollbar_mode(container, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_scroll_dir(container, LV_DIR_HOR);
-    lv_obj_set_style_bg_color(container, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(container, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_all(container, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_top(container, 3, LV_PART_MAIN | LV_STATE_DEFAULT);

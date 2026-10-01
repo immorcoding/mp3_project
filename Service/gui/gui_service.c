@@ -18,9 +18,11 @@
 #include "Service/gui/main/gui_service_main.h"
 #include "Service/gui/main/queue/gui_service_main_queue.h"
 #include "Service/gui/main/transport/gui_service_main_transport.h"
-#include "Service/gui/theme/gui_service_theme_apply.h"
+#include "Service/gui/theme/gui_service_theme.h"
+#include "Service/gui/theme/gui_service_theme_style.h"
 #include "Service/gui/view/gui_service_view.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "lvgl.h"
@@ -49,6 +51,9 @@ static lv_indev_drv_t service_gui_touch_driver;
 static lv_disp_t *service_gui_display;
 static TickType_t service_gui_last_tick;
 static uint32_t service_gui_notify_index;
+
+/** @brief Service_GUI_Init() 已完整成功；之前不接受运行时外观切换。 */
+static bool service_gui_ready;
 
 /**
   * @brief  向 LVGL 提供当前触摸状态。
@@ -167,10 +172,8 @@ static void service_gui_flush_wait_callback(
  * @retval SERVICE_INVALID_PARAM 通知槽越界，或壁纸资源不满足当前 Canvas 视觉处理约束。
  * @retval SERVICE_ERROR 显示、输入或启动视觉资源的注册/生成失败。
  * @retval SERVICE_NOT_READY GUI 生成对象或内部 Canvas 尚未就绪。
- * @note   只能由 GUI Task 调用一次。SquareLine `ui_init()` 会 `lv_theme_basic_init`
- *         覆盖 display theme，因此占位色过滤器必须在 `ui_init()` 之后重新挂上，
- *         再对已创建 Screen 整树绑定。随后对 STARTUP 外观调用 ThemeApply，再准备
- *         Main 与 Boot。
+ * @note   只能由 GUI Task 调用一次。先以 STARTUP 外观初始化共享颜色 style，再由
+ *         view/ 创建全部 Screen 并加载 Boot，然后应用 Screen 外观、准备 Main 与 Boot。
  *         当前 GUI Task 将任何非 SERVICE_OK 视为致命初始化故障并进入
  *         Error_Handler()；本 Module 尚未提供失败后的回滚或重试。
  */
@@ -238,25 +241,17 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
     }
 
     service_gui_last_tick = xTaskGetTickCount();
+
+    /* 共享颜色 style 必须先于对象创建，view/ 创建时直接引用它们。 */
+    service_gui_theme_style_init();
+
     gui_status = service_gui_view_create();
     if (gui_status != SERVICE_OK)
     {
         return gui_status;
     }
 
-    gui_status = service_gui_theme_attach(service_gui_display);
-    if (gui_status != SERVICE_OK)
-    {
-        return gui_status;
-    }
-
-    service_gui_theme_bind_screens();
-
-    gui_status = Service_GUI_ThemeApply(SERVICE_GUI_THEME_STARTUP);
-    if (gui_status != SERVICE_OK)
-    {
-        return gui_status;
-    }
+    service_gui_theme_style_apply(service_gui_view_get());
 
     gui_status = service_gui_main_prepare(
         service_gui_view_wallpaper());
@@ -265,8 +260,6 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
     {
         return gui_status;
     }
-
-    service_gui_theme_bind_screens();
 
     gui_status = service_gui_boot_prepare_background(
         service_gui_view_wallpaper());
@@ -277,10 +270,11 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
     }
 
     /*
-     * ui_init() 内部已经加载 Boot Screen，不能再依赖其 SCREEN_LOADED 事件来启动
+     * view/ 创建时已经加载 Boot Screen，不能再依赖其 SCREEN_LOADED 事件来启动
      * Service 持有的动画。后续动画在此处显式启动，确保背景资源已完成运行时绑定。
      */
     service_gui_boot_start();
+    service_gui_ready = true;
 
     /* Init 期间没有跑 timer_handler，不能把这段墙钟一次性灌进 lv_tick，
      * 否则 Boot 的切屏延迟会在第一圈 Process 立刻到期。 */
@@ -379,4 +373,32 @@ Service_StatusTypeDef Service_GUI_QueueApply(
     uint16_t current_index)
 {
     return service_gui_main_queue_apply(titles, length, window_index, current_index);
+}
+
+/**
+ * @brief 运行时切换外观：调色板、Screen 壁纸/Ground 与 Music 毛玻璃/薄层。
+ * @param[in] id `SERVICE_GUI_THEME_DEFAULT` 或 `SERVICE_GUI_THEME_SOLID`。
+ * @retval SERVICE_OK 已切换。
+ * @retval SERVICE_INVALID_PARAM id 非法，当前外观不变；或首次生成毛玻璃失败。
+ * @retval SERVICE_NOT_READY Service_GUI_Init() 尚未成功，当前外观不变。
+ * @note 只能由 GUI Task 调用。Boot 已删除时跳过 Boot。首次切到 Default 时按需
+ *       生成 Music 毛玻璃，之后切换不再重复模糊。
+ */
+Service_StatusTypeDef Service_GUI_ThemeApply(uint8_t id)
+{
+    Service_StatusTypeDef status;
+
+    if (!service_gui_ready)
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    status = service_gui_theme_select(id);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
+
+    service_gui_theme_style_apply(service_gui_view_get());
+    return service_gui_main_apply_theme();
 }

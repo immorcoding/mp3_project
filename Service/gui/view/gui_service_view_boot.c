@@ -11,7 +11,7 @@
 
 #include "Service/gui/view/gui_service_view_screens.h"
 
-#include "Service/gui/theme/gui_service_theme_config.h"
+#include "Service/gui/theme/gui_service_theme_style.h"
 
 /**
  * @brief 创建一个以壁纸为根背景、不可滚动的 Screen。
@@ -23,7 +23,7 @@ static lv_obj_t *service_gui_view_boot_create_wallpaper_screen(const lv_img_dsc_
     lv_obj_t *screen = lv_obj_create(NULL);
 
     lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(screen, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(screen, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_GROUND, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(screen, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_img_src(screen, wallpaper, LV_PART_MAIN | LV_STATE_DEFAULT);
     return screen;
@@ -62,24 +62,20 @@ void service_gui_view_boot_create(Service_GUI_ViewTypeDef *view, const lv_img_ds
     lv_obj_set_scroll_dir(ring, LV_DIR_TOP);
     lv_arc_set_value(ring, 50);
     lv_arc_set_bg_angles(ring, 0, 360);
-    lv_obj_set_style_arc_color(ring, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_MUTED),
-                               LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(ring, SERVICE_GUI_THEME_ARC, SERVICE_GUI_THEME_MUTED, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_opa(ring, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_width(ring, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_all(ring, 2, LV_PART_INDICATOR | LV_STATE_DEFAULT);
-    lv_obj_set_style_arc_color(ring, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_ACCENT),
-                               LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(ring, SERVICE_GUI_THEME_ARC, SERVICE_GUI_THEME_ACCENT, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_opa(ring, LV_OPA_COVER, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_width(ring, 6, LV_PART_INDICATOR | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ring, lv_color_hex(0xFFFFFF), LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ring, LV_OPA_TRANSP, LV_PART_KNOB | LV_STATE_DEFAULT);
 
     label = lv_label_create(group);
     lv_obj_set_size(label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_align(label, LV_ALIGN_CENTER);
     lv_label_set_text(label, "LOADING");
-    lv_obj_set_style_text_color(label, lv_color_hex(SERVICE_GUI_THEME_PLACEHOLDER_INK),
-                                LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(label, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     view->boot.screen = boot;
