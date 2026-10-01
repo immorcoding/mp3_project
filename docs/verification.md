@@ -11,6 +11,8 @@
 | FULL | `./scripts/verify_full.ps1` | 手动 | FAST + 固件 Debug/Release + 全部 host fake/mock 测试 |
 | HARDWARE | 对应模块的板级清单 | 手动 | 中断、DMA、Cache、时序、掉电和真实外设行为 |
 
+GUI 另有一层 PC 模拟器场景回归：`./Tools/gui_simulator/run-scenarios.ps1` 以确定性虚拟时钟原样运行 `Service/gui`，逐帧比较截图哈希与 `Tools/gui_simulator/scenarios/*.expected`。它不在 FAST/CHANGED/FULL 中自动运行（首次配置需联网下载 SDL2），改动 `Service/gui/` 时手动执行；它只证明 PC 上像素等价，不替代 HARDWARE。
+
 兼容入口 `./scripts/verify.ps1` 固定转发到 FULL。它仍接受旧 `-Module` 参数，但会忽略该参数，避免名为“完整验收”的命令被降级；需要选择模块时使用 CHANGED。
 
 ## 快照语义

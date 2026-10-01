@@ -12,7 +12,7 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 - [0004-log-single-consumer-and-output-adapter.md](0004-log-single-consumer-and-output-adapter.md)：日志单消费者、静态消息池与可替换输出后端。
 - [0005-sd-filesystem-task-ownership.md](0005-sd-filesystem-task-ownership.md)：SD、FatFs、DMA 与 Storage Task 的所有权。
 - [0006-cache-range-ownership.md](0006-cache-range-ownership.md)：Cortex-M7 D-Cache 范围与 DMA 缓冲区约束。
-- [0007-gui-runtime-and-squareline-boundary.md](0007-gui-runtime-and-squareline-boundary.md)：GUI Task、GUI Service 与 SquareLine 生成边界。
+- [0007-gui-runtime-and-squareline-boundary.md](0007-gui-runtime-and-squareline-boundary.md)：GUI Task、GUI Service 与 SquareLine 生成边界；已由 ADR-0016 取代。
 - [0008-sdram-early-init-and-noload-ownership.md](0008-sdram-early-init-and-noload-ownership.md)：SDRAM 早期初始化、正式初始化与 NOLOAD 缓冲责任。
 - [0009-w25q256-firmware-slots-and-diagnostic-reservation.md](0009-w25q256-firmware-slots-and-diagnostic-reservation.md)：W25Q256 的 OTA 固件双槽、自检区、Resource Pack 与 FTL 物理边界。
 
@@ -22,3 +22,4 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 - [0013-usb-msc-product-scope.md](0013-usb-msc-product-scope.md)：主线不支持 USB MSC，批量文件导入使用读卡器。
 - [0014-filesystem-volume-aware-file-interface.md](0014-filesystem-volume-aware-file-interface.md)：SD/Flash 统一为 Volume + UTF-8 相对路径；删除设备侧 FormatSD 与 Flash 单槽旧符号；Flash 格式化/恢复成功后已挂载；是否在无文件系统时格式化由 Storage 宏控制。
 - [0015-volume-roles-and-resource-install.md](0015-volume-roles-and-resource-install.md)：SD 为唯一音乐库，曲库只存相对路径；曲库与播放列表分开且不向 GUI 交整表指针；Flash FTL 作机内盘与资源安装暂存；壁纸/模型经 FTL 校验后再写入 Resource Pack。
+- [0016-hand-written-gui-view-and-shared-theme-styles.md](0016-hand-written-gui-view-and-shared-theme-styles.md)：不再用 SquareLine 生成界面；`Service/gui/view/` 手写全部 Screen 并发布句柄；主题改为按角色引用的共享颜色 style；模拟器场景回归守住界面等价性。
