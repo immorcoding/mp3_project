@@ -18,7 +18,7 @@ ADR-0007 让 SquareLine Studio 的 `GUI/` 导出作为 UI 唯一事实源，GUI 
 
 ## 决定
 
-1. **不再使用图形化生成器产出界面代码。** 全部 Screen 由 `Service/gui/view/`（GUI Service 私有 Module）手写创建；`GUI/` 与 `SquareLineProject/` 不再参与构建，也不再受生成目录保护。设计稿可以用任何工具画，但不导出代码。
+1. **不再使用图形化生成器产出界面代码。** 全部 Screen 由 `Service/gui/view/`（GUI Service 私有 Module）手写创建；`GUI/` 与 `SquareLineProject/` 已从仓库删除（历史可从 git 取回），也不再受生成目录保护。设计稿可以用任何工具画，但不导出代码。
 2. **view/ 只负责对象树与静态样式，并发布句柄**（`Service_GUI_ViewTypeDef`）。boot/、main/*、theme/ 等行为 Module 只通过句柄访问对象，不再依赖全局对象符号。屏幕自身的局部交互（Lock 上滑解锁与呼吸提示）可以留在 view/；跨屏时序（Boot → BootReveal → Lock）归 boot/。
 3. **主题由共享颜色 style 承担。** theme/ 按（颜色属性 × 调色板角色）持有共享 `lv_style_t`，对象只按角色引用它们，Opa 等其他属性仍写在对象上。切外观只刷新这些 style 的颜色并调用 `lv_obj_report_style_change()`，不使用 color filter，也不扫对象改 style。
 4. **`Service_GUI_ThemeApply()` 由 `gui_service.c` 编排**：先选调色板，再刷新共享 style 与各 Screen 的壁纸/Ground，最后由 main/background 设置 Music 毛玻璃或 Solid 薄层。启动序列未结束（Boot 仍存在）时返回 `SERVICE_BUSY`；首次切到 Default 时按需生成长期模糊壁纸，失败则回滚到原外观。

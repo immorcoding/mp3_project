@@ -22,7 +22,7 @@
 
 ## 2. 界面实现边界
 
-界面不再由 SquareLine 等图形化工具生成（[ADR-0016](adr/0016-hand-written-gui-view-and-shared-theme-styles.md)）。全部 Screen 由 GUI Service 的私有 Module `Service/gui/view/` 手写创建：它只负责对象树与静态样式，并把行为 Module 需要的对象发布为句柄；交互、动画、离屏效果与外观切换分别属于 `boot/`、`main/*`、`theme/` 等 Module，见 [Service/gui/README.md](../Service/gui/README.md)。原 `GUI/` 与 `SquareLineProject/` 不再参与构建。
+界面不再由 SquareLine 等图形化工具生成（[ADR-0016](adr/0016-hand-written-gui-view-and-shared-theme-styles.md)）。全部 Screen 由 GUI Service 的私有 Module `Service/gui/view/` 手写创建：它只负责对象树与静态样式，并把行为 Module 需要的对象发布为句柄；交互、动画、离屏效果与外观切换分别属于 `boot/`、`main/*`、`theme/` 等 Module，见 [Service/gui/README.md](../Service/gui/README.md)。原 `GUI/` 与 `SquareLineProject/` 已从仓库删除。
 
 颜色只按调色板角色（`Accent`、`Ink`、`Muted`、`Wash`、`Ground`）引用 `theme/` 的共享 style，不在界面代码里写 RGB；Opa、尺寸、圆角、Padding、字体等写在对象上。
 
@@ -444,7 +444,7 @@ Main
 
 Main 的纵向固定分区为：顶部 `StatusBarContainer` 占屏幕高度 `5%`，中部 `MainPageContainer` 占 `85%`，底部 `DotPanelContainer` 占 `10%`。`MainPageContainer` 使用普通 `Container` 承担横滑内容区，不使用 Tabview 或隐藏的 Tab 按钮栏。它是 Main 中唯一允许横向滚动的普通视口：透明、无边框、无阴影、关闭 Scrollbar，不启用 Flex 或 Grid 布局；左、右、下 Padding 为 `0 px`，顶部保留 `3 px` 的轻微留白，使内容页与 StatusBar 视觉分离。其可视范围裁剪子对象，子 Page 不得溢出可视范围绘制。三张 Page 均填满 Viewport 的有效内容宽高。
 
-三张 Page Container 自身保持不可滚动，但都必须开启 **Horizontal Scroll Chain**：LVGL 命中一个不可滚动的子 Page 后，只有该 Flag 才会继续向父级寻找可横滑的 `MainPageContainer`。`MainPageContainer` 自身保持关闭 Scroll Chain，防止全局分页继续传递给 `Main`。同时，`MainPageContainer` 必须保留 **Clickable** 与 **Scrollable** Flag：在 LVGL v8 中，指针命中测试只会把 Clickable 对象作为活动对象；若关闭 Clickable，即使对象开启 Scrollable，触摸也不会选中该视口，横向滚动无法开始。该 Flag 仅表示可接收指针命中，不会把视口变成视觉上的按钮。不得手改 `GUI/` 生成代码绕过这一结构。
+三张 Page Container 自身保持不可滚动，但都必须开启 **Horizontal Scroll Chain**：LVGL 命中一个不可滚动的子 Page 后，只有该 Flag 才会继续向父级寻找可横滑的 `MainPageContainer`。`MainPageContainer` 自身保持关闭 Scroll Chain，防止全局分页继续传递给 `Main`。同时，`MainPageContainer` 必须保留 **Clickable** 与 **Scrollable** Flag：在 LVGL v8 中，指针命中测试只会把 Clickable 对象作为活动对象；若关闭 Clickable，即使对象开启 Scrollable，触摸也不会选中该视口，横向滚动无法开始。该 Flag 仅表示可接收指针命中，不会把视口变成视觉上的按钮。`view/` 不得绕过这一结构。
 
 #### 10.5.1 MainPageContainer 循环分页（已实现）
 
