@@ -379,18 +379,27 @@ Service_StatusTypeDef Service_GUI_QueueApply(
  * @brief 运行时切换外观：调色板、Screen 壁纸/Ground 与 Music 毛玻璃/薄层。
  * @param[in] id `SERVICE_GUI_THEME_DEFAULT` 或 `SERVICE_GUI_THEME_SOLID`。
  * @retval SERVICE_OK 已切换。
- * @retval SERVICE_INVALID_PARAM id 非法，当前外观不变；或首次生成毛玻璃失败。
+ * @retval SERVICE_INVALID_PARAM id 非法；或首次生成毛玻璃失败（已回滚）。当前外观不变。
  * @retval SERVICE_NOT_READY Service_GUI_Init() 尚未成功，当前外观不变。
- * @note 只能由 GUI Task 调用。Boot 已删除时跳过 Boot。首次切到 Default 时按需
- *       生成 Music 毛玻璃，之后切换不再重复模糊。
+ * @retval SERVICE_BUSY 启动序列尚未结束（Boot 仍存在），当前外观不变。
+ * @note 只能由 GUI Task 调用。Boot 显示期间拒绝切换：Boot 可能直接显示共享 Canvas
+ *       工作帧，此时按需模糊会改写它。首次切到 Default 时按需生成 Music 毛玻璃，
+ *       之后切换不再重复模糊。
  */
 Service_StatusTypeDef Service_GUI_ThemeApply(uint8_t id)
 {
+    const Service_GUI_ViewTypeDef *view = service_gui_view_get();
+    const uint8_t previous = service_gui_theme_get_current();
     Service_StatusTypeDef status;
 
     if (!service_gui_ready)
     {
         return SERVICE_NOT_READY;
+    }
+
+    if (view->boot.screen != NULL)
+    {
+        return SERVICE_BUSY;
     }
 
     status = service_gui_theme_select(id);
@@ -399,6 +408,16 @@ Service_StatusTypeDef Service_GUI_ThemeApply(uint8_t id)
         return status;
     }
 
-    service_gui_theme_style_apply(service_gui_view_get());
-    return service_gui_main_apply_theme();
+    service_gui_theme_style_apply(view);
+    status = service_gui_main_apply_theme();
+
+    if (status != SERVICE_OK)
+    {
+        /* 毛玻璃生成失败时整体回到原外观，不留下半套外观。 */
+        (void)service_gui_theme_select(previous);
+        service_gui_theme_style_apply(view);
+        (void)service_gui_main_apply_theme();
+    }
+
+    return status;
 }

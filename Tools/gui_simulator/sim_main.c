@@ -144,11 +144,17 @@ static void sim_handle_key(char key)
 {
     if ((key == 't') || (key == 'T'))
     {
-        sim_theme = (sim_theme == SERVICE_GUI_THEME_DEFAULT) ?
-                        SERVICE_GUI_THEME_SOLID : SERVICE_GUI_THEME_DEFAULT;
+        const uint8_t next = (sim_theme == SERVICE_GUI_THEME_DEFAULT) ?
+                                 SERVICE_GUI_THEME_SOLID : SERVICE_GUI_THEME_DEFAULT;
+        const Service_StatusTypeDef status = Service_GUI_ThemeApply(next);
+
+        if (status == SERVICE_OK)
+        {
+            sim_theme = next;
+        }
         printf("[sim] theme -> %s (status %d)\n",
-               (sim_theme == SERVICE_GUI_THEME_DEFAULT) ? "default" : "solid",
-               (int)Service_GUI_ThemeApply(sim_theme));
+               (next == SERVICE_GUI_THEME_DEFAULT) ? "default" : "solid",
+               (int)status);
     }
 }
 

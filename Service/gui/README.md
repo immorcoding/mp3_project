@@ -7,7 +7,7 @@
 ## 公开 Interface
 
 - `Service_GUI_Init(notify_index)`：仅由 GUI Task 调用一次。`notify_index` 是本任务 `GUI_NotifyIndexTypeDef` 给出的 LCD DMA 完成槽。初始化 LVGL，注册 v8 显示驱动与 Pointer 输入驱动，绑定 LCD DMA 最终回调；以 STARTUP 外观初始化共享颜色 style，由 `view/` 创建全部 Screen 并加载 Boot，再应用 Screen 外观、准备 Main 与 Boot。
-- `Service_GUI_ThemeApply(id)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`。切换 Default/Solid 调色板，刷新共享颜色 style 与 Boot（若尚未删除）/BootReveal/Lock/Main 的壁纸或 Ground，再设置 Music Tab 毛玻璃或薄层。首次切到 Default 时按需生成长期模糊壁纸。
+- `Service_GUI_ThemeApply(id)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`；启动序列未结束（Boot 仍存在）时返回 `SERVICE_BUSY`，因为 Boot 可能正显示共享 Canvas 工作帧。首次生成毛玻璃失败时回滚到原外观。切换 Default/Solid 调色板，刷新共享颜色 style 与 BootReveal/Lock/Main 的壁纸或 Ground，再设置 Music Tab 毛玻璃或薄层；首次切到 Default 时按需生成长期模糊壁纸。
 - `Service_GUI_Process()`：仅在同一 GUI Task 上下文周期调用。按 FreeRTOS Tick 推进 LVGL 时间，并调用 `lv_timer_handler()` 处理刷新、动画和输入。
 - `Service_GUI_QueueApply(titles, length, window_index, current_index)`：仅由同一 GUI Task 调用。把一窗曲名填进 Queue 可见行；`length` 为 0 时全部 Hidden，`titles` 可为 NULL。`window_index` 是本窗在播放列表上的起点，用于已有行转 head。`current_index` 是正在播放的播放列表下标；无当前曲时为 `SERVICE_GUI_QUEUE_NO_CURRENT`。不包含 `storage_listbuffer.h`。Label 会拷贝文本。
 - `Service_GUI_ConsumeInput(input)`：仅由同一 GUI Task 调用。取走上一圈 `Process()` 记下的一次点击。无点击时 `command` 为 `SERVICE_GUI_INPUT_NONE` 且返回 `SERVICE_OK`，不用 `SERVICE_NOT_READY` 表示空闲。`MUSIC_QUEUE_SELECT` 时 `param` 为播放列表下标；`MUSIC_SEEK` 时为 0..100 百分比。不包含 `storage_listbuffer.h` / `storage_playback_cursor.h`。
