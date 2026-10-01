@@ -31,7 +31,7 @@
 
 声称软件验证完成前，`./scripts/verify.ps1`（固定等价 FULL）必须通过；`PASS_HOST_ONLY` 与 `NEEDS_HARDWARE_VALIDATION` 都不是板级验收，需要上板的事项挂 `hw:pending`（WF-3）。层级、状态与路径映射见 [verification.md](docs/verification.md)。克隆后执行一次 `./scripts/install-git-hooks.ps1`。
 
-改动 `Service/gui/` 后还要跑 `./Tools/gui_simulator/run-scenarios.ps1`（模拟器场景回归）；帧哈希变化须看过截图、确认是有意的，才用 `-Update` 重写基线，并在提交说明写明原因。它只证明 PC 上像素等价，不是板级验收。
+改动 `Service/gui/` 后还要跑 `./Tools/gui_simulator/run-scenarios.ps1`（模拟器场景回归；CHANGED/pre-push 命中 GUI 路径时也会自动跑）；帧哈希变化须看过截图、确认是有意的，才用 `-Update` 重写基线，并在提交说明写明原因。它只证明 PC 上像素等价，不是板级验收。
 
 非 trivial 变化完成后调用只读审阅者 `independent-verifier`；DMA、Cache、ISR、RTOS、HAL、Platform、链接段或硬件生命周期变化再调用 `embedded-reviewer`。提交格式见 GIT-2。
 

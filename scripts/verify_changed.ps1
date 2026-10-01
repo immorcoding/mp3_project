@@ -20,7 +20,8 @@ function Invoke-ChangedValidationInTree {
     param(
         [Parameter(Mandatory)][string]$TreeRoot,
         [Parameter(Mandatory)]$Impact,
-        [string]$RequestedHostCompiler
+        [string]$RequestedHostCompiler,
+        [string]$RepositoryRoot = $TreeRoot
     )
 
     Invoke-PowerShellScript -ScriptPath (Join-Path -Path $TreeRoot -ChildPath 'scripts/check_fast.ps1') `
@@ -35,16 +36,39 @@ function Invoke-ChangedValidationInTree {
     }
 
     if ($Impact.HostModules.Count -eq 0) {
-        Write-NativeUtf8Line -Text 'CHANGED：本次只有文档或 Agent 配置变化，不需要主机模块测试。'
-        return
+        Write-NativeUtf8Line -Text 'CHANGED：本次没有需要运行的主机模块测试。'
+    }
+    else {
+        $hostParameters = @{ Module = $Impact.HostModules }
+        if (-not [string]::IsNullOrWhiteSpace($RequestedHostCompiler)) {
+            $hostParameters.HostCompiler = $RequestedHostCompiler
+        }
+        Invoke-PowerShellScript -ScriptPath (Join-Path -Path $TreeRoot -ChildPath 'scripts/test-host.ps1') `
+            -Parameters $hostParameters
     }
 
-    $hostParameters = @{ Module = $Impact.HostModules }
-    if (-not [string]::IsNullOrWhiteSpace($RequestedHostCompiler)) {
-        $hostParameters.HostCompiler = $RequestedHostCompiler
+    # 旧提交的 Impact 没有该属性；推送快照按其自身规则判定。
+    if (($Impact.PSObject.Properties.Name -contains 'RequiresGuiScenarios') -and $Impact.RequiresGuiScenarios) {
+        $scenarioScript = Join-Path -Path $TreeRoot -ChildPath 'Tools/gui_simulator/run-scenarios.ps1'
+        $scenarioParameters = @{}
+        # 推送快照在临时目录从零构建；主仓库已下载的 SDL2 只有在其 SHA256 与快照
+        # CMakeLists 固定的值一致时才复用，SDL 升级后自动回到联网下载与校验。
+        if ($TreeRoot -ne $RepositoryRoot) {
+            $cachedSdl = Join-Path -Path $RepositoryRoot -ChildPath 'build/gui_simulator/_deps/sdl2_mingw-src'
+            $cachedStamp = Join-Path -Path $RepositoryRoot -ChildPath 'build/gui_simulator/_deps/sdl2_mingw-subbuild/CMakeLists.txt'
+            $snapshotCmake = Join-Path -Path $TreeRoot -ChildPath 'Tools/gui_simulator/CMakeLists.txt'
+            $pinned = Select-String -LiteralPath $snapshotCmake -Pattern 'URL_HASH\s+(SHA256=[0-9a-fA-F]+)' |
+                Select-Object -First 1
+            if (($null -ne $pinned) -and
+                (Test-Path -LiteralPath $cachedSdl -PathType Container) -and
+                (Test-Path -LiteralPath $cachedStamp -PathType Leaf) -and
+                (Select-String -LiteralPath $cachedStamp -Pattern $pinned.Matches[0].Groups[1].Value -SimpleMatch -Quiet)) {
+                $scenarioParameters.SdlSourceDir = $cachedSdl
+            }
+        }
+        Write-NativeUtf8Line -Text 'CHANGED：变更命中 GUI 路径，运行模拟器场景回归。'
+        Invoke-PowerShellScript -ScriptPath $scenarioScript -Parameters $scenarioParameters
     }
-    Invoke-PowerShellScript -ScriptPath (Join-Path -Path $TreeRoot -ChildPath 'scripts/test-host.ps1') `
-        -Parameters $hostParameters
 }
 
 function Invoke-PushedCommitValidation {
@@ -88,7 +112,7 @@ function Invoke-PushedCommitValidation {
         $impact = Get-HarnessImpact -ChangedPath $changedPaths
         $RequiresHardware.Value = [bool]$impact.RequiresHardware
         Invoke-ChangedValidationInTree -TreeRoot $snapshotRoot -Impact $impact `
-            -RequestedHostCompiler $RequestedHostCompiler
+            -RequestedHostCompiler $RequestedHostCompiler -RepositoryRoot $RepositoryRoot
     }
     finally {
         if ($worktreeAdded) {

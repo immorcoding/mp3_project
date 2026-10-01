@@ -4,7 +4,9 @@ param(
     [string[]]$Scenario,
     # 用本次结果覆盖 scenarios/*.expected（仅在确认视觉变化是有意的之后使用）。
     [switch]$Update,
-    [string]$BuildDir
+    [string]$BuildDir,
+    # 已解压的 SDL2 MinGW 开发包目录；给出时不再联网下载（CHANGED 推送快照复用主仓库缓存）。
+    [string]$SdlSourceDir
 )
 
 # GUI 模拟器场景回归：以确定性虚拟时钟运行 scenarios/*.args，比较每张截图的帧哈希。
@@ -19,7 +21,15 @@ if (-not $BuildDir) {
     $BuildDir = Join-Path $repoRoot 'build\gui_simulator'
 }
 
-& cmake -S $simRoot -B $BuildDir -G Ninja -DCMAKE_C_COMPILER=gcc | Out-Null
+$configureArguments = @('-S', $simRoot, '-B', $BuildDir, '-G', 'Ninja', '-DCMAKE_C_COMPILER=gcc')
+if ($SdlSourceDir) {
+    $configureArguments += "-DFETCHCONTENT_SOURCE_DIR_SDL2_MINGW=$SdlSourceDir"
+}
+else {
+    # 不让早先缓存的覆盖值钉住旧 SDL；按 CMakeLists 的 URL 与 SHA256 正常下载/校验。
+    $configureArguments += '-UFETCHCONTENT_SOURCE_DIR_SDL2_MINGW'
+}
+& cmake @configureArguments | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "模拟器 CMake 配置失败" }
 & cmake --build $BuildDir | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "模拟器构建失败" }

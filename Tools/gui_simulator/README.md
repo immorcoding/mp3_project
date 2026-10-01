@@ -46,6 +46,7 @@ cmake --build build/gui_simulator
 ./Tools/gui_simulator/run-scenarios.ps1              # 全部场景与基线比对
 ./Tools/gui_simulator/run-scenarios.ps1 -Scenario queue
 ./Tools/gui_simulator/run-scenarios.ps1 -Update      # 有意的视觉变化确认后重写基线
+./Tools/gui_simulator/run-scenarios.ps1 -SdlSourceDir <已解压的 SDL2 包>  # 复用已下载的 SDL2，不联网
 ```
 
 截图保存在 `build/gui_simulator/shots/<场景>/`。哈希不一致时打开对应 BMP 与上一版比对；只有确认变化是有意的，才用 `-Update` 重写基线，并在提交说明里写明原因。PC 上 FPS/内存浮层已关闭，避免实现细节让基线漂移。
