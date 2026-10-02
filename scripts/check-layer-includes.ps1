@@ -97,7 +97,7 @@ function Get-LayerIncludeViolation {
         return "禁止包含 '$normalized'。$sourceLabel 不得依赖 HAL、CMSIS 或 CubeMX 外设头；把 MCU 访问放到 Adapters/stm32_hal，由 Platform 装配。"
     }
 
-    if ($normalized -match '(?i)(^|/)(Platform|Service|APP|Core|Drivers|FATFS|USB_DEVICE|GUI|Middlewares)(/|$)') {
+    if ($normalized -match '(?i)(^|/)(Platform|Service|APP|Core|Drivers|FATFS|USB_DEVICE|Middlewares)(/|$)') {
         return "禁止包含 '$normalized'。$sourceLabel 禁止反向依赖上层、生成目录或中间件。"
     }
 

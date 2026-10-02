@@ -90,8 +90,25 @@
         '^(?:docs|\.agents|\.codex|\.claude)/'
         '^(?:AGENTS|CLAUDE|CONTEXT|README)\.md$'
         '^Tests/README\.md$'
+        # PC GUI 模拟器只在 host 上运行，由 run-scenarios.ps1 单独回归，不进固件。
+        '^Tools/gui_simulator/'
         '\.md$'
         '^\.gitignore$'
+    )
+
+    # 命中后 CHANGED 额外运行 Tools/gui_simulator/run-scenarios.ps1（界面像素回归）；
+    # 与主机模块测试的选择互不影响。
+    GuiScenarioPathPatterns = @(
+        '^Service/gui/'
+        '^Tools/gui_simulator/'
+        '^Resources/imgs/'
+        '^Middlewares/Third_Party/LVGL/'
+        # 模拟器同时编译这些 Service/gui 之外的头文件（替身实现其 Interface）。
+        '^Service/service\.h$'
+        '^Platform/platform\.h$'
+        '^Platform/lcd/platform_lcd\.h$'
+        '^Platform/touch/platform_touch\.h$'
+        '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
     )
 
     # 无法映射的可执行、构建或 Harness 变化保守回退到全部主机测试。

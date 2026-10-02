@@ -44,6 +44,30 @@ Assert-HarnessSequence -Expected @('resource_pack') -Actual $resourceImpact.Host
 $docsImpact = Get-HarnessImpact -ChangedPath @('docs/verification.md')
 Assert-HarnessEqual -Expected 0 -Actual $docsImpact.HostModules.Count -Message '纯文档变化不跑主机测试'
 
+$simulatorImpact = Get-HarnessImpact -ChangedPath @('Tools/gui_simulator/sim_main.c')
+Assert-HarnessEqual -Expected 0 -Actual $simulatorImpact.HostModules.Count -Message 'GUI 模拟器变化不跑固件主机测试'
+Assert-HarnessEqual -Expected $false -Actual $simulatorImpact.RequiresAllHostTests -Message 'GUI 模拟器变化不应回退全部测试'
+Assert-HarnessEqual -Expected $true -Actual $simulatorImpact.RequiresGuiScenarios -Message 'GUI 模拟器变化必须跑场景回归'
+
+$viewImpact = Get-HarnessImpact -ChangedPath @('Service/gui/view/gui_service_view_music.c')
+Assert-HarnessEqual -Expected $true -Actual $viewImpact.RequiresGuiScenarios -Message '界面层变化必须跑场景回归'
+$lvConfImpact = Get-HarnessImpact -ChangedPath @('Middlewares/Third_Party/LVGL/lv_conf.h')
+Assert-HarnessEqual -Expected $true -Actual $lvConfImpact.RequiresGuiScenarios -Message 'LVGL 配置变化必须跑场景回归'
+Assert-HarnessEqual -Expected $false -Actual $docsImpact.RequiresGuiScenarios -Message '纯文档变化不跑场景回归'
+Assert-HarnessEqual -Expected $false -Actual $ftlImpact.RequiresGuiScenarios -Message '非 GUI 变化不跑场景回归'
+$platformLcdImpact = Get-HarnessImpact -ChangedPath @('Platform/lcd/platform_lcd.h')
+Assert-HarnessEqual -Expected $true -Actual $platformLcdImpact.RequiresGuiScenarios -Message '模拟器编译的 Platform LCD 头变化必须跑场景回归'
+$serviceHeaderImpact = Get-HarnessImpact -ChangedPath @('Service/service.h')
+Assert-HarnessEqual -Expected $true -Actual $serviceHeaderImpact.RequiresGuiScenarios -Message 'Service 状态头变化必须跑场景回归'
+$platformLcdSourceImpact = Get-HarnessImpact -ChangedPath @('Platform/lcd/platform_lcd.c')
+Assert-HarnessEqual -Expected $false -Actual $platformLcdSourceImpact.RequiresGuiScenarios -Message '模拟器不编译的 Platform 实现变化不跑场景回归'
+
+# 旧提交快照的规则可能没有 GuiScenarioPathPatterns；缺键时不得报错，也不跑场景回归。
+$rulesWithoutGui = Get-HarnessRules
+$rulesWithoutGui.Remove('GuiScenarioPathPatterns')
+$legacyImpact = Get-HarnessImpact -ChangedPath @('Service/gui/view/gui_service_view_music.c') -Rules $rulesWithoutGui
+Assert-HarnessEqual -Expected $false -Actual $legacyImpact.RequiresGuiScenarios -Message '规则缺场景键时不跑场景回归'
+
 $agentConfigImpact = Get-HarnessImpact -ChangedPath @('CLAUDE.md', 'Service/CLAUDE.md', '.claude/settings.json', '.codex/hooks.json')
 Assert-HarnessEqual -Expected 0 -Actual $agentConfigImpact.HostModules.Count -Message 'Agent 配置变化不跑主机测试'
 

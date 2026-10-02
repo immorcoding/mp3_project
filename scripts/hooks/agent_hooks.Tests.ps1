@@ -55,8 +55,8 @@ Assert-HookEqual -Expected 'GUI/ui.c' -Actual $gitBash -Message 'Git Bash 形式
 
 # 编辑决策：Claude 可 ask；Codex 的 ask 会放行，须降为 deny。
 $cases = @(
-    @{ Path = 'GUI/screens/ui_Main.c'; Tool = 'Edit'; Expected = 'deny' }
-    @{ Path = 'SquareLineProject/mp3_gui.spj'; Tool = 'Write'; Expected = 'deny' }
+    @{ Path = 'Middlewares/Third_Party/LVGL/src/core/lv_obj.c'; Tool = 'Edit'; Expected = 'deny' }
+    @{ Path = 'Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c'; Tool = 'Write'; Expected = 'deny' }
     @{ Path = 'Drivers/CMSIS/Include/core_cm7.h'; Tool = 'Edit'; Expected = 'deny' }
     @{ Path = 'io_sheet.ioc'; Tool = 'Edit'; Expected = 'deny' }
     @{ Path = 'stm32h743zgtx_flash.ld'; Tool = 'apply_patch'; Expected = 'deny' }
@@ -75,6 +75,7 @@ $cases = @(
     @{ Path = 'Core/Src/brand_new_file.c'; Tool = 'Write'; Expected = 'allow' }
     @{ Path = 'FATFS/Target/bsp_driver_user_diskio.c'; Tool = 'Edit'; Expected = 'allow' }
     @{ Path = 'Service/gui/gui_service.c'; Tool = 'apply_patch'; Expected = 'allow' }
+    @{ Path = 'Service/gui/view/gui_service_view_music.c'; Tool = 'Edit'; Expected = 'allow' }
 )
 foreach ($case in $cases) {
     $decision = Get-AgentHookEditDecision -RepositoryRoot $repositoryRoot -RelativePath $case.Path -ToolName $case.Tool
@@ -90,6 +91,20 @@ $blocked = @(
     'git push --force-with-lease=main:abc origin main'
     'git push origin +main'
     'git push --force-with-lease origin my-feature'
+    'git -C E:/repo push -f origin main'
+    'git -c push.default=current push --force'
+    'cd repo && git push --force-if-includes origin main'
+    'git push origin main --force'
+    'git push --forc origin main'
+    "git`tpush`t-f"
+    'GIT push -F'
+    'git --git-dir x push -f'
+    'git --work-tree x push -f'
+    'git --config-env x=y push -f'
+    '/usr/bin/git push -f'
+    'C:/Git/cmd/git.exe push -f'
+    '.\git.exe push -f'
+    'git -c alias.p=push p -f'
     'git commit "--no-verify" -m x'
     'git commit ''--no-verify'' -m x'
     'git commit --no-veri -m x'
@@ -115,6 +130,12 @@ $allowed = @(
     'git push --follow-tags origin main'
     'git push origin main'
     'git push -u origin v0.5.0-reshape'
+    'git -C E:/repo push origin main'
+    'git --git-dir x push origin main'
+    'git --exec-path push origin main'
+    'git push -- force'
+    'powershell.exe -NoProfile -File scripts/verify_changed.ps1 -Push -RemoteName origin -RemoteLocation https://github.com/x/y.git'
+    'git log --format=%H -- scripts/push-helper.ps1 -f'
     './scripts/verify.ps1'
     'echo $env:ALLOW_GENERATED_UPDATE'
 )
@@ -180,9 +201,9 @@ try {
         return @{ ExitCode = $LASTEXITCODE; Stdout = ($stdout -join "`n") }
     }
 
-    $guiAbsolute = (Join-Path $repositoryRoot 'GUI/ui.c') -replace '\\', '/'
-    $result = Invoke-GuardProcess -Mode edit -Json (@{ tool_name = 'Edit'; tool_input = @{ file_path = $guiAbsolute } } | ConvertTo-Json -Compress)
-    Assert-HookEqual -Expected 2 -Actual $result.ExitCode -Message 'guard: Claude 写 GUI/ 应以 2 拒绝'
+    $vendorAbsolute = (Join-Path $repositoryRoot 'Drivers/CMSIS/Include/core_cm7.h') -replace '\\', '/'
+    $result = Invoke-GuardProcess -Mode edit -Json (@{ tool_name = 'Edit'; tool_input = @{ file_path = $vendorAbsolute } } | ConvertTo-Json -Compress)
+    Assert-HookEqual -Expected 2 -Actual $result.ExitCode -Message 'guard: Claude 写 Drivers/ 应以 2 拒绝'
 
     $result = Invoke-GuardProcess -Mode edit -Json (@{ tool_name = 'apply_patch'; tool_input = @{ command = "*** Begin Patch`n*** Update File: Core/Src/main.c`n*** End Patch" } } | ConvertTo-Json -Compress)
     Assert-HookEqual -Expected 2 -Actual $result.ExitCode -Message 'guard: Codex 改 USER CODE 文件应以 2 拒绝'

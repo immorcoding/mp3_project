@@ -1,12 +1,11 @@
 /**
   ******************************************************************************
   * @file    gui_service_main_queue.c
-  * @brief   按 Length 用 SquareLine 范本构造生成 Queue 可见行。
+  * @brief   按 Length 构造 Queue 可见行，并在窗口滑动时复用。
   *
   * @details
- *          构造序列从 GUI/screens/ui_Main.c 的 SongPanel1 范本摘出，for 循环
- *          写入 QueueTab。不对手上的 LVGL 对象做样式拷贝。SquareLine 导出的
- *          那一行隐藏，避免和循环行叠在一起。当前/非当前只改 Border Opa、
+ *          行由本 Module 的行工厂按需构造进 QueueTab（view/ 只创建空的 QueueTab）。
+ *          当前/非当前只改 Border Opa、
  *          曲名色、Long mode 和右侧符号 Opa，不改 Border Width。点按 CLICKED
  *          只刷新行样式并记下播放列表下标，不打开文件。可见行数跟 Apply
  *          传入的 Length 走，至多 SERVICE_GUI_MAIN_QUEUE_MAX_ROWS；曲名是 GUI Task 传入的窗口文本。
@@ -19,12 +18,12 @@
 #include "Service/gui/main/queue/gui_service_main_queue_config.h"
 #include "Service/gui/gui_service.h"
 #include "Service/gui/gui_service_input.h"
-#include "Service/gui/theme/gui_service_theme_apply.h"
+#include "Service/gui/theme/gui_service_theme_style.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "GUI/ui.h"
+#include "Service/gui/view/gui_service_view.h"
 
 /**
  * @brief 已生成到 QueueTab 的一行对象。
@@ -37,7 +36,10 @@ typedef struct
     lv_obj_t *status;   /**< 右侧符号。 */
 } Service_GUI_MainQueueRowTypeDef;
 
-/** @brief 已按范本构造的行；未创建槽位保持 NULL。 */
+/** @brief Music 页对象句柄，prepare 时取得。 */
+static const Service_GUI_ViewMusicTypeDef *service_gui_main_queue_music;
+
+/** @brief 已构造的行；未创建槽位保持 NULL。 */
 static Service_GUI_MainQueueRowTypeDef service_gui_main_queue_rows[
     SERVICE_GUI_MAIN_QUEUE_MAX_ROWS];
 
@@ -53,13 +55,12 @@ static uint16_t service_gui_main_queue_applied_length;
 static void service_gui_main_queue_on_panel_clicked(lv_event_t *e);
 
 /**
- * @brief 按 SquareLine 范本构造一行，父对象为 QueueTab。
+ * @brief 构造一行 Queue 行，父对象为 QueueTab。
  * @param[out] row 新行对象指针。
- * @retval SERVICE_OK 已按范本构造。
+ * @retval SERVICE_OK 已构造。
  * @retval SERVICE_ERROR LVGL 未能创建对象；已挂到 QueueTab 的半成品 panel 会删除。
- * @note 须与 GUI/screens/ui_Main.c 中 SongPanel1 及其子对象的构造保持同步；
- *       SquareLine 重新导出后对照更新本函数，不得手改 GUI/。
- *       SongStatus 范本仍是占位 `S`；运行时写 `LV_SYMBOL_AUDIO`（montserrat_14 含该字形）。
+ * @note 行结构：Wash 薄底圆角 Panel（左侧 Accent 边条）→ 80% 宽文字组（曲名、歌手）
+ *       + 右侧 `LV_SYMBOL_AUDIO` 符号（montserrat_14 含该字形）。颜色经共享主题 style。
  */
 static Service_StatusTypeDef service_gui_main_queue_create_row(
     Service_GUI_MainQueueRowTypeDef *row)
@@ -70,7 +71,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_t *creator;
     lv_obj_t *status;
 
-    panel = lv_obj_create(ui_QueueTab);
+    panel = lv_obj_create(service_gui_main_queue_music->queue_tab);
     if (panel == NULL)
     {
         return SERVICE_ERROR;
@@ -83,9 +84,9 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(panel, 8, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(panel, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(panel, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(panel, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_color(panel, lv_color_hex(0x00B0DE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(panel, SERVICE_GUI_THEME_BORDER, SERVICE_GUI_THEME_ACCENT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_opa(panel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(panel, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_side(panel, LV_BORDER_SIDE_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -93,9 +94,9 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_style_pad_right(panel, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_top(panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_bottom(panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(panel, lv_color_hex(0xE7E7E7), LV_PART_MAIN | LV_STATE_PRESSED);
+    service_gui_theme_style_add(panel, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(panel, 80, LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_outline_color(panel, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_PRESSED);
+    service_gui_theme_style_add(panel, SERVICE_GUI_THEME_OUTLINE, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_outline_opa(panel, 80, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_outline_width(panel, 1, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_outline_pad(panel, 0, LV_PART_MAIN | LV_STATE_PRESSED);
@@ -129,7 +130,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_align(name, LV_ALIGN_CENTER);
     lv_label_set_long_mode(name, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_obj_clear_flag(name, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_text_color(name, lv_color_hex(0x00B0DE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(name, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_ACCENT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(name, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(name, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -138,7 +139,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_align(creator, LV_ALIGN_CENTER);
     lv_label_set_long_mode(creator, LV_LABEL_LONG_DOT);
     lv_obj_clear_flag(creator, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_text_color(creator, lv_color_hex(0xF1F6FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(creator, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(creator, 180, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(creator, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -147,7 +148,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_align(status, LV_ALIGN_CENTER);
     lv_label_set_text(status, LV_SYMBOL_AUDIO);
     lv_obj_clear_flag(status, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_text_color(status, lv_color_hex(0x00B0DE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(status, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_ACCENT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(status, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(status, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -162,7 +163,6 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     row->name = name;
     row->creator = creator;
     row->status = status;
-    service_gui_theme_bind_tree(panel);
 
     return SERVICE_OK;
 }
@@ -171,7 +171,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
  * @brief 非当前行把右侧符号做成透明，但仍留在 Flex 里占位。
  * @param[in,out] status 行内 SongStatus Label。
  * @param[in] visible 当前行可见，非当前行透明。
- * @note 不得使用 HIDDEN：范本信息组宽度是 80%，Panel 是 SPACE_BETWEEN，拿掉
+ * @note 不得使用 HIDDEN：信息组宽度是 80%，Panel 是 SPACE_BETWEEN，拿掉
  *       右侧符号会把文字组拉开，左侧多出一块空。
  */
 static void service_gui_main_queue_set_status_visible(
@@ -224,7 +224,7 @@ static void service_gui_main_queue_set_current_border_visible(
 
 /**
  * @brief 套用当前/非当前样式，不改曲名与歌手文字。
- * @param[in,out] row 已按范本构造的行。
+ * @param[in,out] row 已构造的行。
  * @param[in] is_current 是否为窗口内正在播放的那一行。
  * @note 只改 Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width。
  *       曲名高度一律锁成一行：LVGL 8 的 DOT 看高度溢出；SCROLL_CIRCULAR 靠宽度
@@ -245,17 +245,19 @@ static void service_gui_main_queue_apply_row_style(
 
     if (is_current)
     {
-        lv_obj_set_style_text_color(
+        service_gui_theme_style_replace(
             row->name,
-            lv_color_hex(0x00B0DE),
+            SERVICE_GUI_THEME_TEXT,
+            SERVICE_GUI_THEME_ACCENT,
             LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_label_set_long_mode(row->name, LV_LABEL_LONG_SCROLL_CIRCULAR);
     }
     else
     {
-        lv_obj_set_style_text_color(
+        service_gui_theme_style_replace(
             row->name,
-            lv_color_hex(0xF1F6FF),
+            SERVICE_GUI_THEME_TEXT,
+            SERVICE_GUI_THEME_INK,
             LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_label_set_long_mode(row->name, LV_LABEL_LONG_DOT);
     }
@@ -263,7 +265,7 @@ static void service_gui_main_queue_apply_row_style(
 
 /**
  * @brief 填写一行文字并套用当前/非当前样式。
- * @param[in,out] row 已按范本构造的行。
+ * @param[in,out] row 已构造的行。
  * @param[in] title 曲名显示文本。
  * @param[in] artist 歌手文本。
  * @param[in] is_current 是否为窗口内正在播放的那一行。
@@ -337,17 +339,8 @@ static void service_gui_main_queue_on_panel_clicked(lv_event_t *e)
 }
 
 /**
- * @brief 隐藏 SquareLine 单行范本，避免它占掉 QueueTab 的一个 Flex 槽。
- * @note 范本仍由 ui_init() 创建，本 Module 不删除、不改 GUI/。
- */
-static void service_gui_main_queue_hide_template(void)
-{
-    lv_obj_add_flag(ui_SongPanel1, LV_OBJ_FLAG_HIDDEN);
-}
-
-/**
  * @brief 显示或隐藏已构造的一行，不销毁对象。
- * @param[in,out] row 已按范本构造的行。
+ * @param[in,out] row 已构造的行。
  * @param[in] hidden 为真则 Hidden，为假则参与 QueueTab Flex。
  */
 static void service_gui_main_queue_set_row_hidden(
@@ -390,7 +383,7 @@ static lv_coord_t service_gui_main_queue_row_stride(void)
         return 0;
     }
 
-    pad_row = lv_obj_get_style_pad_row(ui_QueueTab, LV_PART_MAIN);
+    pad_row = lv_obj_get_style_pad_row(service_gui_main_queue_music->queue_tab, LV_PART_MAIN);
     return (lv_coord_t)(row_h + pad_row);
 }
 
@@ -404,7 +397,8 @@ uint16_t service_gui_main_queue_scroll_lead(void)
     lv_coord_t y;
     uint16_t lead;
 
-    if ((ui_QueueTab == NULL) || (ui_SongPanel1 == NULL))
+    if ((service_gui_main_queue_music == NULL) ||
+        (service_gui_main_queue_music->queue_tab == NULL))
     {
         return 0U;
     }
@@ -415,7 +409,7 @@ uint16_t service_gui_main_queue_scroll_lead(void)
         return 0U;
     }
 
-    y = lv_obj_get_scroll_y(ui_QueueTab);
+    y = lv_obj_get_scroll_y(service_gui_main_queue_music->queue_tab);
     if (y < 0)
     {
         y = 0;
@@ -449,28 +443,28 @@ static void service_gui_main_queue_rotate_down(uint16_t count)
     service_gui_main_queue_rows[count - 1U] = head;
     lv_obj_move_to_index(
         head.panel,
-        (int32_t)lv_obj_get_child_cnt(ui_QueueTab) - 1);
+        (int32_t)lv_obj_get_child_cnt(service_gui_main_queue_music->queue_tab) - 1);
 }
 
 /**
- * @brief 把尾行挪到范本之后，作为新的头行。
+ * @brief 把尾行挪到原头行的位置，作为新的头行。
  * @param[in] count 参与回收的已构造行数。
  */
 static void service_gui_main_queue_rotate_up(uint16_t count)
 {
     Service_GUI_MainQueueRowTypeDef tail;
+    int32_t head_index;
     uint16_t i;
 
     tail = service_gui_main_queue_rows[count - 1U];
+    head_index = (int32_t)lv_obj_get_index(service_gui_main_queue_rows[0].panel);
     for (i = (uint16_t)(count - 1U); i > 0U; i--)
     {
         service_gui_main_queue_rows[i] = service_gui_main_queue_rows[i - 1U];
     }
 
     service_gui_main_queue_rows[0] = tail;
-    lv_obj_move_to_index(
-        tail.panel,
-        (int32_t)lv_obj_get_index(ui_SongPanel1) + 1);
+    lv_obj_move_to_index(tail.panel, head_index);
 }
 
 /**
@@ -520,37 +514,38 @@ static void service_gui_main_queue_adjust_scroll(int32_t index_delta)
         return;
     }
 
-    y = lv_obj_get_scroll_y(ui_QueueTab);
+    y = lv_obj_get_scroll_y(service_gui_main_queue_music->queue_tab);
     next_y = (int32_t)y - (index_delta * (int32_t)stride);
     if (next_y < 0)
     {
         next_y = 0;
     }
 
-    lv_obj_scroll_to_y(ui_QueueTab, (lv_coord_t)next_y, LV_ANIM_OFF);
+    lv_obj_scroll_to_y(service_gui_main_queue_music->queue_tab, (lv_coord_t)next_y, LV_ANIM_OFF);
 }
 
 /**
- * @brief 隐藏范本并打开 QueueTab 竖向滚动，不预先造行。
- * @retval SERVICE_OK 范本已隐藏。
- * @retval SERVICE_NOT_READY QueueTab 或范本尚未导出。
- * @note 必须在 ui_init() 之后、Boot 占用 Canvas 之前由 Main 编排入口调用。
+ * @brief 打开 QueueTab 竖向滚动，不预先造行。
+ * @retval SERVICE_OK 已就绪。
+ * @retval SERVICE_NOT_READY QueueTab 尚未创建。
+ * @note 必须在界面创建之后、Boot 占用 Canvas 之前由 Main 编排入口调用。
  *       可见行等 GUI Task 经 QueueApply 按 Length 填入。
  */
 Service_StatusTypeDef service_gui_main_queue_prepare(void)
 {
-    if ((ui_QueueTab == NULL) || (ui_SongPanel1 == NULL))
+    service_gui_main_queue_music = &service_gui_view_get()->music;
+
+    if (service_gui_main_queue_music->queue_tab == NULL)
     {
         return SERVICE_NOT_READY;
     }
 
-    lv_obj_add_flag(ui_QueueTab, LV_OBJ_FLAG_SCROLLABLE);
-    service_gui_main_queue_hide_template();
+    lv_obj_add_flag(service_gui_main_queue_music->queue_tab, LV_OBJ_FLAG_SCROLLABLE);
     return SERVICE_OK;
 }
 
 /**
- * @brief 按 Length 填 Queue 可见行；不够的 Hidden，不够用的按范本补造。
+ * @brief 按 Length 填 Queue 可见行；不够的 Hidden，不够用的补造。
  * @param[in] titles 曲名字符串指针表，Length 为 0 时允许为 NULL。
  * @param[in] length 本窗实际条数，0..SERVICE_GUI_MAIN_QUEUE_MAX_ROWS。
  * @param[in] window_index 本窗在播放列表上的起点。
@@ -558,7 +553,7 @@ Service_StatusTypeDef service_gui_main_queue_prepare(void)
  *            SERVICE_GUI_QUEUE_NO_CURRENT。
  * @retval SERVICE_OK 已按 Length 显示行，或 Length 为 0 已全部 Hidden。
  * @retval SERVICE_INVALID_PARAM Length 超上限，或 Length 非 0 但 titles 为空。
- * @retval SERVICE_NOT_READY QueueTab 或范本尚未导出。
+ * @retval SERVICE_NOT_READY QueueTab 尚未创建。
  * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
  * @note 歌手空串。不包含 storage_listbuffer.h。已有行转 head，不无限 create。
  */
@@ -573,7 +568,8 @@ Service_StatusTypeDef service_gui_main_queue_apply(
     uint16_t old_index;
     int32_t delta;
 
-    if ((ui_QueueTab == NULL) || (ui_SongPanel1 == NULL))
+    if ((service_gui_main_queue_music == NULL) ||
+        (service_gui_main_queue_music->queue_tab == NULL))
     {
         return SERVICE_NOT_READY;
     }
@@ -598,7 +594,7 @@ Service_StatusTypeDef service_gui_main_queue_apply(
         service_gui_main_queue_applied_index = 0U;
         service_gui_main_queue_applied_length = 0U;
         service_gui_input_drop_queue_select();
-        lv_obj_scroll_to_y(ui_QueueTab, 0, LV_ANIM_OFF);
+        lv_obj_scroll_to_y(service_gui_main_queue_music->queue_tab, 0, LV_ANIM_OFF);
         (void)current_index;
         return SERVICE_OK;
     }

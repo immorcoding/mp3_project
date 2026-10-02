@@ -60,8 +60,6 @@ function Test-GeneratedWriteProtectedPath {
     }
 
     $prefixes = @(
-        'GUI/'
-        'SquareLineProject/'
         'Drivers/'
         'Middlewares/ST/'
         'Middlewares/Third_Party/LVGL/'
@@ -204,7 +202,7 @@ function Invoke-GeneratedWriteCheck {
         return
     }
 
-    $header = "生成目录写保护失败，共 $($dirtyPaths.Count) 个文件被改动。这些路径只能由 SquareLine / CubeMX 重新导出（或更新 Vendor）后提交，不要手改："
+    $header = "生成目录写保护失败，共 $($dirtyPaths.Count) 个文件被改动。这些路径只能由 CubeMX 重新导出（或更新 Vendor）后提交，不要手改："
     $body = ($dirtyPaths | ForEach-Object { "  $_" }) -join [Environment]::NewLine
     $hint = @(
         '若这是你本人的重新导出，在本机 PowerShell 当前会话执行：'

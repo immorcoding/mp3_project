@@ -150,7 +150,7 @@ function Get-AgentHookEditDecision {
     }
 
     if (Test-GeneratedWriteProtectedPath -RelativePath $normalized) {
-        return @{ Decision = 'deny'; Reason = "$normalized 属于 SquareLine/CubeMX/Vendor 生成目录，只认生成器（ARC-2）；请给出源工程配置步骤，由用户导出。" }
+        return @{ Decision = 'deny'; Reason = "$normalized 属于 CubeMX/Vendor 生成目录，只认生成器（ARC-2）；请给出源工程配置步骤，由用户导出。" }
     }
 
     foreach ($pattern in $script:AgentHookCubeMxSourcePatterns) {
@@ -194,7 +194,21 @@ function Get-AgentHookShellViolation {
         if ($segment -match '\bcommit\b' -and $segment -cmatch '\s-[a-zA-Z]*n[a-zA-Z]*(\s|$)') {
             return '禁止跳过 Git Hook（commit -n）：FAST/CHANGED 是唯一自动闸门（GIT-4）。'
         }
-        if ($segment -match '\bpush\b' -and $segment -match '(\s--force(-with-lease|-if-includes)?\b|\s-[a-zA-Z]*f[a-zA-Z]*(\s|$)|\s\+\S)') {
+        # 只看真正的 `git [全局选项] push` 调用，且只检查 push 之后的参数；否则
+        # `powershell -File x.ps1 -Push ... repo.git` 这类命令会因 -File 与 .git 被误判为强推。
+        # git 可带路径前缀；带值的全局选项两种写法（--opt=v / --opt v）都要跳过。
+        # --for 覆盖 git 接受的长选项唯一前缀（--forc、--force-with-lease 等）。
+        $forcePattern = '(\s--for|\s-[a-zA-Z]*f[a-zA-Z]*(\s|$)|\s\+\S)'
+        $pushPattern = '(?i)(^|[\s/\\])git(\.exe)?\s+' +
+            '(?:(?:-C|-c|--git-dir|--work-tree|--namespace|--super-prefix|--config-env|--exec-path)(?:=\S+|\s+\S+)\s+|--?[\w.-]+(?:=\S+)?\s+)*' +
+            'push\b(?<args>.*)$'
+        if ($segment -match $pushPattern) {
+            if ($Matches['args'] -match $forcePattern) {
+                return '禁止 Agent 强推任何分支（GIT-4）；确需覆盖远端时由用户本人执行。'
+            }
+        }
+        # `-c alias.x=push` 让子命令名不再是 push，按整段保守判定。
+        if ($segment -match '(?i)\balias\.\S*=\S*push\b' -and $segment -match $forcePattern) {
             return '禁止 Agent 强推任何分支（GIT-4）；确需覆盖远端时由用户本人执行。'
         }
         if ($segment -match '\bcore\.hooksPath\b') {

@@ -64,20 +64,18 @@ Canvas 工作缓冲按当前 `240 x 320` 显示规格分配，约为 `225 KiB`�
   圆外像素（含底图透明角）原样保留。`compose_music_vinyl()` 把它写进独立唱盘缓冲。
 
 裁剪和合成的输入、输出像素缓冲不得重叠。Interface 不负责对象坐标、页面生命周期或将图片
-绑定到某个 SquareLine 对象；这些属于 `boot/`、`main/vinyl/` 等调用 Module。
+绑定到某个界面对象；这些属于 `boot/`、`main/vinyl/` 等调用 Module。
 
 ## 当前调用顺序
 
 ```text
 Service_GUI_Init()
-  -> ui_init()
+  -> view/ 创建界面，theme/ 应用 Screen 外观
   -> main/service_gui_main_prepare()
-       -> Vinyl：Resource 底图写入独立缓冲并叠假封面，绑到 MusicPlayerVinylImage
-       -> Canvas 模糊当前壁纸
-       -> Main 复制长期全屏模糊帧并建立 MusicModeTabs 首帧裁剪
+       -> Vinyl：Resource 底图写入独立缓冲并叠假封面，绑到唱盘 Image
+       -> Default：Canvas 模糊当前壁纸，Main 复制长期全屏模糊帧并建立 MusicModeTabs 首帧裁剪
   -> boot/gui_service_boot_prepare_background()
-       -> Canvas 重新模糊当前壁纸
-       -> Boot 直接绑定共享工作帧
+       -> Default：Canvas 重新模糊当前壁纸，Boot 直接绑定共享工作帧
   -> boot/service_gui_boot_start()
 ```
 
@@ -86,7 +84,7 @@ Service_GUI_Init()
 
 ## 维护边界
 
-- 不修改 `GUI/` 或 SquareLine 工程；
+- 不创建或修改界面对象（属于 `view/`）；
 - 不包含 STM32 HAL、SPI、DMA2D、SDRAM 初始化或 FreeRTOS 调度逻辑；
 - 不持有 Boot、Main、Settings 等页面对象，也不决定视觉区域的位置、圆角或样式；
 - 新增长期 Canvas 效果前，先明确输出缓冲归属、峰值 SDRAM、共享工作区覆盖时机和 D-Cache

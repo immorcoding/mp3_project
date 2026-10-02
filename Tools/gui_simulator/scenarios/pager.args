@@ -1,0 +1,14 @@
+# MainPageContainer 循环分页：左滑、未过阈值回弹、右滑两次绕回
+--drag 6000:120,290:120,80:250
+--drag 7500:200,160:30,160:200
+--shot 7650:swipe_left_release
+--shot 7800:swipe_left_snap
+--shot 8200:books
+--drag 8400:120,160:180,160:200
+--shot 8800:bounce_back
+--drag 9000:30,160:220,160:200
+--shot 9500:music_again
+--drag 9700:30,160:220,160:200
+--shot 10200:settings
+--drag 10400:30,160:220,160:200
+--shot 10900:books_wrapped

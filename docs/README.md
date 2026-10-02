@@ -7,7 +7,7 @@
 | 层级 | 载体 | 记录内容 |
 | --- | --- | --- |
 | 工作合同 | `../AGENTS.md` | agent 硬规则、验证入口与指针；始终注入。 |
-| 标准层 | `shape/` | 各领域当前标准（harness、workflow、architecture、git、code-style），带级别与来源；按领域读。 |
+| 标准层 | `shape/` | 各领域当前标准（harness、workflow、architecture、gui、git、code-style），带级别与来源；按领域读。 |
 | 事项层 | GitHub Issues | 进度、spec、ticket、wayfinder 地图与置顶「板上状态」；不在仓库文件里。 |
 | 术语层 | `../CONTEXT.md` | 稳定领域术语、产品职责与入口；按条查阅。 |
 | 规范层 | `architecture_standard.md`、`coding_standard.md` | 全工程必须遵守的分层、Interface、命名与注释规则。 |
@@ -35,12 +35,14 @@ ADR 不替代技术文档。技术文档引用相关 ADR，并保持对当前代
 - [adr/0013-usb-msc-product-scope.md](adr/0013-usb-msc-product-scope.md)：主线 USB MSC 产品范围决定；
 - [adr/0014-filesystem-volume-aware-file-interface.md](adr/0014-filesystem-volume-aware-file-interface.md)：SD/Flash 统一为 Volume + UTF-8 相对路径；Flash 自动格式化由 Storage 宏控制；
 - [adr/0015-volume-roles-and-resource-install.md](adr/0015-volume-roles-and-resource-install.md)：SD 为唯一音乐库；曲库与播放列表分开；Flash FTL 作机内盘与资源安装暂存；
+- [adr/0016-hand-written-gui-view-and-shared-theme-styles.md](adr/0016-hand-written-gui-view-and-shared-theme-styles.md)：界面在 `Service/gui/view/` 手写，主题为共享颜色 style，取代 ADR-0007；
 - [log_architecture.md](log_architecture.md)：日志核心、USB Adapter 与任务化约束；
 - [pmic_i2c_architecture.md](pmic_i2c_architecture.md)：AXP2101、SoftI2C 与平台电源；
 - [sdram_architecture.md](sdram_architecture.md)：FMC SDRAM 的初始化、诊断与后续使用约束；
 - [temperature_architecture.md](temperature_architecture.md)：MCU 内部结温采样、工厂标定与 Platform 边界；
 - [touch_architecture.md](touch_architecture.md)：FT6X36、I2C2、TP_RST、轮询式输入与后续 TP_IRQ 演进；
-- [gui_ui_design.md](gui_ui_design.md)：240 x 320 GUI 原型的视觉规范、页面层级与交互边界；
+- [gui_ui_design.md](gui_ui_design.md)：240 x 320 GUI 的视觉规范、页面层级与交互边界；
+- [../Tools/gui_simulator/README.md](../Tools/gui_simulator/README.md)：PC GUI 模拟器（SDL2）与场景回归基线；
 - [error_model.md](error_model.md)：状态、错误和诊断语义。
 
 agent 冷启动只读根目录 `AGENTS.md`（Claude Code 经 `CLAUDE.md` 引入）；`docs/shape/`、`CONTEXT.md` 与本目录按需读取；根 `README.md` 给人看功能清单，agent 非必要不读。本目录仍是按需正文。发生影响多个 Module 的行为、Interface 或职责归属的调整时，必须同步更新相应技术文档并核对 `CONTEXT.md`。

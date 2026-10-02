@@ -16,4 +16,4 @@ description: Route implementation, fixes, and refactors in this STM32H743 MP3 fi
 3. 实现期间运行最窄的相关测试；完成非 trivial 变更时使用 `verify-firmware-change` 的层级规则。
 4. 命中硬件敏感路径时同时使用 `review-embedded-change`。Skill 只触发审阅，不替代上板验证。
 
-保持修改局部，不手改 `GUI/`、`SquareLineProject/` 或受保护的 Vendor/生成目录。新 Module 只有在职责、Interface 和真实实现同时成立时才创建。
+保持修改局部，不手改受保护的 Vendor/CubeMX 生成目录；界面在 `Service/gui/view/` 手写，改动 `Service/gui/` 后跑 `Tools/gui_simulator/run-scenarios.ps1`。新 Module 只有在职责、Interface 和真实实现同时成立时才创建。

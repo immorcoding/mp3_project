@@ -7,9 +7,11 @@
 | 层级 | 入口 | 自动时机 | 验证范围 |
 | --- | --- | --- | --- |
 | FAST | `./scripts/check_fast.ps1` | pre-commit | Harness 与 Agent Hook 自测、分层 include、生成目录写保护、Agent 配置一致性 |
-| CHANGED | `./scripts/verify_changed.ps1` | pre-push | FAST + 由变更路径选出的 host fake/mock 测试 |
+| CHANGED | `./scripts/verify_changed.ps1` | pre-push | FAST + 由变更路径选出的 host fake/mock 测试；命中 GUI 路径时加跑模拟器场景回归 |
 | FULL | `./scripts/verify_full.ps1` | 手动 | FAST + 固件 Debug/Release + 全部 host fake/mock 测试 |
 | HARDWARE | 对应模块的板级清单 | 手动 | 中断、DMA、Cache、时序、掉电和真实外设行为 |
+
+GUI 另有一层 PC 模拟器场景回归：`./Tools/gui_simulator/run-scenarios.ps1` 以确定性虚拟时钟原样运行 `Service/gui`，逐帧比较截图哈希与 `Tools/gui_simulator/scenarios/*.expected`。变更命中 `GuiScenarioPathPatterns`（`Service/gui/`、`Tools/gui_simulator/`、`Resources/imgs/`、`Middlewares/Third_Party/LVGL/`）时，CHANGED（含 pre-push）自动运行它；推送快照仅在主仓库 `build/gui_simulator/` 已下载的 SDL2 与快照固定的 SHA256 一致时复用它，否则联网下载。FAST 与 FULL 不运行它。它需要 MinGW-w64 GCC，只证明 PC 上像素等价，不替代 HARDWARE。
 
 兼容入口 `./scripts/verify.ps1` 固定转发到 FULL。它仍接受旧 `-Module` 参数，但会忽略该参数，避免名为“完整验收”的命令被降级；需要选择模块时使用 CHANGED。
 
@@ -23,7 +25,7 @@ pre-commit 必须验证即将提交的 Git 索引，而不是当前工作树。F
 
 因此，文件暂存后又在工作树修正，暂存版本里的跨层 include 或受保护生成文件变化仍会失败。手动运行 FAST 默认检查工作树。
 
-pre-push 从 Git 提供的 ref 更新读取提交范围。每个待推送 SHA 都在系统临时目录创建 detached worktree，再运行快检和受影响主机测试；当前工作树的未提交内容不会污染推送证据。临时 worktree 只在系统临时目录内创建和清理。
+pre-push 从 Git 提供的 ref 更新读取提交范围。每个待推送 SHA 都在系统临时目录创建 detached worktree，再运行快检、受影响主机测试，命中 GUI 路径时再运行模拟器场景回归；当前工作树的未提交内容不会污染推送证据。场景回归在快照内从零构建模拟器（需要 PATH 中有 MinGW-w64 GCC、CMake、Ninja），只有主仓库 `build/gui_simulator/` 已下载的 SDL2 与快照固定的 SHA256 一致时才复用，否则联网下载并校验。临时 worktree 只在系统临时目录内创建和清理。
 
 ## 影响映射
 
@@ -33,7 +35,8 @@ pre-push 从 Git 提供的 ref 更新读取提交范围。每个待推送 SHA �
 - 生产/测试路径到 `external_loader`、`flash_ftl`、`gui_task`、`gui_theme`、`gui_canvas`、`w25qxx`、`resource_pack`、`storage_catalog` 的多对多映射；
 - 纯文档和 Agent 配置的跳过规则；
 - Harness、构建系统等强制全部 host 测试的规则；
-- MCU/板级敏感路径。
+- MCU/板级敏感路径；
+- 触发模拟器场景回归的 GUI 路径（`GuiScenarioPathPatterns`，含模拟器同时编译的 Platform LCD/Touch 与 Service 状态头）。
 
 一条路径可命中多个模块。例如 `Components/flash_ftl/` 同时进入 `flash_ftl` 和 `w25qxx`，因为两个测试工程都编译 FTL 实现。未识别的非文档路径必须记录证据并回退全部 host 测试，禁止以“零测试”通过。
 

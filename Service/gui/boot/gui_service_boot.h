@@ -5,8 +5,8 @@
   *
   * @details
   *          该头仅供 Service/gui 的生命周期 Module 调用。它不暴露给 APP 或
-  *          其他 Service；它收纳 Boot 背景准备、Arc 动画，以及由 SquareLine
-  *          启动页事件触发的异步切屏交接。
+  *          其他 Service；它收纳 Boot 背景准备、Arc 动画，以及 Boot → BootReveal
+  *          → Lock 的切屏时序。
   ******************************************************************************
   */
 

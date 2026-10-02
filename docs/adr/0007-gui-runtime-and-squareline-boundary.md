@@ -1,6 +1,6 @@
 # ADR-0007：GUI 运行时所有权与 SquareLine 生成边界
 
-- 状态：已接受（按现有代码追溯记录）
+- 状态：已被 [ADR-0016](0016-hand-written-gui-view-and-shared-theme-styles.md) 取代（2026-10-01）。第 1、5、6 条（SquareLine 事实源、生成事件交接点、占位色过滤器）废止；第 2–4 条的运行时所有权、单 LVGL 上下文与触摸原始坐标约束由 ADR-0016 沿用。下文保留作历史记录。
 - 日期：2026-08-29（2026-09-06 增补配色所有权；2026-09-07 增补输入单槽、music 分区与假进度）
 - 相关实现说明：[../gui_ui_design.md](../gui_ui_design.md)、[../../Service/gui/README.md](../../Service/gui/README.md)
 

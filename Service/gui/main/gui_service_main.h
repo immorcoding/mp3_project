@@ -14,5 +14,6 @@
 
 Service_StatusTypeDef service_gui_main_prepare(
     const lv_img_dsc_t *clear_wallpaper);
+Service_StatusTypeDef service_gui_main_apply_theme(void);
 
 #endif /* GUI_SERVICE_MAIN_H */

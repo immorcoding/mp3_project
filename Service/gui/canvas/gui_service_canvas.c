@@ -7,7 +7,7 @@
  *          本 Module 持有全屏模糊工作区和一块独立的 Now Playing 唱盘缓冲。
  *          模糊路径把全屏真彩图复制到 SDRAM 后做横/纵软件模糊；描述符指向可复用
  *          工作区，Boot 可直接绑定，Main 必须先复制。唱盘路径把 Resource 底图复制
- *          进独立缓冲并叠假封面，可长期绑到 SquareLine Image，且不会被模糊覆写。
+ *          进独立缓冲并叠假封面，可长期绑到 Image，且不会被模糊覆写。
   ******************************************************************************
   */
 
@@ -161,7 +161,7 @@ Service_StatusTypeDef service_gui_canvas_blur_image(
  * @param[out] image 返回唱盘图片描述符。
  * @retval SERVICE_OK 成功。
  * @retval SERVICE_INVALID_PARAM image 或底图为空，或合成参数不满足约束。
- * @note 输出像素指向本 Module 的唱盘缓冲，可长期绑到 SquareLine Image。
+ * @note 输出像素指向本 Module 的唱盘缓冲，可长期绑到 Image。
  *       不读 ID3，不导入 PNG。
  */
 Service_StatusTypeDef service_gui_canvas_compose_music_vinyl(

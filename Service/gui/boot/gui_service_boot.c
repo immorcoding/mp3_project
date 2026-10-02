@@ -4,12 +4,11 @@
   * @brief   GUI Service 启动视觉序列的实现入口。
   *
   * @details
-  *          该 Module 在 SquareLine 静态 Boot Arc 之上叠加运行时动画。
-  *          ui_init() 完成且模糊背景绑定后，GUI Task 显式进入本 Module，创建
-  *          一组角度伸缩动画。该动画作用于普通 LVGL Arc，不改变 SquareLine
-  *          导出的轨道样式和 Indicator 内缩 Padding。BootReveal 通过 SquareLine
-  *          Call Function 进入本 Module；本 Module 使用 lv_async_call() 避免在
-  *          前一次 Screen 切换的 SCREEN_LOADED 回调中嵌套发起下一次切换。
+  *          该 Module 持有整段启动视觉序列：Boot（模糊壁纸 + 启动环）保持后淡出到
+  *          BootReveal（清晰壁纸），BootReveal 停留后淡出到 Lock。view/ 只创建对象；
+  *          界面创建且模糊背景绑定后，GUI Task 显式进入本 Module，启动 Arc 相位
+  *          动画并排定 Screen 切换。BootReveal 的 SCREEN_LOADED 回调使用
+  *          lv_async_call() 延后一轮，避免在前一次切换尚未收尾时嵌套发起下一次切换。
   ******************************************************************************
   */
 
@@ -17,13 +16,12 @@
 #include "Service/gui/boot/gui_service_boot_config.h"
 #include "Service/gui/canvas/gui_service_canvas.h"
 #include "Service/gui/theme/gui_service_theme.h"
+#include "Service/gui/view/gui_service_view.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "lvgl.h"
-
-#include "GUI/ui.h"
 
 #define SERVICE_GUI_BOOT_ARC_FULL_CIRCLE_DEG  (360U)
 #define SERVICE_GUI_BOOT_ARC_PHASE_MAX        (LV_BEZIER_VAL_MAX)
@@ -76,7 +74,7 @@ static uint16_t service_gui_boot_ease_in_out(uint16_t progress)
 
 /**
  * @brief 按统一相位设置活动弧的两个端点。
- * @param target SquareLine 导出的 Boot Arc。
+ * @param target view/ 创建的 Boot Arc。
  * @param value 线性循环相位，范围为 0 至 LV_BEZIER_VAL_MAX。
  * @details
  *          前半周期让前端加速向前而后端匀速前进，以延长活动弧；后半周期保持
@@ -160,10 +158,11 @@ static void service_gui_boot_set_arc_phase(void *target, int32_t value)
 Service_StatusTypeDef service_gui_boot_prepare_background(
     const lv_img_dsc_t *clear_wallpaper)
 {
+    lv_obj_t *boot = service_gui_view_get()->boot.screen;
     Service_StatusTypeDef status;
     lv_img_dsc_t *blurred_wallpaper;
 
-    if (ui_Boot == NULL)
+    if (boot == NULL)
     {
         return SERVICE_NOT_READY;
     }
@@ -184,11 +183,11 @@ Service_StatusTypeDef service_gui_boot_prepare_background(
     }
 
     lv_obj_set_style_bg_img_src(
-        ui_Boot,
+        boot,
         blurred_wallpaper,
         LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_img_opa(
-        ui_Boot,
+        boot,
         LV_OPA_COVER,
         LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -203,22 +202,24 @@ Service_StatusTypeDef service_gui_boot_prepare_background(
  */
 static void service_gui_boot_load_lock_async(void *user_data)
 {
+    const Service_GUI_ViewTypeDef *view = service_gui_view_get();
+
     (void)user_data;
 
     service_gui_boot_lock_request_pending = false;
 
     if (service_gui_boot_lock_transition_started ||
-        (ui_BootReveal == NULL) ||
-        (ui_Lock == NULL))
+        (view->boot_reveal == NULL) ||
+        (view->lock == NULL))
     {
         return;
     }
 
     service_gui_boot_lock_transition_started = true;
 
-    /* SquareLine 持有 Screen 对象，不能让 LVGL 自动删除旧 Screen。 */
+    /* view/ 持有 Screen 对象，不能让 LVGL 自动删除旧 Screen。 */
     lv_scr_load_anim(
-        ui_Lock,
+        view->lock,
         LV_SCR_LOAD_ANIM_FADE_OUT,
         SERVICE_GUI_BOOT_LOCK_FADE_TIME_MS,
         SERVICE_GUI_BOOT_REVEAL_HOLD_TIME_MS,
@@ -226,17 +227,16 @@ static void service_gui_boot_load_lock_async(void *user_data)
 }
 
 /**
- * @brief SquareLine 的 BootReveal SCREEN_LOADED 事件回调。
- * @param event SquareLine 传入的 LVGL Screen Loaded 事件。
- * @note  此函数由 GUI/ 生成代码按链接符号调用，但实现及状态均归 GUI Service。
- *        它不直接切屏，只投递一次 lv_async_call()，从而避免在 LVGL 前一段
+ * @brief BootReveal 的 SCREEN_LOADED 事件回调。
+ * @param event LVGL Screen Loaded 事件。
+ * @note  它不直接切屏，只投递一次 lv_async_call()，从而避免在 LVGL 前一段
  *        Screen 切换尚未清理内部状态时重入 lv_scr_load_anim()。
  */
-void Service_GUI_Boot_RequestLock(lv_event_t *event)
+static void service_gui_boot_on_reveal_loaded(lv_event_t *event)
 {
     if ((event == NULL) ||
         (lv_event_get_code(event) != LV_EVENT_SCREEN_LOADED) ||
-        (lv_event_get_target(event) != ui_BootReveal) ||
+        (lv_event_get_target(event) != service_gui_view_get()->boot_reveal) ||
         service_gui_boot_lock_request_pending ||
         service_gui_boot_lock_transition_started)
     {
@@ -253,18 +253,32 @@ void Service_GUI_Boot_RequestLock(lv_event_t *event)
 
 /**
  * @brief 启动 Boot 视觉序列。
- * @note  仅允许由 GUI Task 在 ui_init() 和 Boot 背景资源绑定后调用。
- *        局部 lv_anim_t 描述符在 lv_anim_start() 后会被 LVGL 复制，因此不需要
- *        静态保存。Boot Arc 被删除时，LVGL 会自动删除以该对象为目标的动画。
+ * @note  仅允许由 GUI Task 在界面创建（Boot 已加载）和 Boot 背景资源绑定后调用。
+ *        先排定 Boot 保持后淡出到 BootReveal（Boot 随切换结束由 LVGL 删除），再启动
+ *        Arc 相位动画。局部 lv_anim_t 描述符在 lv_anim_start() 后会被 LVGL 复制，
+ *        因此不需要静态保存。Boot Arc 被删除时，LVGL 会自动删除以该对象为目标的动画。
  */
 void service_gui_boot_start(void)
 {
+    const Service_GUI_ViewTypeDef *view = service_gui_view_get();
+    lv_obj_t *orbit_ring = view->boot.orbit_ring;
     lv_anim_t phase_animation;
 
     service_gui_boot_lock_request_pending = false;
     service_gui_boot_lock_transition_started = false;
 
-    if (ui_BootOrbitRing == NULL)
+    if (view->boot_reveal != NULL)
+    {
+        lv_obj_add_event_cb(view->boot_reveal, service_gui_boot_on_reveal_loaded,
+                            LV_EVENT_SCREEN_LOADED, NULL);
+        lv_scr_load_anim(view->boot_reveal,
+                         LV_SCR_LOAD_ANIM_FADE_OUT,
+                         SERVICE_GUI_BOOT_REVEAL_FADE_TIME_MS,
+                         SERVICE_GUI_BOOT_HOLD_TIME_MS,
+                         true);
+    }
+
+    if (orbit_ring == NULL)
     {
         return;
     }
@@ -274,16 +288,16 @@ void service_gui_boot_start(void)
      * 删除同类动画，确保以后支持重新进入 Boot 时不会叠加重复动画。
      */
     (void)lv_anim_del(
-        ui_BootOrbitRing,
+        orbit_ring,
         service_gui_boot_set_arc_phase);
 
     /* MAIN 保持完整轨道，统一相位负责 INDICATOR 的转动和伸缩。 */
-    lv_arc_set_bg_angles(ui_BootOrbitRing, 0U, 360U);
-    lv_arc_set_rotation(ui_BootOrbitRing, 0U);
-    service_gui_boot_set_arc_phase(ui_BootOrbitRing, 0);
+    lv_arc_set_bg_angles(orbit_ring, 0U, 360U);
+    lv_arc_set_rotation(orbit_ring, 0U);
+    service_gui_boot_set_arc_phase(orbit_ring, 0);
 
     lv_anim_init(&phase_animation);
-    lv_anim_set_var(&phase_animation, ui_BootOrbitRing);
+    lv_anim_set_var(&phase_animation, orbit_ring);
     lv_anim_set_exec_cb(
         &phase_animation,
         service_gui_boot_set_arc_phase);

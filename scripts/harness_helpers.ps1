@@ -244,8 +244,16 @@ function Get-HarnessImpact {
     $unknownPaths = New-Object System.Collections.Generic.List[string]
     $requiresAllHostTests = $false
     $requiresHardware = $false
+    $requiresGuiScenarios = $false
+    # 旧提交的规则可能没有该键；推送快照按其自身规则判定。
+    $guiScenarioPatterns = @(if ($Rules.ContainsKey('GuiScenarioPathPatterns')) { $Rules.GuiScenarioPathPatterns })
 
     foreach ($path in $paths) {
+        if (($guiScenarioPatterns.Count -gt 0) -and
+            (Test-HarnessPathMatchesAny -RelativePath $path -Pattern $guiScenarioPatterns)) {
+            $requiresGuiScenarios = $true
+        }
+
         if (Test-HarnessPathMatchesAny -RelativePath $path -Pattern $Rules.NoHostTestPathPatterns) {
             continue
         }
@@ -286,6 +294,7 @@ function Get-HarnessImpact {
         UnknownPaths = @($unknownPaths | Sort-Object)
         RequiresAllHostTests = $requiresAllHostTests
         RequiresHardware = $requiresHardware
+        RequiresGuiScenarios = $requiresGuiScenarios
     }
 }
 
