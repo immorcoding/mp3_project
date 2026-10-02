@@ -49,7 +49,6 @@
 - Service 的公开 Interface 必须保留 `Service` 层名前缀，例如 `Service_Filesystem_MountSD()`；该前缀表达产品流程 Seam，不能为了缩短而删除。
 - 不删除区分两个真实 Module 的词，例如 `LOG_*`（日志核心）与 `Service_Log_*`（RTOS 投递/消费 Module）。
 - 不删除决定替换方式的 Adapter 身份，例如 `STM32HALAdapter`。
-- 公开 Interface 的重命名必须单独列出调用点，完成构建与板上回归；不与无关功能改动混在一起。
 
 ## 4. Doxygen 与行内注释
 

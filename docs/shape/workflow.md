@@ -2,6 +2,8 @@
 
 事项、规划、交接与板上状态放在哪里，以及会话按需读取什么。
 
+Next id: WF-7
+
 ## Pillars
 
 - 进度在 tracker，不在仓库文件。
@@ -15,8 +17,15 @@
 - **WF-3** · provisional · 需要上板的 ticket 挂 `hw:pending`，板上证据作为 issue 评论贴出后再关闭。_Why:_ host 测试证明不了中断、DMA、Cache 与真实外设。
 - **WF-4** · provisional · 固件版本、NOR 资源包、待上板项只记在置顶 issue「板上状态」，每次烧录后更新。_Why:_ 设备状态跨 ticket，不属于任何一张。
 - **WF-5** · exploring · 不维护 `CURRENT.md` 与 `.scratch/<slug>/{freeze,board}.md`；跨会话交接用 `/handoff`（写系统临时目录）；会话开始由 SessionStart Hook 注入分支、脏文件数与 `ready-for-agent` / `hw:pending` 事项。
-- **WF-6** · provisional · `.scratch/` 只放本地原型，不进 Git。
+- **WF-6** · settled · `.scratch/` 只放本地原型，不进 Git。_Check:_ `.gitignore` 忽略 `.scratch/`。
 
 ## Open questions
 
 - SessionStart 简报在离线或 `gh` 未登录时的降级是否够用。
+
+## Signals
+
+- 2026-10-02 · cite · WF-2 · tracker 迁移是第一次走 `/to-spec`：spec #3，sub-issue #4–#7。
+- 2026-10-02 · contradiction · WF-1 · GitHub 上至今没有任何 issue，`needs-triage`、`ready-for-agent` 等 triage 标签都未创建。
+- 2026-10-02 · contradiction · WF-3 · 远端没有 `hw:pending` 标签；PR #2 的上板清单只能写在 PR 正文里。
+- 2026-10-02 · contradiction · WF-4 · 置顶 issue「板上状态」不存在。（WF-1/3/4 三条由 #3 补齐设施，#7 收尾时移除）
