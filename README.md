@@ -83,6 +83,12 @@ git commit -m "说明这次是重新导出"
 
 主机回归的环境要求、运行命令和安全边界见 [Tests/README.md](Tests/README.md)。
 
+## 开发流程
+
+工作按 GitHub Issues 推进：较大的功能先写成 spec，再拆成 ticket 逐个实现。在分支上开 draft PR，FAST/CHANGED/FULL 通过后，需要上板的事项挂 `hw:pending`，上板确认后再合并。各领域的长期约定记在 [docs/shape/](docs/shape/)，按实际证据逐级提升，并在里程碑时复审。
+
+流程借助两组 agent skill：[mattpocock/skills](https://github.com/mattpocock/skills)（spec、ticket、实现与审阅）和 [shape-your-project](https://github.com/immorcoding/skills/tree/main/shape-your-project)（维护 `docs/shape/`）。
+
 ## 交流与审阅重点
 
 本仓库目前主要用于嵌入式课程交流与架构审阅。特别欢迎针对以下方面提出建议：
