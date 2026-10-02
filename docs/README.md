@@ -7,7 +7,7 @@
 | 层级 | 载体 | 记录内容 |
 | --- | --- | --- |
 | 工作合同 | `../AGENTS.md` | agent 硬规则、验证入口与指针；始终注入。 |
-| 标准层 | `shape/` | 各领域当前标准（harness、workflow、architecture、git、code-style），带级别与来源；按领域读。 |
+| 标准层 | `shape/` | 各领域当前标准（harness、workflow、architecture、gui、git、code-style），带级别与来源；按领域读。 |
 | 事项层 | GitHub Issues | 进度、spec、ticket、wayfinder 地图与置顶「板上状态」；不在仓库文件里。 |
 | 术语层 | `../CONTEXT.md` | 稳定领域术语、产品职责与入口；按条查阅。 |
 | 规范层 | `architecture_standard.md`、`coding_standard.md` | 全工程必须遵守的分层、Interface、命名与注释规则。 |

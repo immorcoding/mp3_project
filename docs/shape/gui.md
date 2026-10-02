@@ -13,9 +13,9 @@ Next id: GUI-5
 ## Rules
 
 - **GUI-1** · provisional · 全部 Screen 在 `Service/gui/view/` 手写，不用图形化工具导出代码；boot/、main/*、theme/ 只经 `Service_GUI_ViewTypeDef` 句柄访问对象。_Why:_ SquareLine 的主题与组件模型迫使 Service 叠补丁，同一界面要看三处。_Source:_ [ADR-0016](../adr/0016-hand-written-gui-view-and-shared-theme-styles.md)
-- **GUI-2** · provisional · 颜色只来自 `theme/` 按（颜色属性 × 调色板角色）持有的共享 `lv_style_t`，对象按角色引用；切外观只刷新这些 style 并调用 `lv_obj_report_style_change()`，不用 color filter，也不遍历对象改 style。_Why:_ 切 Default 曾只生效一半；共享 style 让一次刷新覆盖全部对象。_Source:_ ADR-0016 §3
+- **GUI-2** · provisional · 颜色只来自 `theme/` 按（颜色属性 × 调色板角色）持有的共享 `lv_style_t`，对象按角色引用；切外观时刷新这些 style 的颜色并调用 `lv_obj_report_style_change()`，不用 color filter，也不遍历对象改颜色 style；Screen 的背景透明度与壁纸由 `gui_service.c` 的编排设置。_Why:_ color filter 要靠占位 hex，且每次 `remove_style_all` 后都得整树重绑。_Source:_ ADR-0016 §3
 - **GUI-3** · provisional · 新增或改动界面前先更新 `docs/gui_ui_design.md`。_Why:_ 界面不再有生成器工程可看，设计意图只剩这份文档。_Source:_ ADR-0016 后果
-- **GUI-4** · provisional · 模拟器帧哈希变化时先看截图、确认是有意的，才用 `run-scenarios.ps1 -Update` 重写基线，并在提交说明写明原因。_Why:_ 基线是界面等价的唯一自动证据，随手更新就失效。_Source:_ ADR-0016 §7 _Check:_ CHANGED/pre-push 命中 `GuiScenarioPathPatterns` 时自动跑场景回归（`scripts/rules/verification.psd1`）。
+- **GUI-4** · provisional · 模拟器帧哈希变化时先看截图、确认是有意的，才用 `run-scenarios.ps1 -Update` 重写基线，并在提交说明写明原因。_Why:_ CHANGED/pre-push 命中 GUI 路径会自动跑场景回归，基线是界面等价的唯一自动证据，随手更新就失效。_Source:_ ADR-0016 §7
 
 ## References
 

@@ -26,6 +26,3 @@ Next id: WF-7
 ## Signals
 
 - 2026-10-02 · cite · WF-2 · tracker 迁移是第一次走 `/to-spec`：spec #3，sub-issue #4–#7。
-- 2026-10-02 · contradiction · WF-1 · GitHub 上至今没有任何 issue，`needs-triage`、`ready-for-agent` 等 triage 标签都未创建。
-- 2026-10-02 · contradiction · WF-3 · 远端没有 `hw:pending` 标签；PR #2 的上板清单只能写在 PR 正文里。
-- 2026-10-02 · contradiction · WF-4 · 置顶 issue「板上状态」不存在。（WF-1/3/4 三条由 #3 补齐设施，#7 收尾时移除）

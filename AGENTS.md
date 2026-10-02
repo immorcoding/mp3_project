@@ -5,7 +5,7 @@
 ## Project shape
 
 当前标准，每个领域一个文件；动到哪个领域先读哪个文件，并向用户提出其中的 Proposed 条目。
-级别：**exploring** 是试验（照做，记下摩擦）；**provisional** 大概率成立（打破前先问）；**settled** 已证实（有机制强制）。
+级别：**exploring** 是试验（照做，记下摩擦）；**provisional** 大概率成立（打破前先问）；**settled** 已证实（已交给检查或审阅强制）。
 规则决定了改动的一部分、挡了路或被代码违反，以及用户纠正你时，在该领域 Signals 加一行带日期的记录。需要约束整个项目的决定走 `shape-your-project` skill。
 
 - [Harness](docs/shape/harness.md)：双轨章程、Skill、Hook 与分层验证
@@ -28,7 +28,7 @@
 - **不绕过闸门**：不用 `git commit --no-verify`，不强推任何分支（需要时由用户本人执行），不设置或写入 `ALLOW_GENERATED_UPDATE`（只有维护者本人在当前 PowerShell 会话为 CubeMX 重新导出设置）。Agent Hook 会拦截这些操作（HAR-4）。
 - **范围内改动**：不顺手重构、格式化、改注释或改命名；改公开 Interface、`CONTEXT.md`、ADR 或生成器配置头（`lv_conf.h`、`FreeRTOSConfig.h`、`ffconf.h`）前先问用户。
 - **三张图分开判断**：跨层、改边界或改公开 Interface 前读 `docs/architecture_standard.md` 与相关 Module README，分别判断功能/抽象所有权、编译期 `#include`、运行时请求/回调路径。
-- **界面手写**（ADR-0016）：全部 Screen 在 `Service/gui/view/` 手写，不用图形化工具生成代码；界面每推进一步先更新 `docs/gui_ui_design.md`。
+- **界面手写**（ADR-0016，GUI-1、GUI-3）：全部 Screen 在 `Service/gui/view/` 手写，不用图形化工具生成代码；界面每推进一步先更新 `docs/gui_ui_design.md`。
 
 ## 完成前验收
 

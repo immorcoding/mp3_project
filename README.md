@@ -83,6 +83,38 @@ git commit -m "说明这次是重新导出"
 
 主机回归的环境要求、运行命令和安全边界见 [Tests/README.md](Tests/README.md)。
 
+## 用 Agent 协作：shape 与工程 Skill
+
+Agent 的规矩分三处：`AGENTS.md` 放硬规则，每次会话都加载；`docs/shape/` 放各领域的当前标准，带级别；`docs/agents/` 放 tracker、标签与术语表位置的约定。工程流程由 SuperMatt 插件或 Matt Pocock 的 skills 驱动，两套读同一份 `docs/agents/` 配置，任选一套即可；`/shape-your-project` 负责把流程里冒出来的长期决定写进 shape。
+
+命令写法：SuperMatt 插件在 Claude Code 里写 `/supermatt:<name>`，在 Codex 里写 `$<name>`；Matt Pocock 的 skills 直接写 `/<name>`。
+
+| 阶段 | SuperMatt | Matt Pocock | 与 shape 的配合 |
+| --- | --- | --- | --- |
+| 拷问想法 | `/supermatt:grill-with-docs` | `/grill-with-docs` | 说“把这条记成标准”，由 `/shape-your-project` 写成规则；难以回退的决定再写 ADR |
+| 大块、看不清的工作 | `/supermatt:wayfinder` | `/wayfinder` | 地图上的决定票解决后，长期约束同样记进 shape（WF-2） |
+| 写 spec、拆票 | `/supermatt:to-spec` → `/supermatt:to-tickets` | `/to-spec` → `/to-tickets` | spec 打 `ready-for-agent`，票作为 sub-issue 挂在 spec 下 |
+| 实现 | `/supermatt:implement`（内部驱动 tdd、qa、code-review） | `/implement`、`/tdd` | 动到哪个领域先读对应的 shape 文件；规则决定了改动、挡了路或被违反时，在该领域 Signals 记一行 |
+| 排查故障 | `/supermatt:diagnosing-bugs` | `/diagnosing-bugs` | 同上 |
+| 验证 | 项目 skill `verify-firmware-change`，审阅者 `independent-verifier`、`embedded-reviewer` | 同左 | FULL 通过才算软件完成（HAR-5）；需要上板的事项挂 `hw:pending`（WF-3） |
+| 代码审阅 | `/supermatt:code-review` | `/code-review` | Standards 轴按 `docs/coding_standard.md` 与 shape 中的 settled 规则检查 |
+| 开 PR | `/supermatt:pr`（只写正文） | `/pr` | 开 draft PR；需要你检查（如上板）的 PR 一直保持 draft，由你转 ready 并合并（GIT-3） |
+| 复盘、交接 | `/supermatt:retro`、`/supermatt:handoff` | `/retro`、`/handoff` | 同一类纠正累计到第三次，由 `/shape-your-project` 提议成规则（WF-5） |
+
+`/shape-your-project` 的几种用法：
+
+- **记录**：讨论中定下会长期约束项目的做法时，说“把这条记成标准”。Agent 会先给你看规则草稿，你同意后写进对应领域文件。
+- **复审**：里程碑时（例如一个需要上板的 PR 合并后或发版前）说“复审项目 shape”。Agent 按证据把每条规则分成在用、已失效、无证据三类，给出一张结论表；无证据的规则由你决定去留。
+- **退役**：说“退役 <编号>，因为……”。Agent 删除规则，并清理引用它的检查、文档与信号；编号不再复用。
+- **无人值守**：在后台任务或 `/supermatt:orchestrate` 这类没人确认的运行中，`/shape-your-project` 不直接改规则，只把草稿放进领域文件的 Proposed，下一个进入该领域的会话会先问你。
+
+与本仓库规则相冲突、不要直接用的部分：
+
+- `/supermatt:ship-pr` 会推送、等 CI、squash 合并并关闭 issue。本仓库没有 CI；需要上板的 PR 不能由 Agent 合并（GIT-3）；`hw:pending` 的 issue 要先贴板上证据再关闭（WF-3）。改用 `/supermatt:commit` 加 `/supermatt:pr`。
+- `/supermatt:qa` 只能驱动 PC 上能跑的东西（GUI 模拟器、主机测试），不能替代上板。
+- 不需要再跑 `/setup-supermatt-skills` 或 `/setup-matt-pocock-skills`：`docs/agents/` 已经配好。本仓库的术语表沿用 `CONTEXT.md`，不改名为 `GLOSSARY.md`。
+- tracker 的标签与置顶「板上状态」由 #3 补齐，在那之前，需要打标签的步骤会失败。
+
 ## 交流与审阅重点
 
 本仓库目前主要用于嵌入式课程交流与架构审阅。特别欢迎针对以下方面提出建议：
