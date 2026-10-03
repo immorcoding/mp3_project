@@ -103,6 +103,10 @@ try {
         Assert-Throws -Action { Invoke-ShapeIndexCheck -RepositoryRoot $root -ChangedPath @('src/a.c', 'docs/shape/architecture.md') } `
             -Pattern 'docs/shape/inbox/feature-pause\.md' -Message '分支改领域文件应被拦并指出 inbox'
         Invoke-ShapeIndexCheck -RepositoryRoot $root -ChangedPath @('docs/shape/inbox/feature-pause.md')
+        Invoke-FixtureGit -Root $root -Arguments @('mv', 'docs/shape/architecture.md', 'docs/moved.md') | Out-Null
+        Assert-Throws -Action { Invoke-ShapeIndexCheck -RepositoryRoot $root } `
+            -Pattern 'docs/shape/architecture\.md' -Message '把领域文件改名移出 docs/shape/ 也应被拦'
+        Invoke-FixtureGit -Root $root -Arguments @('reset', '-q', '--hard') | Out-Null
 
         Invoke-FixtureGit -Root $root -Arguments @('switch', '-q', 'main') | Out-Null
         Set-FixtureText -Root $root -Path 'docs/shape/architecture.md' -Text 'decided'

@@ -32,14 +32,21 @@ try {
     $repositoryRoot = Get-AgentHookRepositoryRoot
     $baseDirectory = [string](Get-AgentHookProperty -Object $hookInput -Name 'cwd')
     $askReasons = New-Object System.Collections.Generic.List[string]
-    $currentBranch = Get-ShapeCurrentBranch -RepositoryRoot $repositoryRoot
-    $writerBranch = Get-ShapeWriterBranch -RepositoryRoot $repositoryRoot
+    # 只有命中领域文件时才查分支，普通编辑不多花 git 调用。
+    $currentBranch = $null
+    $writerBranch = $null
+    $shapeBranchResolved = $false
     foreach ($path in @(Get-AgentHookEditPath -ToolInput $toolInput)) {
         $relativePath = ConvertTo-AgentHookRelativePath -RepositoryRoot $repositoryRoot -Path $path -BaseDirectory $baseDirectory
         if ($null -eq $relativePath) {
             continue
         }
 
+        if ((-not $shapeBranchResolved) -and (Test-ShapeAreaPath -RelativePath $relativePath)) {
+            $currentBranch = Get-ShapeCurrentBranch -RepositoryRoot $repositoryRoot
+            $writerBranch = Get-ShapeWriterBranch -RepositoryRoot $repositoryRoot
+            $shapeBranchResolved = $true
+        }
         $decision = Get-AgentHookEditDecision -RepositoryRoot $repositoryRoot -RelativePath $relativePath -ToolName $toolName `
             -CurrentBranch $currentBranch -WriterBranch $writerBranch
         if ($decision.Decision -eq 'deny') {

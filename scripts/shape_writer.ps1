@@ -100,6 +100,10 @@ function Invoke-ShapeIndexCheck {
         return
     }
 
+    # 未给出路径时自取暂存区，--no-renames 让改名或移出 docs/shape/ 也列出旧路径。
+    if (-not $PSBoundParameters.ContainsKey('ChangedPath')) {
+        $ChangedPath = (Invoke-ShapeGit -RepositoryRoot $RepositoryRoot -Arguments @('diff', '--cached', '--name-only', '--no-renames')).Lines
+    }
     $areaPaths = @($ChangedPath | Where-Object { Test-ShapeAreaPath -RelativePath $_ } | Sort-Object)
     if ($areaPaths.Count -gt 0) {
         throw (Get-ShapeWriterViolationMessage -Branch $branch -WriterBranch $writer -Path $areaPaths)

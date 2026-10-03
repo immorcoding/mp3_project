@@ -6,7 +6,7 @@
 
 | 层级 | 入口 | 自动时机 | 验证范围 |
 | --- | --- | --- | --- |
-| FAST | `./scripts/check_fast.ps1` | pre-commit | Harness 与 Agent Hook 自测、分层 include、生成目录写保护、shape 写入分支、Agent 配置一致性 |
+| FAST | `./scripts/check_fast.ps1` | pre-commit | Harness 与 Agent Hook 自测、分层 include、生成目录写保护、Agent 配置一致性；pre-commit（Index）另查 shape 写入分支 |
 | CHANGED | `./scripts/verify_changed.ps1` | pre-push | FAST + 由变更路径选出的 host fake/mock 测试；命中 GUI 路径时加跑模拟器场景回归；推往写入分支以外时检查 shape 写入分支 |
 | FULL | `./scripts/verify_full.ps1` | 手动 | FAST + 固件 Debug/Release + 全部 host fake/mock 测试 |
 | HARDWARE | 对应模块的板级清单 | 手动 | 中断、DMA、Cache、时序、掉电和真实外设行为 |

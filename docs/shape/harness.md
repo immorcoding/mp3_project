@@ -19,7 +19,7 @@ Next id: HAR-9
 - **HAR-5** · settled · 验证分 FAST（pre-commit）→ CHANGED（pre-push）→ FULL（`verify.ps1`）→ HARDWARE；声称完成前 FULL 通过；`PASS_HOST_ONLY` 不是板级验收。_Source:_ [verification.md](../verification.md) _Check:_ FAST、CHANGED 由 `install-git-hooks.ps1` 安装的 `pre-commit`、`pre-push` 自动运行，路径路由在 `scripts/rules/verification.psd1`；FULL 在声称完成前手动运行。
 - **HAR-6** · settled · 自测夹具挂起继承的 `GIT_*` 环境变量；主机编译器只读 `MP3_HOST_CC`。_Why:_ worktree 中 Hook 导出的绝对 `GIT_DIR` 曾让夹具写坏真实仓库；通用 `CC` 常被其他项目设为 Clang。_Source:_ commit `e1be57c` _Check:_ `scripts/build_helpers.ps1` 的 `Suspend-InheritedGitEnvironment` 挂起 `GIT_DIR` 等 7 个仓库定位变量；`test-host.ps1` 只读 `MP3_HOST_CC`。
 - **HAR-7** · provisional · 改动许可交给工具自身模式（Claude 默认/acceptEdits，Codex workspace-write + on-request）与 Hook；不用点火词或许可档位表。_Why:_ 文字许可协议耗上下文且拦不住。
-- **HAR-8** · provisional · 领域文件 `docs/shape/*.md` 只在写入分支（默认 `main`）修改，规则编号也只在那里分配；其他分支把 Signal、草稿和用户当场的批准写进 `docs/shape/inbox/<分支>.md`，合并后在 `main` 上按 drain 处理。_Why:_ 并行分支同时改领域文件会冲突，相同的 `Next id` 改动会被 git 静默合并成重号。_Source:_ shape-your-project `INBOX.md`；拦截在 `scripts/shape_writer.ps1`（Agent Hook、pre-commit、pre-push）
+- **HAR-8** · provisional · 领域文件 `docs/shape/*.md` 只在写入分支（默认 `main`）修改，规则编号也只在那里分配；其他分支把 Signal、草稿和用户当场的批准写进 `docs/shape/inbox/<分支>.md`，合并后在 `main` 上按 drain 处理。_Why:_ 并行分支同时改领域文件会冲突，相同的 `Next id` 改动会被 git 静默合并成重号。_Source:_ shape-your-project `INBOX.md`
 
 ## Open questions
 

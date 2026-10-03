@@ -73,7 +73,7 @@ function Invoke-FastIndexCheck {
 
         $changedPaths = @(Get-HarnessIndexChangedPaths -RepositoryRoot $RepositoryRoot)
         # 分支与 MERGE_HEAD 只能在真实仓库判断，索引快照目录不是 Git 仓库。
-        Invoke-ShapeIndexCheck -RepositoryRoot $RepositoryRoot -ChangedPath $changedPaths
+        Invoke-ShapeIndexCheck -RepositoryRoot $RepositoryRoot
         $previousIndexSnapshot = $env:MP3_HARNESS_INDEX_SNAPSHOT
         try {
             $env:MP3_HARNESS_INDEX_SNAPSHOT = '1'
