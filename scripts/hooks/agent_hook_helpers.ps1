@@ -211,7 +211,10 @@ function Get-AgentHookShellViolation {
         if ($segment -match '(?i)\balias\.\S*=\S*push\b' -and $segment -match $forcePattern) {
             return '禁止 Agent 强推任何分支（GIT-4）；确需覆盖远端时由用户本人执行。'
         }
-        if ($segment -match '\bcore\.hooksPath\b') {
+        # 只拦写入（赋值、--unset、-c 临时覆盖）；--get/--list/`git config get` 只读放行。
+        $hooksPathRead = ($segment -match '(?i)\bconfig\s+(?:--\S+\s+)*(?:--get(?:-all|-regexp)?|--list|-l|get)\b') -and
+            ($segment -notmatch '(?i)\s-c\s+core\.hooksPath|--unset|--replace-all|--add\b')
+        if (($segment -match '\bcore\.hooksPath\b') -and -not $hooksPathRead) {
             return '禁止改写 core.hooksPath；Hook 安装只走 scripts/install-git-hooks.ps1。'
         }
     }

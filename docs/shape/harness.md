@@ -23,7 +23,3 @@ Next id: HAR-8
 ## Open questions
 
 - Codex 项目级 Hook 需在 Codex 内信任一次（按内容哈希），Hook 改动后需重新确认；是否需要在克隆说明里提示。
-
-## Signals
-
-- 2026-10-02 · friction · HAR-4 · 只读的 `git config --get core.hooksPath` 也被拦截。

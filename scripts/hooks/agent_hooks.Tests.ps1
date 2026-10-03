@@ -114,6 +114,9 @@ $blocked = @(
     'Set-Item env:ALLOW_GENERATED_UPDATE 1'
     'export ALLOW_GENERATED_UPDATE=1'
     'git config core.hooksPath /tmp/none'
+    'git config --unset core.hooksPath'
+    'git config --global core.hooksPath /tmp/none'
+    'git -c core.hooksPath=/tmp/none commit -m x'
 )
 foreach ($command in $blocked) {
     if ($null -eq (Get-AgentHookShellViolation -Command $command)) {
@@ -137,6 +140,10 @@ $allowed = @(
     'powershell.exe -NoProfile -File scripts/verify_changed.ps1 -Push -RemoteName origin -RemoteLocation https://github.com/x/y.git'
     'git log --format=%H -- scripts/push-helper.ps1 -f'
     './scripts/verify.ps1'
+    'git config --get core.hooksPath'
+    'git config --local --get core.hooksPath'
+    'git config get core.hooksPath'
+    'git config --list --show-origin'
     'echo $env:ALLOW_GENERATED_UPDATE'
 )
 foreach ($command in $allowed) {
