@@ -5,7 +5,7 @@
 > 当前范围：W25Qxx Device、STM32 HAL QSPI Adapter、Platform Flash 的最小识别、Quad 读写/擦除诊断路径，以及已实现的 Flash FTL 和跨 Component Bridge 职责边界
 > 相关 ADR：[ADR-0001：W25Q256 的 Component、Adapter 与 Platform 接缝](adr/0001-w25q256-component-seams.md)、[ADR-0009：W25Q256 固件双槽与自检区保留](adr/0009-w25q256-firmware-slots-and-diagnostic-reservation.md)
 
-> FTL 补充：首版代码已实现，主机回归与固件构建通过，硬件验收待完成，详见 [flash_ftl_design.md](flash_ftl_design.md)。本文保留原始 NOR 当前代码事实；Service 执行所有权迁移、分组提交和 GC 已实施，板级验证仍须独立完成。
+> FTL 补充：首版代码已实现，主机回归与固件构建通过；基本读写已上板用过，掉电恢复与长时间回收未验证（#9），详见 [flash_ftl_design.md](flash_ftl_design.md)。本文保留原始 NOR 当前代码事实；Service 执行所有权迁移、分组提交和 GC 已实施，板级验证仍须独立完成。
 
 ## 1. 当前范围与非目标
 

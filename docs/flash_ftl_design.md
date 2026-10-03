@@ -1,6 +1,6 @@
 # Flash FTL 首版设计与实施清单
 
-> 状态：首版代码已实现；主机回归、Debug/Release 构建通过，硬件验收待完成。
+> 状态：首版代码已实现；主机回归、Debug/Release 构建通过。基本读写已在板上用过（MSC 实验期间：格式化、挂载、写文件、读回）；真实掉电恢复、长时间回收与耗时未验证，暂缓到有运行时写 Flash 的功能（如 ADR-0015 安装路径），见 GitHub #9（低优先级）。
 > 日期：2026-08-31。
 > 授权记录：先完成文档，后经用户“依据文档开始代码部分”授权实施，并采用 TDD；未执行硬件烧录、设备格式化或 Git 提交。
 > 相关决定：[ADR-0010](adr/0010-fatfs-user-diskio-service-ownership.md)、[ADR-0011](adr/0011-ftl-copy-on-write-and-recovery.md)。

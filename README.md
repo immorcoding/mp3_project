@@ -27,7 +27,7 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 - GUI 的运行时入口为 `APP/tasks/gui/gui_task.c`，其显示与输入装配由 `Service/gui` 持有；
 - 界面不再用 SquareLine 等图形化工具生成（ADR-0016）。改页面直接改 `Service/gui/view/`，先更新 [docs/gui_ui_design.md](docs/gui_ui_design.md)；PC 上可用 [GUI 模拟器](Tools/gui_simulator/README.md) 预览并跑场景回归；
 - 外部 SDRAM 当前以 130 MHz 配置，LVGL 双绘制缓冲位于 `.sdram_framebuffer (NOLOAD)` 段。
-- W25Q256 已完成 CubeMX QSPI 配置，以及 Component、STM32 HAL Adapter、Platform 的间接模式 JEDEC ID 启动识别、`EF / 19` 厂商容量校验、SFDP 签名校验、SR1/SR2 同步读取、启动期 QE 按需安全置位、`0xEC` 固定 4-byte Quad I/O 读取和 `0x34` 非阻塞 Quad 页编程状态机；同时已有 `0x21` 4 KiB 擦除、QSPI/MDMA 读取、WIP 自动状态轮询和只读内存映射路径，详见 [docs/w25q256_architecture.md](docs/w25q256_architecture.md)。Flash FTL、Bridge、Platform 装配、Service 同步执行器与 USER DiskIO 已实现，SD/Flash 私有目录已分离；主机回归及 Debug/Release 构建通过，真实掉电与板级验收待完成，见 [docs/flash_ftl_design.md](docs/flash_ftl_design.md)。
+- W25Q256 已完成 CubeMX QSPI 配置，以及 Component、STM32 HAL Adapter、Platform 的间接模式 JEDEC ID 启动识别、`EF / 19` 厂商容量校验、SFDP 签名校验、SR1/SR2 同步读取、启动期 QE 按需安全置位、`0xEC` 固定 4-byte Quad I/O 读取和 `0x34` 非阻塞 Quad 页编程状态机；同时已有 `0x21` 4 KiB 擦除、QSPI/MDMA 读取、WIP 自动状态轮询和只读内存映射路径，详见 [docs/w25q256_architecture.md](docs/w25q256_architecture.md)。Flash FTL、Bridge、Platform 装配、Service 同步执行器与 USER DiskIO 已实现，SD/Flash 私有目录已分离；主机回归及 Debug/Release 构建通过；基本读写已在板上用过（MSC 实验期间），掉电恢复与长时间回收未验证（低优先级，#9），见 [docs/flash_ftl_design.md](docs/flash_ftl_design.md)。
 
 ## 构建
 
@@ -61,7 +61,7 @@ FAST 会运行分层检查、生成目录写保护和 Harness 自测；FULL 再�
 
 ## 生成目录写保护
 
-`Drivers/`、`Middlewares/ST/`、LVGL 源码、FreeRTOS 内核源码和 `cmake/stm32cubemx/` 相对 `HEAD` 出现改动时，检查失败。`Core/`、`FATFS/`、`USB_DEVICE/`、`FreeRTOS/Config/` 与 `Middlewares/Third_Party/LVGL/lv_conf.h` 仍可直接修改。单独检查：
+`Drivers/`、`Middlewares/ST/`、LVGL 源码、FreeRTOS 内核源码和 `cmake/stm32cubemx/` 相对 `HEAD` 出现改动时，检查失败。这一层 Git 检查不覆盖 `Core/`、`FATFS/`、`USB_DEVICE/`、`FreeRTOS/Config/` 与 `Middlewares/Third_Party/LVGL/lv_conf.h`：其中的 CubeMX 生成文件仍只认生成器，由 Agent Hook 拦截助手写入（生成文件拒绝，`USER CODE` 文件与配置头需经用户确认），人手改动靠审阅把关。单独检查：
 
 ```powershell
 ./scripts/check-generated-write.ps1
