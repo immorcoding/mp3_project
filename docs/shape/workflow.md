@@ -2,7 +2,7 @@
 
 事项、规划、交接与板上状态放在哪里，以及会话按需读取什么。
 
-Next id: WF-7
+Next id: WF-8
 
 ## Pillars
 
@@ -18,6 +18,7 @@ Next id: WF-7
 - **WF-4** · provisional · 固件版本、NOR 资源包、待上板项只记在置顶 issue「板上状态」，每次烧录后更新。_Why:_ 设备状态跨 ticket，不属于任何一张。
 - **WF-5** · exploring · 不维护 `CURRENT.md` 与 `.scratch/<slug>/{freeze,board}.md`；跨会话交接用 `/handoff`（写系统临时目录）；会话开始由 SessionStart Hook 注入分支、脏文件数与 `ready-for-agent` / `hw:pending` 事项。
 - **WF-6** · settled · `.scratch/` 只放本地原型，不进 Git。_Check:_ `.gitignore` 忽略 `.scratch/`。
+- **WF-7** · provisional · 规则挡住正在做的 ticket 时不排队等合并：开一张 `ready-for-human` 的决定 issue（规则、冲突的需求、各选项代价），受影响的 ticket 以 `blocked_by` 依赖它，后撞上同一规则的分支在该 issue 下评论并加依赖；决定后在 `main` 上改一次规则再关闭，被阻塞的分支先 `git merge origin/main` 再继续。_Why:_ inbox 要等合并才处理，挡路的规则等不了；用 merge 不用 rebase，免得强推。_Source:_ shape-your-project `INBOX.md`
 
 ## Open questions
 

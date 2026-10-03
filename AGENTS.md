@@ -7,6 +7,7 @@
 当前标准，每个领域一个文件；动到哪个领域先读哪个文件，并向用户提出其中的 Proposed 条目。
 级别：**exploring** 是试验（照做，记下摩擦）；**provisional** 大概率成立（打破前先问）；**settled** 已证实（已交给检查或审阅强制）。
 规则决定了改动的一部分、挡了路或被代码违反，以及用户纠正你时，在该领域 Signals 加一行带日期的记录。需要约束整个项目的决定走 `shape-your-project` skill。
+领域文件只在 `main`（写入分支）上改；在其他分支，把这些记录和草稿写进 `docs/shape/inbox/<分支>.md`，合并后在 `main` 上处理。
 
 - [Harness](docs/shape/harness.md)：双轨章程、Skill、Hook 与分层验证
 - [Workflow](docs/shape/workflow.md)：GitHub 事项、spec/ticket、板上状态
