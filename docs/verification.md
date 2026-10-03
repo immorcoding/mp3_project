@@ -6,10 +6,12 @@
 
 | 层级 | 入口 | 自动时机 | 验证范围 |
 | --- | --- | --- | --- |
-| FAST | `./scripts/check_fast.ps1` | pre-commit | Harness 与 Agent Hook 自测、分层 include、生成目录写保护、Agent 配置一致性 |
-| CHANGED | `./scripts/verify_changed.ps1` | pre-push | FAST + 由变更路径选出的 host fake/mock 测试；命中 GUI 路径时加跑模拟器场景回归 |
+| FAST | `./scripts/check_fast.ps1` | pre-commit | Harness 与 Agent Hook 自测、分层 include、生成目录写保护、shape 写入分支、Agent 配置一致性 |
+| CHANGED | `./scripts/verify_changed.ps1` | pre-push | FAST + 由变更路径选出的 host fake/mock 测试；命中 GUI 路径时加跑模拟器场景回归；推往写入分支以外时检查 shape 写入分支 |
 | FULL | `./scripts/verify_full.ps1` | 手动 | FAST + 固件 Debug/Release + 全部 host fake/mock 测试 |
 | HARDWARE | 对应模块的板级清单 | 手动 | 中断、DMA、Cache、时序、掉电和真实外设行为 |
+
+shape 写入分支（HAR-8）：领域文件 `docs/shape/*.md` 只在写入分支改（`git config shape.writerBranch`，否则 `origin/HEAD`，否则 `main`），其他分支写 `docs/shape/inbox/<分支>.md`。判定在 `scripts/shape_writer.ps1`，与 shape-your-project skill 的 `hooks/` 样例同一约定：pre-commit 跳过合并提交与分离 HEAD；pre-push 按推送目标分支，从与写入分支最新的 merge-base 起只看分支自己的改动，所以把写入分支合进来不会误报。
 
 GUI 另有一层 PC 模拟器场景回归：`./Tools/gui_simulator/run-scenarios.ps1` 以确定性虚拟时钟原样运行 `Service/gui`，逐帧比较截图哈希与 `Tools/gui_simulator/scenarios/*.expected`。变更命中 `GuiScenarioPathPatterns`（`Service/gui/`、`Tools/gui_simulator/`、`Resources/imgs/`、`Middlewares/Third_Party/LVGL/`）时，CHANGED（含 pre-push）自动运行它；推送快照仅在主仓库 `build/gui_simulator/` 已下载的 SDL2 与快照固定的 SHA256 一致时复用它，否则联网下载。FAST 与 FULL 不运行它。它需要 MinGW-w64 GCC，只证明 PC 上像素等价，不替代 HARDWARE。
 
@@ -73,10 +75,10 @@ Claude Code（`.claude/settings.json`）与 Codex（`.codex/hooks.json`）调用
 
 | 事件 | 脚本 | 行为 |
 | --- | --- | --- |
-| PreToolUse（编辑） | `guard.ps1 -Mode edit` | 生成/Vendor 目录与 CubeMX 源拒绝；USER CODE 文件与生成器配置头在 Claude 走 ask、在 Codex 拒绝 |
-| PreToolUse（Shell） | `guard.ps1 -Mode shell` | 拒绝 `--no-verify`、强推、设置 `ALLOW_GENERATED_UPDATE`、改写 `core.hooksPath` |
+| PreToolUse（编辑） | `guard.ps1 -Mode edit` | 生成/Vendor 目录与 CubeMX 源拒绝；USER CODE 文件与生成器配置头在 Claude 走 ask、在 Codex 拒绝；非写入分支上拒绝改领域文件并指出 inbox |
+| PreToolUse（Shell） | `guard.ps1 -Mode shell` | 拒绝 `--no-verify`、强推、设置 `ALLOW_GENERATED_UPDATE`、改写 `core.hooksPath`（只读查询放行） |
 | PostToolUse（编辑） | `check-edited.ps1` | 只对刚编辑的源文件做分层 include 检查，越层以退出码 2 反馈 |
-| SessionStart | `session-brief.ps1` | 注入分支、脏文件数与 `ready-for-agent` / `hw:pending` 事项 |
+| SessionStart | `session-brief.ps1` | 注入分支、脏文件数与 `ready-for-agent` / `hw:pending` 事项；写入分支上提示未处理的 shape inbox |
 
 生成/Vendor 前缀复用 `check-generated-write.ps1`，分层映射复用 `check-layer-includes.ps1`；Hook 专有的 CubeMX 源、配置头与 USER CODE 根只在 `agent_hook_helpers.ps1` 定义，`.claude/settings.json` 与 `.codex/hooks.json` 不写路径。经 Shell 直接写文件（`Set-Content`、`sed -i`）不经过编辑守卫，仍由 FAST 的写保护兜底。Agent Hook 是提前拦截，Git Hook 仍是最终闸门。Codex 项目级 Hook 首次使用需在 Codex 内信任一次，Hook 改动后需重新确认。
 

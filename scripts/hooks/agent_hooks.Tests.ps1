@@ -82,6 +82,27 @@ foreach ($case in $cases) {
     Assert-HookEqual -Expected $case.Expected -Actual $decision.Decision -Message "$($case.Tool) 写 $($case.Path) 的决策"
 }
 
+# shape 写入分支：领域文件只在写入分支改，其他分支写 inbox；分离 HEAD 不判断。
+$shapeCases = @(
+    @{ Path = 'docs/shape/git.md'; Branch = 'feature/x'; Expected = 'deny' }
+    @{ Path = 'docs/shape/git.md'; Branch = 'main'; Expected = 'allow' }
+    @{ Path = 'docs/shape/git.md'; Branch = ''; Expected = 'allow' }
+    @{ Path = 'docs/shape/inbox/feature-x.md'; Branch = 'feature/x'; Expected = 'allow' }
+    @{ Path = 'docs/verification.md'; Branch = 'feature/x'; Expected = 'allow' }
+)
+foreach ($case in $shapeCases) {
+    foreach ($tool in @('Edit', 'apply_patch')) {
+        $decision = Get-AgentHookEditDecision -RepositoryRoot $repositoryRoot -RelativePath $case.Path -ToolName $tool `
+            -CurrentBranch $case.Branch -WriterBranch 'main'
+        Assert-HookEqual -Expected $case.Expected -Actual $decision.Decision -Message "$tool 在分支 '$($case.Branch)' 写 $($case.Path) 的决策"
+    }
+}
+$shapeDecision = Get-AgentHookEditDecision -RepositoryRoot $repositoryRoot -RelativePath 'docs/shape/git.md' -ToolName 'Edit' `
+    -CurrentBranch 'feature/x' -WriterBranch 'main'
+if ($shapeDecision.Reason -notmatch 'docs/shape/inbox/feature-x\.md') {
+    throw "shape 拒绝原因应指出 inbox，实际：$($shapeDecision.Reason)"
+}
+
 # Shell：拦截跳过 Hook、强推、生成目录豁免变量与改写 hooksPath；放行日常命令。
 $blocked = @(
     'git commit --no-verify -m "x"'

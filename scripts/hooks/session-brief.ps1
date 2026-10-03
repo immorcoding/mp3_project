@@ -63,6 +63,12 @@ try {
             [void]$lines.Add("$($query.Title)（$($query.Label)）：$items")
         }
     }
+
+    . (Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'shape_writer.ps1')
+    $inboxReminder = Get-ShapeInboxReminder -RepositoryRoot $repositoryRoot
+    if ($null -ne $inboxReminder) {
+        [void]$lines.Add($inboxReminder)
+    }
 }
 catch {
     [void]$lines.Add("会话简报生成失败：$($_.Exception.Message)")

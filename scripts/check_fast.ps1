@@ -14,6 +14,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 . (Join-Path -Path $PSScriptRoot -ChildPath 'harness_helpers.ps1')
+. (Join-Path -Path $PSScriptRoot -ChildPath 'shape_writer.ps1')
 
 function Invoke-FastWorkingTreeCheck {
     [CmdletBinding()]
@@ -30,6 +31,7 @@ function Invoke-FastWorkingTreeCheck {
         'check-generated-write.Tests.ps1'
         'hooks/agent_hooks.Tests.ps1'
         'sync-agent-config.Tests.ps1'
+        'shape_writer.Tests.ps1'
     )
     foreach ($selfTest in $selfTests) {
         Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath $selfTest)
@@ -70,6 +72,8 @@ function Invoke-FastIndexCheck {
         )
 
         $changedPaths = @(Get-HarnessIndexChangedPaths -RepositoryRoot $RepositoryRoot)
+        # 分支与 MERGE_HEAD 只能在真实仓库判断，索引快照目录不是 Git 仓库。
+        Invoke-ShapeIndexCheck -RepositoryRoot $RepositoryRoot -ChangedPath $changedPaths
         $previousIndexSnapshot = $env:MP3_HARNESS_INDEX_SNAPSHOT
         try {
             $env:MP3_HARNESS_INDEX_SNAPSHOT = '1'

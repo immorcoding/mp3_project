@@ -32,13 +32,16 @@ try {
     $repositoryRoot = Get-AgentHookRepositoryRoot
     $baseDirectory = [string](Get-AgentHookProperty -Object $hookInput -Name 'cwd')
     $askReasons = New-Object System.Collections.Generic.List[string]
+    $currentBranch = Get-ShapeCurrentBranch -RepositoryRoot $repositoryRoot
+    $writerBranch = Get-ShapeWriterBranch -RepositoryRoot $repositoryRoot
     foreach ($path in @(Get-AgentHookEditPath -ToolInput $toolInput)) {
         $relativePath = ConvertTo-AgentHookRelativePath -RepositoryRoot $repositoryRoot -Path $path -BaseDirectory $baseDirectory
         if ($null -eq $relativePath) {
             continue
         }
 
-        $decision = Get-AgentHookEditDecision -RepositoryRoot $repositoryRoot -RelativePath $relativePath -ToolName $toolName
+        $decision = Get-AgentHookEditDecision -RepositoryRoot $repositoryRoot -RelativePath $relativePath -ToolName $toolName `
+            -CurrentBranch $currentBranch -WriterBranch $writerBranch
         if ($decision.Decision -eq 'deny') {
             [Console]::Error.WriteLine($decision.Reason)
             exit 2

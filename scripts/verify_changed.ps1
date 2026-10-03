@@ -106,6 +106,19 @@ function Invoke-PushedCommitValidation {
         }
         $changedPaths = @(Get-HarnessUniquePaths -Path $paths)
 
+        # 领域文件只在写入分支改：按推送目标分支判断；旧提交没有该 checker 时跳过。
+        $shapeWriterScript = Join-Path -Path $snapshotRoot -ChildPath 'scripts/shape_writer.ps1'
+        if (Test-Path -LiteralPath $shapeWriterScript -PathType Leaf) {
+            . $shapeWriterScript
+            foreach ($item in $Update) {
+                $shapeViolation = Get-ShapePushViolation -RepositoryRoot $RepositoryRoot `
+                    -RemoteName $PushRemoteName -Update $item
+                if ($null -ne $shapeViolation) {
+                    throw $shapeViolation
+                }
+            }
+        }
+
         . (Join-Path -Path $snapshotRoot -ChildPath 'scripts/check-generated-write.ps1')
         Invoke-GeneratedWriteCheck -RepositoryRoot $snapshotRoot -ChangedPath $changedPaths `
             -AllowGeneratedUpdate:$AllowGenerated

@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 # Claude Code 与 Codex 共用的 Agent Hook 判定（HAR-3/HAR-4）。受保护路径复用 Git Hook 的同一份规则。
 . (Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'check-generated-write.ps1')
 . (Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'check-layer-includes.ps1')
+. (Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'shape_writer.ps1')
 
 # Codex 的 apply_patch 不支持 permissionDecision=ask（会放行），需要确认的写入一律拒绝。
 $script:AgentHookAskUnsupportedTools = @('apply_patch')
@@ -139,7 +140,10 @@ function Get-AgentHookEditDecision {
     param(
         [Parameter(Mandatory)][string]$RepositoryRoot,
         [Parameter(Mandatory)][string]$RelativePath,
-        [string]$ToolName = ''
+        [string]$ToolName = '',
+        # 给出两者时检查 shape 写入分支；分离 HEAD 传 $null 表示不判断。
+        [string]$CurrentBranch,
+        [string]$WriterBranch
     )
 
     $normalized = ($RelativePath -replace '\\', '/').TrimStart('/')
@@ -165,6 +169,11 @@ function Get-AgentHookEditDecision {
     }
     if ($cubeMxKind -eq 'generated') {
         return @{ Decision = 'deny'; Reason = "$normalized 带 ST 生成声明且没有 USER CODE 区，只认生成器（ARC-2）。" }
+    }
+
+    if ((-not [string]::IsNullOrWhiteSpace($CurrentBranch)) -and (-not [string]::IsNullOrWhiteSpace($WriterBranch)) -and
+        ($CurrentBranch -ne $WriterBranch) -and (Test-ShapeAreaPath -RelativePath $normalized)) {
+        return @{ Decision = 'deny'; Reason = (Get-ShapeWriterViolationMessage -Branch $CurrentBranch -WriterBranch $WriterBranch -Path @($normalized)) }
     }
 
     return @{ Decision = 'allow'; Reason = '' }
