@@ -15,7 +15,7 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 
 `Platform_Init()` 在调度器启动前初始化 ST7789、安装 SPI HAL 回调，再复位并探测 FT6X36；GUI Task 经 `Service_GUI_*` 驱动 LVGL 的双绘制缓冲、SPI DMA 刷新与轮询式单指触摸输入。触摸的坐标方向由 GUI Service 解释；手势、多指、TP IRQ 订阅和低功耗唤醒尚未接入。
 
-完整分层与依赖规则见 [docs/architecture_standard.md](docs/architecture_standard.md)，命名与注释规则见 [docs/coding_standard.md](docs/coding_standard.md)，稳定领域术语见 [GLOSSARY.md](GLOSSARY.md)（按条查阅），各领域当前标准见 [docs/shape/](docs/shape/)，进度与板上状态见 GitHub Issues，agent 工作方式见 [AGENTS.md](AGENTS.md)。`Core`、`Drivers`、`Middlewares`、`USB_DEVICE` 和 `FATFS/` 主要由 CubeMX 或第三方维护；不要把产品策略直接写入其中。FatFs 的 `BSP_SD_*` 强定义是外部 Override Seam，其实现放在 `Service/filesystem`，不修改生成的 DiskIO Glue。
+完整分层与依赖规则见 [docs/shape/architecture.md](docs/shape/architecture.md)，命名与注释规则见 [docs/shape/REVIEW.md](docs/shape/REVIEW.md)，稳定领域术语见 [GLOSSARY.md](GLOSSARY.md)（按条查阅），各领域当前标准见 [docs/shape/](docs/shape/)，进度与板上状态见 GitHub Issues，agent 工作方式见 [AGENTS.md](AGENTS.md)。`Core`、`Drivers`、`Middlewares`、`USB_DEVICE` 和 `FATFS/` 主要由 CubeMX 或第三方维护；不要把产品策略直接写入其中。FatFs 的 `BSP_SD_*` 强定义是外部 Override Seam，其实现放在 `Service/filesystem`，不修改生成的 DiskIO Glue。
 
 阅读分层时必须区分三件事：`Vendor → Adapters → Components → Platform → Service → APP` 表示功能/抽象所有权；编译期 `#include` 按 Interface 所有权和装配需要决定；运行时请求通常向下、硬件事件经已注册回调向上。第三方回调或 Override Seam（例如 FatFs `disk_* → BSP_SD_*`）是运行时入站接缝，不表示反向头文件依赖。
 
@@ -25,9 +25,9 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 
 - 已接入 LVGL v8.3.11、手写的 GUI 界面（`Service/gui/view/`）、ST7789 SPI DMA 刷新和 FT6X36 单指触摸；
 - GUI 的运行时入口为 `APP/tasks/gui/gui_task.c`，其显示与输入装配由 `Service/gui` 持有；
-- 界面不再用 SquareLine 等图形化工具生成（ADR-0016）。改页面直接改 `Service/gui/view/`，先更新 [docs/gui_ui_design.md](docs/gui_ui_design.md)；PC 上可用 [GUI 模拟器](Tools/gui_simulator/README.md) 预览并跑场景回归；
+- 界面不再用 SquareLine 等图形化工具生成（ADR-0016）。改页面直接改 `Service/gui/view/`，先更新 [docs/shape/gui.design.md](docs/shape/gui.design.md)；PC 上可用 [GUI 模拟器](Tools/gui_simulator/README.md) 预览并跑场景回归；
 - 外部 SDRAM 当前以 130 MHz 配置，LVGL 双绘制缓冲位于 `.sdram_framebuffer (NOLOAD)` 段。
-- W25Q256 已完成 CubeMX QSPI 配置，以及 Component、STM32 HAL Adapter、Platform 的间接模式 JEDEC ID 启动识别、`EF / 19` 厂商容量校验、SFDP 签名校验、SR1/SR2 同步读取、启动期 QE 按需安全置位、`0xEC` 固定 4-byte Quad I/O 读取和 `0x34` 非阻塞 Quad 页编程状态机；同时已有 `0x21` 4 KiB 擦除、QSPI/MDMA 读取、WIP 自动状态轮询和只读内存映射路径，详见 [docs/w25q256_architecture.md](docs/w25q256_architecture.md)。Flash FTL、Bridge、Platform 装配、Service 同步执行器与 USER DiskIO 已实现，SD/Flash 私有目录已分离；主机回归及 Debug/Release 构建通过；基本读写已在板上用过（MSC 实验期间），掉电恢复与长时间回收未验证（低优先级，#9），见 [docs/flash_ftl_design.md](docs/flash_ftl_design.md)。
+- W25Q256 已完成 CubeMX QSPI 配置，以及 Component、STM32 HAL Adapter、Platform 的间接模式 JEDEC ID 启动识别、`EF / 19` 厂商容量校验、SFDP 签名校验、SR1/SR2 同步读取、启动期 QE 按需安全置位、`0xEC` 固定 4-byte Quad I/O 读取和 `0x34` 非阻塞 Quad 页编程状态机；同时已有 `0x21` 4 KiB 擦除、QSPI/MDMA 读取、WIP 自动状态轮询和只读内存映射路径，详见 [docs/shape/storage.media.md](docs/shape/storage.media.md)。Flash FTL、Bridge、Platform 装配、Service 同步执行器与 USER DiskIO 已实现，SD/Flash 私有目录已分离；主机回归及 Debug/Release 构建通过；基本读写已在板上用过（MSC 实验期间），掉电恢复与长时间回收未验证（低优先级，#9），见 [docs/shape/storage.ftl.md](docs/shape/storage.ftl.md)。
 
 ## 构建
 
@@ -43,7 +43,7 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 ./scripts/build-firmware.ps1 -Configuration Release
 ```
 
-使用 CMake Preset `firmware-debug` / `firmware-release`，产物分别在 `build/firmware-debug/` 和 `build/firmware-release/`。分层验证、Hook 与结果状态见 [docs/verification.md](docs/verification.md)；兼容入口 `./scripts/verify.ps1` 固定执行 FULL。
+使用 CMake Preset `firmware-debug` / `firmware-release`，产物分别在 `build/firmware-debug/` 和 `build/firmware-release/`。分层验证、Hook 与结果状态见 [docs/shape/harness.verification.md](docs/shape/harness.verification.md)；兼容入口 `./scripts/verify.ps1` 固定执行 FULL。
 
 ### IDE 构建（日常调试）
 
@@ -57,7 +57,7 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 ./scripts/check-layer-includes.ps1
 ```
 
-FAST 会运行分层检查、生成目录写保护和 Harness 自测；FULL 再构建固件并跑全部主机回归。入口见 [分层验证](docs/verification.md)。
+FAST 会运行分层检查、生成目录写保护和 Harness 自测；FULL 再构建固件并跑全部主机回归。入口见 [分层验证](docs/shape/harness.verification.md)。
 
 ## 生成目录写保护
 

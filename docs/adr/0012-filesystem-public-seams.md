@@ -2,7 +2,7 @@
 
 - 状态：已接受、已实施；其中 MSC 前瞻范围已由 ADR-0013 取代；其中「文件级卷选择不适用于当前文件槽」已由 ADR-0014 取代
 - 日期：2026-09-01
-- 技术方案：[Filesystem Service 公开接缝切开](../filesystem_service_reshape.md)
+- 技术方案：[Filesystem Service 公开接缝切开](../shape/storage.filesystem.md)
 - 相关决定：[ADR-0005](0005-sd-filesystem-task-ownership.md)、[ADR-0010](0010-fatfs-user-diskio-service-ownership.md)
 
 ## 背景

@@ -1,6 +1,6 @@
 # Harness 脚本工作约定
 
-继承根入口。修改前读 [harness](../docs/shape/harness.md)、[验证正文](../docs/verification.md)、目标脚本及对应 `*.Tests.ps1`；快照语义、兼容入口、路径映射与状态输出以验证正文为准。
+继承根入口。修改前读 [harness](../docs/shape/harness.md)、[验证正文](../docs/shape/harness.verification.md)、目标脚本及对应 `*.Tests.ps1`；快照语义、兼容入口、路径映射与状态输出以验证正文为准。
 
 - 嵌套入口抑制自己的 `HARNESS_STATUS=`，只由顶层入口输出一次。
 - 保持 Windows PowerShell 5.1 兼容，不为规则读取或 Hook 引入额外依赖。

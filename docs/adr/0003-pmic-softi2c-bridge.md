@@ -2,7 +2,7 @@
 
 - 状态：已接受（按现有代码追溯记录）
 - 日期：2026-08-29
-- 相关实现说明：[../pmic_i2c_architecture.md](../pmic_i2c_architecture.md)
+- 相关实现说明：[../pmic_i2c_architecture.md](../shape/hardware.reference.md)
 
 ## 背景
 

@@ -2,7 +2,7 @@
 
 在 Windows PC 上运行**真实的** LVGL v8.3.11 与 `Service/gui`（含手写界面 `view/`），用 SDL2 窗口替代 ST7789 + FT6X36。目的是在不烧录的情况下迭代界面与 GUI 运行时（Canvas、Pager、主题、Queue、Transport），并用场景回归守住界面等价性（ADR-0016）。
 
-本工程是独立 host CMake 工程，不进入目标固件，不是板级验收（`PASS_HOST_ONLY` 也不算，见 `docs/verification.md`）。
+本工程是独立 host CMake 工程，不进入目标固件，不是板级验收（`PASS_HOST_ONLY` 也不算，见 `docs/shape/harness.verification.md`）。
 
 ## 构建与运行
 

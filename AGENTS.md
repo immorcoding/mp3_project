@@ -5,9 +5,9 @@
 ## 开始任务
 
 - GitHub spec/ticket：先读事项及评论，再按 [workflow](docs/shape/workflow.md) 与 [tracker](docs/agents/issue-tracker.md) 处理依赖、进度和证据；提交与 PR 读 [git](docs/shape/git.md)。
-- 修改文件：先读路径上最近的子 `AGENTS.md`，按 [ROUTES](docs/shape/ROUTES.md) 找目标模块 README、领域规则与技术正文；其他文档从 [文档地图](docs/README.md) 找。
-- 跨层、边界或公开接口变化：读 [architecture](docs/shape/architecture.md)、[架构说明](docs/architecture_standard.md) 与相关模块 README，分别判断所有权、include 和运行时路径；C 代码另读 [code-style](docs/shape/code-style.md)。
-- GUI 变化：先读 [gui](docs/shape/gui.md)，更新 [界面设计](docs/gui_ui_design.md)，再改手写 view。
+- 修改文件：先读路径上最近的子 `AGENTS.md`，按 [ROUTES](docs/shape/ROUTES.md) 找目标模块 README、领域规则与技术正文；其他文档从 [文档地图](docs/shape/README.md) 找。
+- 跨层、边界或公开接口变化：读 [architecture](docs/shape/architecture.md) 与相关模块 README，分别判断所有权、include 和运行时路径；涉及完成事件时读 [运行参考](docs/shape/architecture.runtime.md)，C 代码另读 [code-style](docs/shape/code-style.md)。
+- GUI 变化：先读 [gui](docs/shape/gui.md)，更新其中受影响的设计参考，再改手写 view。
 - 术语按条查 [GLOSSARY](GLOSSARY.md)；长期边界决定与 ADR 读取顺序见 [domain](docs/agents/domain.md)。修改工具配置、Skill 或 reviewer 时读 [harness](docs/shape/harness.md)：规范源在 `.agents/`，包装用 `./scripts/sync-agent-config.ps1` 生成。
 
 ## Shape 使用方式
@@ -23,5 +23,5 @@
 
 ## 完成前
 
-按 [verification](docs/verification.md) 验证：声称软件验证完成前 `./scripts/verify.ps1`（FULL）必须通过；GUI 变化另跑 `./Tools/gui_simulator/run-scenarios.ps1`，基线变更遵守 GUI-4。
+按 [verification](docs/shape/harness.verification.md) 验证：声称软件验证完成前 `./scripts/verify.ps1`（FULL）必须通过；GUI 变化另跑 `./Tools/gui_simulator/run-scenarios.ps1`，基线变更遵守 GUI-4。
 `PASS_HOST_ONLY`、`NEEDS_HARDWARE_VALIDATION` 和 PC 像素等价都不是板级验收；待上板事项标 `hw:pending`。非 trivial 变化调用 `independent-verifier`；涉及 DMA、Cache、ISR、RTOS、HAL、Platform、链接段或硬件生命周期再调用 `embedded-reviewer`，触发细则见验证正文。

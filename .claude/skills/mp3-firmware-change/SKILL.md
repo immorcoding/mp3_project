@@ -11,7 +11,7 @@ description: Route implementation, fixes, and refactors in this STM32H743 MP3 fi
 
 ## 路由
 
-1. 区分功能/抽象所有权、编译期 include 与运行时请求/事件三种关系。跨层或公开 Interface 变化必须读取 `docs/shape/architecture.md` 与 `docs/architecture_standard.md`。
+1. 区分功能/抽象所有权、编译期 include 与运行时请求/事件三种关系。跨层或公开 Interface 变化读取 `docs/shape/architecture.md`，涉及完成事件时再读 `docs/shape/architecture.runtime.md`。
 2. 用 `scripts/rules/verification.psd1` 判断已有主机测试覆盖和硬件敏感路径。该文件是确定性路径映射的唯一来源；发现未知生产路径时，不得解释成“无需测试”。
 3. 实现期间运行最窄的相关测试；完成非 trivial 变更时使用 `verify-firmware-change` 的层级规则。
 4. 命中硬件敏感路径时同时使用 `review-embedded-change`。Skill 只触发审阅，不替代上板验证。

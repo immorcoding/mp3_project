@@ -5,7 +5,7 @@
 1. `AGENTS.md` 由工具注入（Claude Code 经 `CLAUDE.md`）；SessionStart Hook 注入分支、脏文件数与待办事项。
 2. 任务来自 GitHub issue 时，先 `gh issue view <n> --comments`，只跟随其中给出的指针（spec、ADR、架构文档、术语名）。
 3. 动到哪个领域，先读 `docs/shape/` 下对应文件。
-4. 跨层、改边界或改公开 Interface 时，读 `docs/architecture_standard.md` 与相关 Module README。
+4. 跨层、改边界或改公开 Interface 时，读 `docs/shape/architecture.md` 与相关 Module README。
 5. 术语到 `GLOSSARY.md` **按条**查，不整本读。
 6. 会影响长期边界的新增决定，完成后新增一份 ADR。
 

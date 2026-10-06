@@ -16,4 +16,4 @@
 
 测试结果不证明任意欠压、电气损坏或 CRC 碰撞可恢复，也不提供 FatFs 文件事务原子性。
 
-上板测试清单与结果见 [Flash FTL 设计](../../docs/flash_ftl_design.md)。
+上板测试清单与结果见 [Flash FTL 设计](../../docs/shape/storage.ftl.md)。
