@@ -351,7 +351,7 @@ FatFs 的唯一普通任务上下文。未来若出现 `Service/storage`，它�
 
 应用代码通常只调用 `Platform_SD_*`。`SDCard_*` 接口用于 Platform 装配、Device 独立测试和未来替换 Port；`hsd1` 始终是 SD Card Port 的实现细节。
 
-架构变化时，应同时更新本文和根目录的 `CONTEXT.md`，重点核对：
+架构变化时更新本文与相关 Module README；只有领域概念变化才同步根目录 `GLOSSARY.md`。技术正文重点核对：
 
 - 实际目录；
 - 启动与热插拔运行时路径；

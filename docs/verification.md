@@ -1,6 +1,6 @@
 # 分层验证与 Agent Harness
 
-本文是工程验证入口、结果状态和审校触发策略的唯一说明。模块职责仍由 `CONTEXT.md`、架构文档和各 Module README 维护；确定性路径映射只维护在 `scripts/rules/verification.psd1`。
+本文是工程验证入口、结果状态和审校触发策略的唯一说明。领域术语由 `GLOSSARY.md` 维护，模块职责与实现约束见架构文档和各 Module README；确定性路径映射只维护在 `scripts/rules/verification.psd1`。
 
 ## 四级验证
 

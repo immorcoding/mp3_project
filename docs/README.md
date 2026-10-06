@@ -9,19 +9,19 @@
 | 工作合同 | `../AGENTS.md` | agent 硬规则、验证入口与指针；始终注入。 |
 | 标准层 | `shape/` | 各领域当前标准（harness、workflow、architecture、gui、git、code-style），带级别与来源；按领域读。 |
 | 事项层 | GitHub Issues | 进度、spec、ticket、wayfinder 地图与置顶「板上状态」；不在仓库文件里。 |
-| 术语层 | `../CONTEXT.md` | 稳定领域术语、产品职责与入口；按条查阅。 |
+| 术语层 | `../GLOSSARY.md` | 项目特有概念及区别，每条一两句；按条查阅。 |
 | 阅读/审阅入口 | `architecture_standard.md`、`coding_standard.md` | 按任务指向 shape 规则与技术正文，不另存规则。 |
 | 决策层 | `adr/` | 可替代方案中的长期取舍、未采用方案和演进后果。 |
 | 技术事实层 | `*_architecture.md`、`error_model.md` | 当前目录、调用链、状态机、参数、资源和验收约束。 |
 | 局部导航层 | 各源码目录 `README.md` | Module 公开 Interface、直接依赖、运行时路径和禁止事项。 |
 
-ADR 不替代技术文档。技术文档引用相关 ADR，并保持对当前代码的准确描述；新增长期取舍时先补 ADR，再同步受影响的技术文档、`CONTEXT.md` 和 Module README。
+ADR 不替代技术文档。技术文档引用相关 ADR，并保持对当前代码的准确描述；新增长期取舍时先补 ADR，再同步受影响的技术文档、`GLOSSARY.md` 和 Module README。
 
 ## 入口
 
 - [../AGENTS.md](../AGENTS.md)：硬规则、验证入口与指针；
 - [shape/](shape/)：各领域当前标准；[ROUTES](shape/ROUTES.md) 按目录引导阅读；
-- [../CONTEXT.md](../CONTEXT.md)：稳定领域术语、产品语义和职责归属（按条查阅）；
+- [../GLOSSARY.md](../GLOSSARY.md)：项目特有概念和易混淆关系（按条查阅）；
 - [architecture_standard.md](architecture_standard.md)：架构规则和跨模块技术解释的阅读入口；
 - [adr/README.md](adr/README.md)：长期架构决策记录；
 - [coding_standard.md](coding_standard.md)：代码审阅指针（命名、Doxygen、config）；
@@ -47,4 +47,4 @@ ADR 不替代技术文档。技术文档引用相关 ADR，并保持对当前代
 - [../Tools/gui_simulator/README.md](../Tools/gui_simulator/README.md)：PC GUI 模拟器（SDL2）与场景回归基线；
 - [error_model.md](error_model.md)：状态、错误和诊断语义。
 
-agent 冷启动只读根目录 `AGENTS.md`（Claude Code 经 `CLAUDE.md` 引入）；`docs/shape/`、`CONTEXT.md` 与本目录按需读取；根 `README.md` 给人看功能清单，agent 非必要不读。本目录仍是按需正文。发生影响多个 Module 的行为、Interface 或职责归属的调整时，必须同步更新相应技术文档并核对 `CONTEXT.md`。
+agent 冷启动只读根目录 `AGENTS.md`（Claude Code 经 `CLAUDE.md` 引入）；`docs/shape/`、`GLOSSARY.md` 与本目录按需读取；根 `README.md` 给人看功能清单，agent 非必要不读。本目录仍是按需正文。发生影响多个 Module 的行为、Interface 或职责归属的调整时，必须同步更新相应技术文档并核对 `GLOSSARY.md`。

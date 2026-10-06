@@ -3,7 +3,7 @@
 > 状态：扫描、顺序表、Queue 窗口单槽、GUI 滑窗、播放列表游标、点按假切歌与上一首/下一首环形步进已落地；Playback 打开、元数据未做。  
 > 相关决定：[ADR-0015](adr/0015-volume-roles-and-resource-install.md)  
 > 实现：[`APP/tasks/storage/catalog/`](../APP/tasks/storage/catalog/)  
-> 术语：[CONTEXT.md](../CONTEXT.md) **曲库**、**播放列表**
+> 术语：[GLOSSARY.md](../GLOSSARY.md) **曲库**、**播放列表**
 
 ## 1. 所有权
 
@@ -44,7 +44,7 @@
 
 Music 扫描从相对路径 `Music` 递归子目录，同时只开一个目录句柄；路径栈深 128（`STORAGE_CATALOG_DIR_STACK_MAX`）。收录后缀 `.mp3` / `.MP3`，跳过 `.` 开头名。打开根 `Music` 失败 → 空表且 `STORAGE_OK`。条数满或字符串池满 → 截断已收录部分，仍 `STORAGE_OK`。读/关目录失败 → `STORAGE_ERROR`。栈满则跳过该子目录并告警。
 
-条目只存 UTF-8 相对路径（形如 `Music/.../file.mp3`）在字符串池中的偏移与长度，**不存卷枚举**。Flash 卷不进入曲库。标题、歌手、封面不是曲库字段，也不从文件名用 ` - ` 切开冒充元数据。
+条目只存 UTF-8 相对路径（形如 `Music/.../file.mp3`）在字符串池中的偏移与长度，**不存卷枚举**。Flash 卷不进入曲库。未插卡或缺少 `Music/` 时曲库为空，不自动创建该目录。标题、歌手、封面不是曲库字段，也不从文件名用 ` - ` 切开冒充元数据。
 
 启动不把 `.storage_catalog` / `.music_sheet`（SDRAM NOLOAD）并入 `.bss` 清零。扫描前只重置表头：内部 `.bss` 代次 `music_catalog_generation` 加一，清 `IndexNum`/`Tail`，不 `memset` 整池。SDRAM 里的 `Generation` 是该计数的副本。Sheet 有效长度不另存，等于建表时的 Catalog `IndexNum`。作废后 Catalog 代次继续递增（空表），Sheet `Generation = 0` 表示无效。
 

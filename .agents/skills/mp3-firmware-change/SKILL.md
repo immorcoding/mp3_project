@@ -5,7 +5,7 @@ description: Route implementation, fixes, and refactors in this STM32H743 MP3 fi
 
 # MP3 固件变更路由
 
-任务来自 GitHub issue 时先读该 issue 及评论；再读目标路径上最近的子 `AGENTS.md` 与相关 `docs/shape/` 领域文件。只按需求与实际路径读取相关 Module README、`docs/*_architecture.md` 和 `CONTEXT.md` 对应词条；不要把这些事实复制进本 Skill 或子 `AGENTS.md`。
+任务来自 GitHub issue 时先读该 issue 及评论；再读目标路径上最近的子 `AGENTS.md` 与相关 `docs/shape/` 领域文件。只按需求与实际路径读取相关 Module README、`docs/*_architecture.md` 和 `GLOSSARY.md` 对应词条；不要把这些事实复制进本 Skill 或子 `AGENTS.md`。
 
 ## 路由
 
