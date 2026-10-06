@@ -48,7 +48,7 @@ Next id: RES-9
 
 ### Rules
 
-- **RES-7** · provisional · 相同输入生成同包，ResourceID 保持语义身份而非文件排序位置；名称/来源留外部 Manifest；用已验证 External Loader 写后校验，并按实际 PackSize 核对资源区边界，旧 RPK1 长度不沿用。_Why:_ 确定性与稳定身份防止资源误绑，独立回读与边界核对防止覆盖 FTL。_Source:_ [打包入口](../../Tools/package_maker/main.py)、[烧录工具](../../Tools/external_loader/README.md)
+- **RES-7** · provisional · 相同输入生成同包，ResourceID 保持语义身份而非文件排序位置，同一 ID 内容变化递增 ResourceVersion；名称/来源留外部 Manifest；用已验证 External Loader 写后校验，并按实际 PackSize 核对资源区边界，旧 RPK1 长度不沿用。_Why:_ 确定性与稳定身份防止资源误绑，独立回读与边界核对防止覆盖 FTL。_Source:_ [打包入口](../../Tools/package_maker/main.py)、[烧录工具](../../Tools/external_loader/README.md)
 
 ## firmware-trust
 

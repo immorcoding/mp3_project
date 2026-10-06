@@ -41,7 +41,7 @@
 | Entry | `0x00` | 4 | ResourceID | 非零、包内唯一、严格升序 |
 | Entry | `0x04` | 2 | ResourceType | 见标准类型表 |
 | Entry | `0x06` | 2 | Flags | RPKC1 必须为 0 |
-| Entry | `0x08` | 8 | ResourceVersion | 同一 ID 的内容版本，单调递增 |
+| Entry | `0x08` | 8 | ResourceVersion | 同一 ID 的内容版本 |
 | Entry | `0x10` | 4 | DataOffset | 相对包首地址 |
 | Entry | `0x14` | 4 | DataLength | 必须大于零 |
 | Entry | `0x18` | 4 | DataCRC32 | 只覆盖 Data |
@@ -81,4 +81,3 @@
 | `0x0007–0x7FFF` | Reserved Standard | 后续 RPKC 标准类型 |
 | `0x8000–0xFFFE` | Custom | 用户或厂商自定义类型 |
 | `0xFFFF` | Reserved | 保留 |
-
