@@ -10,7 +10,7 @@
 | 标准层 | `shape/` | 各领域当前标准（harness、workflow、architecture、gui、git、code-style），带级别与来源；按领域读。 |
 | 事项层 | GitHub Issues | 进度、spec、ticket、wayfinder 地图与置顶「板上状态」；不在仓库文件里。 |
 | 术语层 | `../CONTEXT.md` | 稳定领域术语、产品职责与入口；按条查阅。 |
-| 规范层 | `architecture_standard.md`、`coding_standard.md` | 全工程必须遵守的分层、Interface、命名与注释规则。 |
+| 阅读/审阅入口 | `architecture_standard.md`、`coding_standard.md` | 按任务指向 shape 规则与技术正文，不另存规则。 |
 | 决策层 | `adr/` | 可替代方案中的长期取舍、未采用方案和演进后果。 |
 | 技术事实层 | `*_architecture.md`、`error_model.md` | 当前目录、调用链、状态机、参数、资源和验收约束。 |
 | 局部导航层 | 各源码目录 `README.md` | Module 公开 Interface、直接依赖、运行时路径和禁止事项。 |
@@ -20,17 +20,19 @@ ADR 不替代技术文档。技术文档引用相关 ADR，并保持对当前代
 ## 入口
 
 - [../AGENTS.md](../AGENTS.md)：硬规则、验证入口与指针；
-- [shape/](shape/)：各领域当前标准；
+- [shape/](shape/)：各领域当前标准；[ROUTES](shape/ROUTES.md) 按目录引导阅读；
 - [../CONTEXT.md](../CONTEXT.md)：稳定领域术语、产品语义和职责归属（按条查阅）；
-- [architecture_standard.md](architecture_standard.md)：功能/抽象所有权、编译期依赖、运行时请求/事件路径、装配和中断规则的唯一总则；
+- [architecture_standard.md](architecture_standard.md)：架构规则和跨模块技术解释的阅读入口；
 - [adr/README.md](adr/README.md)：长期架构决策记录；
-- [coding_standard.md](coding_standard.md)：命名、Doxygen、行内注释、自维护 config 排版；
+- [coding_standard.md](coding_standard.md)：代码审阅指针（命名、Doxygen、config）；
 - [verification.md](verification.md)：FAST/CHANGED/FULL/HARDWARE、Hook 快照、结果状态、Skill 与独立审校者；
 - [sd_architecture.md](sd_architecture.md)：SD、热插拔与 FatFs 接缝；
 - [w25q256_architecture.md](w25q256_architecture.md)：W25Q256 原始 NOR 现状与 Adapter 接缝；
-- [flash_ftl_design.md](flash_ftl_design.md)：已实现、待硬件验收的首版 FTL 链路、分组提交、恢复、GC、配置和逐文件实施/验收清单；
-- [filesystem_service_reshape.md](filesystem_service_reshape.md)：Filesystem 公开接缝切开、Maintain 改名 Reclaim；后续卷感知文件/目录见 ADR-0014；
+- [flash_ftl_design.md](flash_ftl_design.md)：FTL 链路、分组提交、恢复、GC、配置与故障模型；
+- [filesystem_service_reshape.md](filesystem_service_reshape.md)：当前卷感知公开接缝、执行所有权与私有错误转换；
 - [catalog_architecture.md](catalog_architecture.md)：曲库扫描、顺序播放列表，以及未落地的 MP3 解析/ID3 边界；
+- [resource_pack_format.md](resource_pack_format.md)：打包器与解码器共享的 RPKC1 二进制契约；
+- [runtime_paths.md](runtime_paths.md)：硬件完成事件、LCD DMA 与任务路径；
 - [resource_pack_design.md](resource_pack_design.md)：RPKC1 资源包格式与启动加载；设备侧安装见 ADR-0015（未实现）；
 - [adr/0013-usb-msc-product-scope.md](adr/0013-usb-msc-product-scope.md)：主线 USB MSC 产品范围决定；
 - [adr/0014-filesystem-volume-aware-file-interface.md](adr/0014-filesystem-volume-aware-file-interface.md)：SD/Flash 统一为 Volume + UTF-8 相对路径；Flash 自动格式化由 Storage 宏控制；
