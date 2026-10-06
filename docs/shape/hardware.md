@@ -2,7 +2,7 @@
 
 本板供电、外部内存与采样输入的硬件约束。分层和生成器边界沿用 [Architecture](architecture.md) ARC-2/3/5/6/8/10，配置归属沿用 [Code style](code-style.md) STY-3。
 
-Next id: HWD-5
+Next id: HWD-6
 
 ## Pillars
 
@@ -20,7 +20,7 @@ Next id: HWD-5
 
 ### References
 
-- [电源与总线事实](hardware.reference.md#power)：开漏、启动顺序和电源轨；接口见 [Platform Power](../../Platform/power/README.md)。
+- [硬件依据表](sources/hardware-facts.md)：电源轨与开漏电平依据；操作接口由 [Platform Power](../../Platform/power/README.md) 维护。
 
 ## memory
 
@@ -32,7 +32,7 @@ SDRAM 初始化后内容、诊断与运行数据的所有权。
 
 ### References
 
-- [SDRAM 时序与诊断](hardware.reference.md#memory)：兼容器件、JEDEC、刷新依据和测速语义。
+- [硬件依据表](sources/hardware-facts.md)：器件兼容、刷新和启动等待的依据；初始化接口与诊断见 [Platform SDRAM](../../Platform/sdram/README.md)。
 
 ## input
 
@@ -44,7 +44,7 @@ SDRAM 初始化后内容、诊断与运行数据的所有权。
 
 ### References
 
-- [触摸事实](hardware.reference.md#input)：地址表示、Chip ID、轮询与可用性。
+- [Platform Touch](../../Platform/touch/README.md)：采样可用性；[FT6X36](../../Components/ft6x36/README.md)：原始触点协议；[硬件依据表](sources/hardware-facts.md)：模组识别边界。
 
 ## temperature
 
@@ -56,4 +56,16 @@ SDRAM 初始化后内容、诊断与运行数据的所有权。
 
 ### References
 
-- [结温换算与校准](hardware.reference.md#temperature)：VDDA 修正、标定和失败生命周期。
+- [硬件依据表](sources/hardware-facts.md)：电压补偿和校准失效依据；[Temperature Adapter](../../Adapters/stm32_hal/temp/README.md)：采样接缝。
+
+## transfer
+
+LCD SPI 事务的完成判据与缓冲归还。
+
+### Rules
+
+- **HWD-5** · settled · LCD 分块 DMA 等待 SPI EOT 后才续块，最后一块 EOT 后才释放 CS、归还绘制缓冲并报告最终完成；DMA TC 不作为 RAMWR 完成。_Why:_ DMA TC 仅说明数据进入 SPI FIFO，过早归还会截断事务或覆盖在飞像素。_Source:_ [ST7789 SPI Adapter](../../Adapters/stm32_hal/st7789_spi/README.md) _Check:_ [代码审阅入口](REVIEW.md) 的 embedded-reviewer 对照 SPI 回调、CS 和 GUI 缓冲所有权审阅，板级验证最终完成时序。
+
+### References
+
+- [LCD Platform](../../Platform/lcd/README.md)、[GUI Service](../../Service/gui/README.md)：最终事件与 LVGL 归还接缝。

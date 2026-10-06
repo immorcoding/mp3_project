@@ -1,6 +1,6 @@
 # Diagnostics
 
-错误解释与日志交付边界；通用错误模型沿用 [Architecture](architecture.md) ARC-9，ISR 边界沿用 ARC-10。
+错误解释与日志交付边界；通用错误模型沿用 [Architecture](architecture.md) ARC-9，ISR 边界沿用 ARC-10；调试中的易误判情况见 [错误观察对照](sources/diagnostic-observations.md)。
 
 Next id: DIAG-3
 
@@ -9,14 +9,6 @@ Next id: DIAG-3
 - 一次调用结果不替代持续生命周期。
 - 日志入队、被输出接受和主机显示分别判断。
 - 诊断保留故障证据，不改变产品执行与缓冲所有权。
-
-## errors
-
-设备到后端的错误定位。
-
-### References
-
-- [错误调试参考](diagnostics.reference.md#errors)：四层观察顺序、设备例外和异步失败边界。
 
 ## logging
 
@@ -29,4 +21,4 @@ Next id: DIAG-3
 
 ### References
 
-- [日志生命周期](diagnostics.reference.md#logging)：启动、池/队列、重试和 USB 就绪条件。
+- [Service Log](../../Service/log/README.md)：消息池所有权与任务接缝；[Log Component](../../Components/log/README.md)：核心队列；[USB Adapter](../../Adapters/stm32_hal/log_usb_cdc/README.md)：就绪和异步输出。
