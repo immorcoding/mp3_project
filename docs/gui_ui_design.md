@@ -26,7 +26,7 @@
 
 颜色只按调色板角色（`Accent`、`Ink`、`Muted`、`Wash`、`Ground`）引用 `theme/` 的共享 style，不在界面代码里写 RGB；Opa、尺寸、圆角、Padding、字体等写在对象上。
 
-后续 GUI 工作流程为：先在本文档记下要改的层级、相对位置、样式与事件归属；助手在 `view/`（或对应行为 Module）实现；在 PC 模拟器中预览，并以 `./Tools/gui_simulator/run-scenarios.ps1` 比对场景基线（有意的视觉变化须看过截图再 `-Update`）；最后编译固件上板验证。
+后续 GUI 工作以 GitHub spec/ticket 为目标和验收依据：先在本文档记下要改的层级、相对位置、样式与事件归属；助手在 `view/`（或对应行为 Module）实现；在 PC 模拟器中预览，并以 `./Tools/gui_simulator/run-scenarios.ps1` 比对场景基线（有意的视觉变化须看过截图再 `-Update`）；最后编译固件上板验证。
 
 ### 2.1 设计文档同步
 
@@ -62,7 +62,7 @@ Lock Screen
           │  └─ BooksPageContainer（当前仅为空白占位页）
 ```
 
-`Main` 是解锁后唯一的普通根 Screen。`StatusBarContainer` 与 `MainPageContainer` 是它的直接子对象；后者本身就是透明、横向可滚动的循环分页视口。StatusBar 固定在 Main 层，只有 MainPageContainer 内的三张内容页会左右移动。`Music`、`Bookshelf` 和 `Settings` 不再是独立加载的 LVGL Screen，而是其中的同级 Page。`Lock Screen` 是待机视觉页，首版不提供安全认证。`MainPagerDots`、Album Detail、Mini Player、Reader 和各 Settings 子页尚未创建；开始这些设计前必须先更新本文档。
+`Main` 是解锁后唯一的普通根 Screen。`StatusBarContainer` 与 `MainPageContainer` 是它的直接子对象；后者本身就是透明、横向可滚动的循环分页视口。StatusBar 固定在 Main 层，只有 MainPageContainer 内的三张内容页会左右移动。`Music`、`Bookshelf` 和 `Settings` 不再是独立加载的 LVGL Screen，而是其中的同级 Page。`Lock Screen` 是待机视觉页，首版不提供安全认证。Album Detail、Mini Player、Reader 和各 Settings 子页尚未创建；开始这些设计前必须先更新本文档。
 
 ## 4. 全局视觉规范
 
@@ -88,7 +88,7 @@ Boot Arc 动画本轮不改。Solid 下 `Boot` / `BootReveal` 与 Lock/Main 一�
 
 背景的两色纵向线性渐变在早期原型模拟器和真机中均已验证会产生明显色带，因此不作为最终视觉方案。目标固件保持 `LV_DITHER_GRADIENT = 0`；运行时渐变抖动已经在真机测试，色带虽可变成颗粒，但不能形成干净的雾状层次，故不采用。
 
-Default 外观采用**系统级静态壁纸图**：壁纸目标规格为 `240 x 320` 的全屏资源，先在图像工具中以深蓝到靛紫底色叠加三处大范围、低对比的蓝紫模糊光团，再转换为 LVGL 图片资源。当前选中的 `Indigo Mist Soft Dark` 含少量半透明像素，因此导出为带 Alpha 的资源；其余技术细节和后续不透明化条件见第 10 节。Image Dither 是否启用及其强度以 RGB565 真机观感为准。壁纸图只承担背景雾感，不烘焙固定信息卡；卡片仍由界面组件叠加，以便页面内容和布局独立调整。
+Default 外观采用**系统级静态壁纸图**：壁纸目标规格为 `240 x 320` 的全屏资源，先在图像工具中以深蓝到靛紫底色叠加三处大范围、低对比的蓝紫模糊光团，再转换为 LVGL 图片资源。当前选中的 `Indigo Mist Soft Dark` 含少量半透明像素，因此当前资源保留 Alpha；其余技术细节和后续不透明化条件见第 10 节。资源量化与抖动以 RGB565 真机观感为准。壁纸图只承担背景雾感，不烘焙固定信息卡；卡片仍由界面组件叠加，以便页面内容和布局独立调整。
 
 普通应用内容页的大型卡片首版仍只模拟为半透明深色底、弱描边与上/左侧更亮的细边，不使用运行时背景模糊。`MusicModeTabs` 的运行时局部毛玻璃（第 10.5.2 节）只属于 **Default**。Solid 不算模糊壁纸。`Boot` 的全屏壁纸模糊是第 10.3 节的独立启动效果，也只属于 **Default**。
 
@@ -217,63 +217,43 @@ Settings 使用 2 x 2 方形卡片，而不是长列表：
 
 是否加入安全锁和实际唤醒/背光策略留待硬件交互阶段单独决定。
 
-## 10. 界面实施顺序与记录
+## 10. 当前界面设计与资源生命周期
 
-> 本节按时间记录界面从 SquareLine 原型到手写 `view/` 的实施过程。其中关于 SquareLine 导出、`ui_*` 对象名、Inspector 操作与 1.6.1/1.6.2 导出兼容性的段落是 ADR-0016 之前的历史，保留作背景；当前对象由 `Service/gui/view/` 手写（对象与文件对应见 [view/README.md](../Service/gui/view/README.md)），对象名去掉 `ui_` 前缀后沿用。描述当前实现的段落已按新结构更新。
+本节按对象与资源职责描述当前手写界面；代码入口见 [view/README.md](../Service/gui/view/README.md)。历史编辑器操作和版本排障由 Git 保存，界面所有权的取舍见 ADR-0016。
 
-1. 建立全局背景、状态栏、卡片样式、颜色和字体层级；
-2. 建立 Main 固定 Shell、三张 MainPageContainer 内容页与顶部状态栏；
-3. 完成 Music 的三标签、播放器控制骨架、Library 和 Album Detail；
-4. 完成 Bookshelf、Reader 工具栏和假翻页；
-5. 完成 Settings 的 2 x 2 卡片与四张假子页；
-6. 完成 Lock Screen 及其假播放状态；
-7. 最后统一检查触摸热区、文本截断、动画时长和 RGB565 渐变效果。
+### 10.1 页面骨架
 
-### 10.1 第一步：页面骨架（已被 Main 架构替代）
+普通页面统一置于 MainPageContainer，Main 持有唯一固定状态栏和分页指示器；Lock 与一次性启动序列是独立 Screen。现有对象树与循环分页见第 10.5 节。
 
-本节记录早期的四张独立 Screen 骨架：`Lock`、`Music`、`Books`、`Settings`。当时 `ui_init()` 按该顺序初始化并默认加载 `ui_Lock`，四张 Screen 均关闭 Scrollable、四边 Padding 为 `0`。
-
-该结构无法让顶部信息栏在根页面横滑时保持固定，现已被第 10.5 节的 Main 架构正式替代。迁移时已从当前 SquareLine 导出中移除独立的 `Music`、`Books`、`Settings` Screen；后续正式 UI 只能在 `MainPageContainer` 内的 Page 上扩展。
-
-### 10.2 第二步：Lock 的主视觉
+### 10.2 Lock 的主视觉
 
 本步骤已完成锁屏主视觉和基础解锁事件：`Lock` 的 `LV_EVENT_GESTURE` 检测到向上手势后切换至 `Main`。锁屏仍不提供播放控制、密码或其他业务事件，也不复用 Main 的顶部状态栏；日期、时间和电量构成独立的居中信息层。
 
 系统默认壁纸已经替换为 `Indigo Mist Soft Dark`：文件为 `wallpaper_indigo_mist_soft_dark.png`，规格 `240 x 320 px`、竖屏 PNG、sRGB；保留原有蓝紫烟雾构图，只将右下近黑区改为连续的深靛蓝柔边过渡。图片不得包含文字、图标、状态栏、卡片、边框或任何固定业务内容。
 
-当前 SquareLine 导出将此资源绑定到 `Boot`、`BootReveal`、`Lock` 与 `Main` 四张根 Screen；它们共用同一个导出资源 `ui_img_wallpaper_indigo_mist_soft_dark_png`，不会为每页重复编译一份图像数据。MusicPage、BooksPage、SettingsPage 均保持透明。旧壁纸资源可留在 SquareLine Assets 中作为回退候选，但只要它不在生成的 `filelist.txt` / CMake 源清单中，就不参与固件编译。
+Default 外观中，Boot、BootReveal、Lock、Main 共用系统壁纸描述符，MusicPage、BooksPage、SettingsPage 保持透明；Boot 绑定模糊工作帧，其他 Screen 使用清晰壁纸。固件像素来自 Resource Pack ID 3，由 Resource Service 加载到 SDRAM；PC 模拟器使用自身资源适配。资源路径、格式与加载见 [resource_pack_design.md](resource_pack_design.md)。
 
-这张候选 PNG 实测存在少量半透明像素（共 `1116 / 76800`，Alpha 最低为 `219`），所以当前 SquareLine 导出格式为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，而非原先计划的无 Alpha `CF_TRUE_COLOR`；这会让资源像素数据约为 `230,400 B`，并让底层屏幕背景在半透明处参与混合。后续真机应专门确认右下暗部是否仍显得突兀：若存在问题，再生成一个以深靛蓝底色预合成、Alpha 全为 `255` 的不透明副本，并由用户重新导入/导出；严禁手改生成的图片 `.c` 文件。
-
-`Indigo Mist Soft Dark` 的视觉源已获用户初步认可；壁纸的最终真机验收与后续 UI 文本可读性评估，待锁屏内容叠加后统一进行。
-
-已稳定复现资源构建失败：`GUI/images/ui_img_wallpaper_indigo_mist_png.c` 使用了 LVGL v9 的 `lv_image_dsc_t`、`LV_COLOR_FORMAT_RGB565` 与 `LV_IMAGE_HEADER_MAGIC`，而项目其余 SquareLine 导出文件及中间件均为 LVGL v8.3.11，导致 Debug 构建在该资源文件处失败。用户确认该图片是通过 SquareLine Studio 的 Asset Panel 导入原 PNG、设置 `Image Dither` 的 `Filter Strength = 5`、再使用左上角 `Export UI Files` 导出；不存在手工写入资源 C 文件或使用外部转换器的步骤。`​Filter Strength` 只影响图像抖动，不影响 LVGL API 主版本。
-
-为隔离 Image Dither，用户已将该资源的 `Filter Strength` 临时设为 `0`、重新 Export UI Files，助手使用同一条 `cmake --build --preset Debug` 构建环复验；资源仍导出为相同的 v9 描述符并在相同行失败。因此排除抖动功能、原 PNG、RGB565 与 Alpha。随后用户以 **SquareLine Studio 1.6.1** 导出同一工程，生成的图片资源可正常通过现有 LVGL v8.3.11 工程编译，完成版本回归验证。最终结论：**SquareLine Studio 1.6.2 在此 LVGL v8.3.11 项目的图片 C 源导出存在兼容性回归；1.6.1 是当前已验证可用的 GUI 导出工具版本。** 后续本项目固定使用 1.6.1 导出 `GUI/`，不手改生成文件；只有在新版本经同样的“含 PNG 资源的导出 + 固件编译”验证通过后，才允许升级。
+当前壁纸为 `LV_IMG_CF_TRUE_COLOR_ALPHA`，像素数据约 `230400 B`；少量半透明像素会混合根背景。视觉源已获初步认可；若真机暗部观感要求不透明副本，应通过资源打包链处理，并重新验证显示，不直接改图片像素 C 数据。
 
 初始布局采用相对约束，而非固定像素坐标：大时间位于屏幕上半部并作为全页视觉焦点；日期直接位于时间下方；电量提示与日期共同构成次级信息，位于日期下方并保留一段较短留白。时间和日期直接作为 `Lock` 的子对象；电池图标与百分比使用一个仅包围二者的小型 `BatteryGroup` 透明 Container，保证整组始终水平居中。该 Container 不承载业务事件，也不需要滚动。此前“Container 会吃掉手势”的判断已被实测推翻：锁屏滑动不灵敏的根因是触摸采样率过高，调整后已恢复正常，因此普通布局 Container 不需要为规避手势额外开启 Gesture Bubble。屏幕下半部预留给后续的 Mini Player 与 `Swipe up to unlock`，因此首版不把电量放到底部。
 
-日期固定使用三字母星期与月份缩写，例如当前导出的 `SUN, AUG 24`，避免 `THURSDAY, NOVEMBER 28` 一类文本在 240 px 屏幕上溢出。日期使用约 `14–18 px` 的 `Ink`（`#F1F6FF`）；它与大时间通过字号、字重和后续按需设置的对象透明度形成层级，而不再保留独立的次级文字主题色。大时间使用当前 SquareLine 可选的最大或接近最大的英文字体，建议约 `42–52 px`，主文字色同为 `#F1F6FF`。
+日期固定使用三字母星期与月份缩写，例如 `SUN, AUG 24`，避免 `THURSDAY, NOVEMBER 28` 一类文本在 240 px 屏幕上溢出。日期使用约 `14–18 px` 的 `Ink`（`#F1F6FF`）；它与大时间通过字号、字重和后续按需设置的对象透明度形成层级，而不再保留独立的次级文字主题色。大时间使用大号英文字体，建议约 `42–52 px`，主文字色同为 `#F1F6FF`。
 
-电量提示由一个简洁的 `LockBatteryBar` 与 `82%` 短文本组成，二者置于 `BatteryGroup` 中，以 Row 布局作为同一行视觉组水平居中，位于日期下方；`LockBatteryBar` 使用 SquareLine 的 LVGL Bar 控件绘制细轮廓与容量填充，而非导入 SVG 或使用 LVGL 字符图标。首版不使用电池正极突起：在当前屏幕尺寸上，额外的窄 Panel 会削弱图标的简洁性，保留圆角轮廓和容量填充即可。
+电量提示由一个简洁的 `LockBatteryBar` 与 `82%` 短文本组成，二者置于 `BatteryGroup` 中，以 Row 布局作为同一行视觉组水平居中，位于日期下方；`LockBatteryBar` 使用 LVGL Bar 控件绘制细轮廓与容量填充，而非导入 SVG 或使用 LVGL 字符图标。首版不使用电池正极突起：在当前屏幕尺寸上，额外的窄 Panel 会削弱图标的简洁性，保留圆角轮廓和容量填充即可。
 
-`BatteryGroup` 背景、边框与阴影均透明，Padding 仅保留电量条和文字之间的窄间距。电量条轮廓与百分比使用 `Ink`（`#F1F6FF`），填充使用强调色 `Accent`（`#00B0DE`），文字字号约 `12–14 px`；固定假数据时，Bar 的填充值必须与显示百分比一致，例如 `84%` 对应值 `84`。首版不表现实时电量、充电状态或低电量告警。以 SquareLine 模拟器的视觉平衡为最终依据，优先调整信息层的相对间距与留白，不因本文档强行固定坐标。若导出后固件缺少对应字体，再单独评审并由用户手动调整 `lv_conf.h`，助手不修改生成目录。
+`BatteryGroup` 背景、边框与阴影均透明，Padding 仅保留电量条和文字之间的窄间距。电量条轮廓与百分比使用 `Ink`（`#F1F6FF`），填充使用强调色 `Accent`（`#00B0DE`），文字字号约 `12–14 px`；固定假数据时，Bar 的填充值必须与显示百分比一致，例如 `84%` 对应值 `84`。首版不表现实时电量、充电状态或低电量告警。以 PC 模拟器与真机的视觉平衡为最终依据，优先调整信息层的相对间距与留白，不因本文档强行固定坐标。若固件缺少对应字体，再单独评审并由用户手动调整 `lv_conf.h`，助手不修改生成目录。
 
 锁屏底部解锁提示采用 iPhone 风格的“文字 + Home indicator”：`LockUnlockHint` 显示 `Swipe up to unlock`，其下方为短圆角横条 `LockHomeIndicator`；二者水平居中并靠近屏幕底部安全区。首版不使用箭头或可见容器；向上手势由 `Lock` 根对象处理，底部提示 Group 不承担事件。二者与上部的时间/日期/电量信息保持足够大留白，Mini Player 仍留待后续单独设计与接入。
 
 `LockUnlockHint` 使用主文字色的低亮度版本，不创建文字阴影、发光副本或预渲染模糊资源。240 x 320 的 RGB565 屏幕以文字本身的轻微透明度变化维持简洁与可读性，避免伪阴影产生脏边或使层级过多。
 
-提示文字和 Home indicator 放入透明的 `LockUnlockGroup`，仅用于统一设置透明度动画，不绘制背景、边框或阴影，也不承担事件。该 Group 以低频呼吸提示手势：从低可见度平滑变亮，再平滑变暗，往返周期约 `1.5–2.0 s`，无限循环；避免位移、闪烁或高频动画。文字与横条随 Group 同步呼吸，以保持 iPhone 式的单一底部手势锚点。
+提示文字和 Home indicator 放入透明的 `LockUnlockGroup`，仅用于统一设置透明度动画，不绘制背景、边框或阴影，也不承担事件。该 Group 以低频呼吸提示手势：从低可见度平滑变亮，再平滑变暗，以缓慢、连续的往返节奏，无限循环；避免位移、闪烁或高频动画。文字与横条随 Group 同步呼吸，以保持 iPhone 式的单一底部手势锚点。
 
-呼吸动画由 `Lock` Screen 的 `Screen loaded` 事件以零延迟执行 `Play Animation` 启动，目标为 `LockUnlockGroup`。这是当前“每次进入锁屏都从头开始呼吸”的设计选择，包含默认首屏首次加载与后续从其他页面重新进入 Lock。当前导出还保留了 `LockUnlockGroup` 自身的同名 `Screen loaded` 事件；它与根 Screen 的启动逻辑重复，下一次用户在 SquareLine 编辑时应删除 Group 上的该事件，不得再新增同类重复事件。
-
-SquareLine 的 `Initial actions` 同样可以启动初始动画，但它更适合希望动画跨 Screen 持续运行、而不是每次进入 Screen 都重启的情况；当前不得与 `Screen loaded → Play Animation` 同时启动同一个无限动画，以免重复创建或累积。若后续真机验证发现默认首屏不派发 `Screen loaded`，再以 `Initial actions` 作为单独的替代方案，而不是与本事件并存。
+呼吸动画由 `view/gui_service_view_lock.c` 在 Lock 的 `LV_EVENT_SCREEN_LOADED` 回调启动，目标为透明提示组；上滑同样由根 Screen 处理，子布局不重复绑定启动事件。当前亮到暗与暗到亮的时长以该文件配置为准，每次进入锁屏重启提示。
 
 ### 10.3 开机动画视觉与实现边界
 
-本节记录开机视觉从候选到实现的过程。**以 10.3.1 为当前有效设计**；其后的候选
-方案和资源模型保留为历史决策背景或后续功能规划，不能反向覆盖当前界面。
-Screen 与静态样式由 `view/gui_service_view_boot.c` 创建；时序与动画由 `boot/` 负责。
+Screen 与静态样式由 `view/gui_service_view_boot.c` 创建；时序与动画由 `boot/` 负责。第 10.3.1 节描述当前实现，第 10.3.2 节明确区分离屏处理现况与可换壁纸目标。
 
 #### 10.3.1 当前有效设计与运行时调用链
 
@@ -344,32 +324,13 @@ Canvas 模糊。MainPageContainer 的局部毛玻璃滚动只裁剪 Main 的长�
 现有大数组保留 `service_gui_effect_canvas_buffer` 名称，表示它是通用视觉效果的 Canvas
 缓冲，而不是某张启动页壁纸的专属存储。
 
-#### 10.3.2 历史候选与后续资源模型
+#### 10.3.2 Canvas 与可换壁纸资源模型
 
-以下内容是早期方案选择和资源规划的记录，不是当前实现指令；当前 UI、时序和
-运行时调用链只以 10.3.1 为准。
-
-1. **Orbital ignition（已选定）**：近黑靛蓝底上由活动圆弧和完整轨道组成抽象“轨道标记”；它不依赖未确定的品牌文字或 Logo，具有更强识别度。当前实际对象、相位动画和切屏时序已以第 10.3.1 节为准落地。
-2. **Minimal wordmark**：近黑靛蓝底上仅出现产品字标或单字母标记，短暂停留后淡出，再进入 Lock。层级最克制，但需要先确定项目的显示名称或 Logo。
-3. **Music signal**：近黑底上以三到五根细竖条完成一次简短的“由静到动再归零”的节奏动画，随后切入 Lock。产品属性最直观，但会更偏播放器/科技感。
-
-这些历史候选共同确认了独立 `Boot` Screen、一次性启动序列和短淡入切换的方向。当前实现不再使用该阶段提出的 `Initial actions` 或 `1.0–1.5 s` 时序；实际启动事件、停留时间和 Fade 参数只以第 10.3.1 节及 `view/`、`boot/` 代码为准。产品正常流程不得重新进入 Boot，Lock 的底部解锁呼吸提示只应在切换完成后启动。
-
-参考评估：高质感移动端 Splash 常将单个抽象标记置于深色留白中心，避免在启动阶段堆叠播放器内容、均衡器或 Loading 文案。此前的 LVGL v9 SquareLine `Smart_Gadget` 示例也采用同一节奏结构：Logo 与两行文本按 `100 / 200 / 300 ms` 错峰上移淡入，并在约 `1.4 s` 后用短 Fade 切入主 Screen。当前 `Orbital ignition` 借用其“错峰显现 + 快速淡入切屏”的结构，不复制其白底、Logo 或文字视觉；若未来重新设计启动视觉，应以实际硬件时序和资源占用重新评审，而不是直接恢复本节的历史候选。
-
-下列分镜是 `Orbital ignition` 的资源与背光演进目标；其中运行时 Canvas 模糊已经完成首轮验证，真实背光渐亮和可换壁纸缓存仍待后续实现：
-
-```text
-Boot（预模糊、偏暗的同款壁纸）
-  └─ 背光由低亮度升至目标亮度（后续硬件钩子，当前留空）
-     └─ 轨道标记依次显现并短暂停留
-        └─ Boot → BootReveal：约 120–180 ms，预模糊壁纸快速过渡为清晰壁纸
-           └─ BootReveal → Lock：约 160–220 ms，Lock 信息层淡入
-```
+当前启动只执行一次 Orbital loader 序列，正常流程不重新进入 Boot。背光渐亮、可换壁纸与持久化模糊缓存属于后续目标，尚未实现；实际切屏时序以第 10.3.1 节和 `boot/` 配置为准。
 
 壁纸可由用户更换，故不得为每张候选壁纸都随固件静态保存一张模糊副本，也不得仅以深色遮罩冒充模糊。最终方案为**运行时生成、按壁纸缓存**：解码后的当前壁纸先保留为清晰 RGB565 帧，再通过图像处理生成对应的模糊 RGB565 帧；`Boot` 显示模糊帧，`BootReveal` 显示清晰帧，两个短 Fade 共同模拟“背景由模糊变清晰、随后 Lock 出现”。
 
-H743 的 DMA2D 可协助像素格式转换、拷贝、填充和 Alpha 混合，但没有卷积/高斯模糊功能。LVGL v8.3 的 Canvas 提供 `lv_canvas_blur_hor()` 与 `lv_canvas_blur_ver()`；当前首轮实现已使用位于 SDRAM 的 Canvas，依次执行横向、纵向模糊，而非手写模糊算法。SquareLine Studio 不提供可直接拖拽的 Canvas 控件，Canvas 对象由 GUI Service 在运行时首次创建并挂到 display top layer，不修改生成目录中的任何文件。其大像素缓冲由 GUI Service 在 SDRAM 静态持有，并定义为可复用的“视觉效果工作区”，不以 `Boot` 命名或限定用途；GUI Task 一次只允许一个离屏效果任务占用该工作区。该路径仍是 CPU 软件处理，DMA2D 仅可用于输入/输出格式处理、拷贝、遮罩和过渡混合，不承担模糊卷积本身。若 Canvas 的视觉效果或性能实测不满足要求，再回退至滑动窗口多次 Box Blur 方案。
+H743 的 DMA2D 可协助像素格式转换、拷贝、填充和 Alpha 混合，但没有卷积/高斯模糊功能。LVGL v8.3 的 Canvas 提供 `lv_canvas_blur_hor()` 与 `lv_canvas_blur_ver()`；当前首轮实现已使用位于 SDRAM 的 Canvas，依次执行横向、纵向模糊，而非手写模糊算法。Canvas 对象由 GUI Service 在运行时首次创建并挂到 display top layer。其大像素缓冲由 GUI Service 在 SDRAM 静态持有，并定义为可复用的“视觉效果工作区”，不以 `Boot` 命名或限定用途；GUI Task 一次只允许一个离屏效果任务占用该工作区。该路径仍是 CPU 软件处理，DMA2D 仅可用于输入/输出格式处理、拷贝、遮罩和过渡混合，不承担模糊卷积本身。若 Canvas 的视觉效果或性能实测不满足要求，再回退至滑动窗口多次 Box Blur 方案。
 
 可换壁纸的后续处理策略不应在每次开机重复计算：当用户首次导入或切换某张壁纸时，在 SDRAM 中生成其模糊帧，并按壁纸内容版本写入外部 SPI Flash 或文件系统缓存；后续启动优先直接读取匹配缓存。缓存缺失或校验不匹配时，设备在低背光、Boot 尚未显示有效内容的阶段运行一次生成任务，再异步补写缓存。这样仍完整支持任意可换壁纸，同时避免为每张壁纸占用内部 Flash，也避免每次开机重复消耗 CPU。后续正式缓存格式暂定为全不透明 `240 x 320 RGB565`，清晰帧与模糊帧各约 `150 KiB`；生成阶段需要位于 SDRAM 的工作缓冲，后续结合实际算法与缓存策略单独评审峰值容量和 D-Cache 一致性。
 
@@ -387,7 +348,7 @@ H743 的 DMA2D 可协助像素格式转换、拷贝、填充和 Alpha 混合，�
 
 第一轮 Canvas 验证直接复用当前 `LV_IMG_CF_TRUE_COLOR_ALPHA` 默认壁纸：按源描述符的 `data_size` 复制到同格式 Canvas，再调用 `lv_canvas_blur_hor(canvas, NULL, radius)` 与 `lv_canvas_blur_ver(canvas, NULL, radius)`；该 Canvas 缓冲约 `225 KiB`。这是为了以最少的格式转换证明视觉链路，Canvas 的实现可处理 Alpha。正式可换壁纸缓存再统一为已预合成、全不透明 RGB565：将清晰壁纸复制到 RGB565 Canvas 后执行同一组调用，必要时以较小半径重复一到两轮，使视觉更接近高斯模糊。Canvas 只解决“怎样算出模糊帧”，并不替代按壁纸内容缓存结果的机制。
 
-正式 RGB565 路径至少保留 Clear 与 Blur Canvas 两个 `240 x 320 RGB565` SDRAM 缓冲，合计约 `300 KiB`；若 Canvas 实现或后续手写 Box Blur 回退方案需要乒乓缓冲，再增加第三个缓冲，总计约 `450 KiB`。首轮 Alpha 资源验证仅额外持有一块约 `225 KiB` 的通用视觉效果 Canvas 工作缓冲，清晰源继续位于内部 Flash。Canvas 对象本身可由 LVGL 小堆动态创建，但当前 LVGL 堆为 `256 KiB`、FreeRTOS 堆为 `32 KiB`，不得用 `lv_mem_alloc()`、`pvPortMalloc()` 或未审计的 `malloc()` 分配此大像素缓冲。所有 Canvas 缓冲禁止放入 DTCM。由 DMA 写入的壁纸源在 CPU 读取前需要失效对应 D-Cache 区间；CPU 生成的 Blur 帧在被 DMA2D 或外设 DMA 读取前需要清理对应 D-Cache 区间。若最终由 LVGL 软件渲染直接读取该帧，则同一 CPU 缓存域内不额外做无意义的清理。当前原型使用 `service_gui_effect_canvas_buffer` 与 `canvas/gui_service_canvas` Module；正式缓存的长期资源 Interface 仍须在实现前审校。
+正式 RGB565 路径至少保留 Clear 与 Blur Canvas 两个 `240 x 320 RGB565` SDRAM 缓冲，合计约 `300 KiB`；若 Canvas 实现或后续手写 Box Blur 回退方案需要乒乓缓冲，再增加第三个缓冲，总计约 `450 KiB`。首轮 Alpha 资源验证仅额外持有一块约 `225 KiB` 的通用视觉效果 Canvas 工作缓冲，清晰源由 Resource Pack 加载到 SDRAM。Canvas 对象本身可由 LVGL 小堆动态创建，但当前 LVGL 堆为 `256 KiB`、FreeRTOS 堆为 `32 KiB`，不得用 `lv_mem_alloc()`、`pvPortMalloc()` 或未审计的 `malloc()` 分配此大像素缓冲。所有 Canvas 缓冲禁止放入 DTCM。由 DMA 写入的壁纸源在 CPU 读取前需要失效对应 D-Cache 区间；CPU 生成的 Blur 帧在被 DMA2D 或外设 DMA 读取前需要清理对应 D-Cache 区间。若最终由 LVGL 软件渲染直接读取该帧，则同一 CPU 缓存域内不额外做无意义的清理。当前原型使用 `service_gui_effect_canvas_buffer` 与 `canvas/gui_service_canvas` Module；正式缓存的长期资源 Interface 仍须在实现前审校。
 
 ### 10.4 Settings 局部毛玻璃资源模型（设计已验证，功能待实现）
 
@@ -404,13 +365,13 @@ Settings 的目标效果是：卡片外的壁纸保持清晰；每张圆角卡�
 
 `Boot` / `BootReveal` 与 `Lock`、`Main` 一样，将壁纸作为各自 Screen 根对象的 Background image，而不是额外放置全屏 Image。当前 GUI Service 以运行时样式把模糊帧绑定给 `Boot`；`BootReveal` 与 `Lock` 使用同一清晰壁纸。根背景图更符合“系统壁纸”语义，减少一个全屏对象，也使 Screen Fade 直接参与背景过渡。可换壁纸的统一绑定、缓存键、失效规则与 Settings 合成背景的长期资源 Interface 均属于后续实现任务，必须先经用户审校。
 
-当前结构：`Boot` 与 `BootReveal` 先于 `Lock`、`Main` 创建；三张 Screen 都关闭 Scrollable、四边 Padding 为 `0`。`Boot` 与 `BootReveal` 的根背景均使用当前系统壁纸，根背景色 Alpha 为 `0`。运行时 Default 下由 `boot/` 覆盖 `Boot` 的根背景图为模糊帧，`BootReveal` 保持清晰帧。
+当前四张 Screen 的创建与句柄生命周期由 `view/` 管理；Screen 不承担滚动。`Boot` 与 `BootReveal` 的根背景均使用当前系统壁纸，根背景色 Alpha 为 `0`。运行时 Default 下由 `boot/` 覆盖 `Boot` 的根背景图为模糊帧，`BootReveal` 保持清晰帧。
 
 真实背光渐亮不属于当前界面：后续由 GUI Service 调用 Platform 暴露的 LCD/PWM 亮度接口实现，Boot 仅预留时序位置。`BootReveal` 是仅用于视觉过渡的短生命周期 Screen，不提供输入或业务控件；原型结束后，若能将清晰壁纸与 Lock 的信息层拆分到同一受控层级，可再评审是否删除该中间 Screen。
 
 ### 10.5 Main 固定 Shell 与 Music 页面骨架（当前实现）
 
-锁屏与开机视觉已完成首轮原型后，当前界面已建立解锁后的 `Main` 固定 Shell 及 MusicPage 的首轮视觉骨架。外层 MainPager 已替换为 MainPageContainer 的普通 Container 循环分页结构；本步骤不创建真实播放逻辑、歌曲数据或 Music 业务回调。Lock 到 Main 的基础解锁跳转已由 Lock Screen 的向上手势实现。
+锁屏与开机视觉已完成首轮原型后，当前界面已建立解锁后的 `Main` 固定 Shell 及 MusicPage 的首轮视觉骨架。外层 MainPager 已替换为 MainPageContainer 的普通 Container 循环分页结构；真实音频解码仍未接入，Queue 窗口与假播放交互见下文。Lock 到 Main 的基础解锁跳转已由 Lock Screen 的向上手势实现。
 
 `Main` 是普通应用界面的唯一根 Screen，继续使用当前系统壁纸、关闭 Scrollable、四边 Padding 为 `0`。外层分页已从 Tabview 改为普通 Container；MainPageContainer 本身承担视口和滚动职责，不额外创建嵌套 Viewport。对象由 `view/gui_service_view_main.c` 创建。
 
@@ -438,7 +399,7 @@ Main
    └─ DotBooks
 ```
 
-壁纸只绑定到 `Main` 根对象。`MainPageContainer` 与三张 Page Container 的背景、边框、阴影均保持透明，使滑动时始终露出同一张固定系统壁纸；不得为 MusicPage、BooksPage、SettingsPage 分别再设置壁纸。`MusicModeTabs` 的内部 Content container 是 LVGL 内部对象：`Service/gui/main` 在运行时将其背景、背景图、边框、轮廓和阴影置为透明，以消除 LVGL Simplified Theme 默认白底。除该内部对象与 `ui_MusicModeTabs` 的运行时裁剪背景源外，Service 不得覆盖任何 `view/` 创建对象的视觉 Style。
+壁纸只绑定到 `Main` 根对象。`MainPageContainer` 与三张 Page Container 的背景、边框、阴影均保持透明，使滑动时始终露出同一张固定系统壁纸；不得为 MusicPage、BooksPage、SettingsPage 分别再设置壁纸。`MusicModeTabs` 的内部 Content container 是 LVGL 内部对象：`view/` 在创建时将其背景、背景图、边框、轮廓和阴影置为透明。除该内部对象与 `MusicModeTabs` 的运行时裁剪背景源外，Service 不得覆盖任何 `view/` 创建对象的视觉 Style。
 
 `StatusBar` 为透明的横向 Container，位于 Main 最顶端，当前高度采用屏幕高度的较小比例。左侧为短时间文本；中间为简短日期提示；右侧为电池轮廓与百分比。它不绘制独立卡片底色、不承载点击事件，也不与 Lock Screen 复用对象：Lock 的大时间、电量信息仍是独立的居中信息层。首版所有数值均为固定假数据。
 
@@ -456,11 +417,11 @@ Viewport 内始终只保留同一组三张 Page 实例，不复制首尾页。�
 2. `delta` 超过正阈值时，完成向后一页的短滚动；超过负阈值时，完成向前一页的短滚动；
 3. 完成切页后，Service 只重新排列三张既有 Page 到“前一页 / 当前页 / 后一页”的 `0% / 100% / 200%` 槽位，并立即无动画回到中间槽位；用户视觉上连续循环，且不会看到页面重排。
 
-首轮阈值当前为一个 Viewport 宽度的 `50%`，同一手势最多切换一页。Service 记录当前物理槽位，在 `LV_EVENT_SCROLL_END` 中按阈值决定“原页或相邻页”，并动画滚动至对应的 `0%`、`100%` 或 `200%` 槽位。若活动页到达左端或右端，Service 随即在同一 GUI 任务中循环轮换三个既有 Page 指针、重新写入 `0% / 100% / 200%` 位置，并无动画回到中间槽位；屏幕只在下一次刷新时呈现重排后的稳定画面，因此用户视觉上连续循环。当前仍不更新圆点。Viewport 关闭 Scroll Momentum 和 Scroll Elastic，使短距离快速拖动不会被惯性推进到下一页；日后若实测手感需要“短而快的甩动翻页”，必须将速度判定、阈值和验证结果一并补充到本文档后再启用。Service 必须以私有状态防止程序化吸附和回中产生的 `LV_EVENT_SCROLL_END` 被再次判定为新手势。
+首轮阈值当前为一个 Viewport 宽度的 `50%`，同一手势最多切换一页。Service 记录当前物理槽位，在 `LV_EVENT_SCROLL_END` 中按阈值决定“原页或相邻页”，并动画滚动至对应的 `0%`、`100%` 或 `200%` 槽位。若活动页到达左端或右端，Service 随即在同一 GUI 任务中循环轮换三个既有 Page 指针、重新写入 `0% / 100% / 200%` 位置，并无动画回到中间槽位；屏幕只在下一次刷新时呈现重排后的稳定画面，因此用户视觉上连续循环。圆点随确认后的逻辑页面同步更新，见下文。Viewport 关闭 Scroll Momentum 和 Scroll Elastic，使短距离快速拖动不会被惯性推进到下一页；日后若实测手感需要“短而快的甩动翻页”，必须将速度判定、阈值和验证结果一并补充到本文档后再启用。Service 必须以私有状态防止程序化吸附和回中产生的 `LV_EVENT_SCROLL_END` 被再次判定为新手势。
 
 `LV_EVENT_SCROLL` 只承担 MusicModeTabs 局部毛玻璃的实时坐标更新；翻页判定只在 `LV_EVENT_SCROLL_END` 执行。当前 `MusicPlayingSlider` 依赖 LVGL 原生命中与拖动行为，真机验证中不会触发 MainPageContainer 翻页，因此不额外创建手势仲裁回调或临时修改外层 Scrollable Flag。若未来出现可复现的 Slider 与全局分页竞争，再以实测问题为依据单独诊断。播放器按钮维持 LVGL 原生点击语义，不为它们创建额外的全局手势屏蔽层。
 
-`MusicModeTabs` 位于 MusicPage 内，使用内嵌 Tabview 实现，当前宽高均为页面的 `100%`，铺满状态栏与底部圆点之间的 Music 内容区；Tab 按钮栏高度当前为 `20 px`。它采用轻量选中态：`STYLE (BUTTONS MAIN)` 保持透明；`STYLE (BUTTONS ITEMS)` 的 `DEFAULT` 状态为 `Ink` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Accent` 文字，并仅在底边显示一条细 `Accent` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`Service/gui/main` 会禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPageContainer 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
+`MusicModeTabs` 位于 MusicPage 内，使用内嵌 Tabview 实现，当前宽高均为页面的 `100%`，铺满状态栏与底部圆点之间的 Music 内容区；Tab 按钮栏高度当前为 `20 px`。它采用轻量选中态：Tab 按钮栏 保持透明；Tab 按钮项 的 `DEFAULT` 状态为 `Ink` 低透明文字、无背景与无边框；`CHECKED` 状态为不透明 `Accent` 文字，并仅在底边显示一条细 `Accent` 指示线。不得使用整块高亮填充背景，以免在 240 px 宽屏上与播放器主体争夺视觉重心。`Playing` 为初始选中页，`Queue` 与 `Library` 为非选中页。模式切换只允许点击顶部标签；`view/` 创建时禁用该 Tabview 内部 Content container 的 Scrollable Flag，避免内层横滑与 MainPageContainer 的全局横滑竞争。后续 Queue、Library 的竖向列表滚动应由各自 Tabpage 承担，不得重新开启该内部 Content container 的滚动。
 
 当前 `LibraryTab` 仍为空白内容区。`NowPlayingTab` 底部承载 `MusicPlayerControlContainer`（宽 `90%`、高 `34%`，上/下 Padding `2 px`）：顶部 `MusicPlayerTimeLabel`、其下假进度条、再下上一首/播放暂停/下一首。三键与进度条事件不在 `view/` 绑定：`main/transport` 运行时绑定三键 `CLICKED` 与 Slider `RELEASED`，经 `Service_GUI_ConsumeInput()` 交给 GUI Task 的 `music/` 分区；`Service_GUI_ProgressApply()` 按假百分比写回 Slider，拖动中不覆盖。TimeLabel 仍显示占位文本 `1:00/3:14`，运行时不改字。`view/` 只创建空的 `QueueTab`；`Service/gui/main/queue` 的行工厂按需构造行，GUI Task 的 `music/` 在 `storage_listbuffer` READY 后经 `Service_GUI_QueueApply()` 按 `Length` 填行。`MusicPlayerTimeLabel` 相对控制区顶部下移 `5%`；`MusicPlayingSlider` 宽度为播放器区的 `90%`、高度 `7%`，相对顶部下移 `20%`。唱片与中心封面见第 10.5.4 节。假曲名本阶段仍可不做。Queue 与 Library 不复制这组控制。
 
@@ -468,7 +429,7 @@ Viewport 内始终只保留同一组三张 Page 实例，不复制首尾页。�
 
 分页控制器确认切页后，旧当前页指示器动画收缩为圆点（宽度 `14 → 5`、透明度 `220 → 180`），新当前页圆点同时伸展为胶囊（宽度 `5 → 14`、透明度 `180 → 220`）；高度始终为 `5 px`。该动画与页面吸附同步，首轮时长为 `160 ms`、使用 ease-out；手势未达到翻页阈值而回到原页时，不触发圆点状态切换动画。`view/` 仍是圆点的唯一静态样式来源：`Service/gui/main` 初始化时从 `DotSettings` 和 `DotMusic` 读取非活动与活动的实际宽度、透明度基线，切页时只对 `DotSettings`、`DotMusic`、`DotBooks` 执行这两项运行时动画，不覆盖其颜色、圆角或布局。快速连续切页会取消同一圆点的旧动画，并从当前已绘制状态继续过渡。
 
-分页控制、局部毛玻璃和 Main 初始化在当前原型阶段继续保留于 `Service/gui/main/` 的同一 Module：它们共用对象句柄、物理槽位映射与滚动事件时序，暂不为了目录形式拆成多个浅 Module。待循环分页与圆点动画均完成并通过真机验证后，再审视是否按职责拆出 `main/pager/`（吸附、循环、圆点）与 `main/background/`（壁纸与局部毛玻璃）；届时 Interface 必须隐藏 LVGL 回调顺序和对象映射细节，确保拆分能够提升 Locality 与 Leverage，而非只移动文件。
+Main 的私有编排入口位于 `main/gui_service_main`；分页吸附、循环与圆点在 `main/pager/`，壁纸模糊与裁剪在 `main/background/`。各模块通过对象句柄协作，具体接口与资源所有权见 [Service/gui/README.md](../Service/gui/README.md)。
 
 BooksPage 和 SettingsPage 已直接共用 Main 的单一 StatusBar；它们后续复用 MusicPage 的卡片视觉语言时，仍不得复制新的状态栏对象或单独设置系统壁纸。
 
