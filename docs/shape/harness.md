@@ -54,4 +54,3 @@ Next id: HAR-10
 
 - **HAR-7** · provisional · 改动许可交给工具自身模式（Claude 默认/acceptEdits，Codex workspace-write + on-request）与 Hook；不用点火词或许可档位表。_Why:_ 文字许可协议耗上下文且拦不住。
 - **HAR-8** · provisional · 领域文件 `docs/shape/*.md` 只在写入分支（默认 `main`）修改，规则编号也只在那里分配；其他分支把 Signal、草稿和用户当场的批准写进 `docs/shape/inbox/<分支>.md`，合并后在 `main` 上按 drain 处理。_Why:_ 并行分支同时改领域文件会冲突，相同的 `Next id` 改动会被 git 静默合并成重号。_Source:_ shape-your-project `INBOX.md`
-
