@@ -2,7 +2,7 @@
 
 - 状态：已被 [ADR-0016](0016-hand-written-gui-view-and-shared-theme-styles.md) 取代（2026-10-01）。第 1、5、6 条（SquareLine 事实源、生成事件交接点、占位色过滤器）废止；第 2–4 条的运行时所有权、单 LVGL 上下文与触摸原始坐标约束由 ADR-0016 沿用。下文保留作历史记录。
 - 日期：2026-08-29（2026-09-06 增补配色所有权；2026-09-07 增补输入单槽、music 分区与假进度）
-- 相关实现说明：[../gui_ui_design.md](../shape/gui.design.md)、[../../Service/gui/README.md](../../Service/gui/README.md)
+- 相关实现说明：[../gui_ui_design.md](../shape/gui.md)、[../../Service/gui/README.md](../../Service/gui/README.md)
 
 ## 背景
 
@@ -21,4 +21,4 @@ SquareLine Studio 生成的 `GUI/` 目录会在重新导出时覆盖；与此同
 
 - 用户能始终在 SquareLine 中修改视觉并重新导出，运行时代码只做适配；
 - Canvas/分页等复杂效果不会污染生成代码或泄漏给 APP；
-- GUI 设计每次推进需先同步 `docs/shape/gui.design.md`，运行时调整则在 `Service/gui` 中实现并记录资源生命周期。
+- GUI 设计每次推进需先同步 `docs/shape/gui.md`，运行时调整则在 `Service/gui` 中实现并记录资源生命周期。

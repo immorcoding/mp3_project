@@ -18,4 +18,4 @@ Implementation 只依赖 ISO C 和本 Module 头文件，不包含 W25Qxx、HAL�
 
 `resource_pack_config.h` 只裁剪类型专用 Metadata 解码能力。BINARY 和 IMAGE 默认启用，FONT、AUDIO、MODEL、FIRMWARE 默认关闭；关闭或未知类型不阻止 Core 打开满足公共规则的包，实际解码返回 `RESOURCE_PACK_UNSUPPORTED_TYPE`。
 
-所有整数显式按小端读取，禁止把落盘数据强转为 C 结构体。Handle 不复制 Entry 表，Find 使用二分查找。完整协议、编号空间和兼容规则见 [RPKC1 设计](../../docs/shape/resources.loading.md)。
+所有整数显式按小端读取，禁止把落盘数据强转为 C 结构体。Handle 不复制 Entry 表，Find 使用二分查找。完整协议、编号空间和兼容规则见 [RPKC1 设计](../../docs/shape/resources.md)。

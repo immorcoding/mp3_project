@@ -41,7 +41,7 @@ $resourceImpact = Get-HarnessImpact -ChangedPath @('Components/resource_pack/res
 Assert-HarnessSequence -Expected @('resource_pack') -Actual $resourceImpact.HostModules `
     -Message '资源包变化只选择资源包主机测试'
 
-$docsImpact = Get-HarnessImpact -ChangedPath @('docs/shape/harness.verification.md', 'GLOSSARY.md')
+$docsImpact = Get-HarnessImpact -ChangedPath @('docs/shape/sources/verification.md', 'GLOSSARY.md')
 Assert-HarnessEqual -Expected 0 -Actual $docsImpact.HostModules.Count -Message '纯文档变化不跑主机测试'
 
 $simulatorImpact = Get-HarnessImpact -ChangedPath @('Tools/gui_simulator/sim_main.c')

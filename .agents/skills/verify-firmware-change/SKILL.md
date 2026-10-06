@@ -5,7 +5,7 @@ description: Select and run FAST, CHANGED, FULL, and HARDWARE validation for thi
 
 # 固件变更验证
 
-验证入口和状态语义以 `docs/shape/harness.verification.md` 为准，不在 Skill 内复制路径映射。
+验证入口和状态语义以 `docs/shape/sources/verification.md` 为准，不在 Skill 内复制路径映射。
 
 ## 选择层级
 

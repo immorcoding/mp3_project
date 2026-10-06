@@ -2,7 +2,7 @@
 
 - 状态：已接受
 - 日期：2026-08-30
-- 相关实现说明：[../w25q256_architecture.md](../shape/storage.media.md)
+- 相关实现说明：[../w25q256_architecture.md](../shape/sources/storage-media.md)
 
 ## 背景
 

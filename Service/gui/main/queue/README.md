@@ -6,7 +6,7 @@
 
 本 Module 不包含 `storage_listbuffer.h`，也不向 APP 公开 Interface。曲名由 GUI Task
 把窗口 `Buffer` 原样传入；当前仍是路径。标题/歌手等 `load` 调解析器后，窗口载荷改成
-曲名与歌手，见 `docs/shape/storage.catalog.md` 第 5 节。`Length` 为 0 则没有可见行。
+曲名与歌手，见 `docs/shape/storage.md#catalog` 第 5 节。`Length` 为 0 则没有可见行。
 
 行结构：Wash 薄底、圆角 8 的 Panel（左侧 4 px Accent 边条，按下时提高底 Opa 并加 1 px Ink
 Outline）→ 80% 宽文字组（曲名 montserrat_12、歌手 montserrat_10 Ink 半透明）+ 右侧

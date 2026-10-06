@@ -4,7 +4,7 @@
 - 日期：2026-09-03
 - 修订：2026-09-04。取消用 Flash 存歌；曲库条目不再保存来源卷。
 - 相关决定：[ADR-0009](0009-w25q256-firmware-slots-and-diagnostic-reservation.md)、[ADR-0013](0013-usb-msc-product-scope.md)、[ADR-0014](0014-filesystem-volume-aware-file-interface.md)
-- 技术事实：[storage.catalog.md](../shape/storage.catalog.md)
+- 技术事实：[storage.catalog.md](../shape/storage.md#catalog)
 
 ## 背景
 
@@ -39,7 +39,7 @@
 
 ## 后果
 
-- 曲库 / 播放列表首版只依赖 SD 挂载与 `Music/` 目录枚举；实现细节见 [storage.catalog.md](../shape/storage.catalog.md)。
+- 曲库 / 播放列表首版只依赖 SD 挂载与 `Music/` 目录枚举；实现细节见 [storage.catalog.md](../shape/storage.md#catalog)。
 - Resource Pack 的设备侧更新以 FTL 暂存为事务缓冲（未实现）；PC 烧录仍是发布默认包的路径。
 - Filesystem 保持卷感知；跨任务扫描与安装命令尚未实现，不得由 GUI 直接调用同步文件接口。
 - 实现资源管理器或 Pack 安装时另开 Interface，不把两者做成同一种 `Move to`。

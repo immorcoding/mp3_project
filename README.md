@@ -19,15 +19,15 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 
 阅读分层时必须区分三件事：`Vendor → Adapters → Components → Platform → Service → APP` 表示功能/抽象所有权；编译期 `#include` 按 Interface 所有权和装配需要决定；运行时请求通常向下、硬件事件经已注册回调向上。第三方回调或 Override Seam（例如 FatFs `disk_* → BSP_SD_*`）是运行时入站接缝，不表示反向头文件依赖。
 
-`README.md` 给人看导航、构建和功能现状；`AGENTS.md` 是 Claude Code 与 Codex 共用的章程（`CLAUDE.md` 只引入它）；`docs/shape/` 是各领域当前标准；`GLOSSARY.md` 是按条查阅的领域词典；`docs/` 是按需技术正文。入口互相链接，不重复维护同一份调用链或实现细节。
+`README.md` 给人看导航、构建和功能现状；`AGENTS.md` 是 Claude Code 与 Codex 共用的章程（`CLAUDE.md` 只引入它）；`docs/shape/` 是各领域当前标准；`GLOSSARY.md` 是按条查阅的领域词典；`docs/shape/sources/` 保留必要事实与格式表，`docs/adr/` 保留决策原因。入口互相链接，不重复维护同一份调用链或实现细节。
 
 ## 当前状态
 
 - 已接入 LVGL v8.3.11、手写的 GUI 界面（`Service/gui/view/`）、ST7789 SPI DMA 刷新和 FT6X36 单指触摸；
 - GUI 的运行时入口为 `APP/tasks/gui/gui_task.c`，其显示与输入装配由 `Service/gui` 持有；
-- 界面不再用 SquareLine 等图形化工具生成（ADR-0016）。改页面直接改 `Service/gui/view/`，先更新 [docs/shape/gui.design.md](docs/shape/gui.design.md)；PC 上可用 [GUI 模拟器](Tools/gui_simulator/README.md) 预览并跑场景回归；
+- 界面不再用 SquareLine 等图形化工具生成（ADR-0016）。改页面直接改 `Service/gui/view/`，先更新 [docs/shape/gui.md](docs/shape/gui.md)；PC 上可用 [GUI 模拟器](Tools/gui_simulator/README.md) 预览并跑场景回归；
 - 外部 SDRAM 当前以 130 MHz 配置，LVGL 双绘制缓冲位于 `.sdram_framebuffer (NOLOAD)` 段。
-- W25Q256 已完成 CubeMX QSPI 配置，以及 Component、STM32 HAL Adapter、Platform 的间接模式 JEDEC ID 启动识别、`EF / 19` 厂商容量校验、SFDP 签名校验、SR1/SR2 同步读取、启动期 QE 按需安全置位、`0xEC` 固定 4-byte Quad I/O 读取和 `0x34` 非阻塞 Quad 页编程状态机；同时已有 `0x21` 4 KiB 擦除、QSPI/MDMA 读取、WIP 自动状态轮询和只读内存映射路径，详见 [docs/shape/storage.media.md](docs/shape/storage.media.md)。Flash FTL、Bridge、Platform 装配、Service 同步执行器与 USER DiskIO 已实现，SD/Flash 私有目录已分离；主机回归及 Debug/Release 构建通过；基本读写已在板上用过（MSC 实验期间），掉电恢复与长时间回收未验证（低优先级，#9），见 [docs/shape/storage.ftl.md](docs/shape/storage.ftl.md)。
+- W25Q256 已完成 CubeMX QSPI 配置，以及 Component、STM32 HAL Adapter、Platform 的间接模式 JEDEC ID 启动识别、`EF / 19` 厂商容量校验、SFDP 签名校验、SR1/SR2 同步读取、启动期 QE 按需安全置位、`0xEC` 固定 4-byte Quad I/O 读取和 `0x34` 非阻塞 Quad 页编程状态机；同时已有 `0x21` 4 KiB 擦除、QSPI/MDMA 读取、WIP 自动状态轮询和只读内存映射路径，详见 [docs/shape/sources/storage-media.md](docs/shape/sources/storage-media.md)。Flash FTL、Bridge、Platform 装配、Service 同步执行器与 USER DiskIO 已实现，SD/Flash 私有目录已分离；主机回归及 Debug/Release 构建通过；基本读写已在板上用过（MSC 实验期间），掉电恢复与长时间回收未验证（低优先级，#9），见 [docs/shape/storage.md#durability](docs/shape/storage.md#durability)。
 
 ## 构建
 
@@ -43,7 +43,7 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 ./scripts/build-firmware.ps1 -Configuration Release
 ```
 
-使用 CMake Preset `firmware-debug` / `firmware-release`，产物分别在 `build/firmware-debug/` 和 `build/firmware-release/`。分层验证、Hook 与结果状态见 [docs/shape/harness.verification.md](docs/shape/harness.verification.md)；兼容入口 `./scripts/verify.ps1` 固定执行 FULL。
+使用 CMake Preset `firmware-debug` / `firmware-release`，产物分别在 `build/firmware-debug/` 和 `build/firmware-release/`。分层验证、Hook 与结果状态见 [docs/shape/sources/verification.md](docs/shape/sources/verification.md)；兼容入口 `./scripts/verify.ps1` 固定执行 FULL。
 
 ### IDE 构建（日常调试）
 
@@ -57,7 +57,7 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 ./scripts/check-layer-includes.ps1
 ```
 
-FAST 会运行分层检查、生成目录写保护和 Harness 自测；FULL 再构建固件并跑全部主机回归。入口见 [分层验证](docs/shape/harness.verification.md)。
+FAST 会运行分层检查、生成目录写保护和 Harness 自测；FULL 再构建固件并跑全部主机回归。入口见 [分层验证](docs/shape/sources/verification.md)。
 
 ## 生成目录写保护
 

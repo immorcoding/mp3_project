@@ -18,4 +18,4 @@ Service 包含 ResourcePack Component、Platform Flash、Log Component 和无状
 
 初始化成功后不向其他 Module 发布 NOR 指针或 Entry View。后续 FTL 间接操作可以退出并恢复 QSPI 映射，不会留下由任务长期持有的失效指针。当前四项资源全部为必需资源，任一缺失、类型或 Metadata 不匹配、CRC 错误、目标容量不足或 Cache Clean 失败都会阻止 APP 启动任务。
 
-来源地址、容量、产品身份、资源 ID 和日志开关集中在 `resource_service_config.h`。完整链路见 [RPKC1 设计](../../docs/shape/resources.loading.md)。设备侧从 SD 更新壁纸或模型时，须先经 FTL 暂存再写 Pack，见 [ADR-0015](../../docs/adr/0015-volume-roles-and-resource-install.md)；本 Module 当前仍只做启动一次性加载。
+来源地址、容量、产品身份、资源 ID 和日志开关集中在 `resource_service_config.h`。完整链路见 [RPKC1 设计](../../docs/shape/resources.md)。设备侧从 SD 更新壁纸或模型时，须先经 FTL 暂存再写 Pack，见 [ADR-0015](../../docs/adr/0015-volume-roles-and-resource-install.md)；本 Module 当前仍只做启动一次性加载。

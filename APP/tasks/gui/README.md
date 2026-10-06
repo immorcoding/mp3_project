@@ -24,7 +24,7 @@ GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后�
 - 不创建第二个 LVGL 执行上下文；
 - 不直接创建或修改 LVGL 对象，经 `Service_GUI_*` 公开 Interface 交互；
 - 初始化失败没有部分回滚；
-- 不裁路径、不按文件名切开；标题/歌手等 `load` 调解析器，见 `docs/shape/storage.catalog.md` 第 5 节。
+- 不裁路径、不按文件名切开；标题/歌手等 `load` 调解析器，见 `docs/shape/storage.md#catalog` 第 5 节。
 
 ## 命名
 

@@ -223,10 +223,10 @@ _Avoid_: 主机已显示的消息
 
 ## 定义依据
 
-- 曲库、窗口、卷和 FTL：[Storage](docs/shape/storage.md)，接口定位见其参考正文。
+- 曲库、窗口、卷和 FTL：[Storage](docs/shape/storage.md)，接口定位见规则 Source 与目录路由。
 - 容器、资源身份、加载与安装：[Resources](docs/shape/resources.md)；安装边界见 [ADR-0015](docs/adr/0015-volume-roles-and-resource-install.md)。
 - View、外观、页面和视觉工作区：[GUI](docs/shape/gui.md)。
-- 电源、触摸与 SDRAM：[Hardware](docs/shape/hardware.md)；LCD 完成边界见 [运行路径](docs/shape/architecture.runtime.md)。
+- 电源、触摸与 SDRAM：[Hardware](docs/shape/hardware.md)；LCD 完成边界见 [Hardware · transfer](docs/shape/hardware.md#transfer)。
 - 日志的接受与缓冲生命周期：[Diagnostics](docs/shape/diagnostics.md)。
 
-词条说明概念，不宣告未来功能已经实现。接口清单、寄存器、结构体布局、缓存大小及当前实现/待实现状态由上述领域参考和模块文档承载。
+词条说明概念，不宣告未来功能已经实现。接口清单、寄存器、结构体布局、缓存大小及当前实现/待实现状态由领域规则引用的来源和模块文档承载。
