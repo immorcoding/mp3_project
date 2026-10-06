@@ -54,5 +54,5 @@ Next id: WF-10
 
 - **WF-7** · provisional · 规则挡住正在做的 ticket 时不排队等合并：开一张 `ready-for-human` 的决定 issue（规则、冲突的需求、各选项代价），受影响的 ticket 以 `blocked_by` 依赖它，后撞上同一规则的分支在该 issue 下评论并加依赖；决定后在 `main` 上改一次规则再关闭，被阻塞的分支先 `git merge origin/main` 再继续。_Why:_ inbox 要等合并才处理，挡路的规则等不了；用 merge 不用 rebase，免得强推。_Source:_ shape-your-project `INBOX.md`
 
-- **WF-8** · provisional · 项目特有概念归根 GLOSSARY.md，每条用一两句话定义；模块职责、接口与使用约束归模块 README，跨模块设计归技术文档，长期规则归 shape，重要取舍归 ADR，目标、验收与进度归 GitHub spec/ticket；优先复用现有正文，其他入口按条件引用。_Why:_ 同一事实多处维护造成漂移和冷启动负担。_Source:_ [文档职责决定](https://github.com/immorcoding/mp3_project/issues/11)
+- **WF-8** · provisional · 根 GLOSSARY 按实际跨模块概念核对覆盖，保持短定义与歧义区分；docs 根 Markdown 全部收拢至 shape 的适用 area，规则与必要技术参考分开，重复正文裁剪。模块 README 承载局部接口，ADR 保留取舍，tracker 管目标与进度；优先复用内容，必要时增 area。_Why:_ 只核对迁移去向和减少行数不能证明概念完整，也不能解决根文档与规则双写。_Source:_ [维护者复核后的 spec](https://github.com/immorcoding/mp3_project/issues/15)
 - **WF-9** · provisional · 活动文档描述当前有效设计与开发方式；过期操作和排障流水由 Git 历史承载，历史 ADR 明确替代关系后保留；资源按真实依赖判断去留，不另建历史操作归档文档堆。_Why:_ 历史操作与当前设计混排会误导新任务。_Source:_ [旧内容清理决定](https://github.com/immorcoding/mp3_project/issues/13)
