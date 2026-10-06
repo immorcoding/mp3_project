@@ -114,4 +114,3 @@ KeyID
 ```
 
 DataOffset、MetadataOffset、CRC、Padding、PackageVersion 不参与签名；同一 Vendor/Product 内可重排同份签名资源。签名同时绑定载荷摘要与使用元数据。
-

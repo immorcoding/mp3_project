@@ -81,4 +81,3 @@
 | `0x0007–0x7FFF` | Reserved Standard | 后续 RPKC 标准类型 |
 | `0x8000–0xFFFE` | Custom | 用户或厂商自定义类型 |
 | `0xFFFF` | Reserved | 保留 |
-
