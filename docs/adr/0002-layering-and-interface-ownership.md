@@ -2,7 +2,7 @@
 
 - 状态：已接受（按现有代码追溯记录）
 - 日期：2026-08-29
-- 相关实现说明：[../architecture_standard.md](../architecture_standard.md)、[../../CONTEXT.md](../../CONTEXT.md)
+- 相关实现说明：[../architecture_standard.md](../architecture_standard.md)、[../../GLOSSARY.md](../../GLOSSARY.md)
 
 ## 背景
 

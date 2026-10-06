@@ -26,6 +26,7 @@ Service_Log 将多个普通任务的短日志文本汇集到静态消息块池�
 - 所有权路径固定为 `free → producer → ready → Log task → free`；
 - `tag` 必须在消费前保持有效，通常使用字符串字面量；
 - 仅普通任务可调用，不支持 ISR；队列满时不等待并返回错误。
+- `Service_Log_Init()` 必须早于所有可能投递日志的任务。
 
 ## 命名
 

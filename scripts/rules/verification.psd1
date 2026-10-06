@@ -88,7 +88,7 @@
     # 这些文件不会改变固件或验证器行为，可在 CHANGED 层不跑主机测试。
     NoHostTestPathPatterns = @(
         '^(?:docs|\.agents|\.codex|\.claude)/'
-        '^(?:AGENTS|CLAUDE|CONTEXT|README)\.md$'
+        '^(?:AGENTS|CLAUDE|GLOSSARY|README)\.md$'
         '^Tests/README\.md$'
         # PC GUI 模拟器只在 host 上运行，由 run-scenarios.ps1 单独回归，不进固件。
         '^Tools/gui_simulator/'

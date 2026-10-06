@@ -15,11 +15,11 @@ FATFS/        CubeMX FatFs 逻辑卷与 DiskIO Glue；项目 Override Seam 由 S
 
 `Platform_Init()` 在调度器启动前初始化 ST7789、安装 SPI HAL 回调，再复位并探测 FT6X36；GUI Task 经 `Service_GUI_*` 驱动 LVGL 的双绘制缓冲、SPI DMA 刷新与轮询式单指触摸输入。触摸的坐标方向由 GUI Service 解释；手势、多指、TP IRQ 订阅和低功耗唤醒尚未接入。
 
-完整分层与依赖规则见 [docs/architecture_standard.md](docs/architecture_standard.md)，命名与注释规则见 [docs/coding_standard.md](docs/coding_standard.md)，稳定领域术语见 [CONTEXT.md](CONTEXT.md)（按条查阅），各领域当前标准见 [docs/shape/](docs/shape/)，进度与板上状态见 GitHub Issues，agent 工作方式见 [AGENTS.md](AGENTS.md)。`Core`、`Drivers`、`Middlewares`、`USB_DEVICE` 和 `FATFS/` 主要由 CubeMX 或第三方维护；不要把产品策略直接写入其中。FatFs 的 `BSP_SD_*` 强定义是外部 Override Seam，其实现放在 `Service/filesystem`，不修改生成的 DiskIO Glue。
+完整分层与依赖规则见 [docs/architecture_standard.md](docs/architecture_standard.md)，命名与注释规则见 [docs/coding_standard.md](docs/coding_standard.md)，稳定领域术语见 [GLOSSARY.md](GLOSSARY.md)（按条查阅），各领域当前标准见 [docs/shape/](docs/shape/)，进度与板上状态见 GitHub Issues，agent 工作方式见 [AGENTS.md](AGENTS.md)。`Core`、`Drivers`、`Middlewares`、`USB_DEVICE` 和 `FATFS/` 主要由 CubeMX 或第三方维护；不要把产品策略直接写入其中。FatFs 的 `BSP_SD_*` 强定义是外部 Override Seam，其实现放在 `Service/filesystem`，不修改生成的 DiskIO Glue。
 
 阅读分层时必须区分三件事：`Vendor → Adapters → Components → Platform → Service → APP` 表示功能/抽象所有权；编译期 `#include` 按 Interface 所有权和装配需要决定；运行时请求通常向下、硬件事件经已注册回调向上。第三方回调或 Override Seam（例如 FatFs `disk_* → BSP_SD_*`）是运行时入站接缝，不表示反向头文件依赖。
 
-`README.md` 给人看导航、构建和功能现状；`AGENTS.md` 是 Claude Code 与 Codex 共用的章程（`CLAUDE.md` 只引入它）；`docs/shape/` 是各领域当前标准；`CONTEXT.md` 是按条查阅的领域词典；`docs/` 是按需技术正文。入口互相链接，不重复维护同一份调用链或实现细节。
+`README.md` 给人看导航、构建和功能现状；`AGENTS.md` 是 Claude Code 与 Codex 共用的章程（`CLAUDE.md` 只引入它）；`docs/shape/` 是各领域当前标准；`GLOSSARY.md` 是按条查阅的领域词典；`docs/` 是按需技术正文。入口互相链接，不重复维护同一份调用链或实现细节。
 
 ## 当前状态
 

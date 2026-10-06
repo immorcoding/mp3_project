@@ -27,7 +27,7 @@
 
   唯一例外是 CubeMX 文件 `USER CODE` 区，只放对自维护入口的调用或转发（ARC-3），改前先问用户。`FATFS/Target/bsp_driver_user_diskio.*` 是自维护文件。
 - **不绕过闸门**：不用 `git commit --no-verify`，不强推任何分支（需要时由用户本人执行），不设置或写入 `ALLOW_GENERATED_UPDATE`（只有维护者本人在当前 PowerShell 会话为 CubeMX 重新导出设置）。Agent Hook 会拦截这些操作（HAR-4）。
-- **范围内改动**：不顺手重构、格式化、改注释或改命名；改公开 Interface、`CONTEXT.md`、ADR 或生成器配置头（`lv_conf.h`、`FreeRTOSConfig.h`、`ffconf.h`）前先问用户。
+- **范围内改动**：不顺手重构、格式化、改注释或改命名；改公开 Interface、`GLOSSARY.md`、ADR 或生成器配置头（`lv_conf.h`、`FreeRTOSConfig.h`、`ffconf.h`）前先问用户。
 - **三张图分开判断**：跨层、改边界或改公开 Interface 前读 `docs/architecture_standard.md` 与相关 Module README，分别判断功能/抽象所有权、编译期 `#include`、运行时请求/回调路径。
 - **界面手写**（ADR-0016，GUI-1、GUI-3）：全部 Screen 在 `Service/gui/view/` 手写，不用图形化工具生成代码；界面每推进一步先更新 `docs/gui_ui_design.md`。
 
@@ -42,7 +42,7 @@
 ## 指针
 
 - 事项、进度与板上状态：GitHub Issues，约定见 `docs/agents/issue-tracker.md`，标签见 `docs/agents/triage-labels.md`
-- 术语词典：`CONTEXT.md`（按条查，不整本读）；读取顺序与 ADR 范围：`docs/agents/domain.md`
+- 术语词典：`GLOSSARY.md`（按条查，不整本读）；读取顺序与 ADR 范围：`docs/agents/domain.md`
 - 文档地图：`docs/README.md`；功能清单（给人看）：根 `README.md`
 
 ## 目录级约定
