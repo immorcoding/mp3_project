@@ -31,10 +31,10 @@ Next id: STY-9
 - **STY-3** · settled · 每个 Module 只维护一份 `<module>_config.h`；公开头需要的尺寸/时序/槽位/策略/极性宏及芯片地址/寄存器/位掩码放其中，按所服务 C/H 分组；本模块公开头可包含它再导出，其他模块不直接包含。跨模块契约及上限归拥有方公开类型头，config 引用不复制数字，寄存器细节不泄漏给无关层。 _Why:_ 常量由拥有方维护，复制数字会让契约与实现脱节。 _Check:_ `docs/shape/REVIEW.md` 的配置审阅入口。
 - **STY-6** · settled · 自维护 config（包括 external_loader）宏用取值后的行末 `/* */`，不写上一行或宏 Doxygen；文件头保留 @file/@brief。用 `/* filename */` 分组，组间/不同用途宏簇间空一行；同文件对齐宏名右缘、取值起点、注释起点，超长值不拖动整列；长表达式可续行，注释放值末行，`#endif /* GUARD */`。厂商/移植配置保持既有格式。 _Why:_ 配置值和用途能逐行对照，便于硬件参数审阅。 _Source:_ `Service/filesystem/flash/filesystem_flash_config.h` _Check:_ `docs/shape/REVIEW.md` 的配置审阅入口。
 
-## source-layout
+## expression-layout
 
-源码路径与模块阅读入口。
+赋值表达式的换行。
 
 ### Rules
 
-- **STY-7** · settled · include 使用工程根起始完整路径，避免无意义地在等号后换行；一个目录表达清楚的 Module，README 的三类关系按 ARC-13 分开。 _Why:_ 源码布局直接体现模块边界，减少依赖与阅读歧义。 _Check:_ `docs/shape/REVIEW.md` 的配置审阅入口。
+- **STY-7** · settled · 赋值表达式避免无意义地在等号后换行。 _Why:_ 保持赋值目标与取值的阅读连续性。 _Check:_ [REVIEW](REVIEW.md) 的代码风格审阅入口。
