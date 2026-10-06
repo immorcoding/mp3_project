@@ -1,8 +1,6 @@
 # Flash FTL 设计与故障模型
 
-> 状态：首版代码已实现；主机回归、Debug/Release 构建通过。基本读写已在板上用过（MSC 实验期间：格式化、挂载、写文件、读回）；真实掉电恢复、长时间回收与耗时未验证，暂缓到有运行时写 Flash 的功能（如 ADR-0015 安装路径），见 GitHub #9（低优先级）。
-> 日期：2026-08-31。
-> 授权记录：先完成文档，后经用户“依据文档开始代码部分”授权实施，并采用 TDD；未执行硬件烧录、设备格式化或 Git 提交。
+> 能力范围：FTL、Bridge、Platform 和 Service/USER 链路已实现。软件与板级验证分开，真实掉电恢复、长时间回收及耗时的跟踪见 [板级验收 #9](https://github.com/immorcoding/mp3_project/issues/9)。
 > 相关决定：[ADR-0010](adr/0010-fatfs-user-diskio-service-ownership.md)、[ADR-0011](adr/0011-ftl-copy-on-write-and-recovery.md)。
 > 原始 NOR 现状见 [w25q256_architecture.md](w25q256_architecture.md)，规范见 [architecture_standard.md](architecture_standard.md) 和 [coding_standard.md](coding_standard.md)。
 
@@ -209,7 +207,7 @@ Platform 按操作类型派发：原始诊断直接推进 W25Qxx，FTL 操作只
 
 显式恢复先确认硬件安全，再重新打开扫描 FTL，随后 Service 处理卷生命周期；故障前 FatFs 文件对象不能透明继续写。提交完成但通知丢失可能返回失败，因此失败不代表未写入。
 
-Platform 在整个 FTL 请求期间关闭映射，不在每个内部页操作后短暂恢复；成功且硬件空闲后按入口状态恢复，失败保持关闭。资源消费者不得同期访问映射地址。字体/模型预加载 SDRAM 属上层可选方案，本轮不实现。
+Platform 在整个 FTL 请求期间关闭映射，不在每个内部页操作后短暂恢复；成功且硬件空闲后按入口状态恢复，失败保持关闭。资源消费者不得同期访问映射地址。资源启动预加载由 Resource Service 拥有，见 [资源加载设计](resource_pack_design.md)；FTL 本身不承担加载。
 
 ## 11. 接口能力与启动
 
@@ -275,13 +273,13 @@ USER 驱动内 LUN 为 0，与全局 1:/ 分开；GET_SECTOR_COUNT 返回 38689�
 
 ## 18. Flash 文件 benchmark 与删除边界
 
-Service 文件封装与挂载后的 APP 文件基准的链路为 APP benchmark →
+Service 文件封装与挂载后的 APP 文件基准链路为 APP benchmark →
 Service 文件接口 → FatFs → USER DiskIO → Service 块后端 → Platform → FTL → RawOps。
 实现、默认 1 MiB/4 KiB 参数、计时范围和失败清理详见
 [benchmark 说明](../APP/tasks/storage/benchmark/README.md)；
 静态文件/目录槽、句柄代次和 UTF-8 相对路径范围见 [Service 说明](../Service/filesystem/README.md)。
 
-仅新建本轮测试文件，同名拒绝覆盖或删除；写入同步后重新打开读取、独立校验，最后关闭并删除。
+仅新建此次基准使用的测试文件，同名拒绝覆盖或删除；写入同步后重新打开读取、独立校验，最后关闭并删除。
 异常也尝试清理，但介质/锁故障无法删除时必须明确报告残留。未挂载或无文件系统时跳过测试，
 不自动调用两层格式化，也不在测试结束时强行擦物理地址。
 
