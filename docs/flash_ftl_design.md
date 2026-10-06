@@ -1,4 +1,4 @@
-# Flash FTL 首版设计与实施清单
+# Flash FTL 设计与故障模型
 
 > 状态：首版代码已实现；主机回归、Debug/Release 构建通过。基本读写已在板上用过（MSC 实验期间：格式化、挂载、写文件、读回）；真实掉电恢复、长时间回收与耗时未验证，暂缓到有运行时写 Flash 的功能（如 ADR-0015 安装路径），见 GitHub #9（低优先级）。
 > 日期：2026-08-31。
@@ -226,25 +226,6 @@ Platform 在整个 FTL 请求期间关闭映射，不在每个内部页操作后
 
 原始诊断只访问既有受限区域，不借自检 API 操作 FTL。SD/Flash 独立初始化、挂载和错误状态，一个未就绪不能让另一个伪报成功或失败。
 
-## 12. 已实施的文件范围
-
-| 位置 | 实施内容 |
-| --- | --- |
-| `Components/flash_ftl/` | 新增公开头、实现、私有配置：编解码、状态机、映射、GC、恢复、诊断 |
-| `Adapters/bridge/flash_ftl_w25qxx/` | 新增 Bridge 头/实现，绑定、地址边界和状态转换 |
-| `Components/w25qxx/`、`Adapters/stm32_hal/w25qxx_qspi/` | 核查补齐安全收尾，尤其读超时 DMA 与 NOR 仍忙，不借机增加 TX MDMA |
-| `Platform/flash/platform_flash.c/.h`、`platform_flash_config.h` | FTL 装配、内存、分区、操作派发、映射生命周期、诊断 |
-| `FATFS/Target/bsp_driver_user_diskio.c/.h` | 新增自维护契约与安全弱定义，不宣称由 CubeMX 生成 |
-| `FATFS/Target/user_diskio.c` | 仅 USER CODE 区包含契约并薄转发 |
-| `Service/filesystem/sd/` | 原 `filesystem_fatfs_bsp.c` 改名 `filesystem_sd_bsp.c` 并迁入；迁入 SD 私有执行器及头 |
-| `Service/filesystem/flash/` | 新增 `filesystem_flash_bsp.c`、`filesystem_flash_transfer.c/.h` 与私有配置 |
-| `Service/filesystem/filesystem_service.c/.h` 及配置 | 保留单个 Module；公开头按卷/文件/诊断切开，增加 Flash 卷、回收/恢复能力 |
-| `APP/tasks/storage/flash/storage_flash.c`、相关 benchmark | 执行职责交 Service；APP 保留启动/诊断编排及回收时机，不留第二回调所有者 |
-| 自维护 CMake 与必要链接脚本 | 核查源收集、强符号、SDRAM/DMA SRAM 容量对齐，不向生成构建嵌入产品逻辑 |
-| `Tests/flash_ftl/`与相关测试 | 纯 C Fake NOR、故障注入，与固件构建隔离 |
-
-上述代码已按用户后续授权实施。软件测试与硬件验收分开记录，不把编译通过等同于真实掉电验证。
-
 ## 13. 验收要求
 
 最低验收：
@@ -261,7 +242,7 @@ Platform 在整个 FTL 请求期间关闭映射，不在每个内部页操作后
 
 Fake NOR 约束擦除值 `0xFF`、仅 1→0 编程、页边界和撕裂写/擦除；重启清空 RAM。真实断电不可用复位测试完全替代。CRC 并非无碰撞的原子提交原语，保证依赖明确故障模型，不承诺任意欠压、电气损坏或 CRC 碰撞可恢复；单组 FTL 原子性不自动保证 FatFs 元数据事务一致性。
 
-已落定格式、接口和预算见下文。以后若需改变已通过的容量、完成或恢复语义，先反馈再调整。
+格式、接口和预算见下文；容量、完成或恢复语义的改变属于接口/持久化契约变更。
 
 ## 14. 格式版本 1 的实际编码
 
@@ -292,53 +273,9 @@ USER 驱动内 LUN 为 0，与全局 1:/ 分开；GET_SECTOR_COUNT 返回 38689�
 
 这些预算是保守的软件超时，不是硬件实测速率或最长响应时间保证。任务同步调用期间可阻塞让出 CPU；返回超时前仍须确认控制器/DMA 安全停止。若硬件始终不能 Quiesce，执行器保持等待而非让 DMA 访问已归还的缓冲；该极端情况需板级看门狗/复位策略处理。NOR 内部擦写不会被控制器 Abort 取消，恢复必须另查 WIP=0 与 QE。
 
-## 16. 本轮验证记录（2026-08-31）
-
-- 主机 `Tests/flash_ftl`：FTL 行为、真实 FatFs/USER Glue 文件写入同步及清 RAM 重挂载、无后端安全失败，三项 CTest 通过。
-- Fake NOR 检查页边界、仅 1→0 编程、撕裂写/擦除。覆盖完整/部分/跨组和尾 LBA、溢出/忙、未映射值、全 FF 跳页、持续覆盖写及前台 GC、后台单块预算与停止水位。
-- 掉电注入覆盖全部 16 个编程页各五种撕裂长度、格式化各写擦阶段、旧版本 GC 擦除撕裂、最新已提交 payload 损坏及安全收尾等待；卷头虚假擦除成功的测试先失败，补齐全块验证后通过。
-- `Tests/w25qxx` 既有回归及新增 Quiesce/恢复 WIP、真实 Bridge 分区越界拒绝/地址转换/异步推进场景通过。FatFs 主机测试替换 BSP 硬件后端，不覆盖 Service/FreeRTOS/QSPI 时序；MinGW 的默认实现测试去除 weak 属性仅验证行为，强弱符号覆盖另由 ARM 链接检查。
-- Debug 与 Release 固件均成功构建；五个 BSP_USER_DISKIO_* 是来自 Service 的强符号。SD 文件移动保持执行逻辑。未执行 CubeMX 重生成。
-- Debug 第一内部 Flash 区使用 502,988 / 524,288 B（95.94%），Release 为 343,476 B（65.51%）（含内部枚举类型调整后的最新构建）；存在既有第三方/GUI 警告及 RWX 链接段警告，本轮未修改生成 GUI。
-
-仍需上板：SD 热插拔/读写回归、真实 QSPI/MDMA 中断丢失/延迟/中止失败、欠压掉电、分区保护、格式化与重挂载、启动扫描/读写/GC 延迟、Cache 可见性及长时间磨损行为。本轮未烧录、未格式化任何实际设备，软件回归不替代这些验收。
-
-
-## 17. 函数注释核查（2026-08-31）
-
-本次按 [代码注释规范](coding_standard.md#4-doxygen-与行内注释) 对 FTL 链路及相关测试逐函数核查。规范已明确：所有自维护函数实现均须写 Doxygen，包括私有函数、回调、强/弱后端、测试入口与辅助函数；所有仅声明的位置不写逐函数 Doxygen。头文件保留类型、字段、宏及回调类型契约说明。
-
-核查范围和覆盖：
-
-| 自维护实现范围 | 函数定义数 |
-| --- | ---: |
-| Flash FTL Component | 37 |
-| FTL/W25Qxx Bridge | 9 |
-| Flash Service BSP 与同步执行器 | 23 |
-| USER DiskIO 安全弱后端 | 5 |
-| Platform Flash | 39 |
-| Filesystem Service 根实现 | 13 |
-| Storage Flash 与 Storage Task | 6 |
-| W25Qxx Component 与 HAL QSPI Adapter | 42 |
-| 迁移后的 SD BSP 与同步执行器 | 17 |
-| FTL、弱后端及 W25Qxx 主机测试 | 69 |
-| 合计 | 260 |
-
-本次在 9 个 C 文件中新增 91 处函数 Doxygen，补齐 5 个 SD BSP 函数的形参说明，修正 Platform 同步诊断读取的形参名称，并将 HAL BusOps 表的错位注释移回对象定义。说明覆盖参数、返回语义、同步等待、单一执行上下文、缓冲生命周期、安全收尾以及测试替身边界。已有完整注释未重复插入。
-
-相关 C/H 的源码核查确认：上述 16 个自维护 C 文件的 260 个函数定义均有对应 Doxygen，形参名称逐项匹配，非 void 函数有返回说明；函数声明没有逐函数 Doxygen。CubeMX 生成的 user_diskio.c 模板说明及 USER CODE 薄转发保持原样，不将生成函数计入自维护函数覆盖率；未修改第三方或 GUI 生成文件。本次覆盖范围不等同于全工程历史代码注释已经整改完毕。
-
-验证结果：
-
-- 所有检查范围内 C/H 文件与修改前相比，去除注释和空白后的代码符号序列完全一致，未改变接口、枚举、控制流或 Flash 格式。
-- 四项已有 CTest 通过，Debug/Release 固件均构建成功；两种固件的 BIN 与本轮注释修改前逐字节相同。
-- 环境未安装 Doxygen，本次验证的是源码注释关联、标签和参数一致性，未生成或检查 Doxygen HTML。
-- 保留既有 RWX 链接段警告；未烧录或对实际设备执行格式化，硬件验收边界不变。
-
-
 ## 18. Flash 文件 benchmark 与删除边界
 
-本轮新增 Service 文件封装及挂载后的 APP 文件基准。链路为 APP benchmark →
+Service 文件封装与挂载后的 APP 文件基准的链路为 APP benchmark →
 Service 文件接口 → FatFs → USER DiskIO → Service 块后端 → Platform → FTL → RawOps。
 实现、默认 1 MiB/4 KiB 参数、计时范围和失败清理详见
 [benchmark 说明](../APP/tasks/storage/benchmark/README.md)；
@@ -353,16 +290,7 @@ f_unlink 使 FatFs 文件目录项与簇链释放并同步，不是安全擦除�
 直到这些 LBA 被重新写入且新版本提交，旧物理版本才失效并可由 GC 回收。
 目录/FAT 自身的更新仍会经过 FTL 异地写与 GC，但不等于文件 payload 已直接失效。
 
-本轮验证：新增 12 个文件场景与原有 4 项回归共 16 项 CTest 通过；
-正常删除后重挂载确认文件不存在且 FAT 空闲簇恢复。新增实现及测试通过
--Wall -Wextra -Werror 语法检查，相关 70 个函数定义的 Doxygen/形参/返回说明核查通过。
-默认关闭基准的 Debug/Release 构建通过，第一 FLASH 区分别为 503116 B / 343556 B。
-正式布局开启基准时，Debug 为 697492 B、Release 为 537044 B，均超过 524288 B；
-因此不能宣称开启基准的正式固件构建通过。
 
-仅在 build/flash-file-benchmark-Release 中验证了链接草案：将 cc936.c.obj 的
-.rodata.oem2uni（87172 B）放到 FLASH2，Release 链接后第一 FLASH 为 449868 B，
-FLASH2 为 463804 B，两者均小于各自 512 KiB。正式 stm32h743zgtx_flash.ld 未在本轮改动；
-该布局调整及 Debug 的额外容量安排待用户确认。未修改 CubeMX 配置或生成文件，
-未烧录、未对实际设备格式化；保留既有 RWX 链接警告，未生成 Doxygen HTML。
+## 验证证据归属
 
+本页保留可复用的故障模型和验收场景；某轮测试数量、内存占用、注释覆盖计数及构建日志由对应 GitHub ticket/PR 记录。历史记录可从 Git 查阅；板级状态以置顶「板上状态」issue 的实际证据为准。

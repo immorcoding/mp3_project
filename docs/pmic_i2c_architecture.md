@@ -294,26 +294,9 @@ GPIO Ops 只有两项：
 这种接口只抽象软件 I2C 算法真正需要的最小能力，不制造通用 GPIO HAL。
 `soft_i2c.c` 也不再调用 CMSIS `__NOP()`，而是使用可移植的 volatile 忙等待循环。
 
-## 12. CMake 发现规则
+## 12. 构建与依赖
 
-根 `CMakeLists.txt` 从以下目录递归收集自维护源文件：
-
-```text
-Components/*.c
-Adapters/*.c
-Platform/*.c
-APP/*.c
-Service/*.c
-Middlewares/Third_Party/FreeRTOS/Config/*.c
-```
-
-工程根目录作为唯一私有 include path，因此代码使用完整、无歧义的路径，例如：
-
-```c
-#include "Components/axp2101/axp2101.h"
-#include "Adapters/bridge/axp2101_soft_i2c/axp2101_soft_i2c_adapter.h"
-#include "Platform/power/platform_power.h"
-```
+项目源收集以根 CMakeLists.txt 为准，组件复用和 include 规则见 [Architecture · maintenance](shape/architecture.md#maintenance)。本模块的 GPIO、SoftI2C 与 AXP2101 装配关系见本文第 2–4 节。
 
 ## 13. 当前限制与后续演进
 

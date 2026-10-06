@@ -156,11 +156,8 @@ Flash FTL 已按以下规则实现，仍需板级验证：
 
 不新增通用 `BlockDevice`，也不让 `Service/filesystem`、FatFs 或 USB MSC 绕过 FTL 接触原始 W25Qxx。Service/FatFs 的受控集成和测试按已接受设计开展，通过验收后才作为可用业务盘；USB MSC 不属于首版范围。
 
-## 7. 后续实施顺序
+## 7. 能力边界与验收入口
 
-1. 回归原始 NOR 的识别、QE、读、双自检扇区擦写/读回与映射切换；这些代码已存在，硬件结果按实际日志确认。
-2. FTL 格式、Fake NOR 回归、Component/Bridge/Platform 和 Service 链路已实现；下一步按 [FTL 设计](flash_ftl_design.md) 验证真实物理分区保护、恢复、扫描和 GC 时延。
-3. Flash 执行所有权已迁入 Filesystem Service，USER BSP 弱默认/强定义已接入。逻辑块与 FatFs 主机回归已通过；真实断电测试仍待板级验收。
-4. Bootloader 镜像协议仍待独立设计。Resource Pack 格式与启动加载已落地；未做的是设备侧整包安装（ADR-0015）以及 USB MSC（ADR-0013 明确不做）。已有镜像/自检/资源保留边界必须始终遵守。
+原始识别、QE、读、双自检扇区擦写/读回和映射切换均有实现；FTL、Bridge、Platform 与 Service/USER 接缝已接通。软件能力不等于真实断电验收，板级结果以 tracker 的证据为准。
 
-文件修改清单、宏默认值、完成语义和验收范围由 FTL 设计文档统一维护。当前已实施 FTL，但未新增通用物理擦写或 MSC 接口。
+恢复、分区保护、扫描/GC 时延与故障模型见 [FTL 设计](flash_ftl_design.md)。Resource Pack 已有格式与启动加载，设备侧安装边界见 ADR-0015；Bootloader 镜像协议另行设计，USB MSC 按 ADR-0013 不纳入产品范围。镜像、自检和资源保留区始终有效。
