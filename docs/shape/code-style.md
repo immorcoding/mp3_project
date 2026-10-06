@@ -2,7 +2,7 @@
 
 自维护 C 的命名、注释和配置；适用 APP/Service/Platform/Components/Adapters 与项目维护的中间件接缝，厂商标识符和移植配置保持原风格。
 
-Next id: STY-8
+Next id: STY-9
 
 ## naming
 
@@ -11,7 +11,7 @@ Next id: STY-8
 ### Rules
 
 - **STY-1** · settled · 文件/目录与私有跨文件接口用 snake_case，文件内私有函数/对象用 static snake_case；公开接口用 Module 前缀的 Pascal 分段：`Service_<Capability>_<Verb>`、`Platform_<Capability>_<Verb>`、`<Module>_<Verb>`、`<Module>_<Target>Adapter_<Verb>`。保留 Service 层名、稳定模块拼写、区分模块的 LOG/Service_Log、Adapter 后端及资源/并发语义；只删重复层名。Task 文件/入口为 `<responsibility>_task`，任务显示名可读；APP 启动和私有任务入口保持 snake_case，不向其他层发布。_Check:_ `docs/coding_standard.md` 的命名审阅入口。
-- **STY-4** · settled · 类型用已发布 Module 前缀加 `TypeDef`；回调用 `*_Callback_t` 或既有 `*Func`，Ops 用 `*_OpsTypeDef`；宏、枚举、编译开关用大写 Module 前缀。新增层级不用模糊的 Board/BSP/*_port；既有 Component PortOps 是设备端口契约，厂商/CubeMX 文件名与符号保持不变。_Check:_ `docs/coding_standard.md` 的命名审阅入口。
+- **STY-8** · settled · 类型用已发布 Module 前缀加 `TypeDef`；回调用 `*_Callback_t` 或既有 `*Func`，Ops 用 `*_OpsTypeDef`；宏、枚举、编译开关用大写 Module 前缀。新增层级不用模糊的 Board/BSP/*_port；既有 Component PortOps 是设备端口契约，厂商/CubeMX 文件名与符号保持不变。_Check:_ `docs/coding_standard.md` 的命名审阅入口。
 
 ## comments
 
