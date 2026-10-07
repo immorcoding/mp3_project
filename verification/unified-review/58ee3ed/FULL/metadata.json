@@ -1,0 +1,21 @@
+﻿{
+  "schemaVersion": 1,
+  "mode": "FULL",
+  "repository": "E:\\Projects\\project_mp3\\master",
+  "commit": "58ee3ed0f4f5468d71bfccd99f5dafce682f208b",
+  "commitAfter": "58ee3ed0f4f5468d71bfccd99f5dafce682f208b",
+  "snapshotStatus": "head-unchanged",
+  "command": "& 'E:\\Projects\\project_mp3\\master\\scripts\\verify.ps1'",
+  "parameters": {},
+  "startedAtUtc": "2026-10-07T15:41:26.1151218Z",
+  "finishedAtUtc": "2026-10-07T15:42:08.9636356Z",
+  "dirtyBefore": false,
+  "statusBefore": [],
+  "dirtyAfter": false,
+  "statusAfter": [],
+  "exitCode": 0,
+  "childExitCode": 0,
+  "captureError": null,
+  "stdout": "stdout.log",
+  "stderr": "stderr.log"
+}

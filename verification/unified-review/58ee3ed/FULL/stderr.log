@@ -1,0 +1,4 @@
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+fatal: not a git repository (or any of the parent directories): .git
+Build type: Debug
+Build type: Release
