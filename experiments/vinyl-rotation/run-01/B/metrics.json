@@ -1,0 +1,96 @@
+{
+  "group": "B",
+  "condition": "Matt; no shape",
+  "run_id": "vinyl-rotation-01-B",
+  "recorded_on_user_local_date": "2026-10-07",
+  "source": "User-supplied screenshots; rounded display values preserved",
+  "session": {
+    "model": "claude-fable-5-1",
+    "display_name": "Fable 5.1",
+    "total_cost_display": "$24.18",
+    "api_duration": "42m 42s",
+    "wall_duration": "29m 14s",
+    "lines_added": 575,
+    "lines_removed": 69,
+    "input_tokens_display": "103.2k",
+    "output_tokens_display": "157.1k",
+    "cache_read_tokens_display": "19.7m",
+    "cache_write_tokens_display": "670.5k",
+    "prompt_cache_main_requests": 59,
+    "input_tokens_from_cache_display": "98%",
+    "cache_misses_display": "no misses",
+    "cache_state": "warm",
+    "cache_ttl_display": "1h",
+    "last_activity_relative_display": "4s ago"
+  },
+  "cache_early_observation": {
+    "source": "User oral observation",
+    "approximate_initial_percentage_range": [
+      83,
+      84
+    ],
+    "later_screenshot_display": "98%",
+    "per_request_time_series_available": false
+  },
+  "context_snapshot": {
+    "used_tokens_display": "294.2k",
+    "capacity_display": "1m",
+    "used_percent_display": "29%",
+    "auto_compact_window_display": "1m",
+    "categories": {
+      "system_prompt": "5.6k (0.6%)",
+      "system_tools": "21.8k (2.2%)",
+      "mcp_tools": "1k (0.1%)",
+      "mcp_server_instructions": "1.3k (0.1%)",
+      "custom_agents": "160 (0.0%)",
+      "memory_files": "1.4k (0.1%)",
+      "skills": "7.6k (0.8%)",
+      "messages": "255.2k (25.5%)",
+      "free_space": "672.8k (67.3%)",
+      "autocompact_buffer": "33k (3.3%)"
+    },
+    "mcp_tools_count": 54,
+    "custom_agents_count": 2,
+    "memory_files_count": 4,
+    "skills_count": 52
+  },
+  "implementation_report": {
+    "comment": "https://github.com/immorcoding/mp3_project/issues/24#issuecomment-6039959085",
+    "commit": "cb01f7d1cec017b4f0d7b1ca305d33ab2a2755b9",
+    "status": "Implementer reported software/simulator completion; unified external evaluation pending",
+    "reported_net_diff": "+293/-33 in 17 files",
+    "reported_skills": [
+      "supermatt:tdd",
+      "supermatt:code-review",
+      "mp3-firmware-change"
+    ],
+    "reported_review": "independent-verifier plus Standards/Spec/Adversarial, one model family; Codex peer unavailable per implementer"
+  },
+  "unknown": [
+    "full session ID",
+    "effort",
+    "absolute start/end timestamps",
+    "peak context usage",
+    "actual compaction count",
+    "subagent usage inclusion and breakdown",
+    "phase-level usage",
+    "API duration aggregation semantics"
+  ],
+  "scope_notes": [
+    "API duration is greater than wall duration in screenshot; do not silently correct or infer exact concurrency.",
+    "Code-change display and final net diff are distinct measures.",
+    "Skills listed are not invocation evidence.",
+    "Context snapshot is not peak; auto-compact settings do not prove actual compaction.",
+    "Cache percentage initial and later readings have different sources; do not assume constant rate."
+  ],
+  "images": {
+    "session.png": {
+      "sha256": "3fae4074ae0f8ab97493a023cfd012b17a5054e1c11e1b4d4a0481c43242232f",
+      "bytes": 37223
+    },
+    "context.png": {
+      "sha256": "24bb3a28c7df865b1862ddadd32674df4eace88bdf1d858fa911b429733149b8",
+      "bytes": 104636
+    }
+  }
+}
