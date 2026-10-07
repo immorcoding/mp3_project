@@ -33,6 +33,7 @@ function Invoke-FastWorkingTreeCheck {
         'sync-agent-config.Tests.ps1'
         'shape_writer.Tests.ps1'
         'check-docs.Tests.ps1'
+        'capture-verification.Tests.ps1'
     )
     foreach ($selfTest in $selfTests) {
         Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath $selfTest)

@@ -100,3 +100,6 @@ finally {
     if (-not $resolved.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'fixture outside temp root' }
     if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }
 }
+
+# 预期失败子进程已由断言验证，不把其退出码泄漏给 Harness 调用者。
+$global:LASTEXITCODE = 0
