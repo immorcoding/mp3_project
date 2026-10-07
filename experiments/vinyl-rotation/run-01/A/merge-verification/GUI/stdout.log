@@ -1,0 +1,9 @@
+PASS boot_lock（8 帧）
+PASS music_transport（7 帧）
+PASS pager（7 帧）
+PASS queue（6 帧）
+PASS theme_default（5 帧）
+PASS theme_toggle（4 帧）
+PASS unlock_main（2 帧）
+PASS vinyl_rotation（15 帧）
+GUI 场景回归通过。
