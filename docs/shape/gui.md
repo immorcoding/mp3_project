@@ -14,7 +14,7 @@ Next id: GUI-19
 
 - Library、Album Detail/Mini Player、Books/Reader、Settings 子页何时进入实施 spec？现有占位不代表已实现；阅读横滑与 Main 手势、阅读字号与系统字号须分开决定。
 - 可换壁纸、按内容版本的 Blur 缓存及 Settings 合成背景何时实施？先确认缓存键、失效、峰值内存和真机耗时，不把当前 Alpha 原型视为 RGB565 持久缓存。
-- 唱盘旋转、ID3 封面、真实时间和音频进度何时接入？先确认 playing/paused/CLEAR 行为；当前假状态不能充当解码进度。
+- ID3 封面、真实时间和音频进度何时接入？唱盘旋转已按 playing/paused/CLEAR 接入，当前假状态仍不能充当解码进度。
 - 安全锁、背光与唤醒何时设计？Lock 当前仅视觉锁屏，真实亮度需 Platform LCD/PWM 能力。
 - 何时升级 LVGL 9 并评估 XML 编辑器？随 Vendor 升级再决定，ADR-0016 当前未采用。
 

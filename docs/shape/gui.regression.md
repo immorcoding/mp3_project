@@ -10,4 +10,8 @@
 
 ### References
 
-- [场景运行器](../../Tools/gui_simulator/README.md)：重现已批准的七场景/39帧并产出截图。
+- [场景运行器](../../Tools/gui_simulator/README.md)：重现已批准的八场景/54帧并产出截图。
+
+### Signals
+
+- 2026-10-07 · cite · GUI-4 · 新增 vinyl_rotation 场景，既有场景只更新已检查的四个旋转影响帧；最终八场景/54帧回归通过。
