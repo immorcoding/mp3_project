@@ -55,7 +55,7 @@ function Get-ShapeViolations {
     param([string]$RepositoryRoot)
     $shape = Join-Path $RepositoryRoot 'docs/shape'
     if (-not (Test-Path -LiteralPath $shape)) { return }
-    $all = @(Get-ChildItem -LiteralPath $shape -File -Filter '*.md' | Where-Object { $_.Name -notin @('README.md','REVIEW.md','ROUTES.md') })
+    $all = @(Get-ChildItem -LiteralPath $shape -File -Filter '*.md' | Where-Object { $_.Name -notin @('README.md','ROUTES.md') })
     foreach ($file in $all) {
         if ($file.Name -cnotmatch '^[a-z0-9-]+(?:\.[a-z0-9-]+)?\.md$') { "$($file.Name): 非法 area/title 文件名" }
     }

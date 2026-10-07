@@ -22,4 +22,4 @@
 
 Hook 实现分别见 [guard](../../../scripts/hooks/guard.ps1)、[check-edited](../../../scripts/hooks/check-edited.ps1)、[session-brief](../../../scripts/hooks/session-brief.ps1)。生成/分层/writer 边界直接查对应检查器，外部下载器证据范围见 [loader](../../../Tools/external_loader/README.md)。
 
-证据提交时选用同一SHA且工作树状态可解释的运行记录，将metadata与完整日志归档到PR附件、证据评论或制品位置；build/evidence是本机收集目录，不能替代交付归档。shape规则的职责、来源与语义由未参与编写者按REVIEW审阅，自动检查只覆盖结构和本地引用。
+证据提交时选用同一SHA且工作树状态可解释的运行记录，将metadata与完整日志归档到PR附件、证据评论或制品位置；build/evidence是本机收集目录，不能替代交付归档。shape规则的职责、来源与语义由未参与编写者通过 `code-review` 审阅，规范来源见 [CODING_STANDARDS](../../../CODING_STANDARDS.md)，自动检查只覆盖结构和本地引用。

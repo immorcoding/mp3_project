@@ -76,6 +76,19 @@ try {
     [void](Invoke-AgentConfigSync -RepositoryRoot $fixtureRoot)
     Assert-SyncEqual -Expected 0 -Actual @(Get-AgentConfigDrift -RepositoryRoot $fixtureRoot).Count -Message '同步后应清掉已删 Skill 的副本'
 
+    # 最后一个 reviewer 退役后，应清除两个受管包装并保留本地私有配置。
+    Remove-Item -LiteralPath (Join-Path $fixtureRoot '.agents/reviewers/probe.md')
+    Assert-SyncEqual -Expected 2 -Actual @(Get-AgentConfigDrift -RepositoryRoot $fixtureRoot).Count -Message '已删 reviewer 的两个包装应报漂移'
+    Assert-SyncEqual -Expected 0 -Actual (Invoke-AgentConfigSync -RepositoryRoot $fixtureRoot) -Message '空正文集合应生成零文件'
+    Assert-SyncEqual -Expected 0 -Actual @(Get-AgentConfigDrift -RepositoryRoot $fixtureRoot).Count -Message '空正文集合清理后应无漂移'
+    if ((Test-Path -LiteralPath (Join-Path $fixtureRoot '.claude/agents/probe.md')) -or
+        (Test-Path -LiteralPath (Join-Path $fixtureRoot '.codex/agents/probe.toml'))) {
+        throw '已退役 reviewer 的受管包装仍存在'
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $fixtureRoot '.claude/agents/my-private.md'))) {
+        throw '清理 reviewer 不得删除本地私有 Agent'
+    }
+
     # 定义不合法时拒绝生成。
     Write-FixtureText -Root $fixtureRoot -Relative '.agents/reviewers/bad.md' -Text "---`nname: bad`n---`n正文`n"
     $threw = $false
