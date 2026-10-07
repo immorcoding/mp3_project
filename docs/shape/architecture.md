@@ -18,5 +18,5 @@ Next id: ARC-17
 - [errors](architecture.errors.md): 调用结果、生命周期状态与诊断原因。
 - [interrupts](architecture.interrupts.md): 中断发布事件与任务执行的交界。
 - [storage-seams](architecture.storage-seams.md): 文件系统与持久化层的公开接缝。
-- [evolution](architecture.evolution.md): 模块增设、可复用构建与长期决策。
+- [evolution](architecture.evolution.md): 模块所有权判定、构建封装与长期决策。
 - [module-growth](architecture.module-growth.md): 新增模块与目录分类的准入条件。
