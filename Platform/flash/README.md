@@ -35,7 +35,7 @@ Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识、QSPI Ada
 
 ## FTL 装配（已实现）
 
-原始诊断与逻辑卷共用唯一执行上下文。按 [FTL 设计](../../docs/flash_ftl_design.md)，本 Module 长期持有 FTL/Bridge、SDRAM 映射表与内部 SRAM 工作区，注入经过边界核验的分区；不向 Service 暴露原始任意地址擦写。
+原始诊断与逻辑卷共用唯一执行上下文。按 [FTL 设计](../../docs/shape/storage.md#durability)，本 Module 长期持有 FTL/Bridge、SDRAM 映射表与内部 SRAM 工作区，注入经过边界核验的分区；不向 Service 暴露原始任意地址擦写。
 
 唯一上层回调所有者是 Filesystem Service 的 Flash 执行器，仍在 Storage Task 上下文完成。Process 按当前操作派发到原始 W25Qxx 或 FTL，不重复推进同一底层操作。映射关闭覆盖整个 FTL 请求，不能每页完成就重新打开；错误时先确保控制器/DMA 不再访问缓冲，再显式恢复，NOR 内部仍忙不能视为已取消。
 

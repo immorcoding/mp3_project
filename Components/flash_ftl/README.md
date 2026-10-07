@@ -1,6 +1,6 @@
 # Flash FTL Component
 
-本 Module 已实现 NOR 到 512 B 逻辑扇区的转换：七扇区组映射、异地提交、启动扫描、循环分配、整块 GC 和故障安全收尾。主机回归通过，真实掉电验收待完成；详细格式、参数与测试边界见 [设计文档](../../docs/flash_ftl_design.md)。
+本 Module 已实现 NOR 到 512 B 逻辑扇区的转换：七扇区组映射、异地提交、启动扫描、循环分配、整块 GC 和故障安全收尾。主机回归通过，真实掉电验收待完成；详细格式、参数与测试边界见 [设计文档](../../docs/shape/storage.md#durability)。
 
 ## 公开 Interface
 

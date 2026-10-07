@@ -2,7 +2,7 @@
 
 - 状态：已接受（按现有代码追溯记录）
 - 日期：2026-08-29
-- 相关实现说明：[../sdram_architecture.md](../sdram_architecture.md)、[../sd_architecture.md](../sd_architecture.md)、[../../Adapters/cortex/cache/README.md](../../Adapters/cortex/cache/README.md)
+- 相关实现说明：[../sdram_architecture.md](../shape/hardware.md)、[../sd_architecture.md](../shape/sources/storage-media.md)、[../../Adapters/cortex/cache/README.md](../../Adapters/cortex/cache/README.md)
 
 ## 背景
 

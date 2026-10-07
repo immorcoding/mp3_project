@@ -88,7 +88,7 @@ $shapeCases = @(
     @{ Path = 'docs/shape/git.md'; Branch = 'main'; Expected = 'allow' }
     @{ Path = 'docs/shape/git.md'; Branch = ''; Expected = 'allow' }
     @{ Path = 'docs/shape/inbox/feature-x.md'; Branch = 'feature/x'; Expected = 'allow' }
-    @{ Path = 'docs/verification.md'; Branch = 'feature/x'; Expected = 'allow' }
+    @{ Path = 'docs/agents/domain.md'; Branch = 'feature/x'; Expected = 'allow' }
 )
 foreach ($case in $shapeCases) {
     foreach ($tool in @('Edit', 'apply_patch')) {

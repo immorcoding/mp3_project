@@ -2,7 +2,7 @@
 
 - 状态：已接受。取代 [ADR-0007](0007-gui-runtime-and-squareline-boundary.md)。
 - 日期：2026-10-01
-- 相关实现说明：[../gui_ui_design.md](../gui_ui_design.md)、[../../Service/gui/README.md](../../Service/gui/README.md)、[../../Tools/gui_simulator/README.md](../../Tools/gui_simulator/README.md)
+- 相关实现说明：[../gui_ui_design.md](../shape/gui.md)、[../../Service/gui/README.md](../../Service/gui/README.md)、[../../Tools/gui_simulator/README.md](../../Tools/gui_simulator/README.md)
 
 ## 背景
 
@@ -36,4 +36,4 @@ ADR-0007 让 SquareLine Studio 的 `GUI/` 导出作为 UI 唯一事实源，GUI 
 
 - 改界面只看 `Service/gui/view/` 一处；调布局要改代码再看模拟器，失去所见即所得拖拽。
 - AGENTS.md 硬规则表与 ARC-2 删除 SquareLine 行；`check-generated-write`、Agent Hook 不再保护 `GUI/`、`SquareLineProject/`。
-- 新增或改动界面前，仍需先更新 [gui_ui_design.md](../gui_ui_design.md)；改动界面或 `Service/gui` 后跑场景回归，再上板（`hw:pending`）。
+- 新增或改动界面前，仍需先更新 [gui.design.md](../shape/gui.md)；改动界面或 `Service/gui` 后跑场景回归，再上板（`hw:pending`）。

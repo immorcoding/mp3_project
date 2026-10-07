@@ -30,4 +30,4 @@
 ```
 
 这些命令只在主机上配置、构建和运行测试；不会烧录固件、安装软件或访问硬件。
-测试影响映射、未知路径回退和状态语义见 [分层验证与 Agent Harness](../docs/verification.md)。
+测试影响映射、未知路径回退和状态语义见 [分层验证与 Agent Harness](../docs/shape/sources/verification.md)。

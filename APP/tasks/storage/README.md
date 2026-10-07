@@ -11,7 +11,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 - `storage_task(void *argument)`：由 APP 创建的任务入口，保持 `void` 以满足 `TaskFunction_t`。
 - `storage_sd_*()`：SD 热插拔与挂载策略，仅供本 Task 调用；返回 `Storage_StatusTypeDef`。
 - `storage_flash_init()` / `storage_flash_reclaim()`：Flash 启动、挂载策略与空闲回收，仅供本 Task 调用，返回 `Storage_StatusTypeDef`。`storage_flash_init()` 必须传入当前 Storage Task 句柄，句柄为空或与当前任务不符时拒绝。
-- `storage_catalog_*()`：曲库扫描与作废，返回 `Storage_StatusTypeDef`。曲库是 SD `Music/` 的路径事实表（SDRAM `.storage_catalog` 字符串池 + 偏移/长度，不存卷字段）；公开头不暴露表结构。启动不把该段并入 `.bss` 清零；扫描前只重置表头。没有 `Music/` 时为空表成功。条数满或池满则截断已收录部分，仍 `STORAGE_OK`。`storage_catalog_books_init()` 是空桩，恒成功，当前不调用。拔卡先 `storage_catalog_invalidate()`，再卸载。技术事实见 [catalog_architecture.md](../../../docs/catalog_architecture.md)。
+- `storage_catalog_*()`：曲库扫描与作废，返回 `Storage_StatusTypeDef`。曲库是 SD `Music/` 的路径事实表（SDRAM `.storage_catalog` 字符串池 + 偏移/长度，不存卷字段）；公开头不暴露表结构。启动不把该段并入 `.bss` 清零；扫描前只重置表头。没有 `Music/` 时为空表成功。条数满或池满则截断已收录部分，仍 `STORAGE_OK`。`storage_catalog_books_init()` 是空桩，恒成功，当前不调用。拔卡先 `storage_catalog_invalidate()`，再卸载。技术事实见 [storage.catalog.md](../../../docs/shape/storage.md#catalog)。
 - `storage_sheet_*()`：播放列表，与曲库同属 `catalog/`。首版是恒等下标序列 `SeqList[i] = i`，有效长度即建表时的 Catalog `IndexNum`，不另存 Count。`Generation` 记录对应的 Catalog 代次，`0` 表示已作废。表在 SDRAM `.music_sheet`（NOLOAD），作废不清整数组。曲库扫描成功后立即建表；`storage_catalog_invalidate()` 会一并作废。不向 GUI 暴露整表指针。随机/心动序列尚未实现。
 - `storage_listbuffer_*()`：Queue 窗口单槽。GUI Task 仅在 SD 就绪且 `IDLE` 时 `request`（代次/播放列表起点 `Index`/请求条数 → `PENDING` 并通知 Storage）；Storage Task 仅 SD 就绪时 `load` 填路径拷贝，把 `Length` 改成实际条数后打 `READY`。GUI Task 按 `Length` 把路径和 `Index` 交给 `Service_GUI_QueueApply()` 后写回 `IDLE`。`Index` 随 `QueueTab` 竖滑移动，不是条数。`Generation` 须与 Catalog/Sheet 一致，`0` 为作废空窗。当前播放游标不在本槽，见 `storage_playback_cursor_*()`。`Service/gui` 不得包含此头。宏见 `storage_catalog_config.h`。
 - `storage_playback_cursor_*()`：播放列表当前下标，与 Catalog/Sheet 同代次。扫描成功后非空库从 0 起；空库或 `storage_catalog_invalidate()` 后没有当前曲。GUI Task 读游标并核窗口代次，再交给 `QueueApply`；点 Queue 行经 `set` 改当前下标，上一首/下一首环形步进，均不打开文件。
@@ -52,7 +52,7 @@ Task 内部 Implementation 使用 `storage_*`；任务入口保持 `storage_task
 
 ## FTL 集成（已实现，待上板验收）
 
-启动时先可选跑 SDRAM 破坏性自检，再由 `storage_flash_init()` 绑定执行器、按策略挂载已有卷。`MountFlash` 返回 `SERVICE_NO_FILESYSTEM` 时，是否调用 `FormatAndMountFlash` 由 `STORAGE_FLASH_AUTO_FORMAT` 控制（`storage_task.h`，当前默认开启）。物理基准在执行器绑定之后、挂载之前运行；文件基准仅在挂载成功后运行。QSPI 回调、`STORAGE_NOTIFY_FLASH_OPERATION` 等待和传输收尾职责属于 Filesystem Service 私有 Flash 执行器。Storage Task 仍是唯一上下文，APP 的 `flash/` 分区保留启动/诊断编排、挂载策略和回收调用时机，不注册第二个传输回调。随后 `storage_sd_init()` 处理卡槽热插拔。
+启动时先可选跑 SDRAM 破坏性自检，再由 `storage_flash_init()` 绑定执行器、按策略挂载已有卷。`MountFlash` 返回 `SERVICE_NO_FILESYSTEM` 时，是否调用 `FormatAndMountFlash` 由 `STORAGE_FLASH_AUTO_FORMAT` 控制（`storage_task_config.h`，当前默认开启）。物理基准在执行器绑定之后、挂载之前运行；文件基准仅在挂载成功后运行。QSPI 回调、`STORAGE_NOTIFY_FLASH_OPERATION` 等待和传输收尾职责属于 Filesystem Service 私有 Flash 执行器。Storage Task 仍是唯一上下文，APP 的 `flash/` 分区保留启动/诊断编排、挂载策略和回收调用时机，不注册第二个传输回调。随后 `storage_sd_init()` 处理卡槽热插拔。
 
 主循环已为 `ReclaimFlash` 安排定期机会，不再无限期只等 SD 检测。FTL 决定是否 GC、回收哪个块；已在飞操作按硬件通知与超时推进。默认回收机会周期 100 ms，每次最多回收一块，不承诺 NOR 擦除可以立即抢占。SDRAM 破坏性自检必须早于 FTL 表与业务缓冲使用。
 

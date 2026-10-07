@@ -1,6 +1,6 @@
 # Flash FTL W25Qxx Bridge
 
-已实现 `FlashFTL_W25QxxBridge_Bind()`，将 W25Qxx 的原始 NOR 操作接入 FTL 拥有的 RawOps。编译与主机组件回归已完成，实际板级边界/故障验收见 [FTL 设计](../../../docs/flash_ftl_design.md)。
+已实现 `FlashFTL_W25QxxBridge_Bind()`，将 W25Qxx 的原始 NOR 操作接入 FTL 拥有的 RawOps。编译与主机组件回归已完成，实际板级边界/故障验收见 [FTL 设计](../../../docs/shape/storage.md#durability)。
 
 ## 所有权与依赖
 

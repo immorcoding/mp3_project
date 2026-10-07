@@ -83,7 +83,7 @@ try {
     Assert-Equal $true (Test-ShapeAreaPath -RelativePath 'docs/shape/git.md') '领域文件'
     Assert-Equal $true (Test-ShapeAreaPath -RelativePath 'docs\shape\gui.md') '反斜杠领域文件'
     Assert-Equal $false (Test-ShapeAreaPath -RelativePath 'docs/shape/inbox/feature-x.md') 'inbox 不是领域文件'
-    Assert-Equal $false (Test-ShapeAreaPath -RelativePath 'docs/verification.md') '其他文档'
+    Assert-Equal $false (Test-ShapeAreaPath -RelativePath 'docs/agents/domain.md') '其他文档'
     Assert-Equal 'docs/shape/inbox/feature-pause.md' (Get-ShapeInboxPath -Branch 'feature/pause') 'inbox 路径'
 
     $work = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ('shape-writer-' + [Guid]::NewGuid().ToString('N'))

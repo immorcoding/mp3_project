@@ -2,7 +2,7 @@
 
 - 状态：已接受（按现有代码追溯记录）
 - 日期：2026-08-29
-- 相关实现说明：[../sd_architecture.md](../sd_architecture.md)
+- 相关实现说明：[../sd_architecture.md](../shape/sources/storage-media.md)
 
 ## 背景
 

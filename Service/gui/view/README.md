@@ -24,11 +24,11 @@
 | `gui_service_view_music.c` | Music 标签视图（20 px 标签栏）：Now Playing 唱盘与控制区、Queue 竖向 Flex 容器、Library 空页；Tabview 内部 Content 透明且不可滚动 |
 | `gui_service_view_wallpaper*.{c,h}` | 默认壁纸尺寸、描述符与固件像素区 |
 
-视觉规范与页面层级以 [docs/gui_ui_design.md](../../../docs/gui_ui_design.md) 为准；界面每推进一步先更新该文档。
+视觉规范与页面层级以 [docs/shape/gui.md](../../../docs/shape/gui.md) 为准；界面每推进一步先更新该文档。
 
 ## 修改流程
 
-1. 先在 `docs/gui_ui_design.md` 记下要改的层级、相对位置或样式。
+1. 先在 `docs/shape/gui.md` 记下要改的层级、相对位置或样式。
 2. 改本目录代码；颜色用角色，不加新的 RGB 字面量；新增需要被行为 Module 访问的对象时加到句柄结构体。
 3. 跑 `./Tools/gui_simulator/run-scenarios.ps1`。哈希变化时打开 `build/gui_simulator/shots/<场景>/` 的截图确认，确属有意再 `-Update` 并在提交说明写明原因；必要时新增场景覆盖新界面。
 4. 编译固件并上板确认（`hw:pending`）。

@@ -37,4 +37,4 @@ APP Task 只消费 Service 或 Platform 经公开 Interface 发布的普通上�
 
 ## 命名
 
-`APP` 是一个完整顶层 Module，`APP/tasks` 只是其私有 Implementation 分区。`app_init()`、`app_error()` 是 Core 进入 APP 的启动接缝，`app_task_start()` 与各 Task 入口仅在 APP 内调用；它们都使用 `snake_case`。下层 Module 不得包含 APP 头文件或调用其函数；需要被多处复用的产品能力应下沉为 Service Interface。详情见 [../docs/coding_standard.md](../docs/coding_standard.md)。
+`APP` 是一个完整顶层 Module，`APP/tasks` 只是其私有 Implementation 分区。`app_init()`、`app_error()` 是 Core 进入 APP 的启动接缝，`app_task_start()` 与各 Task 入口仅在 APP 内调用；它们都使用 `snake_case`。下层 Module 不得包含 APP 头文件或调用其函数；需要被多处复用的产品能力应下沉为 Service Interface。详情见 [../docs/shape/REVIEW.md](../docs/shape/REVIEW.md)。
