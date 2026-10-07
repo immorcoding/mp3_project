@@ -24,7 +24,8 @@ param([string]$HostCompiler, [string]$SdlSourceDir)
 [Console]::WriteLine("console 中文")
 [Console]::Error.WriteLine("stderr 中文")
 Write-Output "pipeline output"
-Write-Host "host output"
+Write-Host "host output 中文"
+Write-Warning "warning 中文"
 & $env:ComSpec /d /c "echo native output"
 Write-Output "compiler=$HostCompiler;sdl=$SdlSourceDir"
 exit 7
@@ -41,9 +42,11 @@ exit 7
     Assert-Evidence ($meta.commit -eq $commit -and $meta.exitCode -eq 7 -and $meta.mode -eq 'FULL') 'metadata commit/exit/mode mismatch'
     Assert-Evidence ($meta.dirtyBefore -and $meta.dirtyAfter) 'dirty fixture must be recorded'
     Assert-Evidence ($meta.command.Contains('verify.ps1') -and $meta.parameters.HostCompiler -eq "compiler path's gcc.exe") 'command/parameters missing'
-    $stdout = Get-Content (Join-Path $run 'stdout.log') -Raw -Encoding UTF8
-    $stderr = Get-Content (Join-Path $run 'stderr.log') -Raw -Encoding UTF8
-    foreach ($needle in @('console 中文', 'pipeline output', 'host output', 'native output', "compiler path's gcc.exe")) {
+    $strictUtf8 = New-Object Text.UTF8Encoding($false, $true)
+    $stdout = [IO.File]::ReadAllText((Join-Path $run 'stdout.log'), $strictUtf8)
+    $stderr = [IO.File]::ReadAllText((Join-Path $run 'stderr.log'), $strictUtf8)
+    Assert-Evidence (-not ($stdout + $stderr).Contains('CLIXML')) 'serialized PowerShell stream leaked into logs'
+    foreach ($needle in @('console 中文', 'pipeline output', 'host output 中文', 'warning 中文', 'native output', "compiler path's gcc.exe")) {
         Assert-Evidence ($stdout.Contains($needle)) "stdout missing: $needle"
     }
     Assert-Evidence ($stderr.Contains('stderr 中文')) 'Console stderr missing'
