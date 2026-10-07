@@ -11,7 +11,7 @@ GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后�
 
 ## 编译期依赖
 
-- `Service_GUI_Init()` / `Service_GUI_Process()` / `Service_GUI_ConsumeInput()` / `Service_GUI_TransportApply()` / `Service_GUI_ProgressApply()`；
+- `Service_GUI_Init()` / `Service_GUI_Process()` / `Service_GUI_ConsumeInput()` / `Service_GUI_TransportApply()` / `Service_GUI_ProgressApply()` / `Service_GUI_VinylApply()`；
 - `music/gui_music.h`；
 - FreeRTOS Task 入口签名。
 

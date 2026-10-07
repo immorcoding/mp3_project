@@ -185,6 +185,7 @@ void gui_music_init(void)
     gui_music_transport_init(&gui_music_transport);
     (void)Service_GUI_TransportApply(false);
     (void)Service_GUI_ProgressApply(0U);
+    (void)Service_GUI_VinylApply(false, true);
 }
 
 /**
@@ -197,6 +198,7 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
     bool cursor_moved;
     bool playing_changed;
     bool progress_changed;
+    bool vinyl_reset;
     bool displayed_window_idle;
 
     gui_music_dispatch_input(
@@ -204,6 +206,8 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
         &cursor_moved,
         &playing_changed,
         &progress_changed);
+    /* 切歌（游标变化）让唱盘归零；清空播放内容在 CLEAR 分支再置真。 */
+    vinyl_reset = cursor_moved;
 
     gui_music_queue_window_note_lead(
         &gui_music_queue_window_client,
@@ -264,6 +268,7 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
             }
             (void)gui_music_transport_reset_progress(&gui_music_transport);
             progress_changed = true;
+            vinyl_reset = true;
             break;
 
         default:
@@ -285,6 +290,17 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
     {
         (void)Service_GUI_TransportApply(
             gui_music_transport_is_playing(&gui_music_transport));
+    }
+
+    /*
+     * 唱盘只在 playing 变化、切歌或清空时重新对齐：playing 起转/续转，paused 停在
+     * 当前角度；切歌与清空先归零再按 playing 决定。拖进度条不碰唱盘。
+     */
+    if (playing_changed || vinyl_reset)
+    {
+        (void)Service_GUI_VinylApply(
+            gui_music_transport_is_playing(&gui_music_transport),
+            vinyl_reset);
     }
 
     /*

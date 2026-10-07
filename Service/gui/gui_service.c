@@ -18,6 +18,7 @@
 #include "Service/gui/main/gui_service_main.h"
 #include "Service/gui/main/queue/gui_service_main_queue.h"
 #include "Service/gui/main/transport/gui_service_main_transport.h"
+#include "Service/gui/main/vinyl/gui_service_main_vinyl.h"
 #include "Service/gui/theme/gui_service_theme.h"
 #include "Service/gui/theme/gui_service_theme_style.h"
 #include "Service/gui/view/gui_service_view.h"
@@ -349,6 +350,20 @@ Service_StatusTypeDef Service_GUI_TransportApply(bool playing)
 Service_StatusTypeDef Service_GUI_ProgressApply(uint8_t percent)
 {
     return service_gui_main_transport_apply_progress(percent);
+}
+
+/**
+ * @brief 按 playing 起转或停转 Now Playing 唱盘；reset_angle 先归零。
+ * @param[in] playing 为真从当前角度顺时针匀速续转（6 s 一圈），为假停在当前角度。
+ * @param[in] reset_angle 为真先把角度归零，用于切歌与清空播放内容。
+ * @retval SERVICE_OK 动画状态已与参数一致。
+ * @retval SERVICE_NOT_READY 唱盘尚未准备。
+ * @note 只能由同一 GUI Task 调用。调用方在 playing 变化、游标变化或清空时调用，
+ *       Service 不读播放游标。重复调用不叠加动画。
+ */
+Service_StatusTypeDef Service_GUI_VinylApply(bool playing, bool reset_angle)
+{
+    return service_gui_main_vinyl_apply(playing, reset_angle);
 }
 
 /**

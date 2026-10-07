@@ -49,6 +49,7 @@ uint16_t Service_GUI_QueueScrollLead(void);
 Service_StatusTypeDef Service_GUI_ConsumeInput(Service_GUI_InputTypeDef *input);
 Service_StatusTypeDef Service_GUI_TransportApply(bool playing);
 Service_StatusTypeDef Service_GUI_ProgressApply(uint8_t percent);
+Service_StatusTypeDef Service_GUI_VinylApply(bool playing, bool reset_angle);
 Service_StatusTypeDef Service_GUI_QueueApply(
     const char **titles,
     uint16_t length,

@@ -14,7 +14,7 @@ cmake --build build/gui_simulator
 ./build/gui_simulator/gui_simulator.exe
 ```
 
-窗口为 240×320 的 2 倍放大（`SIM_DISPLAY_ZOOM`）。鼠标左键 = 触摸；`T` 切换 Default/Solid 主题；`Esc` 退出。启动后约 5 s 进入 Lock，向上拖动解锁。
+窗口为 240×320 的 2 倍放大（`SIM_DISPLAY_ZOOM`）。鼠标左键 = 触摸；`T` 切换 Default/Solid 主题；`C` 清空播放内容（模拟拔卡：空 Queue、paused、进度与唱盘归零，期间选曲/三键/进度命令全部忽略；再按 `C` 模拟重新挂载回到第 0 首 paused）；`A` 在 stdout 打印 `[anim] running N`（LVGL 运行中动画数，核对唱盘动画不叠加）；`Esc` 退出。启动后约 5 s 进入 Lock，向上拖动解锁。
 
 ## 脚本参数（无人值守截图）
 
@@ -40,7 +40,7 @@ cmake --build build/gui_simulator
 
 ## 场景回归
 
-`scenarios/*.args` 每行一个参数（`#` 开头为注释），`scenarios/*.expected` 记录每张截图的帧哈希。当前场景：`boot_lock`（开机序列）、`unlock_main`、`music_transport`（播放/切歌/拖进度）、`queue`（选曲、滚动、Library）、`pager`（循环翻页与回弹）、`theme_toggle`（运行时切主题）、`theme_default`（Default 毛玻璃随横滑重裁剪）。改动 `Service/gui/` 后必须跑；新增界面时补场景。
+`scenarios/*.args` 每行一个参数（`#` 开头为注释），`scenarios/*.expected` 记录每张截图的帧哈希。当前场景：`boot_lock`（开机序列）、`unlock_main`、`music_transport`（播放/切歌/拖进度）、`queue`（选曲、滚动、Library）、`pager`（循环翻页与回弹）、`theme_toggle`（运行时切主题）、`theme_default`（Default 毛玻璃随横滑重裁剪）、`vinyl_rotation`（唱盘播放起转、暂停保角、恢复续转、切歌归零、翻页进出、反复切换与清空）。改动 `Service/gui/` 后必须跑；新增界面时补场景。`vinyl_rotation` 的 `--key a` 行在 stdout 打印动画数，不参与哈希比对，作为日志证据。
 
 ```powershell
 ./Tools/gui_simulator/run-scenarios.ps1              # 全部场景与基线比对
@@ -62,7 +62,7 @@ cmake --build build/gui_simulator
 | FreeRTOS `FreeRTOS.h` / `task.h` | `shim/` 同路径头 + `fakes/freertos_sim.c`：Tick 取模拟器时钟（`sim_clock.c`，交互时为 `SDL_GetTicks()`，脚本时为虚拟时钟），通知为计数器 |
 | 链接脚本资源区 `__external_resource_vinyl_*` 与壁纸像素区 | `fakes/resource_sim.c`：asm 定义 vinyl 同名符号、定义 `service_gui_view_wallpaper_pixels`，启动时拷入 `Resources/imgs/` 的唱盘与壁纸打包源；固件专用的 `gui_service_view_wallpaper_region.c` 不编译 |
 | `lv_conf.h` | `config/sim_lv_conf.h`：包装产品配置，只关 DMA2D、`.lvgl_large_ram_array` 段与 FPS/内存浮层 |
-| APP `gui_music`（依赖 Storage） | `sim_main.c` 内最小演示分区：10 首固定曲目、播放/暂停、上一首/下一首、假进度、选曲 |
+| APP `gui_music`（依赖 Storage） | `sim_main.c` 内最小演示分区：10 首固定曲目、播放/暂停、上一首/下一首、假进度、选曲、唱盘 `VinylApply` 接线与 `C` 键清空/恢复（近似固件 CLEAR 与重新挂载，不含窗口协议） |
 
 ## 已知差异
 
