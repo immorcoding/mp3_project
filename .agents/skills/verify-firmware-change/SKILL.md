@@ -16,4 +16,4 @@ description: Select and run FAST, CHANGED, FULL, and HARDWARE validation for thi
 
 只有 `FAIL` 阻止 commit/push。`PASS_HOST_ONLY` 只证明完整软件验证，不表示硬件行为已验收。
 
-非 trivial 软件变更完成后调用只读 `independent-verifier`。如果修改只是拼写、纯文档或显然无行为影响的小配置，可不调用；用户明确要求时始终调用。审校指出问题后先修复并重跑确定性脚本，只有修复改变了审校依据时才重新调用。
+完成前按 `docs/shape/harness.md` HAR-10 与 `docs/shape/REVIEW.md` 触发独立审阅：文档重构、规则迁移也在范围内；文档豁免仅限拼写、链接等显然无语义变化的小改，不能以“纯文档”跳过审阅。作者自查单列，不代替未参与编写者的独立首轮。问题修复与复审沿用 HAR-10。
