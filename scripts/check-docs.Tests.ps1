@@ -16,7 +16,8 @@ try {
     Write-Fixture 'README.md' '[失效](missing.md)'
     Assert-DocsFailure 'missing.md'
     Write-Fixture 'README.md' "# 入口`n[有效](docs/target.md#中文标题)"
-    Write-Fixture 'docs/target.md' '# 中文标题'
+    Write-Fixture 'docs/target.md' "# 中文标题`n[返回根](..)"
+    Write-Fixture 'README.md' "# 入口`n[根目录](.)`n[有效](docs/target.md#中文标题)"
     Invoke-DocumentationCheck -RepositoryRoot $fixture
     Write-Fixture 'docs/target.md' "# 中文标题`n`n## Repeat *text*`n`n## Repeat *text*"
     Write-Fixture 'README.md' "[重复标题](docs/target.md#repeat-text-1)`n[引用][target]`n`n[target]: docs/target.md#中文标题`n``````md`n[示例非链接](missing.md)`n``````"
@@ -41,6 +42,12 @@ try {
     Assert-DocsFailure '整体 split'
     Write-Fixture 'docs/shape/example.md' ($valid + "`n- **EX-1** · exploring · 重复。 _Why:_ 理由。")
     Assert-DocsFailure '重复.*EX-1'
+    Write-Fixture 'docs/shape/example.md' ($valid + "`n- **EX-x** · exploring · 坏编号。 _Why:_ 理由。")
+    Assert-DocsFailure 'Rules.*单行'
+    Write-Fixture 'docs/shape/example.md' ($valid + "`n- 无编号规则")
+    Assert-DocsFailure 'Rules.*单行'
+    Write-Fixture 'docs/shape/example.md' ($valid + "`n  不允许把规则续写到第二行。")
+    Assert-DocsFailure 'Rules.*单行'
     Write-Fixture 'docs/shape/example.md' ($valid.Replace('命名范围。',''))
     Assert-DocsFailure 'scope'
     Write-Fixture 'docs/shape/example.md' ($valid.Replace(' _Why:_ 理由。',''))
@@ -71,6 +78,8 @@ try {
     Write-Fixture 'docs/shape/example.naming.md' "# Example · naming`n`n命名范围。`n`n## Rules`n`n- **EX-1** · settled · 规则。 _Why:_ 理由。 _Check:_ 检查。"
     Assert-DocsFailure 'backlink'
     Write-Fixture 'docs/shape/example.naming.md' "# Example · naming`n`n命名范围。`n`n[返回](example.md)`n`n### Rules`n`n- **EX-1** · settled · 规则。 _Why:_ 理由。 _Check:_ 检查。"
+    Write-Fixture '.gitignore' '.claude/worktrees/'
+    Write-Fixture '.claude/worktrees/other/docs/bad.md' '[他仓链接](missing.md)'
     Write-Fixture 'Tools/vendor/bad.md' '[不扫描](missing.md)'
     Write-Fixture 'Tools/build/bad.md' '[不扫描](missing.md)'
     Write-Fixture 'Drivers/bad.md' '[不扫描](missing.md)'

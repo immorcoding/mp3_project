@@ -18,6 +18,7 @@ function Get-DocumentationDirectoryFiles {
     foreach ($item in Get-ChildItem -LiteralPath $Directory -Force) {
         if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
         if ($item.PSIsContainer) {
+            if ($item.Name -eq 'worktrees' -and (Split-Path $Directory -Leaf) -eq '.claude') { continue }
             if ($item.Name -notmatch '^(?i:build|vendor|generated|third_party|node_modules|\.git|_deps|\.venv|__pycache__)$') {
                 Get-DocumentationDirectoryFiles -Directory $item.FullName
             }
@@ -116,6 +117,9 @@ function Get-ShapeViolations {
                 }
                 if ($line -match '^#{2,3} (Rules|References|Proposed|Signals|Rejected)\s*$') { $section = $Matches[1]; continue }
                 if ($titleName -and -not $section -and $line.Trim() -and $line -notmatch '^#|^[-*] |^\[') { $scope = $true }
+                if ($section -eq 'Rules' -and $line.Trim() -and $line -notmatch '^- \*\*[A-Z][A-Z0-9]*-\d+\*\* · (exploring|provisional|settled) · \S') {
+                    "$at`: Rules 只接受有有效 ID 的单行规则"
+                }
                 if ($line -match '^- \*\*([A-Z][A-Z0-9]*-\d+)\*\*') {
                     $id = $Matches[1]; $count++; $titleRules++
                     if (-not $titleName -or -not $scope -or $section -ne 'Rules') { "$at`: $id 必须在有 scope 的 title Rules 下" }
@@ -161,7 +165,7 @@ function Invoke-DocumentationCheck {
                 $target = ($parts[0] -split '\?',2)[0]
                 $destination = if ($target) { [IO.Path]::GetFullPath((Join-Path $file.DirectoryName $target)) } else { $file.FullName }
                 $location = $file.FullName.Substring($root.Length + 1).Replace('\','/') + ':' + $number
-                if (-not $destination.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) {
+                if ($destination -ne $root -and -not $destination.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) {
                     [void]$errors.Add("${location}: 链接超出仓库：$href"); continue
                 }
                 if (-not (Test-Path -LiteralPath $destination)) { [void]$errors.Add("${location}: 缺少链接目标：$href"); continue }
