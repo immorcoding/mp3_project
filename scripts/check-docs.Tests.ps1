@@ -78,6 +78,15 @@ try {
     Write-Fixture 'docs/shape/example.naming.md' "# Example · naming`n`n命名范围。`n`n## Rules`n`n- **EX-1** · settled · 规则。 _Why:_ 理由。 _Check:_ 检查。"
     Assert-DocsFailure 'backlink'
     Write-Fixture 'docs/shape/example.naming.md' "# Example · naming`n`n命名范围。`n`n[返回](example.md)`n`n### Rules`n`n- **EX-1** · settled · 规则。 _Why:_ 理由。 _Check:_ 检查。"
+    # 审阅导航在根目录，链接仍需检查；旧大写 REVIEW 不再是 shape area 例外。
+    Write-Fixture 'CODING_STANDARDS.md' '[规范](docs/shape/example.md)'
+    Invoke-DocumentationCheck -RepositoryRoot $fixture
+    Write-Fixture 'CODING_STANDARDS.md' '[失效规范](docs/shape/missing.md)'
+    Assert-DocsFailure 'missing.md'
+    Write-Fixture 'CODING_STANDARDS.md' '[规范](docs/shape/example.md)'
+    Write-Fixture 'docs/shape/REVIEW.md' '# 旧入口'
+    Assert-DocsFailure '非法 area/title 文件名'
+    Remove-Item -LiteralPath (Join-Path $fixture 'docs/shape/REVIEW.md')
     Write-Fixture '.gitignore' '.claude/worktrees/'
     Write-Fixture '.claude/worktrees/other/docs/bad.md' '[他仓链接](missing.md)'
     Write-Fixture 'Tools/vendor/bad.md' '[不扫描](missing.md)'

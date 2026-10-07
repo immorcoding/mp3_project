@@ -6,4 +6,4 @@
 - 保持 Windows PowerShell 5.1 兼容，不为规则读取或 Hook 引入额外依赖。
 - 行为变化同步脚本自测；路径路由变化同步 `harness_helpers.Tests.ps1`。
 - 除正向用例外，覆盖相关的索引/工作树不一致、推送提交/脏工作树不一致与失败状态场景。
-- 验证后调用 `independent-verifier`；硬件分类变化再调用 `embedded-reviewer`。
+- 验证后统一 `code-review`；硬件分类变化按嵌入式清单核对验证边界。
