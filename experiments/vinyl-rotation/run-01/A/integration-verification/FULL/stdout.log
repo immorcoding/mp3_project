@@ -1,0 +1,440 @@
+harness_helpers 路由测试通过。
+分层 include 检查通过：已扫描 173 个文件。
+Initialized empty Git repository in C:/Users/22137/AppData/Local/Temp/layer-index-fixture-19c1bd93b5a2446781be7e544e0286df/.git/
+[main (root-commit) 6ed1474] seed
+ 6 files changed, 6 insertions(+)
+ create mode 100644 Adapters/bridge/fixture.c
+ create mode 100644 Adapters/cortex/fixture.c
+ create mode 100644 Adapters/stm32_hal/fixture.c
+ create mode 100644 Components/fixture.c
+ create mode 100644 Platform/fixture.c
+ create mode 100644 Service/fixture.c
+分层 include 检查通过：已扫描 6 个文件。
+check-layer-includes 函数测试通过。
+Initialized empty Git repository in C:/Users/22137/AppData/Local/Temp/generated-write-6e9b84328e9f4f8ebec4f4d6396fbe62/.git/
+[main (root-commit) 039f1ee] seed
+ 1 file changed, 1 insertion(+)
+ create mode 100644 tracked.txt
+Initialized empty Git repository in C:/Users/22137/AppData/Local/Temp/generated-write-7238af64b7ab477e92fc59bd8d68f130/.git/
+[main (root-commit) 039f1ee] seed
+ 1 file changed, 1 insertion(+)
+ create mode 100644 tracked.txt
+Initialized empty Git repository in C:/Users/22137/AppData/Local/Temp/generated-write-c5257a4e757b4c7f826a1b9b71ebe5a1/.git/
+[main (root-commit) 039f1ee] seed
+ 1 file changed, 1 insertion(+)
+ create mode 100644 tracked.txt
+生成目录写保护通过：工作树相对 HEAD 中的受保护路径无改动。
+Initialized empty Git repository in C:/Users/22137/AppData/Local/Temp/generated-write-da3e178d35ca4876ad9c385d708fbd3e/.git/
+[main (root-commit) 188d212] seed
+ 1 file changed, 1 insertion(+)
+ create mode 100644 tracked.txt
+已跳过生成目录写保护（ALLOW_GENERATED_UPDATE）。
+Initialized empty Git repository in C:/Users/22137/AppData/Local/Temp/generated-write-5111bd4ac51649088765710218aafc96/.git/
+[main (root-commit) 188d212] seed
+ 1 file changed, 1 insertion(+)
+ create mode 100644 tracked.txt
+生成目录写保护通过：工作树相对 HEAD 中的受保护路径无改动。
+check-generated-write 函数测试通过。
+Agent Hook 与 commit-msg 测试通过。
+sync-agent-config 函数测试通过。
+shape 写入分支检查测试通过。
+文档检查通过：2 份自维护 Markdown。
+文档检查通过：2 份自维护 Markdown。
+文档检查通过：3 份自维护 Markdown。
+文档检查通过：4 份自维护 Markdown。
+文档检查通过：4 份自维护 Markdown。
+文档检查通过：4 份自维护 Markdown。
+check-docs 文档行为测试通过。
+EVIDENCE_DIRECTORY=C:\Users\22137\AppData\Local\Temp\evidence-fixture-0b4388adb00b4208b6ffd7fe43fec624\build\evidence\20261007T151932362Z-full-e0e91ff584484a889c53e949b156b5bb
+EVIDENCE_DIRECTORY=C:\Users\22137\AppData\Local\Temp\evidence-fixture-0b4388adb00b4208b6ffd7fe43fec624\build\evidence\20261007T151933901Z-full-35370df97fee4b6d84abf12f9124c48b
+EVIDENCE_DIRECTORY=C:\Users\22137\AppData\Local\Temp\evidence-fixture-0b4388adb00b4208b6ffd7fe43fec624\build\custom path's evidence\20261007T151935337Z-gui-4fe99af478e04abb800edd96c2edf340
+EVIDENCE_DIRECTORY=C:\Users\22137\AppData\Local\Temp\evidence-fixture-0b4388adb00b4208b6ffd7fe43fec624\build\evidence\20261007T151936890Z-full-790f4a36d6cb434cb4487543dfacdb12
+EVIDENCE_DIRECTORY=C:\Users\22137\AppData\Local\Temp\evidence-fixture-0b4388adb00b4208b6ffd7fe43fec624\build\evidence\20261007T151938333Z-full-b91d8b43564845f5a63418130f5740aa
+EVIDENCE_DIRECTORY=C:\Users\22137\AppData\Local\Temp\evidence-fixture-0b4388adb00b4208b6ffd7fe43fec624\build\evidence\20261007T151939763Z-full-f3fcdef76b9b4c73a8eda2f44ba95c0b
+验证证据捕获测试通过。
+Agent 配置一致：.claude/ 与 .codex/ 的生成文件与 .agents/ 正文相同。
+分层 include 检查通过：已扫描 173 个文件。
+文档检查通过：156 份自维护 Markdown。
+生成目录写保护通过：工作树相对 HEAD 中的受保护路径无改动。
+-- Components Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/audio/audio.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/axp2101/axp2101.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/flash_ftl/flash_ftl.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/ft6x36/ft6x36.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/led/led.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/log/log.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/resource_pack/resource_pack.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/resource_pack/resource_pack_binary.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/resource_pack/resource_pack_image.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/sd/sd.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/soft_i2c/soft_i2c.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/st7789/st7789.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/w25qxx/w25qxx.c
+-- Adapters Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/bridge/axp2101_soft_i2c/axp2101_soft_i2c_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/bridge/flash_ftl_w25qxx/flash_ftl_w25qxx_bridge.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/cortex/cache/cortex_m7_dcache_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/audio_i2s/audio_i2s_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/ft6x36_i2c/ft6x36_i2c_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/irq/stm32_gpio_exti_irq.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/irq/stm32_qspi_irq.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/irq/stm32_sdmmc_irq.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/led_gpio/led_gpio_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/sd/sd_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/soft_i2c/soft_i2c_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/st7789_spi/st7789_spi_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/temp/temp_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/w25qxx_qspi/w25qxx_qspi_stm32_hal_adapter.c
+-- Platform Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/audio/platform_audio.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/flash/platform_flash.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/lcd/platform_lcd.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/led/platform_led.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/log/platform_log.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/platform.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/power/platform_power.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/sd/platform_sd.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/sdram/platform_sdram.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/temp/platform_temp.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/touch/platform_touch.c
+-- USB Device Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/USB_DEVICE/App/usb_device.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/USB_DEVICE/App/usbd_cdc_if.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/USB_DEVICE/App/usbd_desc.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/USB_DEVICE/Target/usbd_conf.c
+-- APP Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/app.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/app_tasks.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/gui/gui_task.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/gui/music/gui_music.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/gui/music/gui_music_queue_window.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/gui/music/gui_music_transport.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/log/log_task.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/monitor/monitor_task.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/benchmark/storage_flash_benchmark.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/benchmark/storage_flash_file_benchmark.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/benchmark/storage_sd_benchmark.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/benchmark/storage_sdram_benchmark.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/catalog/storage_catalog.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/catalog/storage_listbuffer.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/catalog/storage_playback_cursor.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/catalog/storage_sheet.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/flash/storage_flash.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/sd/storage_sd.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/storage_task.c
+-- Service Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_directory.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_file.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_handle.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_path.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_service.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_status.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/flash/filesystem_flash_access.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/flash/filesystem_flash_bsp.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/flash/filesystem_flash_transfer.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/sd/filesystem_sd_bsp.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/sd/filesystem_sd_transfer.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/boot/gui_service_boot.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/canvas/gui_service_canvas.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/canvas/gui_service_canvas_compositor.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/gui_service.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/gui_service_input.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/background/gui_service_main_background.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/gui_service_main.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/pager/gui_service_main_pager.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/queue/gui_service_main_queue.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/transport/gui_service_main_transport.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/vinyl/gui_service_main_vinyl.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/theme/gui_service_theme.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/theme/gui_service_theme_style.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_boot.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_lock.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_main.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_music.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_wallpaper.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_wallpaper_region.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/log/log_service.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/resource/resource_service.c
+-- FreeRTOS Config Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FreeRTOS/Config/freertos_assert.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FreeRTOS/Config/freertos_hooks.c
+-- Configuring done (0.0s)
+-- Generating done (0.1s)
+-- Build files have been written to: E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/firmware-debug
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+-- Components Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/audio/audio.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/axp2101/axp2101.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/flash_ftl/flash_ftl.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/ft6x36/ft6x36.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/led/led.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/log/log.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/resource_pack/resource_pack.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/resource_pack/resource_pack_binary.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/resource_pack/resource_pack_image.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/sd/sd.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/soft_i2c/soft_i2c.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/st7789/st7789.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Components/w25qxx/w25qxx.c
+-- Adapters Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/bridge/axp2101_soft_i2c/axp2101_soft_i2c_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/bridge/flash_ftl_w25qxx/flash_ftl_w25qxx_bridge.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/cortex/cache/cortex_m7_dcache_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/audio_i2s/audio_i2s_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/ft6x36_i2c/ft6x36_i2c_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/irq/stm32_gpio_exti_irq.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/irq/stm32_qspi_irq.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/irq/stm32_sdmmc_irq.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/led_gpio/led_gpio_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/log_usb_cdc/log_usb_cdc_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/sd/sd_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/soft_i2c/soft_i2c_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/st7789_spi/st7789_spi_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/temp/temp_stm32_hal_adapter.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Adapters/stm32_hal/w25qxx_qspi/w25qxx_qspi_stm32_hal_adapter.c
+-- Platform Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/audio/platform_audio.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/flash/platform_flash.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/lcd/platform_lcd.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/led/platform_led.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/log/platform_log.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/platform.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/power/platform_power.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/sd/platform_sd.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/sdram/platform_sdram.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/temp/platform_temp.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Platform/touch/platform_touch.c
+-- USB Device Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/USB_DEVICE/App/usb_device.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/USB_DEVICE/App/usbd_cdc_if.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/USB_DEVICE/App/usbd_desc.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/USB_DEVICE/Target/usbd_conf.c
+-- APP Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/app.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/app_tasks.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/gui/gui_task.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/gui/music/gui_music.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/gui/music/gui_music_queue_window.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/gui/music/gui_music_transport.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/log/log_task.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/monitor/monitor_task.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/benchmark/storage_flash_benchmark.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/benchmark/storage_flash_file_benchmark.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/benchmark/storage_sd_benchmark.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/benchmark/storage_sdram_benchmark.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/catalog/storage_catalog.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/catalog/storage_listbuffer.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/catalog/storage_playback_cursor.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/catalog/storage_sheet.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/flash/storage_flash.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/sd/storage_sd.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/APP/tasks/storage/storage_task.c
+-- Service Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_directory.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_file.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_handle.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_path.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_service.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_status.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/flash/filesystem_flash_access.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/flash/filesystem_flash_bsp.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/flash/filesystem_flash_transfer.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/sd/filesystem_sd_bsp.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/sd/filesystem_sd_transfer.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/boot/gui_service_boot.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/canvas/gui_service_canvas.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/canvas/gui_service_canvas_compositor.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/gui_service.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/gui_service_input.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/background/gui_service_main_background.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/gui_service_main.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/pager/gui_service_main_pager.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/queue/gui_service_main_queue.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/transport/gui_service_main_transport.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/main/vinyl/gui_service_main_vinyl.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/theme/gui_service_theme.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/theme/gui_service_theme_style.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_boot.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_lock.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_main.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_music.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_wallpaper.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/gui/view/gui_service_view_wallpaper_region.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/log/log_service.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/resource/resource_service.c
+-- FreeRTOS Config Sources:
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FreeRTOS/Config/freertos_assert.c
+E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FreeRTOS/Config/freertos_hooks.c
+-- Configuring done (0.0s)
+-- Generating done (0.1s)
+-- Build files have been written to: E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/firmware-release
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/external_loader
+ninja: no work to do.
+Test project E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/external_loader
+    Start 1: external_loader_geometry
+1/1 Test #1: external_loader_geometry .........   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.02 sec
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/flash_ftl
+[1/37] Building C object CMakeFiles/flash_ftl_fatfs_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/ff_gen_drv.c.obj
+[2/37] Building C object CMakeFiles/flash_ftl_fatfs_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/FATFS/Target/user_diskio.c.obj
+[3/37] Building C object CMakeFiles/flash_ftl_fatfs_tests.dir/test_flash_ftl.c.obj
+[4/37] Building C object CMakeFiles/flash_ftl_fatfs_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/ff.c.obj
+[5/37] Building C object CMakeFiles/flash_ftl_fatfs_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/diskio.c.obj
+[6/37] Building C object CMakeFiles/user_diskio_fallback_tests.dir/test_user_diskio_fallback.c.obj
+[7/37] Building C object CMakeFiles/user_diskio_fallback_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/FATFS/Target/user_diskio.c.obj
+[8/37] Building C object CMakeFiles/flash_ftl_fatfs_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/option/cc936.c.obj
+[9/37] Linking C executable flash_ftl_fatfs_tests.exe
+[10/37] Building C object CMakeFiles/user_diskio_fallback_tests.dir/host_config/bsp_fallback.c.obj
+[11/37] Linking C executable user_diskio_fallback_tests.exe
+[12/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/test_flash_ftl.c.obj
+[13/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/FATFS/Target/user_diskio.c.obj
+[14/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/ff.c.obj
+[15/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/ff_gen_drv.c.obj
+[16/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/diskio.c.obj
+[17/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/option/cc936.c.obj
+[18/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/test_flash_file_benchmark.c.obj
+[19/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_service.c.obj
+[20/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_file.c.obj
+[21/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_directory.c.obj
+[22/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_path.c.obj
+[23/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_status.c.obj
+[24/37] Building C object CMakeFiles/flash_file_benchmark_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_handle.c.obj
+[25/37] Linking C executable flash_file_benchmark_tests.exe
+[26/37] Building C object CMakeFiles/filesystem_service_tests.dir/test_filesystem_service.c.obj
+[27/37] Building C object CMakeFiles/filesystem_service_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_service.c.obj
+[28/37] Building C object CMakeFiles/filesystem_service_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_file.c.obj
+[29/37] Building C object CMakeFiles/filesystem_service_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_directory.c.obj
+[30/37] Building C object CMakeFiles/filesystem_service_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_path.c.obj
+[31/37] Building C object CMakeFiles/filesystem_service_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_handle.c.obj
+[32/37] Building C object CMakeFiles/filesystem_service_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Service/filesystem/filesystem_status.c.obj
+[33/37] Building C object CMakeFiles/filesystem_service_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/ff_gen_drv.c.obj
+[34/37] Building C object CMakeFiles/filesystem_service_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/ff.c.obj
+[35/37] Building C object CMakeFiles/filesystem_service_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/diskio.c.obj
+[36/37] Building C object CMakeFiles/filesystem_service_tests.dir/E_/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/Middlewares/Third_Party/FatFs/src/option/cc936.c.obj
+[37/37] Linking C executable filesystem_service_tests.exe
+Test project E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/flash_ftl
+      Start  1: flash_ftl_behavior
+ 1/16 Test  #1: flash_ftl_behavior ................   Passed    0.09 sec
+      Start  2: flash_ftl_fatfs_remount
+ 2/16 Test  #2: flash_ftl_fatfs_remount ...........   Passed    0.11 sec
+      Start  3: user_diskio_safe_weak_fallback
+ 3/16 Test  #3: user_diskio_safe_weak_fallback ....   Passed    0.04 sec
+      Start  4: flash_file_success
+ 4/16 Test  #4: flash_file_success ................   Passed    0.05 sec
+      Start  5: flash_file_exists
+ 5/16 Test  #5: flash_file_exists .................   Passed    0.01 sec
+      Start  6: flash_file_nonowner
+ 6/16 Test  #6: flash_file_nonowner ...............   Passed    0.01 sec
+      Start  7: flash_file_short_write
+ 7/16 Test  #7: flash_file_short_write ............   Passed    0.01 sec
+      Start  8: flash_file_write_error
+ 8/16 Test  #8: flash_file_write_error ............   Passed    0.01 sec
+      Start  9: flash_file_sync_error
+ 9/16 Test  #9: flash_file_sync_error .............   Passed    0.01 sec
+      Start 10: flash_file_read_error
+10/16 Test #10: flash_file_read_error .............   Passed    0.01 sec
+      Start 11: flash_file_corrupt
+11/16 Test #11: flash_file_corrupt ................   Passed    0.01 sec
+      Start 12: flash_file_close_once
+12/16 Test #12: flash_file_close_once .............   Passed    0.01 sec
+      Start 13: flash_file_close_error
+13/16 Test #13: flash_file_close_error ............   Passed    0.01 sec
+      Start 14: flash_file_delete_error
+14/16 Test #14: flash_file_delete_error ...........   Passed    0.01 sec
+      Start 15: flash_file_contract
+15/16 Test #15: flash_file_contract ...............   Passed    0.01 sec
+      Start 16: filesystem_service_volume_aware
+16/16 Test #16: filesystem_service_volume_aware ...   Passed    0.04 sec
+
+100% tests passed, 0 tests failed out of 16
+
+Total Test time (real) =   0.44 sec
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/gui_task
+ninja: no work to do.
+Test project E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/gui_task
+    Start 1: gui_music_queue_window_protocol
+1/3 Test #1: gui_music_queue_window_protocol ...   Passed    0.01 sec
+    Start 2: gui_music_transport_policy
+2/3 Test #2: gui_music_transport_policy ........   Passed    0.01 sec
+    Start 3: gui_service_input_mailbox
+3/3 Test #3: gui_service_input_mailbox .........   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 3
+
+Total Test time (real) =   0.05 sec
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/gui_theme
+ninja: no work to do.
+Test project E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/gui_theme
+    Start 1: gui_theme_palette_mapping
+1/1 Test #1: gui_theme_palette_mapping ........   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.02 sec
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/gui_canvas
+ninja: no work to do.
+Test project E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/gui_canvas
+    Start 1: gui_canvas_compose_solid_circles
+1/2 Test #1: gui_canvas_compose_solid_circles ......   Passed    0.01 sec
+    Start 2: gui_canvas_compose_image_with_cover
+2/2 Test #2: gui_canvas_compose_image_with_cover ...   Passed    0.02 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   0.04 sec
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/w25qxx
+ninja: no work to do.
+Test project E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/w25qxx
+    Start 1: w25qxx_identification_quad_configuration_and_array_io
+1/1 Test #1: w25qxx_identification_quad_configuration_and_array_io ...   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.02 sec
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/resource_pack
+ninja: no work to do.
+Test project E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/resource_pack
+    Start 1: resource_pack_protocol_validation
+1/1 Test #1: resource_pack_protocol_validation ...   Passed    0.02 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.03 sec
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/storage_catalog
+ninja: no work to do.
+Test project E:/Projects/project_mp3/master/.claude/worktrees/test-a-shape-matt/build/host/storage_catalog
+    Start 1: storage_playback_cursor_protocol
+1/1 Test #1: storage_playback_cursor_protocol ...   Passed    0.02 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.02 sec
+HARNESS_STATUS=PASS_HOST_ONLY
+FULL 通过：架构规则、Harness 自测、固件 Debug/Release 与全部主机回归均通过；本命令不替代上板。

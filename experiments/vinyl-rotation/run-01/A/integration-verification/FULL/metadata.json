@@ -1,0 +1,21 @@
+﻿{
+  "schemaVersion": 1,
+  "mode": "FULL",
+  "repository": "E:\\Projects\\project_mp3\\master\\.claude\\worktrees\\test-a-shape-matt",
+  "commit": "e85c02e9ce4163c0a766317578a28568d09a4e0a",
+  "commitAfter": "e85c02e9ce4163c0a766317578a28568d09a4e0a",
+  "snapshotStatus": "head-unchanged",
+  "command": "& 'E:\\Projects\\project_mp3\\master\\.claude\\worktrees\\test-a-shape-matt\\scripts\\verify.ps1'",
+  "parameters": {},
+  "startedAtUtc": "2026-10-07T15:19:17.9975221Z",
+  "finishedAtUtc": "2026-10-07T15:19:54.1225945Z",
+  "dirtyBefore": false,
+  "statusBefore": [],
+  "dirtyAfter": false,
+  "statusAfter": [],
+  "exitCode": 0,
+  "childExitCode": 0,
+  "captureError": null,
+  "stdout": "stdout.log",
+  "stderr": "stderr.log"
+}

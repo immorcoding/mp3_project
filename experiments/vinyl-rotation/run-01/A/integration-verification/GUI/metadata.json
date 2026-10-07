@@ -1,0 +1,23 @@
+﻿{
+  "schemaVersion": 1,
+  "mode": "GUI",
+  "repository": "E:\\Projects\\project_mp3\\master\\.claude\\worktrees\\test-a-shape-matt",
+  "commit": "e85c02e9ce4163c0a766317578a28568d09a4e0a",
+  "commitAfter": "e85c02e9ce4163c0a766317578a28568d09a4e0a",
+  "snapshotStatus": "head-unchanged",
+  "command": "& 'E:\\Projects\\project_mp3\\master\\.claude\\worktrees\\test-a-shape-matt\\Tools\\gui_simulator\\run-scenarios.ps1' -SdlSourceDir 'E:/Projects/project_mp3/master/build/gui_simulator/_deps/sdl2_mingw-src'",
+  "parameters": {
+    "SdlSourceDir": "E:/Projects/project_mp3/master/build/gui_simulator/_deps/sdl2_mingw-src"
+  },
+  "startedAtUtc": "2026-10-07T15:19:42.7582028Z",
+  "finishedAtUtc": "2026-10-07T15:19:46.0573637Z",
+  "dirtyBefore": false,
+  "statusBefore": [],
+  "dirtyAfter": false,
+  "statusAfter": [],
+  "exitCode": 0,
+  "childExitCode": 0,
+  "captureError": null,
+  "stdout": "stdout.log",
+  "stderr": "stderr.log"
+}
