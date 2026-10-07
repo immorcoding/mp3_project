@@ -32,6 +32,8 @@ function Invoke-FastWorkingTreeCheck {
         'hooks/agent_hooks.Tests.ps1'
         'sync-agent-config.Tests.ps1'
         'shape_writer.Tests.ps1'
+        'check-docs.Tests.ps1'
+        'capture-verification.Tests.ps1'
     )
     foreach ($selfTest in $selfTests) {
         Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath $selfTest)
@@ -42,6 +44,8 @@ function Invoke-FastWorkingTreeCheck {
 
     Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'check-layer-includes.ps1') `
         -Parameters @{ Snapshot = 'WorkingTree' }
+    Invoke-PowerShellScript -ScriptPath (Join-Path $PSScriptRoot 'check-docs.ps1')
+
     $generatedParameters = @{
         Snapshot = 'WorkingTree'
         AllowGeneratedUpdate = $AllowGenerated
@@ -123,7 +127,7 @@ Complete-Utf8EntryScript -Action {
 
         if (-not $SuppressStatus) {
             Write-HarnessStatus -Status PASS `
-                -Summary "FAST 通过：已验证 Harness 自测、分层 include 与生成目录写保护（$Snapshot）。"
+                -Summary "FAST 通过：已验证 Harness 自测、文档与 shape、分层 include 与生成目录写保护（$Snapshot）。"
         }
     }
     catch {
