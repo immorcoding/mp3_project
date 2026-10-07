@@ -66,9 +66,12 @@ $code = 1
 try {
     # 子进程句柄重定向会捕获原生 Console/外部程序，不依赖 PowerShell 管道或 Transcript。
     $body = "[Console]::OutputEncoding = New-Object Text.UTF8Encoding(`$false); [Console]::InputEncoding = [Console]::OutputEncoding; `$OutputEncoding = [Console]::OutputEncoding; `$ErrorActionPreference = 'Stop'; try { $command; if (`$null -ne `$LASTEXITCODE) { exit `$LASTEXITCODE }; exit 0 } catch { [Console]::Error.WriteLine(`$_); exit 1 }"
-    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($body))
+    # -EncodedCommand 会让 Windows PowerShell 的 Host/Warning 流走 CLIXML；
+    # BOM 文件入口让各流按前述 Console UTF-8 设置写入标准句柄。
+    $runnerPath = Join-Path $run 'runner.ps1'
+    [IO.File]::WriteAllText($runnerPath, $body, $utf8)
     $process = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe') `
-        -ArgumentList @('-NoProfile', '-NonInteractive', '-OutputFormat', 'Text', '-EncodedCommand', $encoded) `
+        -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $runnerPath + '"')) `
         -WorkingDirectory $repo -WindowStyle Hidden -Wait -PassThru `
         -RedirectStandardOutput (Join-Path $run 'stdout.log') -RedirectStandardError (Join-Path $run 'stderr.log')
     $code = $process.ExitCode
