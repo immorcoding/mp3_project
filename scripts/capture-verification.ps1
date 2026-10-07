@@ -44,6 +44,8 @@ $metadata = [ordered]@{
     mode = $Mode
     repository = $repo
     commit = $commit
+    commitAfter = $null
+    snapshotStatus = 'running'
     command = $command
     parameters = $parameters
     startedAtUtc = [DateTime]::UtcNow.ToString('o')
@@ -53,6 +55,7 @@ $metadata = [ordered]@{
     dirtyAfter = $null
     statusAfter = @()
     exitCode = $null
+    childExitCode = $null
     captureError = $null
     stdout = 'stdout.log'
     stderr = 'stderr.log'
@@ -69,20 +72,32 @@ try {
         -WorkingDirectory $repo -WindowStyle Hidden -Wait -PassThru `
         -RedirectStandardOutput (Join-Path $run 'stdout.log') -RedirectStandardError (Join-Path $run 'stderr.log')
     $code = $process.ExitCode
+    $metadata.childExitCode = $code
 }
 catch {
     $metadata.captureError = $_.ToString()
     [Console]::Error.WriteLine($_)
 }
 finally {
-    $metadata.exitCode = $code
     $metadata.finishedAtUtc = [DateTime]::UtcNow.ToString('o')
     try {
+        $metadata.commitAfter = (Get-EvidenceGit -GitArguments @('rev-parse', 'HEAD')) -join ''
         $after = @(Get-EvidenceGit -GitArguments @('status', '--porcelain=v1', '--untracked-files=all'))
         $metadata.statusAfter = $after
         $metadata.dirtyAfter = ($after.Count -gt 0)
+        if ($metadata.commitAfter -ne $commit) {
+            $metadata.snapshotStatus = 'head-changed'
+            $metadata.captureError = '运行期间 HEAD 改变，证据不属于单一提交。'
+            if ($code -eq 0) { $code = 1 }
+        }
+        else { $metadata.snapshotStatus = 'head-unchanged' }
     }
-    catch { $metadata.captureError = $_.ToString(); if ($code -eq 0) { $code = 1 } }
+    catch {
+        $metadata.snapshotStatus = 'git-unavailable'
+        $metadata.captureError = $_.ToString()
+        if ($code -eq 0) { $code = 1 }
+    }
+    $metadata.exitCode = $code
     [IO.File]::WriteAllText($metadataPath, ($metadata | ConvertTo-Json -Depth 5), $utf8)
     Write-Output "EVIDENCE_DIRECTORY=$run"
 }

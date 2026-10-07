@@ -68,6 +68,29 @@ exit 7
     $failureMeta = Get-Content (Join-Path $failed 'metadata.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-Evidence (-not $failureMeta.dirtyBefore -and -not $failureMeta.dirtyAfter) 'ignored evidence must preserve clean status'
     Assert-Evidence ((Get-Content (Join-Path $failed 'stderr.log') -Raw -Encoding UTF8).Contains('fixture failure')) 'terminating error text lost'
+    $headFile = Join-Path $fixture '.git/HEAD'
+    $savedHead = [IO.File]::ReadAllText($headFile)
+    [IO.File]::WriteAllText((Join-Path $fixture 'scripts/verify.ps1'), "[IO.File]::WriteAllText((Join-Path `$PSScriptRoot '../.git/HEAD'), 'invalid'); exit 0", $utf8)
+    try {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL
+        Assert-Evidence ($LASTEXITCODE -eq 1) 'post-run Git failure must fail capture'
+        $gitFailed = @(Get-ChildItem (Join-Path $fixture 'build/evidence') -Directory | Sort-Object Name)[-1].FullName
+        $gitMeta = Get-Content (Join-Path $gitFailed 'metadata.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        Assert-Evidence ($gitMeta.exitCode -eq 1 -and $gitMeta.childExitCode -eq 0) 'post-run failure manifest must match wrapper exit'
+        Assert-Evidence ($null -eq $gitMeta.commitAfter -and $gitMeta.snapshotStatus -eq 'git-unavailable') 'unavailable snapshot must be explicit'
+    }
+    finally { [IO.File]::WriteAllText($headFile, $savedHead, (New-Object Text.UTF8Encoding($false))) }
+    $moveHead = @'
+& git -c user.name=EvidenceTest -c user.email=evidence@example.invalid commit --allow-empty -qm changed-head
+exit $LASTEXITCODE
+'@
+    [IO.File]::WriteAllText((Join-Path $fixture 'scripts/verify.ps1'), $moveHead, $utf8)
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL
+    Assert-Evidence ($LASTEXITCODE -eq 1) 'HEAD change must prevent single-commit evidence'
+    $changed = @(Get-ChildItem (Join-Path $fixture 'build/evidence') -Directory | Sort-Object Name)[-1].FullName
+    $changedMeta = Get-Content (Join-Path $changed 'metadata.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-Evidence ($changedMeta.commitAfter -ne $changedMeta.commit -and $changedMeta.snapshotStatus -eq 'head-changed') 'both commits and changed snapshot required'
+    Assert-Evidence ($changedMeta.exitCode -eq 1 -and $changedMeta.childExitCode -eq 0) 'HEAD change manifest must match wrapper exit'
     Write-Output '验证证据捕获测试通过。'
 }
 finally {

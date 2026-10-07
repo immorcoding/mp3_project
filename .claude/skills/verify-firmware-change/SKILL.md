@@ -18,4 +18,4 @@ description: Select and run FAST, CHANGED, FULL, and HARDWARE validation for thi
 
 只有 `FAIL` 阻止 commit/push。`PASS_HOST_ONLY` 只证明完整软件验证，不表示硬件行为已验收。
 
-完成前按 `docs/shape/harness.md` HAR-10 与 `docs/shape/REVIEW.md` 触发独立审阅：文档重构、规则迁移也在范围内；文档豁免仅限拼写、链接等显然无语义变化的小改，不能以“纯文档”跳过审阅。作者自查单列，不代替未参与编写者的独立首轮。问题修复与复审沿用 HAR-10。
+完成前按 `docs/shape/harness.md` HAR-10 与 `docs/shape/REVIEW.md` 触发独立审阅：非 trivial 功能、修复、重构，以及文档重构、规则迁移均在范围内；文档豁免仅限拼写、链接等显然无语义变化的小改，不能以“纯文档”跳过审阅。作者自查单列，不代替未参与编写者的独立首轮。问题修复与复审沿用 HAR-10。
