@@ -1,6 +1,6 @@
 # Architecture · evolution
 
-模块增设、可复用构建与长期决策。
+模块所有权判定、构建封装与长期决策。
 
 [返回 Architecture](architecture.md)
 
