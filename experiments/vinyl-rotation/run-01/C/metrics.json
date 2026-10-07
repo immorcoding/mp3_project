@@ -1,0 +1,94 @@
+{
+  "group": "C",
+  "condition": "none (no shape; Matt use excluded by prompt, not global uninstallation)",
+  "run_id": "vinyl-rotation-01-C",
+  "recorded_on_user_local_date": "2026-10-07",
+  "source": "User-supplied Claude terminal screenshots; displayed rounded values retained",
+  "session": {
+    "model": "claude-fable-5-1",
+    "display_name": "Fable 5.1",
+    "total_cost_display": "$12.27",
+    "api_duration": "19m 4s",
+    "wall_duration": "22m 9s",
+    "lines_added": 589,
+    "lines_removed": 27,
+    "input_tokens_display": "31.7k",
+    "output_tokens_display": "88.6k",
+    "cache_read_tokens_display": "8.2m",
+    "cache_write_tokens_display": "304.1k",
+    "prompt_cache_main_requests": 38,
+    "input_tokens_from_cache_display": "97%",
+    "cache_misses_display": "no misses",
+    "cache_state": "warm",
+    "cache_ttl_display": "1h",
+    "last_activity_relative_display": "18s ago"
+  },
+  "cache_early_observation": {
+    "source": "User oral observation earlier in this conversation",
+    "approximate_initial_percentage_range": [
+      83,
+      84
+    ],
+    "later_screenshot_display": "97%",
+    "per_request_time_series_available": false
+  },
+  "context_snapshot": {
+    "used_tokens_display": "253.1k",
+    "capacity_display": "1m",
+    "used_percent_display": "25%",
+    "auto_compact_window_display": "1m",
+    "categories": {
+      "system_prompt": "5.6k (0.6%)",
+      "system_tools": "22.4k (2.2%)",
+      "mcp_tools": "1k (0.1%)",
+      "mcp_server_instructions": "1.3k (0.1%)",
+      "custom_agents": "160 (0.0%)",
+      "memory_files": "2.1k (0.2%)",
+      "skills": "7k (0.7%)",
+      "messages": "213.4k (21.3%)",
+      "free_space": "713.9k (71.4%)",
+      "autocompact_buffer": "33k (3.3%)"
+    },
+    "mcp_tools_count": 54,
+    "custom_agents_count": 2,
+    "memory_files_count": 4,
+    "skills_count": 49,
+    "cli_suggestion": {
+      "file_reads_tokens_display": "145.7k (15%)",
+      "potential_savings_display": "~43.7k",
+      "note": "CLI estimate, not realized savings or a count of actual repeated reads"
+    }
+  },
+  "implementation_report": {
+    "comment": "https://github.com/immorcoding/mp3_project/issues/25#issuecomment-6039857301",
+    "commit": "426a89f9f02725edef1d4e0e70a94edcc7a11be9",
+    "status": "Implementer reported complete; recording step did not perform independent functional acceptance"
+  },
+  "unknown": [
+    "full session ID",
+    "effort",
+    "absolute run start/end timestamps",
+    "peak context usage",
+    "number of actual compactions",
+    "subagent usage inclusion and breakdown",
+    "reliable phase-level token allocation"
+  ],
+  "scope_notes": [
+    "Context value is a snapshot, not proven peak.",
+    "Listed skills do not prove skill invocations; none policy was prompt-only.",
+    "No all-run constant cache-hit ratio or invented mean is inferred.",
+    "The implementer reported CLI2.1.292 and background job0ecd8046; these are not transcribed from the screenshots.",
+    "The implementer start comment labels its date UTC+8; no exact timestamp/timezone conversion is inferred.",
+    "No cross-group results written to the shared spec."
+  ],
+  "images": {
+    "session.png": {
+      "sha256": "b7bfc63b39f90221af4a1fb38937baf23ada62bfe343d1549767610f34972655",
+      "bytes": 43519
+    },
+    "context.png": {
+      "sha256": "04fa679c02474adffe00a16600f8bc0cbc2aa75ac8b4b64d3d6d0cfddfe16875",
+      "bytes": 118640
+    }
+  }
+}
