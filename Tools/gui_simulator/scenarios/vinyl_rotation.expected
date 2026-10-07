@@ -1,0 +1,15 @@
+idle_zero 014bf63a
+play_start 5dca7d83
+play_quarter 26e5ebe3
+play_half 09bcd39c
+paused 34e11c74
+paused_hold 34e11c74
+resumed 352e0b34
+next_zero_playing 21e90bfe
+paused_after_next 0e07f16f
+next_while_paused 014bf63a
+books_while_playing e31001d5
+back_to_music 058c10c2
+cleared 014bf63a
+cleared_hold 014bf63a
+cleared_play_ignored 014bf63a

@@ -9,7 +9,8 @@
 - `gui_music_queue_window_*()`：listbuffer 窗口 request / APPLY / CLEAR 时机。
 - `gui_music_transport_*()`：playing 与 0..100 进度；无当前曲不能开播；CLEAR 强制 paused 且进度归零。
 - 自动走表未实现：等 Playback 后台用解码器时间对接，见 `gui_music_step` 注释框。
-- Now Playing 时间 Label 已由 `view/` 创建，本分区尚未填时间。假唱盘第一帧见 `docs/shape/gui.md` 10.5.4，旋转尚未接线。
+- Now Playing 时间 Label 已由 `view/` 创建，本分区尚未填时间。
+- 唱盘旋转：playing 变化时 `Service_GUI_VinylApply(playing, false)`；游标变化（选曲含选中同一首、上一首/下一首，与进度归零同条件）时 `VinylApply(playing, true)` 归零后按 playing 续转；游标操作失败不归零；CLEAR 时 `VinylApply(false, true)` 停转归零。拖进度条不碰唱盘。
 
 ## 编译期依赖
 
@@ -28,6 +29,7 @@ ConsumeInput
        -> 窗口 REQUEST / APPLY / CLEAR（CLEAR 强制 paused 且进度归零）
        -> IDLE 且仍展示时按新游标 QueueApply
        -> TransportApply(playing) / ProgressApply(percent)
+       -> playing 变化或切歌/清空：VinylApply(playing, reset_angle)
 ~~~
 
 点 Queue 行仍由 Service 立刻改行样式。Playback 打开/预开只留注释。拖动进度条不改 playing。

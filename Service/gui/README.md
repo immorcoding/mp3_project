@@ -13,6 +13,7 @@
 - `Service_GUI_ConsumeInput(input)`：仅由同一 GUI Task 调用。取走上一圈 `Process()` 记下的一次点击。无点击时 `command` 为 `SERVICE_GUI_INPUT_NONE` 且返回 `SERVICE_OK`，不用 `SERVICE_NOT_READY` 表示空闲。`MUSIC_QUEUE_SELECT` 时 `param` 为播放列表下标；`MUSIC_SEEK` 时为 0..100 百分比。不包含 `storage_listbuffer.h` / `storage_playback_cursor.h`。
 - `Service_GUI_TransportApply(playing)`：仅由同一 GUI Task 调用。把 `MusicPlayPauseIcon` 换成 `LV_SYMBOL_PAUSE` 或 `LV_SYMBOL_PLAY`。
 - `Service_GUI_ProgressApply(percent)`：仅由同一 GUI Task 调用。把 `MusicPlayingSlider` 设为 0..100；Slider 处于 `PRESSED` 时不覆盖当前拖动。不解码、不真正 seek。
+- `Service_GUI_VinylApply(playing, reset_angle)`：仅由同一 GUI Task 调用。`playing` 为真时唱盘从当前角度顺时针匀速续转（`SERVICE_GUI_MAIN_VINYL_REVOLUTION_MS`，6 s 一圈），为假时停在当前角度；`reset_angle` 为真先把角度归零，用于切歌与清空播放内容。调用方在 playing 变化、游标变化或 CLEAR 时调用，Service 不读播放游标；重复调用不叠加动画。
 - `Service_GUI_QueueScrollLead()`：仅由同一 GUI Task 调用。返回 `QueueTab` 顶部已滚出的整行数，供窗口协议计算下一窗 `Index`。换窗时从当前 `scroll_y` 扣整行高度，不把列表吸回整页。
 
 重复调用 `Service_GUI_Init()` 返回 `SERVICE_BUSY`。当前 GUI Task 将初始化失败视为致命并调用
@@ -63,7 +64,7 @@ LVGL Pointer read_cb
 
 ## 私有 Modules 与配置
 
-对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_ConsumeInput()`、`Service_GUI_TransportApply()`、`Service_GUI_ProgressApply()`、`Service_GUI_QueueApply()` 与 `Service_GUI_ThemeApply()`；
+对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_ConsumeInput()`、`Service_GUI_TransportApply()`、`Service_GUI_ProgressApply()`、`Service_GUI_VinylApply()`、`Service_GUI_QueueApply()` 与 `Service_GUI_ThemeApply()`；
 以下是 `Service/gui` 内部的实现拆分，不得被 APP 或其他 Service 直接包含或调用。
 
 ```text
@@ -88,7 +89,7 @@ Service/gui/
 │  ├─ pager/                         循环分页、吸附、重排与圆点动画
 │  ├─ queue/                         按 Length 构造 Queue 行并滑窗复用
 │  ├─ transport/                     Now Playing 三键、进度条假 seek 与 PLAY/PAUSE
-│  ├─ vinyl/                         假唱盘第一帧绑到唱盘 Image
+│  ├─ vinyl/                         假唱盘第一帧绑到唱盘 Image，并按 playing 旋转
 │  ├─ background/                    壁纸模糊、局部裁剪；Solid 薄层
 │  └─ README.md
 └─ canvas/                           可复用的 Canvas 离屏处理
@@ -133,7 +134,8 @@ Service/gui/
   不包含 `storage_listbuffer.h` 或 `storage_playback_cursor.h`。
 - `main/transport/`：给 Now Playing 三键挂 `CLICKED`、给进度条挂 `RELEASED`，`post` 上一首/播放暂停/下一首/假 seek；
   `TransportApply` 只改播放符号，`ProgressApply` 改进度条（拖动中不写回）。不包含游标头。
-- `main/vinyl/`：把 Canvas 假唱盘第一帧绑到唱盘 Image。本刀不旋转。
+- `main/vinyl/`：把 Canvas 假唱盘第一帧绑到唱盘 Image，并按 `VinylApply` 用一条以该 Image 为 var 的 lv_anim
+  绕圆心顺时针旋转；暂停删动画保留角度，切歌/清空归零。角度只存在 lv_img 对象里，不读游标、不按墙钟走表。
 - `main/background/`：只持有 Main 的长期模糊壁纸和 `MusicModeTabs` SDRAM 裁剪背景。Default
   下首次需要时生成模糊壁纸，并监听 `MainPageContainer` 的 `LV_EVENT_SCROLL`，按目标控件当前坐标
   重裁剪背景；Solid 下改为半透明 Wash 薄层、跳过裁剪。它不维护分页槽位、吸附或圆点状态；除

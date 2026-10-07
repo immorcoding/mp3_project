@@ -17,7 +17,7 @@ main/
 ├─ pager/                       Page 槽位、吸附、循环重排、分页指示器动画
 ├─ queue/                       按 QueueApply 的 Length 构造 Queue 可见行并滑窗复用
 ├─ transport/                   Now Playing 三键、进度条假 seek 与 PLAY/PAUSE 符号
-├─ vinyl/                       把 Canvas 假唱盘第一帧绑到唱盘 Image
+├─ vinyl/                       把 Canvas 假唱盘第一帧绑到唱盘 Image，并按 playing 旋转
 └─ background/                  壁纸模糊、局部裁剪；Solid 薄层
 ~~~
 
@@ -28,7 +28,9 @@ main/
   并从当前 `scroll_y` 扣整行高度；不包含 `storage_listbuffer.h`。
   Queue 滚动不是 Pager，不要等 `SCROLL_END` 吸附。
 - `transport/` 不依赖 Canvas 或 Queue 行；绑三键与进度条松手，并换播放符号 / 写回百分比。
-- `vinyl/` 依赖 `canvas/`；合成假唱盘后绑到唱盘 Image。本刀不旋转。
+- `vinyl/` 依赖 `canvas/`；合成假唱盘后绑到唱盘 Image。`service_gui_main_vinyl_apply(playing, reset_angle)`
+  由 `Service_GUI_VinylApply()` 转发：playing 起转/续转、paused 停在当前角度、reset_angle 归零；
+  同一 Image 至多一条 lv_anim。
 - `background/` 不维护当前页、吸附阈值、循环映射、圆点动画或 Queue 行；它长期持有页面级
   SDRAM 图像缓冲，并在 MainPageContainer 滚动时更新 MusicModeTabs 的局部背景。仅 Default
   才会填充这些缓冲，Solid 改用半透明 Wash 薄层。
@@ -60,7 +62,7 @@ GUI Task
             -> 打开 QueueTab 滚动
        -> transport/service_gui_main_transport_prepare()
             -> 绑定上一首/播放暂停/下一首 CLICKED，以及进度条 RELEASED
-       -> vinyl/service_gui_main_vinyl_prepare()
+       -> vinyl/service_gui_main_vinyl_prepare()（角度 0、不起转）
             -> Canvas 合成假唱盘写入独立缓冲，绑到唱盘 Image
        -> background/service_gui_main_background_prepare(clear_wallpaper)
             -> 注册滚动同步
@@ -71,6 +73,8 @@ GUI Task 循环
   -> Service_GUI_Process()
 Service_GUI_ThemeApply()
   -> service_gui_main_apply_theme() -> background 按新外观更新
+Service_GUI_VinylApply(playing, reset_angle)
+  -> vinyl/service_gui_main_vinyl_apply() -> 删旧动画 → 按需归零 → playing 时从当前角度起转
 ~~~
 
 Pager 必须先完成初始居中；Background 随后读取的 MusicModeTabs 坐标才是实际显示位置。

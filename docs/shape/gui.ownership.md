@@ -12,3 +12,7 @@
 ### Rejected
 
 - SquareLine 导出 GUI/ 作为事实源：主题、分页和事件仍需补丁；ADR-0007 已被 ADR-0016 取代。
+
+### Signals
+
+- 2026-10-07 · cite · GUI-3 · 唱盘旋转先在分支 inbox 记录设计，再修改 main/vinyl；view 对象树未改。
