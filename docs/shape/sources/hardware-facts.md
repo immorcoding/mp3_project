@@ -14,3 +14,4 @@
 | ADC仅一个DR，Auto Wait等待读值后才推进下一Rank | 双Rank轮询不会被后一结果覆盖 | [Temperature Adapter](../../../Adapters/stm32_hal/temp/README.md) |
 | VREFINT工厂值校正VDDA，raw_temp折算到工厂校准电压后由TS_CAL1/TS_CAL2插值 | 直接插值原始值会将供电变化误读为温变 | [换算实现](../../../Adapters/stm32_hal/temp/temp_stm32_hal_adapter.c) |
 | ADC Stop保留offset校准，DeInit、deep-power-down或复位后失效 | 重校准取决于硬件生命周期，不是每次采样 | [Temperature Adapter](../../../Adapters/stm32_hal/temp/README.md)、[HAL校准实现](../../../Adapters/stm32_hal/temp/temp_stm32_hal_adapter.c) |
+| DTCM 不经 D-Cache，DMA 不可达；SDMMC 内部 DMA 须访问 AXI SRAM | 放在 DTCM 的栈与静态对象不需要 Cache 维护；DMA 缓冲须放 AXI SRAM 或 SDRAM | [链接脚本段注释](../../../stm32h743zgtx_flash.ld)、[音频 DMA、Cache 与完成事件设计](https://github.com/immorcoding/mp3_project/issues/33) |

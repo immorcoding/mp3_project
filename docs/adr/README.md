@@ -25,3 +25,4 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 - [0016-hand-written-gui-view-and-shared-theme-styles.md](0016-hand-written-gui-view-and-shared-theme-styles.md)：不再用 SquareLine 生成界面；`Service/gui/view/` 手写全部 Screen 并发布句柄；主题改为按角色引用的共享颜色 style；模拟器场景回归守住界面等价性。
 - [0017-mp3-decoder-minimp3.md](0017-mp3-decoder-minimp3.md)：MP3 解码库选用 minimp3（CC0）；解码器状态静态持有；解码接口与容器解析分离；0.6.0 只做 MP3。
 - [0018-playback-advance-ownership.md](0018-playback-advance-ownership.md)：播放推进归 APP 后台任务，播放模块不持游标、自行经 Service/filesystem 打开文件；GUI 只经队列与播放交互。
+- [0019-freertos-static-task-stack.md](0019-freertos-static-task-stack.md)：播放任务静态分配，解码栈放 DTCM；堆大小不变。
