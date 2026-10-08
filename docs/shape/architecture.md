@@ -2,7 +2,7 @@
 
 分层、Interface、装配与并发的当前规则；硬件和调用链事实按 [文档地图](README.md) 阅读。
 
-Next id: ARC-17
+Next id: ARC-19
 
 ## Pillars
 

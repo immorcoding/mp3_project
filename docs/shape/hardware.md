@@ -2,7 +2,7 @@
 
 本板供电、外部内存与采样输入的硬件约束。分层和生成器边界沿用 [Architecture](architecture.md) ARC-2/3/5/6/8/10，配置归属沿用 [Code style](code-style.md) STY-3。
 
-Next id: HWD-6
+Next id: HWD-7
 
 ## Pillars
 
@@ -33,6 +33,22 @@ SDRAM 初始化后内容、诊断与运行数据的所有权。
 ### References
 
 - [硬件依据表](sources/hardware-facts.md)：器件兼容、刷新和启动等待的依据；初始化接口与诊断见 [Platform SDRAM](../../Platform/sdram/README.md)。
+
+### Signals
+
+- 2026-10-08 · correction · HWD-2 · 放在 DTCM 不免 HWD-2 审查：启动与 MPU 仍须审查，只有 Cache/DMA 一项不适用。
+
+## internal-ram
+
+片内 DTCM、AXI SRAM 与 DMA 可达性的放置。
+
+### Rules
+
+- **HWD-6** · settled · DMA 缓冲放在 DMA 可达的 AXI SRAM 或 SDRAM，不放 DTCM；DTCM 只放 CPU 专用对象，如任务栈、解码器状态与读缓冲。_Why:_ DTCM 不经 D-Cache 且 DMA 不可达，SDMMC 也须使用 AXI SRAM。_Source:_ [硬件依据表](sources/hardware-facts.md) DTCM 行、[链接脚本段注释](../../stm32h743zgtx_flash.ld) _Check:_ code-review 规范轴检查链接段与 DMA 缓冲放置。
+
+### References
+
+- [硬件依据表](sources/hardware-facts.md)：DTCM 与 DMA 可达性的依据；链接段与放置见 [链接脚本](../../stm32h743zgtx_flash.ld)。
 
 ## input
 
