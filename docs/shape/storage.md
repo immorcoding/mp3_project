@@ -22,7 +22,7 @@ Next id: STOR-14
 ### Rules
 
 - **STOR-1** · settled · 曲库只收录 SD `Music/` 相对路径；播放列表、游标和窗口使用同一曲库代次，0 表示无效，GUI 只消费窗口副本；重扫或拔卡作废旧代次。_Why:_ 下标仅在其快照内有效，避免跨任务共享整表和误用旧位置。_Source:_ [ADR-0015](../adr/0015-volume-roles-and-resource-install.md)、[Storage 接口](../../APP/tasks/storage/README.md) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 存储审阅及 catalog/listbuffer 回归。
-- **STOR-6** · settled · 窗口按空闲、请求、就绪、消费释放单槽交接；请求仅含播放列表起点、条数和代次，回包以实际条数界定副本范围，代次不符返回无效空窗；游标独立保存，高亮同时核对游标与窗口代次。_Why:_ 可见窗口不是当前播放位置，消费前释放或复用会混淆两次交接。_Source:_ [Storage 接口](../../APP/tasks/storage/README.md) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 存储审阅及窗口/游标回归。
+- **STOR-6** · settled · 窗口按空闲、请求、就绪、消费释放单槽交接；请求仅含播放列表起点、条数和代次，回包以实际条数界定副本范围，代次不符返回无效空窗；窗口不携带当前曲，游标独立保存且只由播放任务写，GUI 不读写游标，当前曲以播放快照的曲目身份为准（GUI-17）。_Why:_ 可见窗口不是当前播放位置，消费前释放或复用会混淆两次交接。_Source:_ [Storage 接口](../../APP/tasks/storage/README.md)、[ADR-0020](../adr/0020-playback-state-machine-ownership.md) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 存储审阅及窗口/游标回归。
 - **STOR-7** · settled · 曲库根目录打不开按成功空库处理且不创建目录；条目或池耗尽保留截断结果，深度耗尽跳过并告警，读/关目录错误返回失败；NOLOAD 曲库和播放表以有效表头及代次判定，不依赖整池清零。_Why:_ 明确空库、容量受限与 I/O 失败的不同产品结果。_Source:_ [Storage 接口](../../APP/tasks/storage/README.md)、[扫描实现](../../APP/tasks/storage/catalog/storage_catalog.c) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 存储审阅及扫描边界回归。
 
 ## volumes

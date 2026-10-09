@@ -2,7 +2,7 @@
 
 界面所有权、交互边界与视觉效果生命周期。
 
-Next id: GUI-19
+Next id: GUI-21
 
 ## Pillars
 
@@ -14,7 +14,7 @@ Next id: GUI-19
 
 - Library、Album Detail/Mini Player、Books/Reader、Settings 子页何时进入实施 spec？现有占位不代表已实现；阅读横滑与 Main 手势、阅读字号与系统字号须分开决定。
 - 可换壁纸、按内容版本的 Blur 缓存及 Settings 合成背景何时实施？先确认缓存键、失效、峰值内存和真机耗时，不把当前 Alpha 原型视为 RGB565 持久缓存。
-- ID3 封面何时接入？0.6.0 不做。真实时间与音频进度已由解码器事件驱动，见 [transport](gui.transport.md)。
+- ID3 封面何时接入？0.6.0 不做。时间、进度与三态由播放快照驱动，见 [transport](gui.transport.md)。
 - 安全锁、背光与唤醒何时设计？Lock 当前仅视觉锁屏，真实亮度需 Platform LCD/PWM 能力。
 - 何时升级 LVGL 9 并评估 XML 编辑器？随 Vendor 升级再决定，ADR-0016 当前未采用。
 

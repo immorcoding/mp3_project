@@ -15,3 +15,4 @@
 ### Signals
 
 - 2026-10-07 · cite · GUI-4 · 新增 vinyl_rotation 场景，既有场景只更新已检查的四个旋转影响帧；最终八场景/54帧回归通过。
+- 2026-10-09 · cite · GUI-4 · 0.6.0 音乐页计划把模拟器替身边界扩到 APP 音乐分区（编译真实 gui_music，假播放后端实现合同头，另配假 Storage 窗口）；基线分两步：先等价替换（旧场景哈希不变，变化帧逐张看图并写明原因），再接新行为、新增场景（[音乐页输入与列表](https://github.com/immorcoding/mp3_project/issues/66)）。
