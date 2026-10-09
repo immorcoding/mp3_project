@@ -12,6 +12,7 @@ Next id: STOR-14
 
 ## Open questions
 
+- 过渡说明（2026-10-09）：STOR-6、STOR-8、STOR-12 中关于播放游标、音频流与回收门的条款是 0.6.0 真播放的目标态（[0.6.0 地图](https://github.com/immorcoding/mp3_project/issues/44)）；后端 spec 实施前，现有代码仍由 GUI 写游标、Storage 初始化与作废游标，审阅不据此判违规。实施完成后删除本条。
 - MP3 标签与封面的展示不在 0.6.0：标签拟在填窗时按需读取，封面拟归 Now Playing，窗口载荷和缺标签文案待对应 spec 落定。播放时越过 ID3v2 与尾部 ID3v1/APE 归 Storage（见词典“音频帧流”），不属本问题。
 - FatFs DiskIO 单次 SDMMC DMA 等待超时为 30 s（`FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS`），远大于播放侧 T_data（初值 2 s）；播放超时停止后 Storage 仍可能阻塞在这次读取中。是否按 SD 读访问上限（SDHC/SDXC 100 ms）收紧，待存储侧复核。
 

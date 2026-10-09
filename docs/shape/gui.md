@@ -12,6 +12,7 @@ Next id: GUI-21
 
 ## Open questions
 
+- 过渡说明（2026-10-09）：GUI-10、GUI-17、GUI-19、GUI-20 描述的是接入播放快照后的目标态（[0.6.0 地图](https://github.com/immorcoding/mp3_project/issues/44)）；交互 spec 实施前，现有音乐页仍按假进度、本地 playing 与直接写游标运行，审阅不据此判违规。实施完成后删除本条。
 - Library、Album Detail/Mini Player、Books/Reader、Settings 子页何时进入实施 spec？现有占位不代表已实现；阅读横滑与 Main 手势、阅读字号与系统字号须分开决定。
 - 可换壁纸、按内容版本的 Blur 缓存及 Settings 合成背景何时实施？先确认缓存键、失效、峰值内存和真机耗时，不把当前 Alpha 原型视为 RGB565 持久缓存。
 - ID3 封面何时接入？0.6.0 不做。时间、进度与三态由播放快照驱动，见 [transport](gui.transport.md)。

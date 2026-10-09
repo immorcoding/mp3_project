@@ -4,7 +4,7 @@
 - 日期：2026-10-08
 - 相关 ticket：[0.6.0 地图](https://github.com/immorcoding/mp3_project/issues/29)、[解码内存预算总账](https://github.com/immorcoding/mp3_project/issues/39)、[解码 scratch 出堆](https://github.com/immorcoding/mp3_project/issues/40)
 - 相关决定：[ADR-0017](0017-mp3-decoder-minimp3.md)（minimp3 与解码器状态）、[ADR-0006](0006-cache-range-ownership.md)（Cache 范围）
-- 完整布局：[地图上的内存布局记录](https://github.com/immorcoding/mp3_project/issues/29#issuecomment-6059217048)
+- 完整布局：[地图上的内存布局记录](https://github.com/immorcoding/mp3_project/issues/29#issuecomment-6059217048)（旧地图，已废弃；现行账目见[内存预算与块池尺寸复核](https://github.com/immorcoding/mp3_project/issues/58)，规划见 [0.6.0 地图](https://github.com/immorcoding/mp3_project/issues/44)）
 
 ## 背景
 

@@ -34,6 +34,6 @@ ADR-0018 把曲目推进交给 APP 后台任务，但其第 3 条让 Service 播
 ## 后果
 
 - ADR-0018 整体废止；其第 1、2 条的意图（推进归 APP、播放模块不持游标）由本 ADR 沿用。
-- 实施时，`APP/tasks/gui/music` 中对 `storage_playback_cursor_set/next/previous` 的调用要改为发送命令，GUI 的 playing 标志与假进度改为读取播放状态。`storage_catalog` 中对游标的 init/invalidate 也要移出 Storage Task。STOR-6（高亮核对游标）和 GUI-17（游标更新后才 Apply）要相应修订，已在 shape inbox 中记为 Signal。
+- 实施时，`APP/tasks/gui/music` 中对 `storage_playback_cursor_set/next/previous` 的调用要改为发送命令，GUI 的 playing 标志与假进度改为读取播放状态。`storage_catalog` 中对游标的 init/invalidate 也要移出 Storage Task。STOR-6 与 GUI-17 已于 2026-10-09 按本决定与[播放后端公开合同](https://github.com/immorcoding/mp3_project/issues/53)改写为读播放快照、只由播放任务写游标。
 - 主机测试从播放任务的纯 C 状态机切入，用假存储窗口和假播放模块驱动；播放模块单独用假的 Platform 音频测试。出声、DMA 与 Cache 只能上板验证。
 - 若将来要把推进策略移入 Service，需要新 ADR 取代本决定。

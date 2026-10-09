@@ -10,6 +10,10 @@ Next id: ARC-19
 - 生成器维护产物，HAL 差异在 Adapter 内吸收。
 - 公开 Interface 隐藏实现，装配与执行分开。
 
+## Open questions
+
+- 过渡说明（2026-10-09）：ARC-12 中的音频流专用交接与 ARC-18 中“停止确认成功才交还、锁存故障时留在传输模块”是 0.6.0 真播放的目标态（[0.6.0 地图](https://github.com/immorcoding/mp3_project/issues/44)）；后端 spec 实施前，现有音频路径仍是阻塞发送，审阅不据此判违规。实施完成后删除本条。
+
 ## Titles
 
 - [ownership](architecture.ownership.md): 各层的抽象、板级资源和产品策略归属。
