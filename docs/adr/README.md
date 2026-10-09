@@ -26,4 +26,4 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 - [0017-mp3-decoder-minimp3.md](0017-mp3-decoder-minimp3.md)：MP3 解码库选用 minimp3（CC0）；解码器状态静态持有；解码接口与容器解析分离；0.6.0 只做 MP3。
 - [0018-playback-advance-ownership.md](0018-playback-advance-ownership.md)：播放推进归 APP 后台任务，播放模块不持游标、自行经 Service/filesystem 打开文件；GUI 只经队列与播放交互；已由 ADR-0020 取代。
 - [0019-freertos-static-task-stack.md](0019-freertos-static-task-stack.md)：播放任务静态分配，解码栈放 DTCM；堆大小不变。
-- [0020-playback-state-machine-ownership.md](0020-playback-state-machine-ownership.md)：播放状态机归 APP 播放任务（推进、开启交接、流身份、三通道），游标只由它写；播放模块只做解码与输出管线；FIL 归 Storage Task；对外只公开停止/播放/暂停三态。
+- [0020-playback-state-machine-ownership.md](0020-playback-state-machine-ownership.md)：播放状态机归 APP 播放任务（推进、开启交接、流身份、命令与状态两条通道，2026-10-09 修订），游标只由它写；播放模块只做解码与输出管线；FIL 归 Storage Task；对外只公开停止/播放/暂停三态。
