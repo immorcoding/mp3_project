@@ -1,6 +1,6 @@
 # ADR-0018：播放推进归 APP 后台任务，播放模块不持游标
 
-- 状态：已接受。
+- 状态：已被 [ADR-0020](0020-playback-state-machine-ownership.md) 取代（2026-10-08）。第 1、2 条的意图（推进归 APP、播放模块不持游标）由 ADR-0020 沿用；第 3 条（播放模块自行打开文件）与 ADR-0005 冲突，废止；第 4、5 条由 ADR-0020 与后续公开合同重新表述。下文保留作历史记录。
 - 日期：2026-10-08
 - 相关 ticket：[0.6.0 地图](https://github.com/immorcoding/mp3_project/issues/29)、[Playback 状态机与接口](https://github.com/immorcoding/mp3_project/issues/35)
 - 相关决定：[ADR-0002](0002-layering-and-interface-ownership.md)、[ADR-0015](0015-volume-roles-and-resource-install.md)、[ADR-0017](0017-mp3-decoder-minimp3.md)
