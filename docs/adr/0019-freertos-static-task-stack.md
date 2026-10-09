@@ -25,8 +25,9 @@ minimp3 的解码 scratch（`mp3dec_scratch_t`，ARM 上 16236 字节）是 `mp3
 
 ## 后果
 
-- 播放任务的任务控制块与栈在启动时确定，运行期间不变。DTCM 为播放任务新增约 16 KB 静态内存（栈下限 16240 字节，加任务控制块 116 字节）。
-- 堆余量不少于 15 KB，足以容纳后续新增的队列。
-- 栈大小在实施时要补足 Layer I/II 分支的局部变量与调用链余量，并用栈水位复核。
+- 播放任务的任务控制块与栈在启动时确定，运行期间不变。DTCM 为播放任务新增约 20.6 KB 静态内存（栈初值 20480 字节 = 5120 word，加任务控制块 116 字节）。栈依据：scratch 16236 字节只是下限，[#46](https://github.com/immorcoding/mp3_project/issues/46) 实测调用链约 17.6 KB，加 Layer I/II 约 0.9 KB，余约 2 KB。
+- 堆余量约 14.3 KB（[#58](https://github.com/immorcoding/mp3_project/issues/58) 补计队列存储区），足以容纳后续新增的队列。
+- 栈水位（`uxTaskGetStackHighWaterMark`）与堆最低余量待板测。
 - 新增栈仍须按 [HWD-2](../shape/hardware.md) 审查启动与 MPU。Cache/DMA 一项对 DTCM 不适用。
 - `FreeRTOSConfig.h` 的静态分配开关因此改变，这是本决定的一部分，已由用户在决定票中选定。
+- 修订（2026-10-09）：按 [#46](https://github.com/immorcoding/mp3_project/issues/46)、[#58](https://github.com/immorcoding/mp3_project/issues/58) 更正栈与堆的数字，决定不变。

@@ -37,6 +37,7 @@ SDRAM 初始化后内容、诊断与运行数据的所有权。
 ### Signals
 
 - 2026-10-08 · correction · HWD-2 · 放在 DTCM 不免 HWD-2 审查：启动与 MPU 仍须审查，只有 Cache/DMA 一项不适用。
+- 2026-10-08 · cite · HWD-2 · 音频块池（初值 32 × 32 KiB）新增 SDRAM NOLOAD 段，块内容入队才有效、不依赖清零；实施时按本规则审查启动、MPU 与全容量诊断的时机，块池不作 DMA 目标。
 
 ## internal-ram
 
@@ -49,6 +50,10 @@ SDRAM 初始化后内容、诊断与运行数据的所有权。
 ### References
 
 - [硬件依据表](sources/hardware-facts.md)：DTCM 与 DMA 可达性的依据；链接段与放置见 [链接脚本](../../stm32h743zgtx_flash.ld)。
+
+### Signals
+
+- 2026-10-09 · cite · HWD-6 · 线性输入窗口（初值 4 KiB）只由 CPU 访问，放 DTCM；PCM 两个半区是 I2S DMA 缓冲，放 AXI SRAM，每半区 1152 帧为配置常量，欠载时先改为 2304（AXI 多占 9 KiB）。
 
 ## input
 

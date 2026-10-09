@@ -12,7 +12,8 @@ Next id: STOR-14
 
 ## Open questions
 
-- MP3 元数据尚未实现：解析器、解码器与 PCM 发送保持独立，标签拟在填窗时按需读取，封面拟归 Now Playing；窗口载荷和缺标签文案待对应 spec 落定。
+- MP3 标签与封面的展示不在 0.6.0：标签拟在填窗时按需读取，封面拟归 Now Playing，窗口载荷和缺标签文案待对应 spec 落定。播放时越过 ID3v2 与尾部 ID3v1/APE 归 Storage（见词典“音频帧流”），不属本问题。
+- FatFs DiskIO 单次 SDMMC DMA 等待超时为 30 s（`FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS`），远大于播放侧 T_data（初值 2 s）；播放超时停止后 Storage 仍可能阻塞在这次读取中。是否按 SD 读访问上限（SDHC/SDXC 100 ms）收紧，待存储侧复核。
 
 ## catalog
 
@@ -30,8 +31,12 @@ Next id: STOR-14
 
 ### Rules
 
-- **STOR-8** · settled · 无卡是可正常启动的持续状态；检测边沿重开任务消抖并暂停窗口请求，稳定后才改变介质状态，消抖不等于卸载；事件等待兼顾消抖和回收期限，传输完成槽与主循环事件槽分开，挂载后继续使用初始化注入的完成槽。_Why:_ 抖动不能伪装传输结果或饿死后台回收，暂不可请求也不等于曲库已消失。_Source:_ [Storage 接口](../../APP/tasks/storage/README.md)、[SD 生命周期](../../Components/sd/README.md) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 存储审阅及热插拔/通知回归。
+- **STOR-8** · settled · 无卡是可正常启动的持续状态；检测边沿重开任务消抖，并暂缓窗口请求、音频流请求与补块（已打开的流保持打开），稳定后才改变介质状态，消抖不等于卸载；事件等待兼顾消抖和回收期限，传输完成槽与主循环事件槽分开，挂载后继续使用初始化注入的完成槽。_Why:_ 抖动不能伪装传输结果或饿死后台回收，暂不可请求也不等于曲库已消失。_Source:_ [Storage 接口](../../APP/tasks/storage/README.md)、[SD 生命周期](../../Components/sd/README.md)、[音频流协议](https://github.com/immorcoding/mp3_project/issues/48) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 存储审阅及热插拔/通知回归。
 - **STOR-9** · settled · SD 与 Flash 独立初始化、挂载和报告错误；SD 无设备侧格式化，Flash 显式格式化或恢复成功时须已重新挂载并使本卷旧 Token 失效；APP 自动格式化策略只处理无文件系统结果，损坏、不兼容等其他失败保留可诊断状态。_Why:_ 一个卷的故障不能污染另一个卷或令旧对象透明继续写。_Source:_ [Filesystem 接口](../../Service/filesystem/README.md)、[APP 策略](../../APP/tasks/storage/flash/storage_flash.c) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 存储审阅及独立卷/Token/恢复回归。
+
+### Signals
+
+- 2026-10-09 · friction · STOR-8 · 插卡消抖后同步挂载并扫描（最多 32000 首，可能数秒），期间不处理流请求，插卡后立即播放会触发 T_data 停止（已接受）；改为分步扫描须同时改写主循环结构与 T_data 的依据。
 
 ## media
 
@@ -42,6 +47,10 @@ Next id: STOR-14
 - **STOR-2** · settled · Flash 诊断仅擦写首尾自检区，FTL 经 Bridge 校验完整分区范围后访问；固件双槽和原始资源区独立保留，格式化与 GC 同样受边界约束，首次破坏性访问核验已有内容和配置布局。_Why:_ 逻辑盘维护不能破坏镜像或资源。_Source:_ [ADR-0009](../adr/0009-w25q256-firmware-slots-and-diagnostic-reservation.md)、[介质事实](sources/storage-media.md) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 分区审阅及 Bridge/Platform 边界回归。
 - **STOR-3** · settled · DMA 使用可达且独占完整 Cache line 的缓冲，方向相关维护和控制器停止确认完成后才归还；FatFs 任意缓冲经专用 bounce buffer 转交。FTL 整笔请求关闭 QSPI 映射，仅成功且硬件空闲后按入口状态恢复，失败保持关闭。_Why:_ IRQ 或软件超时不证明数据和映射已安全，不能让 Cache 维护影响相邻对象。_Source:_ [ADR-0006](../adr/0006-cache-range-ownership.md)、[介质事实](sources/storage-media.md) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 的规范轴核查 Cache/生命周期，覆盖超时和延迟通知。
 - **STOR-10** · settled · 原始 NOR 访问保持已选固定四字节协议、页/块边界和 QE/WEL 前提；恢复和开启映射先确认 NOR 空闲，SD 写传输完成还须等卡回 TRANSFER；改 CubeMX 存储配置同步核对 Adapter 初始化、回调注册、NVIC、QSPI/MDMA 配合及 CS 时序。_Why:_ 控制器忙与介质内部忙不同，吞吐通过不能证明时序或写入安全。_Source:_ [介质事实](sources/storage-media.md)、[SD Adapter](../../Adapters/stm32_hal/sd/sd_stm32_hal_adapter.c) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 的规范轴核查协议/时序，运行设备状态机回归与相关板测。
+
+### Signals
+
+- 2026-10-08 · cite · STOR-3 · 音频路径经 bounce buffer，不承诺零拷贝（bounce → 音频块 → 线性窗口）；音频块不作 DMA 目标，若改为 SDMMC 直写块，须另行决定并改写本规则。
 
 ## durability
 
@@ -59,5 +68,5 @@ FTL 持久化格式、可见提交和故障恢复。
 
 ### Rules
 
-- **STOR-12** · settled · GC 只擦已证明不承载当前数据的块；已擦除空闲数按全池预留预算和滞回水位管理，分配保持保护下限，无可回收块即结束；上层提供有限回收机会，当前一次最多一块，不承诺擦除抢占或静态磨损均衡。_Why:_ 回收是有限进展而非必然释放空间，压力不能成为擦当前版本的理由。_Source:_ [ADR-0011](../adr/0011-ftl-copy-on-write-and-recovery.md)、[FTL 接口](../../Components/flash_ftl/README.md) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 回收审阅及水位/无失效块/持续覆盖回归。
+- **STOR-12** · settled · GC 只擦已证明不承载当前数据的块；已擦除空闲数按全池预留预算和滞回水位管理，分配保持保护下限，无可回收块即结束；上层提供有限回收机会，有打开的音频流时不提供（暂停保留流，回收顺延），当前一次最多一块，不承诺擦除抢占或静态磨损均衡。_Why:_ 回收是有限进展而非必然释放空间，压力不能成为擦当前版本的理由。_Source:_ [ADR-0011](../adr/0011-ftl-copy-on-write-and-recovery.md)、[FTL 接口](../../Components/flash_ftl/README.md)、[音频流协议](https://github.com/immorcoding/mp3_project/issues/48) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 回收审阅及水位/无失效块/持续覆盖回归。
 - **STOR-13** · settled · 执行器区分软件可继续与等待硬件，FTL 内部原始操作只由 FTL 推进；错误后停接新请求，校验失败保留旧映射不自动换块重试，Quiesce 未确认前保持缓冲所有权。Sync 确认先前写入与硬件安全而非清空 GC；失败返回不能解释为介质未变化。_Why:_ 软件步骤未必有 IRQ，Abort 不撤销 NOR 写擦，提交后通知也可能丢失。_Source:_ [FTL 接口](../../Components/flash_ftl/README.md)、[故障模型](sources/storage-format.md) _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 的规范轴核查推进/安全收尾，覆盖通知丢失、中止失败与介质仍忙。
