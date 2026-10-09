@@ -26,6 +26,10 @@ Next id: HAR-14
 
 - **HAR-12** · provisional · 新增 Skill 仅用于反复出现且高风险的独特操作流程，接口、术语和不变量继续由领域文档维护。 _Why:_ 说明型 Skill 会增加常驻导航负担并复制事实源。 _Source:_ [开发入口决定](https://github.com/immorcoding/mp3_project/issues/12)
 
+### Signals
+
+- 2026-10-08 · cite · HAR-9 · 用户要求根 AGENTS 新增「模型分工」表（规划 Opus 5.5，默认 effort medium、难题 high；实施 Sonnet 5.5，默认 high、难题 xhigh；调研探索 Haiku 5.5，effort 始终 max），归为项目约定，仅约束 Claude Code。
+
 ## hooks
 
 工具守卫与即时检查。

@@ -10,6 +10,18 @@
 - GUI 变化：先读 [gui](docs/shape/gui.md)，更新其中受影响的规则或待决设计，再改手写 view。
 - 术语按条查 [GLOSSARY](GLOSSARY.md)；长期边界决定与 ADR 读取顺序见 [domain](docs/agents/domain.md)。修改工具配置时读 [harness](docs/shape/harness.md)。
 
+## 模型分工
+
+仅约束 Claude Code；Codex 按自身配置。
+
+| 阶段 | 模型 | 默认 effort | 典型工作 |
+|---|---|---|---|
+| 规划 | Opus 5.5 | medium；难的规划用 high | wayfinder、grilling、写 spec、拆 ticket、边界与架构决定 |
+| 实施 | Sonnet 5.5 | high；难的实施用 xhigh | 按 ticket 改代码与文档、跑验证、修审阅发现 |
+| 调研与探索 | Haiku 5.5 | 始终 max | 查代码与文档、检索上游资料、汇总事实等重复性工作 |
+
+派 subagent 时按表设 `model`（`opus` / `sonnet` / `haiku`）与 `effort`；主会话所处阶段与当前模型或 effort 不符时，提示用户用 `/model`、`/effort` 切换。
+
 ## Shape 使用方式
 
 动到哪个领域先读哪个领域，并向用户提出其中 Proposed 条目。**exploring** 照做并记录摩擦；**provisional** 打破前先问；**settled** 强制执行。规则影响改动、挡路、被违反或用户纠正时，记带日期的 Signal；长期规则决定用 `shape-your-project`。
