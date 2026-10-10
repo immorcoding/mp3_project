@@ -29,6 +29,7 @@ Next id: HAR-14
 ### Signals
 
 - 2026-10-08 · cite · HAR-9 · 用户要求根 AGENTS 新增「模型分工」表（规划 Opus 5.5，默认 effort medium、难题 high；实施 Sonnet 5.5，默认 high、难题 xhigh；调研探索 Haiku 5.5，effort 始终 max），归为项目约定，仅约束 Claude Code。
+- 2026-10-09 · cite · HAR-9 · 用户要求新增 `visual` 标签：验收依赖外观判断的票（含混合票）整张由 Opus 5.5 medium 实施，理由是 Sonnet 在视觉工作上不及 Opus；模型分工表加「视觉实施」行，标签定义在 `docs/agents/triage-labels.md`。
 
 ## hooks
 

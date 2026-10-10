@@ -24,5 +24,6 @@ GitHub 标签字符串与 `triage` skill 的规范角色同名。每个经过 tr
 | 标签 | 含义 |
 | --- | --- |
 | `hw:pending` | 软件验证已过，等待板上证据（WF-3）；与状态标签并存。 |
+| `visual` | 验收依赖目视判断外观：布局、间距、配色、字体、图标与图片资源、动效与视觉效果，或改动 GUI 模拟器基线（GUI-4）。拆票时由规划会话挂上；与状态标签并存。纯 GUI 逻辑（输入路由、视图状态机、列表分页）不挂。混合票整张算 visual，由 Opus 5.5 medium 实施（见根 AGENTS「模型分工」）。 |
 | `wayfinder:map` | wayfinder 地图 issue。 |
 | `wayfinder:research` / `wayfinder:prototype` / `wayfinder:grilling` / `wayfinder:task` | wayfinder ticket 类型。 |
