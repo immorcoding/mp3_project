@@ -2,7 +2,7 @@
 
 Claude Code 与 Codex 双轨共用的章程、Skill、审阅 Agent、Hook 与分层验证。
 
-Next id: HAR-14
+Next id: HAR-15
 
 ## Pillars
 
@@ -25,11 +25,7 @@ Next id: HAR-14
 - **HAR-9** · provisional · 根 AGENTS 保留项目与语言约定、shape 使用方式、关键保护边界摘要、条件阅读指针和验收入口；子 AGENTS 只补目录独有操作要求。目录路由描述职责与必读正文，模块 README 维护接口和使用约束；正文一处维护，入口引用已落地的目标。_Why:_ 避免根、子入口与规范重复而漂移。_Source:_ [开发入口决定](https://github.com/immorcoding/mp3_project/issues/12)
 
 - **HAR-12** · provisional · 新增 Skill 仅用于反复出现且高风险的独特操作流程，接口、术语和不变量继续由领域文档维护。 _Why:_ 说明型 Skill 会增加常驻导航负担并复制事实源。 _Source:_ [开发入口决定](https://github.com/immorcoding/mp3_project/issues/12)
-
-### Signals
-
-- 2026-10-08 · cite · HAR-9 · 用户要求根 AGENTS 新增「模型分工」表（规划 Opus 5.5，默认 effort medium、难题 high；实施 Sonnet 5.5，默认 high、难题 xhigh；调研探索 Haiku 5.5，effort 始终 max），归为项目约定，仅约束 Claude Code。
-- 2026-10-09 · cite · HAR-9 · 用户要求新增 `visual` 标签：验收依赖外观判断的票（含混合票）整张由 Opus 5.5 medium 实施，理由是 Sonnet 在视觉工作上不及 Opus；模型分工表加「视觉实施」行，标签定义在 `docs/agents/triage-labels.md`。
+- **HAR-14** · exploring · Claude Code 按根 AGENTS「模型分工」表按阶段选模型与 effort；ticket 带 `visual` 标签时整张改由视觉实施行负责，判定口径见 `docs/agents/triage-labels.md`。_Why:_ 规划与实施的推理需求不同；Sonnet 在外观判断上不及 Opus。_Source:_ 用户决定 2026-10-08、2026-10-09
 
 ## hooks
 
