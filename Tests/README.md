@@ -1,6 +1,6 @@
 # 主机回归
 
-`external_loader`、`flash_ftl`、`gui_task`、`gui_theme`、`gui_canvas`、`w25qxx`、`resource_pack`、`storage_catalog` 与 `storage_audio_stream` 是九个独立的 CMake 工程，共 27 个 CTest：`external_loader` 1 个，`flash_ftl` 16 个（3 个固定测试、12 个文件场景测试、1 个卷感知 Service 测试），`gui_task` 3 个，`gui_theme` 1 个，`gui_canvas` 2 个，`w25qxx` 1 个，`resource_pack` 1 个，`storage_catalog` 1 个，`storage_audio_stream` 1 个。
+`external_loader`、`flash_ftl`、`gui_task`、`gui_theme`、`gui_canvas`、`w25qxx`、`resource_pack`、`storage_catalog`、`storage_audio_stream` 与 `playback_service` 是十个独立的 CMake 工程，共 30 个 CTest：`external_loader` 1 个，`flash_ftl` 16 个（3 个固定测试、12 个文件场景测试、1 个卷感知 Service 测试），`gui_task` 3 个，`gui_theme` 1 个，`gui_canvas` 2 个，`w25qxx` 1 个，`resource_pack` 1 个，`storage_catalog` 1 个，`storage_audio_stream` 1 个，`playback_service` 3 个（真实 minimp3 加小 MP3 夹具）。
 
 ## 环境
 
