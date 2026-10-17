@@ -872,7 +872,7 @@ Service_StatusTypeDef Service_Playback_Pump(Service_Playback_PumpReportTypeDef *
  *         此后模块不再写 PCM 半区）；STOP_FAILED 早已锁存也返回 SERVICE_ERROR。
  * @note   阻塞：Platform_Audio_Stop() 同步执行，最坏约为静音斜坡加两次 DMA Abort 超时。
  *         Stop 返回 OK 后 Platform 计数冻结，记下释放数以便恢复时重放 DMA 正在读的半区（D9）。
- *         若暂停时两个半区都已被读完（欠载），无法保证重放顺序，丢弃半区，恢复时重新补满。
+ *         若暂停时已读完的半区多于两个（连续欠载），补满会覆盖尚未重放的半区，丢弃半区，恢复时按解码进度重新补满。
  *         重复暂停无副作用。任务上下文调用。
  */
 Service_StatusTypeDef Service_Playback_PauseOutput(void)
@@ -910,7 +910,7 @@ Service_StatusTypeDef Service_Playback_PauseOutput(void)
         }
         else if (s_out.Fills < s_out.Released)
         {
-            /* 两个半区都已被读完：补满会覆盖尚未重放的半区，直接重来。 */
+            /* 释放数超出补满数：按序补满会覆盖尚未重放的半区，直接重来。 */
             s_out.Fills = 0U;
             s_out.FillFrames = 0U;
             s_out.Released = 0U;
