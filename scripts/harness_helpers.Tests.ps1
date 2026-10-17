@@ -127,13 +127,21 @@ $catalogImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/sto
 Assert-HarnessSequence -Expected @('storage_catalog') -Actual $catalogImpact.HostModules `
     -Message '播放列表游标变化必须选择 Catalog 主机测试'
 
+$audioTagImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_tag.c')
+Assert-HarnessSequence -Expected @('storage_audio_stream') -Actual $audioTagImpact.HostModules `
+    -Message '越过标签纯函数变化必须选择 Storage 音频流主机测试'
+
+$audioStreamImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_stream.c')
+Assert-HarnessSequence -Expected @('storage_audio_stream') -Actual $audioStreamImpact.HostModules `
+    -Message 'Storage 音频流分区变化必须选择 Storage 音频流主机测试'
+
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'resource_pack', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
     -Message 'Harness 变化必须回退全部主机测试'
 Assert-HarnessEqual -Expected $true -Actual $harnessImpact.RequiresAllHostTests -Message 'Harness 变化应标记全部测试'
 
 $unknownImpact = Get-HarnessImpact -ChangedPath @('Service/playback/player.c')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'resource_pack', 'storage_catalog', 'w25qxx') -Actual $unknownImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $unknownImpact.HostModules `
     -Message '未知生产路径不得以零测试通过'
 Assert-HarnessSequence -Expected @('Service/playback/player.c') -Actual $unknownImpact.UnknownPaths `
     -Message '应保留触发保守回退的路径证据'
