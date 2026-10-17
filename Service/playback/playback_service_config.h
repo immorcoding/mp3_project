@@ -18,12 +18,6 @@
 
 /* playback_service.c 输出管线 */
 #define PLAYBACK_SERVICE_PCM_FRAMES_PER_HALF (1152U)   /* 每个 PCM 半区的立体声帧数，须为 1152 的整数倍；欠载时先改为 2304（E8）。 */
-#define PLAYBACK_SERVICE_PCM_SECTION         ".sd_dma_buffer" /* PCM 半区所在链接段；链接脚本现有的 AXI SRAM NOLOAD 段，见下注。 */
-
-/*
- * 链接脚本 stm32h743zgtx_flash.ld 受 CubeMX 守卫（ARC-2），本票未改。PCM 半区暂借 .sd_dma_buffer
- * （AXI SRAM、NOLOAD、32 字节对齐）。待用户授权后在链接脚本新增独立的 .playback_pcm (NOLOAD) >RAM
- * 段，再把 PLAYBACK_SERVICE_PCM_SECTION 改为 ".playback_pcm"。
- */
+#define PLAYBACK_SERVICE_PCM_SECTION         ".playback_pcm" /* PCM 半区所在链接段；链接脚本独立的 AXI SRAM NOLOAD 段。 */
 
 #endif /* PLAYBACK_SERVICE_CONFIG_H */

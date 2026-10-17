@@ -283,6 +283,18 @@ SECTIONS
     . = ALIGN(32);
   } >RAM
 
+  /*
+   * 播放模块 PCM 半区（I2S 循环 DMA 源），位于 AXI SRAM。
+   * Init 写 0，首次 Start 前由预填完整覆盖，故设为 NOLOAD；32 字节对齐避免 Cache 维护
+   * 触及相邻变量。
+   */
+  .playback_pcm (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.playback_pcm)
+    . = ALIGN(32);
+  } >RAM
+
   /* FTL 扫描在使用前完整重建；禁止与破坏性 SDRAM 诊断同时使用。 */
   .flash_ftl_tables (NOLOAD) :
   {
@@ -312,6 +324,17 @@ SECTIONS
   {
     . = ALIGN(32);
     *(.sdram_framebuffer)
+    . = ALIGN(32);
+  } >SDRAM
+
+  /*
+   * Storage 音频块池（32 × 32 KiB）；NOLOAD，块内容入队才有效，不依赖清零。
+   * 放在帧缓冲之后，不移动既有 SDRAM 段的地址；块不作 DMA 目标。
+   */
+  .storage_audio_pool (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.storage_audio_pool)
     . = ALIGN(32);
   } >SDRAM
 
