@@ -5,7 +5,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 ## 公开 Interface
 
 - `storage_task.h` 的 `Storage_StatusTypeDef`：本 Task 编排函数的成功/失败。Filesystem 的细粒度结果仍用 `Service_StatusTypeDef`，在 Storage 边界收成 `STORAGE_OK` / `STORAGE_ERROR`。
-- `storage_task.h` 的 `Storage_NotifyIndexTypeDef`：本任务私有通知槽。`STORAGE_NOTIFY_EVENT` 由本任务主循环有界等待；卡检测边沿置 `STORAGE_NOTIFY_FLAG_SD_DETECT`，GUI `request` 置 `STORAGE_NOTIFY_FLAG_LISTBUFFER`。`STORAGE_NOTIFY_SD_TRANSFER` 与 `STORAGE_NOTIFY_FLASH_OPERATION` 在 `InitSD`/`InitFlash` 时注入 Filesystem Service，不与主循环事件槽共用。
+- `storage_task.h` 的 `Storage_NotifyIndexTypeDef`：本任务私有通知槽。`STORAGE_NOTIFY_EVENT` 由本任务主循环有界等待；卡检测边沿置 `STORAGE_NOTIFY_FLAG_SD_DETECT`，GUI `request` 置 `STORAGE_NOTIFY_FLAG_LISTBUFFER`。播放任务写音频流请求信箱置 `STORAGE_NOTIFY_FLAG_STREAM_REQUEST`，归还音频块置 `STORAGE_NOTIFY_FLAG_BLOCK_RETURNED`，均在同一事件槽、与前两个 FLAG 共存。`STORAGE_NOTIFY_SD_TRANSFER` 与 `STORAGE_NOTIFY_FLASH_OPERATION` 在 `InitSD`/`InitFlash` 时注入 Filesystem Service，不与主循环事件槽共用。
 - `storage_task_sd_is_ready()`：SD FatFs 卷已挂载且不在消抖中。GUI 可查询；消抖中与未就绪均为否。不表示曲库非空。`request` 仅在此时接受。
 - `storage_task_sd_is_mounted()`：FatFs 卷对象仍在。消抖中只要尚未卸载也为真。GUI 用它区分「暂时不能 request」和「卡已拔走该清空 Queue」。
 - `storage_task(void *argument)`：由 APP 创建的任务入口，保持 `void` 以满足 `TaskFunction_t`。
@@ -15,6 +15,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 - `storage_sheet_*()`：播放列表，与曲库同属 `catalog/`。首版是恒等下标序列 `SeqList[i] = i`，有效长度即建表时的 Catalog `IndexNum`，不另存 Count。`Generation` 记录对应的 Catalog 代次，`0` 表示已作废。表在 SDRAM `.music_sheet`（NOLOAD），作废不清整数组。曲库扫描成功后立即建表；`storage_catalog_invalidate()` 会一并作废。不向 GUI 暴露整表指针。随机/心动序列尚未实现。
 - `storage_listbuffer_*()`：Queue 窗口单槽。GUI Task 仅在 SD 就绪且 `IDLE` 时 `request`（代次/播放列表起点 `Index`/请求条数 → `PENDING` 并通知 Storage）；Storage Task 仅 SD 就绪时 `load` 填路径拷贝，把 `Length` 改成实际条数后打 `READY`。GUI Task 按 `Length` 把路径和 `Index` 交给 `Service_GUI_QueueApply()` 后写回 `IDLE`。`Index` 随 `QueueTab` 竖滑移动，不是条数。`Generation` 须与 Catalog/Sheet 一致，`0` 为作废空窗。当前播放游标不在本槽，见 `storage_playback_cursor_*()`。`Service/gui` 不得包含此头。宏见 `storage_catalog_config.h`。
 - `storage_playback_cursor_*()`：播放列表当前下标，与 Catalog/Sheet 同代次。扫描成功后非空库从 0 起；空库或 `storage_catalog_invalidate()` 后没有当前曲。GUI Task 读游标并核窗口代次，再交给 `QueueApply`；点 Queue 行经 `set` 改当前下标，上一首/下一首环形步进，均不打开文件。
+- `storage_audio_stream_*()` / `storage_audio_block_*()`：音频流分区 `stream/`，见下文“音频流分区”。
 - `storage_sd_benchmark_run()`：仅读写测试分支使用的内部诊断入口；成功挂载后由 `storage_sd_init()` 调用，不向其他任务公开。
 - `storage_sdram_benchmark_run()`：本 Task 启动阶段的内部 SDRAM 硬件诊断与基准入口；不向其他任务公开。是否编译进调用由 `STORAGE_SDRAM_BENCHMARK_ENABLE` 门控；宏定义在 `APP/app_config.h`，但 `storage_task.c` 当前未包含该头。
 - `storage_flash_benchmark_run()`：本 Task 启动阶段的 W25Q256 原始读取及可选双自检扇区破坏性基准入口；由 `storage_flash_init()` 在执行器绑定后调用，不向其他任务公开。
@@ -33,6 +34,26 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 卡检测 GPIO EXTI 经 Adapter、Platform SD 回调以 `eSetBits` 置本 Task `STORAGE_NOTIFY_EVENT` 的 `STORAGE_NOTIFY_FLAG_SD_DETECT`；GUI `request` 置同一槽的 `STORAGE_NOTIFY_FLAG_LISTBUFFER`。Filesystem 私有 DMA 执行器在同一 Task 上下文等待 `STORAGE_NOTIFY_SD_TRANSFER`。Filesystem Service Flash 私有执行器在 Task 启动时长期订阅 Platform Flash 的 QSPI IRQ，并以 `STORAGE_NOTIFY_FLASH_OPERATION` 等待 0xEC QSPI/MDMA 读取完成、`0x34/0x21` 自动状态轮询的匹配、错误或中止；任务醒来后才调用 Platform Flash 收尾。
 
 `storage_task()` 主循环维护就绪 / 消抖中 / 未就绪，有界等待 `STORAGE_NOTIFY_EVENT`：检测 FLAG 立刻进消抖中并重开 30 ms 起点；`wait` 超时取消抖剩余与默认 100 ms 回收剩余的较小值。消抖截止到点后才 `storage_sd_process()`，再按 SD 是否已挂载回到就绪或未就绪。仅就绪时 `load`。回收截止到点才 `storage_flash_reclaim()`。FTL 决定是否回收，最长一次不可抢占擦除仍需板测。一次 Service 文件读写会在同一个 Task 的嵌套调用栈中进入 Filesystem 的 SD DMA 执行器，等待 `STORAGE_NOTIFY_SD_TRANSFER`、收尾当前分块后再启动下一分块；一次 Flash MDMA 读取则由 Service Flash 私有执行器在同一 Task 的嵌套调用栈中等待 `STORAGE_NOTIFY_FLASH_OPERATION`。ISR 只发布事件，绝不复制数据、维护 Cache 或启动下一笔传输。
+
+## 音频流分区
+
+`stream/` 把 SD 上的 MP3 以“音频块”交给播放任务（播放任务本身由后续票引入；本分区只定义 Storage 一侧与调用契约）。FIL 的打开、读取、关闭（含拔卡）都在 Storage Task（ARC-12）；播放任务只持流序号。
+
+- 文件：`storage_audio_stream.*`（信箱、开启、读块、终止记录）、`storage_audio_block.*`（块池与两个队列）、`storage_audio_tag.*`（越过标签纯函数，主机测试见 `Tests/storage_audio_stream/`）、`storage_audio_config.h`（块长 32 KiB、块数 32，均为配置常量）。
+- 请求信箱（播放任务 → Storage）：长度 1 的覆盖队列，内容 `{StreamSeq, Generation, Position}`，`StreamSeq` 为 0 表示无流；开启、关闭、取消是同一种写入，经 `storage_audio_stream_request()` 写入并置 `STORAGE_NOTIFY_FLAG_STREAM_REQUEST`。代次 0 表示“当前”。
+- 流记录信箱（Storage → 播放任务）：长度 1 的覆盖队列，内容 `{StreamSeq, OpenResult, Generation, TrackCount, AudioBytes, End}`，整份覆盖，开启参数一直保留；播放任务用 `storage_audio_stream_get_record()` 非消费读取。开启结果：OK、NOT_READY、STALE、NO_TRACK、BAD_FILE（打不开、标签长度越界、音频区间为空）、IO_ERROR；终止：ENDED（只在最后一块入队之后写）、READ_ERROR、CARD_REMOVED。Service 无法区分“文件不存在”与“打开时 I/O 错误”，打开失败一律 BAD_FILE；位置超出列表按 STALE。
+- 块：`{StreamSeq, ValidBytes}` 加数据，有效字节数 1..块容量，任何块都可以是短块，不设 kind、末块标志或块序号。Storage 只用当前正在读的流序号盖章；读完后若请求信箱已有新请求，半读的块不入就绪队列，直接放回空闲队列。播放任务用 `storage_audio_block_take_ready()` / `peek_ready()` 取块，用 `storage_audio_stream_return_block()` 归还（放回空闲队列并置 `STORAGE_NOTIFY_FLAG_BLOCK_RETURNED`）。
+- 唤醒播放任务：本分区不认识播放任务的事件槽，由播放任务外壳用 `storage_audio_stream_set_wake_callback()` 注册回调（`STORAGE_AUDIO_WAKE_STREAM_RECORD`、`STORAGE_AUDIO_WAKE_BLOCK_READY`），回调只能置 FLAG。FLAG 只用于唤醒，醒来后以信箱与队列内容为准。播放任务须在 `storage_task()` 完成 `storage_audio_stream_init()` 之后才能调用 `request`（此前返回 false）。
+- 主循环每圈顺序：请求信箱 → 列表窗口 → 最多读一块 → 回收。还有工作（待处理请求，或流已打开且有空闲块）时不阻塞等待。结构上界：取消 ≤ 一次块读取；开启 ≤ f_open + 标签探测（读头、读尾、seek）+ 一次块读取。
+- 有打开的流时（FIL 未关）不提供 Flash 回收机会，回收剩余不参与等待计时；流关闭（ENDED、读错、拔卡、无流请求）后照常，暂停期间因流保持而顺延。
+- 消抖期：暂缓处理流请求和补块，不应答；已打开的流保持打开；消抖结束后卡仍在就继续，卡已拔则以 NOT_READY 或 CARD_REMOVED 收尾。
+- 拔卡：`storage_sd_process()` 确认拔卡后，在作废曲库与卸载卷之前先 `storage_audio_stream_card_removed()`：关闭 FIL，再写 `{当前流序号, CARD_REMOVED}` 并唤醒播放任务；没有打开的流时不写、不唤醒。插卡事件同样先调用一次（换卡视同拔卡）。
+- 块池内存与 HWD-2 审查：块池 32 × 32 KiB = 1 MiB 放 SDRAM NOLOAD 段，块内容入队才有效，不依赖清零，**块只由 CPU 读写，不是 DMA 目标**（SD DMA → bounce buffer → memcpy 进块 → 播放任务 memcpy 进窗口）。
+  - 启动：`storage_audio_block_init()` 在 `storage_task()` 内、可选的 `storage_sdram_benchmark_run()` 全容量诊断之后、Flash/SD 初始化之前调用，只建队列并入队块指针，不触碰块内容；SDRAM 在 `main()` 经 `Platform/sdram` 完成正式初始化后任务才运行，满足“正式初始化之后、首次使用前”。队列控制块与存储放 DTCM `.bss`（约 416 B）。
+  - MPU：`Core/Src/main.c` 的 Region 2 把 0xC0000000 起 32 MB 设为 Cacheable、Bufferable、不可执行、全访问，块池落其中；块只由单核 CPU 两个任务读写，无 DMA 与 Cache 一致性问题，ARC-18 不适用。
+  - 全容量诊断：诊断是破坏性的，只能在块池入队前独占运行；`STORAGE_SDRAM_BENCHMARK_ENABLE` 开启时仍须保持在 `storage_audio_block_init()` 之前，产品默认关闭。
+  - 链接段：`stm32h743zgtx_flash.ld` 受 CubeMX 守卫（ARC-2），本票未改。块池暂借现有的 `.storage_catalog` (NOLOAD, >SDRAM) 段，段名由 `storage_audio_config.h` 的 `STORAGE_AUDIO_POOL_SECTION` 持有；待用户授权后在链接脚本新增独立的 `.storage_audio_pool` 段并改该宏。 `hw:pending`：上板确认 map 中块池落点、`.storage_catalog` 总大小仍在 SDRAM 内。
+- 板级行为（单圈耗时、消抖、拔卡、播放中不回收、1 MiB 缓冲下的断流余量）归板级验收票，Storage 音频流主循环不做主机测试。
 
 ## 约束
 

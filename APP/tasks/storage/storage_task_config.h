@@ -13,8 +13,12 @@
 
 #define STORAGE_NOTIFY_FLAG_SD_DETECT    (1UL << 0) /* 主循环事件槽：卡检测边沿。 */
 #define STORAGE_NOTIFY_FLAG_LISTBUFFER   (1UL << 1) /* 主循环事件槽：Queue 窗口 PENDING。 */
+#define STORAGE_NOTIFY_FLAG_STREAM_REQUEST (1UL << 2) /* 主循环事件槽：播放任务写了音频流请求信箱。 */
+#define STORAGE_NOTIFY_FLAG_BLOCK_RETURNED (1UL << 3) /* 主循环事件槽：播放任务归还了音频块。 */
 #define STORAGE_NOTIFY_FLAG_EVENT_MASK   (STORAGE_NOTIFY_FLAG_SD_DETECT | \
-                                          STORAGE_NOTIFY_FLAG_LISTBUFFER) /* 主循环一次收取并清除的事件位。 */
+                                          STORAGE_NOTIFY_FLAG_LISTBUFFER | \
+                                          STORAGE_NOTIFY_FLAG_STREAM_REQUEST | \
+                                          STORAGE_NOTIFY_FLAG_BLOCK_RETURNED) /* 主循环一次收取并清除的事件位。 */
 
 /* storage_task.c */
 #define STORAGE_SD_DEBOUNCE_MS           30U   /* SD 卡检测输入在最后一个边沿后的最短稳定时间，单位为毫秒。 */
