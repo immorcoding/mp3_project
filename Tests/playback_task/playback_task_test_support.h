@@ -87,6 +87,30 @@ bool fake_player_input_finished(void);
 /** @brief 模拟“最后一个含真实数据的半区已释放”：之后输入读尽且窗口空时 Pump 回报 StreamEnded。 */
 void fake_player_release_tail(void);
 
+/* 假播放模块的故障注入：回报 Service_Playback_PumpReportTypeDef 里的事实。 */
+typedef enum
+{
+    FAKE_FACT_SYNC_EXHAUSTED = 0U,  /**< 同步预算 R 耗尽（状态类：每次 Pump 重复给出，直到下一次 BeginStream）。 */
+    FAKE_FACT_START_REJECTED,       /**< Platform 因参数拒绝 Start（状态类）。 */
+    FAKE_FACT_TRANSFER_ERROR,       /**< Platform 报告 TRANSFER_ERROR（状态类）。 */
+    FAKE_FACT_STOP_FAILED           /**< Platform 锁存 STOP_FAILED（状态类，且之后 BeginStream 被拒）。 */
+} FakePlayerFactTypeDef;
+void fake_player_set_fact(FakePlayerFactTypeDef fact);
+/** @brief 下一次 Pump 回报“输出已 Start”（事件类，只给一次）。 */
+void fake_player_emit_output_started(void);
+/** @brief 下一次 Pump 回报“输出有进展”（事件类，只给一次）。 */
+void fake_player_emit_output_progress(void);
+/** @brief 下一次 Pump 回报一次欠载恢复（Stop、补满、Start 已由播放模块处理；事件类）。 */
+void fake_player_emit_underrun(void);
+/** @brief 下一次 AbandonStream / PauseOutput 返回 SERVICE_ERROR 并锁存 STOP_FAILED（锁存后 BeginStream 返回 SERVICE_NOT_READY）。 */
+void fake_player_fail_next_stop(void);
+/** @brief 下一次 BeginStream 返回 SERVICE_NOT_READY（播放模块拒绝开新流，如 STOP_FAILED 已锁存）。 */
+void fake_player_refuse_next_begin(void);
+/** @brief 下一次 Pump 返回 SERVICE_ERROR（读状态或提交半区失败）。 */
+void fake_player_fail_next_pump(void);
+/** @brief 假播放模块是否已锁存 STOP_FAILED。 */
+bool fake_player_faulted(void);
+
 /* 场景助手：状态机实例与步进。 */
 void world_reset(void);
 Playback_MachineTypeDef *world_machine(void);
@@ -97,6 +121,16 @@ void world_send_select(uint32_t generation, uint16_t index);
 void world_step_commands(const Playback_CommandTypeDef *commands, uint32_t count);
 /** @brief 没有命令的一次唤醒。 */
 void world_wake(void);
+/** @brief 传给状态机的最近一次单调毫秒时刻。 */
+uint32_t world_now(void);
+/** @brief 在绝对时刻 now_ms 做一次没有命令的唤醒（时刻不得倒退）。 */
+void world_wake_at(uint32_t now_ms);
+/** @brief 在绝对时刻 now_ms 发一条命令（SELECT 请用 world_send_select_at）。 */
+void world_send_at(Playback_CommandKindTypeDef kind, uint32_t now_ms);
+/** @brief Storage 对当前流应答任意开启结果（非 OK），并唤醒一次。 */
+void world_open_result(Playback_MachineOpenResultTypeDef result);
+/** @brief Storage 对当前流应答 BAD_FILE，并唤醒一次。 */
+void world_open_bad_file(void);
 /** @brief 最近分配的流序号（= 最近一次请求信箱写入的序号）。 */
 uint32_t world_current_seq(void);
 Playback_SnapshotTypeDef world_snapshot(void);

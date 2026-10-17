@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    playback_machine.h
-  * @brief   播放任务的纯 C 状态机：命令、流交接、切歌、暂停与播完（#71 B1–B4、B9、B11–B17、K3–K5）。
+  * @brief   播放任务的纯 C 状态机：命令、流交接、切歌、暂停、播完，以及坏文件、超时、故障与停止原因（#71 B1–B17、K3–K5）。
   * @note    不依赖 FreeRTOS、HAL 或 Storage 的头：存储窗口（请求信箱、流记录、块队列）与播放模块经
   *          Ops 注入，时刻由调用方传入（B9）。任务外壳负责等待通知、取空命令 FIFO、读单调毫秒时刻、
   *          把 Ops 接到 storage_audio_stream_* 与 Service_Playback_*，并保证单线程调用本模块。
@@ -117,6 +117,17 @@ typedef struct
     bool Holding;                              /**< 手中持有一块。 */
     Playback_MachineBlockTypeDef Held;         /**< 手中的块。 */
     uint32_t HeldOffset;                       /**< 手中块已拷进播放模块的字节数。 */
+    bool AudioFaultLatched;                    /**< STOP_FAILED 已锁存（B10）：重启前 TOGGLE/SELECT 只让停止次数加一。 */
+    bool SkipForward;                          /**< 自动跳过坏文件的方向：true 向后（索引增大），false 向前（PREV 之后，B5）。 */
+    uint32_t ConsecutiveSkips;                 /**< 连跳计数（B5）：首帧解出、用户换曲命令、进入停止态时清零。 */
+    bool PumpNeedInput;                        /**< 本次唤醒最后一次推进回报了“补半区时输入不够”（B7 的断流判据之一）。 */
+    Playback_MachineOpenResultTypeDef SeenOpen;/**< 当前流已见过的开启结果，用来发现“收到应答”（B7 重新计时）。 */
+    Playback_MachineEndTypeDef SeenEnd;        /**< 当前流已见过的终止状态。 */
+    bool DataEvent;                            /**< 本次唤醒收到本流的应答或块：T_data 重新计时。 */
+    bool DataWaitActive;                       /**< T_data 正在计时。 */
+    uint32_t DataWaitSinceMs;                  /**< T_data 的起算时刻。 */
+    bool OutputRunning;                        /**< Platform 输出正在运行（T_out 只在此时计时，B8）。 */
+    uint32_t OutputSinceMs;                    /**< T_out 的起算时刻：Start 返回或最近一次半区释放。 */
 } Playback_MachineTypeDef;
 
 void playback_machine_init(Playback_MachineTypeDef *machine, const Playback_MachineOpsTypeDef *ops);
