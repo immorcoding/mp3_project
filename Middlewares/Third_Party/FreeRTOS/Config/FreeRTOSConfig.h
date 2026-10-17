@@ -45,7 +45,7 @@
 #define configHEAP_CLEAR_MEMORY_ON_FREE                             0
 
 /* 动态/静态内存分配策略；当前由 heap_4.c 提供 32 KiB 内核堆。 */
-#define configSUPPORT_STATIC_ALLOCATION                             0
+#define configSUPPORT_STATIC_ALLOCATION                             1
 #define configSUPPORT_DYNAMIC_ALLOCATION                            1
 #define configTOTAL_HEAP_SIZE                                       32768
 #define configAPPLICATION_ALLOCATED_HEAP                            0
