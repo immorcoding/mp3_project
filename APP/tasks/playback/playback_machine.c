@@ -1,9 +1,9 @@
 /**
  * @file playback_machine.c
  * @brief 播放任务的纯 C 状态机：命令表、流序号、块交接、切歌清理顺序、暂停、播完自动前进与快照发布。
- * @note  一次唤醒的顺序按 #71 B1：流记录 → 归还旧序号块 → 命令 → 交字节 → 推进输出管线。
- *        坏文件跳过、T_data/T_out 超时、播放模块与 Platform 故障、AUDIO_FAULT 锁存和除“流中 READ_ERROR”之外的
- *        停止原因归下一票（#79）；本文件对这些事实不作反应。
+ * @note  一次唤醒的顺序按 #71 B1：流记录 → 归还旧序号块 → 命令 → 交字节 → 推进输出管线 → T_out、T_data 判定。
+ *        B6 的结果码表在这里落地：开启结果与终止事实在 handle_record()，播放模块与 Platform 的事实在
+ *        apply_pump_report()，超时在 check_timeouts()；所有停止出口都经 enter_stopped()。
  */
 
 #include "APP/tasks/playback/playback_machine.h"
@@ -64,6 +64,29 @@ static void return_held_block(Playback_MachineTypeDef *machine)
 }
 
 /**
+ * @brief 判断播放模块对 Stop 类操作的返回是否表示 Stop 失败（Platform 已锁存 STOP_FAILED）。
+ * @param[in] status 播放模块返回。
+ * @return Stop 失败为 true。
+ * @note  PauseOutput/AbandonStream 只在 Stop 失败时返回 SERVICE_ERROR；BeginStream 在锁存后返回
+ *        SERVICE_NOT_READY，在上一条流 Stop 失败时返回 SERVICE_ERROR（Service/playback/playback_service.c）。
+ */
+static bool stop_failed(Service_StatusTypeDef status)
+{
+    return status == SERVICE_ERROR;
+}
+
+/**
+ * @brief 放弃播放模块里的流（Platform Stop），输出随之停止。
+ * @param[in,out] machine 状态机。
+ * @return Stop 成功为 true；失败（STOP_FAILED 锁存）为 false。
+ */
+static bool abandon_player_stream(Playback_MachineTypeDef *machine)
+{
+    machine->OutputRunning = false;
+    return !stop_failed(machine->Ops->Player.AbandonStream());
+}
+
+/**
  * @brief 分配下一个流序号（单调，跳过 0）。
  * @param[in,out] machine 状态机。
  * @return 新序号。
@@ -79,6 +102,20 @@ static uint32_t allocate_stream_seq(Playback_MachineTypeDef *machine)
 }
 
 /**
+ * @brief 新流（或“无流”）开始：清掉上一条流的记录观察与 T_data 计时。
+ * @param[in,out] machine 状态机。
+ * @note  T_out 的运行标志在放弃播放模块的流时清除，不在这里动。
+ */
+static void reset_stream_tracking(Playback_MachineTypeDef *machine)
+{
+    machine->SeenOpen = PLAYBACK_MACHINE_OPEN_PENDING;
+    machine->SeenEnd = PLAYBACK_MACHINE_END_NONE;
+    machine->DataEvent = false;
+    machine->DataWaitActive = false;
+    machine->PumpNeedInput = false;
+}
+
+/**
  * @brief 按游标打开一条新流：分配新序号并写请求信箱；重选同一首也是新序号（B3）。
  * @param[in,out] machine 状态机。
  * @note  不碰播放模块；旧流的清理由调用者在写请求之后做（B11）。
@@ -91,6 +128,7 @@ static void open_stream_for_cursor(Playback_MachineTypeDef *machine)
     machine->StreamBegun = false;
     machine->InputFinished = false;
     machine->RecordValid = false;
+    reset_stream_tracking(machine);
 
     request.StreamSeq = machine->StreamSeq;
     request.Generation = machine->Snapshot.Generation;
@@ -113,8 +151,11 @@ static void close_stream(Playback_MachineTypeDef *machine)
     machine->StreamBegun = false;
     machine->InputFinished = false;
     machine->RecordValid = false;
+    reset_stream_tracking(machine);
     (void)machine->Ops->Storage.WriteRequest(&request);
 }
+
+static void enter_stopped(Playback_MachineTypeDef *machine, Playback_StopReasonTypeDef reason, bool keep_cursor);
 
 /**
  * @brief 切歌：按已更新的游标换到一条新流，顺序为 B11 ①–④。
@@ -122,19 +163,25 @@ static void close_stream(Playback_MachineTypeDef *machine)
  * @note  ① 分配新序号并写请求信箱；② 放弃播放模块的流（Platform Stop，返回即交还半区）；
  *        ③ 归还手中旧块；④ 就绪队列中的旧序号块由 discard_stale_blocks() 取出即归还。
  *        位置回 0、总时长变为未知，在接受命令的同一刻生效（K4）。
+ *        ② 里 Stop 失败时，已写的新流请求被“无流”覆盖，停止为 AUDIO_FAULT（B10）。
  */
 static void switch_to_cursor_track(Playback_MachineTypeDef *machine)
 {
     bool had_player_stream = machine->StreamBegun;
+    bool stop_ok = true;
 
     open_stream_for_cursor(machine);
     if (had_player_stream)
     {
-        (void)machine->Ops->Player.AbandonStream();
+        stop_ok = abandon_player_stream(machine);
     }
     return_held_block(machine);
     machine->Snapshot.PositionMs = 0U;
     machine->Snapshot.DurationMs = 0U;
+    if (!stop_ok)
+    {
+        enter_stopped(machine, PLAYBACK_STOP_REASON_AUDIO_FAULT, true);
+    }
 }
 
 /**
@@ -174,17 +221,24 @@ static void discard_stale_blocks(Playback_MachineTypeDef *machine)
  * @param[in,out] machine 状态机。
  * @param[in] reason 停止原因。
  * @param[in] keep_cursor true 保留游标，false 重置为无当前曲。
- * @note  #78 只有流中 READ_ERROR 用到；其余原因的接入归 #79。
+ * @note  B6 的每一个停止出口都经这里：先写“无流”，再 Stop，再记录原因（B7、B10）。Stop 失败时原因改为
+ *        AUDIO_FAULT 并锁存（游标按原来的取舍）。进入停止态清零连跳计数与两个计时（B5）。
  */
 static void enter_stopped(Playback_MachineTypeDef *machine, Playback_StopReasonTypeDef reason, bool keep_cursor)
 {
     bool had_player_stream = machine->StreamBegun;
 
     close_stream(machine);
-    if (had_player_stream)
+    machine->OutputRunning = false;
+    if (had_player_stream && !abandon_player_stream(machine))
     {
-        (void)machine->Ops->Player.AbandonStream();
+        reason = PLAYBACK_STOP_REASON_AUDIO_FAULT;
     }
+    if (reason == PLAYBACK_STOP_REASON_AUDIO_FAULT)
+    {
+        machine->AudioFaultLatched = true;
+    }
+    machine->ConsecutiveSkips = 0U;
     return_held_block(machine);
 
     machine->Snapshot.State = PLAYBACK_STATE_STOPPED;
@@ -235,6 +289,17 @@ static bool step_cursor(Playback_MachineTypeDef *machine, bool forward)
 }
 
 /**
+ * @brief 用户换曲命令：清零连跳计数并更新自动跳过的方向（B5）。
+ * @param[in,out] machine 状态机。
+ * @param[in] forward true 向后（NEXT、SELECT、停止态 TOGGLE），false 向前（PREV）。
+ */
+static void note_user_move(Playback_MachineTypeDef *machine, bool forward)
+{
+    machine->ConsecutiveSkips = 0U;
+    machine->SkipForward = forward;
+}
+
+/**
  * @brief 从停止态开播：无游标时打开 {代次 0, 位置 0}，否则打开游标所指曲目。
  * @param[in,out] machine 状态机。
  */
@@ -248,6 +313,7 @@ static void start_from_stopped(Playback_MachineTypeDef *machine)
         machine->TrackCount = 0U;
     }
 
+    note_user_move(machine, true);
     machine->Snapshot.State = PLAYBACK_STATE_PLAYING;
     machine->Snapshot.StopReason = PLAYBACK_STOP_REASON_NONE;
     switch_to_cursor_track(machine);
@@ -264,22 +330,36 @@ static void handle_toggle(Playback_MachineTypeDef *machine)
     case PLAYBACK_STATE_PLAYING:
         if (machine->StreamBegun)
         {
-            (void)machine->Ops->Player.PauseOutput();
+            if (stop_failed(machine->Ops->Player.PauseOutput()))
+            {
+                enter_stopped(machine, PLAYBACK_STOP_REASON_AUDIO_FAULT, true);
+                break;
+            }
+            machine->OutputRunning = false;
         }
         machine->Snapshot.State = PLAYBACK_STATE_PAUSED;
         break;
 
     case PLAYBACK_STATE_PAUSED:
         machine->Snapshot.State = PLAYBACK_STATE_PLAYING;
-        if (machine->StreamBegun)
+        if (machine->StreamBegun && (machine->Ops->Player.ResumeOutput() == SERVICE_OK))
         {
-            (void)machine->Ops->Player.ResumeOutput();
+            /* 恢复即 Start（补满半区的罕见情形下由随后的 Pump 回报 Start）：T_out 从此刻起算。 */
+            machine->OutputRunning = true;
+            machine->OutputSinceMs = machine->NowMs;
         }
         break;
 
     case PLAYBACK_STATE_STOPPED:
     default:
-        start_from_stopped(machine);
+        if (machine->AudioFaultLatched)
+        {
+            machine->Snapshot.StopCount++;   /* B10：锁存后不开流、不出声，只重新给出原因。 */
+        }
+        else
+        {
+            start_from_stopped(machine);
+        }
         break;
     }
 }
@@ -298,6 +378,7 @@ static void handle_step(Playback_MachineTypeDef *machine, bool forward)
         return;
     }
 
+    note_user_move(machine, forward);
     if (machine->Snapshot.State != PLAYBACK_STATE_STOPPED)
     {
         switch_to_cursor_track(machine);
@@ -312,11 +393,18 @@ static void handle_step(Playback_MachineTypeDef *machine, bool forward)
  */
 static void handle_select(Playback_MachineTypeDef *machine, const Playback_CommandTypeDef *command)
 {
+    if (machine->AudioFaultLatched)
+    {
+        machine->Snapshot.StopCount++;   /* B10：锁存后不开流、游标不动，只重新给出原因。 */
+        return;
+    }
+
     if (!machine->Snapshot.HasTrack || (machine->Snapshot.Generation != command->Generation))
     {
         machine->TrackCount = 0U;
     }
 
+    note_user_move(machine, true);
     machine->Snapshot.HasTrack = true;
     machine->Snapshot.Generation = command->Generation;
     machine->Snapshot.Index = command->Index;
@@ -374,28 +462,67 @@ static void refresh_record(Playback_MachineTypeDef *machine)
     }
     machine->Record = record;
     machine->RecordValid = true;
+    if ((record.OpenResult != machine->SeenOpen) || (record.End != machine->SeenEnd))
+    {
+        machine->SeenOpen = record.OpenResult;
+        machine->SeenEnd = record.End;
+        machine->DataEvent = true;   /* 收到本流的应答：T_data 重新计时（B7）。 */
+    }
 }
 
 /**
  * @brief 开启 OK：按应答重新初始化游标代次与曲目数 N，让播放模块开始新流（B4）。
  * @param[in,out] machine 状态机。
  * @note  暂停中换曲（或开启期间被暂停）时，BeginStream 之后立即暂停输出：推进只解首帧并预填，不出声（B12）。
+ *        BeginStream 被拒（STOP_FAILED 已锁存，或上一条流 Stop 失败）或暂停时 Stop 失败，都按 AUDIO_FAULT 停止（B10）。
  */
 static void begin_player_stream(Playback_MachineTypeDef *machine)
 {
     machine->Snapshot.Generation = machine->Record.Generation;
     machine->TrackCount = machine->Record.TrackCount;
-    (void)machine->Ops->Player.BeginStream(machine->Record.AudioBytes);
-    machine->StreamBegun = true;
-    if (machine->Snapshot.State == PLAYBACK_STATE_PAUSED)
+    if (machine->Ops->Player.BeginStream(machine->Record.AudioBytes) != SERVICE_OK)
     {
-        (void)machine->Ops->Player.PauseOutput();
+        enter_stopped(machine, PLAYBACK_STOP_REASON_AUDIO_FAULT, true);
+        return;
+    }
+    machine->StreamBegun = true;
+    if ((machine->Snapshot.State == PLAYBACK_STATE_PAUSED) && stop_failed(machine->Ops->Player.PauseOutput()))
+    {
+        enter_stopped(machine, PLAYBACK_STOP_REASON_AUDIO_FAULT, true);
     }
 }
 
 /**
- * @brief 按当前流记录推进状态机：开启 OK 与流中读错误。
+ * @brief 跳过坏文件：SkippedBadCount 加一，沿跳过方向前进一首；整轮都坏则停止（B5、B6）。
  * @param[in,out] machine 状态机。
+ * @note  曲目数 N 未知（最近没有开启 OK 带回过）时无法环形步进与计数，按 NO_TRACK 停止并重置游标（B5：N = 0 走 NO_TRACK）。
+ *        连跳计数达到 N 即 ALL_BAD，保留游标；跳过后的新流请求走与切歌相同的路径，暂停态保持暂停（B12）。
+ */
+static void skip_bad_file(Playback_MachineTypeDef *machine)
+{
+    if (machine->TrackCount == 0U)
+    {
+        enter_stopped(machine, PLAYBACK_STOP_REASON_NO_TRACK, false);
+        return;
+    }
+
+    machine->Snapshot.SkippedBadCount++;
+    machine->ConsecutiveSkips++;
+    if (machine->ConsecutiveSkips >= machine->TrackCount)
+    {
+        enter_stopped(machine, PLAYBACK_STOP_REASON_ALL_BAD, true);
+        return;
+    }
+
+    (void)step_cursor(machine, machine->SkipForward);
+    switch_to_cursor_track(machine);
+}
+
+/**
+ * @brief 按当前流记录推进状态机：开启结果（B6 开启各行）与终止事实（B6 终止各行）。
+ * @param[in,out] machine 状态机。
+ * @note  BAD_FILE 的应答若带回代次与曲目数（Storage 已解析出曲目），采用它们；否则沿用最近一次开启 OK 的 N。
+ *        每个停止出口之后 RecordValid 为假（流已关闭），后续检查随之跳过。
  */
 static void handle_record(Playback_MachineTypeDef *machine)
 {
@@ -404,14 +531,57 @@ static void handle_record(Playback_MachineTypeDef *machine)
         return;
     }
 
-    if (!machine->StreamBegun && (machine->Record.OpenResult == PLAYBACK_MACHINE_OPEN_OK))
+    if (!machine->StreamBegun)
     {
-        begin_player_stream(machine);
+        switch (machine->Record.OpenResult)
+        {
+        case PLAYBACK_MACHINE_OPEN_OK:
+            begin_player_stream(machine);
+            break;
+
+        case PLAYBACK_MACHINE_OPEN_BAD_FILE:
+            if (machine->Record.TrackCount != 0U)
+            {
+                machine->TrackCount = machine->Record.TrackCount;
+                machine->Snapshot.Generation = machine->Record.Generation;
+            }
+            skip_bad_file(machine);
+            break;
+
+        case PLAYBACK_MACHINE_OPEN_IO_ERROR:
+            enter_stopped(machine, PLAYBACK_STOP_REASON_READ_ERROR, true);
+            break;
+
+        case PLAYBACK_MACHINE_OPEN_NOT_READY:
+            enter_stopped(machine, PLAYBACK_STOP_REASON_NOT_READY, false);
+            break;
+
+        case PLAYBACK_MACHINE_OPEN_STALE:
+            enter_stopped(machine, PLAYBACK_STOP_REASON_CATALOG_CHANGED, false);
+            break;
+
+        case PLAYBACK_MACHINE_OPEN_NO_TRACK:
+            enter_stopped(machine, PLAYBACK_STOP_REASON_NO_TRACK, false);
+            break;
+
+        case PLAYBACK_MACHINE_OPEN_PENDING:
+        default:
+            break;
+        }
     }
 
-    if (machine->StreamBegun && (machine->Record.End == PLAYBACK_MACHINE_END_READ_ERROR))
+    if (!machine->RecordValid)
+    {
+        return;
+    }
+
+    if (machine->Record.End == PLAYBACK_MACHINE_END_READ_ERROR)
     {
         enter_stopped(machine, PLAYBACK_STOP_REASON_READ_ERROR, true);
+    }
+    else if (machine->Record.End == PLAYBACK_MACHINE_END_CARD_REMOVED)
+    {
+        enter_stopped(machine, PLAYBACK_STOP_REASON_CARD_REMOVED, false);
     }
 }
 
@@ -447,6 +617,7 @@ static uint32_t feed_blocks(Playback_MachineTypeDef *machine)
             }
             machine->Holding = true;
             machine->HeldOffset = 0U;
+            machine->DataEvent = true;   /* 收到本流的块：T_data 重新计时（B7）。 */
         }
 
         uint32_t accepted = 0U;
@@ -492,19 +663,57 @@ static void finish_input_if_drained(Playback_MachineTypeDef *machine)
  */
 static void advance_after_stream_end(Playback_MachineTypeDef *machine)
 {
+    machine->SkipForward = true;
     (void)step_cursor(machine, true);
     switch_to_cursor_track(machine);
 }
 
 /**
- * @brief 把播放模块回报的事实并入快照：首帧给出总时长，每次推进更新已解码时间；流尾放完则前进。
+ * @brief 把播放模块回报的事实并入快照与计时；故障事实按 B6 的表处理（B5–B8、B10）。
  * @param[in,out] machine 状态机。
  * @param[in] report 播放模块回报。
+ * @note  优先级：STOP_FAILED（锁存）→ TRANSFER_ERROR（AUDIO_ERROR）→ Start 被拒、同步预算耗尽（跳过坏文件）→ 正常事实。
+ *        首帧清零连跳计数，但与 Start 被拒或 R 耗尽出现在同一份回报里时不清零，否则整库都被拒的曲目会无界轮转。
+ *        欠载恢复时播放模块已 Stop，T_out 暂停到它回报 Start（B8：只在 Platform 运行时计时）。
  */
 static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Playback_PumpReportTypeDef *report)
 {
+    machine->PumpNeedInput = report->NeedInput;
+
+    if (report->StopFailed)
+    {
+        enter_stopped(machine, PLAYBACK_STOP_REASON_AUDIO_FAULT, true);
+        return;
+    }
+
+    if (report->Underruns > 0U)
+    {
+        machine->OutputRunning = false;
+    }
+    if (report->OutputStarted)
+    {
+        machine->OutputRunning = true;
+        machine->OutputSinceMs = machine->NowMs;
+    }
+    if (report->OutputProgress)
+    {
+        machine->OutputSinceMs = machine->NowMs;
+    }
+
+    if (report->TransferError)
+    {
+        enter_stopped(machine, PLAYBACK_STOP_REASON_AUDIO_ERROR, true);
+        return;
+    }
+    if (report->StartRejected || report->SyncExhausted)
+    {
+        skip_bad_file(machine);
+        return;
+    }
+
     if (report->FirstFrame)
     {
+        machine->ConsecutiveSkips = 0U;
         machine->Snapshot.DurationMs = report->StreamInfo.TotalDurationMs;
     }
     if (report->DecodedMs > machine->Snapshot.PositionMs)
@@ -515,8 +724,8 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
 
     if (report->StreamEnded)
     {
+        machine->OutputRunning = false;
         advance_after_stream_end(machine);
-        publish_if_changed(machine);
     }
 }
 
@@ -534,15 +743,97 @@ static void feed_and_pump(Playback_MachineTypeDef *machine)
 
         finish_input_if_drained(machine);
         memset(&report, 0, sizeof(report));
-        if (machine->Ops->Player.Pump(&report) != SERVICE_OK)
+
+        Service_StatusTypeDef status = machine->Ops->Player.Pump(&report);
+
+        if (status == SERVICE_ERROR)
+        {
+            /* 读状态或提交半区失败：输出不可信，按音频错误处理（Service_Playback_Pump 的约定）。 */
+            enter_stopped(machine, PLAYBACK_STOP_REASON_AUDIO_ERROR, true);
+            break;
+        }
+        if (status != SERVICE_OK)
         {
             break;
         }
         apply_pump_report(machine, &report);
+        publish_if_changed(machine);
         if (!report.NeedInput || (fed == 0U))
         {
             break;
         }
+    }
+}
+
+/**
+ * @brief 经过时间是否已达 limit_ms（回绕安全）。
+ * @param[in] now_ms 当前时刻。
+ * @param[in] since_ms 起算时刻。
+ * @param[in] limit_ms 期限。
+ * @return 达到为 true。
+ */
+static bool elapsed_reached(uint32_t now_ms, uint32_t since_ms, uint32_t limit_ms)
+{
+    return (uint32_t)(now_ms - since_ms) >= limit_ms;
+}
+
+/**
+ * @brief 当前是否处于“需要数据却没有”的阶段（B7 的计时条件）。
+ * @param[in] machine 状态机。
+ * @return 需要且没有为 true。
+ * @note  等开启应答；或本流未终止、播放模块补半区时输入不够、手中无块且就绪队列没有本流的块（B16）。
+ *        暂停且输出已满、排空（ENDED 之后）、停止时播放模块不会要输入，所以自然不计时。
+ */
+static bool waiting_for_data(const Playback_MachineTypeDef *machine)
+{
+    if (machine->StreamSeq == 0U)
+    {
+        return false;
+    }
+    if (!machine->StreamBegun)
+    {
+        return true;
+    }
+    if (machine->RecordValid && (machine->Record.End != PLAYBACK_MACHINE_END_NONE))
+    {
+        return false;
+    }
+    return machine->PumpNeedInput && !machine->Holding && !ready_has_current_block(machine);
+}
+
+/**
+ * @brief T_out 与 T_data 的到期判定，在本次唤醒的推进之后做（B8、B7）。
+ * @param[in,out] machine 状态机。
+ * @note  T_out 到期与 TRANSFER_ERROR 同路：Stop → AUDIO_ERROR，保留游标。T_data 到期：写“无流” → Stop → NO_DATA，
+ *        保留游标。起算时刻是进入等待的那次唤醒的时刻；收到本流的应答或块重新计时。
+ */
+static void check_timeouts(Playback_MachineTypeDef *machine)
+{
+    if (machine->StreamBegun && machine->OutputRunning &&
+        elapsed_reached(machine->NowMs, machine->OutputSinceMs, PLAYBACK_MACHINE_OUTPUT_TIMEOUT_MS))
+    {
+        enter_stopped(machine, PLAYBACK_STOP_REASON_AUDIO_ERROR, true);
+        return;
+    }
+
+    if (!waiting_for_data(machine))
+    {
+        machine->DataWaitActive = false;
+        machine->DataEvent = false;
+        return;
+    }
+
+    if (!machine->DataWaitActive || machine->DataEvent)
+    {
+        machine->DataWaitActive = true;
+        machine->DataWaitSinceMs = machine->NowMs;
+        machine->DataEvent = false;
+        return;
+    }
+
+    if (elapsed_reached(machine->NowMs, machine->DataWaitSinceMs, PLAYBACK_MACHINE_DATA_TIMEOUT_MS))
+    {
+        enter_stopped(machine, PLAYBACK_STOP_REASON_NO_DATA, true);
     }
 }
 
@@ -555,6 +846,7 @@ void playback_machine_init(Playback_MachineTypeDef *machine, const Playback_Mach
 {
     memset(machine, 0, sizeof(*machine));
     machine->Ops = ops;
+    machine->SkipForward = true;
 }
 
 /**
@@ -562,7 +854,7 @@ void playback_machine_init(Playback_MachineTypeDef *machine, const Playback_Mach
  * @param[in,out] machine 状态机。
  * @param[in] commands 本次唤醒从命令 FIFO 取空的命令（≤ 8 条，按入队顺序）；count 为 0 时可为 NULL。
  * @param[in] command_count 命令条数。
- * @param[in] now_ms 调用方传入的单调毫秒时刻（B9）；本票只记录，超时判定归 #79。
+ * @param[in] now_ms 调用方传入的单调毫秒时刻（B9）；T_data、T_out 都按它判定。
  * @note  不阻塞、不碰 FatFs/LVGL、不同步等 Storage；播放模块的 Stop/Start 阻塞由其自身文档说明。
  */
 void playback_machine_step(Playback_MachineTypeDef *machine,
@@ -587,4 +879,6 @@ void playback_machine_step(Playback_MachineTypeDef *machine,
     handle_record(machine);
     publish_if_changed(machine);
     feed_and_pump(machine);
+    check_timeouts(machine);
+    publish_if_changed(machine);
 }

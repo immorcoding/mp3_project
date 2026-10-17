@@ -438,6 +438,17 @@ static uint32_t player_begin_count;
 static uint32_t player_last_audio_bytes;
 static uint32_t player_fed_total;
 static uint8_t player_fed[FAKE_FED_CAPACITY];
+static bool player_fact_sync_exhausted;
+static bool player_fact_start_rejected;
+static bool player_fact_transfer_error;
+static bool player_fact_stop_failed;
+static bool player_event_output_started;
+static bool player_event_output_progress;
+static uint32_t player_event_underruns;
+static bool player_fail_next_stop;
+static bool player_fail_next_pump;
+static bool player_refuse_next_begin;
+static bool player_faulted;
 
 /**
  * @brief 把假播放模块恢复为默认配置与空状态。
@@ -461,6 +472,17 @@ static void fake_player_reset(void)
     player_last_audio_bytes = 0U;
     player_fed_total = 0U;
     memset(player_fed, 0, sizeof(player_fed));
+    player_fact_sync_exhausted = false;
+    player_fact_start_rejected = false;
+    player_fact_transfer_error = false;
+    player_fact_stop_failed = false;
+    player_event_output_started = false;
+    player_event_output_progress = false;
+    player_event_underruns = 0U;
+    player_fail_next_stop = false;
+    player_fail_next_pump = false;
+    player_refuse_next_begin = false;
+    player_faulted = false;
 }
 
 /**
@@ -480,6 +502,11 @@ void fake_player_configure(const FakePlayerConfigTypeDef *config)
 static Service_StatusTypeDef fake_begin_stream(uint32_t audio_bytes)
 {
     call_log_add(CALL_BEGIN_STREAM);
+    if (player_faulted || player_refuse_next_begin)
+    {
+        player_refuse_next_begin = false;
+        return SERVICE_NOT_READY;   /* STOP_FAILED 锁存后拒绝开新流，与真实模块一致。 */
+    }
     player_active = true;
     player_paused = false;
     player_input_finished = false;
@@ -554,6 +581,11 @@ static Service_StatusTypeDef fake_pump(Service_Playback_PumpReportTypeDef *repor
     {
         return SERVICE_NOT_READY;
     }
+    if (player_fail_next_pump)
+    {
+        player_fail_next_pump = false;
+        return SERVICE_ERROR;
+    }
 
     for (uint32_t frames = 0U; frames < player_config.FramesPerPump; frames++)
     {
@@ -592,6 +624,16 @@ static Service_StatusTypeDef fake_pump(Service_Playback_PumpReportTypeDef *repor
         report->StreamInfo.DurationFromHeader = true;
     }
     report->DecodedMs = player_decoded_ms;
+    report->SyncExhausted = player_fact_sync_exhausted;
+    report->StartRejected = player_fact_start_rejected;
+    report->TransferError = player_fact_transfer_error;
+    report->StopFailed = player_fact_stop_failed || player_faulted;
+    report->OutputStarted = player_event_output_started;
+    report->OutputProgress = player_event_output_progress;
+    report->Underruns = player_event_underruns;
+    player_event_output_started = false;
+    player_event_output_progress = false;
+    player_event_underruns = 0U;
     if (player_input_finished && (player_window_fill == 0U) && !player_paused && player_tail_released)
     {
         report->StreamEnded = true;
@@ -609,6 +651,12 @@ static Service_StatusTypeDef fake_pause_output(void)
     if (!player_active)
     {
         return SERVICE_NOT_READY;
+    }
+    if (player_fail_next_stop)
+    {
+        player_fail_next_stop = false;
+        player_faulted = true;
+        return SERVICE_ERROR;
     }
     player_paused = true;
     return SERVICE_OK;
@@ -638,6 +686,16 @@ static Service_StatusTypeDef fake_abandon_stream(void)
     call_log_add(CALL_ABANDON);
     player_active = false;
     player_paused = false;
+    player_fact_sync_exhausted = false;   /* 状态类事实随流存在；状态机放弃该流后就不再给出。 */
+    player_fact_start_rejected = false;
+    player_fact_transfer_error = false;
+    player_fact_stop_failed = false;
+    if (player_fail_next_stop)
+    {
+        player_fail_next_stop = false;
+        player_faulted = true;
+        return SERVICE_ERROR;
+    }
     return SERVICE_OK;
 }
 
@@ -710,6 +768,87 @@ bool fake_player_input_finished(void)
 void fake_player_release_tail(void)
 {
     player_tail_released = true;
+}
+
+/**
+ * @brief 设置状态类事实。
+ * @param[in] fact 事实种类。
+ */
+void fake_player_set_fact(FakePlayerFactTypeDef fact)
+{
+    switch (fact)
+    {
+    case FAKE_FACT_SYNC_EXHAUSTED:
+        player_fact_sync_exhausted = true;
+        break;
+    case FAKE_FACT_START_REJECTED:
+        player_fact_start_rejected = true;
+        break;
+    case FAKE_FACT_TRANSFER_ERROR:
+        player_fact_transfer_error = true;
+        break;
+    case FAKE_FACT_STOP_FAILED:
+    default:
+        player_fact_stop_failed = true;
+        break;
+    }
+}
+
+/**
+ * @brief 下一次 Pump 回报输出已 Start。
+ */
+void fake_player_emit_output_started(void)
+{
+    player_event_output_started = true;
+}
+
+/**
+ * @brief 下一次 Pump 回报输出有进展。
+ */
+void fake_player_emit_output_progress(void)
+{
+    player_event_output_progress = true;
+}
+
+/**
+ * @brief 下一次 Pump 回报一次欠载恢复。
+ */
+void fake_player_emit_underrun(void)
+{
+    player_event_underruns++;
+}
+
+/**
+ * @brief 让下一次 AbandonStream / PauseOutput 失败并锁存 STOP_FAILED。
+ */
+void fake_player_fail_next_stop(void)
+{
+    player_fail_next_stop = true;
+}
+
+/**
+ * @brief 让下一次 BeginStream 被拒绝。
+ */
+void fake_player_refuse_next_begin(void)
+{
+    player_refuse_next_begin = true;
+}
+
+/**
+ * @brief 让下一次 Pump 返回 SERVICE_ERROR。
+ */
+void fake_player_fail_next_pump(void)
+{
+    player_fail_next_pump = true;
+}
+
+/**
+ * @brief 假播放模块是否已锁存 STOP_FAILED。
+ * @return 已锁存为 true。
+ */
+bool fake_player_faulted(void)
+{
+    return player_faulted;
 }
 
 /* ---------------------------------------------------------------------------
@@ -810,6 +949,44 @@ void world_wake(void)
 }
 
 /**
+ * @brief 传给状态机的最近一次单调毫秒时刻。
+ * @return 毫秒时刻。
+ */
+uint32_t world_now(void)
+{
+    return world_now_ms;
+}
+
+/**
+ * @brief 在绝对时刻做一次没有命令的唤醒。
+ * @param[in] now_ms 单调毫秒时刻，不得小于上次。
+ */
+void world_wake_at(uint32_t now_ms)
+{
+    assert(now_ms >= world_now_ms);
+    world_now_ms = now_ms;
+    playback_machine_step(&world_machine_instance, NULL, 0U, world_now_ms);
+}
+
+/**
+ * @brief 在绝对时刻发一条命令（序号自增）。
+ * @param[in] kind 命令种类。
+ * @param[in] now_ms 单调毫秒时刻，不得小于上次。
+ */
+void world_send_at(Playback_CommandKindTypeDef kind, uint32_t now_ms)
+{
+    Playback_CommandTypeDef command;
+
+    assert(now_ms >= world_now_ms);
+    world_now_ms = now_ms;
+    memset(&command, 0, sizeof(command));
+    command.Kind = kind;
+    world_command_seq++;
+    command.Seq = world_command_seq;
+    playback_machine_step(&world_machine_instance, &command, 1U, world_now_ms);
+}
+
+/**
  * @brief 最近一次写入请求信箱的流序号。
  * @return 流序号。
  */
@@ -845,6 +1022,29 @@ void world_open_ok(uint32_t generation, uint16_t track_count)
 {
     fake_storage_open_ok(world_current_seq(), generation, track_count, WORLD_AUDIO_BYTES);
     world_wake();
+}
+
+/**
+ * @brief Storage 对当前流应答指定的开启结果（只含结果，不带 OK 的参数），并唤醒一次。
+ * @param[in] result 开启结果。
+ */
+void world_open_result(Playback_MachineOpenResultTypeDef result)
+{
+    Playback_MachineRecordTypeDef record;
+
+    memset(&record, 0, sizeof(record));
+    record.StreamSeq = world_current_seq();
+    record.OpenResult = result;
+    fake_storage_write_record(&record);
+    world_wake();
+}
+
+/**
+ * @brief Storage 对当前流应答 BAD_FILE，并唤醒一次。
+ */
+void world_open_bad_file(void)
+{
+    world_open_result(PLAYBACK_MACHINE_OPEN_BAD_FILE);
 }
 
 /**
