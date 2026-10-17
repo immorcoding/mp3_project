@@ -143,13 +143,25 @@ $audioStreamImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/
 Assert-HarnessSequence -Expected @('storage_audio_stream') -Actual $audioStreamImpact.HostModules `
     -Message 'Storage 音频流分区变化必须选择 Storage 音频流主机测试'
 
+$playbackMachineImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/playback/playback_machine.c')
+Assert-HarnessSequence -Expected @('playback_task') -Actual $playbackMachineImpact.HostModules `
+    -Message '播放任务状态机变化必须选择播放任务主机测试'
+
+$playbackContractImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/playback/playback_contract.h')
+Assert-HarnessSequence -Expected @('playback_task') -Actual $playbackContractImpact.HostModules `
+    -Message '播放任务公开合同变化必须选择播放任务主机测试'
+
+$playbackServiceInterfaceImpact = Get-HarnessImpact -ChangedPath @('Service/playback/playback_service.h')
+Assert-HarnessSequence -Expected @('playback_service', 'playback_task') -Actual $playbackServiceInterfaceImpact.HostModules `
+    -Message '播放模块公开头变化必须同时选择播放模块与播放任务主机测试'
+
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'playback_service', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
     -Message 'Harness 变化必须回退全部主机测试'
 Assert-HarnessEqual -Expected $true -Actual $harnessImpact.RequiresAllHostTests -Message 'Harness 变化应标记全部测试'
 
 $unknownImpact = Get-HarnessImpact -ChangedPath @('Service/unmapped/player.c')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'playback_service', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $unknownImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $unknownImpact.HostModules `
     -Message '未知生产路径不得以零测试通过'
 Assert-HarnessSequence -Expected @('Service/unmapped/player.c') -Actual $unknownImpact.UnknownPaths `
     -Message '应保留触发保守回退的路径证据'
