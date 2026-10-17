@@ -17,7 +17,7 @@
 | 阶段 | 模型 | 默认 effort | 典型工作 |
 |---|---|---|---|
 | 规划 | Opus 5.5 | medium；难的规划用 high | wayfinder、grilling、写 spec、拆 ticket、边界与架构决定 |
-| 实施 | Sonnet 5.5 | high；难的实施用 xhigh | 按 ticket 改代码与文档、跑验证、修审阅发现 |
+| 实施 | Sonnet 5.5 | medium；难的实施用 high | 按 ticket 改代码与文档、跑验证、修审阅发现 |
 | 视觉实施 | Opus 5.5 | medium | 带 `visual` 标签的票整张实施（布局、外观、动效、视觉资源、GUI 基线变更） |
 | 调研与探索 | Haiku 5.5 | 始终 max | 查代码与文档、检索上游资料、汇总事实等重复性工作 |
 
