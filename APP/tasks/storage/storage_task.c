@@ -10,6 +10,8 @@
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark.h"
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark_config.h"
 #include "catalog/storage_listbuffer.h"
+#include "stream/storage_audio_block.h"
+#include "stream/storage_audio_stream.h"
 
 #include <stdint.h>
 
@@ -90,11 +92,30 @@ static void storage_task_enter_debounce(TickType_t now, TickType_t *debounce_sta
 }
 
 /**
+ * @brief  当前 SD 状态对音频流的介质视图。
+ * @return 就绪 / 消抖中 / 未挂载。
+ */
+static Storage_AudioMediaTypeDef storage_task_audio_media(void)
+{
+    switch (storage_task_sd_state)
+    {
+        case STORAGE_TASK_SD_READY:
+            return STORAGE_AUDIO_MEDIA_READY;
+        case STORAGE_TASK_SD_DEBOUNCING:
+            return STORAGE_AUDIO_MEDIA_DEBOUNCING;
+        default:
+            return STORAGE_AUDIO_MEDIA_ABSENT;
+    }
+}
+
+/**
  * @brief  本圈 wait 应阻塞多久：回收剩余与（若在消抖中）消抖剩余的较小值。
  * @param[in] now 当前 tick。
  * @param[in] debounce_start 消抖起点。
  * @param[in] reclaim_start 回收起点。
  * @return 传给通知等待的超时。
+ * @note   音频流还有工作（待处理请求，或流已打开且有空闲块可读）时不阻塞。有打开的音频流时
+ *         不提供回收机会，因此回收剩余不参与计时，只靠事件 FLAG 或消抖截止唤醒。
  */
 static TickType_t storage_task_next_wait_ticks(TickType_t now,
                                                TickType_t debounce_start,
@@ -102,9 +123,21 @@ static TickType_t storage_task_next_wait_ticks(TickType_t now,
 {
     TickType_t wait_ticks;
 
-    wait_ticks = storage_task_ticks_until(now,
-                                          reclaim_start,
-                                          pdMS_TO_TICKS(STORAGE_FLASH_RECLAIM_PERIOD_MS));
+    if (storage_audio_stream_has_work(storage_task_audio_media()))
+    {
+        return 0U;
+    }
+
+    if (storage_audio_stream_is_open())
+    {
+        wait_ticks = portMAX_DELAY;
+    }
+    else
+    {
+        wait_ticks = storage_task_ticks_until(now,
+                                              reclaim_start,
+                                              pdMS_TO_TICKS(STORAGE_FLASH_RECLAIM_PERIOD_MS));
+    }
 
     if (storage_task_sd_state == STORAGE_TASK_SD_DEBOUNCING)
     {
@@ -217,6 +250,10 @@ void storage_task(void *handle)
     storage_sdram_benchmark_run();
 #endif
 
+    /* 块池 NOLOAD 段的内容此时才开始有主；必须晚于可选的 SDRAM 全容量诊断（HWD-2）。 */
+    storage_audio_block_init();
+    storage_audio_stream_init(task_handle);
+
     if (storage_flash_init(task_handle) != STORAGE_OK)
     {
         /* Handle flash initialization error */
@@ -264,10 +301,14 @@ void storage_task(void *handle)
             storage_task_apply_sd_state();
         }
 
+        /* 每圈顺序：请求信箱 → 列表窗口 → 最多读一块 → 回收。 */
+        storage_audio_stream_process_request(storage_task_audio_media());
         storage_task_load_listbuffer_if_allowed();
+        storage_audio_stream_read_block(storage_task_audio_media());
 
         now = xTaskGetTickCount();
-        if (storage_task_ticks_until(now,
+        if (!storage_audio_stream_is_open() &&
+            storage_task_ticks_until(now,
                                      reclaim_start,
                                      pdMS_TO_TICKS(STORAGE_FLASH_RECLAIM_PERIOD_MS)) == 0U)
         {
