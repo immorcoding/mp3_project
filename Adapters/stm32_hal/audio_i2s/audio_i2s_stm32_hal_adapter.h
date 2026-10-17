@@ -27,6 +27,8 @@ typedef struct
     I2S_HandleTypeDef *I2SHandle; /**< CubeMX 生成并初始化的 I2S Handle。 */
     GPIO_TypeDef *MutePort;       /**< 硬件静音 GPIO 端口。 */
     uint16_t MutePin;             /**< 硬件静音 GPIO 引脚掩码。 */
+    Audio_StreamEventFunc EventHandler; /**< ISR 事件处理函数；由 Audio Component 经 Ops 安装。 */
+    void *EventContext;                 /**< 原样传给 EventHandler 的上下文。 */
 } AudioI2S_STM32HALAdapterTypeDef;
 
 Audio_StatusTypeDef AudioI2S_STM32HALAdapter_Bind(
