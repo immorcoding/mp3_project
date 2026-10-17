@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    playback_service.h
-  * @brief   播放模块 Interface：音频帧字节 → PCM 帧（解码半边）。
+  * @brief   播放模块 Interface：音频帧字节 → PCM 帧 → Platform 音频输出。
   ******************************************************************************
   */
 
@@ -43,11 +43,37 @@ typedef struct
     uint32_t DecodedMs;                           /**< 已解码时间：按已解出的每声道采样数与采样率累计，越过总时长时钳在总时长。 */
 } Service_Playback_AdvanceReportTypeDef;
 
+/**
+ * @brief Service_Playback_Pump() 回报的事实；播放模块只回报事实，不认识曲目、序号、文件或块。
+ * @note  事件类（FirstFrame、NeedInput、OutputStarted、OutputProgress、Underruns）只在发生的那次推进里给出；
+ *        状态类（SyncExhausted、StreamEnded、StartRejected、TransferError、StopFailed）在条件持续时每次推进重复给出，
+ *        直到新流开始或模块重新初始化。
+ */
+typedef struct
+{
+    bool     FirstFrame;          /**< 本次推进解出了本流的首帧，StreamInfo 有效（暂停中的预填也会给出）。 */
+    Service_Playback_StreamInfoTypeDef StreamInfo; /**< 首帧信息；首帧之前为全 0。 */
+    uint32_t DecodedMs;           /**< 已解码时间：只增不减，欠载恢复、暂停与同曲恢复的重放都不让它回退。 */
+    bool     NeedInput;           /**< 补半区时输入不够（窗口低于 W_min 且输入未结束）；请交入更多字节后再推进。 */
+    bool     SyncExhausted;       /**< 本流不可播：同步预算 R 耗尽，或输入读尽仍一帧都没解出。 */
+    bool     OutputStarted;       /**< 本次推进成功 Start 了输出（含欠载恢复后的重新 Start）；T_out 以此起算。 */
+    bool     OutputProgress;      /**< 自上次推进起 Platform 又释放了半区，即输出有进展（供 T_out）。 */
+    uint32_t Underruns;           /**< 本次推进处理的欠载次数；已按 Stop、补满、Start 恢复，对外不变，只供调用者记日志。 */
+    bool     StreamEnded;         /**< 流尾放完：最后一个含真实数据的半区已释放，输出已 Stop。 */
+    bool     StartRejected;       /**< Platform 因参数（如不支持的采样率）拒绝 Start，未锁存；本流应跳过。 */
+    bool     TransferError;       /**< Platform 报告 TRANSFER_ERROR；调用者应放弃当前流（其中 Stop 输出）。 */
+    bool     StopFailed;          /**< Platform 锁存了 STOP_FAILED；此后模块不再写 PCM 半区，重启前不能出声。 */
+} Service_Playback_PumpReportTypeDef;
+
 Service_StatusTypeDef Service_Playback_Init(void);
 Service_StatusTypeDef Service_Playback_BeginStream(uint32_t audio_bytes);
 Service_StatusTypeDef Service_Playback_Feed(const uint8_t *data, uint32_t length, uint32_t *accepted);
 Service_StatusTypeDef Service_Playback_FinishInput(void);
 Service_StatusTypeDef Service_Playback_Advance(Service_Playback_AdvanceReportTypeDef *report);
 Service_StatusTypeDef Service_Playback_ReadFrame(int16_t *stereo_pcm, uint32_t capacity_frames, uint32_t *frames);
+Service_StatusTypeDef Service_Playback_Pump(Service_Playback_PumpReportTypeDef *report);
+Service_StatusTypeDef Service_Playback_PauseOutput(void);
+Service_StatusTypeDef Service_Playback_ResumeOutput(void);
+Service_StatusTypeDef Service_Playback_AbandonStream(void);
 
 #endif /* PLAYBACK_SERVICE_H */

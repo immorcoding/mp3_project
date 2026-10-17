@@ -16,4 +16,14 @@
 /* playback_service.c、playback_service_decoder_minimp3.c */
 #define PLAYBACK_SERVICE_FRAME_MAX_SAMPLES   (1152U)   /* 单帧每声道最多采样数；帧输出缓冲按 2 声道容纳一帧（1152 × 2 × 16 bit = 4608 B），位于 DTCM。 */
 
+/* playback_service.c 输出管线 */
+#define PLAYBACK_SERVICE_PCM_FRAMES_PER_HALF (1152U)   /* 每个 PCM 半区的立体声帧数，须为 1152 的整数倍；欠载时先改为 2304（E8）。 */
+#define PLAYBACK_SERVICE_PCM_SECTION         ".sd_dma_buffer" /* PCM 半区所在链接段；链接脚本现有的 AXI SRAM NOLOAD 段，见下注。 */
+
+/*
+ * 链接脚本 stm32h743zgtx_flash.ld 受 CubeMX 守卫（ARC-2），本票未改。PCM 半区暂借 .sd_dma_buffer
+ * （AXI SRAM、NOLOAD、32 字节对齐）。待用户授权后在链接脚本新增独立的 .playback_pcm (NOLOAD) >RAM
+ * 段，再把 PLAYBACK_SERVICE_PCM_SECTION 改为 ".playback_pcm"。
+ */
+
 #endif /* PLAYBACK_SERVICE_CONFIG_H */
