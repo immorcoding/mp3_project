@@ -8,6 +8,7 @@
         'w25qxx'
         'resource_pack'
         'storage_catalog'
+        'playback_service'
     )
 
     # 每条规则描述一个主机测试工程真正编译或覆盖的生产路径。
@@ -81,6 +82,14 @@
             PathPatterns = @(
                 '^APP/tasks/storage/catalog/'
                 '^Tests/storage_catalog/'
+            )
+        }
+        @{
+            Name = 'playback_service'
+            PathPatterns = @(
+                '^Service/playback/'
+                '^Middlewares/Third_Party/minimp3/'
+                '^Tests/playback_service/'
             )
         }
     )
