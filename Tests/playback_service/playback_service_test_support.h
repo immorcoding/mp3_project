@@ -55,4 +55,62 @@ void test_run_stream(const uint8_t *data, size_t size, uint32_t audio_bytes, uin
 /** 沿 MPEG-1/2 Layer III 帧头走 count 帧，返回第 count 帧末尾的字节偏移。 */
 size_t test_frame_end_offset(const uint8_t *data, size_t offset, uint32_t count);
 
+/** @brief 解码出的立体声 PCM（交错 int16），用解码半边的 Advance/ReadFrame 得到，作为输出管线的独立期望。 */
+typedef struct
+{
+    int16_t *Pcm;
+    size_t Frames; /**< 立体声帧数。 */
+} test_pcm_t;
+
+/** @brief 按块喂入码流的喂入器：模拟播放任务把块字节交给播放模块并在读尽时告知。 */
+typedef struct
+{
+    const uint8_t *Data;
+    size_t Size;
+    size_t Offset;
+    uint32_t Chunk;      /**< 每次尝试交入的字节数；0 表示尽量多。 */
+    int Finished;        /**< 已调用 FinishInput。 */
+    uint32_t Limit;      /**< 非 0 时最多交入这么多字节（模拟后面的块还没到），且不告知读尽。 */
+} test_feeder_t;
+
+/** @brief 驱动输出管线时累计的事实。 */
+typedef struct
+{
+    uint32_t Pumps;
+    uint32_t Started;           /**< OutputStarted 次数。 */
+    uint32_t Progress;          /**< OutputProgress 次数。 */
+    uint32_t Ended;             /**< StreamEnded 次数。 */
+    uint32_t FirstFrames;       /**< FirstFrame 次数。 */
+    uint32_t NeedInputs;
+    uint32_t Underruns;         /**< Underruns 字段之和。 */
+    uint32_t SyncExhausted;
+    uint32_t StartRejected;
+    uint32_t TransferErrors;
+    uint32_t StopFailed;
+    uint32_t TimeWentBackwards;
+    uint32_t LastDecodedMs;
+    Service_Playback_StreamInfoTypeDef Info;
+} test_facts_t;
+
+void test_decode_reference(const uint8_t *data, size_t size, uint32_t audio_bytes, test_pcm_t *out);
+void test_free_pcm(test_pcm_t *pcm);
+
+void test_feeder_init(test_feeder_t *feeder, const uint8_t *data, size_t size, uint32_t chunk);
+void test_feeder_feed(test_feeder_t *feeder);
+
+/** 先喂入再 Pump 一次，并把报告并入 facts；返回 Pump 的状态码（SERVICE_OK 时才并入）。 */
+Service_StatusTypeDef test_pump(test_feeder_t *feeder, test_facts_t *facts, Service_Playback_PumpReportTypeDef *report);
+
+/**
+ * 模拟任务反复“喂入 + Pump + DMA 释放一个半区”，直到报告 StreamEnded 或轮数用尽。
+ * 返回是否因 StreamEnded 结束。
+ */
+int test_play_until_ended(test_feeder_t *feeder, test_facts_t *facts, uint32_t max_rounds);
+
+/** 复位假 Platform，Init 播放模块并开始一条新流，喂入器指向 blob 的前 size 字节。 */
+void test_begin_stream(const test_blob_t *blob, size_t size, uint32_t chunk, test_feeder_t *feeder);
+
+/** 断言播放日志按序等于参考 PCM，其后（若有）到 played_frames 为止全是静音。 */
+void test_assert_played_equals_reference_then_silence(const test_pcm_t *ref, size_t played_frames);
+
 #endif /* PLAYBACK_SERVICE_TEST_SUPPORT_H */

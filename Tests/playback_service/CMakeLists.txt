@@ -4,7 +4,7 @@ project(playback_service_host_tests LANGUAGES C)
 
 enable_testing()
 
-# 被测生产代码：播放模块与真实 minimp3，不链接 FreeRTOS、HAL 或 Platform。
+# 被测生产代码：播放模块与真实 minimp3，不链接 FreeRTOS、HAL；Platform 音频由 fake_platform_audio.c 替代。
 set(PLAYBACK_SERVICE_PRODUCTION_SOURCES
     ../../Service/playback/playback_service.c
     ../../Service/playback/playback_service_decoder.c
@@ -15,6 +15,7 @@ function(add_playback_service_test test_name source)
     add_executable(${test_name}
         ${source}
         playback_service_test_support.c
+        fake_platform_audio.c
         ${PLAYBACK_SERVICE_PRODUCTION_SOURCES}
     )
 
@@ -31,3 +32,4 @@ endfunction()
 add_playback_service_test(playback_service_stream test_playback_service_stream.c)
 add_playback_service_test(playback_service_sync test_playback_service_sync.c)
 add_playback_service_test(playback_service_info test_playback_service_info.c)
+add_playback_service_test(playback_service_output test_playback_service_output.c)

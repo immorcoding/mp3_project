@@ -4,6 +4,7 @@
  */
 
 #include "Tests/playback_service/playback_service_test_support.h"
+#include "Tests/playback_service/fake_platform_audio.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -215,4 +216,226 @@ void test_run_stream(const uint8_t *data, size_t size, uint32_t audio_bytes, uin
     }
 
     assert(!"整流驱动未在上界内结束");
+}
+
+/**
+ * @brief 用解码半边的 Advance/ReadFrame 得到一份参考 PCM，作为输出管线的独立期望。
+ * @param[in]  data        码流。
+ * @param[in]  size        码流字节数。
+ * @param[in]  audio_bytes BeginStream 的音频区间字节数。
+ * @param[out] out         参考 PCM；用 test_free_pcm() 释放。
+ */
+void test_decode_reference(const uint8_t *data, size_t size, uint32_t audio_bytes, test_pcm_t *out)
+{
+    size_t offset = 0U;
+    size_t capacity = 4096U;
+    int16_t stereo[PLAYBACK_SERVICE_FRAME_MAX_SAMPLES * 2U];
+
+    out->Pcm = (int16_t *)malloc(capacity * 2U * sizeof(int16_t));
+    assert(out->Pcm != NULL);
+    out->Frames = 0U;
+    assert(Service_Playback_Init() == SERVICE_OK);
+    assert(Service_Playback_BeginStream(audio_bytes) == SERVICE_OK);
+
+    for (;;)
+    {
+        Service_Playback_AdvanceReportTypeDef report;
+        uint32_t accepted = 0U;
+
+        if (offset < size)
+        {
+            assert(Service_Playback_Feed(data + offset, (uint32_t)(size - offset), &accepted) == SERVICE_OK);
+            offset += accepted;
+            if (offset >= size)
+            {
+                assert(Service_Playback_FinishInput() == SERVICE_OK);
+            }
+        }
+        assert(Service_Playback_Advance(&report) == SERVICE_OK);
+        if (report.Result == SERVICE_PLAYBACK_ADVANCE_END)
+        {
+            break;
+        }
+        assert(report.Result != SERVICE_PLAYBACK_ADVANCE_SYNC_EXHAUSTED);
+        if (report.Result == SERVICE_PLAYBACK_ADVANCE_FRAME)
+        {
+            uint32_t frames = 0U;
+
+            assert(Service_Playback_ReadFrame(stereo, PLAYBACK_SERVICE_FRAME_MAX_SAMPLES, &frames) == SERVICE_OK);
+            if ((out->Frames + frames) > capacity)
+            {
+                capacity *= 2U;
+                out->Pcm = (int16_t *)realloc(out->Pcm, capacity * 2U * sizeof(int16_t));
+                assert(out->Pcm != NULL);
+            }
+            memcpy(out->Pcm + (out->Frames * 2U), stereo, (size_t)frames * 2U * sizeof(int16_t));
+            out->Frames += frames;
+        }
+    }
+}
+
+/**
+ * @brief 释放 test_decode_reference() 的结果。
+ * @param[in,out] pcm 被释放并清零。
+ */
+void test_free_pcm(test_pcm_t *pcm)
+{
+    free(pcm->Pcm);
+    pcm->Pcm = NULL;
+    pcm->Frames = 0U;
+}
+
+/**
+ * @brief 初始化喂入器。
+ * @param[out] feeder 喂入器。
+ * @param[in]  data   码流。
+ * @param[in]  size   码流字节数。
+ * @param[in]  chunk  每次尝试交入的字节数；0 表示尽量多。
+ */
+void test_feeder_init(test_feeder_t *feeder, const uint8_t *data, size_t size, uint32_t chunk)
+{
+    memset(feeder, 0, sizeof(*feeder));
+    feeder->Data = data;
+    feeder->Size = size;
+    feeder->Chunk = chunk;
+}
+
+/**
+ * @brief 把码流尽量多地交入播放模块；全部交完后告知输入读尽（设置了 Limit 时不告知）。
+ * @param[in,out] feeder 喂入器。
+ */
+void test_feeder_feed(test_feeder_t *feeder)
+{
+    size_t end = feeder->Size;
+
+    if ((feeder->Limit != 0U) && (end > feeder->Limit))
+    {
+        end = feeder->Limit;
+    }
+    while ((feeder->Offset < end) && !feeder->Finished)
+    {
+        uint32_t accepted = 0U;
+        size_t want = end - feeder->Offset;
+
+        if ((feeder->Chunk != 0U) && (want > feeder->Chunk))
+        {
+            want = feeder->Chunk;
+        }
+        assert(Service_Playback_Feed(feeder->Data + feeder->Offset, (uint32_t)want, &accepted) == SERVICE_OK);
+        if (accepted == 0U)
+        {
+            break;
+        }
+        feeder->Offset += accepted;
+    }
+    if ((feeder->Offset >= feeder->Size) && !feeder->Finished)
+    {
+        assert(Service_Playback_FinishInput() == SERVICE_OK);
+        feeder->Finished = 1;
+    }
+}
+
+/**
+ * @brief 喂入后 Pump 一次，并把报告并入累计事实。
+ * @param[in,out] feeder 喂入器。
+ * @param[in,out] facts  累计事实。
+ * @param[out]    report 本次报告。
+ * @return Pump 的状态码。
+ */
+Service_StatusTypeDef test_pump(test_feeder_t *feeder, test_facts_t *facts, Service_Playback_PumpReportTypeDef *report)
+{
+    Service_StatusTypeDef status;
+
+    test_feeder_feed(feeder);
+    memset(report, 0xA5, sizeof(*report));
+    status = Service_Playback_Pump(report);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
+
+    facts->Pumps++;
+    facts->Started += report->OutputStarted ? 1U : 0U;
+    facts->Progress += report->OutputProgress ? 1U : 0U;
+    facts->Ended += report->StreamEnded ? 1U : 0U;
+    facts->FirstFrames += report->FirstFrame ? 1U : 0U;
+    facts->NeedInputs += report->NeedInput ? 1U : 0U;
+    facts->Underruns += report->Underruns;
+    facts->SyncExhausted += report->SyncExhausted ? 1U : 0U;
+    facts->StartRejected += report->StartRejected ? 1U : 0U;
+    facts->TransferErrors += report->TransferError ? 1U : 0U;
+    facts->StopFailed += report->StopFailed ? 1U : 0U;
+    if (report->DecodedMs < facts->LastDecodedMs)
+    {
+        facts->TimeWentBackwards++;
+    }
+    facts->LastDecodedMs = report->DecodedMs;
+    if (report->FirstFrame)
+    {
+        facts->Info = report->StreamInfo;
+    }
+    return status;
+}
+
+/**
+ * @brief 模拟任务循环：喂入、Pump、让 DMA 读完一个半区，直到流尾放完。
+ * @param[in,out] feeder     喂入器。
+ * @param[in,out] facts      累计事实。
+ * @param[in]     max_rounds 最多轮数，防止测试挂死。
+ * @return 1 表示收到 StreamEnded；0 表示轮数用尽或出现不可播事实。
+ */
+int test_play_until_ended(test_feeder_t *feeder, test_facts_t *facts, uint32_t max_rounds)
+{
+    uint32_t round;
+
+    for (round = 0U; round < max_rounds; round++)
+    {
+        Service_Playback_PumpReportTypeDef report;
+
+        assert(test_pump(feeder, facts, &report) == SERVICE_OK);
+        if (report.StreamEnded)
+        {
+            return 1;
+        }
+        if (report.SyncExhausted || report.StartRejected || report.TransferError || report.StopFailed)
+        {
+            return 0;
+        }
+        (void)fake_audio_release_half();
+    }
+    return 0;
+}
+
+/**
+ * @brief 复位假 Platform，Init 播放模块并开始一条新流。
+ * @param[in]  blob   夹具内容。
+ * @param[in]  size   交给播放模块的字节数（可小于夹具大小，用于截断出短文件）。
+ * @param[in]  chunk  喂入块大小，0 为尽量多。
+ * @param[out] feeder 喂入器。
+ */
+void test_begin_stream(const test_blob_t *blob, size_t size, uint32_t chunk, test_feeder_t *feeder)
+{
+    fake_audio_reset();
+    assert(Service_Playback_Init() == SERVICE_OK);
+    assert(Service_Playback_BeginStream((uint32_t)size) == SERVICE_OK);
+    test_feeder_init(feeder, blob->Data, size, chunk);
+}
+
+/**
+ * @brief 断言播放日志按序等于参考 PCM，其后（若有）到 played_frames 为止全是 0。
+ * @param[in] ref           参考 PCM。
+ * @param[in] played_frames 期望的播放总帧数（不小于参考帧数，多出部分必须是静音）。
+ */
+void test_assert_played_equals_reference_then_silence(const test_pcm_t *ref, size_t played_frames)
+{
+    size_t samples = 0U;
+    const int16_t *played = fake_audio_played(&samples);
+    size_t i;
+
+    assert(samples == played_frames * 2U);
+    assert(memcmp(played, ref->Pcm, ref->Frames * 2U * sizeof(int16_t)) == 0);
+    for (i = ref->Frames * 2U; i < samples; i++)
+    {
+        assert(played[i] == 0);
+    }
 }
