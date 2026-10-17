@@ -31,11 +31,13 @@
 #define APP_STORAGE_TASK_STACK_WORDS    1024U   /* Storage Task 栈深度，单位为 word。 */
 #define APP_MONITOR_TASK_STACK_WORDS    256U   /* Monitor Task 栈深度，单位为 word。 */
 #define APP_GUI_TASK_STACK_WORDS        2048U  /* GUI Task 栈深度，单位为 word。768 word 会在 Default 解锁 Fade 时溢出。 */
+#define APP_PLAYBACK_TASK_STACK_WORDS   5120U  /* Playback Task 栈深度，单位为 word（20480 B）；静态创建，栈与 TCB 位于 DTCM .bss。 */
 
 #define APP_BOOT_TASK_PRIORITY          0U     /* Boot Task 优先级。 */
 #define APP_LOG_TASK_PRIORITY           1U     /* Log Task 优先级。 */
 #define APP_STORAGE_TASK_PRIORITY       2U     /* Storage Task 优先级。 */
 #define APP_MONITOR_TASK_PRIORITY       1U     /* Monitor Task 优先级。 */
 #define APP_GUI_TASK_PRIORITY           1U     /* GUI Task 优先级。 */
+#define APP_PLAYBACK_TASK_PRIORITY      3U     /* Playback Task 优先级：播放 3 > Storage 2 > GUI/Log/Monitor 1 > Boot 0。 */
 
 #endif /* APP_CONFIG_H */
