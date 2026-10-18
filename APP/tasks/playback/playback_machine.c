@@ -673,7 +673,8 @@ static void advance_after_stream_end(Playback_MachineTypeDef *machine)
  * @param[in,out] machine 状态机。
  * @param[in] report 播放模块回报。
  * @note  优先级：STOP_FAILED（锁存）→ TRANSFER_ERROR（AUDIO_ERROR）→ Start 被拒、同步预算耗尽（跳过坏文件）→ 正常事实。
- *        首帧清零连跳计数，但与 Start 被拒或 R 耗尽出现在同一份回报里时不清零，否则整库都被拒的曲目会无界轮转。
+ *        连跳计数在输出真正 Start 时清零（OutputStarted），不在首帧清零：首帧后 Start 被拒的曲目，其拒绝可能出现在
+ *        更晚的一次推进里，首帧清零会让整库不支持的采样率无界轮转而到不了 ALL_BAD（B5、B6）。
  *        欠载恢复时播放模块已 Stop，T_out 暂停到它回报 Start（B8：只在 Platform 运行时计时）。
  */
 static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Playback_PumpReportTypeDef *report)
@@ -694,6 +695,7 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
     {
         machine->OutputRunning = true;
         machine->OutputSinceMs = machine->NowMs;
+        machine->ConsecutiveSkips = 0U;
     }
     if (report->OutputProgress)
     {
@@ -713,7 +715,6 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
 
     if (report->FirstFrame)
     {
-        machine->ConsecutiveSkips = 0U;
         machine->Snapshot.DurationMs = report->StreamInfo.TotalDurationMs;
     }
     if (report->DecodedMs > machine->Snapshot.PositionMs)

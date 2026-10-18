@@ -119,7 +119,7 @@ typedef struct
     uint32_t HeldOffset;                       /**< 手中块已拷进播放模块的字节数。 */
     bool AudioFaultLatched;                    /**< STOP_FAILED 已锁存（B10）：重启前 TOGGLE/SELECT 只让停止次数加一。 */
     bool SkipForward;                          /**< 自动跳过坏文件的方向：true 向后（索引增大），false 向前（PREV 之后，B5）。 */
-    uint32_t ConsecutiveSkips;                 /**< 连跳计数（B5）：首帧解出、用户换曲命令、进入停止态时清零。 */
+    uint32_t ConsecutiveSkips;                 /**< 连跳计数（B5）：输出真正 Start（OutputStarted）、用户换曲命令、进入停止态时清零。 */
     bool PumpNeedInput;                        /**< 本次唤醒最后一次推进回报了“补半区时输入不够”（B7 的断流判据之一）。 */
     Playback_MachineOpenResultTypeDef SeenOpen;/**< 当前流已见过的开启结果，用来发现“收到应答”（B7 重新计时）。 */
     Playback_MachineEndTypeDef SeenEnd;        /**< 当前流已见过的终止状态。 */

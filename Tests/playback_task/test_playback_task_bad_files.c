@@ -203,9 +203,9 @@ static void test_open_ok_does_not_reset_consecutive_count(void)
 }
 
 /**
- * @brief 首帧解出后连跳计数清零：此后再坏 N - 1 次仍继续跳过，第 N 次才停止。
+ * @brief 输出真正 Start 后连跳计数清零：此后再坏 N - 1 次仍继续跳过，第 N 次才停止。
  */
-static void test_first_frame_resets_consecutive_count(void)
+static void test_output_started_resets_consecutive_count(void)
 {
     world_reset();
     world_start_playing(GENERATION, TRACKS);
@@ -213,7 +213,8 @@ static void test_first_frame_resets_consecutive_count(void)
     world_open_bad_file();
     world_open_bad_file();
     world_open_ok(GENERATION, TRACKS);
-    world_feed_block(30U);   /* 首帧：计数清零 */
+    fake_player_emit_output_started();
+    world_feed_block(30U);   /* 首帧加输出 Start：计数清零 */
     assert(world_snapshot().DurationMs != 0U);
     assert(world_snapshot().SkippedBadCount == 2U);
 
@@ -228,6 +229,55 @@ static void test_first_frame_resets_consecutive_count(void)
     assert(world_snapshot().State == PLAYBACK_STATE_STOPPED);
     assert(world_snapshot().StopReason == PLAYBACK_STOP_REASON_ALL_BAD);
     assert(world_snapshot().SkippedBadCount == 5U);
+}
+
+/**
+ * @brief 只解出首帧而输出未 Start：连跳计数不清零，之后再坏仍累计到 N（B5）。
+ */
+static void test_first_frame_alone_does_not_reset_consecutive_count(void)
+{
+    world_reset();
+    world_start_playing(GENERATION, TRACKS);
+    world_send(PLAYBACK_COMMAND_NEXT);
+    world_open_bad_file();
+    world_open_bad_file();   /* 2 次 */
+    world_open_ok(GENERATION, TRACKS);
+    world_feed_block(30U);   /* 首帧解出，但没有 OutputStarted */
+    assert(world_snapshot().DurationMs != 0U);
+
+    fake_player_set_fact(FAKE_FACT_SYNC_EXHAUSTED);
+    world_feed_block(30U);   /* 第 3 次 = N */
+
+    assert(world_snapshot().State == PLAYBACK_STATE_STOPPED);
+    assert(world_snapshot().StopReason == PLAYBACK_STOP_REASON_ALL_BAD);
+}
+
+/**
+ * @brief 整库都被 Start 拒绝（如全是 22.05 kHz），首帧与拒绝落在不同的推进里仍到达 ALL_BAD。
+ * @note  每首都是：开启 OK、首帧在较早一次推进解出、随后一次推进才回报 Start 被拒。
+ */
+static void test_start_rejection_in_later_pump_than_first_frame_reaches_all_bad(void)
+{
+    world_reset();
+    world_start_playing(GENERATION, TRACKS);   /* 首帧在较早的推进里 */
+    fake_player_set_fact(FAKE_FACT_START_REJECTED);
+    world_wake();                              /* 第 1 次拒绝 */
+    assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
+    assert(world_snapshot().SkippedBadCount == 1U);
+
+    for (uint32_t track = 1U; track < TRACKS; track++)
+    {
+        assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
+        world_open_ok(GENERATION, TRACKS);
+        world_feed_block(30U);                 /* 首帧 */
+        fake_player_set_fact(FAKE_FACT_START_REJECTED);
+        world_wake();                          /* 更晚的一次推进才回报拒绝 */
+    }
+
+    assert(world_snapshot().State == PLAYBACK_STATE_STOPPED);
+    assert(world_snapshot().StopReason == PLAYBACK_STOP_REASON_ALL_BAD);
+    assert(world_snapshot().SkippedBadCount == TRACKS);
+    assert(world_snapshot().StopCount == 1U);
 }
 
 /**
@@ -494,7 +544,9 @@ int main(void)
     test_whole_round_of_bad_files_stops_all_bad();
     test_single_track_library_with_bad_file_stops_all_bad();
     test_open_ok_does_not_reset_consecutive_count();
-    test_first_frame_resets_consecutive_count();
+    test_output_started_resets_consecutive_count();
+    test_first_frame_alone_does_not_reset_consecutive_count();
+    test_start_rejection_in_later_pump_than_first_frame_reaches_all_bad();
     test_user_track_commands_reset_consecutive_count();
     test_entering_stopped_resets_consecutive_count();
     test_paused_skips_bad_files_and_stays_paused();

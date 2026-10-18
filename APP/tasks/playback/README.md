@@ -55,7 +55,7 @@
 | STOP_FAILED、`BeginStream`/`PauseOutput`/`AbandonStream` 失败 | `Pump` / 返回值 | 停止 AUDIO_FAULT 并锁存 | 保留 | 否 |
 | T_data 到期 | 计时 | 写“无流” → Stop → 停止 NO_DATA | 保留 | 否 |
 
-- **坏文件跳过**（B5）：`SkippedBadCount` 每次 +1；沿最近一次移动的方向前进（PREV 向前，NEXT、SELECT、停止态 TOGGLE、播完前进向后），暂停态保持暂停。连跳计数达到最近一次开启 OK 带回的 N 即停止 ALL_BAD（游标保留，跳过数增加 N）。计数在首帧解出时清零，不在开启 OK 时清零；用户换曲命令与进入停止态也清零。首帧与“Start 被拒/R 耗尽”落在同一份 `Pump` 回报里时不清零，否则整库采样率都被拒的曲目会无界轮转（B5 与 B6 合起来的缺口，见 inbox）。N 未知（开机后第一首就是坏文件，且应答没有带回曲目数）时无法计数，按 NO_TRACK 停止；BAD_FILE 应答若带回代次与曲目数（Storage 目前填 0），状态机采用它们。
+- **坏文件跳过**（B5）：`SkippedBadCount` 每次 +1；沿最近一次移动的方向前进（PREV 向前，NEXT、SELECT、停止态 TOGGLE、播完前进向后），暂停态保持暂停。连跳计数达到最近一次开启 OK 带回的 N 即停止 ALL_BAD（游标保留，跳过数增加 N）。计数在输出真正 Start（`OutputStarted`）时清零，不在首帧解出或开启 OK 时清零；用户换曲命令与进入停止态也清零。不在首帧清零，是因为 Start 被拒可能出现在比首帧更晚的一次 `Pump` 里，否则整库采样率都被拒的曲目会无界轮转到不了 ALL_BAD（B5 与 B6 合起来的缺口）。N 未知（开机后第一首就是坏文件，且应答没有带回曲目数）时无法计数，按 NO_TRACK 停止；BAD_FILE 应答若带回代次与曲目数（Storage 目前填 0），状态机采用它们。
 - **T_data**（B7，`PLAYBACK_MACHINE_DATA_TIMEOUT_MS`，初值 2000）：只在“需要数据却没有”时计时——等开启应答（从写请求起算，暂停中也算）；或本流未终止、播放模块补半区时回报输入不够、手中无块且队列没有本流的块（B16，预填、断流、欠载后的补满）。收到本流的应答或块重新计时；暂停且输出已满、排空（ENDED 之后）、停止时播放模块不要输入，自然不计时。
 - **T_out**（B8，`PLAYBACK_MACHINE_OUTPUT_TIMEOUT_MS`，初值 500）：`OutputStarted` 起算，每次 `OutputProgress` 重新计时；暂停、放弃流、流尾放完、欠载（播放模块已 Stop）时停止计时，直到下一次 `OutputStarted`；恢复输出成功即视为 Start 并从恢复时刻起算。到期与 TRANSFER_ERROR 同路。判定放在本次推进之后，迟到的唤醒不会把已经发生的半区释放误判为无进展。到期都是“经过时间达到阈值”（≥），时刻按差值比较，回绕安全。
 - **AUDIO_FAULT 锁存**（B10、K3）：之后停止态的 TOGGLE、SELECT 不开流、不动游标，只让停止次数 +1；NEXT/PREV 只移动游标。切歌途中 Stop 失败时，已写的新流请求被“无流”覆盖，游标停在已前进的位置。因其他原因停止时 Stop 失败，原因升级为 AUDIO_FAULT（停止次数仍只 +1）。锁存期间没有流，所以拔卡、代次变化没有可处理的流事实；重启才解除，不自动复位 MCU。
