@@ -138,6 +138,10 @@ static void fire_callback(void)
     }
 }
 
+/**
+ * @brief 模拟 DMA 读完一个半区：计入已读完的半区日志与释放数，另一半区未提交则欠载加一，随后调用事件回调。
+ * @return 1 表示发生了释放；输出未运行（含 Stop 之后）时不释放，返回 0。
+ */
 int fake_audio_release_half(void)
 {
     uint32_t half;
@@ -164,6 +168,10 @@ int fake_audio_release_half(void)
     return 1;
 }
 
+/**
+ * @brief 注入 DMA 传输错误：记 TRANSFER_ERROR 并调用回调；输出仍视为运行，等待调用者 Stop。
+ * @note  输出必须正在运行；STOP_FAILED 已锁存时保持锁存，不被覆盖。
+ */
 void fake_audio_inject_transfer_error(void)
 {
     assert(g_fake_audio.Running);
@@ -174,47 +182,85 @@ void fake_audio_inject_transfer_error(void)
     fire_callback();
 }
 
+/**
+ * @brief 让下一次真正停止输出的 Stop 失败：锁存 STOP_FAILED 并返回错误（缓冲留在 Platform）。
+ * @note  只对输出正在运行时的 Stop 生效一次。
+ */
 void fake_audio_fail_next_stop(void)
 {
     s_fail_next_stop = 1;
 }
 
+/**
+ * @brief 直接锁存 STOP_FAILED（模拟 Stop 之外的时机已锁存），之后 Start/Stop 一律拒绝。
+ */
 void fake_audio_latch_stop_failed(void)
 {
     s_fault = PLATFORM_AUDIO_FAULT_STOP_FAILED;
 }
 
+/**
+ * @brief 让下一次 Platform_Audio_GetStatus 返回错误（仅一次）。
+ * @note  只影响状态读取；Start、Stop 与 SubmitHalf 不受影响，也不改变计数与故障。
+ */
 void fake_audio_fail_next_get_status(void)
 {
     s_fail_next_get_status = 1;
 }
 
+/**
+ * @brief 让下一次 Start 因参数被拒（仅一次，不锁存，Fault 保持不变）。
+ */
 void fake_audio_reject_next_start(void)
 {
     s_reject_next_start = 1;
 }
 
+/**
+ * @brief 额外接受一个采样率（默认只收 32000、44100、48000）。
+ * @param[in] rate 采样率。
+ * @note  仅用于用 MPEG-2 夹具构造“非整半区”的流尾；真实 Platform 仍拒绝它，生产合同不变。
+ */
 void fake_audio_accept_rate_for_test(uint32_t rate)
 {
     s_extra_rate = rate;
 }
 
+/**
+ * @brief 取回某半区最近一次 Clean 出去（Start 或 SubmitHalf）的内容，即 DMA 将读到的数据。
+ * @param[in] half 半区号，必须小于 2。
+ * @return 该半区副本的首地址（立体声交错 int16）。
+ */
 const int16_t *fake_audio_clean_half(uint32_t half)
 {
     assert(half < FAKE_HALF_COUNT);
     return s_clean[half];
 }
 
+/**
+ * @brief 事件回调被调用的次数（ISR 唤醒的模拟）。
+ * @return 自上次 fake_audio_reset() 起的调用次数，未注册回调时也计数。
+ */
 uint32_t fake_audio_callback_count(void)
 {
     return s_callback_count;
 }
 
+/**
+ * @brief 假 Platform_Audio_Init：无硬件可初始化。
+ * @return PLATFORM_OK。
+ */
 Platform_StatusTypeDef Platform_Audio_Init(void)
 {
     return PLATFORM_OK;
 }
 
+/**
+ * @brief 假 Platform_Audio_SetEventCallback：登记半区释放与故障的事件回调。
+ * @param[in] callback 事件回调，不得为 NULL。
+ * @param[in] context  回调的用户上下文，原样回传。
+ * @return PLATFORM_OK；callback 为 NULL 返回 PLATFORM_AUDIO_ERROR。
+ */
 Platform_StatusTypeDef Platform_Audio_SetEventCallback(Platform_Audio_EventCallback_t callback, void *context)
 {
     if (callback == NULL)
@@ -226,6 +272,10 @@ Platform_StatusTypeDef Platform_Audio_SetEventCallback(Platform_Audio_EventCallb
     return PLATFORM_OK;
 }
 
+/**
+ * @brief 假 Platform_Audio_ClearEventCallback：清除已登记的事件回调。
+ * @return PLATFORM_OK。
+ */
 Platform_StatusTypeDef Platform_Audio_ClearEventCallback(void)
 {
     s_callback = NULL;
@@ -233,6 +283,14 @@ Platform_StatusTypeDef Platform_Audio_ClearEventCallback(void)
     return PLATFORM_OK;
 }
 
+/**
+ * @brief 假 Platform_Audio_Start：按合同校验参数后清零计数并开始输出，两个半区视为已提交。
+ * @param[in] sample_rate     采样率，只收 32/44.1/48 kHz（另可由 fake_audio_accept_rate_for_test() 追加）。
+ * @param[in] ring            双半区缓冲首地址，须 32 B 对齐，不得为 NULL。
+ * @param[in] frames_per_half 每半区立体声帧数，非 0，半区字节数须为 32 B 的整数倍。
+ * @return PLATFORM_OK；STOP_FAILED 已锁存、运行中再 Start（记合同违反）、被 fake_audio_reject_next_start() 拒绝
+ *         或参数不被接受返回 PLATFORM_AUDIO_ERROR，且不改变现有输出。
+ */
 Platform_StatusTypeDef Platform_Audio_Start(uint32_t sample_rate, int16_t *ring, uint32_t frames_per_half)
 {
     const uint32_t half_bytes = frames_per_half * 2U * (uint32_t)sizeof(int16_t);
@@ -280,6 +338,12 @@ Platform_StatusTypeDef Platform_Audio_Start(uint32_t sample_rate, int16_t *ring,
     return PLATFORM_OK;
 }
 
+/**
+ * @brief 假 Platform_Audio_SubmitHalf：把调用者缓冲里的半区 Clean 成 DMA 可见的副本并标记已提交。
+ * @param[in] half 半区号，0 或 1。
+ * @return PLATFORM_OK；半区号越界或输出未运行（记合同违反）返回 PLATFORM_AUDIO_ERROR。
+ * @note  提交仍处于已提交态的半区记一次所有权违反（OwnershipViolations）。
+ */
 Platform_StatusTypeDef Platform_Audio_SubmitHalf(uint32_t half)
 {
     if ((half >= FAKE_HALF_COUNT) || !g_fake_audio.Running)
@@ -298,6 +362,11 @@ Platform_StatusTypeDef Platform_Audio_SubmitHalf(uint32_t half)
     return PLATFORM_OK;
 }
 
+/**
+ * @brief 假 Platform_Audio_GetStatus：读取释放数、欠载数与故障。
+ * @param[out] status 状态快照。
+ * @return PLATFORM_OK；status 为 NULL 或被 fake_audio_fail_next_get_status() 指定失败时返回 PLATFORM_AUDIO_ERROR。
+ */
 Platform_StatusTypeDef Platform_Audio_GetStatus(Platform_Audio_StatusTypeDef *status)
 {
     if (status == NULL)
@@ -315,6 +384,12 @@ Platform_StatusTypeDef Platform_Audio_GetStatus(Platform_Audio_StatusTypeDef *st
     return PLATFORM_OK;
 }
 
+/**
+ * @brief 假 Platform_Audio_Stop：停止输出，成功后计数冻结。
+ * @return PLATFORM_OK（含本来就未运行）；STOP_FAILED 已锁存或被 fake_audio_fail_next_stop() 指定失败时返回
+ *         PLATFORM_AUDIO_ERROR（后者锁存 STOP_FAILED）。
+ * @note  每次调用都计入 StopCount 与调用记录。
+ */
 Platform_StatusTypeDef Platform_Audio_Stop(void)
 {
     if (s_fault == PLATFORM_AUDIO_FAULT_STOP_FAILED)

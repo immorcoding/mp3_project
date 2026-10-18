@@ -107,6 +107,9 @@ Service_StatusTypeDef test_pump(test_feeder_t *feeder, test_facts_t *facts, Serv
  */
 int test_play_until_ended(test_feeder_t *feeder, test_facts_t *facts, uint32_t max_rounds);
 
+/** @brief 往 out 里写 count 个确定性伪随机字节（固定种子的线性同余发生器，结果与平台无关）。 */
+void test_fill_garbage(uint8_t *out, size_t count, uint32_t seed);
+
 /** 复位假 Platform，Init 播放模块并开始一条新流，喂入器指向 blob 的前 size 字节。 */
 void test_begin_stream(const test_blob_t *blob, size_t size, uint32_t chunk, test_feeder_t *feeder);
 

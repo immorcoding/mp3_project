@@ -439,3 +439,20 @@ void test_assert_played_equals_reference_then_silence(const test_pcm_t *ref, siz
         assert(played[i] == 0);
     }
 }
+
+/**
+ * @brief 往 out 里写 count 个确定性伪随机字节：固定种子的线性同余发生器，结果与平台无关。
+ * @param[out] out   输出缓冲，至少 count 字节。
+ * @param[in]  count 要写的字节数。
+ * @param[in]  seed  发生器种子，相同种子得到相同序列。
+ */
+void test_fill_garbage(uint8_t *out, size_t count, uint32_t seed)
+{
+    size_t i;
+
+    for (i = 0U; i < count; i++)
+    {
+        seed = (seed * 1664525U) + 1013904223U;
+        out[i] = (uint8_t)(seed >> 24);
+    }
+}

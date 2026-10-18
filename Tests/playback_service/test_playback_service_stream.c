@@ -232,6 +232,10 @@ static void test_truncated_tail_is_silently_dropped(void)
     test_free_blob(&blob);
 }
 
+/**
+ * @brief 测试入口。
+ * @return 0 表示全部通过；断言失败会直接终止进程。
+ */
 int main(void)
 {
     test_rejects_calls_before_init_and_without_stream();

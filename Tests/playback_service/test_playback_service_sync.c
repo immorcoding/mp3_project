@@ -14,19 +14,13 @@
 #define CBR_AUDIO_FRAMES   (30U)
 #define MPEG2_AUDIO_FRAMES (41U)
 
-/** @brief 往 out 里写 count 个确定性伪随机字节。 */
-static void fill_garbage(uint8_t *out, size_t count, uint32_t seed)
-{
-    size_t i;
-
-    for (i = 0U; i < count; i++)
-    {
-        seed = (seed * 1664525U) + 1013904223U;
-        out[i] = (uint8_t)(seed >> 24);
-    }
-}
-
-/** @brief 把 src 追加到 dst 的 *used 之后。 */
+/**
+ * @brief 把 src 追加到 dst 的 *used 之后。
+ * @param[out]    dst   目标缓冲，容量须容得下追加后的内容。
+ * @param[in,out] used  已用字节数，追加后增加 count。
+ * @param[in]     src   源数据。
+ * @param[in]     count 追加的字节数。
+ */
 static void append(uint8_t *dst, size_t *used, const uint8_t *src, size_t count)
 {
     memcpy(dst + *used, src, count);
@@ -44,7 +38,7 @@ static void test_garbage_exhausts_sync_budget(void)
     Service_Playback_AdvanceReportTypeDef report;
 
     assert(garbage != NULL);
-    fill_garbage(garbage, size, 12345U);
+    test_fill_garbage(garbage, size, 12345U);
 
     test_run_stream(garbage, size, (uint32_t)size, 1000U, &run);
 
@@ -76,7 +70,7 @@ static void test_garbage_shorter_than_budget_is_not_exhausted(void)
     test_run_t run;
 
     assert(garbage != NULL);
-    fill_garbage(garbage, size, 777U);
+    test_fill_garbage(garbage, size, 777U);
 
     test_run_stream(garbage, size, (uint32_t)size, 0U, &run);
 
@@ -107,7 +101,7 @@ static void test_real_fixtures_with_leading_junk_are_not_misjudged(void)
         test_load_fixture(names[f], &blob);
         stream = (uint8_t *)malloc(junk + blob.Size);
         assert(stream != NULL);
-        fill_garbage(stream, junk, 99U + (uint32_t)f);
+        test_fill_garbage(stream, junk, 99U + (uint32_t)f);
         used = junk;
         append(stream, &used, blob.Data, blob.Size);
 
@@ -138,7 +132,7 @@ static void test_resyncs_after_garbage_in_the_middle(void)
     stream = (uint8_t *)malloc(blob.Size + 3000U);
     assert(stream != NULL);
     append(stream, &used, blob.Data, cut);
-    fill_garbage(stream + used, 3000U, 4242U);
+    test_fill_garbage(stream + used, 3000U, 4242U);
     used += 3000U;
     append(stream, &used, blob.Data + cut, blob.Size - cut);
 
@@ -231,6 +225,10 @@ static void test_different_sample_rate_frames_count_against_sync_budget(void)
     test_free_blob(&odd_blob);
 }
 
+/**
+ * @brief 测试入口。
+ * @return 0 表示全部通过；断言失败会直接终止进程。
+ */
 int main(void)
 {
     test_garbage_exhausts_sync_budget();

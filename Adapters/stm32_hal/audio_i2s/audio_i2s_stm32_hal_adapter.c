@@ -242,19 +242,31 @@ static void audio_i2s_stm32_hal_dispatch(const I2S_HandleTypeDef *hi2s,
     }
 }
 
-/** @brief HAL 弱符号覆盖：DMA 读完前半区（半区 0）。 */
+/**
+ * @brief HAL 弱符号覆盖：DMA 读完前半区（半区 0）。
+ * @param[in] hi2s HAL 传入的 I2S Handle；与本 Adapter 绑定的不一致时分发函数忽略。
+ * @note  DMA 半传输中断上下文（ISR），只转发给已安装的事件处理函数，不阻塞。
+ */
 void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
 {
     audio_i2s_stm32_hal_dispatch(hi2s, AUDIO_STREAM_EVENT_HALF0_RELEASED);
 }
 
-/** @brief HAL 弱符号覆盖：DMA 读完后半区（半区 1）。 */
+/**
+ * @brief HAL 弱符号覆盖：DMA 读完后半区（半区 1）。
+ * @param[in] hi2s HAL 传入的 I2S Handle；与本 Adapter 绑定的不一致时分发函数忽略。
+ * @note  DMA 传输完成中断上下文（ISR），只转发给已安装的事件处理函数，不阻塞。
+ */
 void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
 {
     audio_i2s_stm32_hal_dispatch(hi2s, AUDIO_STREAM_EVENT_HALF1_RELEASED);
 }
 
-/** @brief HAL 弱符号覆盖：I2S 或 DMA 传输错误。 */
+/**
+ * @brief HAL 弱符号覆盖：I2S 或 DMA 传输错误。
+ * @param[in] hi2s HAL 传入的 I2S Handle；与本 Adapter 绑定的不一致时分发函数忽略。
+ * @note  错误中断上下文（ISR），只转发给已安装的事件处理函数，不阻塞。
+ */
 void HAL_I2S_ErrorCallback(I2S_HandleTypeDef *hi2s)
 {
     audio_i2s_stm32_hal_dispatch(hi2s, AUDIO_STREAM_EVENT_ERROR);

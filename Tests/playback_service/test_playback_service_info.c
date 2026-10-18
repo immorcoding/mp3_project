@@ -11,7 +11,13 @@
 
 #include "Tests/playback_service/playback_service_test_support.h"
 
-/** @brief 帧数 × 每帧采样数 → 毫秒（向下取整），与产品口径一致。 */
+/**
+ * @brief 帧数 × 每帧采样数 → 毫秒（向下取整），与产品口径一致。
+ * @param[in] frames            帧数。
+ * @param[in] samples_per_frame 每帧每声道采样数（MPEG-1 为 1152，MPEG-2 为 576）。
+ * @param[in] hz                采样率，不得为 0。
+ * @return 对应的毫秒数。
+ */
 static uint32_t frames_to_ms(uint32_t frames, uint32_t samples_per_frame, uint32_t hz)
 {
     return (uint32_t)(((uint64_t)frames * samples_per_frame * 1000ULL) / hz);
@@ -204,6 +210,10 @@ static void test_begin_stream_restarts_time_and_first_frame(void)
     test_free_blob(&blob);
 }
 
+/**
+ * @brief 测试入口。
+ * @return 0 表示全部通过；断言失败会直接终止进程。
+ */
 int main(void)
 {
     test_first_frame_info_per_fixture();

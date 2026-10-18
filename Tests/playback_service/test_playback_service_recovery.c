@@ -18,29 +18,26 @@
 #define HALF_FRAMES  (PLAYBACK_SERVICE_PCM_FRAMES_PER_HALF)
 #define HALF_SAMPLES (HALF_FRAMES * 2U)
 
-/** @brief 参考 PCM 的第 j 个半区。 */
+/**
+ * @brief 参考 PCM 的第 j 个半区。
+ * @param[in] ref 参考 PCM。
+ * @param[in] j   半区序号（从 0 起）。
+ * @return 指向该半区第一个样本的指针，共 HALF_SAMPLES 个 int16。
+ */
 static const int16_t *ref_half(const test_pcm_t *ref, uint32_t j)
 {
     return ref->Pcm + ((size_t)j * HALF_SAMPLES);
 }
 
-/** @brief 断言 Start 时两个半区依次是参考 PCM 的第 first、first + 1 个半区。 */
+/**
+ * @brief 断言 Start 时两个半区依次是参考 PCM 的第 first、first + 1 个半区。
+ * @param[in] ref   参考 PCM。
+ * @param[in] first 期望落在半区 0 的参考半区序号。
+ */
 static void assert_start_halves(const test_pcm_t *ref, uint32_t first)
 {
     assert(memcmp(g_fake_audio.StartSnapshot, ref_half(ref, first), HALF_SAMPLES * sizeof(int16_t)) == 0);
     assert(memcmp(g_fake_audio.StartSnapshot + HALF_SAMPLES, ref_half(ref, first + 1U), HALF_SAMPLES * sizeof(int16_t)) == 0);
-}
-
-/** @brief 往 out 里写 count 个确定性伪随机字节。 */
-static void fill_garbage(uint8_t *out, size_t count, uint32_t seed)
-{
-    size_t i;
-
-    for (i = 0U; i < count; i++)
-    {
-        seed = (seed * 1664525U) + 1013904223U;
-        out[i] = (uint8_t)(seed >> 24);
-    }
 }
 
 /**
@@ -63,14 +60,23 @@ static void start_cbr_playing(test_blob_t *blob, test_pcm_t *ref, test_feeder_t 
     assert(report.OutputStarted);
 }
 
-/** @brief 释放一个半区并 Pump 一次。 */
+/**
+ * @brief 释放一个半区并 Pump 一次。
+ * @param[in,out] feeder 喂入器。
+ * @param[in,out] facts  累计事实。
+ * @param[out]    report 本次推进的报告。
+ */
 static void release_and_pump(test_feeder_t *feeder, test_facts_t *facts, Service_Playback_PumpReportTypeDef *report)
 {
     assert(fake_audio_release_half() == 1);
     assert(test_pump(feeder, facts, report) == SERVICE_OK);
 }
 
-/** @brief 释放结束并清理。 */
+/**
+ * @brief 释放夹具与参考 PCM。
+ * @param[in,out] blob 夹具内容。
+ * @param[in,out] ref  参考 PCM。
+ */
 static void finish(test_blob_t *blob, test_pcm_t *ref)
 {
     test_free_pcm(ref);
@@ -505,13 +511,19 @@ typedef struct
     int16_t Samples[2U * HALF_SAMPLES];
 } ring_copy_t;
 
-/** @brief 取走 Start 时的环形缓冲当前内容。 */
+/**
+ * @brief 取走 Start 时的环形缓冲当前内容。
+ * @param[out] copy 接收两个半区样本的副本。
+ */
 static void snapshot_ring(ring_copy_t *copy)
 {
     memcpy(copy->Samples, g_fake_audio.StartRing, sizeof(copy->Samples));
 }
 
-/** @brief 断言环形缓冲与快照一致。 */
+/**
+ * @brief 断言环形缓冲与快照一致。
+ * @param[in] copy snapshot_ring() 取得的副本。
+ */
 static void assert_ring_unchanged(const ring_copy_t *copy)
 {
     assert(memcmp(copy->Samples, g_fake_audio.StartRing, sizeof(copy->Samples)) == 0);
@@ -733,7 +745,7 @@ static void test_unplayable_input_reports_sync_exhausted_without_starting(void)
     uint32_t rounds;
 
     assert(garbage != NULL);
-    fill_garbage(garbage, size, 12345U);
+    test_fill_garbage(garbage, size, 12345U);
     blob.Data = garbage;
     blob.Size = size;
     test_begin_stream(&blob, size, 1000U, &feeder);

@@ -286,6 +286,10 @@ static void short_file_without_tags_is_whole_range(void)
     assert(r.Start == 0U && r.End == 5U);
 }
 
+/**
+ * @brief 测试入口。
+ * @return 0 表示全部通过；断言失败会直接终止进程。
+ */
 int main(void)
 {
     plain_file_is_whole_range();
