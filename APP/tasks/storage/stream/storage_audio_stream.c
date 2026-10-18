@@ -328,7 +328,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t *audio_b
  * @param[in] media 介质状态（非消抖）。
  * @return 开启结果；OK 时 FIL 已打开，storage_audio_record 的参数已填。
  * @note  代次 0 表示“当前”。位置超出列表按 STALE。无法区分“文件不存在”与“打开时 I/O 错误”，
- *        打开失败一律 BAD_FILE（C3 的“打不开”）。
+ *        打开失败一律 BAD_FILE（C3 的“打不开”）。BAD_FILE 时仍填写 Generation 与 TrackCount（位置已通过 STALE 校验），供播放任务跳过坏文件；其余失败二者为 0。
  */
 static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequestTypeDef *request,
                                                          Storage_AudioMediaTypeDef media)
@@ -368,6 +368,10 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
         return STORAGE_AUDIO_OPEN_STALE;
     }
 
+    /* 位置已通过 STALE 校验：此后即使 BAD_FILE，播放任务也要靠代次与曲目数继续跳过坏文件。 */
+    storage_audio_record.Generation = sheet_generation;
+    storage_audio_record.TrackCount = track_count;
+
     status = Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_SD,
                                          storage_audio_path,
                                          SERVICE_FILESYSTEM_FILE_MODE_READ,
@@ -382,8 +386,6 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
     if (result == STORAGE_AUDIO_OPEN_OK)
     {
         storage_audio_remaining = audio_bytes;
-        storage_audio_record.Generation = sheet_generation;
-        storage_audio_record.TrackCount = track_count;
         storage_audio_record.AudioBytes = audio_bytes;
     }
     return result;
@@ -420,8 +422,11 @@ void storage_audio_stream_process_request(Storage_AudioMediaTypeDef media)
     storage_audio_record.OpenResult = storage_audio_open(&request, media);
     if (storage_audio_record.OpenResult != STORAGE_AUDIO_OPEN_OK)
     {
-        storage_audio_record.Generation = 0U;
-        storage_audio_record.TrackCount = 0U;
+        if (storage_audio_record.OpenResult != STORAGE_AUDIO_OPEN_BAD_FILE)
+        {
+            storage_audio_record.Generation = 0U;
+            storage_audio_record.TrackCount = 0U;
+        }
         storage_audio_record.AudioBytes = 0U;
     }
     storage_audio_publish_record(true);
