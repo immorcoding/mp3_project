@@ -31,6 +31,7 @@ static int16_t s_clean[FAKE_HALF_COUNT][FAKE_MAX_HALF_FRAMES * 2U];
 
 static int s_fail_next_stop;
 static int s_reject_next_start;
+static int s_fail_next_get_status;
 static uint32_t s_extra_rate;
 
 static int16_t *s_played;
@@ -89,6 +90,7 @@ void fake_audio_reset(void)
     s_frames_per_half = 0U;
     s_fail_next_stop = 0;
     s_reject_next_start = 0;
+    s_fail_next_get_status = 0;
     s_extra_rate = 0U;
     s_played = NULL;
     s_played_samples = 0U;
@@ -180,6 +182,11 @@ void fake_audio_fail_next_stop(void)
 void fake_audio_latch_stop_failed(void)
 {
     s_fault = PLATFORM_AUDIO_FAULT_STOP_FAILED;
+}
+
+void fake_audio_fail_next_get_status(void)
+{
+    s_fail_next_get_status = 1;
 }
 
 void fake_audio_reject_next_start(void)
@@ -295,6 +302,11 @@ Platform_StatusTypeDef Platform_Audio_GetStatus(Platform_Audio_StatusTypeDef *st
 {
     if (status == NULL)
     {
+        return PLATFORM_AUDIO_ERROR;
+    }
+    if (s_fail_next_get_status != 0)
+    {
+        s_fail_next_get_status = 0;
         return PLATFORM_AUDIO_ERROR;
     }
     status->ReleasedHalves = s_released;

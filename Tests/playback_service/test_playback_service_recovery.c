@@ -554,6 +554,41 @@ static void test_stop_failed_on_pause_stops_all_writes(void)
 }
 
 /**
+ * @brief 暂停时 Stop 成功而读状态失败：不算 Stop 失败，返回 SERVICE_OK、不锁存 STOP_FAILED，仍处于暂停，
+ *        恢复后按最近一次推进记下的计数重放并播完全程。
+ * @note  先释放一个半区并 Pump 一次，让“最近已知”的释放数为 1；GetStatus 失败那次暂停沿用它。
+ */
+static void test_get_status_failure_after_successful_stop_is_not_a_stop_failure(void)
+{
+    test_blob_t blob;
+    test_pcm_t ref;
+    test_feeder_t feeder;
+    test_facts_t facts;
+    Service_Playback_PumpReportTypeDef report;
+
+    start_cbr_playing(&blob, &ref, &feeder, &facts);
+    release_and_pump(&feeder, &facts, &report);
+
+    fake_audio_fail_next_get_status();
+    assert(Service_Playback_PauseOutput() == SERVICE_OK);
+    assert(g_fake_audio.StopCount == 1U);
+    assert(!g_fake_audio.Running);
+    assert(Service_Playback_PauseOutput() == SERVICE_OK);
+    assert(g_fake_audio.StopCount == 1U);
+
+    assert(test_pump(&feeder, &facts, &report) == SERVICE_OK);
+    assert(!report.StopFailed && !report.OutputStarted);
+
+    assert(Service_Playback_ResumeOutput() == SERVICE_OK);
+    assert(g_fake_audio.StartCount == 2U);
+    assert_start_halves(&ref, 1U);
+    assert(test_play_until_ended(&feeder, &facts, 1000U));
+    assert(facts.StopFailed == 0U);
+    test_assert_played_equals_reference_then_silence(&ref, ref.Frames);
+    finish(&blob, &ref);
+}
+
+/**
  * @brief 欠载恢复的 Stop 失败：回报 StopFailed，不再补满、不再 Start。
  */
 static void test_stop_failed_during_underrun_recovery_stops_all_writes(void)
@@ -802,6 +837,7 @@ int main(void)
     test_start_rejected_by_latched_fault_is_reported_as_stop_failed();
     test_transfer_error_is_reported_without_further_writes_and_abandon_stops();
     test_stop_failed_on_pause_stops_all_writes();
+    test_get_status_failure_after_successful_stop_is_not_a_stop_failure();
     test_stop_failed_during_underrun_recovery_stops_all_writes();
     test_stop_failed_at_stream_end_is_reported_instead_of_stream_end();
     test_stop_failed_on_abandon_blocks_new_streams();

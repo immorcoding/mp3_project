@@ -72,6 +72,9 @@ void fake_audio_fail_next_stop(void);
 /** @brief 直接锁存 STOP_FAILED（模拟 Stop 之外的时机已锁存），之后 Start/Stop 一律拒绝。 */
 void fake_audio_latch_stop_failed(void);
 
+/** @brief 让下一次 Platform_Audio_GetStatus 返回错误（仅一次；状态读取本身失败，Stop 等其他操作不受影响）。 */
+void fake_audio_fail_next_get_status(void);
+
 /** @brief 让下一次 Start 因参数被拒（不锁存，Fault 保持不变）。 */
 void fake_audio_reject_next_start(void);
 

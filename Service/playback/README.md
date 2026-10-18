@@ -19,7 +19,7 @@
 - `Service_Playback_ResumeOutput()`：补好暂停期间空出的半区后 `Platform_Audio_Start`；同曲恢复重放暂停时 DMA 正在读的半区；
 - `Service_Playback_AbandonStream()`：Stop 输出并使流失效，换曲与停止都先调用它；`BeginStream()` 在输出仍运行时也会先 Stop。
 
-`Pump` 的返回：`SERVICE_OK`；无活动流 `SERVICE_NOT_READY`；读状态或提交半区失败 `SERVICE_ERROR`（按音频错误处理）。`PauseOutput`/`ResumeOutput`/`AbandonStream` 在 Stop 失败（Platform 已锁存 STOP_FAILED）或 Start 被拒时返回 `SERVICE_ERROR`，STOP_FAILED 锁存后 `BeginStream` 返回 `SERVICE_NOT_READY`，只有 `Init`（重启）解除。
+`Pump` 的返回：`SERVICE_OK`；无活动流 `SERVICE_NOT_READY`；读状态或提交半区失败 `SERVICE_ERROR`（按音频错误处理）。`PauseOutput`/`ResumeOutput`/`AbandonStream` 在 Stop 失败（Platform 已锁存 STOP_FAILED）或 Start 被拒时返回 `SERVICE_ERROR`，STOP_FAILED 锁存后 `BeginStream` 返回 `SERVICE_NOT_READY`，只有 `Init`（重启）解除。`PauseOutput` 在 Stop 已成功后读状态失败不算 Stop 失败：仍返回 `SERVICE_OK`，释放数沿用最近一次推进记下的值，读状态的故障留给下一次 `Pump` 判定，所以任务不会据 `SERVICE_ERROR` 误锁存 AUDIO_FAULT。
 
 `playback_service_config.h` 持有窗口容量、W_min、同步预算 R 与帧缓冲尺寸；`playback_service.h` 包含它，其他模块不直接包含。
 

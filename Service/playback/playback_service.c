@@ -872,6 +872,8 @@ Service_StatusTypeDef Service_Playback_Pump(Service_Playback_PumpReportTypeDef *
  *         此后模块不再写 PCM 半区）；STOP_FAILED 早已锁存也返回 SERVICE_ERROR。
  * @note   阻塞：Platform_Audio_Stop() 同步执行，最坏约为静音斜坡加两次 DMA Abort 超时。
  *         Stop 返回 OK 后 Platform 计数冻结，记下释放数以便恢复时重放 DMA 正在读的半区（D9）。
+ *         Stop 成功后读状态失败不算 Stop 失败：仍返回 SERVICE_OK，释放数沿用最近一次推进记下的值
+ *         （至多让恢复时重放的半区早一个推进周期），读状态的故障留给下一次 Pump 判定，不会被误当 STOP_FAILED 锁存。
  *         若暂停时已读完的半区多于两个（连续欠载），补满会覆盖尚未重放的半区，丢弃半区，恢复时按解码进度重新补满。
  *         重复暂停无副作用。任务上下文调用。
  */
@@ -899,22 +901,23 @@ Service_StatusTypeDef Service_Playback_PauseOutput(void)
         {
             return SERVICE_ERROR;
         }
-        if (Platform_Audio_GetStatus(&status) != PLATFORM_OK)
+        /* Stop 已成功，输出已停；读状态失败不是 Stop 失败（调用者据 SERVICE_ERROR 判 STOP_FAILED），
+         * 沿用最近一次推进记下的释放数，故障留给下一次 Pump/Resume 的读状态判定。 */
+        if (Platform_Audio_GetStatus(&status) == PLATFORM_OK)
         {
-            return SERVICE_ERROR;
-        }
-        s_out.Released = status.ReleasedHalves;
-        if ((s_out.LastRelease != 0U) && (s_out.Released >= s_out.LastRelease))
-        {
-            s_out.EndedPending = true;
-        }
-        else if (s_out.Fills < s_out.Released)
-        {
-            /* 释放数超出补满数：按序补满会覆盖尚未重放的半区，直接重来。 */
-            s_out.Fills = 0U;
-            s_out.FillFrames = 0U;
-            s_out.Released = 0U;
-            s_out.LastRelease = 0U;
+            s_out.Released = status.ReleasedHalves;
+            if ((s_out.LastRelease != 0U) && (s_out.Released >= s_out.LastRelease))
+            {
+                s_out.EndedPending = true;
+            }
+            else if (s_out.Fills < s_out.Released)
+            {
+                /* 释放数超出补满数：按序补满会覆盖尚未重放的半区，直接重来。 */
+                s_out.Fills = 0U;
+                s_out.FillFrames = 0U;
+                s_out.Released = 0U;
+                s_out.LastRelease = 0U;
+            }
         }
     }
     return SERVICE_OK;
