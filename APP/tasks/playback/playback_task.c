@@ -25,6 +25,9 @@
 _Static_assert((unsigned)PLAYBACK_NOTIFY_COUNT <= (unsigned)configTASK_NOTIFICATION_ARRAY_ENTRIES,
                "Playback Task notify slots exceed FreeRTOS array length");
 _Static_assert(configTICK_RATE_HZ == 1000U, "playback_task_now_ms() assumes a 1 kHz tick");
+_Static_assert((PLAYBACK_MACHINE_STALE_BLOCK_LIMIT == STORAGE_AUDIO_BLOCK_COUNT) &&
+                   (PLAYBACK_MACHINE_FEED_BLOCK_LIMIT == STORAGE_AUDIO_BLOCK_COUNT),
+               "状态机的块循环上限须与块池块数 STORAGE_AUDIO_BLOCK_COUNT 同值");
 
 /**
  * @brief 断言状态机自带类型与 Storage 类型的某个字段一一对应（宽度与偏移都相同）。
