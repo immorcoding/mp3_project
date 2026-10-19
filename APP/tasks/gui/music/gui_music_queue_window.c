@@ -73,9 +73,9 @@ uint16_t gui_music_queue_window_desired_index(
     uint16_t desired;
 
     first_visible = (uint32_t)applied_index + (uint32_t)lead;
-    if (first_visible > 0xFFFFU)
+    if (first_visible > (uint32_t)UINT16_MAX)
     {
-        first_visible = 0xFFFFU;
+        first_visible = (uint32_t)UINT16_MAX;
     }
 
     if (first_visible == 0U)

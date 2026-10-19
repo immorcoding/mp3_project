@@ -32,19 +32,24 @@ static GUI_MusicQueueWindowClientTypeDef gui_music_queue_window_client;
 /** @brief 快照归约状态：命令序号、最后一份已追上的快照与各规则的历史基准。 */
 static GUI_MusicTransportTypeDef gui_music_transport;
 
-/** @brief 上一圈已写到界面的显示决定；gui_music_has_shown 为假时首圈全部写入。 */
-static GUI_MusicTransportDecisionTypeDef gui_music_shown;
-static bool gui_music_has_shown;
+/** @brief 已写到界面的内容：显示决定与交给 Service 的 Queue 高亮。 */
+typedef struct
+{
+    /** 上一圈已写到界面的显示决定；has_decision 为假时首圈全部写入。 */
+    GUI_MusicTransportDecisionTypeDef decision;
+    bool has_decision;
+    /** 最近一次经 QueueApply 交给 Service 的高亮下标。 */
+    uint16_t highlight;
+    /**
+     * Service 的 Queue 高亮可能已不等于 highlight。点行时 Service 先即时高亮
+     * 本行（GUI-17），本分区不知道是哪一行；回显追上后须无条件重套一次，
+     * 即使快照所示高亮与上次相同。
+     */
+    bool highlight_stale;
+} GUI_MusicShownTypeDef;
 
-/** @brief 最近一次经 QueueApply 交给 Service 的高亮下标。 */
-static uint16_t gui_music_shown_highlight;
-
-/**
- * @brief Service 的 Queue 高亮可能已不等于 gui_music_shown_highlight。
- * @note  点行时 Service 先即时高亮本行（GUI-17），本分区不知道是哪一行；回显
- *        追上后须无条件重套一次，即使快照所示高亮与上次相同。
- */
-static bool gui_music_highlight_stale;
+/** @brief 已写到界面的内容。 */
+static GUI_MusicShownTypeDef gui_music_shown;
 
 /**
  * @brief 判断已显示窗口能否立即重套：仍显示、槽位 IDLE 且卷仍挂载。
@@ -70,8 +75,8 @@ static Service_StatusTypeDef gui_music_apply_window(uint16_t highlight_index)
     uint16_t length;
     uint16_t i;
 
-    gui_music_shown_highlight = highlight_index;
-    gui_music_highlight_stale = false;
+    gui_music_shown.highlight = highlight_index;
+    gui_music_shown.highlight_stale = false;
 
     if (!storage_task_sd_is_mounted())
     {
@@ -104,11 +109,15 @@ static Service_StatusTypeDef gui_music_apply_window(uint16_t highlight_index)
 /**
  * @brief 给命令编号并发送；队列满时丢弃本次输入并记日志（B5、B6）。
  * @param[in] kind 命令种类。
- * @param[in] generation 仅 SELECT：已显示窗口的曲库代次。
- * @param[in] index 仅 SELECT：播放列表位置。
+ * @param[in] generation 仅 SELECT：已显示窗口的曲库代次；其他命令传 0。
+ * @param[in] index 仅 SELECT：播放列表位置；其他命令传 0。
  * @return 为真表示命令已入队。
+ * @note  只由 gui_music_send_plain 与 gui_music_send_select 调用。
  */
-static bool gui_music_send(Playback_CommandKindTypeDef kind, uint32_t generation, uint16_t index)
+static bool gui_music_send_command(
+    Playback_CommandKindTypeDef kind,
+    uint32_t generation,
+    uint16_t index)
 {
     if (gui_music_transport_send(&gui_music_transport, kind, generation, index) == PLAYBACK_OK)
     {
@@ -121,11 +130,32 @@ static bool gui_music_send(Playback_CommandKindTypeDef kind, uint32_t generation
 }
 
 /**
+ * @brief 发送不带参数的命令（PREV、NEXT、TOGGLE）。
+ * @param[in] kind 命令种类。
+ * @return 为真表示命令已入队。
+ */
+static bool gui_music_send_plain(Playback_CommandKindTypeDef kind)
+{
+    return gui_music_send_command(kind, 0U, 0U);
+}
+
+/**
+ * @brief 发送 SELECT 命令。
+ * @param[in] generation 已显示窗口的曲库代次。
+ * @param[in] index 播放列表位置。
+ * @return 为真表示命令已入队。
+ */
+static bool gui_music_send_select(uint32_t generation, uint16_t index)
+{
+    return gui_music_send_command(PLAYBACK_COMMAND_SELECT, generation, index);
+}
+
+/**
  * @brief 处理本分区输入：三键与点行发命令，进度条松手只要求回位（B1–B4）。
  * @param[in] input 本圈命令；NULL 视为 NONE。
  * @return 为真表示进度条刚松手，本圈须按快照重写一次进度条（B3）。
  */
-static bool gui_music_dispatch_input(const Service_GUI_InputTypeDef *input)
+static bool gui_music_dispatch_input_seek_released(const Service_GUI_InputTypeDef *input)
 {
     Service_GUI_InputCommandTypeDef command;
     uint32_t window_generation;
@@ -137,10 +167,10 @@ static bool gui_music_dispatch_input(const Service_GUI_InputTypeDef *input)
         case SERVICE_GUI_INPUT_MUSIC_QUEUE_SELECT:
             window_generation = gui_music_queue_window_displayed_generation(
                 &gui_music_queue_window_client);
-            if (gui_music_send(PLAYBACK_COMMAND_SELECT, window_generation, input->param))
+            if (gui_music_send_select(window_generation, input->param))
             {
                 /* Service 已即时高亮本行；回显追上后无条件按快照重套。 */
-                gui_music_highlight_stale = true;
+                gui_music_shown.highlight_stale = true;
             }
             else if (gui_music_displayed_window_idle())
             {
@@ -152,20 +182,20 @@ static bool gui_music_dispatch_input(const Service_GUI_InputTypeDef *input)
             else
             {
                 /* 窗口正在换，Buffer 不可读；等下一次 APPLY 或回显追上时按快照重套。 */
-                gui_music_highlight_stale = true;
+                gui_music_shown.highlight_stale = true;
             }
             break;
 
         case SERVICE_GUI_INPUT_MUSIC_PREVIOUS:
-            (void)gui_music_send(PLAYBACK_COMMAND_PREV, 0U, 0U);
+            (void)gui_music_send_plain(PLAYBACK_COMMAND_PREV);
             break;
 
         case SERVICE_GUI_INPUT_MUSIC_NEXT:
-            (void)gui_music_send(PLAYBACK_COMMAND_NEXT, 0U, 0U);
+            (void)gui_music_send_plain(PLAYBACK_COMMAND_NEXT);
             break;
 
         case SERVICE_GUI_INPUT_MUSIC_PLAY_PAUSE:
-            (void)gui_music_send(PLAYBACK_COMMAND_TOGGLE, 0U, 0U);
+            (void)gui_music_send_plain(PLAYBACK_COMMAND_TOGGLE);
             break;
 
         case SERVICE_GUI_INPUT_MUSIC_SEEK:
@@ -245,8 +275,8 @@ static GUI_MusicQueueWindowActionTypeDef gui_music_window_step(void)
 
         case GUI_MUSIC_QUEUE_WINDOW_ACTION_CLEAR:
             (void)Service_GUI_QueueApply(NULL, 0U, 0U, SERVICE_GUI_QUEUE_NO_CURRENT);
-            gui_music_shown_highlight = GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT;
-            gui_music_highlight_stale = false;
+            gui_music_shown.highlight = GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT;
+            gui_music_shown.highlight_stale = false;
             break;
 
         default:
@@ -265,29 +295,29 @@ static GUI_MusicQueueWindowActionTypeDef gui_music_window_step(void)
  */
 static void gui_music_show(const GUI_MusicTransportDecisionTypeDef *decision, bool seek_released)
 {
-    const bool first = !gui_music_has_shown;
+    const bool first = !gui_music_shown.has_decision;
 
-    if (first || (decision->state != gui_music_shown.state))
+    if (first || (decision->state != gui_music_shown.decision.state))
     {
         (void)Service_GUI_TransportApply(decision->state == PLAYBACK_STATE_PLAYING);
     }
 
     if (first || seek_released ||
-        (decision->progress_percent != gui_music_shown.progress_percent))
+        (decision->progress_percent != gui_music_shown.decision.progress_percent))
     {
         (void)Service_GUI_ProgressApply(decision->progress_percent);
     }
 
     if (first ||
-        (decision->position_ms != gui_music_shown.position_ms) ||
-        (decision->duration_ms != gui_music_shown.duration_ms))
+        (decision->position_ms != gui_music_shown.decision.position_ms) ||
+        (decision->duration_ms != gui_music_shown.decision.duration_ms))
     {
         (void)Service_GUI_TimeApply(decision->position_ms, decision->duration_ms);
     }
 
     /* 唱盘（C8）：三态变化时起转/停转；归零是一次性事件，出现即调用。 */
     if (first || decision->vinyl_reset_angle ||
-        (decision->vinyl_playing != gui_music_shown.vinyl_playing))
+        (decision->vinyl_playing != gui_music_shown.decision.vinyl_playing))
     {
         (void)Service_GUI_VinylApply(decision->vinyl_playing, decision->vinyl_reset_angle);
     }
@@ -297,7 +327,7 @@ static void gui_music_show(const GUI_MusicTransportDecisionTypeDef *decision, bo
      * 提示被常驻短语挡掉（Service 内“常驻 > 提示 > 时间”）。短语指向模块内静态表，
      * 按指针比较即可。跳过增量与闪烁是一次性事件，出现即调用。
      */
-    if (first || (decision->status_phrase != gui_music_shown.status_phrase))
+    if (first || (decision->status_phrase != gui_music_shown.decision.status_phrase))
     {
         (void)Service_GUI_StatusApply(decision->status_phrase);
     }
@@ -312,8 +342,8 @@ static void gui_music_show(const GUI_MusicTransportDecisionTypeDef *decision, bo
         (void)Service_GUI_StatusFlash();
     }
 
-    gui_music_shown = *decision;
-    gui_music_has_shown = true;
+    gui_music_shown.decision = *decision;
+    gui_music_shown.has_decision = true;
 }
 
 /**
@@ -334,9 +364,9 @@ void gui_music_init(void)
 
     gui_music_queue_window_client_init(&gui_music_queue_window_client);
     gui_music_transport_init(&gui_music_transport);
-    gui_music_has_shown = false;
-    gui_music_shown_highlight = GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT;
-    gui_music_highlight_stale = false;
+    gui_music_shown.has_decision = false;
+    gui_music_shown.highlight = GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT;
+    gui_music_shown.highlight_stale = false;
     (void)Service_GUI_TransportApply(false);
     (void)Service_GUI_ProgressApply(0U);
     (void)Service_GUI_VinylApply(false, true);
@@ -355,7 +385,7 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
     GUI_MusicQueueWindowActionTypeDef action;
     bool seek_released;
 
-    seek_released = gui_music_dispatch_input(input);
+    seek_released = gui_music_dispatch_input_seek_released(input);
 
     playback_snapshot_read(&snapshot);
     gui_music_transport_reduce(
@@ -369,8 +399,8 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
     /* APPLY 已按快照重套本窗；其余情况在高亮变化或 Service 即时高亮待覆盖时重套。 */
     if (decision.highlight_apply &&
         (action != GUI_MUSIC_QUEUE_WINDOW_ACTION_APPLY) &&
-        (gui_music_highlight_stale ||
-         (decision.highlight_index != gui_music_shown_highlight)) &&
+        (gui_music_shown.highlight_stale ||
+         (decision.highlight_index != gui_music_shown.highlight)) &&
         gui_music_displayed_window_idle())
     {
         (void)gui_music_apply_window(decision.highlight_index);
