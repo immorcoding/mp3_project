@@ -78,6 +78,7 @@ add_executable(gui_simulator
     fakes/freertos_sim.c
     fakes/resource_sim.c
     fakes/storage_sim.c
+    fakes/playback_sim.c
     ${SERVICE_GUI_SOURCES}
     ${APP_GUI_MUSIC_SOURCES}
     "${REPO_ROOT}/APP/tasks/storage/catalog/storage_playback_cursor.c"
