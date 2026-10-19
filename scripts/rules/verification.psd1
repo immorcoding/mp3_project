@@ -29,6 +29,14 @@
                 '^Middlewares/Third_Party/FatFs/'
                 '^Service/filesystem/'
                 '^APP/tasks/storage/benchmark/'
+                # 主机测试编译的 Platform/Service/APP 头（由 check-test-paths.ps1 发现）。
+                '^Platform/platform\.h$'
+                '^Platform/flash/platform_flash\.h$'
+                '^Platform/sd/platform_sd\.h$'
+                '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+                '^Service/service\.h$'
+                '^Service/log/log_service(?:_config)?\.h$'
+                '^APP/app_config\.h$'
                 '^Tests/flash_ftl/'
             )
         }
@@ -49,6 +57,12 @@
                 '^Service/gui/gui_service\.(c|h)$'
                 '^Service/gui/main/queue/'
                 '^Service/gui/main/transport/'
+                # gui_music_transport 的 reducer 测试依赖播放合同；其余为测试编译到的 Platform/Service 聚合头与配置头（由 check-test-paths.ps1 发现）。
+                '^APP/tasks/playback/playback_contract\.h$'
+                '^Platform/platform\.h$'
+                '^Platform/lcd/platform_lcd\.h$'
+                '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+                '^Service/service\.h$'
                 '^Tests/gui_task/'
             )
         }
@@ -59,6 +73,10 @@
                 '^Service/gui/gui_service\.c$'
                 '^Service/gui/gui_service\.h$'
                 '^Service/gui/main/background/'
+                '^Platform/platform\.h$'
+                '^Platform/lcd/platform_lcd\.h$'
+                '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+                '^Service/service\.h$'
                 '^Tests/gui_theme/'
             )
         }
@@ -67,6 +85,7 @@
             PathPatterns = @(
                 '^Service/gui/canvas/'
                 '^Service/gui/main/vinyl/'
+                '^Service/service\.h$'
                 '^Service/gui/gui_service\.h$'
                 '^Tests/gui_canvas/'
             )
@@ -90,6 +109,10 @@
             PathPatterns = @(
                 '^Service/playback/'
                 '^Middlewares/Third_Party/minimp3/'
+                '^Platform/platform\.h$'
+                '^Platform/audio/platform_audio\.h$'
+                '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+                '^Service/service\.h$'
                 '^Tests/playback_service/'
             )
         }
