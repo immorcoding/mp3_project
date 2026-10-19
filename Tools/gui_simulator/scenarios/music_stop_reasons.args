@@ -1,0 +1,43 @@
+# 停止原因短语（GUI-19、#72 C6/C7）：G 后点旧窗口的行得到 `Library changed`；R 逐个注入
+# 9 个非 NONE 原因，检查短语不截断；停止后按下一首（身份变化）清除短语、回到时间；
+# AUDIO_FAULT 锁存后再按播放，原因不变并闪一次；连按两次只重启闪烁、不叠加（--key a 打印动画数，日志证据）。
+# R 在停止态也再进入一次停止；CARD_REMOVED 至 CATALOG_CHANGED 使假后端无当前曲，故 READ_ERROR 前先开播。
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--shot 7800:playing
+--key 8000:g
+--tap 8200:125,28
+--tap 8500:120,148
+--shot 8900:queue_stale_select
+--tap 9000:60,28
+--shot 9300:library_changed
+--key 9500:r
+--shot 9900:reason_card_removed
+--key 10000:r
+--shot 10400:reason_not_ready
+--key 10500:r
+--shot 10900:reason_no_track
+--key 11000:r
+--shot 11400:reason_catalog_changed
+--tap 11500:120,260
+--key 12000:r
+--shot 12400:reason_read_error
+--tap 12500:180,260
+--shot 12800:next_clears_reason
+--tap 13000:120,260
+--key 13500:r
+--shot 13900:reason_no_data
+--tap 14000:120,260
+--key 14500:r
+--shot 14900:reason_audio_error
+--tap 15000:120,260
+--key 15500:r
+--shot 15900:reason_audio_fault
+--tap 16000:120,260
+--shot 16200:audio_fault_replay_flash
+--shot 16500:audio_fault_replay
+--tap 16600:120,260
+--tap 16700:120,260
+--key 16820:a
+--key 17200:r
+--shot 17600:reason_all_bad

@@ -54,7 +54,8 @@ typedef enum
     PLAYBACK_STOP_REASON_NO_DATA,          /* T_data 到期。 */
     PLAYBACK_STOP_REASON_AUDIO_ERROR,      /* TRANSFER_ERROR 或 T_out 到期，可重试。 */
     PLAYBACK_STOP_REASON_AUDIO_FAULT,      /* STOP_FAILED 锁存，重启前不能出声。 */
-    PLAYBACK_STOP_REASON_ALL_BAD           /* 整轮无可播。 */
+    PLAYBACK_STOP_REASON_ALL_BAD,          /* 整轮无可播。 */
+    PLAYBACK_STOP_REASON_COUNT             /* 哨兵：原因个数，不是真实原因；新增原因须放在它之前。 */
 } Playback_StopReasonTypeDef;
 
 typedef struct

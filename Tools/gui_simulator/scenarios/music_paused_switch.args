@@ -1,0 +1,15 @@
+# 暂停中上一首/下一首只换曲、保持暂停（唱盘归零不转）；暂停中点 Queue 行即开播这首
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--tap 8000:120,260
+--shot 8300:paused
+--tap 8500:180,260
+--shot 8800:paused_next
+--tap 9000:60,260
+--shot 9300:paused_previous
+--tap 9500:125,28
+--shot 9800:queue_paused
+--tap 10000:120,190
+--shot 10300:queue_selected
+--tap 10500:60,28
+--shot 11500:playing_selected

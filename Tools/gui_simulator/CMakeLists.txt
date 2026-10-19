@@ -1,7 +1,8 @@
 # GUI 模拟器（Windows host，MinGW-w64 + SDL2）
 #
 # 在 PC 上运行真实的 LVGL v8.3.11 与 Service/gui（含手写界面 view/），
-# 只把 Platform LCD、Platform Touch 与 FreeRTOS 任务通知替换为 SDL 替身。
+# 只把 Platform LCD、Platform Touch 与 FreeRTOS 任务通知替换为 SDL 替身，
+# 并以假 Storage、假播放后端与假日志替换 APP 音乐分区的依赖。
 # 本工程独立于固件构建，不进入目标固件。
 
 cmake_minimum_required(VERSION 3.22)
@@ -55,13 +56,19 @@ target_compile_definitions(lvgl_sim PUBLIC LV_CONF_PATH=sim_lv_conf.h)
 target_compile_options(lvgl_sim PRIVATE -w)
 
 # ---------------------------------------------------------------------------
-# 模拟器本体：真实 Service/gui + SDL 替身
+# 模拟器本体：真实 Service/gui + 真实 APP 音乐分区 + SDL/Storage 替身
 # ---------------------------------------------------------------------------
 file(GLOB_RECURSE SERVICE_GUI_SOURCES CONFIGURE_DEPENDS
     "${REPO_ROOT}/Service/gui/*.c"
 )
 # 壁纸像素区只在固件中由链接脚本放进 SDRAM 资源区；模拟器由 fakes/resource_sim.c 提供。
 list(FILTER SERVICE_GUI_SOURCES EXCLUDE REGEX "gui_service_view_wallpaper_region\\.c$")
+
+# 真实的 APP 音乐分区；它依赖的 Storage 窗口槽与 SD 状态由 fakes/storage_sim.c 提供，
+# 播放合同由 fakes/playback_sim.c 提供，Service Log 由 fakes/log_sim.c 提供。
+file(GLOB APP_GUI_MUSIC_SOURCES CONFIGURE_DEPENDS
+    "${REPO_ROOT}/APP/tasks/gui/music/*.c"
+)
 
 add_executable(gui_simulator
     sim_main.c
@@ -72,7 +79,11 @@ add_executable(gui_simulator
     fakes/platform_touch_sim.c
     fakes/freertos_sim.c
     fakes/resource_sim.c
+    fakes/storage_sim.c
+    fakes/playback_sim.c
+    fakes/log_sim.c
     ${SERVICE_GUI_SOURCES}
+    ${APP_GUI_MUSIC_SOURCES}
 )
 
 # shim/ 必须排在仓库根之前：Service/gui 以仓库相对路径包含 FreeRTOS 头，

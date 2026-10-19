@@ -1,0 +1,24 @@
+# 回显未追上：S 挂起假后端后连按，曲目与三态冻结、位置照走；点行把 FIFO 填满后再点触发
+# 队列满，即时高亮撤回到快照所示；S 恢复后一圈处理完全部命令并追上
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--key 7500:s
+--tap 7600:120,260
+--tap 7800:180,260
+--shot 8100:frozen_playing
+--shot 9200:frozen_position_moves
+--tap 9300:125,28
+--shot 9600:frozen_queue
+--tap 9800:120,105
+--tap 10000:120,148
+--tap 10200:120,190
+--tap 10400:120,233
+--tap 10600:120,105
+--tap 10800:120,148
+--shot 11000:instant_highlight
+--tap 11100:120,190
+--shot 11400:queue_full_withdrawn
+--key 11600:s
+--shot 11900:caught_up_queue
+--tap 12100:60,28
+--shot 12500:caught_up_playing

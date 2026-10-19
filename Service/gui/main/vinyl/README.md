@@ -2,7 +2,7 @@
 
 `vinyl/` 是 Main Screen 的私有 Now Playing 唱盘 Module。它在界面创建后把 Canvas 合成的唱盘第一帧绑到唱盘 Image（`view/` 句柄 `music.vinyl_image`），并按 GUI Task 给出的 playing 让唱盘绕圆心顺时针匀速旋转。
 
-不包含 `storage_playback_cursor.h`，不读游标、不按墙钟走表。唱盘 Image 不带事件。底图来自 Resource Pack ID 4 的 SDRAM 槽；Canvas 复制后再叠假封面。不把唱盘 C 数组编进内部 Flash。
+不读游标、不按墙钟走表。唱盘 Image 不带事件。底图来自 Resource Pack ID 4 的 SDRAM 槽；Canvas 复制后再叠假封面。不把唱盘 C 数组编进内部 Flash。
 
 ## 旋转
 

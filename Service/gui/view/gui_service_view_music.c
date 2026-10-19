@@ -158,10 +158,11 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
     lv_obj_set_size(label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_pos(label, 0, lv_pct(5));
     lv_obj_set_align(label, LV_ALIGN_TOP_MID);
-    lv_label_set_text(label, "1:00/3:14");
+    /* 初始文本 `0:00/--:--` 由 main/transport prepare 按同一格式写入，本处不另写一份。 */
     service_gui_theme_style_add(label, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    music->time_label = label;
 
     /* Muted 轨道 + Wash 细边；Accent 进度；Knob 只在按下时显示并放大。 */
     slider = lv_slider_create(controls);

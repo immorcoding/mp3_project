@@ -10,10 +10,16 @@
 - `Service_GUI_ThemeApply(id)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`；启动序列未结束（Boot 仍存在）时返回 `SERVICE_BUSY`，因为 Boot 可能正显示共享 Canvas 工作帧。首次生成毛玻璃失败时回滚到原外观。切换 Default/Solid 调色板，刷新共享颜色 style 与 BootReveal/Lock/Main 的壁纸或 Ground，再设置 Music Tab 毛玻璃或薄层；首次切到 Default 时按需生成长期模糊壁纸。
 - `Service_GUI_Process()`：仅在同一 GUI Task 上下文周期调用。按 FreeRTOS Tick 推进 LVGL 时间，并调用 `lv_timer_handler()` 处理刷新、动画和输入。
 - `Service_GUI_QueueApply(titles, length, window_index, current_index)`：仅由同一 GUI Task 调用。把一窗曲名填进 Queue 可见行；`length` 为 0 时全部 Hidden，`titles` 可为 NULL。`window_index` 是本窗在播放列表上的起点，用于已有行转 head。`current_index` 是正在播放的播放列表下标；无当前曲时为 `SERVICE_GUI_QUEUE_NO_CURRENT`。不包含 `storage_listbuffer.h`。Label 会拷贝文本。
-- `Service_GUI_ConsumeInput(input)`：仅由同一 GUI Task 调用。取走上一圈 `Process()` 记下的一次点击。无点击时 `command` 为 `SERVICE_GUI_INPUT_NONE` 且返回 `SERVICE_OK`，不用 `SERVICE_NOT_READY` 表示空闲。`MUSIC_QUEUE_SELECT` 时 `param` 为播放列表下标；`MUSIC_SEEK` 时为 0..100 百分比。不包含 `storage_listbuffer.h` / `storage_playback_cursor.h`。
+- `Service_GUI_ConsumeInput(input)`：仅由同一 GUI Task 调用。取走上一圈 `Process()` 记下的一次点击。无点击时 `command` 为 `SERVICE_GUI_INPUT_NONE` 且返回 `SERVICE_OK`，不用 `SERVICE_NOT_READY` 表示空闲。`MUSIC_QUEUE_SELECT` 时 `param` 为播放列表下标；`MUSIC_SEEK` 时为 0..100 百分比。不包含 `storage_listbuffer.h`。
 - `Service_GUI_TransportApply(playing)`：仅由同一 GUI Task 调用。把 `MusicPlayPauseIcon` 换成 `LV_SYMBOL_PAUSE` 或 `LV_SYMBOL_PLAY`。
 - `Service_GUI_ProgressApply(percent)`：仅由同一 GUI Task 调用。把 `MusicPlayingSlider` 设为 0..100；Slider 处于 `PRESSED` 时不覆盖当前拖动。不解码、不真正 seek。
-- `Service_GUI_VinylApply(playing, reset_angle)`：仅由同一 GUI Task 调用。`playing` 为真时唱盘从当前角度顺时针匀速续转（`SERVICE_GUI_MAIN_VINYL_REVOLUTION_MS`，6 s 一圈），为假时停在当前角度；`reset_angle` 为真先把角度归零，用于切歌与清空播放内容。调用方在 playing 变化、游标变化或 CLEAR 时调用，Service 不读播放游标；重复调用不叠加动画。
+- `Service_GUI_TimeApply(position_ms, duration_ms)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`。记下 Now Playing 时间 Label（view 句柄 `music.time_label`）的“已解码/总时长”，格式 `m:ss/m:ss`，按整秒向下取整；总时长 0 写 `--:--`。只在状态行显示时间时写入 Label，文本未变不重写；不按墙钟走表，拖动进度条时仍显示真实时间。Init 时写入初始 `0:00/--:--`。（#72 D0、D1）
+- 状态行（GUI-19、#72 D2–D5）：时间 Label 兼作状态行，不另建对象。以下三个接口与 `TimeApply` 同样仅由 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`。显示优先级“常驻文本 > 跳过提示 > 时间”只在本 Service 内实现，APP 只决定何时调用。
+  - `Service_GUI_StatusApply(text)`：非 NULL 时常驻显示该文本（Label 拷贝），并删除正在进行的跳过提示、清零累加数；NULL 时取消常驻，回到时间。
+  - `Service_GUI_SkipNoticeApply(added)`：累加跳过数并显示 `Skipped 1 file` / `Skipped k files`，单次 `lv_timer` 在 `SERVICE_GUI_MUSIC_SKIP_NOTICE_MS`（2000）后回到时间并清零累加数；期间再调用则累加并重新计时；有常驻文本时不显示也不累加；`added` 为 0 不做任何事。计时器创建失败返回 `SERVICE_ERROR`，状态行不变。
+  - `Service_GUI_StatusFlash()`：以时间 Label 为 var 的 `lv_anim` 在 `SERVICE_GUI_MUSIC_STATUS_FLASH_MS`（300）内把 `text_opa` 淡出再淡回；同一 Label 至多一条闪烁动画，重复调用先删旧动画、恢复不透明再重启。
+  - 计时器与动画都按 LVGL tick 计时，模拟器中来自虚拟时钟。两个时长常量在 `gui_service_config.h`。
+- `Service_GUI_VinylApply(playing, reset_angle)`：仅由同一 GUI Task 调用。`playing` 为真时唱盘从当前角度顺时针匀速续转（`SERVICE_GUI_MAIN_VINYL_REVOLUTION_MS`，6 s 一圈），为假时停在当前角度；`reset_angle` 为真先把角度归零，用于切歌、同曲重选与停止归零。调用方按播放快照在三态变化或需要归零时调用，Service 不读播放快照；重复调用不叠加动画。
 - `Service_GUI_QueueScrollLead()`：仅由同一 GUI Task 调用。返回 `QueueTab` 顶部已滚出的整行数，供窗口协议计算下一窗 `Index`。换窗时从当前 `scroll_y` 扣整行高度，不把列表吸回整页。
 
 重复调用 `Service_GUI_Init()` 返回 `SERVICE_BUSY`。当前 GUI Task 将初始化失败视为致命并调用
@@ -64,7 +70,7 @@ LVGL Pointer read_cb
 
 ## 私有 Modules 与配置
 
-对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_ConsumeInput()`、`Service_GUI_TransportApply()`、`Service_GUI_ProgressApply()`、`Service_GUI_VinylApply()`、`Service_GUI_QueueApply()` 与 `Service_GUI_ThemeApply()`；
+对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_ConsumeInput()`、`Service_GUI_TransportApply()`、`Service_GUI_ProgressApply()`、`Service_GUI_TimeApply()`、`Service_GUI_StatusApply()`、`Service_GUI_SkipNoticeApply()`、`Service_GUI_StatusFlash()`、`Service_GUI_VinylApply()`、`Service_GUI_QueueApply()` 与 `Service_GUI_ThemeApply()`；
 以下是 `Service/gui` 内部的实现拆分，不得被 APP 或其他 Service 直接包含或调用。
 
 ```text
@@ -88,7 +94,7 @@ Service/gui/
 │  ├─ gui_service_main.c / .h
 │  ├─ pager/                         循环分页、吸附、重排与圆点动画
 │  ├─ queue/                         按 Length 构造 Queue 行并滑窗复用
-│  ├─ transport/                     Now Playing 三键、进度条假 seek 与 PLAY/PAUSE
+│  ├─ transport/                     Now Playing 三键、进度条假 seek、PLAY/PAUSE 与时间 Label（兼作状态行）
 │  ├─ vinyl/                         假唱盘第一帧绑到唱盘 Image，并按 playing 旋转
 │  ├─ background/                    壁纸模糊、局部裁剪；Solid 薄层
 │  └─ README.md
@@ -131,15 +137,19 @@ Service/gui/
 - `main/queue/`：只持有 Queue 可见行对象。行工厂按 Length 在 `QueueTab` 中构造行，窗口滑动时
   转 head 改字，并套用当前/非当前样式（Border Opa、曲名颜色角色，不改 Width）。点按
   `CLICKED` 只刷新行样式并 `post` 选曲命令。用 `QueueScrollLead` 报告滚出顶部的整行数。
-  不包含 `storage_listbuffer.h` 或 `storage_playback_cursor.h`。
+  不包含 `storage_listbuffer.h`。
 - `main/transport/`：给 Now Playing 三键挂 `CLICKED`、给进度条挂 `RELEASED`，`post` 上一首/播放暂停/下一首/假 seek；
-  `TransportApply` 只改播放符号，`ProgressApply` 改进度条（拖动中不写回）。不包含游标头。
+  `TransportApply` 只改播放符号，`ProgressApply` 改进度条（拖动中不写回），`TimeApply` 格式化时间；
+  时间 Label 兼作状态行，本 Module 持有常驻标志、跳过累加数、提示计时器与闪烁动画，按“常驻 > 提示 > 时间”
+  决定 Label 文本。不包含游标头或播放合同头，停止原因短语由 APP 给出。
 - `main/vinyl/`：把 Canvas 假唱盘第一帧绑到唱盘 Image，并按 `VinylApply` 用一条以该 Image 为 var 的 lv_anim
-  绕圆心顺时针旋转；暂停删动画保留角度，切歌/清空归零。角度只存在 lv_img 对象里，不读游标、不按墙钟走表。
+  绕圆心顺时针旋转；暂停删动画保留角度，按调用方要求归零。角度只存在 lv_img 对象里，不读游标或快照、不按墙钟走表。
 - `main/background/`：只持有 Main 的长期模糊壁纸和 `MusicModeTabs` SDRAM 裁剪背景。Default
   下首次需要时生成模糊壁纸，并监听 `MainPageContainer` 的 `LV_EVENT_SCROLL`，按目标控件当前坐标
   重裁剪背景；Solid 下改为半透明 Wash 薄层、跳过裁剪。它不维护分页槽位、吸附或圆点状态；除
   `MusicModeTabs` 的背景源与背景 Opa 外，不覆盖 `view/` 创建对象的视觉 Style。
+
+`gui_service_config.h` 另保存状态行跳过提示与闪烁的时长（`SERVICE_GUI_MUSIC_SKIP_NOTICE_MS`、`SERVICE_GUI_MUSIC_STATUS_FLASH_MS`），供 `main/transport/` 使用；真机 tick 下的观感进板级验收。
 
 `gui_service_config.h` 保存绘制缓冲行数。改变该值会同时影响 SDRAM 占用、SPI
 刷新分块数量和 LVGL 的双缓冲等待行为，必须结合显示帧率与 D-Cache 约束验证。

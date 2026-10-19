@@ -7,7 +7,6 @@
         'gui_canvas'
         'w25qxx'
         'resource_pack'
-        'storage_catalog'
         'storage_audio_stream'
         'playback_service'
         'playback_task'
@@ -87,13 +86,6 @@
             )
         }
         @{
-            Name = 'storage_catalog'
-            PathPatterns = @(
-                '^APP/tasks/storage/catalog/'
-                '^Tests/storage_catalog/'
-            )
-        }
-        @{
             Name = 'playback_service'
             PathPatterns = @(
                 '^Service/playback/'
@@ -137,6 +129,15 @@
         '^Platform/lcd/platform_lcd\.h$'
         '^Platform/touch/platform_touch\.h$'
         '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+        # 模拟器编译真实 APP 音乐分区；fakes/storage_sim.c 实现 Storage 窗口槽与 SD 状态头，
+        # fakes/playback_sim.c 实现播放合同头（FIFO 深度取播放任务配置），fakes/log_sim.c 实现 Service Log 头。
+        '^APP/tasks/gui/music/'
+        '^APP/tasks/playback/playback_(?:contract|task_config)\.h$'
+        '^Service/log/log_service(?:_config)?\.h$'
+        '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
+        '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
+        '^APP/tasks/storage/storage_task(?:_config)?\.h$'
+        '^Service/filesystem/filesystem_types\.h$'
     )
 
     # 无法映射的可执行、构建或 Harness 变化保守回退到全部主机测试。

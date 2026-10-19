@@ -18,6 +18,7 @@ void gui_music_queue_window_client_init(GUI_MusicQueueWindowClientTypeDef *clien
     client->desired_index = 0U;
     client->applied_index = 0U;
     client->applied_length = 0U;
+    client->applied_generation = 0U;
 }
 
 /**
@@ -25,18 +26,32 @@ void gui_music_queue_window_client_init(GUI_MusicQueueWindowClientTypeDef *clien
  * @param[in,out] client 音乐分区持有的窗口客户状态。
  * @param[in] index 本窗在播放列表上的起点，与 READY 槽位的 Index 一致。
  * @param[in] length 本窗实际条数，与 READY 槽位的 Length 一致。
+ * @param[in] generation 本窗的曲库代次，与 READY 槽位的 Generation 一致（#72 C3）。
  * @note 仅在 QueueApply 成功后调用。失败须保持 need_window，以便写回 IDLE 后重试。
  */
 void gui_music_queue_window_mark_applied(
     GUI_MusicQueueWindowClientTypeDef *client,
     uint16_t index,
-    uint16_t length)
+    uint16_t length,
+    uint32_t generation)
 {
     client->need_window = false;
     client->displayed = true;
     client->applied_index = index;
     client->applied_length = length;
+    client->applied_generation = generation;
     client->desired_index = index;
+}
+
+/**
+ * @brief 已显示窗口的曲库代次，供当前曲高亮与窗口对账。
+ * @param[in] client 音乐分区持有的窗口客户状态。
+ * @return APPLY 时记下的代次；尚未显示或已被卸载清空时为 0。
+ */
+uint32_t gui_music_queue_window_displayed_generation(
+    const GUI_MusicQueueWindowClientTypeDef *client)
+{
+    return client->displayed ? client->applied_generation : 0U;
 }
 
 /**
@@ -58,9 +73,9 @@ uint16_t gui_music_queue_window_desired_index(
     uint16_t desired;
 
     first_visible = (uint32_t)applied_index + (uint32_t)lead;
-    if (first_visible > 0xFFFFU)
+    if (first_visible > (uint32_t)UINT16_MAX)
     {
-        first_visible = 0xFFFFU;
+        first_visible = (uint32_t)UINT16_MAX;
     }
 
     if (first_visible == 0U)
@@ -154,6 +169,7 @@ GUI_MusicQueueWindowActionTypeDef gui_music_queue_window_poll(
             client->desired_index = 0U;
             client->applied_index = 0U;
             client->applied_length = 0U;
+            client->applied_generation = 0U;
             return GUI_MUSIC_QUEUE_WINDOW_ACTION_CLEAR;
         }
 
@@ -166,29 +182,4 @@ GUI_MusicQueueWindowActionTypeDef gui_music_queue_window_poll(
     }
 
     return GUI_MUSIC_QUEUE_WINDOW_ACTION_NONE;
-}
-
-/**
- * @brief 把 Storage 游标收成 QueueApply 可用的当前下标。
- * @param[in] cursor_valid `storage_playback_cursor_get` 是否成功。
- * @param[in] cursor_index 播放列表下标。
- * @param[in] cursor_generation 游标代次。
- * @param[in] window_generation 本窗 READY 载荷的代次。
- * @return 代次一致时的播放列表下标；否则 `GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT`。
- * @note 不判断该下标是否落在本窗内；QueueApply 只高亮窗内匹配行。
- */
-uint16_t gui_music_queue_window_current_index(
-    bool cursor_valid,
-    uint16_t cursor_index,
-    uint32_t cursor_generation,
-    uint32_t window_generation)
-{
-    if (!cursor_valid ||
-        (cursor_generation == 0U) ||
-        (cursor_generation != window_generation))
-    {
-        return GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT;
-    }
-
-    return cursor_index;
 }

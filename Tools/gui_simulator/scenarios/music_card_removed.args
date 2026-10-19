@@ -1,0 +1,26 @@
+# 拔卡：假后端按 K5 停止（CARD_REMOVED、无当前曲），播放键回 PLAY、进度归零、唱盘停转归零、
+# Queue 清空；状态行常驻 `No SD card`（同一份快照里的“无当前曲”不清除它），进入停止时闪一次；
+# 无卡再按播放：开启 {0, 0} 约 100 ms 后 NOT_READY 停止，原因变为 `SD card not ready` 并再闪一次；
+# 重新挂载后 Queue 无高亮，按播放从第 0 首开播，状态行回到时间。
+# *_flash 帧拍在闪烁中途（约 300 ms 内 text_opa 淡出再淡回）；--key a 打印动画数（日志证据）
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--shot 8500:playing
+--key 8600:c
+--shot 8720:card_removed_flash
+--shot 8900:card_removed
+--key 8950:a
+--tap 9000:125,28
+--shot 9300:queue_cleared
+--tap 9500:60,28
+--tap 9800:120,260
+--shot 10100:no_card_play_flash
+--shot 10350:no_card_play_stopped
+--key 10400:c
+--tap 10600:125,28
+--shot 10900:queue_remounted
+--tap 11100:60,28
+--tap 11300:120,260
+--shot 11800:replay_after_mount
+--tap 12000:125,28
+--shot 12300:queue_replay_current

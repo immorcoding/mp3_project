@@ -59,6 +59,11 @@ static UBaseType_t monitor_get_task_stack_words(const char *task_name)
         return APP_GUI_TASK_STACK_WORDS;
     }
 
+    if (strcmp(task_name, "Playback Task") == 0)
+    {
+        return APP_PLAYBACK_TASK_STACK_WORDS;
+    }
+
     if (strcmp(task_name, "IDLE") == 0)
     {
         return configMINIMAL_STACK_SIZE;
@@ -121,6 +126,18 @@ static void monitor_log_stack_snapshot(void)
     }
 
     vPortFree(task_snapshot);
+
+    /* 堆历史最小余量含上面临时快照的占用，比业务实际占用略保守。 */
+    {
+        char heap_message[MONITOR_LOG_MESSAGE_LENGTH];
+
+        (void)snprintf(heap_message,
+                       sizeof(heap_message),
+                       "Heap: free=%lu B, min free=%lu B",
+                       (unsigned long)xPortGetFreeHeapSize(),
+                       (unsigned long)xPortGetMinimumEverFreeHeapSize());
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "MONITOR", heap_message);
+    }
 }
 
 /**

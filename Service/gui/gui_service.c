@@ -342,7 +342,7 @@ Service_StatusTypeDef Service_GUI_TransportApply(bool playing)
 
 /**
  * @brief 按百分比更新 Now Playing 进度条；按下拖动时不写回。
- * @param[in] percent 0..100 的假进度；大于 100 时夹到 100。
+ * @param[in] percent 0..100 的播放进度；大于 100 时夹到 100。
  * @retval SERVICE_OK 已写入，或拖动中已跳过。
  * @retval SERVICE_NOT_READY 进度条对象尚未创建。
  * @note 只能由同一 GUI Task 调用。不解码、不真正 seek。
@@ -353,13 +353,63 @@ Service_StatusTypeDef Service_GUI_ProgressApply(uint8_t percent)
 }
 
 /**
+ * @brief 记下 Now Playing 时间 Label 的“已解码/总时长”，状态行显示时间时写入。
+ * @param[in] position_ms 已解码时间，按整秒向下取整显示为 `m:ss`。
+ * @param[in] duration_ms 总时长；0 表示未知，显示 `--:--`。
+ * @retval SERVICE_OK 已记下，并按“常驻文本 > 跳过提示 > 时间”写入或暂不显示。
+ * @retval SERVICE_NOT_READY 时间 Label 尚未创建（Init 未成功）。
+ * @note 只能由同一 GUI Task 在 Init() 成功后调用。不按墙钟走表；文本未变时不重写 Label。
+ */
+Service_StatusTypeDef Service_GUI_TimeApply(uint32_t position_ms, uint32_t duration_ms)
+{
+    return service_gui_main_transport_apply_time(position_ms, duration_ms);
+}
+
+/**
+ * @brief 设置或取消状态行（时间 Label）的常驻文本，如停止原因短语（#72 D2）。
+ * @param[in] text 非 NULL 时常驻显示（Label 拷贝文本）并取消跳过提示；NULL 时回到时间。
+ * @retval SERVICE_OK 状态行已刷新。
+ * @retval SERVICE_NOT_READY 时间 Label 尚未创建（Init 未成功）。
+ * @note 只能由同一 GUI Task 在 Init() 成功后调用。优先级“常驻文本 > 跳过提示 > 时间”只在 Service 内实现。
+ */
+Service_StatusTypeDef Service_GUI_StatusApply(const char *text)
+{
+    return service_gui_main_transport_apply_status(text);
+}
+
+/**
+ * @brief 累加跳过坏文件数并在状态行临时显示 `Skipped 1 file` / `Skipped k files`（#72 D3）。
+ * @param[in] added 本次新增的跳过数；0 不做任何事。
+ * @retval SERVICE_OK 已累加并重新计时，或因有常驻文本而忽略。
+ * @retval SERVICE_NOT_READY 时间 Label 尚未创建（Init 未成功）。
+ * @retval SERVICE_ERROR LVGL 未能创建提示计时器，状态行不变。
+ * @note 只能由同一 GUI Task 在 Init() 成功后调用。约 SERVICE_GUI_MUSIC_SKIP_NOTICE_MS 后回到时间，
+ *       期间再调用则累加并重新计时；累加数在到期或被常驻文本取消时清零。按 LVGL tick 计时。
+ */
+Service_StatusTypeDef Service_GUI_SkipNoticeApply(uint32_t added)
+{
+    return service_gui_main_transport_apply_skip_notice(added);
+}
+
+/**
+ * @brief 让状态行闪一次（约 SERVICE_GUI_MUSIC_STATUS_FLASH_MS 的 text_opa 动画，#72 D4）。
+ * @retval SERVICE_OK 闪烁已开始。
+ * @retval SERVICE_NOT_READY 时间 Label 尚未创建（Init 未成功）。
+ * @note 只能由同一 GUI Task 在 Init() 成功后调用。同一 Label 至多一条闪烁动画，重复调用重启而不叠加。
+ */
+Service_StatusTypeDef Service_GUI_StatusFlash(void)
+{
+    return service_gui_main_transport_flash();
+}
+
+/**
  * @brief 按 playing 起转或停转 Now Playing 唱盘；reset_angle 先归零。
  * @param[in] playing 为真从当前角度顺时针匀速续转（6 s 一圈），为假停在当前角度。
  * @param[in] reset_angle 为真先把角度归零，用于切歌与清空播放内容。
  * @retval SERVICE_OK 动画状态已与参数一致。
  * @retval SERVICE_NOT_READY 唱盘尚未准备。
- * @note 只能由同一 GUI Task 调用。调用方在 playing 变化、游标变化或清空时调用，
- *       Service 不读播放游标。重复调用不叠加动画。
+ * @note 只能由同一 GUI Task 调用。调用方按播放快照在三态变化或需要归零时调用，
+ *       Service 不读播放快照。重复调用不叠加动画。
  */
 Service_StatusTypeDef Service_GUI_VinylApply(bool playing, bool reset_angle)
 {
