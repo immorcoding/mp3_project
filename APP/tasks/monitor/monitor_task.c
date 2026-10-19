@@ -12,6 +12,7 @@
 
 #include "APP/tasks/monitor/monitor_task.h"
 #include "APP/tasks/monitor/monitor_task_config.h"
+#include "APP/tasks/monitor/monitor_warn.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -26,6 +27,9 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/portable.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
+
+/* 已告警的未登记任务名；静态零初始化即为空记录，仅 Monitor Task 访问。 */
+static monitor_warn_record_t monitor_warned_tasks;
 
 /**
   * @brief  返回由 App 创建或 FreeRTOS 内核创建的任务总栈深度。
@@ -82,7 +86,8 @@ static UBaseType_t monitor_get_task_stack_words(const char *task_name)
 /**
   * @brief  取得当前任务快照并记录各任务的栈历史峰值。
   * @note   FreeRTOS 仅保证 HighWaterMark 的单位为 StackType_t。输出字节数时
-  *         必须乘 sizeof(StackType_t)；未知任务的总栈深度为 0，不能计算比例。
+  *         必须乘 sizeof(StackType_t)；未知任务的总栈深度为 0，不能计算比例，
+  *         改为每个任务名投递一条 WARN 日志（记录写满后不再告警）。
   */
 static void monitor_log_stack_snapshot(void)
 {
@@ -105,7 +110,22 @@ static void monitor_log_stack_snapshot(void)
         UBaseType_t used_words;
         unsigned long peak_x10;
 
-        if ((total_words == 0U) || (free_words > total_words))
+        if (total_words == 0U)
+        {
+            /* 未登记任务算不出占用率；每个任务名只告警一次，让漏登记在日志里可见。 */
+            if (monitor_warn_should_report(&monitor_warned_tasks, task_snapshot[index].pcTaskName))
+            {
+                (void)snprintf(message,
+                               sizeof(message),
+                               "Task not registered in monitor: %s",
+                               task_snapshot[index].pcTaskName);
+                (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN, "MONITOR", message);
+            }
+
+            continue;
+        }
+
+        if (free_words > total_words)
         {
             continue;
         }
