@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    playback_sim.h
-  * @brief   假播放后端的模拟器控制入口：推进虚拟时钟、挂起命令处理与拔卡。
+  * @brief   假播放后端的模拟器控制入口：推进虚拟时钟、挂起命令处理、拔卡、坏文件与指定停止。
   *
   * @details
   *          音乐分区看到的 `playback_command_send()`、`playback_snapshot_read()` 由
@@ -19,5 +19,7 @@ void playback_sim_init(void);
 void playback_sim_step(uint32_t now_ms);
 void playback_sim_toggle_suspend(void);
 void playback_sim_card_removed(void);
+void playback_sim_mark_bad(void);
+void playback_sim_stop_next_reason(void);
 
 #endif /* PLAYBACK_SIM_H */

@@ -11,8 +11,9 @@
   *
   *          键盘：T 切换 Default/Solid 主题；C 拔卡/重新挂载（代次 +1，拔卡时假
   *          后端按拔卡停止）；G 模拟重扫（代次 +1，已显示窗口保留到下一次
-  *          request）；S 挂起/恢复假后端的命令处理；A 打印 LVGL 运行中动画数
-  *          （核对唱盘动画不叠加）；Esc 退出。脚本参数见 sim_script.h。
+  *          request）；S 挂起/恢复假后端的命令处理；B 让假后端之后一次开启为坏
+  *          文件；R 让假后端以下一个非 NONE 停止原因停止；A 打印 LVGL 运行中动画数
+  *          （核对唱盘与状态行闪烁不叠加）；Esc 退出。脚本参数见 sim_script.h。
   ******************************************************************************
   */
 
@@ -62,6 +63,16 @@ static void sim_handle_key(char key)
     if ((key == 'g') || (key == 'G'))
     {
         storage_sim_rescan();
+        return;
+    }
+    if ((key == 'b') || (key == 'B'))
+    {
+        playback_sim_mark_bad();
+        return;
+    }
+    if ((key == 'r') || (key == 'R'))
+    {
+        playback_sim_stop_next_reason();
         return;
     }
     if ((key == 'a') || (key == 'A'))
@@ -169,7 +180,8 @@ int main(int argc, char *argv[])
     playback_sim_init();
     gui_music_init();
     printf("[sim] running. T: toggle theme, C: card remove/mount, G: rescan, "
-           "S: suspend/resume playback, A: anim count, Esc: quit\n");
+           "S: suspend/resume playback, B: next open bad, R: stop with next reason, "
+           "A: anim count, Esc: quit\n");
     start_ms = sim_clock_now();
 
     while (sim_pump_events())

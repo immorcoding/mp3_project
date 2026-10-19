@@ -42,8 +42,9 @@ ConsumeInput
        -> 回显已追上、窗口仍显示且 IDLE：高亮变化或点行后重套 QueueApply（不自动滚动）
        -> 与上一圈比较：TransportApply(三态 == PLAYING) / ProgressApply / TimeApply
        -> 三态变化或归零事件：VinylApply(playing, reset_angle)
+       -> 常驻短语变化：StatusApply(短语或 NULL)；跳过增量 > 0：SkipNoticeApply(k)；停止次数增加：StatusFlash()
 ~~~
 
 - 唱盘（C8）：显示的三态为 PLAYING 时转，否则停在原角度；曲目身份变化或位置变小时归零。归零是一次性事件，出现的那一圈必须调用，不与上一圈比较。曲库代次从 0（开启尚未确认）变为非 0 也算身份变化，开播后约在开启应答时多归零一次，此时位置接近 0。
-- 状态行（C6、C7）：归约已输出常驻短语、跳过增量与闪烁，本分区暂不消费；接 `Service_GUI_StatusApply/SkipNoticeApply/StatusFlash` 由状态行票（#86）完成，同样在产生的这一圈消费。
+- 状态行（C6、C7、GUI-19）：常驻短语与上一圈不同时调用 `Service_GUI_StatusApply()`（短语来自模块内静态表，按指针比较；NULL 回到时间）；跳过增量与闪烁是一次性事件，出现的那一圈调用 `Service_GUI_SkipNoticeApply(k)`、`Service_GUI_StatusFlash()`，不与上一圈比较。同一圈先调 `StatusApply` 再调 `SkipNoticeApply`，所以整轮坏文件进入 ALL_BAD 那一圈新增的跳过被常驻短语挡掉。显示优先级、2 s 提示计时与闪烁动画都在 Service 内，本分区不使用 LVGL。
 - 三键与进度条从不置灰（C9）。

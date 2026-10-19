@@ -261,7 +261,7 @@ static GUI_MusicQueueWindowActionTypeDef gui_music_window_step(void)
  * @param[in] decision 本圈归约结果。
  * @param[in] seek_released 进度条刚松手，须无条件重写进度条（B3）。
  * @note  一次性事件（唱盘归零、跳过增量、闪烁）只在产生它的这一圈出现，必须在
- *        本圈消费，不能与上次比较后丢弃。
+ *        本圈消费，不能与上次比较后丢弃。状态行的优先级与计时由 Service 持有。
  */
 static void gui_music_show(const GUI_MusicTransportDecisionTypeDef *decision, bool seek_released)
 {
@@ -293,10 +293,24 @@ static void gui_music_show(const GUI_MusicTransportDecisionTypeDef *decision, bo
     }
 
     /*
-     * 状态行（C6、C7）：status_phrase、skip_added、status_flash 由 #86 接到
-     * Service_GUI_StatusApply / SkipNoticeApply / StatusFlash，届时也在这一圈消费；
-     * 本票的时间 Label 只显示时间。
+     * 状态行（C6、C7）：常驻短语先于跳过提示，同一圈既进入 ALL_BAD 又新增跳过时，
+     * 提示被常驻短语挡掉（Service 内“常驻 > 提示 > 时间”）。短语指向模块内静态表，
+     * 按指针比较即可。跳过增量与闪烁是一次性事件，出现即调用。
      */
+    if (first || (decision->status_phrase != gui_music_shown.status_phrase))
+    {
+        (void)Service_GUI_StatusApply(decision->status_phrase);
+    }
+
+    if (decision->skip_added != 0U)
+    {
+        (void)Service_GUI_SkipNoticeApply(decision->skip_added);
+    }
+
+    if (decision->status_flash)
+    {
+        (void)Service_GUI_StatusFlash();
+    }
 
     gui_music_shown = *decision;
     gui_music_has_shown = true;
