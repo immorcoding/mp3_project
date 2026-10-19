@@ -50,6 +50,11 @@ Next id: HAR-15
 
 - **HAR-13** · provisional · 最终验证证据记录提交 SHA、工作树状态、命令、退出码和完整输出；交付时把证据归档到 PR 附件或制品位置，不以系统临时目录作为唯一留存。 _Why:_ 摘要不能独立证明实际验收快照，临时文件也会被清理。 _Source:_ [spec #15](https://github.com/immorcoding/mp3_project/issues/15)
 
+### Signals
+
+- 2026-10-17 · cite · HAR-5 · 播放链路主机测试的保真边界：`Tests/playback_task` 的假播放模块不模拟半区、欠载与 Stop/Start 顺序，PASS 只证明状态机对播放模块 Interface 的使用与反应；外壳 `playback_task.c` 无主机测试，只由固件构建编译与静态断言覆盖；`Tests/playback_service` 的假 Platform 音频有唯一不忠实开关 `fake_audio_accept_rate_for_test()`（放宽 22.05 kHz 以覆盖流尾补 0）。
+- 2026-10-19 · friction · new · #85 游标退场后主机模块 `storage_catalog` 整体退场，`APP/tasks/storage/catalog/` 不再属于任何主机模块，改动它走“未知生产路径”回退跑全部主机测试；要缩小范围需另立票补 Catalog 主机测试。
+
 ## collaboration
 
 改动授权与领域文件写入位置。

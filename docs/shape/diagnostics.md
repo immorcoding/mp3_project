@@ -22,3 +22,7 @@ Next id: DIAG-3
 ### References
 
 - [Service Log](../../Service/log/README.md)：消息池所有权与任务接缝；[Log Component](../../Components/log/README.md)：核心队列；[USB Adapter](../../Adapters/stm32_hal/log_usb_cdc/README.md)：就绪和异步输出。
+
+### Signals
+
+- 2026-10-19 · friction · new · `Platform/audio` 与播放代码（`Service/playback`、`APP/tasks/playback`）只记错误日志，没有 INFO 事件（开流、Start/Stop、切歌、停止原因），板级调试时难以从日志重建播放过程。

@@ -11,6 +11,12 @@
 - **GUI-19** · provisional · 时间 Label 兼作状态行，不另建提示对象：停止且原因非 NONE 时常驻原因的英文短语，直到离开停止态或停止期间曲目身份变化，之后显示 `0:00/--:--`；已跳过坏文件数增加时临时显示 `Skipped k file(s)` 约 2 s，期间再增加则累加并重新计时，停止原因优先；停止次数增加时闪一次（约 300 ms）；两个计数以首次读快照为基线，只看差值；提示用单次 lv_timer、闪烁用 lv_anim，都按 LVGL tick 计时；三键与进度条不置灰，可用性只由停止原因表达。_Why:_ 合同只保证计数不漏、不保证逐次；固件只有 Montserrat 拉丁字形；按 LVGL tick 计时在模拟器中可重现；GUI 不另设可用状态源。_Source:_ [音乐页呈现](https://github.com/immorcoding/mp3_project/issues/65)、[播放后端公开合同](https://github.com/immorcoding/mp3_project/issues/53)、[GUI 侧 drain](https://github.com/immorcoding/mp3_project/issues/70)
 - **GUI-20** · provisional · 唱盘当且仅当显示的三态为播放时旋转，暂停原地停、恢复从原角度续转；曲目身份变化或 position_ms 变小（同曲重选、停止归 0）时角度归零；角度由现有 Image 持有，同一 Image 至多一条旋转动画。_Why:_ 播放反馈与播放进度分离，输入只来自快照。_Source:_ [唱盘模块](../../Service/gui/main/vinyl/README.md)、[采用决定](https://github.com/immorcoding/mp3_project/issues/26)、[音乐页呈现](https://github.com/immorcoding/mp3_project/issues/65)
 
+### Proposed
+
+- 2026-10-19 · exploring · 曲库代次从 0（开启尚未确认）变为非 0 计为曲目身份变化，开播时唱盘角度再归零一次（现行 C8 行为）。_Why:_ 未决：模拟器中开播约 100 ms 后唱盘从约 6° 回跳到 0°，真机开启应答更慢时回跳更大（每 100 ms 约 6°）；备选为前一份代次为 0 且 `HasTrack`、`Index` 不变时不算身份变化（需同步改归约测试 `test_play_from_boot_confirms_generation_after_opening`）；用户表示暂保持现状。(queued: unattended run)
+- 2026-10-19 · exploring · 状态行停止次数闪烁把时间 Label 的 `text_opa` 从 COVER 淡到 TRANSP 再淡回，共 300 ms，`ease_in_out`。_Why:_ 深度与曲线不在 GUI-19 或 #72 中，由 #86 实施者自定；若太重可改降到半透明，只动 `service_gui_main_transport_flash()`，影响 `*_flash` 帧；建议用 `/prototype` 比较后定。(queued: unattended run)
+
 ### Signals
 
 - 2026-10-07 · cite · GUI-14 · 旋转沿用 vinyl 合成后的同一 Image 与 SDRAM 缓冲，不新增资源；角度 0 与原基线一致。
+- 2026-10-19 · cite · GUI-19 · 优先级“常驻文本 > 跳过提示 > 时间”只在 `Service/gui/main/transport` 内；跳过提示为单次 `lv_timer`（2000 ms，累加时 `lv_timer_reset`），闪烁为以时间 Label 为 var 的 `lv_anim`，重复调用先删旧动画；模拟器日志 `music_stop_reasons` 连按两次播放后动画数只比静止时多一条。
