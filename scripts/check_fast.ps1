@@ -34,6 +34,7 @@ function Invoke-FastWorkingTreeCheck {
         'shape_writer.Tests.ps1'
         'check-docs.Tests.ps1'
         'capture-verification.Tests.ps1'
+        'capture-verification.MergedStderr.Tests.ps1'
     )
     foreach ($selfTest in $selfTests) {
         Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath $selfTest)
