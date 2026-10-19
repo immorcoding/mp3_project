@@ -21,6 +21,59 @@ function Get-HarnessRules {
     return $rules
 }
 
+function Invoke-HarnessQuietStep {
+    <#
+    .SYNOPSIS
+        在子进程中运行脚本并缓冲全部输出：成功时静默，失败时输出完整细节并抛错。
+    .DESCRIPTION
+        只改变打印，不改变检查内容与退出语义；退出码非零时抛出与
+        Invoke-PowerShellScript 同形的错误，由调用方的入口脚本转成非零退出。
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ScriptPath,
+
+        [string[]]$ArgumentList = @()
+    )
+
+    $powerShellPath = (Get-Process -Id $PID).Path
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+    try {
+        $quotedArguments = ($ArgumentList | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }) -join ' '
+        # 解析错误或未捕获异常不会设置 LASTEXITCODE，必须显式转成非零退出。
+        $command = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding `$false; " +
+            "`$ErrorActionPreference = 'Stop'; `$ProgressPreference = 'SilentlyContinue'; `$global:LASTEXITCODE = 0; " +
+            "try { & '" + ($ScriptPath -replace "'", "''") + "' $quotedArguments; " +
+            "if (`$null -eq `$LASTEXITCODE) { exit 0 }; exit `$LASTEXITCODE } " +
+            "catch { [Console]::Error.WriteLine(`$_.Exception.Message); exit 1 }"
+        # 用 EncodedCommand 规避多层引号转义。
+        $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
+        $process = Start-Process -FilePath $powerShellPath -NoNewWindow -Wait -PassThru `
+            -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-OutputFormat', 'Text', '-EncodedCommand', $encoded) `
+            -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+        $exitCode = $process.ExitCode
+        if ($exitCode -ne 0) {
+            $utf8 = New-Object System.Text.UTF8Encoding $false
+            $detail = New-Object System.Collections.Generic.List[string]
+            foreach ($path in @($stdoutPath, $stderrPath)) {
+                foreach ($line in [System.IO.File]::ReadAllText($path, $utf8).Split("`n")) {
+                    $trimmed = $line.TrimEnd("`r")
+                    if ($trimmed.Length -gt 0) {
+                        $detail.Add($trimmed)
+                    }
+                }
+            }
+            # 细节随异常消息一起由入口脚本打印，保证失败时信息完整。
+            throw ((@($detail) + "脚本执行失败：$ScriptPath，退出码：$exitCode。") -join "`n")
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Get-HarnessNormalizedPath {
     [CmdletBinding()]
     param(
