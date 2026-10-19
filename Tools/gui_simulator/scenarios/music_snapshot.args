@@ -1,0 +1,26 @@
+# 快照驱动：停止态开播（总时长未知 -> 约 100 ms 后已知）、暂停冻结、恢复续走、下一首归零；
+# Queue 滚离当前曲后在 Playing 连按三次下一首，回到 Queue 滚动位置不变（不自动跟随），
+# 高亮移到仍可见的新当前曲
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--shot 7140:opening
+--shot 7400:duration_known
+--shot 9200:playing
+--tap 9300:120,260
+--shot 9600:paused
+--shot 10600:paused_hold
+--tap 10700:120,260
+--shot 11800:resumed
+--tap 12000:180,260
+--shot 12140:next_opening
+--shot 12500:next_playing
+--tap 12700:125,28
+--shot 13000:queue_current
+--drag 13200:120,250:120,90:400
+--shot 13800:queue_scrolled
+--tap 14000:60,28
+--tap 14300:180,260
+--tap 14500:180,260
+--tap 14700:180,260
+--tap 15000:125,28
+--shot 15300:queue_after_next

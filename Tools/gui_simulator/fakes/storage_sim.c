@@ -9,9 +9,8 @@
   *          分区一致）。没有 Storage Task：sim_main.c 每圈先调 storage_sim_step()，
   *          上一圈 request 的窗口在本圈填成 READY。
   *
-  *          挂载、拔卡与重扫时代替 storage_catalog 调用真实的
-  *          storage_playback_cursor_init/invalidate（基线第 1 步，游标退场后删除）。
-  *          SD 无消抖：已挂载即就绪。
+  *          播放游标归播放任务（假后端 playback_sim.c），本替身只给出当前代次与
+  *          曲目数供假后端判定开启结果。SD 无消抖：已挂载即就绪。
   ******************************************************************************
   */
 
@@ -24,7 +23,6 @@
 
 #include "APP/tasks/storage/storage_task.h"
 #include "APP/tasks/storage/catalog/storage_listbuffer.h"
-#include "APP/tasks/storage/catalog/storage_playback_cursor.h"
 
 static const char *const storage_sim_titles[] = {
     "Clair de Lune",
@@ -50,14 +48,21 @@ Storage_ListBufferTypeDef storage_listbuffer;
 static bool storage_sim_mounted;
 static uint32_t storage_sim_generation;
 
+/**
+ * @brief 复位为已挂载、第 1 代、10 首固定曲目，窗口槽 IDLE。
+ * @note  须在 gui_music_init() 之前调用。
+ */
 void storage_sim_init(void)
 {
     storage_listbuffer_bind(NULL);
     storage_sim_mounted = true;
     storage_sim_generation = 1U;
-    (void)storage_playback_cursor_init(STORAGE_SIM_TITLE_COUNT, storage_sim_generation);
 }
 
+/**
+ * @brief 代替 Storage Task 走一圈：上一圈留下的 PENDING 窗口在本圈填成 READY。
+ * @note  每圈在 gui_music_step() 之前调用，因此 request 恰好在下一圈可 APPLY。
+ */
 void storage_sim_step(void)
 {
     if (storage_sim_mounted)
@@ -66,24 +71,34 @@ void storage_sim_step(void)
     }
 }
 
-void storage_sim_toggle_mount(void)
+/**
+ * @brief C 键：在拔卡与重新挂载之间切换，并把代次 +1。
+ * @return 切换后是否已挂载；为假时调用方应让假播放后端按拔卡停止。
+ * @note  拔卡时把 PENDING 打成空窗 READY。
+ */
+bool storage_sim_toggle_mount(void)
 {
     storage_sim_generation++;
     if (storage_sim_mounted)
     {
         storage_sim_mounted = false;
-        (void)storage_playback_cursor_invalidate();
         storage_listbuffer_complete_unavailable();
         printf("[storage] card removed (generation %u)\n", (unsigned)storage_sim_generation);
     }
     else
     {
         storage_sim_mounted = true;
-        (void)storage_playback_cursor_init(STORAGE_SIM_TITLE_COUNT, storage_sim_generation);
         printf("[storage] mounted (generation %u)\n", (unsigned)storage_sim_generation);
     }
+
+    return storage_sim_mounted;
 }
 
+/**
+ * @brief G 键：模拟重扫，代次 +1。
+ * @note  已显示的 Queue 窗口不主动作废，保留到音乐分区下一次 request，用于制造
+ *        过期窗口。未挂载时忽略。
+ */
 void storage_sim_rescan(void)
 {
     if (!storage_sim_mounted)
@@ -92,10 +107,26 @@ void storage_sim_rescan(void)
     }
 
     storage_sim_generation++;
-    (void)storage_playback_cursor_init(STORAGE_SIM_TITLE_COUNT, storage_sim_generation);
     printf("[storage] rescan (generation %u)\n", (unsigned)storage_sim_generation);
 }
 
+/**
+ * @brief 当前曲库代次，供假播放后端判定开启是否过期（STALE）。
+ * @return 当前代次；从 1 开始，挂载切换与重扫各 +1。
+ */
+uint32_t storage_sim_generation_get(void)
+{
+    return storage_sim_generation;
+}
+
+/**
+ * @brief 固定曲库的曲目数，供假播放后端判定越界与环形步进。
+ * @return 曲目数。
+ */
+uint16_t storage_sim_track_count(void)
+{
+    return STORAGE_SIM_TITLE_COUNT;
+}
 /**
  * @brief 复位窗口槽；模拟器没有 Storage Task 句柄，不发通知。
  * @param[in] storage_task 忽略。
@@ -187,11 +218,19 @@ void storage_listbuffer_complete_unavailable(void)
     storage_listbuffer.Status = STORAGE_LISTBUFFER_READY;
 }
 
+/**
+ * @brief 同生产头：SD 是否就绪；替身无消抖，已挂载即就绪。
+ * @return 已挂载为真。
+ */
 bool storage_task_sd_is_ready(void)
 {
     return storage_sim_mounted;
 }
 
+/**
+ * @brief 同生产头：卷是否已挂载。
+ * @return 已挂载为真。
+ */
 bool storage_task_sd_is_mounted(void)
 {
     return storage_sim_mounted;
