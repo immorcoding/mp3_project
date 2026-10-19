@@ -26,7 +26,7 @@
 - `storage_listbuffer_*()` 与 `storage_task_sd_is_ready/mounted()`（只允许出现在本分区）；
 - `Service_Log_Post()`：命令队列满时记日志。
 
-不包含 `storage_playback_cursor.h`：游标只有播放任务一个写者。
+不读写播放游标：游标只有播放任务一个写者。
 
 ## 运行时路径
 
