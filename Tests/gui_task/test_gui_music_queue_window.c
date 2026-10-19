@@ -112,7 +112,7 @@ static void test_does_not_rerequest_after_apply(void)
         true,
         true,
         GUI_MUSIC_QUEUE_WINDOW_READY);
-    gui_music_queue_window_mark_applied(&client, 0U, 8U);
+    gui_music_queue_window_mark_applied(&client, 0U, 8U, 1U);
     action = gui_music_queue_window_poll(
         &client,
         true,
@@ -179,7 +179,7 @@ static void test_clears_displayed_window_when_sd_removed(void)
         true,
         true,
         GUI_MUSIC_QUEUE_WINDOW_READY);
-    gui_music_queue_window_mark_applied(&client, 0U, 8U);
+    gui_music_queue_window_mark_applied(&client, 0U, 8U, 1U);
     action = gui_music_queue_window_poll(
         &client,
         false,
@@ -202,7 +202,7 @@ static void test_does_not_clear_during_debounce_while_mounted(void)
         true,
         true,
         GUI_MUSIC_QUEUE_WINDOW_READY);
-    gui_music_queue_window_mark_applied(&client, 0U, 8U);
+    gui_music_queue_window_mark_applied(&client, 0U, 8U, 1U);
     action = gui_music_queue_window_poll(
         &client,
         false,
@@ -225,7 +225,7 @@ static void test_does_not_clear_twice_while_sd_absent(void)
         true,
         true,
         GUI_MUSIC_QUEUE_WINDOW_READY);
-    gui_music_queue_window_mark_applied(&client, 0U, 8U);
+    gui_music_queue_window_mark_applied(&client, 0U, 8U, 1U);
     (void)gui_music_queue_window_poll(
         &client,
         false,
@@ -253,7 +253,7 @@ static void test_requests_again_after_sd_reinserted(void)
         true,
         true,
         GUI_MUSIC_QUEUE_WINDOW_READY);
-    gui_music_queue_window_mark_applied(&client, 0U, 8U);
+    gui_music_queue_window_mark_applied(&client, 0U, 8U, 1U);
     (void)gui_music_queue_window_poll(
         &client,
         false,
@@ -354,7 +354,7 @@ static void test_note_lead_requests_when_desired_index_moves(void)
         true,
         true,
         GUI_MUSIC_QUEUE_WINDOW_READY);
-    gui_music_queue_window_mark_applied(&client, 0U, 8U);
+    gui_music_queue_window_mark_applied(&client, 0U, 8U, 1U);
     gui_music_queue_window_note_lead(&client, 2U, 8U);
     assert(gui_music_queue_window_request_index(&client) == 1U);
     action = gui_music_queue_window_poll(
@@ -379,7 +379,7 @@ static void test_note_lead_does_not_rerequest_for_slack_row(void)
         true,
         true,
         GUI_MUSIC_QUEUE_WINDOW_READY);
-    gui_music_queue_window_mark_applied(&client, 0U, 8U);
+    gui_music_queue_window_mark_applied(&client, 0U, 8U, 1U);
     gui_music_queue_window_note_lead(&client, 1U, 8U);
     assert(gui_music_queue_window_request_index(&client) == 0U);
     action = gui_music_queue_window_poll(
@@ -403,7 +403,7 @@ static void test_clear_resets_request_index_to_zero(void)
         true,
         true,
         GUI_MUSIC_QUEUE_WINDOW_READY);
-    gui_music_queue_window_mark_applied(&client, 4U, 8U);
+    gui_music_queue_window_mark_applied(&client, 4U, 8U, 1U);
     (void)gui_music_queue_window_poll(
         &client,
         false,
@@ -449,6 +449,30 @@ static void test_current_index_is_none_when_generation_mismatches(void)
 }
 
 /**
+ * @brief APPLY 成功后记下已显示窗口的曲库代次；换窗更新，卸载 CLEAR 后回到 0（未显示）。
+ */
+static void test_apply_records_displayed_window_generation(void)
+{
+    GUI_MusicQueueWindowClientTypeDef client;
+
+    gui_music_queue_window_client_init(&client);
+    assert(gui_music_queue_window_displayed_generation(&client) == 0U);
+
+    gui_music_queue_window_mark_applied(&client, 0U, 8U, 7U);
+    assert(gui_music_queue_window_displayed_generation(&client) == 7U);
+
+    gui_music_queue_window_mark_applied(&client, 4U, 8U, 9U);
+    assert(gui_music_queue_window_displayed_generation(&client) == 9U);
+
+    assert(gui_music_queue_window_poll(
+               &client,
+               false,
+               false,
+               GUI_MUSIC_QUEUE_WINDOW_IDLE) == GUI_MUSIC_QUEUE_WINDOW_ACTION_CLEAR);
+    assert(gui_music_queue_window_displayed_generation(&client) == 0U);
+}
+
+/**
  * @brief 运行全部窗口状态机测试。
  * @return 成功时返回 0。
  */
@@ -480,7 +504,7 @@ int main(void)
     test_current_index_is_none_when_cursor_invalid();
     test_current_index_is_none_when_generation_is_zero();
     test_current_index_is_none_when_generation_mismatches();
-
+    test_apply_records_displayed_window_generation();
     puts("gui_music_queue_window_tests: all tests passed");
     return 0;
 }

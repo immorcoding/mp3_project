@@ -11,7 +11,6 @@
 
 #include "gui_music.h"
 #include "gui_music_queue_window.h"
-#include "gui_music_transport.h"
 
 #include <stddef.h>
 #include <stdbool.h>
@@ -21,7 +20,53 @@
 #include "APP/tasks/storage/catalog/storage_playback_cursor.h"
 
 static GUI_MusicQueueWindowClientTypeDef gui_music_queue_window_client;
-static GUI_MusicTransportTypeDef gui_music_transport;
+
+/*
+ * 过渡（#83）：gui_music_transport 已改写为快照归约，不再持 playing 与假进度。
+ * 在 #84 把本分区接到播放合同之前，旧的本地 playing 与假进度暂放在这里，
+ * 行为与改写前一致；#84 整体删除。
+ */
+static bool gui_music_playing;
+static uint8_t gui_music_progress_percent;
+
+/**
+ * @brief 有当前曲时翻转 playing；否则保持 paused。
+ * @param[in] has_current 播放列表游标当前有效。
+ * @return 标志是否相对调用前发生变化。
+ */
+static bool gui_music_playing_toggle(bool has_current)
+{
+    bool was_playing = gui_music_playing;
+
+    if (!has_current)
+    {
+        gui_music_playing = false;
+        return was_playing;
+    }
+
+    gui_music_playing = !gui_music_playing;
+    return true;
+}
+
+/**
+ * @brief 强制 paused，供拔卡清空 Queue 时使用。
+ * @return 调用前是否为 playing。
+ */
+static bool gui_music_playing_force_paused(void)
+{
+    bool was_playing = gui_music_playing;
+
+    gui_music_playing = false;
+    return was_playing;
+}
+
+/**
+ * @brief 把假进度清回 0。
+ */
+static void gui_music_progress_reset(void)
+{
+    gui_music_progress_percent = 0U;
+}
 
 /**
  * @brief 把 READY 窗口填进 Queue。
@@ -104,7 +149,7 @@ static void gui_music_dispatch_input(
             if (storage_playback_cursor_set(input->param) == STORAGE_OK)
             {
                 *cursor_moved = true;
-                (void)gui_music_transport_reset_progress(&gui_music_transport);
+                gui_music_progress_reset();
                 *progress_changed = true;
             }
             /*
@@ -120,7 +165,7 @@ static void gui_music_dispatch_input(
             if (storage_playback_cursor_previous() == STORAGE_OK)
             {
                 *cursor_moved = true;
-                (void)gui_music_transport_reset_progress(&gui_music_transport);
+                gui_music_progress_reset();
                 *progress_changed = true;
             }
             break;
@@ -129,7 +174,7 @@ static void gui_music_dispatch_input(
             if (storage_playback_cursor_next() == STORAGE_OK)
             {
                 *cursor_moved = true;
-                (void)gui_music_transport_reset_progress(&gui_music_transport);
+                gui_music_progress_reset();
                 *progress_changed = true;
             }
             break;
@@ -138,9 +183,7 @@ static void gui_music_dispatch_input(
             has_current = (storage_playback_cursor_get(
                                &cursor_index,
                                &cursor_generation) == STORAGE_OK);
-            *playing_changed = gui_music_transport_toggle(
-                &gui_music_transport,
-                has_current);
+            *playing_changed = gui_music_playing_toggle(has_current);
             break;
 
         case SERVICE_GUI_INPUT_MUSIC_SEEK:
@@ -154,9 +197,7 @@ static void gui_music_dispatch_input(
                 percent = (input->param > 100U) ?
                           100U :
                           (uint8_t)input->param;
-                (void)gui_music_transport_set_progress(
-                    &gui_music_transport,
-                    percent);
+                gui_music_progress_percent = percent;
             }
             *progress_changed = true;
             break;
@@ -182,7 +223,8 @@ void gui_music_init(void)
                    "music queue window no-current must match QueueApply sentinel");
 
     gui_music_queue_window_client_init(&gui_music_queue_window_client);
-    gui_music_transport_init(&gui_music_transport);
+    gui_music_playing = false;
+    gui_music_progress_percent = 0U;
     (void)Service_GUI_TransportApply(false);
     (void)Service_GUI_ProgressApply(0U);
     (void)Service_GUI_VinylApply(false, true);
@@ -254,7 +296,8 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
                 gui_music_queue_window_mark_applied(
                     &gui_music_queue_window_client,
                     applied_index,
-                    applied_length);
+                    applied_length,
+                    storage_listbuffer.Generation);
             }
 
             storage_listbuffer.Status = STORAGE_LISTBUFFER_IDLE;
@@ -262,11 +305,11 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
 
         case GUI_MUSIC_QUEUE_WINDOW_ACTION_CLEAR:
             (void)Service_GUI_QueueApply(NULL, 0U, 0U, SERVICE_GUI_QUEUE_NO_CURRENT);
-            if (gui_music_transport_force_paused(&gui_music_transport))
+            if (gui_music_playing_force_paused())
             {
                 playing_changed = true;
             }
-            (void)gui_music_transport_reset_progress(&gui_music_transport);
+            gui_music_progress_reset();
             progress_changed = true;
             vinyl_reset = true;
             break;
@@ -288,8 +331,7 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
 
     if (playing_changed)
     {
-        (void)Service_GUI_TransportApply(
-            gui_music_transport_is_playing(&gui_music_transport));
+        (void)Service_GUI_TransportApply(gui_music_playing);
     }
 
     /*
@@ -298,9 +340,7 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
      */
     if (playing_changed || vinyl_reset)
     {
-        (void)Service_GUI_VinylApply(
-            gui_music_transport_is_playing(&gui_music_transport),
-            vinyl_reset);
+        (void)Service_GUI_VinylApply(gui_music_playing, vinyl_reset);
     }
 
     /*
@@ -314,7 +354,6 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
 
     if (progress_changed)
     {
-        (void)Service_GUI_ProgressApply(
-            gui_music_transport_get_progress(&gui_music_transport));
+        (void)Service_GUI_ProgressApply(gui_music_progress_percent);
     }
 }

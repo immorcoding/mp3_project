@@ -24,7 +24,7 @@ target_include_directories(gui_music_transport_tests PRIVATE ../..)
 target_compile_features(gui_music_transport_tests PRIVATE c_std_11)
 target_compile_options(gui_music_transport_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 
-add_test(NAME gui_music_transport_policy COMMAND gui_music_transport_tests)
+add_test(NAME gui_music_transport_reducer COMMAND gui_music_transport_tests)
 
 add_executable(gui_service_input_tests
     test_gui_service_input.c

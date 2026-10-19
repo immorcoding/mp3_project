@@ -31,13 +31,17 @@ typedef struct
     uint16_t desired_index;  /**< 下一窗在播放列表上的起点。 */
     uint16_t applied_index;  /**< 已成功填进 Queue 的窗口起点。 */
     uint16_t applied_length; /**< 已成功填进 Queue 的本窗条数。 */
+    uint32_t applied_generation; /**< 已成功填进 Queue 的本窗曲库代次；未显示为 0。 */
 } GUI_MusicQueueWindowClientTypeDef;
 
 void gui_music_queue_window_client_init(GUI_MusicQueueWindowClientTypeDef *client);
 void gui_music_queue_window_mark_applied(
     GUI_MusicQueueWindowClientTypeDef *client,
     uint16_t index,
-    uint16_t length);
+    uint16_t length,
+    uint32_t generation);
+uint32_t gui_music_queue_window_displayed_generation(
+    const GUI_MusicQueueWindowClientTypeDef *client);
 uint16_t gui_music_queue_window_desired_index(
     uint16_t applied_index,
     uint16_t applied_length,
