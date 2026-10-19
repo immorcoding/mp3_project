@@ -7,7 +7,6 @@
         'gui_canvas'
         'w25qxx'
         'resource_pack'
-        'storage_catalog'
         'storage_audio_stream'
         'playback_service'
         'playback_task'
@@ -84,13 +83,6 @@
             PathPatterns = @(
                 '^APP/tasks/storage/stream/'
                 '^Tests/storage_audio_stream/'
-            )
-        }
-        @{
-            Name = 'storage_catalog'
-            PathPatterns = @(
-                '^APP/tasks/storage/catalog/'
-                '^Tests/storage_catalog/'
             )
         }
         @{

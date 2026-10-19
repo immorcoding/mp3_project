@@ -10,7 +10,7 @@
 - `Service_GUI_ThemeApply(id)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`；启动序列未结束（Boot 仍存在）时返回 `SERVICE_BUSY`，因为 Boot 可能正显示共享 Canvas 工作帧。首次生成毛玻璃失败时回滚到原外观。切换 Default/Solid 调色板，刷新共享颜色 style 与 BootReveal/Lock/Main 的壁纸或 Ground，再设置 Music Tab 毛玻璃或薄层；首次切到 Default 时按需生成长期模糊壁纸。
 - `Service_GUI_Process()`：仅在同一 GUI Task 上下文周期调用。按 FreeRTOS Tick 推进 LVGL 时间，并调用 `lv_timer_handler()` 处理刷新、动画和输入。
 - `Service_GUI_QueueApply(titles, length, window_index, current_index)`：仅由同一 GUI Task 调用。把一窗曲名填进 Queue 可见行；`length` 为 0 时全部 Hidden，`titles` 可为 NULL。`window_index` 是本窗在播放列表上的起点，用于已有行转 head。`current_index` 是正在播放的播放列表下标；无当前曲时为 `SERVICE_GUI_QUEUE_NO_CURRENT`。不包含 `storage_listbuffer.h`。Label 会拷贝文本。
-- `Service_GUI_ConsumeInput(input)`：仅由同一 GUI Task 调用。取走上一圈 `Process()` 记下的一次点击。无点击时 `command` 为 `SERVICE_GUI_INPUT_NONE` 且返回 `SERVICE_OK`，不用 `SERVICE_NOT_READY` 表示空闲。`MUSIC_QUEUE_SELECT` 时 `param` 为播放列表下标；`MUSIC_SEEK` 时为 0..100 百分比。不包含 `storage_listbuffer.h` / `storage_playback_cursor.h`。
+- `Service_GUI_ConsumeInput(input)`：仅由同一 GUI Task 调用。取走上一圈 `Process()` 记下的一次点击。无点击时 `command` 为 `SERVICE_GUI_INPUT_NONE` 且返回 `SERVICE_OK`，不用 `SERVICE_NOT_READY` 表示空闲。`MUSIC_QUEUE_SELECT` 时 `param` 为播放列表下标；`MUSIC_SEEK` 时为 0..100 百分比。不包含 `storage_listbuffer.h`。
 - `Service_GUI_TransportApply(playing)`：仅由同一 GUI Task 调用。把 `MusicPlayPauseIcon` 换成 `LV_SYMBOL_PAUSE` 或 `LV_SYMBOL_PLAY`。
 - `Service_GUI_ProgressApply(percent)`：仅由同一 GUI Task 调用。把 `MusicPlayingSlider` 设为 0..100；Slider 处于 `PRESSED` 时不覆盖当前拖动。不解码、不真正 seek。
 - `Service_GUI_TimeApply(position_ms, duration_ms)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`。记下并显示 Now Playing 时间 Label（view 句柄 `music.time_label`）的“已解码/总时长”，格式 `m:ss/m:ss`，按整秒向下取整；总时长 0 写 `--:--`。文本未变时不重写 Label；不按墙钟走表，拖动进度条时仍显示真实时间。Init 时写入初始 `0:00/--:--`。（#72 D0、D1；状态行的常驻文本、跳过提示与闪烁由 #86 加入，届时只在状态行显示时间时写入。）
@@ -132,7 +132,7 @@ Service/gui/
 - `main/queue/`：只持有 Queue 可见行对象。行工厂按 Length 在 `QueueTab` 中构造行，窗口滑动时
   转 head 改字，并套用当前/非当前样式（Border Opa、曲名颜色角色，不改 Width）。点按
   `CLICKED` 只刷新行样式并 `post` 选曲命令。用 `QueueScrollLead` 报告滚出顶部的整行数。
-  不包含 `storage_listbuffer.h` 或 `storage_playback_cursor.h`。
+  不包含 `storage_listbuffer.h`。
 - `main/transport/`：给 Now Playing 三键挂 `CLICKED`、给进度条挂 `RELEASED`，`post` 上一首/播放暂停/下一首/假 seek；
   `TransportApply` 只改播放符号，`ProgressApply` 改进度条（拖动中不写回），`TimeApply` 格式化并写时间 Label。
   不包含游标头或播放合同头。
