@@ -59,6 +59,14 @@ $platformLcdImpact = Get-HarnessImpact -ChangedPath @('Platform/lcd/platform_lcd
 Assert-HarnessEqual -Expected $true -Actual $platformLcdImpact.RequiresGuiScenarios -Message '模拟器编译的 Platform LCD 头变化必须跑场景回归'
 $serviceHeaderImpact = Get-HarnessImpact -ChangedPath @('Service/service.h')
 Assert-HarnessEqual -Expected $true -Actual $serviceHeaderImpact.RequiresGuiScenarios -Message 'Service 状态头变化必须跑场景回归'
+$guiMusicImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/gui/music/gui_music.c')
+Assert-HarnessEqual -Expected $true -Actual $guiMusicImpact.RequiresGuiScenarios -Message '模拟器编译的 APP 音乐分区变化必须跑场景回归'
+$cursorImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_playback_cursor.c')
+Assert-HarnessEqual -Expected $true -Actual $cursorImpact.RequiresGuiScenarios -Message '模拟器编译的播放游标变化必须跑场景回归'
+$listbufferHeaderImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_listbuffer.h')
+Assert-HarnessEqual -Expected $true -Actual $listbufferHeaderImpact.RequiresGuiScenarios -Message '假 Storage 实现的窗口槽头变化必须跑场景回归'
+$listbufferSourceImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_listbuffer.c')
+Assert-HarnessEqual -Expected $false -Actual $listbufferSourceImpact.RequiresGuiScenarios -Message '模拟器不编译的窗口槽实现变化不跑场景回归'
 $platformLcdSourceImpact = Get-HarnessImpact -ChangedPath @('Platform/lcd/platform_lcd.c')
 Assert-HarnessEqual -Expected $false -Actual $platformLcdSourceImpact.RequiresGuiScenarios -Message '模拟器不编译的 Platform 实现变化不跑场景回归'
 
