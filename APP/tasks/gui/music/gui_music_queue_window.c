@@ -18,6 +18,7 @@ void gui_music_queue_window_client_init(GUI_MusicQueueWindowClientTypeDef *clien
     client->desired_index = 0U;
     client->applied_index = 0U;
     client->applied_length = 0U;
+    client->applied_generation = 0U;
 }
 
 /**
@@ -25,18 +26,32 @@ void gui_music_queue_window_client_init(GUI_MusicQueueWindowClientTypeDef *clien
  * @param[in,out] client 音乐分区持有的窗口客户状态。
  * @param[in] index 本窗在播放列表上的起点，与 READY 槽位的 Index 一致。
  * @param[in] length 本窗实际条数，与 READY 槽位的 Length 一致。
+ * @param[in] generation 本窗的曲库代次，与 READY 槽位的 Generation 一致（#72 C3）。
  * @note 仅在 QueueApply 成功后调用。失败须保持 need_window，以便写回 IDLE 后重试。
  */
 void gui_music_queue_window_mark_applied(
     GUI_MusicQueueWindowClientTypeDef *client,
     uint16_t index,
-    uint16_t length)
+    uint16_t length,
+    uint32_t generation)
 {
     client->need_window = false;
     client->displayed = true;
     client->applied_index = index;
     client->applied_length = length;
+    client->applied_generation = generation;
     client->desired_index = index;
+}
+
+/**
+ * @brief 已显示窗口的曲库代次，供当前曲高亮与窗口对账。
+ * @param[in] client 音乐分区持有的窗口客户状态。
+ * @return APPLY 时记下的代次；尚未显示或已被卸载清空时为 0。
+ */
+uint32_t gui_music_queue_window_displayed_generation(
+    const GUI_MusicQueueWindowClientTypeDef *client)
+{
+    return client->displayed ? client->applied_generation : 0U;
 }
 
 /**
@@ -154,6 +169,7 @@ GUI_MusicQueueWindowActionTypeDef gui_music_queue_window_poll(
             client->desired_index = 0U;
             client->applied_index = 0U;
             client->applied_length = 0U;
+            client->applied_generation = 0U;
             return GUI_MUSIC_QUEUE_WINDOW_ACTION_CLEAR;
         }
 

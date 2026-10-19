@@ -254,7 +254,8 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
                 gui_music_queue_window_mark_applied(
                     &gui_music_queue_window_client,
                     applied_index,
-                    applied_length);
+                    applied_length,
+                    storage_listbuffer.Generation);
             }
 
             storage_listbuffer.Status = STORAGE_LISTBUFFER_IDLE;
