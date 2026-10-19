@@ -10,17 +10,12 @@
 #include <stddef.h>
 #include <string.h>
 
-/**
- * @brief 短语表长度：停止原因个数，ALL_BAD 须是枚举最后一项。
- * @note  新增原因（含在 ALL_BAD 之后）时必须同步改本值和短语表，否则下面的断言使编译失败。
- */
-#define GUI_MUSIC_TRANSPORT_STOP_REASON_COUNT 10U
-
-_Static_assert(GUI_MUSIC_TRANSPORT_STOP_REASON_COUNT == (PLAYBACK_STOP_REASON_ALL_BAD + 1U),
-               "stop reason count changed: update the phrase table and the count");
+/* 短语表长度取合同的原因个数；ALL_BAD 之后又有新原因时，下面的断言使编译失败，提醒补短语。 */
+_Static_assert((unsigned)PLAYBACK_STOP_REASON_ALL_BAD + 1U == (unsigned)PLAYBACK_STOP_REASON_COUNT,
+               "ALL_BAD is no longer the last stop reason: add the new phrase and update this assert");
 
 /** 停止原因 -> 状态行短语（C6）；NONE 为空，状态行回到时间。只用 Montserrat 拉丁字形。 */
-static const char *const gui_music_transport_phrase_table[GUI_MUSIC_TRANSPORT_STOP_REASON_COUNT] =
+static const char *const gui_music_transport_phrase_table[PLAYBACK_STOP_REASON_COUNT] =
 {
     [PLAYBACK_STOP_REASON_NONE] = NULL,
     [PLAYBACK_STOP_REASON_CARD_REMOVED] = "No SD card",
@@ -141,7 +136,7 @@ static const char *gui_music_transport_phrase_step(
 {
     if ((adopted->State != PLAYBACK_STATE_STOPPED) ||
         (adopted->StopReason == PLAYBACK_STOP_REASON_NONE) ||
-        (adopted->StopReason > PLAYBACK_STOP_REASON_ALL_BAD))
+        ((uint32_t)adopted->StopReason >= (uint32_t)PLAYBACK_STOP_REASON_COUNT))
     {
         transport->phrase_mode = GUI_MUSIC_TRANSPORT_PHRASE_NONE;
         return NULL;
