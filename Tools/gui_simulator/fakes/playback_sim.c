@@ -16,7 +16,14 @@
   *            否则确认代次、取得曲目数并给出总时长。
   *          - 位置只在开启 OK 后的播放态按虚拟时钟推进；到总时长自动前进（末曲回首曲）。
   *          - 拔卡（C 键）：有流（播放或暂停）时停止 CARD_REMOVED、无当前曲。
-  *          坏文件、其余停止原因与 AUDIO_FAULT 锁存不在本替身范围（#86 再加脚本按键）。
+  *          - 坏文件（B 键）：每按一次，让之后一次开启应答为坏文件。坏文件按 B5 跳过：
+  *            SkippedBadCount +1，沿最近一次移动的方向开启下一首、三态不变；连跳数达到
+  *            曲目数 N 即停止 ALL_BAD（游标保留），N 未知时停止 NO_TRACK。连跳数在开启 OK、
+  *            用户换曲命令与进入停止时清零（假后端没有输出，以开启 OK 代替 OutputStarted）。
+  *          - 指定停止（R 键）：按 K1 枚举顺序取下一个非 NONE 原因立即进入停止（停止态
+  *            也再进入一次，停止次数 +1），副作用同 K4；AUDIO_FAULT 锁存后停止态的
+  *            TOGGLE、SELECT 只让停止次数 +1（K3、B10），重启模拟器才解除。
+  *          不解码、不读块，没有 T_data/T_out 计时，其余停止原因只能用 R 键注入。
   ******************************************************************************
   */
 
@@ -49,12 +56,18 @@ typedef struct
     uint16_t track_count;                                            /**< 最近一次开启 OK 带回的曲目数；0 = 未知。 */
     bool has_clock;                                                  /**< 已记下上次推进的时刻。 */
     uint32_t last_ms;                                                /**< 上次推进的时刻。 */
+    uint16_t bad_pending;                                            /**< 还要按坏文件应答的开启次数（B 键累加）。 */
+    uint16_t consecutive_skips;                                      /**< 本轮连续跳过的坏文件数（B5 连跳计数）。 */
+    bool skip_forward;                                               /**< 跳过坏文件的方向：最近一次移动是否向后。 */
+    bool audio_fault_latched;                                        /**< 已因 AUDIO_FAULT 锁存，重启才解除。 */
+    Playback_StopReasonTypeDef last_forced_reason;                   /**< R 键上一次注入的停止原因；NONE = 尚未注入。 */
 } PlaybackSim_StateTypeDef;
 
 static PlaybackSim_StateTypeDef playback_sim;
 
 /**
- * @brief 进入停止：位置与总时长清零、停止次数 +1；按 K4 决定游标保留还是重置。
+ * @brief 进入停止：位置与总时长清零、停止次数 +1、连跳计数清零；按 K4 决定游标保留
+ *        还是重置，AUDIO_FAULT 另外锁存。
  * @param[in] reason 停止原因，非 NONE。
  */
 static void playback_sim_enter_stopped(Playback_StopReasonTypeDef reason)
@@ -67,6 +80,12 @@ static void playback_sim_enter_stopped(Playback_StopReasonTypeDef reason)
     snapshot->DurationMs = 0U;
     snapshot->StopCount++;
     playback_sim.opening = false;
+    playback_sim.consecutive_skips = 0U;
+
+    if (reason == PLAYBACK_STOP_REASON_AUDIO_FAULT)
+    {
+        playback_sim.audio_fault_latched = true;
+    }
 
     if ((reason == PLAYBACK_STOP_REASON_CARD_REMOVED) ||
         (reason == PLAYBACK_STOP_REASON_NOT_READY) ||
@@ -104,7 +123,42 @@ static void playback_sim_open(uint32_t generation, uint16_t index)
 }
 
 /**
- * @brief 开启应答：按假 Storage 判定结果，OK 时确认代次、曲目数与总时长。
+ * @brief 开启应答为坏文件时跳过（B5）：跳过数 +1，沿最近一次移动的方向开启下一首，
+ *        三态不变；连跳数达到曲目数即停止 ALL_BAD（游标保留）。
+ * @note  曲目数未知（开机第一首就是坏文件）时无法计数，按 NO_TRACK 停止，不计跳过。
+ */
+static void playback_sim_skip_bad(void)
+{
+    Playback_SnapshotTypeDef *snapshot = &playback_sim.snapshot;
+    const uint16_t count = playback_sim.track_count;
+    uint16_t index;
+
+    if (count == 0U)
+    {
+        playback_sim_enter_stopped(PLAYBACK_STOP_REASON_NO_TRACK);
+        return;
+    }
+
+    snapshot->SkippedBadCount++;
+    playback_sim.consecutive_skips++;
+    printf("[playback] bad file %u skipped (skipped %u)\n",
+           (unsigned)snapshot->Index, (unsigned)snapshot->SkippedBadCount);
+
+    if (playback_sim.consecutive_skips >= count)
+    {
+        playback_sim_enter_stopped(PLAYBACK_STOP_REASON_ALL_BAD);
+        return;
+    }
+
+    index = playback_sim.skip_forward ?
+            (uint16_t)((snapshot->Index + 1U) % count) :
+            (uint16_t)((snapshot->Index + count - 1U) % count);
+    playback_sim_open(snapshot->Generation, index);
+}
+
+/**
+ * @brief 开启应答：按假 Storage 判定结果；B 键排队的坏文件按 B5 跳过；OK 时确认代次、
+ *        曲目数与总时长，并清零连跳计数。
  */
 static void playback_sim_open_reply(void)
 {
@@ -132,6 +186,14 @@ static void playback_sim_open_reply(void)
         return;
     }
 
+    if (playback_sim.bad_pending > 0U)
+    {
+        playback_sim.bad_pending--;
+        playback_sim_skip_bad();
+        return;
+    }
+
+    playback_sim.consecutive_skips = 0U;
     snapshot->Generation = storage_generation;
     snapshot->DurationMs = PLAYBACK_SIM_DURATION_BASE_MS +
                            ((uint32_t)snapshot->Index * PLAYBACK_SIM_DURATION_STEP_MS);
@@ -175,6 +237,24 @@ static void playback_sim_handle(const Playback_CommandTypeDef *command)
 {
     Playback_SnapshotTypeDef *snapshot = &playback_sim.snapshot;
 
+    /* AUDIO_FAULT 锁存（K3、B10）：停止态的 TOGGLE、SELECT 不开流、不动游标，只让停止次数 +1。 */
+    if (playback_sim.audio_fault_latched &&
+        (snapshot->State == PLAYBACK_STATE_STOPPED) &&
+        ((command->Kind == PLAYBACK_COMMAND_TOGGLE) || (command->Kind == PLAYBACK_COMMAND_SELECT)))
+    {
+        snapshot->StopCount++;
+        printf("[playback] audio fault latched, stops %u\n", (unsigned)snapshot->StopCount);
+        snapshot->HandledCommandSeq = command->Seq;
+        return;
+    }
+
+    /* 换曲命令清零连跳计数并决定之后跳过坏文件的方向（B5）。 */
+    if (command->Kind != PLAYBACK_COMMAND_TOGGLE)
+    {
+        playback_sim.consecutive_skips = 0U;
+        playback_sim.skip_forward = (command->Kind != PLAYBACK_COMMAND_PREV);
+    }
+
     switch (command->Kind)
     {
         case PLAYBACK_COMMAND_TOGGLE:
@@ -188,7 +268,8 @@ static void playback_sim_handle(const Playback_CommandTypeDef *command)
             }
             else
             {
-                /* 停止态开播：打开游标所指曲目；无游标时打开 {代次 0, 位置 0}。 */
+                /* 停止态开播：打开游标所指曲目；无游标时打开 {代次 0, 位置 0}。之后坏文件向后跳。 */
+                playback_sim.skip_forward = true;
                 if (snapshot->HasTrack)
                 {
                     playback_sim_open(snapshot->Generation, snapshot->Index);
@@ -252,8 +333,9 @@ static void playback_sim_advance(uint32_t elapsed_ms)
     snapshot->PositionMs += elapsed_ms;
     if ((snapshot->DurationMs != 0U) && (snapshot->PositionMs >= snapshot->DurationMs))
     {
-        /* 播完自动前进：末曲回首曲，不出现停止态（K5）。 */
+        /* 播完自动前进：末曲回首曲，不出现停止态（K5）；之后坏文件向后跳。 */
         snapshot->PositionMs = snapshot->DurationMs;
+        playback_sim.skip_forward = true;
         playback_sim_step_track(true);
     }
 }
@@ -313,6 +395,35 @@ void playback_sim_card_removed(void)
     {
         playback_sim_enter_stopped(PLAYBACK_STOP_REASON_CARD_REMOVED);
     }
+}
+
+/**
+ * @brief B 键：让之后一次开启应答为坏文件；连按 k 次则之后 k 次开启都是坏文件。
+ * @note  曲目数为 10 时连按 10 次再换曲，整轮都坏，按 ALL_BAD 停止。
+ */
+void playback_sim_mark_bad(void)
+{
+    if (playback_sim.bad_pending < UINT16_MAX)
+    {
+        playback_sim.bad_pending++;
+    }
+    printf("[playback] bad pending %u\n", (unsigned)playback_sim.bad_pending);
+}
+
+/**
+ * @brief R 键：按 K1 枚举顺序取下一个非 NONE 停止原因，立即进入停止（K4 副作用同真实后端）。
+ * @note  ALL_BAD 之后回到 CARD_REMOVED。停止态也再进入一次（停止次数 +1），便于逐个拍短语帧；
+ *        注入 AUDIO_FAULT 会锁存，之后停止态的 TOGGLE、SELECT 只让停止次数 +1。
+ */
+void playback_sim_stop_next_reason(void)
+{
+    Playback_StopReasonTypeDef reason = playback_sim.last_forced_reason;
+
+    reason = (reason >= PLAYBACK_STOP_REASON_ALL_BAD) ?
+             PLAYBACK_STOP_REASON_CARD_REMOVED :
+             (Playback_StopReasonTypeDef)(reason + 1);
+    playback_sim.last_forced_reason = reason;
+    playback_sim_enter_stopped(reason);
 }
 
 /**
