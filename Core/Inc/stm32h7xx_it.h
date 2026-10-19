@@ -53,6 +53,7 @@ void UsageFault_Handler(void);
 void DebugMon_Handler(void);
 void EXTI3_IRQHandler(void);
 void DMA1_Stream0_IRQHandler(void);
+void DMA1_Stream1_IRQHandler(void);
 void EXTI9_5_IRQHandler(void);
 void SPI1_IRQHandler(void);
 void SDMMC1_IRQHandler(void);

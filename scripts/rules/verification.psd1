@@ -8,6 +8,9 @@
         'w25qxx'
         'resource_pack'
         'storage_catalog'
+        'storage_audio_stream'
+        'playback_service'
+        'playback_task'
     )
 
     # 每条规则描述一个主机测试工程真正编译或覆盖的生产路径。
@@ -77,10 +80,35 @@
             )
         }
         @{
+            Name = 'storage_audio_stream'
+            PathPatterns = @(
+                '^APP/tasks/storage/stream/'
+                '^Tests/storage_audio_stream/'
+            )
+        }
+        @{
             Name = 'storage_catalog'
             PathPatterns = @(
                 '^APP/tasks/storage/catalog/'
                 '^Tests/storage_catalog/'
+            )
+        }
+        @{
+            Name = 'playback_service'
+            PathPatterns = @(
+                '^Service/playback/'
+                '^Middlewares/Third_Party/minimp3/'
+                '^Tests/playback_service/'
+            )
+        }
+        @{
+            Name = 'playback_task'
+            PathPatterns = @(
+                '^APP/tasks/playback/'
+                '^Service/playback/playback_service\.h$'
+                '^Service/playback/playback_service_config\.h$'
+                '^Service/service\.h$'
+                '^Tests/playback_task/'
             )
         }
     )

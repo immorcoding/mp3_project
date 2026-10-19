@@ -1,6 +1,6 @@
 # Service
 
-本目录包含跨 Platform 和 Component 的产品流程 Module。当前有异步日志投递、FatFs 卷操作、GUI 运行时与资源包加载。曲库扫描属于 APP Storage Task，不在本目录。未来播放或跨任务存储命令可在此增加独立目录。
+本目录包含跨 Platform 和 Component 的产品流程 Module。当前有异步日志投递、FatFs 卷操作、GUI 运行时、资源包加载与播放解码。曲库扫描属于 APP Storage Task，不在本目录。未来跨任务存储命令可在此增加独立目录。
 
 ## 公开 Interface
 
@@ -9,12 +9,14 @@
 - `Service_Filesystem_*`：Storage Task 独占期间的 FatFs 卷生命周期、卷感知文件/目录访问和启动诊断；调用者按需包含 `filesystem_types.h`、`filesystem_service.h`、`filesystem_file.h`、`filesystem_directory.h` 或 `filesystem_flash_access.h`。
 - `Service_GUI_*`：GUI Task 内的 LVGL 生命周期推进、显示 DMA 刷新协调和触摸输入接入。
 - `Service_Resource_*`：任务启动前映射并校验 RPKC1，把当前必需资源加载到链接器预留的 SDRAM。
+- `Service_Playback_*`：播放任务交来的音频帧字节经线性输入窗口解码为 PCM 帧，再经 Platform 音频的 PCM 半区循环 DMA 放出（预填、补满、欠载恢复、暂停与恢复、流尾排空），只回报事实，不认识曲目与文件；详见 [playback/README.md](playback/README.md)。
 
 ## 编译期依赖
 
 - `Platform` 与 `Components` 的公开 Interface；
 - FreeRTOS；
-- 仅文件系统 Module 可直接使用 FatFs `f_*`。
+- 仅文件系统 Module 可直接使用 FatFs `f_*`；
+- 仅播放 Module 的解码实现可直接包含 `Middlewares/Third_Party/minimp3/`。
 
 ## 运行时请求路径
 

@@ -13,6 +13,7 @@
 #include "APP/tasks/storage/sd/storage_sd.h"
 #include "APP/tasks/storage/storage_task.h"
 #include "APP/tasks/storage/catalog/storage_catalog.h"
+#include "APP/tasks/storage/stream/storage_audio_stream.h"
 #include "APP/tasks/storage/benchmark/storage_sd_benchmark.h"
 #include "APP/app_config.h"
 
@@ -307,6 +308,7 @@ Storage_StatusTypeDef storage_sd_process(void)
 
     if (event == PLATFORM_SD_EVENT_INSERTED)
     {
+        storage_audio_stream_card_removed(); /* 换卡视同拔卡：旧卡的 FIL 先关。 */
         storage_sd_log_card_ready("Card inserted");
         if (storage_sd_mount() != STORAGE_OK)
         {
@@ -328,6 +330,7 @@ Storage_StatusTypeDef storage_sd_process(void)
 
     if (event == PLATFORM_SD_EVENT_REMOVED)
     {
+        storage_audio_stream_card_removed(); /* 先关 FIL 再写 CARD_REMOVED，卸载卷前不得有打开对象。 */
         (void)storage_catalog_invalidate();
         Storage_StatusTypeDef unmount_status = storage_sd_unmount();
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, storage_sd_log_tag, "Card removed.");
