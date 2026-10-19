@@ -59,7 +59,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path -Path $PSScriptRoot -ChildPath 'harness_helpers.ps1')
 . (Join-Path -Path $PSScriptRoot -ChildPath 'hooks/agent_hook_helpers.ps1')
 
-$script:DoxygenEmptyTree = '4b825dc642cb6eb9a060e54bf8d69288fbb56904'
+$script:DoxygenEmptyTree = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
 # 一次扫描同时抹掉预处理行、块注释、行注释、字符串和字符常量；左到右最早匹配优先，
 # 所以字符串里的 // 或 /* 不会被误当注释。
@@ -804,8 +804,10 @@ function Get-DoxygenPushBaseRef {
     }
 
     $oldest = $commits[$commits.Count - 1]
-    $fields = @((Get-HarnessGitOutputLines -RepositoryRoot $RepositoryRoot -Arguments @(
-                'rev-list', '--parents', '-n', '1', $oldest))[0] -split '\s+')
+    # 单行输出会被管道展开成字符串，必须先包成数组再取 [0]。
+    $parentLine = @(Get-HarnessGitOutputLines -RepositoryRoot $RepositoryRoot -Arguments @(
+            'rev-list', '--parents', '-n', '1', $oldest))[0]
+    $fields = @($parentLine -split '\s+')
     if ($fields.Count -ge 2) {
         return $fields[1]
     }

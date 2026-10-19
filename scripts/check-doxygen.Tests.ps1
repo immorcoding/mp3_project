@@ -548,6 +548,23 @@ int legacy_second(int y)
     Assert-FixtureClean -Label '范围终点已修好' -Source 'Range' -BaseRef $baselineRef
     Assert-FixtureViolation -Label '只看到修复前一段' -Pattern 'src/new\.c' -Source 'Range' -BaseRef $baselineRef -HeadRef 'HEAD~1'
 
+    # 11b. 推送范围起点：已有远端分支取远端 SHA；新分支取最早未推送提交的父提交；根提交用空树
+    $baselineSha = @(Get-HarnessGitOutputLines -RepositoryRoot $fixture -Arguments @('rev-parse', 'baseline'))[0]
+    $headSha = @(Get-HarnessGitOutputLines -RepositoryRoot $fixture -Arguments @('rev-parse', 'HEAD'))[0]
+    $zeroSha = '0' * 40
+    Invoke-FixtureGit -Arguments @('update-ref', 'refs/remotes/origin/main', $baselineSha)
+    $existing = [pscustomobject]@{ LocalSha = $headSha; RemoteSha = $baselineSha }
+    $newBranch = [pscustomobject]@{ LocalSha = $headSha; RemoteSha = $zeroSha }
+    $deleted = [pscustomobject]@{ LocalSha = $zeroSha; RemoteSha = $headSha }
+    Assert-DoxygenTrue ((Get-DoxygenPushBaseRef -RepositoryRoot $fixture -RemoteName origin -Update $existing) -eq $baselineSha) '已有远端分支应取远端 SHA'
+    Assert-DoxygenTrue ((Get-DoxygenPushBaseRef -RepositoryRoot $fixture -RemoteName origin -Update $newBranch) -eq $baselineSha) '新分支应取最早未推送提交的父提交'
+    Assert-DoxygenTrue ($null -eq (Get-DoxygenPushBaseRef -RepositoryRoot $fixture -RemoteName origin -Update $deleted)) '删除 ref 无需检查'
+    Invoke-FixtureGit -Arguments @('update-ref', '-d', 'refs/remotes/origin/main')
+    $rootBase = Get-DoxygenPushBaseRef -RepositoryRoot $fixture -RemoteName origin -Update $newBranch
+    Assert-DoxygenTrue ($rootBase -eq '4b825dc642cb6eb9a060e54bf8d69288fbee4904') "含根提交的新分支应从空树起算，实际 $rootBase"
+    $rootViolations = @((Get-DoxygenCheckResult -RepositoryRoot $fixture -BaseRef $rootBase -HeadRef 'baseline').Violations)
+    Assert-DoxygenTrue (($rootViolations -join "`n") -match 'legacy_naked') '从空树起算时整个仓库都是新增，应报告裸函数'
+
     # 12. 存量报告：只计数，不抛出
     $inventory = Get-DoxygenReport -RepositoryRoot $fixture
     Assert-DoxygenTrue ($inventory.FunctionCount -ge 5) "报告应统计全部手写函数，实际 $($inventory.FunctionCount)"
