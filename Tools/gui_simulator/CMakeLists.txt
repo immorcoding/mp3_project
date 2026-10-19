@@ -55,13 +55,18 @@ target_compile_definitions(lvgl_sim PUBLIC LV_CONF_PATH=sim_lv_conf.h)
 target_compile_options(lvgl_sim PRIVATE -w)
 
 # ---------------------------------------------------------------------------
-# 模拟器本体：真实 Service/gui + SDL 替身
+# 模拟器本体：真实 Service/gui + 真实 APP 音乐分区 + SDL/Storage 替身
 # ---------------------------------------------------------------------------
 file(GLOB_RECURSE SERVICE_GUI_SOURCES CONFIGURE_DEPENDS
     "${REPO_ROOT}/Service/gui/*.c"
 )
 # 壁纸像素区只在固件中由链接脚本放进 SDRAM 资源区；模拟器由 fakes/resource_sim.c 提供。
 list(FILTER SERVICE_GUI_SOURCES EXCLUDE REGEX "gui_service_view_wallpaper_region\\.c$")
+
+# 真实的 APP 音乐分区与播放游标；它依赖的 Storage 窗口槽与 SD 状态由 fakes/storage_sim.c 提供。
+file(GLOB APP_GUI_MUSIC_SOURCES CONFIGURE_DEPENDS
+    "${REPO_ROOT}/APP/tasks/gui/music/*.c"
+)
 
 add_executable(gui_simulator
     sim_main.c
@@ -72,7 +77,10 @@ add_executable(gui_simulator
     fakes/platform_touch_sim.c
     fakes/freertos_sim.c
     fakes/resource_sim.c
+    fakes/storage_sim.c
     ${SERVICE_GUI_SOURCES}
+    ${APP_GUI_MUSIC_SOURCES}
+    "${REPO_ROOT}/APP/tasks/storage/catalog/storage_playback_cursor.c"
 )
 
 # shim/ 必须排在仓库根之前：Service/gui 以仓库相对路径包含 FreeRTOS 头，
