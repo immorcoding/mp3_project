@@ -137,6 +137,13 @@
         '^Platform/lcd/platform_lcd\.h$'
         '^Platform/touch/platform_touch\.h$'
         '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+        # 模拟器编译真实 APP 音乐分区与播放游标；fakes/storage_sim.c 实现 Storage 窗口槽与 SD 状态头。
+        '^APP/tasks/gui/music/'
+        '^APP/tasks/storage/catalog/storage_playback_cursor\.[ch]$'
+        '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
+        '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
+        '^APP/tasks/storage/storage_task(?:_config)?\.h$'
+        '^Service/filesystem/filesystem_types\.h$'
     )
 
     # 无法映射的可执行、构建或 Harness 变化保守回退到全部主机测试。
