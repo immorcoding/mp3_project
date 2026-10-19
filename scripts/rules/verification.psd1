@@ -137,9 +137,11 @@
         '^Platform/lcd/platform_lcd\.h$'
         '^Platform/touch/platform_touch\.h$'
         '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
-        # 模拟器编译真实 APP 音乐分区与播放游标；fakes/storage_sim.c 实现 Storage 窗口槽与 SD 状态头。
+        # 模拟器编译真实 APP 音乐分区；fakes/storage_sim.c 实现 Storage 窗口槽与 SD 状态头，
+        # fakes/playback_sim.c 实现播放合同头（FIFO 深度取播放任务配置），fakes/log_sim.c 实现 Service Log 头。
         '^APP/tasks/gui/music/'
-        '^APP/tasks/storage/catalog/storage_playback_cursor\.[ch]$'
+        '^APP/tasks/playback/playback_(?:contract|task_config)\.h$'
+        '^Service/log/log_service(?:_config)?\.h$'
         '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
         '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
         '^APP/tasks/storage/storage_task(?:_config)?\.h$'
