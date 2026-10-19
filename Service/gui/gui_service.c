@@ -342,7 +342,7 @@ Service_StatusTypeDef Service_GUI_TransportApply(bool playing)
 
 /**
  * @brief 按百分比更新 Now Playing 进度条；按下拖动时不写回。
- * @param[in] percent 0..100 的假进度；大于 100 时夹到 100。
+ * @param[in] percent 0..100 的播放进度；大于 100 时夹到 100。
  * @retval SERVICE_OK 已写入，或拖动中已跳过。
  * @retval SERVICE_NOT_READY 进度条对象尚未创建。
  * @note 只能由同一 GUI Task 调用。不解码、不真正 seek。
@@ -353,13 +353,26 @@ Service_StatusTypeDef Service_GUI_ProgressApply(uint8_t percent)
 }
 
 /**
+ * @brief 记下并显示 Now Playing 时间 Label 的“已解码/总时长”。
+ * @param[in] position_ms 已解码时间，按整秒向下取整显示为 `m:ss`。
+ * @param[in] duration_ms 总时长；0 表示未知，显示 `--:--`。
+ * @retval SERVICE_OK 已写入，或文本未变已跳过。
+ * @retval SERVICE_NOT_READY 时间 Label 尚未创建（Init 未成功）。
+ * @note 只能由同一 GUI Task 在 Init() 成功后调用。不按墙钟走表；文本未变时不重写 Label。
+ */
+Service_StatusTypeDef Service_GUI_TimeApply(uint32_t position_ms, uint32_t duration_ms)
+{
+    return service_gui_main_transport_apply_time(position_ms, duration_ms);
+}
+
+/**
  * @brief 按 playing 起转或停转 Now Playing 唱盘；reset_angle 先归零。
  * @param[in] playing 为真从当前角度顺时针匀速续转（6 s 一圈），为假停在当前角度。
  * @param[in] reset_angle 为真先把角度归零，用于切歌与清空播放内容。
  * @retval SERVICE_OK 动画状态已与参数一致。
  * @retval SERVICE_NOT_READY 唱盘尚未准备。
- * @note 只能由同一 GUI Task 调用。调用方在 playing 变化、游标变化或清空时调用，
- *       Service 不读播放游标。重复调用不叠加动画。
+ * @note 只能由同一 GUI Task 调用。调用方按播放快照在三态变化或需要归零时调用，
+ *       Service 不读播放快照。重复调用不叠加动画。
  */
 Service_StatusTypeDef Service_GUI_VinylApply(bool playing, bool reset_angle)
 {

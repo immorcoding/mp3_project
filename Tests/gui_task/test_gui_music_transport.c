@@ -814,6 +814,104 @@ static void test_vinyl_does_not_reset_on_identity_while_frozen(void)
 }
 
 /**
+ * @brief 接线回归：开机从停止态按播放，后端先报“开启中、代次 0”，应答后确认代次与总时长。
+ * @note  场景同模拟器 music_snapshot：开启中无高亮、时间 0/未知；确认代次时按 C8 把
+ *        0 -> 非 0 当作身份变化归零一次唱盘（此时位置仍为 0）。
+ */
+static void test_play_from_boot_confirms_generation_after_opening(void)
+{
+    GUI_MusicTransportTypeDef transport;
+    GUI_MusicTransportDecisionTypeDef decision;
+    Playback_SnapshotTypeDef snapshot = make_snapshot(PLAYBACK_STATE_STOPPED, false, 0U, 0U);
+
+    fake_send_reset();
+    gui_music_transport_init(&transport);
+    decision = reduce(&transport, &snapshot, 1U);
+    assert(decision.state == PLAYBACK_STATE_STOPPED);
+    assert(decision.highlight_index == GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT);
+    assert(decision.status_phrase == NULL);
+
+    assert(gui_music_transport_send(&transport, PLAYBACK_COMMAND_TOGGLE, 0U, 0U) == PLAYBACK_OK);
+    snapshot = make_snapshot(PLAYBACK_STATE_PLAYING, true, 0U, 0U);
+    snapshot.HandledCommandSeq = 1U;
+    decision = reduce(&transport, &snapshot, 1U);
+    assert(decision.caught_up == true);
+    assert(decision.state == PLAYBACK_STATE_PLAYING);
+    assert(decision.highlight_apply == true);
+    assert(decision.highlight_index == GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT);
+    assert(decision.duration_ms == 0U);
+    assert(decision.progress_percent == 0U);
+    assert(decision.vinyl_playing == true);
+
+    snapshot.Generation = 1U;
+    snapshot.DurationMs = 150000U;
+    decision = reduce(&transport, &snapshot, 1U);
+    assert(decision.highlight_index == 0U);
+    assert(decision.duration_ms == 150000U);
+    assert(decision.vinyl_reset_angle == true);
+
+    snapshot.PositionMs = 1500U;
+    decision = reduce(&transport, &snapshot, 1U);
+    assert(decision.vinyl_reset_angle == false);
+    assert(decision.progress_percent == 1U);
+}
+
+/**
+ * @brief 接线回归：回显落后时换上新窗口，新窗口的高亮仍按最后一份已追上的快照判定。
+ * @note  gui_music 在 APPLY 时用 withdraw_highlight(新窗口代次) 套高亮，与 B6 撤回同一规则。
+ */
+static void test_new_window_highlight_uses_last_caught_up_snapshot(void)
+{
+    GUI_MusicTransportTypeDef transport;
+    Playback_SnapshotTypeDef snapshot = make_snapshot(PLAYBACK_STATE_PLAYING, true, 1U, 3U);
+
+    fake_send_reset();
+    gui_music_transport_init(&transport);
+    (void)reduce(&transport, &snapshot, 1U);
+    assert(gui_music_transport_send(&transport, PLAYBACK_COMMAND_NEXT, 0U, 0U) == PLAYBACK_OK);
+
+    snapshot.Index = 4U;
+    (void)reduce(&transport, &snapshot, 1U);
+
+    assert(gui_music_transport_withdraw_highlight(&transport, 1U) == 3U);
+    assert(gui_music_transport_withdraw_highlight(&transport, 2U) == GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT);
+}
+
+/**
+ * @brief 接线回归：挂起的后端被点行填满 FIFO，第 9 条被拒后撤回到冻结的曲目；恢复后一次处理
+ *        完全部命令，回显追上，高亮改为最后一条 SELECT 的位置（场景 music_echo）。
+ */
+static void test_queue_full_withdraw_then_catch_up_highlights_last_select(void)
+{
+    GUI_MusicTransportTypeDef transport;
+    GUI_MusicTransportDecisionTypeDef decision;
+    Playback_SnapshotTypeDef snapshot = make_snapshot(PLAYBACK_STATE_PLAYING, true, 1U, 0U);
+    uint16_t row;
+
+    fake_send_reset();
+    gui_music_transport_init(&transport);
+    (void)reduce(&transport, &snapshot, 1U);
+
+    for (row = 1U; row <= 8U; row++)
+    {
+        assert(gui_music_transport_send(&transport, PLAYBACK_COMMAND_SELECT, 1U, row) == PLAYBACK_OK);
+        decision = reduce(&transport, &snapshot, 1U);
+        assert(decision.highlight_apply == false);
+    }
+
+    fake_send_status = PLAYBACK_QUEUE_FULL;
+    assert(gui_music_transport_send(&transport, PLAYBACK_COMMAND_SELECT, 1U, 9U) == PLAYBACK_QUEUE_FULL);
+    assert(gui_music_transport_withdraw_highlight(&transport, 1U) == 0U);
+
+    snapshot.Index = 8U;
+    snapshot.HandledCommandSeq = 8U;
+    decision = reduce(&transport, &snapshot, 1U);
+    assert(decision.caught_up == true);
+    assert(decision.highlight_apply == true);
+    assert(decision.highlight_index == 8U);
+}
+
+/**
  * @brief 空指针不崩溃：归约输出全零且无高亮，发送按失败处理且不调用后端。
  */
 static void test_null_arguments_are_safe(void)
@@ -876,6 +974,9 @@ int main(void)
     test_vinyl_resets_when_track_identity_changes();
     test_vinyl_resets_when_position_goes_backwards();
     test_vinyl_does_not_reset_on_identity_while_frozen();
+    test_play_from_boot_confirms_generation_after_opening();
+    test_new_window_highlight_uses_last_caught_up_snapshot();
+    test_queue_full_withdraw_then_catch_up_highlights_last_select();
     test_null_arguments_are_safe();
 
     puts("gui_music_transport_tests: all tests passed");

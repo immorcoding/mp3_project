@@ -62,7 +62,15 @@ Assert-HarnessEqual -Expected $true -Actual $serviceHeaderImpact.RequiresGuiScen
 $guiMusicImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/gui/music/gui_music.c')
 Assert-HarnessEqual -Expected $true -Actual $guiMusicImpact.RequiresGuiScenarios -Message '模拟器编译的 APP 音乐分区变化必须跑场景回归'
 $cursorImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_playback_cursor.c')
-Assert-HarnessEqual -Expected $true -Actual $cursorImpact.RequiresGuiScenarios -Message '模拟器编译的播放游标变化必须跑场景回归'
+Assert-HarnessEqual -Expected $false -Actual $cursorImpact.RequiresGuiScenarios -Message '模拟器不再编译的播放游标变化不跑场景回归'
+$playbackContractGuiImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/playback/playback_contract.h')
+Assert-HarnessEqual -Expected $true -Actual $playbackContractGuiImpact.RequiresGuiScenarios -Message '假播放后端实现的合同头变化必须跑场景回归'
+$playbackConfigGuiImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/playback/playback_task_config.h')
+Assert-HarnessEqual -Expected $true -Actual $playbackConfigGuiImpact.RequiresGuiScenarios -Message '假播放后端引用的命令 FIFO 深度变化必须跑场景回归'
+$playbackMachineGuiImpact =Get-HarnessImpact -ChangedPath @('APP/tasks/playback/playback_machine.c')
+Assert-HarnessEqual -Expected $false -Actual $playbackMachineGuiImpact.RequiresGuiScenarios -Message '模拟器不编译的播放状态机变化不跑场景回归'
+$logHeaderGuiImpact = Get-HarnessImpact -ChangedPath @('Service/log/log_service.h')
+Assert-HarnessEqual -Expected $true -Actual $logHeaderGuiImpact.RequiresGuiScenarios -Message '假日志实现的 Service Log 头变化必须跑场景回归'
 $listbufferHeaderImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_listbuffer.h')
 Assert-HarnessEqual -Expected $true -Actual $listbufferHeaderImpact.RequiresGuiScenarios -Message '假 Storage 实现的窗口槽头变化必须跑场景回归'
 $listbufferSourceImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_listbuffer.c')

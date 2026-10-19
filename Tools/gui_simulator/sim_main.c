@@ -6,12 +6,13 @@
   * @details
   *          循环结构与 APP/tasks/gui/gui_task.c 一致：ConsumeInput -> 产品分区 step
   *          -> Service_GUI_Process()。产品分区是真实的 APP gui_music；它依赖的
-  *          Storage 窗口槽与 SD 状态由 fakes/storage_sim.c 代替，每圈先于
-  *          gui_music_step() 推进一次。
+  *          Storage 窗口槽与 SD 状态由 fakes/storage_sim.c 代替，播放合同由
+  *          fakes/playback_sim.c 代替，两者每圈先于 gui_music_step() 推进一次。
   *
-  *          键盘：T 切换 Default/Solid 主题；C 拔卡/重新挂载（代次 +1）；G 模拟
-  *          重扫（代次 +1，已显示窗口保留到下一次 request）；A 打印 LVGL 运行中
-  *          动画数（核对唱盘动画不叠加）；Esc 退出。脚本参数见 sim_script.h。
+  *          键盘：T 切换 Default/Solid 主题；C 拔卡/重新挂载（代次 +1，拔卡时假
+  *          后端按拔卡停止）；G 模拟重扫（代次 +1，已显示窗口保留到下一次
+  *          request）；S 挂起/恢复假后端的命令处理；A 打印 LVGL 运行中动画数
+  *          （核对唱盘动画不叠加）；Esc 退出。脚本参数见 sim_script.h。
   ******************************************************************************
   */
 
@@ -25,6 +26,7 @@
 
 #include "APP/tasks/gui/music/gui_music.h"
 #include "Service/gui/gui_service.h"
+#include "fakes/playback_sim.h"
 #include "fakes/resource_sim.h"
 #include "fakes/storage_sim.h"
 #include "sim_clock.h"
@@ -36,12 +38,25 @@
 
 static uint8_t sim_theme = SERVICE_GUI_THEME_STARTUP;
 
+/**
+ * @brief 处理一个按键（交互键盘与脚本 --key 共用）。
+ * @param[in] key ASCII 键值，大小写等价。
+ */
 static void sim_handle_key(char key)
 {
     if ((key == 'c') || (key == 'C'))
     {
-        /* 拔卡/重新挂载：真实 gui_music 下一圈按窗口协议 CLEAR 或重新 request。 */
-        storage_sim_toggle_mount();
+        /* 拔卡/重新挂载：真实 gui_music 下一圈按窗口协议 CLEAR 或重新 request；
+           拔卡时假后端同时按 K5 停止，三态、唱盘与时间由快照驱动。 */
+        if (!storage_sim_toggle_mount())
+        {
+            playback_sim_card_removed();
+        }
+        return;
+    }
+    if ((key == 's') || (key == 'S'))
+    {
+        playback_sim_toggle_suspend();
         return;
     }
     if ((key == 'g') || (key == 'G'))
@@ -151,9 +166,10 @@ int main(int argc, char *argv[])
     }
 
     storage_sim_init();
+    playback_sim_init();
     gui_music_init();
     printf("[sim] running. T: toggle theme, C: card remove/mount, G: rescan, "
-           "A: anim count, Esc: quit\n");
+           "S: suspend/resume playback, A: anim count, Esc: quit\n");
     start_ms = sim_clock_now();
 
     while (sim_pump_events())
@@ -170,6 +186,7 @@ int main(int argc, char *argv[])
         (void)Service_GUI_ConsumeInput(&input);
 
         storage_sim_step();
+        playback_sim_step(sim_clock_now());
         gui_music_step(&input);
 
         Service_GUI_Process();
