@@ -122,6 +122,19 @@ function Invoke-PushedCommitValidation {
         . (Join-Path -Path $snapshotRoot -ChildPath 'scripts/check-generated-write.ps1')
         Invoke-GeneratedWriteCheck -RepositoryRoot $snapshotRoot -ChangedPath $changedPaths `
             -AllowGeneratedUpdate:$AllowGenerated
+
+        # STY-2 机械项：只看待推送提交范围内新增/修改的函数；旧提交没有该 checker 时跳过。
+        $doxygenScript = Join-Path -Path $snapshotRoot -ChildPath 'scripts/check-doxygen.ps1'
+        if (Test-Path -LiteralPath $doxygenScript -PathType Leaf) {
+            . $doxygenScript
+            foreach ($item in $Update) {
+                $doxygenBase = Get-DoxygenPushBaseRef -RepositoryRoot $RepositoryRoot `
+                    -RemoteName $PushRemoteName -Update $item
+                if ($null -ne $doxygenBase) {
+                    Invoke-DoxygenCheck -RepositoryRoot $RepositoryRoot -BaseRef $doxygenBase -HeadRef $Commit
+                }
+            }
+        }
         $impact = Get-HarnessImpact -ChangedPath $changedPaths
         $RequiresHardware.Value = [bool]$impact.RequiresHardware
         Invoke-ChangedValidationInTree -TreeRoot $snapshotRoot -Impact $impact `
@@ -150,6 +163,7 @@ Complete-Utf8EntryScript -Action {
     try {
         $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
         $generatedScript = Join-Path -Path $PSScriptRoot -ChildPath 'check-generated-write.ps1'
+        $doxygenScript = Join-Path -Path $PSScriptRoot -ChildPath 'check-doxygen.ps1'
         $requiresHardware = $false
 
         if ($Push) {
@@ -194,6 +208,13 @@ Complete-Utf8EntryScript -Action {
             Invoke-PowerShellScript -ScriptPath $generatedScript -Parameters @{
                 ChangedPath = $paths
                 AllowGeneratedUpdate = $AllowGeneratedUpdate
+            }
+            # 工作树模式的 Doxygen 检查已在 check_fast 内；给了基线提交时额外检查 BaseRef..HeadRef。
+            if ((-not $changedPathSpecified) -and (-not [string]::IsNullOrWhiteSpace($BaseRef))) {
+                Invoke-PowerShellScript -ScriptPath $doxygenScript -Parameters @{
+                    BaseRef = $BaseRef
+                    HeadRef = $HeadRef
+                }
             }
             $impact = Get-HarnessImpact -ChangedPath $paths
             $requiresHardware = $impact.RequiresHardware
