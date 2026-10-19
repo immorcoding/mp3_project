@@ -34,18 +34,31 @@ function Invoke-HarnessQuietStep {
         [Parameter(Mandatory)]
         [string]$ScriptPath,
 
-        [string[]]$ArgumentList = @()
+        [hashtable]$Parameters = @{}
     )
 
     $powerShellPath = (Get-Process -Id $PID).Path
     $stdoutPath = [System.IO.Path]::GetTempFileName()
     $stderrPath = [System.IO.Path]::GetTempFileName()
     try {
-        $quotedArguments = ($ArgumentList | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }) -join ' '
+        # 与 Invoke-PowerShellScript 同形的参数表：布尔、字符串与字符串数组按字面量展开。
+        $splat = New-Object System.Collections.Generic.List[string]
+        foreach ($key in $Parameters.Keys) {
+            $value = $Parameters[$key]
+            if ($value -is [bool]) {
+                $literal = if ($value) { '$true' } else { '$false' }
+            }
+            else {
+                $literal = '@(' + ((@($value) | ForEach-Object { "'" + ([string]$_ -replace "'", "''") + "'" }) -join ',') + ')'
+            }
+            $splat.Add("'$key'=$literal")
+        }
+        $quotedArguments = '@{' + ($splat -join ';') + '}'
         # 解析错误或未捕获异常不会设置 LASTEXITCODE，必须显式转成非零退出。
         $command = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding `$false; " +
             "`$ErrorActionPreference = 'Stop'; `$ProgressPreference = 'SilentlyContinue'; `$global:LASTEXITCODE = 0; " +
-            "try { & '" + ($ScriptPath -replace "'", "''") + "' $quotedArguments; " +
+            "try { " +
+            "`$quietParameters = $quotedArguments; & '" + ($ScriptPath -replace "'", "''") + "' @quietParameters; " +
             "if (`$null -eq `$LASTEXITCODE) { exit 0 }; exit `$LASTEXITCODE } " +
             "catch { [Console]::Error.WriteLine(`$_.Exception.Message); exit 1 }"
         # 用 EncodedCommand 规避多层引号转义。

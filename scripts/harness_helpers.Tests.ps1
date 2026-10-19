@@ -295,6 +295,11 @@ try {
     $okOutput = @(Invoke-HarnessQuietStep -ScriptPath $okScript)
     Assert-HarnessEqual -Expected 0 -Actual $okOutput.Count -Message '静默步骤成功时不应输出任何内容'
 
+    $paramScript = Join-Path -Path $quietRoot -ChildPath 'param.ps1'
+    [System.IO.File]::WriteAllText($paramScript, "param([string[]]`$Module, [switch]`$Flag)`nif ((`$Module -join ',') -ne 'a,b''c' -or -not `$Flag) { exit 4 }`n", (New-Object System.Text.UTF8Encoding $true))
+    $paramOutput = @(Invoke-HarnessQuietStep -ScriptPath $paramScript -Parameters @{ Module = @('a', "b'c"); Flag = $true })
+    Assert-HarnessEqual -Expected 0 -Actual $paramOutput.Count -Message '静默步骤应按参数表展开数组与开关'
+
     $failScript = Join-Path -Path $quietRoot -ChildPath 'fail.ps1'
     [System.IO.File]::WriteAllText($failScript, "Write-Output '失败细节-stdout'`n[Console]::Error.WriteLine('失败细节-stderr')`nexit 3`n", (New-Object System.Text.UTF8Encoding $true))
     $failMessage = $null

@@ -43,8 +43,10 @@ function Invoke-ChangedValidationInTree {
         if (-not [string]::IsNullOrWhiteSpace($RequestedHostCompiler)) {
             $hostParameters.HostCompiler = $RequestedHostCompiler
         }
-        Invoke-PowerShellScript -ScriptPath (Join-Path -Path $TreeRoot -ChildPath 'scripts/test-host.ps1') `
+        # 成功时静默（cmake/ninja/ctest 输出只在失败时展示），只保留汇总行。
+        Invoke-HarnessQuietStep -ScriptPath (Join-Path -Path $TreeRoot -ChildPath 'scripts/test-host.ps1') `
             -Parameters $hostParameters
+        Write-NativeUtf8Line -Text "CHANGED：主机测试通过（$($Impact.HostModules -join ', ')）。"
     }
 
     # 旧提交的 Impact 没有该属性；推送快照按其自身规则判定。
@@ -67,7 +69,8 @@ function Invoke-ChangedValidationInTree {
             }
         }
         Write-NativeUtf8Line -Text 'CHANGED：变更命中 GUI 路径，运行模拟器场景回归。'
-        Invoke-PowerShellScript -ScriptPath $scenarioScript -Parameters $scenarioParameters
+        Invoke-HarnessQuietStep -ScriptPath $scenarioScript -Parameters $scenarioParameters
+        Write-NativeUtf8Line -Text 'CHANGED：模拟器场景回归通过。'
     }
 }
 
