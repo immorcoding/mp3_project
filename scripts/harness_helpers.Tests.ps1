@@ -327,6 +327,39 @@ Restore-InheritedGitEnvironment -Saved $probeEnvironment
 Assert-HarnessEqual -Expected 'Z:/hook-fixture/.git' -Actual $env:GIT_DIR -Message '恢复后应还原 GIT_DIR。'
 Remove-Item -Path Env:GIT_DIR
 
+# 静默步骤：成功时不输出，失败时输出缓冲的完整细节并抛错（退出码不变）。
+$quietRoot = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ('quiet-step-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $quietRoot -Force | Out-Null
+try {
+    $okScript = Join-Path -Path $quietRoot -ChildPath 'ok.ps1'
+    [System.IO.File]::WriteAllText($okScript, "Write-Output '噪声-成功'`n[Console]::Error.WriteLine('噪声-成功-stderr')`n", (New-Object System.Text.UTF8Encoding $true))
+    $okOutput = @(Invoke-HarnessQuietStep -ScriptPath $okScript)
+    Assert-HarnessEqual -Expected 0 -Actual $okOutput.Count -Message '静默步骤成功时不应输出任何内容'
+
+    $paramScript = Join-Path -Path $quietRoot -ChildPath 'param.ps1'
+    [System.IO.File]::WriteAllText($paramScript, "param([string[]]`$Module, [switch]`$Flag)`nif ((`$Module -join ',') -ne 'a,b''c' -or -not `$Flag) { exit 4 }`n", (New-Object System.Text.UTF8Encoding $true))
+    $paramOutput = @(Invoke-HarnessQuietStep -ScriptPath $paramScript -Parameters @{ Module = @('a', "b'c"); Flag = $true })
+    Assert-HarnessEqual -Expected 0 -Actual $paramOutput.Count -Message '静默步骤应按参数表展开数组与开关'
+
+    $failScript = Join-Path -Path $quietRoot -ChildPath 'fail.ps1'
+    [System.IO.File]::WriteAllText($failScript, "Write-Output '失败细节-stdout'`n[Console]::Error.WriteLine('失败细节-stderr')`nexit 3`n", (New-Object System.Text.UTF8Encoding $true))
+    $failMessage = $null
+    try {
+        Invoke-HarnessQuietStep -ScriptPath $failScript
+    }
+    catch {
+        $failMessage = $_.Exception.Message
+    }
+    Assert-HarnessEqual -Expected $true -Actual ($null -ne $failMessage) -Message '静默步骤失败时必须抛错以保持非零退出'
+    Assert-HarnessEqual -Expected $true -Actual ($failMessage -like '*退出码：3*') -Message '失败消息应带原退出码'
+    $failText = $failMessage
+    Assert-HarnessEqual -Expected $true -Actual ($failText -like '*失败细节-stdout*') -Message '失败时应输出缓冲的标准输出'
+    Assert-HarnessEqual -Expected $true -Actual ($failText -like '*失败细节-stderr*') -Message '失败时应输出缓冲的标准错误'
+}
+finally {
+    Remove-Item -LiteralPath $quietRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Restore-InheritedGitEnvironment -Saved $inheritedGitEnvironment
 
 Write-Output 'harness_helpers 路由测试通过。'
