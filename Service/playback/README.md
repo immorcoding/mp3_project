@@ -53,7 +53,7 @@ PCM 半区是两个连续的静态半区（每个 1152 立体声帧、16 位，�
 - **同曲恢复**（D9）：暂停时记下 Platform 冻结的释放数 n。n 为奇数说明 DMA 正在读半区 1，恢复要重放它，而 `Start` 总是从半区 0 开始，所以交换两个半区的内容和种类（最后的数据半区的标记跟着内容走），再 Start。暂停期间已读完的半区在暂停态推进里补满但不提交。释放数超出补满数两个以上（连续欠载）时直接丢弃重来。重放不让已解码时间回退。
 - **暂停中换曲的预填**：`BeginStream` 后先 `PauseOutput`，推进只解首帧并补满两个半区、回报首帧信息，不 Start；恢复后才出声。
 - **STOP_FAILED 之后**（B10）：不再写 PCM 半区、不再 Start/Submit，只回报 `StopFailed`。
-- **PCM 半区所在链接段**：`PLAYBACK_SERVICE_PCM_SECTION`（`playback_service_config.h`）为链接脚本 `stm32h743zgtx_flash.ld` 的独立段 `.playback_pcm (NOLOAD) >RAM`（AXI SRAM，位于 `.lvgl_large_ram_array` 之后；用户授权，链接脚本由用户手改）。HWD-2：半区内容在 `Init` 写 0，且首次 Start 之前一定被预填完整覆盖；AXI SRAM 没有 SDRAM 全容量诊断，无需避让。
+- **PCM 半区所在链接段**：`PLAYBACK_SERVICE_PCM_SECTION`（`playback_service_config.h`）为链接脚本 `STM32H743xG_flash.ld` 的独立段 `.playback_pcm (NOLOAD) >RAM`（AXI SRAM，位于 `.lvgl_large_ram_array` 之后；用户授权，链接脚本由用户手改）。HWD-2：半区内容在 `Init` 写 0，且首次 Start 之前一定被预填完整覆盖；AXI SRAM 没有 SDRAM 全容量诊断，无需避让。
 
 ## 行为约定
 

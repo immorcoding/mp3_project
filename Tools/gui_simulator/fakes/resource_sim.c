@@ -23,7 +23,7 @@
 #include "Resources/imgs/vinyl_original_144px.c"
 #include "Resources/imgs/ui_img_wallpaper_indigo_mist_soft_dark_png.c"
 
-/** @brief 与 stm32h743zgtx_flash.ld 中的 vinyl 区大小一致。 */
+/** @brief 与 STM32H743xG_flash.ld 中的 vinyl 区大小一致。 */
 #define SIM_RESOURCE_VINYL_SIZE  0xF300
 
 __asm__(
