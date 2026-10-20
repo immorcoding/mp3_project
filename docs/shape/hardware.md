@@ -45,11 +45,11 @@ SDRAM 初始化后内容、诊断与运行数据的所有权。
 
 ### Rules
 
-- **HWD-6** · settled · DMA 缓冲放在 DMA 可达的 AXI SRAM 或 SDRAM，不放 DTCM；DTCM 只放 CPU 专用对象，如任务栈、解码器状态与读缓冲。_Why:_ DTCM 不经 D-Cache 且 DMA 不可达，SDMMC 也须使用 AXI SRAM。_Source:_ [硬件依据表](sources/hardware-facts.md) DTCM 行、[链接脚本段注释](../../stm32h743zgtx_flash.ld) _Check:_ code-review 规范轴检查链接段与 DMA 缓冲放置。
+- **HWD-6** · settled · DMA 缓冲放在 DMA 可达的 AXI SRAM 或 SDRAM，不放 DTCM；DTCM 只放 CPU 专用对象，如任务栈、解码器状态与读缓冲。_Why:_ DTCM 不经 D-Cache 且 DMA 不可达，SDMMC 也须使用 AXI SRAM。_Source:_ [硬件依据表](sources/hardware-facts.md) DTCM 行、链接脚本 `STM32H743xG_flash.ld` 段注释 _Check:_ code-review 规范轴检查链接段与 DMA 缓冲放置。
 
 ### References
 
-- [硬件依据表](sources/hardware-facts.md)：DTCM 与 DMA 可达性的依据；链接段与放置见 [链接脚本](../../stm32h743zgtx_flash.ld)。
+- [硬件依据表](sources/hardware-facts.md)：DTCM 与 DMA 可达性的依据；链接段与放置见链接脚本 `STM32H743xG_flash.ld`。
 
 ### Signals
 
