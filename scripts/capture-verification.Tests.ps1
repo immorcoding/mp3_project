@@ -4,6 +4,15 @@ $ErrorActionPreference = 'Stop'
 $savedGit = Suspend-InheritedGitEnvironment
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('evidence-fixture-' + [Guid]::NewGuid().ToString('N'))
 $utf8 = New-Object Text.UTF8Encoding($true)
+# 原生命令的 stderr 行（如 git 的 CRLF 警告）在调用方 `2>&1` 时会被 PS 5.1 包成 ErrorRecord，
+# Stop 偏好下抛错；局部放宽并丢弃 stderr，只靠 $LASTEXITCODE 与断言判定。
+function Invoke-Native {
+    param([scriptblock]$Command)
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & $Command 2>$null }
+    finally { $ErrorActionPreference = $previous }
+}
 function Assert-Evidence {
     param([bool]$Condition, [string]$Message)
     if (-not $Condition) { throw $Message }
@@ -14,11 +23,11 @@ try {
     Copy-Item (Join-Path $PSScriptRoot 'capture-verification.ps1') (Join-Path $fixture 'scripts')
     [IO.File]::WriteAllText((Join-Path $fixture '.gitignore'), "build/`n", $utf8)
     [IO.File]::WriteAllText((Join-Path $fixture 'tracked.txt'), 'seed', $utf8)
-    & git -C $fixture init --quiet
-    & git -C $fixture add .
-    & git -C $fixture -c user.name=EvidenceTest -c user.email=evidence@example.invalid commit -qm seed
+    Invoke-Native { & git -C $fixture init --quiet }
+    Invoke-Native { & git -C $fixture add . }
+    Invoke-Native { & git -C $fixture -c user.name=EvidenceTest -c user.email=evidence@example.invalid commit -qm seed }
     Assert-Evidence ($LASTEXITCODE -eq 0) 'fixture commit failed'
-    $commit = (& git -C $fixture rev-parse HEAD).Trim()
+    $commit = (Invoke-Native { & git -C $fixture rev-parse HEAD }).Trim()
     $probe = @'
 param([string]$HostCompiler, [string]$SdlSourceDir)
 [Console]::WriteLine("console 中文")
@@ -33,7 +42,7 @@ exit 7
     [IO.File]::WriteAllText((Join-Path $fixture 'scripts/verify.ps1'), $probe, $utf8)
     [IO.File]::WriteAllText((Join-Path $fixture 'Tools/gui_simulator/run-scenarios.ps1'), ($probe -replace 'exit 7', 'exit 0'), $utf8)
     $runner = Join-Path $fixture 'scripts/capture-verification.ps1'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL -HostCompiler "compiler path's gcc.exe"
+    Invoke-Native { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL -HostCompiler "compiler path's gcc.exe" }
     Assert-Evidence ($LASTEXITCODE -eq 7) 'child nonzero must propagate unchanged'
     $runs = @(Get-ChildItem (Join-Path $fixture 'build/evidence') -Directory)
     Assert-Evidence ($runs.Count -eq 1) 'one isolated run directory expected'
@@ -50,12 +59,12 @@ exit 7
         Assert-Evidence ($stdout.Contains($needle)) "stdout missing: $needle"
     }
     Assert-Evidence ($stderr.Contains('stderr 中文')) 'Console stderr missing'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL
+    Invoke-Native { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL }
     Assert-Evidence ($LASTEXITCODE -eq 7) 'second failure must still propagate'
     Assert-Evidence (@(Get-ChildItem (Join-Path $fixture 'build/evidence') -Directory).Count -eq 2) 'runs must not overwrite'
     Assert-Evidence ((Get-Content (Join-Path $run 'stdout.log') -Raw -Encoding UTF8) -eq $stdout) 'previous log overwritten'
     $custom = Join-Path $fixture "build/custom path's evidence"
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode GUI -OutputDirectory $custom -SdlSourceDir "SDL path's source"
+    Invoke-Native { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode GUI -OutputDirectory $custom -SdlSourceDir "SDL path's source" }
     Assert-Evidence ($LASTEXITCODE -eq 0) 'GUI success must pass'
     $guiRun = @(Get-ChildItem $custom -Directory)[0].FullName
     $gui = Get-Content (Join-Path $guiRun 'metadata.json') -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -63,9 +72,9 @@ exit 7
     Assert-Evidence ((Get-Content (Join-Path $guiRun 'stdout.log') -Raw -Encoding UTF8).Contains("SDL path's source")) 'GUI argument quoting failed'
     # 干净快照和 PowerShell 终止错误均需有明确证据，不能被包装吞掉。
     [IO.File]::WriteAllText((Join-Path $fixture 'scripts/verify.ps1'), "throw 'fixture failure'", $utf8)
-    & git -C $fixture add .
-    & git -C $fixture -c user.name=EvidenceTest -c user.email=evidence@example.invalid commit -qm probe
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL
+    Invoke-Native { & git -C $fixture add . }
+    Invoke-Native { & git -C $fixture -c user.name=EvidenceTest -c user.email=evidence@example.invalid commit -qm probe }
+    Invoke-Native { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL }
     Assert-Evidence ($LASTEXITCODE -eq 1) 'terminating error must fail'
     $failed = @(Get-ChildItem (Join-Path $fixture 'build/evidence') -Directory | Sort-Object Name)[-1].FullName
     $failureMeta = Get-Content (Join-Path $failed 'metadata.json') -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -75,7 +84,7 @@ exit 7
     $savedHead = [IO.File]::ReadAllText($headFile)
     [IO.File]::WriteAllText((Join-Path $fixture 'scripts/verify.ps1'), "[IO.File]::WriteAllText((Join-Path `$PSScriptRoot '../.git/HEAD'), 'invalid'); exit 0", $utf8)
     try {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL
+        Invoke-Native { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL }
         Assert-Evidence ($LASTEXITCODE -eq 1) 'post-run Git failure must fail capture'
         $gitFailed = @(Get-ChildItem (Join-Path $fixture 'build/evidence') -Directory | Sort-Object Name)[-1].FullName
         $gitMeta = Get-Content (Join-Path $gitFailed 'metadata.json') -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -88,7 +97,7 @@ exit 7
 exit $LASTEXITCODE
 '@
     [IO.File]::WriteAllText((Join-Path $fixture 'scripts/verify.ps1'), $moveHead, $utf8)
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL
+    Invoke-Native { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Mode FULL }
     Assert-Evidence ($LASTEXITCODE -eq 1) 'HEAD change must prevent single-commit evidence'
     $changed = @(Get-ChildItem (Join-Path $fixture 'build/evidence') -Directory | Sort-Object Name)[-1].FullName
     $changedMeta = Get-Content (Join-Path $changed 'metadata.json') -Raw -Encoding UTF8 | ConvertFrom-Json

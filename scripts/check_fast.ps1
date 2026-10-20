@@ -36,6 +36,7 @@ function Invoke-FastWorkingTreeCheck {
         'check-doxygen.Tests.ps1'
         'check-test-paths.Tests.ps1'
         'capture-verification.Tests.ps1'
+        'capture-verification.MergedStderr.Tests.ps1'
     )
     # 自测成功时静默（夹具仓库、证据目录等噪声不进入工具结果），失败时输出完整细节。
     foreach ($selfTest in $selfTests) {
