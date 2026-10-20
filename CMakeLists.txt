@@ -23,7 +23,6 @@ endif()
 set(CMAKE_PROJECT_NAME mp3_project)
 
 # 引入 ARM GCC 交叉编译工具链文件
-include("cmake/gcc-arm-none-eabi.cmake")
 
 # 导出 compile_commands.json，便于 clangd 等工具索引源码
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -127,7 +126,8 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 # 链接最终固件所依赖的库目标
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
+# cmake/stm32cubemx 用 plain 签名链接 MX_LINK_LIBS，同一目标不能再混用 PRIVATE 关键字
+target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
     # 在此添加用户自定义的库目标
     freertos_kernel
