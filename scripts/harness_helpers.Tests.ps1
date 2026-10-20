@@ -170,6 +170,14 @@ Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas',
     -Message 'Harness 变化必须回退全部主机测试'
 Assert-HarnessEqual -Expected $true -Actual $harnessImpact.RequiresAllHostTests -Message 'Harness 变化应标记全部测试'
 
+$doxygenCheckImpact = Get-HarnessImpact -ChangedPath @('scripts/check-doxygen.ps1', 'scripts/check-doxygen.Tests.ps1')
+Assert-HarnessEqual -Expected $true -Actual $doxygenCheckImpact.RequiresAllHostTests `
+    -Message 'Doxygen 检查脚本及自测属于 Harness 变化，回退全部主机测试'
+Assert-HarnessEqual -Expected 0 -Actual $doxygenCheckImpact.UnknownPaths.Count `
+    -Message 'Doxygen 检查脚本由 scripts/ 前缀规则覆盖，不应落入未知生产路径'
+Assert-HarnessEqual -Expected $false -Actual $doxygenCheckImpact.RequiresHardware `
+    -Message 'Doxygen 检查脚本不要求上板'
+
 $unknownImpact = Get-HarnessImpact -ChangedPath @('Service/unmapped/player.c')
 Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'w25qxx') -Actual $unknownImpact.HostModules `
     -Message '未知生产路径不得以零测试通过'
