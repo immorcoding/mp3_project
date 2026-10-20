@@ -14,6 +14,7 @@
 ## 固件专有约定
 
 - 需要上板的 ticket 在软件验证通过后挂 `hw:pending`；板上证据（固件版本、观察现象、日志）作为评论贴出后移除标签并关闭。
+- 板级验收评论用 [board-test-checklist.md](board-test-checklist.md) 的模板；测试卡由 [make_card.py](../../Tools/board_test_card/README.md) 生成。
 - 置顶 issue「板上状态」只记设备此刻的事实：已烧录的固件提交、NOR 中的资源包版本、待上板项列表。每次烧录后更新正文，不写过程。
 - 稳定事实仍进架构文档、Module README 与 ADR；issue 只放进度、决定过程与证据。
 
