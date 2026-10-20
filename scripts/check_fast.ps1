@@ -34,6 +34,7 @@ function Invoke-FastWorkingTreeCheck {
         'shape_writer.Tests.ps1'
         'check-docs.Tests.ps1'
         'check-doxygen.Tests.ps1'
+        'check-test-paths.Tests.ps1'
         'capture-verification.Tests.ps1'
     )
     foreach ($selfTest in $selfTests) {
@@ -46,6 +47,9 @@ function Invoke-FastWorkingTreeCheck {
     Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'check-layer-includes.ps1') `
         -Parameters @{ Snapshot = 'WorkingTree' }
     Invoke-PowerShellScript -ScriptPath (Join-Path $PSScriptRoot 'check-docs.ps1')
+
+    # 主机测试 PathPatterns 与各模块真实编译依赖的漂移检查；只读仓库文件，索引快照里同样适用，故不受快照分支限制。
+    Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'check-test-paths.ps1')
 
     # Doxygen 检查要读 Git 差异；索引快照目录不是仓库，暂存内容已由 Invoke-FastIndexCheck 在真实仓库检查过。
     if ($env:MP3_HARNESS_INDEX_SNAPSHOT -ne '1') {
@@ -141,7 +145,7 @@ Complete-Utf8EntryScript -Action {
 
         if (-not $SuppressStatus) {
             Write-HarnessStatus -Status PASS `
-                -Summary "FAST 通过：已验证 Harness 自测、文档与 shape、改动函数的 Doxygen（STY-2）、分层 include 与生成目录写保护（$Snapshot）。"
+                -Summary "FAST 通过：已验证 Harness 自测、文档与 shape、改动函数的 Doxygen（STY-2）、分层 include、主机测试路径覆盖与生成目录写保护（$Snapshot）。"
         }
     }
     catch {

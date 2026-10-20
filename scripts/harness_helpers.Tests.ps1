@@ -158,12 +158,41 @@ Assert-HarnessSequence -Expected @('playback_task') -Actual $playbackMachineImpa
     -Message '播放任务状态机变化必须选择播放任务主机测试'
 
 $playbackContractImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/playback/playback_contract.h')
-Assert-HarnessSequence -Expected @('playback_task') -Actual $playbackContractImpact.HostModules `
-    -Message '播放任务公开合同变化必须选择播放任务主机测试'
+Assert-HarnessSequence -Expected @('gui_task', 'playback_task') -Actual $playbackContractImpact.HostModules `
+    -Message '播放任务公开合同变化必须选择播放任务与编译它的 GUI Task（音乐传输 reducer）主机测试'
 
 $playbackServiceInterfaceImpact = Get-HarnessImpact -ChangedPath @('Service/playback/playback_service.h')
 Assert-HarnessSequence -Expected @('playback_service', 'playback_task') -Actual $playbackServiceInterfaceImpact.HostModules `
     -Message '播放模块公开头变化必须同时选择播放模块与播放任务主机测试'
+
+# 主机测试编译的跨层聚合头与配置头：由 check-test-paths.ps1 按真实依赖发现，路由必须与之一致。
+$serviceHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Service/service.h')
+Assert-HarnessSequence -Expected @('flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'playback_service', 'playback_task') `
+    -Actual $serviceHeaderHostImpact.HostModules -Message 'Service 聚合头变化必须选择所有编译它的主机测试'
+
+$platformHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Platform/platform.h')
+Assert-HarnessSequence -Expected @('flash_ftl', 'gui_task', 'gui_theme', 'playback_service') `
+    -Actual $platformHeaderHostImpact.HostModules -Message 'Platform 聚合头变化必须选择所有编译它的主机测试'
+
+$platformLcdHostImpact = Get-HarnessImpact -ChangedPath @('Platform/lcd/platform_lcd.h')
+Assert-HarnessSequence -Expected @('gui_task', 'gui_theme') -Actual $platformLcdHostImpact.HostModules `
+    -Message 'Platform LCD 头变化必须选择 GUI Task 与主题主机测试'
+
+$platformAudioHostImpact = Get-HarnessImpact -ChangedPath @('Platform/audio/platform_audio.h')
+Assert-HarnessSequence -Expected @('playback_service') -Actual $platformAudioHostImpact.HostModules `
+    -Message 'Platform 音频头变化必须选择播放模块主机测试'
+
+$platformFlashHostImpact = Get-HarnessImpact -ChangedPath @('Platform/flash/platform_flash.h', 'Platform/sd/platform_sd.h')
+Assert-HarnessSequence -Expected @('flash_ftl') -Actual $platformFlashHostImpact.HostModules `
+    -Message 'Platform Flash/SD 头变化必须选择 FTL 主机测试'
+
+$dcacheConfigHostImpact = Get-HarnessImpact -ChangedPath @('Adapters/cortex/cache/cortex_m7_dcache_adapter_config.h')
+Assert-HarnessSequence -Expected @('flash_ftl', 'gui_task', 'gui_theme', 'playback_service') `
+    -Actual $dcacheConfigHostImpact.HostModules -Message 'DCache 配置头变化必须选择所有编译它的主机测试'
+
+$logHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Service/log/log_service.h', 'Service/log/log_service_config.h', 'APP/app_config.h')
+Assert-HarnessSequence -Expected @('flash_ftl') -Actual $logHeaderHostImpact.HostModules `
+    -Message 'Service Log 头与 APP 配置头变化必须选择 FTL 主机测试'
 
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
 Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'w25qxx') -Actual $harnessImpact.HostModules `
