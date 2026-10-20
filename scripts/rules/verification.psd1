@@ -10,6 +10,7 @@
         'storage_audio_stream'
         'playback_service'
         'playback_task'
+        'monitor_warn'
     )
 
     # 每条规则描述一个主机测试工程真正编译或覆盖的生产路径。
@@ -124,6 +125,13 @@
                 '^Service/playback/playback_service_config\.h$'
                 '^Service/service\.h$'
                 '^Tests/playback_task/'
+            )
+        }
+        @{
+            Name = 'monitor_warn'
+            PathPatterns = @(
+                '^APP/tasks/monitor/'
+                '^Tests/monitor_warn/'
             )
         }
     )

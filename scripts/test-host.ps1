@@ -2,8 +2,8 @@
 param(
     [string]$HostCompiler,
 
-    [ValidateSet('external_loader', 'flash_ftl', 'gui_task', 'gui_theme', 'gui_canvas', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'playback_service', 'playback_task')]
-    [string[]]$Module = @('external_loader', 'flash_ftl', 'gui_task', 'gui_theme', 'gui_canvas', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'playback_service', 'playback_task')
+    [ValidateSet('external_loader', 'flash_ftl', 'gui_task', 'gui_theme', 'gui_canvas', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'playback_service', 'playback_task', 'monitor_warn')]
+    [string[]]$Module = @('external_loader', 'flash_ftl', 'gui_task', 'gui_theme', 'gui_canvas', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'playback_service', 'playback_task', 'monitor_warn')
 )
 
 Set-StrictMode -Version Latest
