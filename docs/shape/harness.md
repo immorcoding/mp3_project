@@ -36,6 +36,10 @@ Next id: HAR-15
 - **HAR-3** · provisional · Agent Hook 两边共用 `scripts/hooks/*.ps1`，同时解析 Claude 的 `file_path` 与 Codex `apply_patch` 的补丁文本，路径以 Hook 输入的 `cwd` 为基准规范化；生成/Vendor 前缀复用 `check-generated-write.ps1`，分层映射复用 `check-layer-includes.ps1`，Hook 专有的 CubeMX 源、配置头与 USER CODE 根只在 `scripts/hooks/agent_hook_helpers.ps1`。 _Why:_ 两种工具的输入不同，但保护边界必须一致且只维护一份。 _Source:_ Codex `core/src/tools/hook_names.rs`（`apply_patch` 以 `Edit`/`Write` 为 matcher 别名）
 - **HAR-4** · provisional · PreToolUse 硬拦生成/Vendor 目录写入与 `--no-verify`、强推、`ALLOW_GENERATED_UPDATE`；CubeMX `USER CODE` 文件与生成器配置头在 Claude 走 `ask`、在 Codex 一律 `deny`；PostToolUse 只做毫秒级单文件检查；不在 Stop 跑构建。_Why:_ Codex 对 `ask` 会记错误后放行；固件构建慢，每轮触发不可承受。_Source:_ Codex `hooks/src/events/pre_tool_use.rs`（`unsupported_permission_decision_fails_open`）、commit `e57187b`（强推判定只看 `git push` 之后的参数）
 
+### Signals
+
+- 2026-10-20 · cite · HAR-4 · Agent Hook 按 `\.ld$` 拒绝所有链接脚本编辑（`scripts/hooks/agent_hook_helpers.ps1`），#98 并入自定义段时 Agent 只能在 scratch 目录生成合并文件、由用户拷入；用 `ld` 重链接（`-T` 指向 scratch 文件）可在不动仓库文件时验证各段地址不变。
+
 ## verification
 
 验证层级与主机自测隔离。
@@ -68,3 +72,11 @@ Next id: HAR-15
 
 - **HAR-7** · provisional · 改动许可交给工具自身模式（Claude 默认/acceptEdits，Codex workspace-write + on-request）与 Hook；不用点火词或许可档位表。_Why:_ 文字许可协议耗上下文且拦不住。
 - **HAR-8** · provisional · 领域文件 `docs/shape/*.md` 只在写入分支（默认 `main`）修改，规则编号也只在那里分配；其他分支把 Signal、草稿和用户当场的批准写进 `docs/shape/inbox/<分支>.md`，合并后在 `main` 上按 drain 处理。_Why:_ 并行分支同时改领域文件会冲突，相同的 `Next id` 改动会被 git 静默合并成重号。_Source:_ shape-your-project `INBOX.md`
+
+### Proposed
+
+- 2026-10-20 · provisional · HAR-8 补一句例外：仅“链接目标重命名”的文档引用修改，可随引起重命名的分支同步（须在 inbox 记明，合并后 drain 复核）。_Why:_ #98 链接脚本改名时，`hardware.md` 链接与改名必须同一提交，否则 `check-docs` 断链、FULL 失败；本次靠先在 `main` 改成纯文本绕过。仅一次证据，先排队，再遇到同类情况时决定。
+
+### Signals
+
+- 2026-10-20 · friction · HAR-8 · #98 把链接脚本改名为 `STM32H743xG_flash.ld`，`hardware.md` 的两处链接必须与改名同一提交，否则 `check-docs` 断链、FULL 失败；pre-commit 的写入分支检查拦住了分支上的链接修改。用户批准的绕法：先在 `main` 把两处链接改成纯文本文件名（`7f53d80`），再合入分支。
