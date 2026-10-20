@@ -59,7 +59,7 @@ $cases = @(
     @{ Path = 'Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c'; Tool = 'Write'; Expected = 'deny' }
     @{ Path = 'Drivers/CMSIS/Include/core_cm7.h'; Tool = 'Edit'; Expected = 'deny' }
     @{ Path = 'io_sheet.ioc'; Tool = 'Edit'; Expected = 'deny' }
-    @{ Path = 'stm32h743zgtx_flash.ld'; Tool = 'apply_patch'; Expected = 'deny' }
+    @{ Path = 'STM32H743xG_flash.ld'; Tool = 'apply_patch'; Expected = 'deny' }
     @{ Path = 'startup_stm32h743xx.s'; Tool = 'Edit'; Expected = 'deny' }
     @{ Path = 'Middlewares/Third_Party/FreeRTOS/Config/FreeRTOSConfig.h'; Tool = 'Edit'; Expected = 'ask' }
     @{ Path = 'Middlewares/Third_Party/FreeRTOS/Config/FreeRTOSConfig.h'; Tool = 'apply_patch'; Expected = 'deny' }

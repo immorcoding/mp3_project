@@ -51,7 +51,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
   - 启动：`storage_audio_block_init()` 在 `storage_task()` 内、可选的 `storage_sdram_benchmark_run()` 全容量诊断之后、Flash/SD 初始化之前调用，只建队列并入队块指针，不触碰块内容；SDRAM 在 `main()` 经 `Platform/sdram` 完成正式初始化后任务才运行，满足“正式初始化之后、首次使用前”。队列控制块与存储放 DTCM `.bss`（约 416 B）。
   - MPU：`Core/Src/main.c` 的 Region 2 把 0xC0000000 起 32 MB 设为 Cacheable、Bufferable、不可执行、全访问，块池落其中；块只由单核 CPU 两个任务读写，无 DMA 与 Cache 一致性问题，ARC-18 不适用。
   - 全容量诊断：诊断是破坏性的，只能在块池入队前独占运行；`STORAGE_SDRAM_BENCHMARK_ENABLE` 开启时仍须保持在 `storage_audio_block_init()` 之前，产品默认关闭。
-  - 链接段：块池在链接脚本 `stm32h743zgtx_flash.ld` 的独立段 `.storage_audio_pool` (NOLOAD, >SDRAM)，位于 `.sdram_framebuffer` 之后，不移动既有 SDRAM 段；段名由 `storage_audio_config.h` 的 `STORAGE_AUDIO_POOL_SECTION` 持有（用户授权，链接脚本由用户手改）。 `hw:pending`：上板确认 map 中块池落点、SDRAM 总用量在容量内。
+  - 链接段：块池在链接脚本 `STM32H743xG_flash.ld` 的独立段 `.storage_audio_pool` (NOLOAD, >SDRAM)，位于 `.sdram_framebuffer` 之后，不移动既有 SDRAM 段；段名由 `storage_audio_config.h` 的 `STORAGE_AUDIO_POOL_SECTION` 持有（用户授权，链接脚本由用户手改）。 `hw:pending`：上板确认 map 中块池落点、SDRAM 总用量在容量内。
 - 板级行为（单圈耗时、消抖、拔卡、播放中不回收、1 MiB 缓冲下的断流余量）归板级验收票，Storage 音频流主循环不做主机测试。
 
 ## 约束
