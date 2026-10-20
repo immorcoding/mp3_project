@@ -17,7 +17,7 @@
 | [Workflow](workflow.md) | spec/ticket、文档职责、交接与板级证据 |
 | [Git](git.md) | 分支、提交与 PR |
 
-术语按条查根 [GLOSSARY](../../GLOSSARY.md)；历史取舍查 [ADR 索引](../adr/README.md)。事项、进度与验收证据在 GitHub，读取约定见 [tracker](../agents/issue-tracker.md)；领域词典与 ADR 的职责见 [domain](../agents/domain.md)。
+术语按条查根 [GLOSSARY](../../GLOSSARY.md)；历史取舍查 [ADR 索引](../adr/README.md)。事项、进度与验收证据在 GitHub，读取约定见 [tracker](../agents/issue-tracker.md)；领域词典与 ADR 的职责见 [domain](../agents/domain.md)；派 subagent 实施票的常驻步骤见 [implementer-brief](../agents/implementer-brief.md)。
 
 新增标准先确定 area 与 title 的适用范围，再提炼规则；不按旧文档章节搬运。仅超过 15 条规则的 area 才整体按 title 拆分；必要的硬件事实、介质字节契约与命令表放在 `sources/`，由规则引用。References 放示例或批准的视觉依据，历史由 Git/ADR 保存。
 

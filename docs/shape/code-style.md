@@ -2,7 +2,7 @@
 
 自维护 C 的命名、注释和配置；适用 APP/Service/Platform/Components/Adapters 与项目维护的中间件接缝，厂商标识符和移植配置保持原风格。
 
-Next id: STY-9
+Next id: STY-10
 
 ## naming
 
@@ -19,8 +19,14 @@ Next id: STY-9
 
 ### Rules
 
-- **STY-2** · settled · 所有自维护函数定义紧邻完整中文 Doxygen（公开、static、私有跨文件、回调、强弱后端、测试、头内 static inline 均包括），仅声明处不复制。至少 `@brief`；每个实参名用带方向 `@param`，无参不占位；非 void 用 `@return`/`@retval` 说明结果和失败；旧无方向注释维护时补齐。说明实际阻塞性、次序、所有权、线程/ISR、DMA/Cache、超时和失败缓冲生命周期；测试写场景/断言/替身边界。 _Why:_ 调用约束随实现维护，声明与定义双写容易漂移。 _Check:_ `CODING_STANDARDS.md` 的注释审阅入口。
+- **STY-2** · settled · 所有自维护函数定义紧邻完整中文 Doxygen（公开、static、私有跨文件、回调、强弱后端、测试、头内 static inline 均包括），仅声明处不复制。至少 `@brief`；每个实参名用带方向 `@param`，无参不占位；非 void 用 `@return`/`@retval` 说明结果和失败；旧无方向注释维护时补齐。说明实际阻塞性、次序、所有权、线程/ISR、DMA/Cache、超时和失败缓冲生命周期；测试写场景/断言/替身边界。 _Why:_ 调用约束随实现维护，声明与定义双写容易漂移。 _Check:_ 机械项（紧邻 `/** */`、`@brief`、每个形参 `@param`、非 void 有 `@return`/`@retval`、新函数 `@param` 带方向）由 `scripts/check-doxygen.ps1`（FAST，pre-commit/pre-push，只查本次新增或修改的函数）拦截；描述措辞等判断性部分靠 `CODING_STANDARDS.md` 的注释审阅入口。
 - **STY-5** · settled · 自维护 C/H 文件写 `@file`/`@brief`，声明头保留概述、公开类型和关键字段说明；行内注释解释状态机、资源、重试、时序或并发原因，不复述语句，也不替代 Doxygen；代码/目录/行为变化时同步注释，不保留失效层名。 _Why:_ 注释解释跨语句的意图和风险，失效说明会误导下一次修改。 _Check:_ `CODING_STANDARDS.md` 的注释审阅入口。
+- **STY-9** · exploring · 注释不用 spec 或 ticket 内部编码（如 B5、K3、A7、D7、E8）作为唯一说明；先用一句话写出含义，再按需链到 spec。_Why:_ #71/#72 集成分支评审指出这些编码对没读过 ticket 的读者不可解，在 `playback_task_config.h`、`app_tasks.c` 等多处出现。_Check:_ 判断类项，靠 `CODING_STANDARDS.md` 的注释审阅入口。
+
+### Signals
+
+- 2026-10-19 · friction · STY-2 · 全仓库存量（`./scripts/check-doxygen.ps1 -Report`）：300 个手写 C/H、1517 个函数定义中 112 个缺文档或缺项（Tools 29、Service 24、Tests 24、Adapters 16、Components 9、APP 8、Platform 2；不含方向）；下次被改动时由检查拦住并顺手补齐，不做集中清欠。
+- 2026-10-19 · friction · new · `_Static_assert` 消息用英文还是中文没有规定：#71/#72 两者都有（`playback_task.c`、`gui_music_transport.c` 用英文），STY 只规定注释、文档用中文；用户决定维持现状，不立规则。
 
 ## config
 

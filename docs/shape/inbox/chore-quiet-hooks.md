@@ -1,1 +1,0 @@
-- 2026-10-19 Signal（HAR）：Hook 成功时只打印汇总与 HARNESS_STATUS，失败时输出完整细节（Invoke-HarnessQuietStep 缓冲子进程输出）。

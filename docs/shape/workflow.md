@@ -2,7 +2,7 @@
 
 事项、规划、交接与板上状态放在哪里，以及会话按需读取什么。
 
-Next id: WF-12
+Next id: WF-13
 
 ## Pillars
 
@@ -36,6 +36,16 @@ Next id: WF-12
 
 - **WF-3** · provisional · 需要上板的 ticket 挂 `hw:pending`，板上证据作为 issue 评论贴出后再关闭。_Why:_ host 测试证明不了中断、DMA、Cache 与真实外设。
 - **WF-4** · provisional · 固件版本、NOR 资源包、待上板项只记在置顶 issue「板上状态」，每次烧录后更新。_Why:_ 设备状态跨 ticket，不属于任何一张。
+- **WF-12** · exploring · spec 的每个验收项写明证据来源，且该来源在固件里存在（日志行、计数器、可读寄存器），或明确标“仅听感/外部仪器”；缺固件出口的项在同一 spec 里列为任务。与 WF-3（证据贴为 issue 评论）相邻。_Why:_ #71 板级验收清单要求 `Underruns` 日志作证据，但播放路径除错误外不打日志、`Underruns` 无输出口，板测只能凭听感；固件没有版本输出，测试记录只能写“48f97f0 或 859f307”。_Source:_ #71、#81
+
+### Proposed
+
+- 2026-10-19 · 扩展 WF-3（并入正文或单列待定，level 未定）：板级验收评论使用 `docs/agents/board-test-checklist.md` 模板；结果只用 通过 / 部分 / 未测 / 记录，部分 与 未测 不计通过并保留 `hw:pending`。_Why:_ #81/#87 的两份清单没有统一词汇，证据来源不明导致大量 未测。（queued: 无人值守 drain，chore/board-test-card）
+
+### Signals
+
+- 2026-10-19 · cite · WF-3 · 已有板级验收清单模板 `docs/agents/board-test-checklist.md` 与打卡工具 `Tools/board_test_card/make_card.py`，结果词固定为 通过 / 部分 / 未测 / 记录。
+- 2026-10-19 · friction · WF-3 · 固件无版本出口、Underruns 与回调计数无日志，B/C/D 组多行只能听感或外部仪器；是否加固件侧诊断出口留给后续决定。
 
 ## sessions
 

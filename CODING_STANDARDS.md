@@ -5,7 +5,7 @@
 | 变动范围 | 规范与检查依据 |
 | --- | --- |
 | 所有权、依赖、Ops、ISR、持久存储与模块接缝 | [Architecture](docs/shape/architecture.md) |
-| 标识符、Doxygen、配置与排版 | [Code style](docs/shape/code-style.md) |
+| 标识符、Doxygen 与注释、配置与排版 | [Code style](docs/shape/code-style.md) |
 | 曲库、卷、文件系统、FTL 与介质生命周期 | [Storage](docs/shape/storage.md) |
 | 资源格式、加载与安装边界 | [Resources](docs/shape/resources.md) |
 | 界面、交互、效果生命周期与像素基线 | [GUI](docs/shape/gui.md) |
