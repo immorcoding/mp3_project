@@ -2,7 +2,7 @@
 
 事项、规划、交接与板上状态放在哪里，以及会话按需读取什么。
 
-Next id: WF-13
+Next id: WF-14
 
 ## Pillars
 
@@ -22,6 +22,7 @@ Next id: WF-13
 
 - **WF-1** · provisional · 事项、spec 与 ticket 都是 GitHub Issues（`immorcoding/mp3_project`），用 `gh` 操作。 _Why:_ 规格、依赖和进度集中，避免多处任务状态失步。 _Source:_ [issue-tracker.md](../agents/issue-tracker.md)
 - **WF-2** · exploring · 雾里的大块工作走 `/wayfinder`；已清晰的功能走 `/to-spec` → `/to-tickets` → `/implement`。 _Why:_ 流程深度随不确定性选择，清晰任务无需重复探索。
+- **WF-13** · exploring · 一个次版本只做一个用户可见功能；补丁版本（如 0.6.1）只放修复与小打磨，不加新功能，可不写 spec 直接开票。 _Why:_ 每个版本的范围能在一次集成分支上完成板级验收，避免把多个功能挤进同一版本。 _Source:_ [打磨阶段地图](https://github.com/immorcoding/mp3_project/issues/100)
 
 ### Signals
 
