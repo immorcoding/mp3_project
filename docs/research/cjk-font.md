@@ -56,7 +56,7 @@
 | `0x007FF000–0x01FFEFFF` | FTL 物理分区（`PLATFORM_FLASH_FTL_SIZE_BYTES` = 24 MiB） | 24 MiB |
 | `0x01FFF000–0x01FFFFFF` | 尾自检区 | 4 KiB |
 
-- **资源包**：`SERVICE_RESOURCE_FLASH_OFFSET = 0x00401000`（`Service/resource/resource_service_config.h:12`）。打包测试断言长度为 `0x77000`，映射地址为 `0x90401000`（`Tools/package_maker/tests/test_rpkc_pack.py:255、282`）。Issue #8 记录 Pack v2 于 2026-09-11 写入板上，之后未重写（【实测】，在板记录）。
+- **资源包**：`SERVICE_RESOURCE_FLASH_OFFSET = 0x00401000`（`Service/resource/resource_service_config.h:12`）。打包测试断言长度为 `0x77000`，映射地址为 `0x90401000`（`Tools/package_maker/tests/test_rpkc_pack.py:255、282`）。Issue #8 记录 Pack v2 于 2026-09-11 写入板上，之后未重写（【实测】，在板记录）。`Tools/external_loader/README.md:53–58` 的烧录参数仍是旧 RPK1 包（长度 `0x65000`，即 413,696 B，文件头 `RPK1`），与 v2 的 `0x77000` 不一致；该 README 未更新，本文以 Issue #8、打包测试与资源 ID 表为准。
 - **资源区上限**：`SERVICE_RESOURCE_MAXIMUM_SIZE = 0x003FE000`，即 4,186,112 B（`resource_service_config.h:13`）。
 - **资源包内容**：按 `resource_service_config.h:17–20` 的 ID 表，当前产品资源为 ID 1–4（两张 CP936 转码表、默认壁纸、唱盘底图），服务层没有字体的加载路径。载荷字节为 87,172 × 2 + 230,400 + 62,208 = 466,952 B；32 B 对齐后为 467,008 B，与 ELF 的 `.sdram_external_resources` 段大小一致（【实测】）。包内其余 20,416 B（487,424 − 467,008）为包头、索引与元数据等（【推断】，未逐字段核对）。
 - **FONT 类型**：RPKC1 扩展定义了 FONT V1，载荷为可重定位序列化字体，不含 MCU 指针（`docs/shape/sources/rpkc1-extensions.md:9、20–28`）。资源包配置中 FONT 默认关闭，解码返回 `RESOURCE_PACK_UNSUPPORTED_TYPE`（`Components/resource_pack/README.md:19`）。`docs/shape/resources.md:16` 把 FONT 解码器何时启用列为待决问题。
