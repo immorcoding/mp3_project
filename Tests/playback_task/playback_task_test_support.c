@@ -14,6 +14,53 @@
 #define FAKE_PREFILL_FRAMES 2U   /* 两个半区的预填折合的帧数；暂停且已满时不再解码。 */
 
 /* ---------------------------------------------------------------------------
+ * INFO 日志记录
+ * ------------------------------------------------------------------------- */
+
+static char log_texts[FAKE_LOG_CAPACITY][FAKE_LOG_TEXT_MAX];
+static uint32_t log_length;
+
+/**
+ * @brief 记录一条 INFO 日志文本（LogInfo 的替身）。
+ * @param[in] text 文本。
+ */
+static void fake_log_info(const char *text)
+{
+    assert(log_length < FAKE_LOG_CAPACITY);
+    assert(strlen(text) < FAKE_LOG_TEXT_MAX);
+    strcpy(log_texts[log_length], text);
+    log_length++;
+}
+
+/**
+ * @brief 已记录的日志条数。
+ * @return 条数。
+ */
+uint32_t fake_log_count(void)
+{
+    return log_length;
+}
+
+/**
+ * @brief 第 index 条日志文本。
+ * @param[in] index 位置。
+ * @return 文本。
+ */
+const char *fake_log_text(uint32_t index)
+{
+    assert(index < log_length);
+    return log_texts[index];
+}
+
+/**
+ * @brief 清空日志记录。
+ */
+void fake_log_clear(void)
+{
+    log_length = 0U;
+}
+
+/* ---------------------------------------------------------------------------
  * 调用日志与快照记录
  * ------------------------------------------------------------------------- */
 
@@ -866,6 +913,7 @@ static uint32_t world_command_seq;
 void world_reset(void)
 {
     call_log_reset();
+    fake_log_clear();
     fake_storage_reset();
     fake_player_reset();
     world_now_ms = 1000U;
@@ -884,6 +932,7 @@ void world_reset(void)
     world_ops.Player.ResumeOutput = fake_resume_output;
     world_ops.Player.AbandonStream = fake_abandon_stream;
     world_ops.PublishSnapshot = fake_publish;
+    world_ops.LogInfo = fake_log_info;
     playback_machine_init(&world_machine_instance, &world_ops);
 }
 

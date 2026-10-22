@@ -9,6 +9,7 @@
 #include "APP/tasks/playback/playback_machine.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 /**
@@ -47,6 +48,47 @@ static void publish_if_changed(Playback_MachineTypeDef *machine)
     {
         machine->Ops->PublishSnapshot(&machine->Published);
     }
+}
+
+/**
+ * @brief 停止原因的日志名，与 Playback_StopReasonTypeDef 的枚举名（去掉前缀）一致。
+ * @param[in] reason 停止原因。
+ * @return 静态字符串。
+ */
+static const char *stop_reason_name(Playback_StopReasonTypeDef reason)
+{
+    static const char *const names[PLAYBACK_STOP_REASON_COUNT] = {
+        "NONE", "CARD_REMOVED", "NOT_READY", "NO_TRACK", "CATALOG_CHANGED",
+        "READ_ERROR", "NO_DATA", "AUDIO_ERROR", "AUDIO_FAULT", "ALL_BAD"
+    };
+
+    return ((unsigned)reason < (unsigned)PLAYBACK_STOP_REASON_COUNT) ? names[reason] : "UNKNOWN";
+}
+
+/**
+ * @brief 记一条 INFO 日志：事件加曲库序号（可选）与一个可选数值，格式 "<事件> idx=<序号> [<键>=<值>]"。
+ * @param[in] machine 状态机。
+ * @param[in] event 事件名，静态字符串。
+ * @param[in] with_index 是否附当前游标的曲库序号。
+ * @note  只在命令与曲目边界调用；不记文件名（曲名属于曲名数据路径）。
+ */
+static void log_event(const Playback_MachineTypeDef *machine, const char *event, bool with_index)
+{
+    char text[48];
+
+    if (machine->Ops->LogInfo == NULL)
+    {
+        return;
+    }
+    if (with_index)
+    {
+        (void)snprintf(text, sizeof(text), "%s idx=%u", event, (unsigned)machine->Snapshot.Index);
+    }
+    else
+    {
+        (void)snprintf(text, sizeof(text), "%s", event);
+    }
+    machine->Ops->LogInfo(text);
 }
 
 /**
@@ -246,6 +288,13 @@ static void enter_stopped(Playback_MachineTypeDef *machine, Playback_StopReasonT
     machine->Snapshot.PositionMs = 0U;
     machine->Snapshot.DurationMs = 0U;
     machine->Snapshot.StopCount++;
+    if (machine->Ops->LogInfo != NULL)
+    {
+        char text[48];
+
+        (void)snprintf(text, sizeof(text), "Stop reason=%s", stop_reason_name(reason));
+        machine->Ops->LogInfo(text);
+    }
     if (!keep_cursor)
     {
         machine->Snapshot.HasTrack = false;
@@ -316,6 +365,7 @@ static void start_from_stopped(Playback_MachineTypeDef *machine)
     note_user_move(machine, true);
     machine->Snapshot.State = PLAYBACK_STATE_PLAYING;
     machine->Snapshot.StopReason = PLAYBACK_STOP_REASON_NONE;
+    log_event(machine, "Start", true);
     switch_to_cursor_track(machine);
 }
 
@@ -338,10 +388,12 @@ static void handle_toggle(Playback_MachineTypeDef *machine)
             machine->OutputRunning = false;
         }
         machine->Snapshot.State = PLAYBACK_STATE_PAUSED;
+        log_event(machine, "Pause", false);
         break;
 
     case PLAYBACK_STATE_PAUSED:
         machine->Snapshot.State = PLAYBACK_STATE_PLAYING;
+        log_event(machine, "Resume", false);
         if (machine->StreamBegun && (machine->Ops->Player.ResumeOutput() == SERVICE_OK))
         {
             /* 恢复即 Start（补满半区的罕见情形下由随后的 Pump 回报 Start）：T_out 从此刻起算。 */
@@ -379,6 +431,7 @@ static void handle_step(Playback_MachineTypeDef *machine, bool forward)
     }
 
     note_user_move(machine, forward);
+    log_event(machine, forward ? "Next" : "Prev", true);
     if (machine->Snapshot.State != PLAYBACK_STATE_STOPPED)
     {
         switch_to_cursor_track(machine);
@@ -410,6 +463,7 @@ static void handle_select(Playback_MachineTypeDef *machine, const Playback_Comma
     machine->Snapshot.Index = command->Index;
     machine->Snapshot.State = PLAYBACK_STATE_PLAYING;
     machine->Snapshot.StopReason = PLAYBACK_STOP_REASON_NONE;
+    log_event(machine, "Start", true);
     switch_to_cursor_track(machine);
 }
 
@@ -508,6 +562,7 @@ static void skip_bad_file(Playback_MachineTypeDef *machine)
 
     machine->Snapshot.SkippedBadCount++;
     machine->ConsecutiveSkips++;
+    log_event(machine, "Skip bad", true);
     if (machine->ConsecutiveSkips >= machine->TrackCount)
     {
         enter_stopped(machine, PLAYBACK_STOP_REASON_ALL_BAD, true);
@@ -663,8 +718,10 @@ static void finish_input_if_drained(Playback_MachineTypeDef *machine)
  */
 static void advance_after_stream_end(Playback_MachineTypeDef *machine)
 {
+    log_event(machine, "Finished", true);
     machine->SkipForward = true;
     (void)step_cursor(machine, true);
+    log_event(machine, "Auto", true);
     switch_to_cursor_track(machine);
 }
 
@@ -715,6 +772,14 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
 
     if (report->FirstFrame)
     {
+        if (machine->Ops->LogInfo != NULL)
+        {
+            char text[48];
+
+            (void)snprintf(text, sizeof(text), "Open idx=%u rate=%lu", (unsigned)machine->Snapshot.Index,
+                           (unsigned long)report->StreamInfo.SampleRateHz);
+            machine->Ops->LogInfo(text);
+        }
         machine->Snapshot.DurationMs = report->StreamInfo.TotalDurationMs;
     }
     if (report->DecodedMs > machine->Snapshot.PositionMs)
