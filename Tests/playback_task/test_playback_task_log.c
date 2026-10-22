@@ -168,6 +168,42 @@ static void test_stream_end_logs_finished_then_auto_advance(void)
 }
 
 /**
+ * @brief 播完后自动前进失败（放弃旧流 Stop 失败）时不记 Auto，只留停止原因。
+ */
+static void test_auto_advance_failure_does_not_log_auto(void)
+{
+    world_reset();
+    world_start_playing(GENERATION, TRACKS);
+    fake_storage_enqueue_block(world_current_seq(), 20U, 1U);
+    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    world_wake();
+    fake_player_release_tail();
+    fake_player_fail_next_stop();
+    world_wake();
+
+    assert(world_snapshot().StopReason == PLAYBACK_STOP_REASON_AUDIO_FAULT);
+    for (uint32_t i = 0U; i < fake_log_count(); i++)
+    {
+        assert(strncmp(fake_log_text(i), "Auto", 4) != 0);
+    }
+}
+
+/**
+ * @brief ResumeOutput 失败时不记 Resume。
+ */
+static void test_resume_failure_does_not_log_resume(void)
+{
+    world_reset();
+    world_start_playing(GENERATION, TRACKS);
+    world_send(PLAYBACK_COMMAND_TOGGLE);
+    fake_log_clear();
+    fake_player_fail_next_resume();
+    world_send(PLAYBACK_COMMAND_TOGGLE);
+
+    assert(fake_log_count() == 0U);
+}
+
+/**
  * @brief 被忽略的命令与无变化的唤醒不记日志；SELECT 记 Start。
  */
 static void test_ignored_commands_and_idle_wakes_do_not_log(void)
@@ -203,6 +239,8 @@ int main(void)
     test_audio_stop_reasons_are_logged();
     test_bad_file_skip_is_logged();
     test_stream_end_logs_finished_then_auto_advance();
+    test_auto_advance_failure_does_not_log_auto();
+    test_resume_failure_does_not_log_resume();
     test_ignored_commands_and_idle_wakes_do_not_log();
 
     puts("playback_task_log: all tests passed");

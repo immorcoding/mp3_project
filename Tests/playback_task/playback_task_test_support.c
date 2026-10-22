@@ -493,6 +493,7 @@ static bool player_event_output_started;
 static bool player_event_output_progress;
 static uint32_t player_event_underruns;
 static bool player_fail_next_stop;
+static bool player_fail_next_resume;
 static bool player_fail_next_pump;
 static bool player_refuse_next_begin;
 static bool player_faulted;
@@ -527,6 +528,7 @@ static void fake_player_reset(void)
     player_event_output_progress = false;
     player_event_underruns = 0U;
     player_fail_next_stop = false;
+    player_fail_next_resume = false;
     player_fail_next_pump = false;
     player_refuse_next_begin = false;
     player_faulted = false;
@@ -716,8 +718,9 @@ static Service_StatusTypeDef fake_pause_output(void)
 static Service_StatusTypeDef fake_resume_output(void)
 {
     call_log_add(CALL_RESUME);
-    if (!player_active)
+    if (!player_active || player_fail_next_resume)
     {
+        player_fail_next_resume = false;
         return SERVICE_NOT_READY;
     }
     player_paused = false;
@@ -871,6 +874,14 @@ void fake_player_emit_underrun(void)
 void fake_player_fail_next_stop(void)
 {
     player_fail_next_stop = true;
+}
+
+/**
+ * @brief 让下一次 ResumeOutput 返回 SERVICE_NOT_READY。
+ */
+void fake_player_fail_next_resume(void)
+{
+    player_fail_next_resume = true;
 }
 
 /**
