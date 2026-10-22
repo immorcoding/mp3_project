@@ -98,6 +98,14 @@ try {
     Write-Fixture 'docs/shape/inbox/notes.txt' 'x'
     Write-Fixture 'docs/shape/inbox/feature-x.md' $inboxValid
     Assert-DocsFailure '只放'
+    # 未拆分 area：title 回退到 area 文件内的 `## title` 标题。
+    Remove-Item -LiteralPath (Join-Path $fixture 'docs/shape/inbox/notes.txt')
+    Remove-Item -LiteralPath (Join-Path $fixture 'docs/shape/example.naming.md')
+    Write-Fixture 'docs/shape/example.md' $valid
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · example/naming · cite · EX-1 · 未拆分 area 的标题。')
+    Invoke-DocumentationCheck -RepositoryRoot $fixture
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · example/gone · cite · new · 未拆分 area 无此标题。')
+    Assert-DocsFailure '未知 title example/gone'
     Remove-Item -LiteralPath (Join-Path $fixture 'docs/shape/inbox') -Recurse -Force
     # 审阅导航在根目录，链接仍需检查；旧大写 REVIEW 不再是 shape area 例外。
     Write-Fixture 'CODING_STANDARDS.md' '[规范](docs/shape/example.md)'

@@ -156,12 +156,12 @@ function Get-InboxViolations {
     foreach ($file in @(Get-ChildItem -LiteralPath $inbox -File -Force)) {
         $name = 'docs/shape/inbox/' + $file.Name
         if ($file.Extension -ne '.md') { "${name}: inbox 只放 <分支>.md"; continue }
-        $number = 0; $content = $false
+        $number = 0; $seenHeader = $false
         foreach ($line in [IO.File]::ReadAllLines($file.FullName, [Text.Encoding]::UTF8)) {
             $number++; $at = "${name}:$number"
             if (-not $line.Trim()) { continue }
-            if (-not $content -and $line -match '^# Inbox: \S') { $content = $true; continue }
-            $content = $true
+            if (-not $seenHeader -and $line -match '^# Inbox: \S') { $seenHeader = $true; continue }
+            $seenHeader = $true
             if ($line -cnotmatch $linePattern) { "${at}: inbox 行须为 '- 日期 · area[/title] · kind · 内容'（kind 取 INBOX.md 的七种）"; continue }
             $area = $Matches[1]; $title = $Matches[2]; $kind = $Matches[3]
             if (($area -eq 'routes') -ne ($kind -eq 'route')) { "${at}: route 行的 area 须且只能为 routes"; continue }
