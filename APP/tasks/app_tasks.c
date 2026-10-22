@@ -55,10 +55,11 @@ static void create_task(void *handle)
 
     /* 固件版本只在启动时打印一次；队列已就绪，Log Task 创建后消费。
      * 这是刚初始化的空消息池里的第一条，不会被其他任务的早期 INFO 挤掉；此处失败只会是
-     * 版本串过长等构建缺陷，与 Service_Log_Init 失败同样按启动错误处理，不静默丢掉版本行。 */
+     * 版本串过长等构建缺陷。诊断行不得阻止播放器启动：失败时静默改投固定短行，
+     * 板测时日志里出现 "FW unknown" 即说明版本串有问题。 */
     if (Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "BOOT", "FW " FW_VERSION_STRING " " FW_BUILD_TYPE_STRING) != SERVICE_OK)
     {
-        Error_Handler();
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "BOOT", "FW unknown");
     }
 
     if ((xTaskCreate(log_task,
