@@ -108,7 +108,7 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
 
         if (strcmp(argv[i], "--shot") == 0)
         {
-            if ((sscanf(value, "%u:%n", &at, &consumed) != 1) || (consumed == 0))
+            if ((sscanf(value, "%u:%n", &at, &consumed) != 1) || (consumed == 0) || (value[consumed] == '\0'))
             {
                 fprintf(stderr, "bad --shot %s\n", value);
                 return false;
@@ -144,7 +144,7 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
         }
         else if (strcmp(argv[i], "--anims") == 0)
         {
-            if ((sscanf(value, "%u:%n", &at, &consumed) != 1) || (consumed == 0))
+            if ((sscanf(value, "%u:%n", &at, &consumed) != 1) || (consumed == 0) || (value[consumed] == '\0'))
             {
                 fprintf(stderr, "bad --anims %s\n", value);
                 return false;
