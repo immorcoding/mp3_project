@@ -1,46 +1,17 @@
 # Routes
 
-按改动目录读取接口、领域规则和技术正文；目录更深处的 README 解释局部实现。
+按改动目录读取接口、领域规则和技术正文。分层目录按层通配：先读层 README，再读目标模块 README；目录更深处的 README 解释局部实现。
 
 Routed: `Components/*/`, `Platform/*/`, `Service/*/`, `APP/tasks/*/`, `Tools/*/`, `Adapters/*/`, `Tests/`, `scripts/`
 
-- `Components/audio/`: 可复用设备协议与算法（audio）。Entry: [模块说明](../../Components/audio/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md)
-- `Components/axp2101/`: 可复用设备协议与算法（axp2101）。Entry: [模块说明](../../Components/axp2101/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Hardware](hardware.md)
-- `Components/flash_ftl/`: 可复用设备协议与算法（flash_ftl）。Entry: [模块说明](../../Components/flash_ftl/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Storage](storage.md)
-- `Components/ft6x36/`: 可复用设备协议与算法（ft6x36）。Entry: [模块说明](../../Components/ft6x36/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Hardware](hardware.md)
-- `Components/led/`: 可复用设备协议与算法（led）。Entry: [模块说明](../../Components/led/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md)
-- `Components/log/`: 可复用设备协议与算法（log）。Entry: [模块说明](../../Components/log/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Diagnostics](diagnostics.md)
-- `Components/resource_pack/`: 可复用设备协议与算法（resource_pack）。Entry: [模块说明](../../Components/resource_pack/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Resources](resources.md)
-- `Components/sd/`: 可复用设备协议与算法（sd）。Entry: [模块说明](../../Components/sd/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Storage](storage.md)
-- `Components/soft_i2c/`: 可复用设备协议与算法（soft_i2c）。Entry: [模块说明](../../Components/soft_i2c/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Hardware](hardware.md)
-- `Components/st7789/`: 可复用设备协议与算法（st7789）。Entry: [模块说明](../../Components/st7789/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [GUI](gui.md)
-- `Components/w25qxx/`: 可复用设备协议与算法（w25qxx）。Entry: [模块说明](../../Components/w25qxx/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Storage](storage.md)
-- `Platform/audio/`: 本板资源装配与产品硬件能力（audio）。Entry: [模块说明](../../Platform/audio/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md)
-- `Platform/flash/`: 本板资源装配与产品硬件能力（flash）。Entry: [模块说明](../../Platform/flash/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Storage](storage.md)
-- `Platform/lcd/`: 本板资源装配与产品硬件能力（lcd）。Entry: [模块说明](../../Platform/lcd/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [GUI](gui.md)
-- `Platform/led/`: 本板资源装配与产品硬件能力（led）。Entry: [模块说明](../../Platform/led/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md)
-- `Platform/log/`: 本板资源装配与产品硬件能力（log）。Entry: [模块说明](../../Platform/log/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Diagnostics](diagnostics.md)
-- `Platform/power/`: 本板资源装配与产品硬件能力（power）。Entry: [模块说明](../../Platform/power/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Hardware](hardware.md)
-- `Platform/sd/`: 本板资源装配与产品硬件能力（sd）。Entry: [模块说明](../../Platform/sd/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Storage](storage.md)
-- `Platform/sdram/`: 本板资源装配与产品硬件能力（sdram）。Entry: [模块说明](../../Platform/sdram/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Hardware](hardware.md)
-- `Platform/temp/`: 本板资源装配与产品硬件能力（temp）。Entry: [模块说明](../../Platform/temp/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Hardware](hardware.md)
-- `Platform/touch/`: 本板资源装配与产品硬件能力（touch）。Entry: [模块说明](../../Platform/touch/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Hardware](hardware.md)
-- `Service/filesystem/`: 跨模块产品流程（filesystem）。Entry: [模块说明](../../Service/filesystem/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Storage](storage.md)
-- `Service/gui/`: 跨模块产品流程（gui）。Entry: [模块说明](../../Service/gui/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [GUI](gui.md)
-- `Service/log/`: 跨模块产品流程（log）。Entry: [模块说明](../../Service/log/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Diagnostics](diagnostics.md)
-- `Service/playback/`: 跨模块产品流程（playback）。Entry: [模块说明](../../Service/playback/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md)
-- `Service/resource/`: 跨模块产品流程（resource）。Entry: [模块说明](../../Service/resource/README.md)。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Resources](resources.md)
-- `APP/tasks/storage/`: 介质生命周期、曲库与播放编排。Entry: [说明](../../APP/tasks/storage/README.md)。Areas: [Architecture](architecture.md) · [Storage](storage.md)
-- `APP/tasks/playback/`: 播放状态机与任务外壳。Entry: [说明](../../APP/tasks/playback/README.md)。Areas: [Architecture](architecture.md) · [Hardware](hardware.md)
-- `APP/tasks/gui/`: GUI 任务与跨任务窗口交接。Entry: [说明](../../APP/tasks/gui/README.md)。Areas: [Architecture](architecture.md) · [GUI](gui.md)
-- `APP/tasks/monitor/`: 结温与板级监控。Entry: [说明](../../APP/tasks/monitor/README.md)。Areas: [Architecture](architecture.md) · [Hardware](hardware.md)
-- `APP/tasks/log/`: 日志任务消费。Entry: [说明](../../APP/tasks/log/README.md)。Areas: [Architecture](architecture.md) · [Diagnostics](diagnostics.md)
+- `Components/*/`: 可复用设备协议与算法，每模块一目录。Entry: [层说明](../../Components/README.md) → 目标模块 README。Areas: [Architecture](architecture.md) · [Code style](code-style.md)；另按模块：[Hardware](hardware.md)（axp2101、ft6x36、soft_i2c）· [Storage](storage.md)（flash_ftl、sd、w25qxx）· [Diagnostics](diagnostics.md)（log）· [Resources](resources.md)（resource_pack）· [GUI](gui.md)（st7789）
+- `Platform/*/`: 本板资源装配与产品硬件能力。Entry: [层说明](../../Platform/README.md) → 目标模块 README。Areas: [Architecture](architecture.md) · [Code style](code-style.md)；另按模块：[Hardware](hardware.md)（power、sdram、temp、touch）· [Storage](storage.md)（flash、sd）· [Diagnostics](diagnostics.md)（log）· [GUI](gui.md)（lcd）
+- `Service/*/`: 跨模块产品流程。Entry: [层说明](../../Service/README.md) → 目标模块 README。Areas: [Architecture](architecture.md) · [Code style](code-style.md)；另按模块：[Storage](storage.md)（filesystem）· [GUI](gui.md)（gui）· [Diagnostics](diagnostics.md)（log）· [Resources](resources.md)（resource）
+- `APP/tasks/*/`: 任务外壳、状态机与跨任务交接。Entry: [任务总览](../../APP/tasks/README.md) → 目标 Task README。Areas: [Architecture](architecture.md)；另按任务：[Storage](storage.md)（storage）· [GUI](gui.md)（gui）· [Hardware](hardware.md)（monitor、playback）· [Diagnostics](diagnostics.md)（log、playback）
+- `Adapters/*/`: SDK/HAL 适配，分 bridge、cortex、stm32_hal 三类。Entry: [层说明](../../Adapters/README.md) → 类别与目标 Adapter README。Areas: [Architecture](architecture.md) · [Code style](code-style.md) · [Harness](harness.md)；`stm32_hal/` 另加 [Hardware](hardware.md)，其中 sd、w25qxx_qspi 另加 [Storage](storage.md)
 - `Tools/gui_simulator/`: 手写 GUI 的 PC 场景回归。Entry: [说明](../../Tools/gui_simulator/README.md)。Areas: [Architecture](architecture.md) · [GUI](gui.md)
 - `Tools/package_maker/`: 资源包构建工具。Entry: [说明](../../Tools/package_maker/main.py)。Areas: [Architecture](architecture.md) · [Resources](resources.md)
 - `Tools/external_loader/`: 独立 NOR 下载器。Entry: [说明](../../Tools/external_loader/README.md)。Areas: [Architecture](architecture.md) · [Storage](storage.md)
 - `Tools/board_test_card/`: 板级验收样本 MP3 生成。Entry: [说明](../../Tools/board_test_card/README.md)。Areas: [Workflow](workflow.md)
-- `Adapters/bridge/`: 跨 Component 接口转换。Entry: [入口](../../Adapters/README.md)。Areas: [Architecture](architecture.md) · [Harness](harness.md)
-- `Adapters/cortex/`: 内核 Cache 与周期计数。Entry: [入口](../../Adapters/README.md)。Areas: [Architecture](architecture.md) · [Harness](harness.md)
-- `Adapters/stm32_hal/`: HAL 和强类型 IRQ 适配。Entry: [入口](../../Adapters/README.md)。Areas: [Architecture](architecture.md) · [Harness](harness.md)
 - `Tests/`: 独立 host 行为测试。Entry: [入口](../../Tests/AGENTS.md)。Areas: [Architecture](architecture.md) · [Harness](harness.md)
 - `scripts/`: 构建、验证与 Hook。Entry: [入口](../../scripts/AGENTS.md)。Areas: [Architecture](architecture.md) · [Harness](harness.md)
