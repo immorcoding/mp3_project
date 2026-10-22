@@ -46,7 +46,7 @@ Next id: WF-14
 ### Signals
 
 - 2026-10-19 · cite · WF-3 · 已有板级验收清单模板 `docs/agents/board-test-checklist.md` 与打卡工具 `Tools/board_test_card/make_card.py`，结果词固定为 通过 / 部分 / 未测 / 记录。
-- 2026-10-19 · friction · WF-3 · 固件无版本出口、Underruns 与回调计数无日志，B/C/D 组多行只能听感或外部仪器；是否加固件侧诊断出口留给后续决定。
+- 2026-10-19 · friction · WF-3 · Underruns 与回调计数无日志（固件版本已由启动日志 `BOOT: FW <提交号>[-dirty] <构建类型>` 输出），B/C/D 组多行只能听感或外部仪器；是否加固件侧诊断出口留给后续决定。
 
 ## sessions
 

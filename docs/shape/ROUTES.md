@@ -38,6 +38,7 @@ Routed: `Components/*/`, `Platform/*/`, `Service/*/`, `APP/tasks/*/`, `Tools/*/`
 - `Tools/gui_simulator/`: 手写 GUI 的 PC 场景回归。Entry: [说明](../../Tools/gui_simulator/README.md)。Areas: [Architecture](architecture.md) · [GUI](gui.md)
 - `Tools/package_maker/`: 资源包构建工具。Entry: [说明](../../Tools/package_maker/main.py)。Areas: [Architecture](architecture.md) · [Resources](resources.md)
 - `Tools/external_loader/`: 独立 NOR 下载器。Entry: [说明](../../Tools/external_loader/README.md)。Areas: [Architecture](architecture.md) · [Storage](storage.md)
+- `Tools/board_test_card/`: 板级验收样本 MP3 生成。Entry: [说明](../../Tools/board_test_card/README.md)。Areas: [Workflow](workflow.md)
 - `Adapters/bridge/`: 跨 Component 接口转换。Entry: [入口](../../Adapters/README.md)。Areas: [Architecture](architecture.md) · [Harness](harness.md)
 - `Adapters/cortex/`: 内核 Cache 与周期计数。Entry: [入口](../../Adapters/README.md)。Areas: [Architecture](architecture.md) · [Harness](harness.md)
 - `Adapters/stm32_hal/`: HAL 和强类型 IRQ 适配。Entry: [入口](../../Adapters/README.md)。Areas: [Architecture](architecture.md) · [Harness](harness.md)
