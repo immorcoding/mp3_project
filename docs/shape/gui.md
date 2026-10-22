@@ -14,17 +14,13 @@ Next id: GUI-21
 
 - Library、Album Detail/Mini Player、Books/Reader、Settings 子页何时进入实施 spec？现有占位不代表已实现；阅读横滑与 Main 手势、阅读字号与系统字号须分开决定。
 - 可换壁纸、按内容版本的 Blur 缓存及 Settings 合成背景何时实施？先确认缓存键、失效、峰值内存和真机耗时，不把当前 Alpha 原型视为 RGB565 持久缓存。
-- ID3 封面何时接入？0.6.0 不做。时间、进度与三态由播放快照驱动，见 [transport](gui.transport.md)。
+- ID3 封面何时接入？0.6.0 不做。时间、进度与三态由播放快照驱动，见 [music](gui.music.md)。
 - 安全锁、背光与唤醒何时设计？Lock 当前仅视觉锁屏，真实亮度需 Platform LCD/PWM 能力。
 - 何时升级 LVGL 9 并评估 XML 编辑器？随 Vendor 升级再决定，ADR-0016 当前未采用。
 
 ## Titles
 
-- [ownership](gui.ownership.md): 对象、设计变更与行为模块的职责。
-- [appearance](gui.appearance.md): 颜色来源、外观与系统背景。
-- [navigation](gui.navigation.md): 普通页面结构与横向手势。
-- [queue](gui.queue.md): 窗口交接与播放列表行的稳定呈现。
-- [transport](gui.transport.md): 播放控制与唱盘呈现。
-- [effects](gui.effects.md): 离屏缓冲所有权、启动次序与局部玻璃。
-- [lock](gui.lock.md): 待机视觉层级与解锁提示。
-- [regression](gui.regression.md): 视觉变化的验收依据。
+- [ownership](gui.ownership.md): 对象、设计变更与行为模块的职责，以及视觉变化的验收依据。
+- [appearance](gui.appearance.md): 颜色来源、外观与系统背景，离屏缓冲所有权、启动次序与局部玻璃。
+- [navigation](gui.navigation.md): 普通页面结构与横向手势，待机视觉层级与解锁提示。
+- [music](gui.music.md): 音乐页：窗口交接与播放列表行的稳定呈现，播放控制与唱盘呈现。

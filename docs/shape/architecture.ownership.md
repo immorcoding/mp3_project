@@ -1,6 +1,6 @@
 # Architecture · ownership
 
-各层的抽象、板级资源和产品策略归属。
+各层的抽象、板级资源和产品策略归属，新增模块的准入与分类、构建封装与长期决策。
 
 [返回 Architecture](architecture.md)
 
@@ -11,6 +11,11 @@
 - **ARC-6** · settled · Platform 是唯一板级对象装配层，持有 Component Handle/Adapter Context，注入 PCB 资源、极性和启动等待，向上只发布产品能力；APP 不见寄存器、HAL Handle、USB 状态和 Component 私有 Handle。SDRAM Platform 负责 JEDEC 初始化，不拥有链接段、堆、帧缓冲或任务策略。 _Why:_ 板级装配集中才能隔离引脚、时序和资源实例变化。 _Source:_ [architecture_standard（迁移基线）](https://github.com/immorcoding/mp3_project/blob/232502bd4b66a728d26d58d39555f34bb3faedf2/docs/architecture_standard.md) §3.4 _Check:_ `CODING_STANDARDS.md` 的架构审阅入口。
 - **ARC-7** · settled · Service 经 Platform、Component 和必要 Middleware 的公开接口编排产品流程，不依赖 HAL；APP 负责启动顺序、失败策略、任务与 Service 连接，不构造 Ops、填写 Component Handle、解释 HAL 状态或访问寄存器。Storage Task 与未来 Service/storage 的产品服务职责分开。 _Why:_ 启动策略与可复用产品流程分别演进，避免透传硬件细节。 _Source:_ [architecture_standard（迁移基线）](https://github.com/immorcoding/mp3_project/blob/232502bd4b66a728d26d58d39555f34bb3faedf2/docs/architecture_standard.md) §2、§3.5–3.6 _Check:_ `CODING_STANDARDS.md` 的架构审阅入口。
 - **ARC-18** · provisional · DMA 缓冲的所有权按时段转移：提交前由缓冲所有者写入；提交后由传输模块持有并负责 Cache 维护，直到完成事件或停止确认成功才交还所有者；停止失败并锁存故障时，缓冲留在传输模块直到重启。 _Why:_ ADR-0006 要求调用者拥有完整缓存行，所有权必须与持有时段一致；HWD-5 的 LCD 绘制缓冲归还属于同一模式。 _Source:_ [ADR-0006](../adr/0006-cache-range-ownership.md)、[音频 DMA、Cache 与完成事件设计](https://github.com/immorcoding/mp3_project/issues/33)、[DMA 完成事实、欠载与 Stop 失败语义](https://github.com/immorcoding/mp3_project/issues/50) _Check:_ code-review 规范轴核对提交、完成与交还的调用点。
+- **ARC-4** · settled · 长期约束 Module 所有权、Interface 接缝、并发或资源生命周期的决定写 ADR；改变现行规则时同步 writer branch 的 shape，ADR 与技术文档不能各自发布冲突规则。 _Why:_ 保留决策原因，同时让当前标准只有一个约束源。 _Source:_ [domain.md](../agents/domain.md) _Check:_ `CODING_STANDARDS.md` 的架构审阅入口。
+- **ARC-13** · settled · 新增 Module 按可移植核心、SDK 转换、PCB 装配、产品流程、顶层启动判定 Components/Adapters/Platform/Service/APP 所有权；README 分别说明职责、资源与抽象所有权、公开接口、编译依赖、请求/事件/ISR 路径、禁止依赖与生命周期。边界不清先定 ADR/shape，不靠目录命名代替决定。 _Why:_ 目录位置不能替代接口与资源所有权的设计。 _Source:_ [architecture_standard（迁移基线）](https://github.com/immorcoding/mp3_project/blob/232502bd4b66a728d26d58d39555f34bb3faedf2/docs/architecture_standard.md) §12 _Check:_ `CODING_STANDARDS.md` 的架构审阅入口。
+- **ARC-14** · settled · 主机 Tests 独立 CMake，只编译待测核心和 Fake Adapter，不进入固件递归收集；项目 include 从工程根写完整路径。组件需跨仓复用时才增加独立 target，公开自己的 include、PRIVATE 实现依赖、PUBLIC 公共头暴露的依赖，不依赖固件目标的隐式 include。 _Why:_ 主机测试和可复用组件不能隐式依赖固件构建环境。 _Source:_ [architecture_standard（迁移基线）](https://github.com/immorcoding/mp3_project/blob/232502bd4b66a728d26d58d39555f34bb3faedf2/docs/architecture_standard.md) §2、§11 _Check:_ `CODING_STANDARDS.md` 的构建审阅入口。
+- **ARC-15** · settled · 未实现的 Module 不建立空目录或占位 Interface，新增模块先有真实职责与实现。 _Why:_ 占位抽象制造不存在的依赖边界。 _Source:_ [架构标准迁移基线](https://github.com/immorcoding/mp3_project/blob/232502bd4b66a728d26d58d39555f34bb3faedf2/docs/architecture_standard.md) §3.5 _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 对应领域审阅。
+- **ARC-16** · settled · Components 保持扁平，只有稳定分类需求才增加分组。 _Why:_ 目录层级需要服务实际查找和所有权，而非预想规模。 _Source:_ [架构标准迁移基线](https://github.com/immorcoding/mp3_project/blob/232502bd4b66a728d26d58d39555f34bb3faedf2/docs/architecture_standard.md) §2 _Check:_ [CODING_STANDARDS](../../CODING_STANDARDS.md) 对应领域审阅。
 
 ### Signals
 
@@ -18,3 +23,4 @@
 - 2026-10-17 · cite · new · 播放模块推进入口定为 `Service_Playback_Pump()`（另有 `PauseOutput`/`ResumeOutput`/`AbandonStream`），一条流被 `Pump` 驱动后解码半边的 `Advance`/`ReadFrame` 返回 `SERVICE_BUSY`；与 #71 D12 字面“`Advance` 承担推进”不同，待用户确认。
 - 2026-10-17 · cite · new · 暂停时连续欠载按丢弃半区、恢复时按解码进度整体重补处理；欠载恢复丢弃半区会丢至多约 24 ms 已写未提交音频，已解码时间不回退。听感代价待板测一并听。
 - 2026-10-19 · cite · new · 曲目数 N 未知（开启 OK 之前，或 SELECT 换了代次之后）时 NEXT/PREV 被忽略（仍回显命令序号），因为无法环形步进；K3 原文未规定，板测未见问题，主机测试 `playback_task_cursor` 固定该行为。
+- 2026-10-17 · cite · ARC-13 · 新建 `Service/playback/README.md` 与 `Middlewares/Third_Party/minimp3/README.md`（固定提交 `ea99364`），Service 层 README 补 `Service_Playback_*` 条目；已验证的 minimp3 行为写在前者“已知的 minimp3 行为”。

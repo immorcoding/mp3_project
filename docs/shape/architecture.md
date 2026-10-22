@@ -12,11 +12,7 @@ Next id: ARC-19
 
 ## Titles
 
-- [ownership](architecture.ownership.md): 各层的抽象、板级资源和产品策略归属。
+- [ownership](architecture.ownership.md): 各层的抽象、板级资源和产品策略归属，新增模块的准入与分类、构建封装与长期决策。
 - [generation](architecture.generation.md): 生成代码与自维护代码的修改边界。
-- [binding](architecture.binding.md): 实例装配与调用期间的对象寿命。
-- [errors](architecture.errors.md): 调用结果、生命周期状态与诊断原因。
-- [interrupts](architecture.interrupts.md): 中断发布事件与任务执行的交界。
+- [runtime](architecture.runtime.md): 实例装配与调用期间的对象寿命、中断与任务的交界、调用结果与生命周期状态。
 - [storage-seams](architecture.storage-seams.md): 文件系统与持久化层的公开接缝。
-- [evolution](architecture.evolution.md): 模块所有权判定、构建封装与长期决策。
-- [module-growth](architecture.module-growth.md): 新增模块与目录分类的准入条件。
