@@ -10,4 +10,4 @@
 
 ### Signals
 
-- 2026-10-22 · cite · GUI-15 · [#106](https://github.com/immorcoding/mp3_project/issues/106)：呼吸动画随 Lock 屏幕卸载停止、加载时重建，外观、时长、曲线不变；模拟器 `lock_anim` 场景以 `--anims` 断言 Lock 时 1、解锁后 0、回到 Lock 后 1。真屏确认回到 Lock 的恢复仍为 hw:pending（产品无重新锁屏入口）。
+- 2026-10-22 · cite · GUI-15 · [#106](https://github.com/immorcoding/mp3_project/issues/106)：呼吸动画随 Lock 屏幕卸载停止、加载时重建，外观、时长、曲线不变；模拟器 `lock_anim` 场景以 `--anims` 断言 Lock 时 1、解锁后 0、回到 Lock 后 1。

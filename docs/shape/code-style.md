@@ -26,7 +26,6 @@ Next id: STY-10
 ### Signals
 
 - 2026-10-19 · friction · STY-2 · 全仓库存量（`./scripts/check-doxygen.ps1 -Report`）：300 个手写 C/H、1517 个函数定义中 112 个缺文档或缺项（Tools 29、Service 24、Tests 24、Adapters 16、Components 9、APP 8、Platform 2；不含方向）；下次被改动时由检查拦住并顺手补齐，不做集中清欠。
-- 2026-10-19 · friction · new · `_Static_assert` 消息用英文还是中文没有规定：#71/#72 两者都有（`playback_task.c`、`gui_music_transport.c` 用英文），STY 只规定注释、文档用中文；用户决定维持现状，不立规则。
 
 ## config
 

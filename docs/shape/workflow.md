@@ -24,11 +24,6 @@ Next id: WF-14
 - **WF-2** · exploring · 雾里的大块工作走 `/wayfinder`；已清晰的功能走 `/to-spec` → `/to-tickets` → `/implement`。 _Why:_ 流程深度随不确定性选择，清晰任务无需重复探索。
 - **WF-13** · exploring · 一个次版本只做一个用户可见功能；补丁版本（如 0.6.1）只放修复与小打磨，不加新功能；补丁同样以一份 spec 作父事项，只写范围、交付与板级验收，不做设计展开。 _Why:_ 每个版本的范围能在一次集成分支上完成板级验收，避免把多个功能挤进同一版本；集成 PR 与合并板测清单需要父事项（GIT-3）。 _Source:_ [打磨阶段地图](https://github.com/immorcoding/mp3_project/issues/100)
 
-### Signals
-
-- 2026-10-02 · cite · WF-2 · tracker 迁移首次使用 spec #3 与子事项。
-- 2026-10-06 · cite · WF-2 · 文档重构通过决策地图与 spec #15 明确职责、入口、清理边界和验收。
-
 ## hardware-evidence
 
 板级状态与验收证据。

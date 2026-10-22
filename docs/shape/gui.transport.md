@@ -13,7 +13,5 @@
 
 ### Signals
 
-- 2026-10-19 · cite · GUI-20 · 用户决定保持现状：曲库代次由 0 变非 0 仍计为曲目身份变化，开播时唱盘角度多归零一次（约 6°）；GUI-19 的状态行闪烁深度与曲线（降到全透明，ease_in_out，300 ms）也保持现状。
-
 - 2026-10-07 · cite · GUI-14 · 旋转沿用 vinyl 合成后的同一 Image 与 SDRAM 缓冲，不新增资源；角度 0 与原基线一致。
 - 2026-10-19 · cite · GUI-19 · 优先级“常驻文本 > 跳过提示 > 时间”只在 `Service/gui/main/transport` 内；跳过提示为单次 `lv_timer`（2000 ms，累加时 `lv_timer_reset`），闪烁为以时间 Label 为 var 的 `lv_anim`，重复调用先删旧动画；模拟器日志 `music_stop_reasons` 连按两次播放后动画数只比静止时多一条。

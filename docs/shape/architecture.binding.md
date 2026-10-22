@@ -12,7 +12,4 @@
 ### Signals
 
 - 2026-10-17 · cite · ARC-17 · 播放任务的命令队列与状态信箱也用 `xQueueCreateStatic`，控制块与存储在 DTCM `.bss`（约 360 B），不占内核堆，创建不会失败（#80）。
-- 2026-10-19 · cite · ARC-17 · 板测 Playback Task 栈峰值 84.4%（最小余量 3184 B / 20480 B），堆最小余量 15792 B。
-- 2026-10-19 · cite · new · 新任务须在 `monitor_get_task_stack_words()`（`APP/tasks/monitor/monitor_task.c`）登记栈深，否则栈占用不出现在监控日志；Playback Task 曾因此缺失，已在 859f307 补登记。
-- 2026-10-17 · cite · new · 播放状态机为不依赖 FreeRTOS，在 `playback_machine.h` 自带与 `Storage_Audio*TypeDef` 1:1 的 `Playback_Machine*TypeDef` 与 Ops，由任务外壳映射，并用 `_Static_assert` 固定结构体大小、字段宽度与偏移、枚举值；漂移只在固件构建报错，主机测试不会。用户决定不把 Storage 的请求/记录类型拆到无 FreeRTOS 的头。
 - 2026-10-17 · cite · new · `playback_task()` 在队列创建、播放模块初始化或音频回调注册失败时记日志并 `vTaskDelete(NULL)`（`FreeRTOSConfig.h` 未开 `INCLUDE_vTaskSuspend`），快照保持全零；用户可能日后改为 `Error_Handler()`（同 `app_tasks.c` 创建失败）。该路径主机测试无法覆盖。

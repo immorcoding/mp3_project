@@ -37,8 +37,6 @@ SDRAM 初始化后内容、诊断与运行数据的所有权。
 ### Signals
 
 - 2026-10-08 · correction · HWD-2 · 放在 DTCM 不免 HWD-2 审查：启动与 MPU 仍须审查，只有 Cache/DMA 一项不适用。
-- 2026-10-08 · cite · HWD-2 · 音频块池（初值 32 × 32 KiB）新增 SDRAM NOLOAD 段，块内容入队才有效、不依赖清零；实施时按本规则审查启动、MPU 与全容量诊断的时机，块池不作 DMA 目标。
-
 ## internal-ram
 
 片内 DTCM、AXI SRAM 与 DMA 可达性的放置。

@@ -15,7 +15,6 @@
 ### Signals
 
 - 2026-10-08 · cite · ARC-18 · 音频块不是 DMA 缓冲，在空闲/就绪队列间按“持有指针者拥有”转移，不归本规则管；出现第二处同类用法时再考虑另立规则。
-- 2026-10-17 · cite · ARC-18 · PCM 两个半区按时段转移：预填由播放模块写、Start 视两半区已提交并 Clean；运行中释放后补满再 `SubmitHalf`；`Stop` 返回 OK 后交还；`Stop` 失败锁存 STOP_FAILED 后模块置 `Faulted`，不再写半区、不再 Start/Submit（主机测试覆盖暂停、欠载恢复、流尾和放弃四处 Stop 失败）。
 - 2026-10-17 · cite · new · 播放模块推进入口定为 `Service_Playback_Pump()`（另有 `PauseOutput`/`ResumeOutput`/`AbandonStream`），一条流被 `Pump` 驱动后解码半边的 `Advance`/`ReadFrame` 返回 `SERVICE_BUSY`；与 #71 D12 字面“`Advance` 承担推进”不同，待用户确认。
 - 2026-10-17 · cite · new · 暂停时连续欠载按丢弃半区、恢复时按解码进度整体重补处理；欠载恢复丢弃半区会丢至多约 24 ms 已写未提交音频，已解码时间不回退。听感代价待板测一并听。
 - 2026-10-19 · cite · new · 曲目数 N 未知（开启 OK 之前，或 SELECT 换了代次之后）时 NEXT/PREV 被忽略（仍回显命令序号），因为无法环形步进；K3 原文未规定，板测未见问题，主机测试 `playback_task_cursor` 固定该行为。

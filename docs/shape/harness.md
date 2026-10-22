@@ -62,7 +62,7 @@ Next id: HAR-15
 - 2026-10-19 · cite · HAR-11 · 主机模块 `PathPatterns` 手写会随 include 漂移；`scripts/check-test-paths.ps1`（FAST）对每个模块只配置 `Tests/<模块>/`、读 `compile_commands.json` 并以 `gcc -MM` 取依赖，要求每个仓库内依赖被该模块某个 PathPatterns 命中，首次运行补齐 22 处缺口并加路由断言；约 4.7 s。
 - 2026-10-19 · friction · HAR-5 · `check-test-paths.ps1` 发现的缺口集中在跨层聚合头与配置头（`Service/service.h`、`Platform/platform.h`、`APP/app_config.h`、`Service/log/log_service*.h` 等），一改就选中 4~6 个模块，CHANGED 变慢但正确；盲区：仅在别的宏定义下才包含的头、`file(READ)` 改写输入、链接脚本、测试数据与 `CMakeLists.txt` 不经 `#include`，过宽的模式不检查。
 - 2026-10-19 · friction · HAR-5 · FAST 因 `check-test-paths.ps1` 新增对 `cmake`、`ninja` 与主机 GCC 的依赖（FULL 本就需要），而 `scripts/AGENTS.md` 写“不为规则读取或 Hook 引入额外依赖”；两者是否冲突、要不要在 FAST 缺工具时降级，待用户决定。
-- 2026-10-19 · cite · HAR-5 · 新主机模块 `monitor_warn`（`APP/tasks/monitor/monitor_warn.c`）的保真边界：PASS 只证明未登记任务告警的去重/容量/截断逻辑；`monitor_task.c` 外壳（任务名到栈深的登记表、`Service_Log_Post` 的 WARN）无主机测试，靠固件构建与板上 MONITOR 日志，板上 WARN 行尚未验证（`hw:pending`）；漏登记是运行期 WARN，不是编译期保证。
+- 2026-10-19 · cite · HAR-5 · 新主机模块 `monitor_warn`（`APP/tasks/monitor/monitor_warn.c`）的保真边界：PASS 只证明未登记任务告警的去重/容量/截断逻辑；`monitor_task.c` 外壳（任务名到栈深的登记表、`Service_Log_Post` 的 WARN）无主机测试，靠固件构建与板上 MONITOR 日志；漏登记是运行期 WARN，不是编译期保证。
 
 ## collaboration
 
