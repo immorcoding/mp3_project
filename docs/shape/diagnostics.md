@@ -2,7 +2,7 @@
 
 错误解释与日志交付边界；通用错误模型沿用 [Architecture](architecture.md) ARC-9，ISR 边界沿用 ARC-10；调试中的易误判情况见 [错误观察对照](sources/diagnostic-observations.md)。
 
-Next id: DIAG-3
+Next id: DIAG-4
 
 ## Pillars
 
@@ -18,11 +18,8 @@ Next id: DIAG-3
 
 - **DIAG-1** · settled · 调度器启动后只有 Log Task 消费无锁日志核心；其他普通任务经先初始化的 Service_Log 非阻塞投递，tag 使用静态存储期字符串，文本由消息块复制。_Why:_ 核心不支持并发，队列复制块指针而不延长 tag 生命周期。_Source:_ [ADR-0004](../adr/0004-log-single-consumer-and-output-adapter.md)、[Service Log](../../Service/log/README.md) _Check:_ code-review 规范轴 核对生产者、单消费者和消息所有权。
 - **DIAG-2** · settled · 异步输出 Adapter 持有独立持久发送缓冲，提交后直到后端结束读取才复用；核心出队只表示 Adapter 已接受，不表示主机已收到。_Why:_ 出队后的核心槽位可立即复用，USB 仍异步读取提交指针。_Source:_ [USB 日志 Adapter](../../Adapters/stm32_hal/log_usb_cdc/README.md) _Check:_ code-review 规范轴核对异步提交、完成与缓冲复用。
+- **DIAG-3** · provisional · ISR 回调与每帧路径不调用 `Service_Log_Post`；播放 INFO 只在命令与曲目边界由播放任务记（标签 `PLAYBACK`），文本只含曲库序号与停止原因名，不含文件名。_Why:_ 日志投递占消息池且不属实时预算；文件名转换属曲名数据路径。_Source:_ [播放任务](../../APP/tasks/playback/README.md)、[#108](https://github.com/immorcoding/mp3_project/issues/108)
 
 ### References
 
 - [Service Log](../../Service/log/README.md)：消息池所有权与任务接缝；[Log Component](../../Components/log/README.md)：核心队列；[USB Adapter](../../Adapters/stm32_hal/log_usb_cdc/README.md)：就绪和异步输出。
-
-### Signals
-
-- 2026-10-19 · friction · new · `Platform/audio` 与播放代码（`Service/playback`、`APP/tasks/playback`）只记错误日志，没有 INFO 事件（开流、Start/Stop、切歌、停止原因），板级调试时难以从日志重建播放过程。
