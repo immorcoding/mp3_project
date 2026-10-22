@@ -28,7 +28,7 @@
 ## Shape 使用方式
 
 动到哪个领域先读哪个领域，并向用户提出其中 Proposed 条目。**exploring** 照做并记录摩擦；**provisional** 打破前先问；**settled** 强制执行。规则影响改动、挡路、被违反或用户纠正时，记带日期的 Signal；长期规则决定用 `shape-your-project`。
-领域文件只在 writer branch（本仓库 `main`）修改；其他分支的 Signal、草稿和批准写入 `docs/shape/inbox/<分支>.md`，合并到 writer branch 后 drain（HAR-8）。
+领域文件只在 writer branch（本仓库 `main`）修改，其他分支写 inbox（HAR-8）。
 
 ## 关键保护
 

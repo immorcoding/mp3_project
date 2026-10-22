@@ -63,7 +63,7 @@ Next id: WF-14
 
 ### Rules
 
-- **WF-7** · provisional · 规则挡住正在做的 ticket 时不排队等合并：开一张 `ready-for-human` 的决定 issue（规则、冲突的需求、各选项代价），受影响的 ticket 以 `blocked_by` 依赖它，后撞上同一规则的分支在该 issue 下评论并加依赖；决定后在 `main` 上改一次规则再关闭，被阻塞的分支先 `git merge origin/main` 再继续。_Why:_ inbox 要等合并才处理，挡路的规则等不了；用 merge 不用 rebase，免得强推。_Source:_ shape-your-project `INBOX.md`
+- **WF-7** · provisional · 规则挡住正在做的 ticket 时按 shape-your-project `INBOX.md`「When a rule blocks the work」升级：决定 issue 挂 `ready-for-human`，阻塞关系用 GitHub `blocked_by`（[issue-tracker](../agents/issue-tracker.md#wayfinding-operations) Blocking）。_Why:_ inbox 要等合并才处理，挡路的规则等不了；本仓库的人工决定状态与阻塞机制需要落到具体标签与 API。_Source:_ shape-your-project `INBOX.md`
 
 - **WF-9** · provisional · 活动文档描述当前有效设计与开发方式；过期操作和排障流水由 Git 历史承载，历史 ADR 明确替代关系后保留；资源按真实依赖判断去留，不另建历史操作归档文档堆。_Why:_ 历史操作与当前设计混排会误导新任务。_Source:_ [旧内容清理决定](https://github.com/immorcoding/mp3_project/issues/13)
 
