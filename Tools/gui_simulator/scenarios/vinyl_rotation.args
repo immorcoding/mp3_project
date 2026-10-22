@@ -35,5 +35,5 @@
 --shot 18200:cleared
 --shot 19200:cleared_hold
 --tap 19300:120,260
---shot 19600:cleared_play_ignored
+--shot 19600:cleared_play_not_ready
 --key 19700:a
