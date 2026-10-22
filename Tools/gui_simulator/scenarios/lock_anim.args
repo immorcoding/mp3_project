@@ -1,0 +1,9 @@
+# Lock 呼吸动画随屏幕：Lock 显示时 1 条，解锁后 Main 显示期间 0 条，回到 Lock 后恢复为 1 条
+# --anims 把运行中动画数写入 .expected（键为 anims.<name>），与帧哈希一同比对
+--anims 6000:lock_before
+--drag 6000:120,290:120,80:250
+--shot 7500:main_after_unlock
+--anims 7500:main_unlocked
+--key 8000:l
+--shot 9000:lock_again
+--anims 9000:lock_returned
