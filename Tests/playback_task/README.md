@@ -8,7 +8,7 @@
 
 断言只看公开可观察的行为：GUI 读到的快照（最近一次发布的内容）、请求信箱写入、块归还、对替身的调用序列。时间由测试传入，不依赖时间偶然性。
 
-八个 CTest：
+九个 CTest：
 
 | CTest | 覆盖 |
 |---|---|
@@ -20,6 +20,8 @@
 | `playback_task_stop_reasons` | B6 停止各行：IO_ERROR/READ_ERROR 保留游标，NOT_READY/STALE/NO_TRACK/CARD_REMOVED 重置游标；都不计入连跳；无卡按播放后可重试；停止放弃流、归还块、写“无流”；旧流终止事实丢弃；停止次数每次 +1 |
 | `playback_task_timeouts` | B7 T_data：等应答从写请求起算、应答/块重新计时、到期那次唤醒收到块不误停、欠载后的补满、暂停中换曲计时、暂停且输出已满/排空/停止不计时、播完前进后重新起算、回绕；B8 T_out：Start 起算、释放重新计时、预填与暂停不计时、恢复后起算、与 T_data 互不替代 |
 | `playback_task_faults` | TRANSFER_ERROR 与推进失败 → AUDIO_ERROR 可重试；STOP_FAILED → AUDIO_FAULT 锁存；锁存后 TOGGLE/SELECT 只让停止次数 +1、NEXT/PREV 只移动游标；切歌途中 Stop 失败时新流请求被“无流”覆盖；暂停、其他停止、T_out 到期时 Stop 失败升级为 AUDIO_FAULT；`BeginStream` 被拒 |
+
+`playback_task_log` 另用一个有序记录文本的 `LogInfo` 替身（`fake_log_*`），断言 INFO 事件的顺序与文案（#108）：播放、切歌、暂停、恢复、停止的完整序列、停止原因文案与快照一致、坏文件跳过、播完与自动前进、被忽略的命令与空闲唤醒不记日志。
 
 运行（仓库根目录）：
 
