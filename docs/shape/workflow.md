@@ -69,8 +69,11 @@ Next id: WF-14
 
 ### Rules
 
-- **WF-10** · provisional · docs 根 Markdown 收拢至 shape 的适用 area；模块 README 承载局部接口，ADR 保留取舍，tracker 管目标与进度。已有来源承接后删除重复正文，必要时新增 area。 _Why:_ 每种材料有唯一维护位置，入口只负责导航。 _Source:_ [spec #15](https://github.com/immorcoding/mp3_project/issues/15)
 - **WF-11** · provisional · 不可替代的硬件事实与格式表在 sources 由规则引用；实现讲解回模块来源，旧章节和操作流水不作为规则 title。 _Why:_ 规则服务未来决定，来源只补充决定所需的事实。 _Source:_ [spec #15](https://github.com/immorcoding/mp3_project/issues/15)
+
+### Rejected
+
+- 把 docs 根 Markdown 收拢进 shape 的迁移规则：迁移已完成（docs 下只剩 adr、agents、shape），各材料归属表留在 [domain](../agents/domain.md)。（was WF-10）
 
 ## vocabulary
 
@@ -78,4 +81,4 @@ Next id: WF-14
 
 ### Rules
 
-- **WF-8** · provisional · 根 GLOSSARY 从实际跨模块概念反查覆盖，保持短定义与歧义区分。 _Why:_ 旧词条有去向不等于当前领域概念完整。 _Source:_ [spec #15](https://github.com/immorcoding/mp3_project/issues/15)
+- **WF-8** · provisional · 根 GLOSSARY 覆盖代码中实际跨模块使用的项目特有概念，每条短定义并写明与易混概念的区别。 _Why:_ 旧词条有去向不等于当前领域概念完整。 _Source:_ [spec #15](https://github.com/immorcoding/mp3_project/issues/15)
