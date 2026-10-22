@@ -28,15 +28,12 @@ SDRAM 初始化后内容、诊断与运行数据的所有权。
 
 ### Rules
 
-- **HWD-2** · settled · NOLOAD 缓冲由拥有者在正式 SDRAM 初始化后、首次 CPU/DMA 使用前完整填充；全容量诊断仅在业务占用前独占运行，新增堆、栈或段先审查启动、MPU 与 Cache/DMA 所有权。_Why:_ NOLOAD 不自动清零，两次初始化之间内容无效，诊断覆写全容量。_Source:_ [ADR-0008](../adr/0008-sdram-early-init-and-noload-ownership.md) _Check:_ code-review 规范轴 检查链接段、首次写入与诊断调用时机。
+- **HWD-2** · settled · NOLOAD 缓冲由拥有者在正式 SDRAM 初始化后、首次 CPU/DMA 使用前完整填充；全容量诊断仅在业务占用前独占运行，新增堆、栈或段先审查启动、MPU 与 Cache/DMA 所有权；放在 DTCM 不免此审查，启动与 MPU 仍须审查，只有 Cache/DMA 一项不适用。_Why:_ NOLOAD 不自动清零，两次初始化之间内容无效，诊断覆写全容量。_Source:_ [ADR-0008](../adr/0008-sdram-early-init-and-noload-ownership.md) _Check:_ code-review 规范轴 检查链接段、首次写入与诊断调用时机。
 
 ### References
 
 - [硬件依据表](sources/hardware-facts.md)：器件兼容、刷新和启动等待的依据；初始化接口与诊断见 [Platform SDRAM](../../Platform/sdram/README.md)。
 
-### Signals
-
-- 2026-10-08 · correction · HWD-2 · 放在 DTCM 不免 HWD-2 审查：启动与 MPU 仍须审查，只有 Cache/DMA 一项不适用。
 ## internal-ram
 
 片内 DTCM、AXI SRAM 与 DMA 可达性的放置。
