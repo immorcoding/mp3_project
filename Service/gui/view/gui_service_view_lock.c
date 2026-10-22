@@ -55,6 +55,12 @@ static void service_gui_view_lock_start_breath(void)
  */
 static void service_gui_view_lock_stop_breath(void)
 {
+    /* lv_anim_del 的 var 为 NULL 时会删除所有同 exec_cb 的动画，group 尚未创建时必须直接返回。 */
+    if (service_gui_view_lock_unlock_group == NULL)
+    {
+        return;
+    }
+
     (void)lv_anim_del(service_gui_view_lock_unlock_group, service_gui_view_lock_set_opa);
     lv_obj_set_style_opa(service_gui_view_lock_unlock_group, LV_OPA_COVER, 0);
 }
