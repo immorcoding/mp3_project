@@ -1,6 +1,6 @@
 # Coding standards
 
-供 `code-review` 按本次 diff 选择适用规范；引用规则编号，指出违反 provisional 或 settled 规则的改动。正文由下列来源维护，本文件只提供评审指针。
+供根 [AGENTS](AGENTS.md#完成前)「完成前」指定的审阅 skill 按本次 diff 选择适用规范；引用规则编号，指出违反 provisional 或 settled 规则的改动。正文由下列来源维护，本文件只提供评审指针。
 
 | 变动范围 | 规范与检查依据 |
 | --- | --- |

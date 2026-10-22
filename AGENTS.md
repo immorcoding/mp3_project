@@ -4,7 +4,7 @@
 
 ## 开始任务
 
-- GitHub spec/ticket：先读事项及评论，再按 [workflow](docs/shape/workflow.md) 与 [tracker](docs/agents/issue-tracker.md) 处理依赖、进度和证据；提交与 PR 读 [git](docs/shape/git.md)。
+- GitHub spec/ticket：先读事项及评论，再按 [workflow](docs/shape/workflow.md) 与 [tracker](docs/agents/issue-tracker.md) 处理依赖、进度和证据；提交与 PR 读 [git](docs/shape/git.md)。implement-spec 止于 draft PR，转 ready 与合并归用户（GIT-3）。
 - 修改文件：先读路径上最近的子 `AGENTS.md`，按 [ROUTES](docs/shape/ROUTES.md) 找目标模块 README、领域规则与技术正文；其他文档从 [文档地图](docs/shape/README.md) 找。
 - 跨层、边界或公开接口变化：读 [architecture](docs/shape/architecture.md) 与相关模块 README，分别判断所有权、include 和运行时路径；完成事件沿相关模块 README 核对，C 代码另读 [code-style](docs/shape/code-style.md)。
 - GUI 变化：先读 [gui](docs/shape/gui.md)，更新其中受影响的规则或待决设计，再改手写 view。
@@ -39,4 +39,4 @@
 ## 完成前
 
 按 [verification](docs/shape/sources/verification.md) 验证：声称软件验证完成前 `./scripts/verify.ps1`（FULL）必须通过；GUI 变化另跑 `./Tools/gui_simulator/run-scenarios.ps1`，基线变更遵守 GUI-4。
-`PASS_HOST_ONLY`、`NEEDS_HARDWARE_VALIDATION` 和 PC 像素等价都不是板级验收；待上板事项标 `hw:pending`。非 trivial 变化统一使用 `code-review`，规范来源见 [CODING_STANDARDS](CODING_STANDARDS.md)，范围与证据要求见 [harness](docs/shape/harness.md#verification)。
+`PASS_HOST_ONLY`、`NEEDS_HARDWARE_VALIDATION` 和 PC 像素等价都不是板级验收；待上板事项标 `hw:pending`。非 trivial 变化统一用 `mattpocock-skills:code-review` 审阅（名称带插件前缀；规范轴对照 [CODING_STANDARDS](CODING_STANDARDS.md)，需求轴对照 spec/ticket），本仓库其他文档说“审阅”即指它；范围与证据要求见 [harness](docs/shape/harness.md#verification)。
