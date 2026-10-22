@@ -96,6 +96,7 @@ typedef struct
     Playback_MachineStorageOpsTypeDef Storage;                        /**< 存储窗口。 */
     Playback_MachinePlayerOpsTypeDef Player;                          /**< 播放模块。 */
     void (*PublishSnapshot)(const Playback_SnapshotTypeDef *snapshot);/**< 覆盖写状态信箱；只在快照变化时调用。 */
+    void (*LogInfo)(const char *text);                                /**< INFO 日志（可为空）；只在命令与曲目边界调用，不进每帧路径；文本由实现复制。 */
 } Playback_MachineOpsTypeDef;
 
 /**

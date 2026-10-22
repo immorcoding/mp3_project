@@ -68,6 +68,23 @@
 - 存储窗口：写请求信箱、窥视流记录、窥视/取走就绪块、归还块。类型与 `storage_audio_stream.h` 的请求、记录、结果枚举一一对应，外壳做 1:1 映射并以静态断言固定。
 - 播放模块：`BeginStream`、`Feed`、`FinishInput`、`Pump`、`PauseOutput`、`ResumeOutput`、`AbandonStream`，签名即 `Service_Playback_*`，外壳直接填函数指针。
 - 状态信箱：`PublishSnapshot` 覆盖写。
+- INFO 日志：`LogInfo(text)` 可为空；外壳接到 `Service_Log_Post(INFO, "PLAYBACK", text)`（非阻塞，队列满丢弃）。
+
+## INFO 日志事件
+
+状态机只在命令与曲目边界记 INFO，频率随命令与曲目数有界；`Platform/audio`（ISR 回调路径）与 `Service/playback`（每帧路径）不记 INFO。只记曲库序号 `idx`，不记文件名（曲名属于曲名数据路径）。文案固定，主机测试 `playback_task_log` 按顺序断言：
+
+| 文案 | 时机 |
+|---|---|
+| `Start idx=N` | 停止态 TOGGLE 开播，或 SELECT 选中并播放 |
+| `Open idx=N rate=R` | 首帧解出（开流成功，R 为采样率 Hz） |
+| `Pause` / `Resume` | 播放中 TOGGLE 暂停 / 暂停中 TOGGLE 恢复 |
+| `Next idx=N` / `Prev idx=N` | 用户切歌，N 为新序号 |
+| `Skip bad idx=N` | 跳过坏文件（含 Start 被拒、同步预算耗尽），N 为被跳过的曲目 |
+| `Finished idx=N` / `Auto idx=M` | 播完，随后自动前进到 M |
+| `Stop reason=NAME` | 进入停止态，NAME 为快照 `StopReason` 的枚举名（去掉 `PLAYBACK_STOP_REASON_` 前缀） |
+
+一次「播放 → 切歌 → 暂停 → 停止」因此可按日志顺序重建，停止原因与快照一致。
 
 ## 编译期依赖
 

@@ -20,6 +20,7 @@
 #include "APP/tasks/gui/gui_task.h"
 
 #include "Service/log/log_service.h"
+#include "generated/fw_version.h"
 #include "main.h"
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
@@ -51,6 +52,9 @@ static void create_task(void *handle)
     {
         Error_Handler();
     }
+
+    /* 固件版本只在启动时打印一次；队列已就绪，Log Task 创建后消费。 */
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "BOOT", "FW " FW_VERSION_STRING " " FW_BUILD_TYPE_STRING);
 
     if ((xTaskCreate(log_task,
                      "Log Task",

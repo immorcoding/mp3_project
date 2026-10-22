@@ -38,6 +38,13 @@ uint32_t call_log_count_of(CallKindTypeDef kind);
 /** @brief 第 nth（从 0 起）次 kind 在日志里的位置；不存在返回 UINT32_MAX。 */
 uint32_t call_log_index_of(CallKindTypeDef kind, uint32_t nth);
 
+/* INFO 日志记录（LogInfo 的接收端）：按调用顺序保存文本，不带等级与标签（外壳固定为 INFO + PLAYBACK）。 */
+#define FAKE_LOG_CAPACITY 64U
+#define FAKE_LOG_TEXT_MAX 64U
+uint32_t fake_log_count(void);
+const char *fake_log_text(uint32_t index);
+void fake_log_clear(void);
+
 /* 快照记录（PublishSnapshot 的接收端）。 */
 uint32_t published_count(void);
 Playback_SnapshotTypeDef published_last(void);

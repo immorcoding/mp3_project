@@ -111,11 +111,28 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${APP_SOURCES}
 )
 
+# 固件版本头：每次构建运行 cmake/fw_version.cmake（git describe --always --dirty），
+# 内容不变不覆盖，增量构建不因版本不变而重编。不在 configure 时生成，否则不重新 configure 就会过期。
+# 脚本构建与 IDE 构建共用这条路径。头文件以 "generated/fw_version.h" 包含。
+set(FW_VERSION_HEADER "${CMAKE_BINARY_DIR}/generated/fw_version.h")
+add_custom_target(fw_version
+    COMMAND ${CMAKE_COMMAND}
+            -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -DOUTPUT=${FW_VERSION_HEADER}
+            -DBUILD_TYPE=${CMAKE_BUILD_TYPE}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/fw_version.cmake
+    BYPRODUCTS ${FW_VERSION_HEADER}
+    COMMENT "正在生成固件版本头"
+    VERBATIM
+)
+add_dependencies(${CMAKE_PROJECT_NAME} fw_version)
+
 # 只把工程根目录加入头文件搜索路径。
 # 因此源码使用 "Components/axp2101/axp2101.h" 这类从工程根目录开始的
 # 明确完整路径，而不是把每个叶子目录都加入搜索路径后依赖可能重名的短文件名。
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}
 
     # 在此添加用户自定义的头文件搜索路径
 )

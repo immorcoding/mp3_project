@@ -256,6 +256,15 @@ static void playback_task_return_block(const Playback_MachineBlockTypeDef *block
     (void)storage_audio_stream_return_block((Storage_AudioBlockTypeDef *)block->Handle);
 }
 
+/**
+ * @brief 状态机的 INFO 日志出口：非阻塞投递到 Log Task，失败（队列满）丢弃。
+ * @param[in] text 日志文本，由 Service_Log 复制。
+ */
+static void playback_task_log_info(const char *text)
+{
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, playback_task_log_tag, text);
+}
+
 /** @brief 状态机的全部外部依赖：存储窗口经本文件适配，播放模块直接填 Service_Playback_* 函数指针。 */
 static const Playback_MachineOpsTypeDef playback_task_ops = {
     .Storage = {
@@ -275,6 +284,7 @@ static const Playback_MachineOpsTypeDef playback_task_ops = {
         .AbandonStream = Service_Playback_AbandonStream,
     },
     .PublishSnapshot = playback_task_publish_snapshot,
+    .LogInfo = playback_task_log_info,
 };
 
 /**
