@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "lvgl.h"
+
 #include "sim_display.h"
 
 #define SIM_SCRIPT_MAX_ACTIONS  64
@@ -19,7 +21,8 @@ typedef enum
 {
     SIM_ACTION_SHOT = 0,
     SIM_ACTION_DRAG,
-    SIM_ACTION_KEY
+    SIM_ACTION_KEY,
+    SIM_ACTION_ANIMS
 } sim_action_kind_t;
 
 typedef struct
@@ -53,6 +56,14 @@ static bool sim_script_add(const sim_action_t *action)
     return true;
 }
 
+/**
+ * @brief 解析命令行脚本参数，登记定时动作。
+ * @param[in]  argc    参数个数。
+ * @param[in]  argv    参数数组。
+ * @param[out] options 解析出的窗口与时钟选项。
+ * @retval true  解析成功。
+ * @retval false 参数无法解析，已向 stderr 打印原因。
+ */
 bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
 {
     int i;
@@ -97,7 +108,7 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
 
         if (strcmp(argv[i], "--shot") == 0)
         {
-            if ((sscanf(value, "%u:%n", &at, &consumed) != 1) || (consumed == 0))
+            if ((sscanf(value, "%u:%n", &at, &consumed) != 1) || (consumed == 0) || (value[consumed] == '\0'))
             {
                 fprintf(stderr, "bad --shot %s\n", value);
                 return false;
@@ -131,6 +142,16 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
             action.kind = SIM_ACTION_DRAG;
             action.duration_ms = (duration == 0U) ? 1U : duration;
         }
+        else if (strcmp(argv[i], "--anims") == 0)
+        {
+            if ((sscanf(value, "%u:%n", &at, &consumed) != 1) || (consumed == 0) || (value[consumed] == '\0'))
+            {
+                fprintf(stderr, "bad --anims %s\n", value);
+                return false;
+            }
+            action.kind = SIM_ACTION_ANIMS;
+            action.path = value + consumed;
+        }
         else if (strcmp(argv[i], "--key") == 0)
         {
             if (sscanf(value, "%u:%c", &at, &action.key) != 2)
@@ -158,6 +179,13 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
     return true;
 }
 
+/**
+ * @brief 推进脚本：执行到期的截图、动画计数、按键与触点动作。
+ * @param[in] elapsed_ms 自 GUI 初始化完成起的毫秒数。
+ * @param[in] on_key     按键动作的处理函数。
+ * @retval true  所有动作已完成，应退出。
+ * @retval false 无脚本或仍有未完成动作。
+ */
 bool sim_script_step(uint32_t elapsed_ms, sim_script_key_handler_t on_key)
 {
     int i;
@@ -196,6 +224,11 @@ bool sim_script_step(uint32_t elapsed_ms, sim_script_key_handler_t on_key)
                    sim_display_save_bmp(path) ? "" : " (save failed)");
             action->done = true;
         }
+            break;
+
+        case SIM_ACTION_ANIMS:
+            printf("[anims] %s %u\n", action->path, (unsigned)lv_anim_count_running());
+            action->done = true;
             break;
 
         case SIM_ACTION_KEY:

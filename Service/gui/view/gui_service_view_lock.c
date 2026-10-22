@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    gui_service_view_lock.c
-  * @brief   Lock Screen 的对象树、静态样式、呼吸提示与上滑解锁。
+  * @brief   Lock Screen 的对象树、静态样式、呼吸提示（随屏幕加载/卸载启停）与上滑解锁。
   *
   * @details
   *          锁屏首版是待机视觉页：大号时间、日期、电量与底部解锁提示。
@@ -50,7 +50,23 @@ static void service_gui_view_lock_start_breath(void)
 }
 
 /**
- * @brief Lock Screen 事件：加载后开始呼吸；向上手势淡出到 Main。
+ * @brief 停止底部解锁提示的呼吸，并把不透明度恢复为不透明。
+ * @note  Lock 不再可见时不应继续驱动 GUI；恢复不透明保证下次加载从同一外观起步。
+ */
+static void service_gui_view_lock_stop_breath(void)
+{
+    /* lv_anim_del 的 var 为 NULL 时会删除所有同 exec_cb 的动画，group 尚未创建时必须直接返回。 */
+    if (service_gui_view_lock_unlock_group == NULL)
+    {
+        return;
+    }
+
+    (void)lv_anim_del(service_gui_view_lock_unlock_group, service_gui_view_lock_set_opa);
+    lv_obj_set_style_opa(service_gui_view_lock_unlock_group, LV_OPA_COVER, 0);
+}
+
+/**
+ * @brief Lock Screen 事件：加载后开始呼吸、卸载后停止；向上手势淡出到 Main。
  * @param[in] event Lock Screen 事件。
  */
 static void service_gui_view_lock_event(lv_event_t *event)
@@ -59,7 +75,13 @@ static void service_gui_view_lock_event(lv_event_t *event)
 
     if (code == LV_EVENT_SCREEN_LOADED)
     {
+        /* 先删再建：Boot 与回到 Lock 的路径都不叠加第二条动画。 */
+        service_gui_view_lock_stop_breath();
         service_gui_view_lock_start_breath();
+    }
+    else if (code == LV_EVENT_SCREEN_UNLOADED)
+    {
+        service_gui_view_lock_stop_breath();
     }
     else if ((code == LV_EVENT_GESTURE) &&
              (lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP))

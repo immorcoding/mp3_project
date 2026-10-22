@@ -8,6 +8,7 @@
   *            --shot  T:name                T 时保存 <out-dir>/name.bmp 并打印帧哈希
   *            --tap   T:x,y                 T 时按下，80 ms 后松开
   *            --drag  T:x0,y0:x1,y1:D       T 时按下，D ms 内线性移动后松开
+  *            --anims T:name                T 时打印 "[anims] name N"（LVGL 运行中动画数）
   *            --key   T:c                   T 时触发按键 c（同窗口键盘）
   *            --out-dir DIR                 截图目录，默认当前目录
   *            --hidden                      不显示窗口

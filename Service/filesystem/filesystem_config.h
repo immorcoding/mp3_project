@@ -36,6 +36,9 @@
 #define FILESYSTEM_SD_DMA_BUFFER_ALIGNMENT   PLATFORM_DCACHE_LINE_SIZE  /* SDMMC DMA 中转对齐，复用 Platform 公开的 D-Cache 行大小。 */
 
 /* filesystem_sd_bsp.c */
-#define FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS  30000U  /* 同步 FatFs DiskIO Bridge 等待一次 SDMMC DMA 事件的最大时间，单位为毫秒。 */
+/* 依据：SD 规范读访问上限 100 ms、SDHC 写忙 250 ms、SDXC 写忙 500 ms，另含 32 KiB 分块的传输时间；
+ * 远小于播放侧 T_data（2 s）。按每个 DMA 分块计，不是整次 FatFs 请求；产品路径不写 SD，故不拆读写常量。
+ * 超时后 filesystem_sd_transfer_finish 以 ERROR 收尾，BSP 返回 MSD_ERROR，Storage 回到主循环。 */
+#define FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS  500U    /* 同步 FatFs DiskIO Bridge 等待一个 SDMMC DMA 分块事件的最大时间，单位为毫秒。 */
 
 #endif /* FILESYSTEM_CONFIG_H */

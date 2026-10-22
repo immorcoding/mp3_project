@@ -13,7 +13,8 @@
   *          后端按拔卡停止）；G 模拟重扫（代次 +1，已显示窗口保留到下一次
   *          request）；S 挂起/恢复假后端的命令处理；B 让假后端之后一次开启为坏
   *          文件；R 让假后端以下一个非 NONE 停止原因停止；A 打印 LVGL 运行中动画数
-  *          （核对唱盘与状态行闪烁不叠加）；Esc 退出。脚本参数见 sim_script.h。
+  *          （核对唱盘与状态行闪烁不叠加）；L 淡出回到 Lock（核对 Lock 呼吸随屏幕
+  *          重启）；Esc 退出。脚本参数见 sim_script.h。
   ******************************************************************************
   */
 
@@ -27,6 +28,7 @@
 
 #include "APP/tasks/gui/music/gui_music.h"
 #include "Service/gui/gui_service.h"
+#include "Service/gui/view/gui_service_view.h"
 #include "fakes/playback_sim.h"
 #include "fakes/resource_sim.h"
 #include "fakes/storage_sim.h"
@@ -78,6 +80,12 @@ static void sim_handle_key(char key)
     if ((key == 'a') || (key == 'A'))
     {
         printf("[anim] running %u\n", (unsigned)lv_anim_count_running());
+        return;
+    }
+    if ((key == 'l') || (key == 'L'))
+    {
+        /* 回到 Lock：产品暂无重新锁屏入口，模拟器用它验证 Lock 动画随屏幕重启。 */
+        lv_scr_load_anim(service_gui_view_get()->lock, LV_SCR_LOAD_ANIM_FADE_OUT, 300U, 0U, false);
         return;
     }
     if ((key == 't') || (key == 'T'))
@@ -143,6 +151,14 @@ static bool sim_pump_events(void)
     return true;
 }
 
+/**
+ * @brief 模拟器入口：解析脚本参数，初始化显示与 GUI，运行主循环直到退出。
+ * @param[in] argc 参数个数。
+ * @param[in] argv 参数数组，格式见 sim_script.h。
+ * @retval 0 正常退出。
+ * @retval 1 资源、显示或 GUI 初始化失败。
+ * @retval 2 脚本参数无法解析。
+ */
 int main(int argc, char *argv[])
 {
     Service_StatusTypeDef status;
@@ -181,7 +197,7 @@ int main(int argc, char *argv[])
     gui_music_init();
     printf("[sim] running. T: toggle theme, C: card remove/mount, G: rescan, "
            "S: suspend/resume playback, B: next open bad, R: stop with next reason, "
-           "A: anim count, Esc: quit\n");
+           "A: anim count, L: back to Lock, Esc: quit\n");
     start_ms = sim_clock_now();
 
     while (sim_pump_events())

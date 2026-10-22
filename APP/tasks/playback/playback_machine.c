@@ -9,6 +9,7 @@
 #include "APP/tasks/playback/playback_machine.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 /**
@@ -47,6 +48,73 @@ static void publish_if_changed(Playback_MachineTypeDef *machine)
     {
         machine->Ops->PublishSnapshot(&machine->Published);
     }
+}
+
+/**
+ * @brief 停止原因的日志名，与 Playback_StopReasonTypeDef 的枚举名（去掉前缀）一致。
+ * @param[in] reason 停止原因。
+ * @return 静态字符串。
+ */
+static const char *stop_reason_name(Playback_StopReasonTypeDef reason)
+{
+    static const char *const names[PLAYBACK_STOP_REASON_COUNT] = {
+        "NONE", "CARD_REMOVED", "NOT_READY", "NO_TRACK", "CATALOG_CHANGED",
+        "READ_ERROR", "NO_DATA", "AUDIO_ERROR", "AUDIO_FAULT", "ALL_BAD"
+    };
+
+    return ((unsigned)reason < (unsigned)PLAYBACK_STOP_REASON_COUNT) ? names[reason] : "UNKNOWN";
+}
+
+/**
+ * @brief 记一条 INFO 日志：事件加曲库序号（可选）与一个可选数值，格式 "<事件> [idx=<序号>] [<键>=<值>]"。
+ * @param[in] machine 状态机。
+ * @param[in] event 事件名，静态字符串。
+ * @param[in] with_index 是否附当前游标的曲库序号。
+ * @param[in] key 数值的键名；NULL 表示不附数值。
+ * @param[in] value 数值（key 非 NULL 时有效）。
+ * @note  只在命令与曲目边界调用；不记文件名（曲名属于曲名数据路径）。所有 INFO 事件共用本格式化路径；
+ *        缓冲放不下时末字符改为 '~'，截断可见而不静默。
+ */
+static void log_event_value(const Playback_MachineTypeDef *machine, const char *event, bool with_index,
+                            const char *key, unsigned long value)
+{
+    char text[PLAYBACK_MACHINE_LOG_TEXT_SIZE];
+    size_t used;
+    int written;
+
+    if (machine->Ops->LogInfo == NULL)
+    {
+        return;
+    }
+
+    written = snprintf(text, sizeof(text), "%s", event);
+    if (with_index && (written >= 0) && ((size_t)written < sizeof(text)))
+    {
+        used = (size_t)written;
+        written += snprintf(&text[used], sizeof(text) - used, " idx=%u", (unsigned)machine->Snapshot.Index);
+    }
+    if ((key != NULL) && (written >= 0) && ((size_t)written < sizeof(text)))
+    {
+        used = (size_t)written;
+        written += snprintf(&text[used], sizeof(text) - used, " %s=%lu", key, value);
+    }
+    if ((written < 0) || ((size_t)written >= sizeof(text)))
+    {
+        text[sizeof(text) - 2U] = '~';
+        text[sizeof(text) - 1U] = '\0';
+    }
+    machine->Ops->LogInfo(text);
+}
+
+/**
+ * @brief 记一条不带数值的 INFO 日志。
+ * @param[in] machine 状态机。
+ * @param[in] event 事件名，静态字符串。
+ * @param[in] with_index 是否附当前游标的曲库序号。
+ */
+static void log_event(const Playback_MachineTypeDef *machine, const char *event, bool with_index)
+{
+    log_event_value(machine, event, with_index, NULL, 0UL);
 }
 
 /**
@@ -246,6 +314,13 @@ static void enter_stopped(Playback_MachineTypeDef *machine, Playback_StopReasonT
     machine->Snapshot.PositionMs = 0U;
     machine->Snapshot.DurationMs = 0U;
     machine->Snapshot.StopCount++;
+    if (machine->Ops->LogInfo != NULL)
+    {
+        char text[48];
+
+        (void)snprintf(text, sizeof(text), "Stop reason=%s", stop_reason_name(reason));
+        machine->Ops->LogInfo(text);
+    }
     if (!keep_cursor)
     {
         machine->Snapshot.HasTrack = false;
@@ -316,6 +391,7 @@ static void start_from_stopped(Playback_MachineTypeDef *machine)
     note_user_move(machine, true);
     machine->Snapshot.State = PLAYBACK_STATE_PLAYING;
     machine->Snapshot.StopReason = PLAYBACK_STOP_REASON_NONE;
+    log_event(machine, "Start", true);
     switch_to_cursor_track(machine);
 }
 
@@ -338,16 +414,23 @@ static void handle_toggle(Playback_MachineTypeDef *machine)
             machine->OutputRunning = false;
         }
         machine->Snapshot.State = PLAYBACK_STATE_PAUSED;
+        log_event(machine, "Pause", false);
         break;
 
     case PLAYBACK_STATE_PAUSED:
         machine->Snapshot.State = PLAYBACK_STATE_PLAYING;
-        if (machine->StreamBegun && (machine->Ops->Player.ResumeOutput() == SERVICE_OK))
+        if (!machine->StreamBegun)
+        {
+            log_event(machine, "Resume", false);
+        }
+        else if (machine->Ops->Player.ResumeOutput() == SERVICE_OK)
         {
             /* 恢复即 Start（补满半区的罕见情形下由随后的 Pump 回报 Start）：T_out 从此刻起算。 */
             machine->OutputRunning = true;
             machine->OutputSinceMs = machine->NowMs;
+            log_event(machine, "Resume", false);
         }
+        /* ResumeOutput 失败不记 Resume：输出未恢复，随后由 T_data/T_out 超时走停止日志。 */
         break;
 
     case PLAYBACK_STATE_STOPPED:
@@ -379,6 +462,7 @@ static void handle_step(Playback_MachineTypeDef *machine, bool forward)
     }
 
     note_user_move(machine, forward);
+    log_event(machine, forward ? "Next" : "Prev", true);
     if (machine->Snapshot.State != PLAYBACK_STATE_STOPPED)
     {
         switch_to_cursor_track(machine);
@@ -410,6 +494,7 @@ static void handle_select(Playback_MachineTypeDef *machine, const Playback_Comma
     machine->Snapshot.Index = command->Index;
     machine->Snapshot.State = PLAYBACK_STATE_PLAYING;
     machine->Snapshot.StopReason = PLAYBACK_STOP_REASON_NONE;
+    log_event(machine, "Start", true);
     switch_to_cursor_track(machine);
 }
 
@@ -508,6 +593,7 @@ static void skip_bad_file(Playback_MachineTypeDef *machine)
 
     machine->Snapshot.SkippedBadCount++;
     machine->ConsecutiveSkips++;
+    log_event(machine, "Skip bad", true);
     if (machine->ConsecutiveSkips >= machine->TrackCount)
     {
         enter_stopped(machine, PLAYBACK_STOP_REASON_ALL_BAD, true);
@@ -663,9 +749,16 @@ static void finish_input_if_drained(Playback_MachineTypeDef *machine)
  */
 static void advance_after_stream_end(Playback_MachineTypeDef *machine)
 {
+    bool moved;
+
+    log_event(machine, "Finished", true);
     machine->SkipForward = true;
-    (void)step_cursor(machine, true);
+    moved = step_cursor(machine, true);
     switch_to_cursor_track(machine);
+    if (moved && (machine->Snapshot.State != PLAYBACK_STATE_STOPPED))
+    {
+        log_event(machine, "Auto", true);
+    }
 }
 
 /**
@@ -715,6 +808,7 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
 
     if (report->FirstFrame)
     {
+        log_event_value(machine, "Open", true, "rate", (unsigned long)report->StreamInfo.SampleRateHz);
         machine->Snapshot.DurationMs = report->StreamInfo.TotalDurationMs;
     }
     if (report->DecodedMs > machine->Snapshot.PositionMs)

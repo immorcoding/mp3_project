@@ -33,7 +33,7 @@ Task 是 APP 创建后的运行时执行上下文：任务通过 Service/Platfor
 
 排序依据（[#71](https://github.com/immorcoding/mp3_project/issues/71) A6、B1、B2；[#62](https://github.com/immorcoding/mp3_project/issues/62)）：
 
-- **播放最高**：PCM 半区只有约 24 ms（1152 帧，48 kHz）的补满期限，期限只允许受中断与播放任务自身工作（有上界的一次唤醒，不含 FatFs/LVGL、不同步等待 Storage、发送不阻塞）影响。Storage 的一次 FatFs 读取（含 SD DMA 与可能的 30 s 超时）和 GUI 的一帧 `lv_timer_handler` 都可能远长于期限，所以播放任务必须能抢占它们；与这些长任务的关系只靠优先级，GUI 和 Storage 不加让出点，播放任务也不与低优先级任务共用互斥锁。
+- **播放最高**：PCM 半区只有约 24 ms（1152 帧，48 kHz）的补满期限，期限只允许受中断与播放任务自身工作（有上界的一次唤醒，不含 FatFs/LVGL、不同步等待 Storage、发送不阻塞）影响。Storage 的一次 FatFs 读取（含 SD DMA 与可能的单分块 500 ms 超时）和 GUI 的一帧 `lv_timer_handler` 都可能远长于期限，所以播放任务必须能抢占它们；与这些长任务的关系只靠优先级，GUI 和 Storage 不加让出点，播放任务也不与低优先级任务共用互斥锁。
 - **Storage 高于 GUI/Log/Monitor**：块池缓冲有限，Storage 要在播放消耗完块之前及时补块；GUI 的帧循环不应拖慢读块。
 - **GUI、Log、Monitor 同级 1**：时间片轮转，互不依赖。
 - **Boot 最低**：只在启动时创建任务。

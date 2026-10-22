@@ -14,7 +14,7 @@ cmake --build build/gui_simulator
 ./build/gui_simulator/gui_simulator.exe
 ```
 
-窗口为 240×320 的 2 倍放大（`SIM_DISPLAY_ZOOM`）。鼠标左键 = 触摸；`T` 切换 Default/Solid 主题；`C` 在拔卡与重新挂载之间切换并把曲库代次 +1（拔卡：真实 `gui_music` 按窗口协议 CLEAR 清空 Queue；假播放后端在播放或暂停中按拔卡停止，无当前曲，播放键、时间、进度与唱盘随快照归零；无卡再按播放，开启约 100 ms 后按 NOT_READY 停止；重新挂载：Queue 重新 request，无当前曲故无高亮）；`G` 模拟重扫：代次 +1，但已显示的 Queue 窗口保留到下一次 request，用于制造过期窗口（点旧窗口的行，假后端按 CATALOG_CHANGED 停止）；`S` 挂起/恢复假播放后端的命令处理（挂起时命令只入队、位置照走，FIFO 满后 `playback_command_send()` 返回队列满，stdout 打印 `[playback] queue full` 与 `[log]` 行；恢复后一圈处理完）；`B` 让假后端之后一次开启应答为坏文件（连按 k 次则之后 k 次开启都坏）：按 B5 沿最近一次移动的方向跳到下一首、跳过数 +1，连跳数达到曲目数（10）即按 ALL_BAD 停止；`R` 让假后端按 K1 枚举顺序以下一个非 NONE 原因立即停止（停止态也再停一次，停止次数 +1；CARD_REMOVED、NOT_READY、NO_TRACK、CATALOG_CHANGED 变为无当前曲，AUDIO_FAULT 锁存，之后停止态按播放或点行只让停止次数 +1，重启模拟器才解除）；`A` 在 stdout 打印 `[anim] running N`（LVGL 运行中动画数，核对唱盘旋转与状态行闪烁不叠加）；`Esc` 退出。启动后约 5 s 进入 Lock，向上拖动解锁。
+窗口为 240×320 的 2 倍放大（`SIM_DISPLAY_ZOOM`）。鼠标左键 = 触摸；`T` 切换 Default/Solid 主题；`C` 在拔卡与重新挂载之间切换并把曲库代次 +1（拔卡：真实 `gui_music` 按窗口协议 CLEAR 清空 Queue；假播放后端在播放或暂停中按拔卡停止，无当前曲，播放键、时间、进度与唱盘随快照归零；无卡再按播放，开启约 100 ms 后按 NOT_READY 停止；重新挂载：Queue 重新 request，无当前曲故无高亮）；`G` 模拟重扫：代次 +1，但已显示的 Queue 窗口保留到下一次 request，用于制造过期窗口（点旧窗口的行，假后端按 CATALOG_CHANGED 停止）；`S` 挂起/恢复假播放后端的命令处理（挂起时命令只入队、位置照走，FIFO 满后 `playback_command_send()` 返回队列满，stdout 打印 `[playback] queue full` 与 `[log]` 行；恢复后一圈处理完）；`B` 让假后端之后一次开启应答为坏文件（连按 k 次则之后 k 次开启都坏）：按 B5 沿最近一次移动的方向跳到下一首、跳过数 +1，连跳数达到曲目数（10）即按 ALL_BAD 停止；`R` 让假后端按 K1 枚举顺序以下一个非 NONE 原因立即停止（停止态也再停一次，停止次数 +1；CARD_REMOVED、NOT_READY、NO_TRACK、CATALOG_CHANGED 变为无当前曲，AUDIO_FAULT 锁存，之后停止态按播放或点行只让停止次数 +1，重启模拟器才解除）；`A` 在 stdout 打印 `[anim] running N`（LVGL 运行中动画数，核对唱盘旋转与状态行闪烁不叠加）；`L` 以 300 ms 淡出回到 Lock（产品暂无重新锁屏入口，只用于核对 Lock 呼吸随屏幕重启）；`Esc` 退出。启动后约 5 s 进入 Lock，向上拖动解锁。
 
 ## 脚本参数（无人值守截图）
 
@@ -25,6 +25,7 @@ cmake --build build/gui_simulator
 | `--shot T:name` | T 时保存 `<out-dir>/name.bmp`，并打印 `[shot] name <帧哈希>` |
 | `--tap T:x,y` | T 时点按（按住 80 ms） |
 | `--drag T:x0,y0:x1,y1:D` | T 时按下，D ms 内线性拖动后松开 |
+| `--anims T:name` | T 时打印 `[anims] name N`（LVGL 运行中动画数）；`run-scenarios.ps1` 以键 `anims.name` 与基线比对 |
 | `--key T:c` | T 时触发按键 `c` |
 | `--out-dir DIR` | 截图目录，默认当前目录 |
 | `--hidden` | 不显示窗口 |
@@ -40,7 +41,7 @@ cmake --build build/gui_simulator
 
 ## 场景回归
 
-`scenarios/*.args` 每行一个参数（`#` 开头为注释），`scenarios/*.expected` 记录每张截图的帧哈希。当前场景：`boot_lock`（开机序列）、`unlock_main`、`music_transport`（播放/暂停/切歌/拖进度）、`queue`（选曲、滚动、Library）、`pager`（循环翻页与回弹）、`theme_toggle`（运行时切主题）、`theme_default`（Default 毛玻璃随横滑重裁剪）、`vinyl_rotation`（唱盘播放起转、暂停保角、恢复续转、切歌归零、翻页进出、反复切换与清空）、`music_snapshot`（停止态开播、总时长未知到已知、暂停冻结、恢复、切歌归零、Queue 不自动跟随）、`music_paused_switch`（暂停中上一首/下一首保持暂停、暂停中点行开播）、`music_echo`（挂起后端时冻结与位置照走、点行触发队列满撤回高亮、恢复后追上）、`music_seek`（拖动跟手、松手回位：总时长未知、播放中、暂停中）、`music_card_removed`（拔卡停止归零、状态行 `No SD card` 与闪烁、Queue 清空、无卡按播放得到 `SD card not ready`、重新挂载后开播）、`music_stop_reasons`（`G` 后点旧行得到 `Library changed`、`R` 逐个拍 9 个停止原因短语、停止后按下一首清除短语、AUDIO_FAULT 锁存后再按播放闪一次）、`music_bad_file`（`Skipped 1 file` 提示与 2 s 到期、连续跳过累加并重新计时、整轮坏文件 `No playable files` 取代提示）；共 15 个场景、119 帧。改动 `Service/gui/`、`APP/tasks/gui/music/`、播放合同头或替身实现的 Storage/Log 头后必须跑（CHANGED 按 `scripts/rules/verification.psd1` 的 `GuiScenarioPathPatterns` 自动加跑）；新增界面时补场景。`vinyl_rotation`、`music_card_removed`、`music_stop_reasons` 的 `--key a` 行在 stdout 打印动画数（`music_stop_reasons` 连按两次播放后只比静止时多一条闪烁动画），`music_echo` 打印队列满日志，均不参与哈希比对，作为日志证据。名为 `*_flash` 的帧拍在约 300 ms 闪烁的中途。
+`scenarios/*.args` 每行一个参数（`#` 开头为注释），`scenarios/*.expected` 记录每张截图的帧哈希。当前场景：`boot_lock`（开机序列）、`unlock_main`、`music_transport`（播放/暂停/切歌/拖进度）、`queue`（选曲、滚动、Library）、`pager`（循环翻页与回弹）、`theme_toggle`（运行时切主题）、`theme_default`（Default 毛玻璃随横滑重裁剪）、`vinyl_rotation`（唱盘播放起转、暂停保角、恢复续转、切歌归零、翻页进出、反复切换与清空）、`music_snapshot`（停止态开播、总时长未知到已知、暂停冻结、恢复、切歌归零、Queue 不自动跟随）、`music_paused_switch`（暂停中上一首/下一首保持暂停、暂停中点行开播）、`music_echo`（挂起后端时冻结与位置照走、点行触发队列满撤回高亮、恢复后追上）、`music_seek`（拖动跟手、松手回位：总时长未知、播放中、暂停中）、`music_card_removed`（拔卡停止归零、状态行 `No SD card` 与闪烁、Queue 清空、无卡按播放得到 `SD card not ready`、重新挂载后开播）、`music_stop_reasons`（`G` 后点旧行得到 `Library changed`、`R` 逐个拍 9 个停止原因短语、停止后按下一首清除短语、AUDIO_FAULT 锁存后再按播放闪一次）、`music_bad_file`（`Skipped 1 file` 提示与 2 s 到期、连续跳过累加并重新计时、整轮坏文件 `No playable files` 取代提示）、`lock_anim`（Lock 呼吸随屏幕启停：Lock 显示时动画数 1、解锁后 Main 显示期间 0、按 `L` 回到 Lock 后恢复为 1）；共 16 个场景、121 帧与 3 个动画数断言。`scenarios/*.expected` 中 `anims.<name> N` 行是 `--anims` 的动画数断言，与帧哈希一同比对。改动 `Service/gui/`、`APP/tasks/gui/music/`、播放合同头或替身实现的 Storage/Log 头后必须跑（CHANGED 按 `scripts/rules/verification.psd1` 的 `GuiScenarioPathPatterns` 自动加跑）；新增界面时补场景。`vinyl_rotation`、`music_card_removed`、`music_stop_reasons` 的 `--key a` 行在 stdout 打印动画数（`music_stop_reasons` 连按两次播放后只比静止时多一条闪烁动画），`music_echo` 打印队列满日志，均不参与哈希比对，作为日志证据。名为 `*_flash` 的帧拍在约 300 ms 闪烁的中途。
 
 ```powershell
 ./Tools/gui_simulator/run-scenarios.ps1              # 全部场景与基线比对
@@ -50,6 +51,8 @@ cmake --build build/gui_simulator
 ```
 
 截图保存在 `build/gui_simulator/shots/<场景>/`。哈希不一致时打开对应 BMP 与上一版比对；只有确认变化是有意的，才用 `-Update` 重写基线，并在提交说明里写明原因。PC 上 FPS/内存浮层已关闭，避免实现细节让基线漂移。
+
+LVGL 在动画链表为空时暂停动画定时器、新动画开始时恢复，恢复后的首拍不落在原有 `LV_DISP_DEF_REFR_PERIOD` 节拍上；因此「播放前是否还有别的动画在跑」会改变唱盘角度、状态行闪烁透明度与翻页回弹位置的采样相位。#106 停止解锁后的 Lock 呼吸后，正是这一相位变化使 12 个场景的 50 帧重录（布局、颜色、文字不变）。
 
 ## 替身边界
 

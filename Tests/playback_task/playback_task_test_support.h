@@ -38,6 +38,13 @@ uint32_t call_log_count_of(CallKindTypeDef kind);
 /** @brief 第 nth（从 0 起）次 kind 在日志里的位置；不存在返回 UINT32_MAX。 */
 uint32_t call_log_index_of(CallKindTypeDef kind, uint32_t nth);
 
+/* INFO 日志记录（LogInfo 的接收端）：按调用顺序保存文本，不带等级与标签（外壳固定为 INFO + PLAYBACK）。 */
+#define FAKE_LOG_CAPACITY 64U
+#define FAKE_LOG_TEXT_MAX 64U
+uint32_t fake_log_count(void);
+const char *fake_log_text(uint32_t index);
+void fake_log_clear(void);
+
 /* 快照记录（PublishSnapshot 的接收端）。 */
 uint32_t published_count(void);
 Playback_SnapshotTypeDef published_last(void);
@@ -104,6 +111,8 @@ void fake_player_emit_output_progress(void);
 void fake_player_emit_underrun(void);
 /** @brief 下一次 AbandonStream / PauseOutput 返回 SERVICE_ERROR 并锁存 STOP_FAILED（锁存后 BeginStream 返回 SERVICE_NOT_READY）。 */
 void fake_player_fail_next_stop(void);
+/** @brief 下一次 ResumeOutput 返回 SERVICE_NOT_READY（输出未能恢复）。 */
+void fake_player_fail_next_resume(void);
 /** @brief 下一次 BeginStream 返回 SERVICE_NOT_READY（播放模块拒绝开新流，如 STOP_FAILED 已锁存）。 */
 void fake_player_refuse_next_begin(void);
 /** @brief 下一次 Pump 返回 SERVICE_ERROR（读状态或提交半区失败）。 */

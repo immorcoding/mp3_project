@@ -59,6 +59,7 @@ foreach ($file in $scenarioFiles) {
     $actual = [ordered]@{}
     foreach ($row in $output) {
         if ($row -match '^\[shot\] (\S+) ([0-9a-f]{8})') { $actual[$Matches[1]] = $Matches[2] }
+        elseif ($row -match '^\[anims\] (\S+) (\d+)') { $actual["anims.$($Matches[1])"] = $Matches[2] }
     }
 
     $expectedPath = Join-Path $simRoot "scenarios\$name.expected"
