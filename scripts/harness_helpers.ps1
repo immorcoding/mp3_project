@@ -41,15 +41,20 @@ function Invoke-HarnessQuietStep {
     $stdoutPath = [System.IO.Path]::GetTempFileName()
     $stderrPath = [System.IO.Path]::GetTempFileName()
     try {
-        # 与 Invoke-PowerShellScript 同形的参数表：布尔、字符串与字符串数组按字面量展开。
+        # 与 Invoke-PowerShellScript 同形的参数表：布尔、字符串标量与集合按字面量展开。
         $splat = New-Object System.Collections.Generic.List[string]
         foreach ($key in $Parameters.Keys) {
             $value = $Parameters[$key]
             if ($value -is [bool]) {
                 $literal = if ($value) { '$true' } else { '$false' }
             }
-            else {
+            elseif ($value -is [System.Collections.IEnumerable] -and $value -isnot [string]) {
+                # 真正的集合才写成数组字面量（含单元素），绑定到 [string[]] 参数。
                 $literal = '@(' + ((@($value) | ForEach-Object { "'" + ([string]$_ -replace "'", "''") + "'" }) -join ',') + ')'
+            }
+            else {
+                # 标量必须按标量传：带 [CmdletBinding()] 的脚本不会把单元素数组转成 [string]。
+                $literal = "'" + ([string]$value -replace "'", "''") + "'"
             }
             $splat.Add("'$key'=$literal")
         }

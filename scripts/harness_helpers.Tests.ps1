@@ -341,6 +341,12 @@ try {
     $paramOutput = @(Invoke-HarnessQuietStep -ScriptPath $paramScript -Parameters @{ Module = @('a', "b'c"); Flag = $true })
     Assert-HarnessEqual -Expected 0 -Actual $paramOutput.Count -Message '静默步骤应按参数表展开数组与开关'
 
+    # 带 [CmdletBinding()] 的脚本不会把单元素数组压成 [string]；标量值必须按标量字面量传入。
+    $scalarScript = Join-Path -Path $quietRoot -ChildPath 'scalar.ps1'
+    [System.IO.File]::WriteAllText($scalarScript, "[CmdletBinding()]`nparam([string]`$Dir, [string[]]`$Module, [string[]]`$Single, [switch]`$Flag)`nif (`$Dir -ne 'E:\p ath\it''s' -or (`$Module -join ',') -ne 'a,b' -or `$Single.Count -ne 1 -or `$Single[0] -ne 'x' -or -not `$Flag) { exit 5 }`n", (New-Object System.Text.UTF8Encoding $true))
+    $scalarOutput = @(Invoke-HarnessQuietStep -ScriptPath $scalarScript -Parameters @{ Dir = "E:\p ath\it's"; Module = @('a', 'b'); Single = @('x'); Flag = $true })
+    Assert-HarnessEqual -Expected 0 -Actual $scalarOutput.Count -Message '静默步骤应把单个字符串按标量传给 CmdletBinding 脚本的 [string] 参数，并保留单元素数组'
+
     $failScript = Join-Path -Path $quietRoot -ChildPath 'fail.ps1'
     [System.IO.File]::WriteAllText($failScript, "Write-Output '失败细节-stdout'`n[Console]::Error.WriteLine('失败细节-stderr')`nexit 3`n", (New-Object System.Text.UTF8Encoding $true))
     $failMessage = $null
