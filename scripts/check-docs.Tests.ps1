@@ -78,6 +78,27 @@ try {
     Write-Fixture 'docs/shape/example.naming.md' "# Example · naming`n`n命名范围。`n`n## Rules`n`n- **EX-1** · settled · 规则。 _Why:_ 理由。 _Check:_ 检查。"
     Assert-DocsFailure 'backlink'
     Write-Fixture 'docs/shape/example.naming.md' "# Example · naming`n`n命名范围。`n`n[返回](example.md)`n`n### Rules`n`n- **EX-1** · settled · 规则。 _Why:_ 理由。 _Check:_ 检查。"
+    # 分支 inbox 只收 INBOX.md 格式的行，area/title 须存在（HAR-8）。
+    $inboxHead = "# Inbox: feature/x`n`n"
+    $inboxValid = $inboxHead + "- 2026-10-22 · example/naming · cite · EX-1 · 说明。`n- 2026-10-22 · example · proposed · provisional · 新规则。 _Why:_ 理由。`n" + '- 2026-10-22 · routes · route · `src/`: gone'
+    Write-Fixture 'docs/shape/inbox/feature-x.md' $inboxValid
+    Invoke-DocumentationCheck -RepositoryRoot $fixture
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + "## Signal`n`n- 自由格式说明")
+    Assert-DocsFailure 'inbox 行须为'
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · example · signal · EX-1 · 不存在的 kind。')
+    Assert-DocsFailure 'inbox 行须为'
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · missing · cite · new · 未知 area。')
+    Assert-DocsFailure '未知 area missing'
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · example/gone · cite · new · 未知 title。')
+    Assert-DocsFailure '未知 title example/gone'
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · routes · cite · new · routes 只收 route。')
+    Assert-DocsFailure 'route 行'
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · example · route · `src/`: gone')
+    Assert-DocsFailure 'route 行'
+    Write-Fixture 'docs/shape/inbox/notes.txt' 'x'
+    Write-Fixture 'docs/shape/inbox/feature-x.md' $inboxValid
+    Assert-DocsFailure '只放'
+    Remove-Item -LiteralPath (Join-Path $fixture 'docs/shape/inbox') -Recurse -Force
     # 审阅导航在根目录，链接仍需检查；旧大写 REVIEW 不再是 shape area 例外。
     Write-Fixture 'CODING_STANDARDS.md' '[规范](docs/shape/example.md)'
     Invoke-DocumentationCheck -RepositoryRoot $fixture

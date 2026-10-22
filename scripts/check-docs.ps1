@@ -145,6 +145,38 @@ function Get-ShapeViolations {
     }
 }
 
+# 分支 inbox（HAR-8）：每行按 shape-your-project INBOX.md 的 日期 · area[/title] · kind · 内容，area/title 须存在。
+function Get-InboxViolations {
+    param([string]$RepositoryRoot)
+    $shape = Join-Path $RepositoryRoot 'docs/shape'
+    $inbox = Join-Path $shape 'inbox'
+    if (-not (Test-Path -LiteralPath $inbox -PathType Container)) { return }
+    $areaFiles = @(Get-ChildItem -LiteralPath $shape -File -Filter '*.md' | Where-Object { $_.Name -notin @('README.md','ROUTES.md') })
+    $linePattern = '^- \d{4}-\d{2}-\d{2} · ([a-z0-9-]+)(?:/([a-z0-9-]+))? · (cite|friction|contradiction|correction|proposed|approved|route) · \S'
+    foreach ($file in @(Get-ChildItem -LiteralPath $inbox -File -Force)) {
+        $name = 'docs/shape/inbox/' + $file.Name
+        if ($file.Extension -ne '.md') { "${name}: inbox 只放 <分支>.md"; continue }
+        $number = 0; $content = $false
+        foreach ($line in [IO.File]::ReadAllLines($file.FullName, [Text.Encoding]::UTF8)) {
+            $number++; $at = "${name}:$number"
+            if (-not $line.Trim()) { continue }
+            if (-not $content -and $line -match '^# Inbox: \S') { $content = $true; continue }
+            $content = $true
+            if ($line -cnotmatch $linePattern) { "${at}: inbox 行须为 '- 日期 · area[/title] · kind · 内容'（kind 取 INBOX.md 的七种）"; continue }
+            $area = $Matches[1]; $title = $Matches[2]; $kind = $Matches[3]
+            if (($area -eq 'routes') -ne ($kind -eq 'route')) { "${at}: route 行的 area 须且只能为 routes"; continue }
+            if ($area -eq 'routes') { continue }
+            $areaFile = $areaFiles | Where-Object { $_.Name -eq "$area.md" }
+            if (-not $areaFile) { "${at}: 未知 area $area"; continue }
+            if ($title) {
+                $titleFile = $areaFiles | Where-Object { $_.Name -eq "$area.$title.md" }
+                $areaText = [IO.File]::ReadAllText($areaFile.FullName, [Text.Encoding]::UTF8)
+                if (-not $titleFile -and $areaText -notmatch ('(?m)^## ' + [regex]::Escape($title) + '\s*$')) { "${at}: 未知 title $area/$title" }
+            }
+        }
+    }
+}
+
 function Invoke-DocumentationCheck {
     param([Parameter(Mandatory)][string]$RepositoryRoot)
     $root = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd('\','/')
@@ -177,6 +209,7 @@ function Invoke-DocumentationCheck {
         }
     }
     foreach ($violation in @(Get-ShapeViolations -RepositoryRoot $root)) { [void]$errors.Add($violation) }
+    foreach ($violation in @(Get-InboxViolations -RepositoryRoot $root)) { [void]$errors.Add($violation) }
     if ($errors.Count) { throw ("文档检查失败：`n" + ($errors -join "`n")) }
     Write-NativeUtf8Line -Text "文档检查通过：$($files.Count) 份自维护 Markdown。"
 }
