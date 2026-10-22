@@ -111,6 +111,8 @@ void fake_player_emit_output_progress(void);
 void fake_player_emit_underrun(void);
 /** @brief 下一次 AbandonStream / PauseOutput 返回 SERVICE_ERROR 并锁存 STOP_FAILED（锁存后 BeginStream 返回 SERVICE_NOT_READY）。 */
 void fake_player_fail_next_stop(void);
+/** @brief 下一次 ResumeOutput 返回 SERVICE_NOT_READY（输出未能恢复）。 */
+void fake_player_fail_next_resume(void);
 /** @brief 下一次 BeginStream 返回 SERVICE_NOT_READY（播放模块拒绝开新流，如 STOP_FAILED 已锁存）。 */
 void fake_player_refuse_next_begin(void);
 /** @brief 下一次 Pump 返回 SERVICE_ERROR（读状态或提交半区失败）。 */
