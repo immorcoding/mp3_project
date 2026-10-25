@@ -7,7 +7,7 @@ import argparse
 from pathlib import Path
 import subprocess
 
-SIZES = (14, 16, 18)
+SIZES = (10, 12)
 SYMBOLS = "晴天不能说的秘密蒲公英的约定回到过去周杰伦最长的电影（）…"
 
 

@@ -3,9 +3,9 @@
   * @file    track_title_prototype.c
   * @brief   一次性唱盘页曲名原型，不进入产品固件。
   *
-  * @details 在真实 Now Playing 页上比较三种结构：A 上置 16 px 单行滚动、
-  *          B 下置 18 px 双行省略、C 右侧 14 px 三行省略。方向键切换方案与
-  *          状态，底部悬浮条提供同样的鼠标操作。所有状态均为内存中的静态演示。
+  * @details 第二轮根据用户反馈保留原生 144 px 唱盘，以 10/12 px 小字号比较
+  *          D 上置、E 下置、F 唱盘下沿悬浮三种结构；长曲名均为单行循环滚动。
+  *          方向键切换方案与状态，P 切换字号，数字键 1..7 直达状态。
   *          本文件只随 host 模拟器进入临时原型分支，不是产品 Screen 的第二事实源；
   *          产品 view/ 与运行时实现不改，定稿后只把决定交给后续 spec。
   ******************************************************************************
@@ -24,14 +24,12 @@
 #include "Service/gui/theme/gui_service_theme_style.h"
 #include "Service/gui/view/gui_service_view.h"
 
-LV_FONT_DECLARE(lv_font_track_title_14);
-LV_FONT_DECLARE(lv_font_track_title_16);
-LV_FONT_DECLARE(lv_font_track_title_18);
+LV_FONT_DECLARE(lv_font_track_title_10);
+LV_FONT_DECLARE(lv_font_track_title_12);
 
 #define TRACK_TITLE_START_MS           6000U
 #define TRACK_TITLE_VARIANT_COUNT      3U
 #define TRACK_TITLE_STATE_COUNT        7U
-#define TRACK_TITLE_FORMATTED_BYTES    256U
 #define TRACK_TITLE_TOOLBAR_BYTES      96U
 #define TRACK_TITLE_VINYL_NATIVE_SIZE  144U
 #define TRACK_TITLE_VINYL_ZOOM_NONE    256U
@@ -40,9 +38,6 @@ typedef struct
 {
     char key;                /**< 悬浮条与日志中的方案键。 */
     const char *name;        /**< 方案短名。 */
-    const lv_font_t *font;   /**< 本方案候选字号。 */
-    uint8_t max_lines;       /**< 省略方案的最大行数；滚动方案为 1。 */
-    bool scroll;             /**< 是否使用单行循环滚动。 */
 } TrackTitlePrototypeVariantTypeDef;
 
 typedef struct
@@ -57,17 +52,18 @@ typedef struct
 {
     lv_obj_t *title;          /**< 曲名 Label。 */
     lv_obj_t *toolbar;        /**< 原型切换条。 */
-    lv_obj_t *toolbar_label;  /**< 当前方案与状态文本。 */
+    lv_obj_t *toolbar_label;  /**< 当前方案、字号与状态文本。 */
     uint8_t variant;          /**< 当前方案下标。 */
     uint8_t state;            /**< 当前演示状态下标。 */
+    bool compact_font;        /**< false = 12 px；true = 10 px。 */
     bool entered;             /**< 是否已越过启动序列并进入 Main。 */
     bool dirty;               /**< 是否需重排曲名区域。 */
 } TrackTitlePrototypeTypeDef;
 
 static const TrackTitlePrototypeVariantTypeDef track_title_variants[TRACK_TITLE_VARIANT_COUNT] = {
-    {'A', "Top scroll 16", &lv_font_track_title_16, 1U, true},
-    {'B', "Bottom 2-line 18", &lv_font_track_title_18, 2U, false},
-    {'C', "Side 3-line 14", &lv_font_track_title_14, 3U, false},
+    {'D', "Above"},
+    {'E', "Below"},
+    {'F', "Overlay"},
 };
 
 static const TrackTitlePrototypeStateTypeDef track_title_states[TRACK_TITLE_STATE_COUNT] = {
@@ -83,226 +79,24 @@ static const TrackTitlePrototypeStateTypeDef track_title_states[TRACK_TITLE_STAT
 static TrackTitlePrototypeTypeDef track_title_prototype;
 
 /**
- * @brief 返回 UTF-8 文本中下一个字符的字节下标。
- * @param[in] text 以 NUL 结尾的有效 UTF-8 文本。
- * @param[in] pos 当前字符的字节下标。
- * @return 下一个字符的字节下标；演示文本不含非法序列。
- */
-static size_t track_title_utf8_next(const char *text, size_t pos)
-{
-    const uint8_t lead = (uint8_t)text[pos];
-    size_t length = 1U;
-
-    if ((lead & 0xE0U) == 0xC0U)
-    {
-        length = 2U;
-    }
-    else if ((lead & 0xF0U) == 0xE0U)
-    {
-        length = 3U;
-    }
-    else if ((lead & 0xF8U) == 0xF0U)
-    {
-        length = 4U;
-    }
-
-    return pos + length;
-}
-
-/**
- * @brief 测量一个字节前缀在给定字体下的宽度。
- * @param[in] text 文本起点，不要求在前缀末尾有 NUL。
- * @param[in] length 参与测量的字节数。
+ * @brief 测量一段文本在当前原型字体下的宽度。
+ * @param[in] text 以 NUL 结尾的 UTF-8 文本。
  * @param[in] font LVGL 字体。
  * @return 文本宽度，单位为像素。
  */
-static lv_coord_t track_title_measure(const char *text, size_t length, const lv_font_t *font)
+static lv_coord_t track_title_measure(const char *text, const lv_font_t *font)
 {
-    return lv_txt_get_width(text, (uint32_t)length, font, 0, LV_TEXT_FLAG_NONE);
+    return lv_txt_get_width(text, (uint32_t)strlen(text), font, 0, LV_TEXT_FLAG_NONE);
 }
 
 /**
- * @brief 判断一个字节是否为演示换行所用的 ASCII 字母或数字。
- * @param[in] value 待判断字节。
- * @return 是 ASCII 字母或数字为 true。
+ * @brief 取得当前选定的原型字号。
+ * @return 10 px 或 12 px 的演示 CJK 字体。
  */
-static bool track_title_ascii_alnum(char value)
+static const lv_font_t *track_title_prototype_font(void)
 {
-    const uint8_t byte = (uint8_t)value;
-
-    return ((byte >= (uint8_t)'0') && (byte <= (uint8_t)'9')) ||
-           ((byte >= (uint8_t)'A') && (byte <= (uint8_t)'Z')) ||
-           ((byte >= (uint8_t)'a') && (byte <= (uint8_t)'z'));
-}
-
-/**
- * @brief 非末行若在 ASCII 单词中间断开，把整个单词留给下一行。
- * @param[in] text 当前行文本起点。
- * @param[in] length 当前剩余文本字节数。
- * @param[in] prefix 按像素找到的断行字节数。
- * @return 调整后的断行字节数；行首就是超长单词时保留原断点。
- */
-static size_t track_title_avoid_ascii_word_split(const char *text, size_t length, size_t prefix)
-{
-    size_t word_start;
-    size_t adjusted;
-
-    if ((prefix == 0U) || (prefix >= length) ||
-        !track_title_ascii_alnum(text[prefix - 1U]) ||
-        !track_title_ascii_alnum(text[prefix]))
-    {
-        return prefix;
-    }
-
-    word_start = prefix;
-    while ((word_start > 0U) && track_title_ascii_alnum(text[word_start - 1U]))
-    {
-        word_start--;
-    }
-    if (word_start == 0U)
-    {
-        return prefix;
-    }
-
-    adjusted = word_start;
-    if ((adjusted > 0U) && (text[adjusted - 1U] == '('))
-    {
-        adjusted--;
-    }
-    else if ((adjusted >= 3U) &&
-             ((uint8_t)text[adjusted - 3U] == 0xEFU) &&
-             ((uint8_t)text[adjusted - 2U] == 0xBCU) &&
-             ((uint8_t)text[adjusted - 1U] == 0x88U))
-    {
-        adjusted -= 3U;
-    }
-
-    return (adjusted == 0U) ? prefix : adjusted;
-}
-
-/**
- * @brief 找到可容纳指定后缀的最长 UTF-8 前缀。
- * @param[in] text 文本起点。
- * @param[in] length 可选择的文本字节数。
- * @param[in] font LVGL 字体。
- * @param[in] width 可用像素宽度。
- * @param[in] reserved_width 为省略号等后缀预留的像素宽度。
- * @return 最长可容纳前缀的字节数；首字符本身过宽时仍返回首字符长度。
- */
-static size_t track_title_fit_prefix(const char *text,
-                                     size_t length,
-                                     const lv_font_t *font,
-                                     lv_coord_t width,
-                                     lv_coord_t reserved_width)
-{
-    size_t pos = 0U;
-    size_t best = 0U;
-
-    while (pos < length)
-    {
-        const size_t next = track_title_utf8_next(text, pos);
-
-        if ((next > length) ||
-            ((track_title_measure(text, next, font) + reserved_width) > width))
-        {
-            break;
-        }
-        best = next;
-        pos = next;
-    }
-
-    if ((best == 0U) && (length > 0U))
-    {
-        best = track_title_utf8_next(text, 0U);
-        if (best > length)
-        {
-            best = length;
-        }
-    }
-    return best;
-}
-
-/**
- * @brief 向演示格式化缓冲追加字节并保持 NUL 结尾。
- * @param[out] output 输出缓冲。
- * @param[in] output_size 输出缓冲总字节数。
- * @param[in,out] used 已使用字节数，不含 NUL。
- * @param[in] text 待追加文本。
- * @param[in] length 待追加字节数。
- */
-static void track_title_append(char *output,
-                               size_t output_size,
-                               size_t *used,
-                               const char *text,
-                               size_t length)
-{
-    if ((*used >= (output_size - 1U)) || (length == 0U))
-    {
-        return;
-    }
-    if (length > (output_size - 1U - *used))
-    {
-        length = output_size - 1U - *used;
-    }
-    (void)memcpy(&output[*used], text, length);
-    *used += length;
-    output[*used] = '\0';
-}
-
-/**
- * @brief 把文本按字符边界排成固定行数，末行装不下时用省略号收尾。
- * @param[in] text 原始 UTF-8 文本。
- * @param[in] font LVGL 字体。
- * @param[in] width 每行可用像素宽度。
- * @param[in] max_lines 最大行数。
- * @param[out] output 格式化结果缓冲。
- * @param[in] output_size 输出缓冲总字节数。
- */
-static void track_title_format_lines(const char *text,
-                                     const lv_font_t *font,
-                                     lv_coord_t width,
-                                     uint8_t max_lines,
-                                     char *output,
-                                     size_t output_size)
-{
-    static const char ellipsis[] = "…";
-    const lv_coord_t ellipsis_width = track_title_measure(ellipsis, strlen(ellipsis), font);
-    const char *remaining = text;
-    size_t used = 0U;
-    uint8_t line;
-
-    output[0] = '\0';
-    for (line = 0U; line < max_lines; line++)
-    {
-        const size_t length = strlen(remaining);
-        const bool last_line = (line + 1U == max_lines);
-        size_t prefix;
-
-        if (track_title_measure(remaining, length, font) <= width)
-        {
-            track_title_append(output, output_size, &used, remaining, length);
-            return;
-        }
-
-        prefix = track_title_fit_prefix(remaining,
-                                        length,
-                                        font,
-                                        width,
-                                        last_line ? ellipsis_width : 0);
-        if (!last_line)
-        {
-            prefix = track_title_avoid_ascii_word_split(remaining, length, prefix);
-        }
-        track_title_append(output, output_size, &used, remaining, prefix);
-        if (last_line)
-        {
-            track_title_append(output, output_size, &used, ellipsis, strlen(ellipsis));
-            return;
-        }
-
-        track_title_append(output, output_size, &used, "\n", 1U);
-        remaining += prefix;
-    }
+    return track_title_prototype.compact_font ?
+           &lv_font_track_title_10 : &lv_font_track_title_12;
 }
 
 /**
@@ -314,16 +108,19 @@ static void track_title_prototype_report(void)
         &track_title_variants[track_title_prototype.variant];
     const TrackTitlePrototypeStateTypeDef *state =
         &track_title_states[track_title_prototype.state];
+    const unsigned font_size = track_title_prototype.compact_font ? 10U : 12U;
     char text[TRACK_TITLE_TOOLBAR_BYTES];
 
-    (void)snprintf(text, sizeof(text), "%c %s | %s", variant->key, variant->name, state->name);
+    (void)snprintf(text, sizeof(text), "%c %s %upx | %s",
+                   variant->key, variant->name, font_size, state->name);
     if (track_title_prototype.toolbar_label != NULL)
     {
         lv_label_set_text(track_title_prototype.toolbar_label, text);
     }
-    printf("[track-title-prototype] variant=%c (%s), state=%s, title=%s, status=%s\n",
+    printf("[track-title-prototype] variant=%c (%s), font=%u px, state=%s, title=%s, status=%s\n",
            variant->key,
            variant->name,
+           font_size,
            state->name,
            state->title,
            state->status);
@@ -347,6 +144,16 @@ static void track_title_prototype_set_variant(uint8_t index)
 static void track_title_prototype_set_state(uint8_t index)
 {
     track_title_prototype.state = index;
+    track_title_prototype.dirty = true;
+    track_title_prototype_report();
+}
+
+/**
+ * @brief 在 10 px 与 12 px 之间切换，并让当前方案按新字高重排。
+ */
+static void track_title_prototype_toggle_font(void)
+{
+    track_title_prototype.compact_font = !track_title_prototype.compact_font;
     track_title_prototype.dirty = true;
     track_title_prototype_report();
 }
@@ -460,85 +267,69 @@ static void track_title_prototype_create_toolbar(void)
 }
 
 /**
- * @brief 按当前方案重排唱盘与曲名，并应用当前状态文本。
+ * @brief 按当前方案与字号重排原尺寸唱盘和单行曲名，并应用当前状态文本。
  */
 static void track_title_prototype_apply(void)
 {
     const Service_GUI_ViewTypeDef *view = service_gui_view_get();
-    const TrackTitlePrototypeVariantTypeDef *variant =
-        &track_title_variants[track_title_prototype.variant];
     const TrackTitlePrototypeStateTypeDef *state =
         &track_title_states[track_title_prototype.state];
+    const lv_font_t *font = track_title_prototype_font();
     lv_obj_t *title = track_title_prototype.title;
     lv_obj_t *vinyl = view->music.vinyl_image;
-    const char *display_text = state->title;
-    char formatted[TRACK_TITLE_FORMATTED_BYTES];
     lv_coord_t title_width;
     lv_coord_t title_height;
+    lv_coord_t text_width;
 
-    lv_obj_set_style_text_font(title, variant->font, LV_PART_MAIN | LV_STATE_DEFAULT);
+    text_width = track_title_measure(state->title, font);
+    lv_obj_set_style_text_font(title, font, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(title, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_radius(title, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_hor(title, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_align(title, LV_ALIGN_TOP_LEFT);
     lv_obj_set_size(vinyl, TRACK_TITLE_VINYL_NATIVE_SIZE, TRACK_TITLE_VINYL_NATIVE_SIZE);
+    lv_img_set_zoom(vinyl, TRACK_TITLE_VINYL_ZOOM_NONE);
+    lv_obj_set_align(vinyl, LV_ALIGN_TOP_MID);
 
     switch (track_title_prototype.variant)
     {
     case 0U:
         title_width = 218;
-        title_height = variant->font->line_height + 4;
+        title_height = font->line_height + 2;
         lv_obj_set_pos(title, 8, 0);
-        lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_img_set_zoom(vinyl, 199); /* 可见直径 112 px。 */
-        lv_obj_set_align(vinyl, LV_ALIGN_TOP_MID);
-        lv_obj_set_pos(vinyl, 0, 12); /* 图像可见顶部 28 px。 */
+        lv_obj_set_pos(vinyl, 0, 17); /* 原盘 144 px；仅比原布局下移 2 px。 */
         break;
 
     case 1U:
         title_width = 218;
-        title_height = (variant->font->line_height * 2) + 6;
-        lv_obj_set_pos(title, 8, 108);
-        lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_img_set_zoom(vinyl, 171); /* 可见直径 96 px。 */
-        lv_obj_set_align(vinyl, LV_ALIGN_TOP_MID);
-        lv_obj_set_pos(vinyl, 0, -20); /* 图像可见顶部 4 px。 */
+        title_height = font->line_height + 2;
+        lv_obj_set_pos(title, 8, 151);
+        lv_obj_set_pos(vinyl, 0, 5); /* 原盘 144 px；上移 10 px 换取下方曲名留白。 */
         break;
 
     default:
-        title_width = 114;
-        title_height = (variant->font->line_height * 3) + 6;
-        lv_obj_set_pos(title, 112, 28);
-        lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_img_set_zoom(vinyl, 185); /* 可见直径 104 px。 */
-        lv_obj_set_align(vinyl, LV_ALIGN_TOP_LEFT);
-        lv_obj_set_pos(vinyl, -17, -4); /* 图像可见区域约 x=3..107、y=16..120。 */
+        title_width = (text_width + 16 < 170) ? (text_width + 16) : 170;
+        title_height = font->line_height + 6;
+        lv_obj_set_pos(title, (lv_obj_get_width(lv_obj_get_parent(vinyl)) - title_width) / 2, 136);
+        lv_obj_set_pos(vinyl, 0, 15); /* 原盘尺寸与位置均不变，曲名悬浮于下沿。 */
+        lv_obj_set_style_bg_opa(title, 185, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_radius(title, 9, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_pad_hor(title, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
         break;
     }
 
-    if (variant->scroll)
-    {
-        const lv_coord_t text_width = track_title_measure(state->title, strlen(state->title), variant->font);
-        lv_label_set_long_mode(title,
-                               (text_width > title_width) ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_CLIP);
-    }
-    else
-    {
-        track_title_format_lines(state->title,
-                                 variant->font,
-                                 title_width,
-                                 variant->max_lines,
-                                 formatted,
-                                 sizeof(formatted));
-        display_text = formatted;
-        lv_label_set_long_mode(title, LV_LABEL_LONG_WRAP);
-    }
-
+    lv_label_set_long_mode(title,
+                           (text_width > (title_width - ((track_title_prototype.variant == 2U) ? 8 : 0))) ?
+                               LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_CLIP);
     lv_obj_set_size(title, title_width, title_height);
-    lv_label_set_text(title, display_text);
+    lv_label_set_text(title, state->title);
     lv_obj_move_foreground(title);
     track_title_prototype.dirty = false;
 }
 
 /**
- * @brief 创建曲名 Label 与原型切换条；初始状态为短曲名。
+ * @brief 创建曲名 Label 与原型切换条；初始为 12 px 短曲名。
  * @note 仅在 Service_GUI_Init() 与 gui_music_init() 成功后、进入模拟主循环前调用一次；
  *       必须早于 track_title_prototype_step()。普通模拟器模式不得调用。
  */
@@ -554,6 +345,10 @@ void track_title_prototype_init(void)
     service_gui_theme_style_add(track_title_prototype.title,
                                 SERVICE_GUI_THEME_TEXT,
                                 SERVICE_GUI_THEME_INK,
+                                LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(track_title_prototype.title,
+                                SERVICE_GUI_THEME_BG,
+                                SERVICE_GUI_THEME_GROUND,
                                 LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_add_flag(track_title_prototype.title, LV_OBJ_FLAG_HIDDEN);
     track_title_prototype.state = 0U;
@@ -606,7 +401,7 @@ void track_title_prototype_step(uint32_t elapsed_ms)
 
 /**
  * @brief 处理 ASCII 演示键。
- * @param[in] key ASCII 键值，大小写等价；V 切方案，N 切状态。
+ * @param[in] key ASCII 键值；V 切方案、N 切状态、P 切字号、1..7 直达状态。
  * @return 已消费该键为 true，否则 false。
  */
 bool track_title_prototype_handle_key(char key)
@@ -619,6 +414,16 @@ bool track_title_prototype_handle_key(char key)
     if ((key == 'n') || (key == 'N'))
     {
         track_title_prototype_next_state();
+        return true;
+    }
+    if ((key == 'p') || (key == 'P'))
+    {
+        track_title_prototype_toggle_font();
+        return true;
+    }
+    if ((key >= '1') && (key <= '7'))
+    {
+        track_title_prototype_set_state((uint8_t)(key - '1'));
         return true;
     }
     return false;
