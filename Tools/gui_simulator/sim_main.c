@@ -14,7 +14,8 @@
   *          request）；S 挂起/恢复假后端的命令处理；B 让假后端之后一次开启为坏
   *          文件；R 让假后端以下一个非 NONE 停止原因停止；A 打印 LVGL 运行中动画数
   *          （核对唱盘与状态行闪烁不叠加）；L 淡出回到 Lock（核对 Lock 呼吸随屏幕
-  *          重启）；Esc 退出。脚本参数见 sim_script.h。
+  *          重启）；Esc 退出。曲名原型模式另用方向键切换方案与状态，V/N 供脚本
+  *          切换。脚本参数见 sim_script.h。
   ******************************************************************************
   */
 
@@ -32,6 +33,7 @@
 #include "fakes/playback_sim.h"
 #include "fakes/resource_sim.h"
 #include "fakes/storage_sim.h"
+#include "prototype/track_title/track_title_prototype.h"
 #include "sim_clock.h"
 #include "sim_display.h"
 #include "sim_script.h"
@@ -40,6 +42,7 @@
 #define SIM_GUI_NOTIFY_LCD_TRANSFER  0U
 
 static uint8_t sim_theme = SERVICE_GUI_THEME_STARTUP;
+static bool sim_track_title_prototype_enabled;
 
 /**
  * @brief 处理一个按键（交互键盘与脚本 --key 共用）。
@@ -47,6 +50,10 @@ static uint8_t sim_theme = SERVICE_GUI_THEME_STARTUP;
  */
 static void sim_handle_key(char key)
 {
+    if (sim_track_title_prototype_enabled && track_title_prototype_handle_key(key))
+    {
+        return;
+    }
     if ((key == 'c') || (key == 'C'))
     {
         /* 拔卡/重新挂载：真实 gui_music 下一圈按窗口协议 CLEAR 或重新 request；
@@ -105,6 +112,7 @@ static void sim_handle_key(char key)
 }
 
 /**
+ * @brief 泵出 SDL 退出、键盘与鼠标事件，并更新模拟触点。
  * @return false 表示用户请求退出。
  */
 static bool sim_pump_events(void)
@@ -120,6 +128,26 @@ static bool sim_pump_events(void)
             return false;
 
         case SDL_KEYDOWN:
+            if (sim_track_title_prototype_enabled && (event.key.keysym.sym == SDLK_LEFT))
+            {
+                track_title_prototype_previous_variant();
+                break;
+            }
+            if (sim_track_title_prototype_enabled && (event.key.keysym.sym == SDLK_RIGHT))
+            {
+                track_title_prototype_next_variant();
+                break;
+            }
+            if (sim_track_title_prototype_enabled && (event.key.keysym.sym == SDLK_UP))
+            {
+                track_title_prototype_previous_state();
+                break;
+            }
+            if (sim_track_title_prototype_enabled && (event.key.keysym.sym == SDLK_DOWN))
+            {
+                track_title_prototype_next_state();
+                break;
+            }
             if (event.key.keysym.sym == SDLK_ESCAPE)
             {
                 return false;
@@ -171,6 +199,7 @@ int main(int argc, char *argv[])
     {
         return 2;
     }
+    sim_track_title_prototype_enabled = options.track_title_prototype;
     sim_clock_set_deterministic(options.deterministic);
 
     if (!sim_resource_install())
@@ -195,9 +224,18 @@ int main(int argc, char *argv[])
     storage_sim_init();
     playback_sim_init();
     gui_music_init();
-    printf("[sim] running. T: toggle theme, C: card remove/mount, G: rescan, "
-           "S: suspend/resume playback, B: next open bad, R: stop with next reason, "
-           "A: anim count, L: back to Lock, Esc: quit\n");
+    if (sim_track_title_prototype_enabled)
+    {
+        track_title_prototype_init();
+        printf("[track-title-prototype] Left/Right: variant, Up/Down: state, "
+               "V: next variant, N: next state, Esc: quit\n");
+    }
+    else
+    {
+        printf("[sim] running. T: toggle theme, C: card remove/mount, G: rescan, "
+               "S: suspend/resume playback, B: next open bad, R: stop with next reason, "
+               "A: anim count, L: back to Lock, Esc: quit\n");
+    }
     start_ms = sim_clock_now();
 
     while (sim_pump_events())
@@ -216,6 +254,10 @@ int main(int argc, char *argv[])
         storage_sim_step();
         playback_sim_step(sim_clock_now());
         gui_music_step(&input);
+        if (sim_track_title_prototype_enabled)
+        {
+            track_title_prototype_step(sim_clock_now() - start_ms);
+        }
 
         Service_GUI_Process();
 

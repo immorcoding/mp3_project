@@ -13,6 +13,7 @@
   *            --out-dir DIR                 截图目录，默认当前目录
   *            --hidden                      不显示窗口
   *            --realtime                    脚本模式下仍用墙钟（默认虚拟时钟）
+  *            --prototype-track-title       启用一次性唱盘页曲名原型
   *          给出任一脚本动作时，默认使用确定性虚拟时钟，最后一个动作完成后自动退出。
   ******************************************************************************
   */
@@ -27,8 +28,9 @@ typedef void (*sim_script_key_handler_t)(char key);
 
 typedef struct
 {
-    bool hidden;          /**< 不显示窗口。 */
-    bool deterministic;   /**< 使用虚拟时钟。 */
+    bool hidden;                  /**< 不显示窗口。 */
+    bool deterministic;           /**< 使用虚拟时钟。 */
+    bool track_title_prototype;   /**< 启用一次性唱盘页曲名原型。 */
 } sim_script_options_t;
 
 /** @return 参数无法解析时为 false，并已向 stderr 打印原因。 */

@@ -70,6 +70,11 @@ file(GLOB APP_GUI_MUSIC_SOURCES CONFIGURE_DEPENDS
     "${REPO_ROOT}/APP/tasks/gui/music/*.c"
 )
 
+# 一次性曲名决策原型；只在 --prototype-track-title 运行时启用，普通场景不创建其对象。
+file(GLOB TRACK_TITLE_PROTOTYPE_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_LIST_DIR}/prototype/track_title/*.c"
+)
+
 add_executable(gui_simulator
     sim_main.c
     sim_clock.c
@@ -84,6 +89,7 @@ add_executable(gui_simulator
     fakes/log_sim.c
     ${SERVICE_GUI_SOURCES}
     ${APP_GUI_MUSIC_SOURCES}
+    ${TRACK_TITLE_PROTOTYPE_SOURCES}
 )
 
 # shim/ 必须排在仓库根之前：Service/gui 以仓库相对路径包含 FreeRTOS 头，

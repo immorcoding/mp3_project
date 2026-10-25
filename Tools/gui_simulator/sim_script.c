@@ -71,6 +71,7 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
 
     options->hidden = false;
     options->deterministic = false;
+    options->track_title_prototype = false;
 
     for (i = 1; i < argc; i++)
     {
@@ -89,6 +90,11 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
         if (strcmp(argv[i], "--realtime") == 0)
         {
             realtime = true;
+            continue;
+        }
+        if (strcmp(argv[i], "--prototype-track-title") == 0)
+        {
+            options->track_title_prototype = true;
             continue;
         }
 
