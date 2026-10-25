@@ -10,21 +10,25 @@
 - 坏文件跳过显示下一首候选曲名，并保留 `Skipped k file(s)` 提示。
 - 切歌取得新曲目身份后立即显示新曲名，时间为 `0:00/--:--`，进度为 0。
 
-## 第三轮：重排间距与视觉层级
+## 当前：第四轮 J（按用户指定顺序）
 
-用户未批准第二轮布局，具体反馈是“上下间距要重排、视觉样式仍不满意”。本轮因此重排整段布局，而不是只移动曲名。三种方案都保持原生 **144 px** 唱盘、12 px 曲名和透明文字底色：
+用户以 H 为基础提出“进度条上方曲目，下方时间”。J 因此改为：
 
-- **G · Center**：上置居中；Playing 标签 → 曲名 → 唱盘 → 原时间行形成均匀间隔。
-- **H · Below split**：唱盘下方左曲名、右时间／状态，下方只留进度与控制；分栏对齐进度条边宽。
-- **I · Above split**：唱盘上方左曲名、右时间／状态，唱盘下方只留进度与控制。
+**144 px 唱盘 → 居中曲名独占一行 → 进度条 → 居中时间／状态 → 播放按钮**
 
-| 方案 | 短曲名 | 超长曲名 | 中英混排 |
-| --- | --- | --- | --- |
-| G | [短名](shots/round3/G_short.png) | [长名](shots/round3/G_long.png) | [混排](shots/round3/G_mixed.png) |
-| H | [短名](shots/round3/H_short.png) | [长名](shots/round3/H_long.png) | [混排](shots/round3/H_mixed.png) |
-| I | [短名](shots/round3/I_short.png) | [长名](shots/round3/I_long.png) | [混排](shots/round3/I_mixed.png) |
+曲名不再与时间左右分栏。唱盘保持 144 px 并小幅上移；进度略上移，播放按钮仅下移 4 px，时间／状态仍复用同一个 Label。
 
-H 分栏状态：[无卡](shots/round3/H_no_card.png) · [空库](shots/round3/H_empty.png) · [坏文件跳过](shots/round3/H_bad_skip.png) · [切歌过渡](shots/round3/H_next_track.png)
+| 短曲名 | 超长曲名 | 中英混排 |
+| --- | --- | --- |
+| [J 短名](shots/round4/J_short.png) | [J 长名](shots/round4/J_long.png) | [J 混排](shots/round4/J_mixed.png) |
+
+状态截图：[无卡](shots/round4/J_no_card.png) · [空库](shots/round4/J_empty.png) · [坏文件跳过](shots/round4/J_bad_skip.png) · [切歌过渡](shots/round4/J_next_track.png)
+
+### 第三轮候选仍可在模拟器内切换
+
+- **G · Center**：上置居中，时间保留原位。[长名](shots/round3/G_long.png)
+- **H · Below split**：下置左曲名、右时间／状态。[长名](shots/round3/H_long.png)
+- **I · Above split**：上置左曲名、右时间／状态。[长名](shots/round3/I_long.png)
 
 ## 运行
 
@@ -34,7 +38,7 @@ H 分栏状态：[无卡](shots/round3/H_no_card.png) · [空库](shots/round3/H
 
 约 6 秒后自动进入唱盘页，无需解锁。操作：
 
-- `←` / `→` 或底部 `<` / `>`：切换 G／H／I。
+- `←` / `→` 或底部 `<` / `>`：切换 G／H／I／J。
 - `↑` / `↓`：切换状态；点击底部中间文字也可顺序切换。
 - 数字键 `1..7`：直达短名、长名、中英混排、无卡、空库、坏文件跳过、切歌过渡。
 - `V`：下一方案；`N`：下一状态（供脚本使用）；`Esc`：退出。
@@ -43,27 +47,28 @@ H 分栏状态：[无卡](shots/round3/H_no_card.png) · [空库](shots/round3/H
 
 ## 截图复现
 
-`demo-round3.args` 使用确定性虚拟时钟截取第三轮 13 张图：
+`demo-round4.args` 使用确定性虚拟时钟截取 J 的 7 张图：
 
 ```powershell
 $exe = './build/gui_simulator_track_title_prototype/gui_simulator.exe'
-$out = './build/gui_simulator_track_title_prototype/shots-round3'
+$out = './build/gui_simulator_track_title_prototype/shots-round4'
 New-Item -ItemType Directory -Force -Path $out
 $arguments = @('--prototype-track-title', '--hidden', '--out-dir', $out)
-Get-Content './Tools/gui_simulator/prototype/track_title/demo-round3.args' -Encoding UTF8 |
+Get-Content './Tools/gui_simulator/prototype/track_title/demo-round4.args' -Encoding UTF8 |
     Where-Object { $_ -and -not $_.StartsWith('#') } |
     ForEach-Object { $arguments += ($_ -split '\s+') }
 & $exe @arguments
 ```
 
-截图是 `240×320` BMP；`shots/round3/` 保存转换为 2 倍 PNG 后的审阅副本。
+截图是 `240×320` BMP；`shots/round4/` 保存转换为 2 倍 PNG 后的审阅副本。
 
 ## 历史方案
 
 - **第一轮**（`76ee112`，`demo-round1.args`）：14–18 px、多行和缩小唱盘；因字号过大、排版不协调、侵占唱盘空间被否决。
-- **第二轮**（`30d12db`，`demo-round2.args`）：保留 144 px，D 上置／E 下置／F 下沿悬浮，10/12 px；用户确定 12 px，但上下间距与视觉样式仍需调整。[D](shots/round2/D_long_12.png) · [E](shots/round2/E_long_12.png) · [F](shots/round2/F_long_12.png)
+- **第二轮**（`30d12db`，`demo-round2.args`）：保留 144 px，D 上置／E 下置／F 下沿悬浮，10/12 px；用户确定 12 px，但上下间距与视觉样式仍需调整。
+- **第三轮**（`a61653e`，`demo-round3.args`）：G／H／I 重排纵向间距与分栏；用户选择以 H 为基础继续调整为 J。
 
-历史 `demo-round1.args` / `demo-round2.args` 分别只与对应提交配套；当前代码用于第三轮。
+历史 `demo-round1.args` / `demo-round2.args` / `demo-round3.args` 分别只与对应提交配套；当前代码另包含第四轮 J。
 
 ## 字体
 

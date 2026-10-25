@@ -4,8 +4,9 @@
   * @brief   一次性唱盘页曲名原型，不进入产品固件。
   *
   * @details 第三轮按用户反馈固定 12 px 与单行循环滚动，重排唱盘、曲名、时间
-  *          和进度的纵向节奏：G 上置居中、H 下置曲名/时间分栏、I 上置分栏。
-  *          唱盘始终为原生 144 px，不使用悬浮底板。方向键切换方案与状态，
+  *          和进度的纵向节奏：G 上置居中、H 下置曲名/时间分栏、I 上置分栏；
+  *          J 按用户补充改为唱盘→曲名→进度→时间→按钮。唱盘始终为原生
+  *          144 px，不使用悬浮底板。方向键切换方案与状态，
   *          数字键 1..7 直达状态。本文件只随 host 模拟器进入临时原型分支，
   *          不是产品 Screen 的第二事实源；产品 view/ 与运行时实现不改。
   ******************************************************************************
@@ -27,7 +28,7 @@
 LV_FONT_DECLARE(lv_font_track_title_12);
 
 #define TRACK_TITLE_START_MS           6000U
-#define TRACK_TITLE_VARIANT_COUNT      3U
+#define TRACK_TITLE_VARIANT_COUNT      4U
 #define TRACK_TITLE_STATE_COUNT        7U
 #define TRACK_TITLE_TOOLBAR_BYTES      96U
 #define TRACK_TITLE_VINYL_NATIVE_SIZE  144U
@@ -63,6 +64,7 @@ static const TrackTitlePrototypeVariantTypeDef track_title_variants[TRACK_TITLE_
     {'G', "Center"},
     {'H', "Below split"},
     {'I', "Above split"},
+    {'J', "Stacked"},
 };
 
 static const TrackTitlePrototypeStateTypeDef track_title_states[TRACK_TITLE_STATE_COUNT] = {
@@ -272,6 +274,10 @@ static void track_title_prototype_apply(void)
     lv_obj_set_align(time_label, LV_ALIGN_TOP_MID);
     lv_obj_set_pos(time_label, 0, lv_pct(5));
     lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_pos(view->music.slider, lv_pct(0), lv_pct(20));
+    lv_obj_set_pos(view->music.previous_button, lv_pct(-30), lv_pct(19));
+    lv_obj_set_pos(view->music.next_button, lv_pct(30), lv_pct(19));
+    lv_obj_set_pos(view->music.play_pause_button, lv_pct(0), lv_pct(18));
 
     switch (track_title_prototype.variant)
     {
@@ -298,7 +304,7 @@ static void track_title_prototype_apply(void)
         lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
         break;
 
-    default:
+    case 2U:
         title_width = 126;
         lv_obj_set_pos(title, 12, 4);
         lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -312,6 +318,18 @@ static void track_title_prototype_apply(void)
         lv_obj_set_size(time_label, 80, lv_font_montserrat_10.line_height + 2);
         lv_obj_set_pos(time_label, -12, 4);
         lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
+        break;
+
+    default:
+        title_width = 218;
+        lv_obj_set_pos(title, 8, 152);
+        lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_pos(vinyl, 0, 4); /* 唱盘→曲名→进度→时间→按钮，曲名不再分栏。 */
+        lv_obj_set_pos(view->music.slider, lv_pct(0), 10);
+        lv_obj_set_pos(time_label, 0, 18);
+        lv_obj_set_pos(view->music.previous_button, lv_pct(-30), lv_pct(19) + 4);
+        lv_obj_set_pos(view->music.next_button, lv_pct(30), lv_pct(19) + 4);
+        lv_obj_set_pos(view->music.play_pause_button, lv_pct(0), lv_pct(18) + 4);
         break;
     }
 

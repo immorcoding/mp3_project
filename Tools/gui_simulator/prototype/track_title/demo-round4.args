@@ -1,0 +1,17 @@
+# 第四轮：J 唱盘→曲名→进度→时间→按钮，12 px。
+--key 6000:v
+--key 6000:v
+--key 6000:v
+--shot 6200:J_short
+--key 6300:2
+--shot 6400:J_long
+--key 6500:3
+--shot 6600:J_mixed
+--key 6700:4
+--shot 6800:J_no_card
+--key 6900:5
+--shot 7000:J_empty
+--key 7100:6
+--shot 7200:J_bad_skip
+--key 7300:7
+--shot 7400:J_next_track
