@@ -1,0 +1,17 @@
+# 第七轮：只将曲名再下移 2 px，其他对象保持第六轮位置。
+--key 6000:v
+--key 6000:v
+--key 6000:v
+--shot 6200:J4_short
+--key 6300:2
+--shot 6400:J4_long
+--key 6500:3
+--shot 6600:J4_mixed
+--key 6700:4
+--shot 6800:J4_no_card
+--key 6900:5
+--shot 7000:J4_empty
+--key 7100:6
+--shot 7200:J4_bad_skip
+--key 7300:7
+--shot 7400:J4_next_track

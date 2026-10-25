@@ -10,20 +10,20 @@
 - 坏文件跳过显示下一首候选曲名，并保留 `Skipped k file(s)` 提示。
 - 切歌取得新曲目身份后立即显示新曲名，时间为 `0:00/--:--`，进度为 0。
 
-## 当前：第六轮 J 位置微调
+## 当前：第七轮 J 位置微调
 
-第四轮按用户指定形成“144 px 唱盘 → 居中曲名独占一行 → 进度条 → 居中时间／状态 → 播放按钮”。第五轮根据“标题离唱盘过近、离进度条过远，长名字不要显示这么多”调整间距与宽度；第六轮按“再往下挪一点”继续微调：
+第四轮按用户指定形成“144 px 唱盘 → 居中曲名独占一行 → 进度条 → 居中时间／状态 → 播放按钮”。后续逐轮收窄长名并调整曲名位置；第七轮按“只下移歌曲标题”继续微调：
 
-- 曲名在第五轮基础上**再下移 2 px**，相对第四轮累计下移 6 px；截图确认不碰进度条。
+- **只把曲名再下移 2 px**，相对第四轮累计下移 8 px；唱盘、进度条、时间与按钮保持第六轮位置。
 - 曲名可见宽度保持 **160 px**，仍为 12 px 单行循环滚动，一次少显示一些字符。
 
 其他布局不变：曲名与时间不分栏，播放按钮用真正的 4 px 平移，时间／状态复用同一个 Label。
 
 | 短曲名 | 超长曲名 | 中英混排 |
 | --- | --- | --- |
-| [J 短名](shots/round6/J3_short.png) | [J 长名](shots/round6/J3_long.png) | [J 混排](shots/round6/J3_mixed.png) |
+| [J 短名](shots/round7/J4_short.png) | [J 长名](shots/round7/J4_long.png) | [J 混排](shots/round7/J4_mixed.png) |
 
-状态截图：[无卡](shots/round6/J3_no_card.png) · [空库](shots/round6/J3_empty.png) · [坏文件跳过](shots/round6/J3_bad_skip.png) · [切歌过渡](shots/round6/J3_next_track.png)
+状态截图：[无卡](shots/round7/J4_no_card.png) · [空库](shots/round7/J4_empty.png) · [坏文件跳过](shots/round7/J4_bad_skip.png) · [切歌过渡](shots/round7/J4_next_track.png)
 
 ### 第三轮候选仍可在模拟器内切换
 
@@ -48,20 +48,20 @@
 
 ## 截图复现
 
-`demo-round6.args` 使用确定性虚拟时钟截取第六轮 J 的 7 张图：
+`demo-round7.args` 使用确定性虚拟时钟截取第七轮 J 的 7 张图：
 
 ```powershell
 $exe = './build/gui_simulator_track_title_prototype/gui_simulator.exe'
-$out = './build/gui_simulator_track_title_prototype/shots-round6'
+$out = './build/gui_simulator_track_title_prototype/shots-round7'
 New-Item -ItemType Directory -Force -Path $out
 $arguments = @('--prototype-track-title', '--hidden', '--out-dir', $out)
-Get-Content './Tools/gui_simulator/prototype/track_title/demo-round6.args' -Encoding UTF8 |
+Get-Content './Tools/gui_simulator/prototype/track_title/demo-round7.args' -Encoding UTF8 |
     Where-Object { $_ -and -not $_.StartsWith('#') } |
     ForEach-Object { $arguments += ($_ -split '\s+') }
 & $exe @arguments
 ```
 
-截图是 `240×320` BMP；`shots/round6/` 保存转换为 2 倍 PNG 后的审阅副本。
+截图是 `240×320` BMP；`shots/round7/` 保存转换为 2 倍 PNG 后的审阅副本。
 
 ## 历史方案
 
@@ -70,8 +70,9 @@ Get-Content './Tools/gui_simulator/prototype/track_title/demo-round6.args' -Enco
 - **第三轮**（`a61653e`，`demo-round3.args`）：G／H／I 重排纵向间距与分栏；用户选择以 H 为基础继续调整为 J。
 - **第四轮**（`d8841b6`，`demo-round4.args`）：形成 J 的曲名→进度→时间顺序；用户随后要求拉开唱盘间距、靠近进度并收窄长名显示。[原始 J](shots/round4/J_long.png)
 - **第五轮**（`fd20f23`，`demo-round5.args`）：曲名下移 4 px、宽度收窄到 160 px；用户随后要求再下移一点。[第五轮 J](shots/round5/J2_long.png)
+- **第六轮**（`d80051a`，`demo-round6.args`）：曲名再下移 2 px；用户随后明确只移动标题。[第六轮 J](shots/round6/J3_long.png)
 
-历史 `demo-round1.args` 至 `demo-round5.args` 分别只与对应提交配套；当前代码另包含第六轮 J 微调。
+历史 `demo-round1.args` 至 `demo-round6.args` 分别只与对应提交配套；当前代码另包含第七轮 J 微调。
 
 ## 字体
 
