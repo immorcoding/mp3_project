@@ -50,7 +50,7 @@ typedef struct
 typedef struct
 {
     lv_obj_t *title;          /**< 曲名 Label。 */
-    lv_obj_t *meta;           /**< 分栏方案使用的右侧时间/状态 Label。 */
+    lv_obj_t *time_home;      /**< 时间 Label 原有的控制区父对象。 */
     lv_obj_t *toolbar;        /**< 原型切换条。 */
     lv_obj_t *toolbar_label;  /**< 当前方案与状态文本。 */
     uint8_t variant;          /**< 当前方案下标。 */
@@ -250,8 +250,9 @@ static void track_title_prototype_apply(void)
     const TrackTitlePrototypeStateTypeDef *state =
         &track_title_states[track_title_prototype.state];
     lv_obj_t *title = track_title_prototype.title;
-    lv_obj_t *meta = track_title_prototype.meta;
     lv_obj_t *vinyl = view->music.vinyl_image;
+    lv_obj_t *playing_tab = lv_obj_get_parent(vinyl);
+    lv_obj_t *time_label = view->music.time_label;
     lv_coord_t title_width;
 
     lv_obj_set_style_text_font(title, &lv_font_track_title_12, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -261,8 +262,16 @@ static void track_title_prototype_apply(void)
     lv_img_set_zoom(vinyl, TRACK_TITLE_VINYL_ZOOM_NONE);
     lv_obj_set_align(vinyl, LV_ALIGN_TOP_MID);
 
-    lv_obj_clear_flag(view->music.time_label, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(meta, LV_OBJ_FLAG_HIDDEN);
+    if (lv_obj_get_parent(time_label) != track_title_prototype.time_home)
+    {
+        lv_obj_set_parent(time_label, track_title_prototype.time_home);
+    }
+    lv_obj_clear_flag(time_label, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_long_mode(time_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_size(time_label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_align(time_label, LV_ALIGN_TOP_MID);
+    lv_obj_set_pos(time_label, 0, lv_pct(5));
+    lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     switch (track_title_prototype.variant)
     {
@@ -278,9 +287,15 @@ static void track_title_prototype_apply(void)
         lv_obj_set_pos(title, 12, 158);
         lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_pos(vinyl, 0, 6); /* 唱盘→曲名/时间分栏→进度保持清晰间隔。 */
-        lv_obj_add_flag(view->music.time_label, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(meta, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_pos(meta, -12, 158);
+        if (lv_obj_get_parent(time_label) != playing_tab)
+        {
+            lv_obj_set_parent(time_label, playing_tab);
+        }
+        lv_obj_set_align(time_label, LV_ALIGN_TOP_RIGHT);
+        lv_label_set_long_mode(time_label, LV_LABEL_LONG_DOT);
+        lv_obj_set_size(time_label, 80, lv_font_montserrat_10.line_height + 2);
+        lv_obj_set_pos(time_label, -12, 158);
+        lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
         break;
 
     default:
@@ -288,9 +303,15 @@ static void track_title_prototype_apply(void)
         lv_obj_set_pos(title, 12, 4);
         lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_pos(vinyl, 0, 26); /* 曲名/时间在上方分栏，唱盘下方只留进度。 */
-        lv_obj_add_flag(view->music.time_label, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(meta, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_pos(meta, -12, 4);
+        if (lv_obj_get_parent(time_label) != playing_tab)
+        {
+            lv_obj_set_parent(time_label, playing_tab);
+        }
+        lv_obj_set_align(time_label, LV_ALIGN_TOP_RIGHT);
+        lv_label_set_long_mode(time_label, LV_LABEL_LONG_DOT);
+        lv_obj_set_size(time_label, 80, lv_font_montserrat_10.line_height + 2);
+        lv_obj_set_pos(time_label, -12, 4);
+        lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
         break;
     }
 
@@ -300,12 +321,12 @@ static void track_title_prototype_apply(void)
     lv_obj_set_size(title, title_width, lv_font_track_title_12.line_height + 2);
     lv_label_set_text(title, state->title);
     lv_obj_move_foreground(title);
-    lv_obj_move_foreground(meta);
+    lv_obj_move_foreground(time_label);
     track_title_prototype.dirty = false;
 }
 
 /**
- * @brief 创建曲名、分栏时间与原型切换条；初始为 G 上置居中短曲名。
+ * @brief 创建曲名与原型切换条，记录时间 Label 原父对象；初始为 G 上置居中短曲名。
  * @note 仅在 Service_GUI_Init() 与 gui_music_init() 成功后、进入模拟主循环前调用一次；
  *       必须早于 track_title_prototype_step()。普通模拟器模式不得调用。
  */
@@ -324,21 +345,8 @@ void track_title_prototype_init(void)
                                 LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_add_flag(track_title_prototype.title, LV_OBJ_FLAG_HIDDEN);
 
-    track_title_prototype.meta = lv_label_create(playing_tab);
-    lv_obj_clear_flag(track_title_prototype.meta, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_text_font(track_title_prototype.meta, &lv_font_montserrat_10,
-                               LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_align(track_title_prototype.meta, LV_TEXT_ALIGN_RIGHT,
-                                LV_PART_MAIN | LV_STATE_DEFAULT);
-    service_gui_theme_style_add(track_title_prototype.meta,
-                                SERVICE_GUI_THEME_TEXT,
-                                SERVICE_GUI_THEME_INK,
-                                LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_align(track_title_prototype.meta, LV_ALIGN_TOP_RIGHT);
-    lv_label_set_long_mode(track_title_prototype.meta, LV_LABEL_LONG_DOT);
-    lv_obj_set_size(track_title_prototype.meta, 80, lv_font_montserrat_10.line_height + 2);
-    lv_obj_add_flag(track_title_prototype.meta, LV_OBJ_FLAG_HIDDEN);
-
+    track_title_prototype.time_home =
+        lv_obj_get_parent(service_gui_view_get()->music.time_label);
     track_title_prototype.state = 0U;
     track_title_prototype.dirty = true;
     track_title_prototype_create_toolbar();
@@ -384,7 +392,6 @@ void track_title_prototype_step(uint32_t elapsed_ms)
 
     state = &track_title_states[track_title_prototype.state];
     lv_label_set_text(view->music.time_label, state->status);
-    lv_label_set_text(track_title_prototype.meta, state->status);
     lv_slider_set_value(view->music.slider, state->progress, LV_ANIM_OFF);
 }
 
