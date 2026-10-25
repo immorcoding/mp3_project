@@ -1,0 +1,17 @@
+# 第六轮：J 曲名在第五轮基础上再下移 2 px，宽度保持 160 px。
+--key 6000:v
+--key 6000:v
+--key 6000:v
+--shot 6200:J3_short
+--key 6300:2
+--shot 6400:J3_long
+--key 6500:3
+--shot 6600:J3_mixed
+--key 6700:4
+--shot 6800:J3_no_card
+--key 6900:5
+--shot 7000:J3_empty
+--key 7100:6
+--shot 7200:J3_bad_skip
+--key 7300:7
+--shot 7400:J3_next_track
