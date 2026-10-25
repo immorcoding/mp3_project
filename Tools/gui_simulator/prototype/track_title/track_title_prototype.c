@@ -279,6 +279,7 @@ static void track_title_prototype_apply(void)
     lv_obj_t *vinyl = view->music.vinyl_image;
     lv_coord_t title_width;
     lv_coord_t title_height;
+    lv_coord_t title_padding = 0;
     lv_coord_t text_width;
 
     text_width = track_title_measure(state->title, font);
@@ -313,14 +314,15 @@ static void track_title_prototype_apply(void)
         title_height = font->line_height + 6;
         lv_obj_set_pos(title, (lv_obj_get_width(lv_obj_get_parent(vinyl)) - title_width) / 2, 136);
         lv_obj_set_pos(vinyl, 0, 15); /* 原盘尺寸与位置均不变，曲名悬浮于下沿。 */
-        lv_obj_set_style_bg_opa(title, 185, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(title, 80, LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_radius(title, 9, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_pad_hor(title, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+        title_padding = 4;
+        lv_obj_set_style_pad_hor(title, title_padding, LV_PART_MAIN | LV_STATE_DEFAULT);
         break;
     }
 
     lv_label_set_long_mode(title,
-                           (text_width > (title_width - ((track_title_prototype.variant == 2U) ? 8 : 0))) ?
+                           (text_width > (title_width - (title_padding * 2))) ?
                                LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_CLIP);
     lv_obj_set_size(title, title_width, title_height);
     lv_label_set_text(title, state->title);
@@ -348,7 +350,7 @@ void track_title_prototype_init(void)
                                 LV_PART_MAIN | LV_STATE_DEFAULT);
     service_gui_theme_style_add(track_title_prototype.title,
                                 SERVICE_GUI_THEME_BG,
-                                SERVICE_GUI_THEME_GROUND,
+                                SERVICE_GUI_THEME_WASH,
                                 LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_add_flag(track_title_prototype.title, LV_OBJ_FLAG_HIDDEN);
     track_title_prototype.state = 0U;

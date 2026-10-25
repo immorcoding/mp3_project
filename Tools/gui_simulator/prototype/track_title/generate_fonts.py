@@ -12,7 +12,7 @@ SYMBOLS = "晴天不能说的秘密蒲公英的约定回到过去周杰伦最长
 
 
 def main() -> None:
-    """按命令行给定的 OTF 路径生成三种字号的 LVGL C 数组。"""
+    """按命令行给定的 OTF 路径生成 SIZES 中各字号的 LVGL C 数组。"""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("font", type=Path, help="NotoSansCJKsc-Regular.otf 路径")
     args = parser.parse_args()
