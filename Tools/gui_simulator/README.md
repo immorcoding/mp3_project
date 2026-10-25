@@ -30,6 +30,7 @@ cmake --build build/gui_simulator
 | `--out-dir DIR` | 截图目录，默认当前目录 |
 | `--hidden` | 不显示窗口 |
 | `--realtime` | 脚本模式下仍按墙钟运行 |
+| `--prototype-track-title` | 启用临时分支的唱盘页曲名决策原型；运行与操作见 [原型说明](prototype/track_title/README.md)，不进入产品固件 |
 
 示例（解锁、播放、切到 Queue 并截图）：
 

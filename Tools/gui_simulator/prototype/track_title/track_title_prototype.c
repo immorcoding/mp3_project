@@ -6,6 +6,8 @@
   * @details 在真实 Now Playing 页上比较三种结构：A 上置 16 px 单行滚动、
   *          B 下置 18 px 双行省略、C 右侧 14 px 三行省略。方向键切换方案与
   *          状态，底部悬浮条提供同样的鼠标操作。所有状态均为内存中的静态演示。
+  *          本文件只随 host 模拟器进入临时原型分支，不是产品 Screen 的第二事实源；
+  *          产品 view/ 与运行时实现不改，定稿后只把决定交给后续 spec。
   ******************************************************************************
   */
 
@@ -400,8 +402,11 @@ static lv_obj_t *track_title_prototype_create_button(lv_obj_t *parent,
     lv_obj_set_size(button, width, 22);
     lv_obj_clear_flag(button, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(button, 11, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(button, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(button, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH,
+                                LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(button, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_ACCENT,
+                                LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(button, 50, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_border_width(button, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_shadow_width(button, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -410,7 +415,8 @@ static lv_obj_t *track_title_prototype_create_button(lv_obj_t *parent,
     lv_label_set_text(button_label, text);
     lv_obj_set_align(button_label, LV_ALIGN_CENTER);
     lv_obj_set_style_text_font(button_label, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_color(button_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(button_label, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK,
+                                LV_PART_MAIN | LV_STATE_DEFAULT);
     if (label != NULL)
     {
         *label = button_label;
@@ -434,9 +440,11 @@ static void track_title_prototype_create_toolbar(void)
     lv_obj_set_style_pad_all(bar, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_column(bar, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(bar, 14, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(0x101018), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(bar, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_GROUND,
+                                LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(bar, 225, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_color(bar, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(bar, SERVICE_GUI_THEME_BORDER, SERVICE_GUI_THEME_INK,
+                                LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_opa(bar, 70, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(bar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -531,6 +539,8 @@ static void track_title_prototype_apply(void)
 
 /**
  * @brief 创建曲名 Label 与原型切换条；初始状态为短曲名。
+ * @note 仅在 Service_GUI_Init() 与 gui_music_init() 成功后、进入模拟主循环前调用一次；
+ *       必须早于 track_title_prototype_step()。普通模拟器模式不得调用。
  */
 void track_title_prototype_init(void)
 {
@@ -555,6 +565,8 @@ void track_title_prototype_init(void)
 /**
  * @brief 在启动序列后进入真实唱盘页，并覆盖演示专用的曲名、时间与进度。
  * @param[in] elapsed_ms 自 GUI Service 初始化完成起的模拟毫秒数。
+ * @note 每圈在 gui_music_step() 之后、Service_GUI_Process() 之前调用，确保演示文本
+ *       先于本帧绘制覆盖假后端默认值；须先完成 track_title_prototype_init()。
  */
 void track_title_prototype_step(uint32_t elapsed_ms)
 {

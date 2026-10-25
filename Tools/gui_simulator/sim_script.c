@@ -60,7 +60,7 @@ static bool sim_script_add(const sim_action_t *action)
  * @brief 解析命令行脚本参数，登记定时动作。
  * @param[in]  argc    参数个数。
  * @param[in]  argv    参数数组。
- * @param[out] options 解析出的窗口与时钟选项。
+ * @param[out] options 解析出的窗口、时钟与原型选项。
  * @retval true  解析成功。
  * @retval false 参数无法解析，已向 stderr 打印原因。
  */
