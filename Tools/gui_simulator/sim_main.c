@@ -14,8 +14,8 @@
   *          request）；S 挂起/恢复假后端的命令处理；B 让假后端之后一次开启为坏
   *          文件；R 让假后端以下一个非 NONE 停止原因停止；A 打印 LVGL 运行中动画数
   *          （核对唱盘与状态行闪烁不叠加）；L 淡出回到 Lock（核对 Lock 呼吸随屏幕
-  *          重启）；Esc 退出。曲名原型模式另用方向键切换方案与状态，V/N/P 与数字键
-  *          供脚本切换方案、状态与字号。脚本参数见 sim_script.h。
+  *          重启）；Esc 退出。曲名原型模式另用方向键切换方案与状态，V/N 与数字键
+  *          供脚本切换。脚本参数见 sim_script.h。
   ******************************************************************************
   */
 
@@ -228,7 +228,7 @@ int main(int argc, char *argv[])
     {
         track_title_prototype_init();
         printf("[track-title-prototype] Left/Right: variant, Up/Down: state, "
-               "V: next variant, N: next state, P: 10/12 px, 1..7: state, Esc: quit\n");
+               "V: next variant, N: next state, 1..7: state, Esc: quit\n");
     }
     else
     {
