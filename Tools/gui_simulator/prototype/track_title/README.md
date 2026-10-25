@@ -10,19 +10,20 @@
 - 坏文件跳过显示下一首候选曲名，并保留 `Skipped k file(s)` 提示。
 - 切歌取得新曲目身份后立即显示新曲名，时间为 `0:00/--:--`，进度为 0。
 
-## 当前：第四轮 J（按用户指定顺序）
+## 当前：第五轮 J 微调
 
-用户以 H 为基础提出“进度条上方曲目，下方时间”。J 因此改为：
+第四轮按用户指定形成“144 px 唱盘 → 居中曲名独占一行 → 进度条 → 居中时间／状态 → 播放按钮”。随后用户指出“标题离唱盘过近、离进度条过远，长名字不要显示这么多”，因此当前 J 做两处定向微调：
 
-**144 px 唱盘 → 居中曲名独占一行 → 进度条 → 居中时间／状态 → 播放按钮**
+- 曲名**下移 4 px**：拉开与唱盘的间距，同时靠近进度条。
+- 曲名可见宽度从 218 px **收窄到 160 px**：仍为 12 px 单行循环滚动，但一次少显示一些字符。
 
-曲名不再与时间左右分栏。唱盘保持 144 px 并小幅上移；进度略上移，播放按钮仅下移 4 px，时间／状态仍复用同一个 Label。
+其他布局不变：曲名与时间不分栏，播放按钮用真正的 4 px 平移，时间／状态复用同一个 Label。
 
 | 短曲名 | 超长曲名 | 中英混排 |
 | --- | --- | --- |
-| [J 短名](shots/round4/J_short.png) | [J 长名](shots/round4/J_long.png) | [J 混排](shots/round4/J_mixed.png) |
+| [J 短名](shots/round5/J2_short.png) | [J 长名](shots/round5/J2_long.png) | [J 混排](shots/round5/J2_mixed.png) |
 
-状态截图：[无卡](shots/round4/J_no_card.png) · [空库](shots/round4/J_empty.png) · [坏文件跳过](shots/round4/J_bad_skip.png) · [切歌过渡](shots/round4/J_next_track.png)
+状态截图：[无卡](shots/round5/J2_no_card.png) · [空库](shots/round5/J2_empty.png) · [坏文件跳过](shots/round5/J2_bad_skip.png) · [切歌过渡](shots/round5/J2_next_track.png)
 
 ### 第三轮候选仍可在模拟器内切换
 
@@ -47,28 +48,29 @@
 
 ## 截图复现
 
-`demo-round4.args` 使用确定性虚拟时钟截取 J 的 7 张图：
+`demo-round5.args` 使用确定性虚拟时钟截取微调后 J 的 7 张图：
 
 ```powershell
 $exe = './build/gui_simulator_track_title_prototype/gui_simulator.exe'
-$out = './build/gui_simulator_track_title_prototype/shots-round4'
+$out = './build/gui_simulator_track_title_prototype/shots-round5'
 New-Item -ItemType Directory -Force -Path $out
 $arguments = @('--prototype-track-title', '--hidden', '--out-dir', $out)
-Get-Content './Tools/gui_simulator/prototype/track_title/demo-round4.args' -Encoding UTF8 |
+Get-Content './Tools/gui_simulator/prototype/track_title/demo-round5.args' -Encoding UTF8 |
     Where-Object { $_ -and -not $_.StartsWith('#') } |
     ForEach-Object { $arguments += ($_ -split '\s+') }
 & $exe @arguments
 ```
 
-截图是 `240×320` BMP；`shots/round4/` 保存转换为 2 倍 PNG 后的审阅副本。
+截图是 `240×320` BMP；`shots/round5/` 保存转换为 2 倍 PNG 后的审阅副本。
 
 ## 历史方案
 
 - **第一轮**（`76ee112`，`demo-round1.args`）：14–18 px、多行和缩小唱盘；因字号过大、排版不协调、侵占唱盘空间被否决。
 - **第二轮**（`30d12db`，`demo-round2.args`）：保留 144 px，D 上置／E 下置／F 下沿悬浮，10/12 px；用户确定 12 px，但上下间距与视觉样式仍需调整。
 - **第三轮**（`a61653e`，`demo-round3.args`）：G／H／I 重排纵向间距与分栏；用户选择以 H 为基础继续调整为 J。
+- **第四轮**（`d8841b6`，`demo-round4.args`）：形成 J 的曲名→进度→时间顺序；用户随后要求拉开唱盘间距、靠近进度并收窄长名显示。[原始 J](shots/round4/J_long.png)
 
-历史 `demo-round1.args` / `demo-round2.args` / `demo-round3.args` 分别只与对应提交配套；当前代码另包含第四轮 J。
+历史 `demo-round1.args` / `demo-round2.args` / `demo-round3.args` / `demo-round4.args` 分别只与对应提交配套；当前代码另包含第五轮 J 微调。
 
 ## 字体
 

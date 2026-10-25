@@ -1,0 +1,17 @@
+# 第五轮：J 微调，曲名下移 4 px、可见宽度收窄至 160 px。
+--key 6000:v
+--key 6000:v
+--key 6000:v
+--shot 6200:J2_short
+--key 6300:2
+--shot 6400:J2_long
+--key 6500:3
+--shot 6600:J2_mixed
+--key 6700:4
+--shot 6800:J2_no_card
+--key 6900:5
+--shot 7000:J2_empty
+--key 7100:6
+--shot 7200:J2_bad_skip
+--key 7300:7
+--shot 7400:J2_next_track

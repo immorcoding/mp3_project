@@ -5,8 +5,9 @@
   *
   * @details 第三轮按用户反馈固定 12 px 与单行循环滚动，重排唱盘、曲名、时间
   *          和进度的纵向节奏：G 上置居中、H 下置曲名/时间分栏、I 上置分栏；
-  *          J 按用户补充改为唱盘→曲名→进度→时间→按钮。唱盘始终为原生
-  *          144 px，不使用悬浮底板。方向键切换方案与状态，
+  *          J 按用户补充改为唱盘→曲名→进度→时间→按钮，并将曲名下移 4 px、
+  *          可见宽度收窄至 160 px。唱盘始终为原生 144 px，不使用悬浮底板。
+  *          方向键切换方案与状态，
   *          数字键 1..7 直达状态。本文件只随 host 模拟器进入临时原型分支，
   *          不是产品 Screen 的第二事实源；产品 view/ 与运行时实现不改。
   ******************************************************************************
@@ -324,10 +325,10 @@ static void track_title_prototype_apply(void)
         break;
 
     default:
-        title_width = 218;
-        lv_obj_set_pos(title, 8, 152);
+        title_width = 160;
+        lv_obj_set_pos(title, (lv_obj_get_width(playing_tab) - title_width) / 2, 156);
         lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_pos(vinyl, 0, 4); /* 唱盘→曲名→进度→时间→按钮，曲名不再分栏。 */
+        lv_obj_set_pos(vinyl, 0, 4); /* 曲名下移 4 px 靠近进度，可见宽度收窄至 160 px。 */
         lv_obj_set_pos(view->music.slider, lv_pct(0), 10);
         lv_obj_set_pos(time_label, 0, 18);
         lv_obj_set_style_translate_y(view->music.previous_button, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
