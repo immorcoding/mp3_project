@@ -278,6 +278,9 @@ static void track_title_prototype_apply(void)
     lv_obj_set_pos(view->music.previous_button, lv_pct(-30), lv_pct(19));
     lv_obj_set_pos(view->music.next_button, lv_pct(30), lv_pct(19));
     lv_obj_set_pos(view->music.play_pause_button, lv_pct(0), lv_pct(18));
+    lv_obj_set_style_translate_y(view->music.previous_button, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_translate_y(view->music.next_button, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_translate_y(view->music.play_pause_button, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     switch (track_title_prototype.variant)
     {
@@ -327,9 +330,9 @@ static void track_title_prototype_apply(void)
         lv_obj_set_pos(vinyl, 0, 4); /* 唱盘→曲名→进度→时间→按钮，曲名不再分栏。 */
         lv_obj_set_pos(view->music.slider, lv_pct(0), 10);
         lv_obj_set_pos(time_label, 0, 18);
-        lv_obj_set_y(view->music.previous_button, lv_obj_get_y_aligned(view->music.previous_button) + 4);
-        lv_obj_set_y(view->music.next_button, lv_obj_get_y_aligned(view->music.next_button) + 4);
-        lv_obj_set_y(view->music.play_pause_button, lv_obj_get_y_aligned(view->music.play_pause_button) + 4);
+        lv_obj_set_style_translate_y(view->music.previous_button, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_translate_y(view->music.next_button, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_translate_y(view->music.play_pause_button, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
         break;
     }
 
