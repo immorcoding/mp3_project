@@ -5,7 +5,8 @@
   "metadata_alignment": 4,
   "vendor_id": 1,
   "product_id": 1,
-  "package_version": 2,
+  "package_version": 3,
+  "scanned_image_first_id": 3,
   "maximum_pack_size": "0x003FE000",
   "deployment": {
     "nor_chip_offset": "0x00401000",
@@ -38,6 +39,18 @@
         "byte_order": "LITTLE_ENDIAN",
         "element_size": 2,
         "element_count": 43586
+      }
+    },
+    {
+      "id": 5,
+      "name": "noto_sans_cjk_sc_12_4bpp",
+      "type": "FONT",
+      "version": 1,
+      "source": "Resources/fonts/noto_sans_cjk_sc_12_4bpp.bin",
+      "metadata": {
+        "version": 1,
+        "font_format": "LV_FONT_CONV_BIN",
+        "codepoint_encoding": "UNICODE"
       }
     }
   ]

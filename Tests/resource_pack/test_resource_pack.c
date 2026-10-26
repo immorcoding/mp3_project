@@ -275,6 +275,419 @@ static void test_rejects_overlapping_regions(void)
            RESOURCE_PACK_FORMAT_ERROR);
 }
 
+#define TEST_FONT_METADATA_SIZE   32U
+#define TEST_FONT_HEAD_SIZE       48U
+#define TEST_FONT_CMAP_SIZE       12U
+#define TEST_FONT_ADV_BITS        9U
+#define TEST_FONT_XY_BITS         5U
+#define TEST_FONT_WH_BITS         4U
+#define TEST_FONT_HEADER_BYTES    3U
+#define TEST_FONT_MIB             0x100000U
+#define TEST_FONT_RESOURCE_ID  5U
+
+static uint8_t test_font_bin[TEST_FONT_MIB + 0x2000U];
+
+/**
+ * @brief 把低 count 位的 value 按 MSB 优先写入位流。
+ * @param[in,out] destination 位流首地址（需已清零）。
+ * @param[in] bit_position 起始位序号。
+ * @param[in] value 待写数值。
+ * @param[in] count 位数。
+ */
+static void test_put_bits(uint8_t *destination, uint32_t bit_position, uint32_t value, uint32_t count)
+{
+    for (uint32_t index = 0U; index < count; index++)
+    {
+        uint32_t bit = (value >> (count - 1U - index)) & 1U;
+
+        if (bit != 0U)
+        {
+            uint32_t position = bit_position + index;
+            destination[position / 8U] |= (uint8_t)(0x80U >> (position % 8U));
+        }
+    }
+}
+
+/**
+ * @brief 返回合成字形在 glyf 中的字节数：位图紧跟 3 字节头，空盒子字形只有 4 字节头位流。
+ * @param[in] index 字形索引，0 为 notdef。
+ * @param[in] bitmap 字形位图字节数，0 表示空盒子。
+ * @return 字形条目字节数。
+ */
+static uint32_t test_font_glyph_length(uint32_t index, uint32_t bitmap)
+{
+    if (index == 0U)
+    {
+        return 0U; /* lv_font_conv 为 notdef 写入零长度条目。 */
+    }
+
+    return (bitmap == 0U) ? 4U : (TEST_FONT_HEADER_BYTES + bitmap);
+}
+
+/**
+ * @brief 构造合成的 lv_font_conv bin：字形 0 为 notdef，其后每个字形占一个条目。
+ * @param[in] bitmap_bytes 字形 1.. 的位图字节数；0 表示该字形盒子为空（如空格）。
+ * @param[in] glyph_count 字形条目总数（含索引 0）。
+ * @param[in] index_to_loc_format loca 条目宽度，0 为 16 位、1 为 32 位。
+ * @return bin 总长度。
+ */
+static uint32_t test_build_font_bin(
+    const uint32_t *bitmap_bytes,
+    uint32_t glyph_count,
+    uint8_t index_to_loc_format)
+{
+    uint32_t loca_entry_size = (index_to_loc_format == 0U) ? 2U : 4U;
+    uint32_t loca_size = 12U + glyph_count * loca_entry_size;
+    uint32_t glyf_size = 8U;
+    uint32_t offset;
+    uint8_t *head = test_font_bin;
+    uint8_t *cmap = head + TEST_FONT_HEAD_SIZE;
+    uint8_t *loca = cmap + TEST_FONT_CMAP_SIZE;
+    uint8_t *glyf;
+
+    memset(test_font_bin, 0, sizeof(test_font_bin));
+
+    test_write_u32(head, TEST_FONT_HEAD_SIZE);
+    memcpy(head + 4U, "head", 4U);
+    test_write_u32(head + 0x08U, 1U);
+    test_write_u16(head + 0x0CU, 4U);
+    test_write_u16(head + 0x0EU, 12U);                      /* font_size */
+    test_write_u16(head + 0x10U, 13U);                      /* ascent */
+    test_write_u16(head + 0x12U, (uint16_t)(int16_t)-3);    /* descent */
+    head[0x22U] = index_to_loc_format;
+    head[0x23U] = 1U;                                       /* glyph_id_format */
+    head[0x24U] = 1U;                                       /* advance_width_format */
+    head[0x25U] = 4U;                                       /* bits_per_pixel */
+    head[0x26U] = TEST_FONT_XY_BITS;
+    head[0x27U] = TEST_FONT_WH_BITS;
+    head[0x28U] = TEST_FONT_ADV_BITS;
+
+    test_write_u32(cmap, TEST_FONT_CMAP_SIZE);
+    memcpy(cmap + 4U, "cmap", 4U);
+
+    test_write_u32(loca, loca_size);
+    memcpy(loca + 4U, "loca", 4U);
+    test_write_u32(loca + 8U, glyph_count);
+
+    for (uint32_t index = 0U; index < glyph_count; index++)
+    {
+        glyf_size += test_font_glyph_length(index, (index == 0U) ? 0U : bitmap_bytes[index - 1U]);
+    }
+
+    glyf = loca + loca_size;
+    test_write_u32(glyf, glyf_size);
+    memcpy(glyf + 4U, "glyf", 4U);
+
+    offset = 8U;
+    for (uint32_t index = 0U; index < glyph_count; index++)
+    {
+        uint32_t bitmap = (index == 0U) ? 0U : bitmap_bytes[index - 1U];
+
+        if (index_to_loc_format == 0U)
+        {
+            test_write_u16(loca + 12U + index * 2U, (uint16_t)offset);
+        }
+        else
+        {
+            test_write_u32(loca + 12U + index * 4U, offset);
+        }
+
+        if (index != 0U)
+        {
+            uint32_t box = (bitmap != 0U) ? 1U : 0U;
+
+            /* 字形头位流：adv(9) ofs_x(5) ofs_y(5) box_w(4) box_h(4)，共 27 位。 */
+            test_put_bits(glyf + offset, 0U, 5U, TEST_FONT_ADV_BITS);
+            test_put_bits(glyf + offset, 19U, box, TEST_FONT_WH_BITS);
+            test_put_bits(glyf + offset, 23U, box, TEST_FONT_WH_BITS);
+        }
+
+        offset += test_font_glyph_length(index, bitmap);
+    }
+
+    return TEST_FONT_HEAD_SIZE + TEST_FONT_CMAP_SIZE + loca_size + glyf_size;
+}
+
+/**
+ * @brief 写入 FONT Metadata V1，缺省字段与合成 bin 一致。
+ * @param[out] metadata 32 B 目标缓冲。
+ * @param[in] glyph_count GlyphCount。
+ */
+static void test_write_font_metadata(uint8_t *metadata, uint32_t glyph_count)
+{
+    memset(metadata, 0, TEST_FONT_METADATA_SIZE);
+    test_write_u32(metadata + 0x00U, 1U);
+    test_write_u32(metadata + 0x04U, TEST_FONT_METADATA_SIZE);
+    test_write_u32(metadata + 0x08U, RESOURCE_PACK_FONT_FORMAT_LV_FONT_CONV_BIN);
+    test_write_u32(metadata + 0x0CU, RESOURCE_PACK_CODEPOINT_ENCODING_UNICODE);
+    test_write_u32(metadata + 0x10U, glyph_count);
+    test_write_u32(metadata + 0x14U, 12U);
+    test_write_u32(metadata + 0x18U, 13U);
+    test_write_u32(metadata + 0x1CU, (uint32_t)(int32_t)-3);
+}
+
+/**
+ * @brief 以独立缓冲构造 FONT Entry 与 View，并按 Metadata 内容计算 CRC。
+ * @param[in] metadata 32 B Metadata。
+ * @param[in] data_length bin 长度。
+ * @param[out] entry 接收 Entry。
+ * @param[out] view 接收 View，Data 指向 test_font_bin。
+ */
+static void test_make_font_entry(
+    const uint8_t *metadata,
+    uint32_t data_length,
+    ResourcePack_EntryTypeDef *entry,
+    ResourcePack_EntryViewTypeDef *view)
+{
+    memset(entry, 0, sizeof(*entry));
+    entry->ResourceID = TEST_FONT_RESOURCE_ID;
+    entry->ResourceType = RESOURCE_PACK_TYPE_FONT;
+    entry->ResourceVersion = 1U;
+    entry->DataLength = data_length;
+    entry->MetadataLength = TEST_FONT_METADATA_SIZE;
+    entry->MetadataCRC32 = test_crc32(metadata, TEST_FONT_METADATA_SIZE);
+
+    view->Metadata = metadata;
+    view->MetadataLength = TEST_FONT_METADATA_SIZE;
+    view->Data = test_font_bin;
+    view->DataLength = data_length;
+}
+
+/**
+ * @brief 验证包内 FONT Entry 可经 Open/Find/View 取得，并解码出 Metadata 各字段。
+ */
+static void test_open_and_decode_font(void)
+{
+    static const uint32_t bitmaps[] = {9U, 0U, 7U};
+    ResourcePack_HandleTypeDef handle = {0};
+    ResourcePack_EntryTypeDef entry;
+    ResourcePack_EntryViewTypeDef view;
+    ResourcePack_FontMetadataTypeDef metadata;
+    uint8_t *package_entry = test_package + 0x40U;
+    uint32_t bin_length = test_build_font_bin(bitmaps, 4U, 1U);
+
+    test_build_valid_package();
+    test_write_font_metadata(test_package + TEST_METADATA_OFFSET, 4U);
+    memcpy(test_package + TEST_DATA_OFFSET, test_font_bin, bin_length);
+    test_write_u16(package_entry + 0x04U, RESOURCE_PACK_TYPE_FONT);
+    test_write_u32(package_entry + 0x14U, bin_length);
+    test_write_u32(package_entry + 0x18U, test_crc32(test_font_bin, bin_length));
+    test_write_u32(package_entry + 0x20U, TEST_FONT_METADATA_SIZE);
+    test_write_u32(package_entry + 0x24U,
+                   test_crc32(test_package + TEST_METADATA_OFFSET, TEST_FONT_METADATA_SIZE));
+    test_write_u32(test_package + TEST_HEADER_SIZE - 4U,
+                   test_crc32(test_package, TEST_HEADER_SIZE - 4U));
+
+    assert(ResourcePack_Open(test_package, sizeof(test_package), &handle) == RESOURCE_PACK_OK);
+    assert(ResourcePack_FindEntry(&handle, 7U, &entry) == RESOURCE_PACK_OK);
+    assert(ResourcePack_GetEntryView(&handle, &entry, &view) == RESOURCE_PACK_OK);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_OK);
+    assert(metadata.MetadataVersion == 1U);
+    assert(metadata.MetadataSize == 32U);
+    assert(metadata.FontFormat == RESOURCE_PACK_FONT_FORMAT_LV_FONT_CONV_BIN);
+    assert(metadata.CodepointEncoding == RESOURCE_PACK_CODEPOINT_ENCODING_UNICODE);
+    assert(metadata.GlyphCount == 4U);
+    assert(metadata.NominalPixelHeight == 12U);
+    assert(metadata.Ascent == 13);
+    assert(metadata.Descent == -3);
+    assert(ResourcePack_VerifyBuffer(view.Data, view.DataLength, entry.DataCRC32) == RESOURCE_PACK_OK);
+}
+
+/**
+ * @brief 验证 16 位与 32 位 loca 格式的合法字体都能解码。
+ */
+static void test_decodes_both_loca_formats(void)
+{
+    static const uint32_t bitmaps[] = {9U, 0U, 7U};
+    uint8_t metadata_bytes[TEST_FONT_METADATA_SIZE];
+    ResourcePack_EntryTypeDef entry;
+    ResourcePack_EntryViewTypeDef view;
+    ResourcePack_FontMetadataTypeDef metadata;
+
+    for (uint8_t format = 0U; format <= 1U; format++)
+    {
+        uint32_t bin_length = test_build_font_bin(bitmaps, 4U, format);
+
+        test_write_font_metadata(metadata_bytes, 4U);
+        test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+        assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_OK);
+    }
+}
+
+/**
+ * @brief 验证 MetadataSize 不是 32 B 时按格式错误拒绝。
+ */
+static void test_font_rejects_wrong_metadata_size(void)
+{
+    static const uint32_t bitmaps[] = {9U};
+    uint8_t metadata_bytes[TEST_FONT_METADATA_SIZE];
+    ResourcePack_EntryTypeDef entry;
+    ResourcePack_EntryViewTypeDef view;
+    ResourcePack_FontMetadataTypeDef metadata;
+    uint32_t bin_length = test_build_font_bin(bitmaps, 2U, 1U);
+
+    test_write_font_metadata(metadata_bytes, 2U);
+    test_write_u32(metadata_bytes + 0x04U, 24U);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    entry.MetadataLength = 24U;
+    entry.MetadataCRC32 = test_crc32(metadata_bytes, 24U);
+    view.MetadataLength = 24U;
+
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_FORMAT_ERROR);
+}
+
+/**
+ * @brief 验证未知 FontFormat、未知 CodepointEncoding 与未知版本分别返回不支持。
+ */
+static void test_font_rejects_unknown_enumerations(void)
+{
+    static const uint32_t bitmaps[] = {9U};
+    uint8_t metadata_bytes[TEST_FONT_METADATA_SIZE];
+    ResourcePack_EntryTypeDef entry;
+    ResourcePack_EntryViewTypeDef view;
+    ResourcePack_FontMetadataTypeDef metadata;
+    uint32_t bin_length = test_build_font_bin(bitmaps, 2U, 1U);
+
+    test_write_font_metadata(metadata_bytes, 2U);
+    test_write_u32(metadata_bytes + 0x08U, 0x7FU);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) ==
+           RESOURCE_PACK_UNSUPPORTED_FORMAT);
+
+    test_write_font_metadata(metadata_bytes, 2U);
+    test_write_u32(metadata_bytes + 0x0CU, 0x7FU);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) ==
+           RESOURCE_PACK_UNSUPPORTED_FORMAT);
+
+    test_write_font_metadata(metadata_bytes, 2U);
+    test_write_u32(metadata_bytes + 0x00U, 2U);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) ==
+           RESOURCE_PACK_UNSUPPORTED_VERSION);
+}
+
+/**
+ * @brief 验证类型不是 FONT 时返回不支持类型。
+ */
+static void test_font_decoder_rejects_other_types(void)
+{
+    uint8_t metadata_bytes[TEST_FONT_METADATA_SIZE];
+    ResourcePack_EntryTypeDef entry;
+    ResourcePack_EntryViewTypeDef view;
+    ResourcePack_FontMetadataTypeDef metadata;
+    static const uint32_t bitmaps[] = {9U};
+    uint32_t bin_length = test_build_font_bin(bitmaps, 2U, 1U);
+
+    test_write_font_metadata(metadata_bytes, 2U);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    entry.ResourceType = RESOURCE_PACK_TYPE_IMAGE;
+
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) ==
+           RESOURCE_PACK_UNSUPPORTED_TYPE);
+}
+
+/**
+ * @brief 验证 Metadata 与 bin 不一致（字形数、字号、行高）或 bin 被截断时按格式错误拒绝。
+ */
+static void test_font_rejects_metadata_that_disagrees_with_bin(void)
+{
+    static const uint32_t bitmaps[] = {9U, 0U, 7U};
+    uint8_t metadata_bytes[TEST_FONT_METADATA_SIZE];
+    ResourcePack_EntryTypeDef entry;
+    ResourcePack_EntryViewTypeDef view;
+    ResourcePack_FontMetadataTypeDef metadata;
+    uint32_t bin_length = test_build_font_bin(bitmaps, 4U, 1U);
+
+    test_write_font_metadata(metadata_bytes, 5U);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_FORMAT_ERROR);
+
+    test_write_font_metadata(metadata_bytes, 4U);
+    test_write_u32(metadata_bytes + 0x14U, 14U);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_FORMAT_ERROR);
+
+    test_write_font_metadata(metadata_bytes, 4U);
+    test_write_u32(metadata_bytes + 0x18U, 12U);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_FORMAT_ERROR);
+
+    test_write_font_metadata(metadata_bytes, 4U);
+    test_make_font_entry(metadata_bytes, bin_length - 5U, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_FORMAT_ERROR);
+
+    test_write_font_metadata(metadata_bytes, 4U);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    test_font_bin[4U] = 'x';
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_FORMAT_ERROR);
+}
+
+/**
+ * @brief 验证位图总量恰为 1 MiB 被拒绝、少 1 B 被接受；空盒子字形不计入总量。
+ */
+static void test_font_bitmap_total_limit(void)
+{
+    static const uint32_t over[] = {TEST_FONT_MIB / 2U, TEST_FONT_MIB / 2U, 3U};
+    static const uint32_t exact[] = {TEST_FONT_MIB / 2U, TEST_FONT_MIB / 2U};
+    static const uint32_t under[] = {TEST_FONT_MIB / 2U, TEST_FONT_MIB / 2U - 1U};
+    static const uint32_t blank_glyphs[] = {TEST_FONT_MIB - 1U, 0U, 0U, 0U};
+    uint8_t metadata_bytes[TEST_FONT_METADATA_SIZE];
+    ResourcePack_EntryTypeDef entry;
+    ResourcePack_EntryViewTypeDef view;
+    ResourcePack_FontMetadataTypeDef metadata;
+    uint32_t bin_length;
+
+    bin_length = test_build_font_bin(over, 4U, 1U);
+    test_write_font_metadata(metadata_bytes, 4U);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_FORMAT_ERROR);
+
+    bin_length = test_build_font_bin(exact, 3U, 1U);
+    test_write_font_metadata(metadata_bytes, 3U);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_FORMAT_ERROR);
+
+    bin_length = test_build_font_bin(under, 3U, 1U);
+    test_write_font_metadata(metadata_bytes, 3U);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_OK);
+
+    /* 空盒子字形（空格）的占位字节不计入位图总量。 */
+    bin_length = test_build_font_bin(blank_glyphs, 5U, 1U);
+    test_write_font_metadata(metadata_bytes, 5U);
+    test_make_font_entry(metadata_bytes, bin_length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_OK);
+}
+
+/**
+ * @brief 验证已入库的真实字体 bin 可按设计的 Metadata 解码，并拒绝与实测不符的字形数。
+ */
+static void test_decodes_committed_font_bin(void)
+{
+    uint8_t metadata_bytes[TEST_FONT_METADATA_SIZE];
+    ResourcePack_EntryTypeDef entry;
+    ResourcePack_EntryViewTypeDef view;
+    ResourcePack_FontMetadataTypeDef metadata;
+    FILE *file = fopen(TEST_FONT_BIN_PATH, "rb");
+    size_t length;
+
+    assert(file != NULL);
+    length = fread(test_font_bin, 1U, sizeof(test_font_bin), file);
+    assert(feof(file) != 0);
+    assert(fclose(file) == 0);
+
+    /* 7540 个字符加索引 0 的 notdef；字号 12，ascent 13，descent -3。 */
+    test_write_font_metadata(metadata_bytes, 7541U);
+    test_make_font_entry(metadata_bytes, (uint32_t)length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_OK);
+    assert(metadata.GlyphCount == 7541U);
+
+    test_write_font_metadata(metadata_bytes, 7540U);
+    test_make_font_entry(metadata_bytes, (uint32_t)length, &entry, &view);
+    assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_FORMAT_ERROR);
+}
+
 /**
  * @brief 运行全部 RPKC1 主机行为测试。
  * @return 成功时返回 0。
@@ -283,6 +696,14 @@ int main(void)
 {
     test_open_find_and_decode_binary();
     test_open_and_decode_image();
+    test_open_and_decode_font();
+    test_decodes_both_loca_formats();
+    test_font_rejects_wrong_metadata_size();
+    test_font_rejects_unknown_enumerations();
+    test_font_decoder_rejects_other_types();
+    test_font_rejects_metadata_that_disagrees_with_bin();
+    test_font_bitmap_total_limit();
+    test_decodes_committed_font_bin();
     test_allows_unknown_type_at_core_level();
     test_rejects_corrupt_header();
     test_rejects_overlapping_regions();

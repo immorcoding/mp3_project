@@ -95,6 +95,7 @@
             Name = 'resource_pack'
             PathPatterns = @(
                 '^Components/resource_pack/'
+                '^Resources/fonts/'
                 '^Tests/resource_pack/'
             )
         }
