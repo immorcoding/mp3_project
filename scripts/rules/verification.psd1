@@ -8,6 +8,7 @@
         'w25qxx'
         'resource_pack'
         'storage_audio_stream'
+        'storage_catalog'
         'playback_service'
         'playback_task'
         'monitor_warn'
@@ -104,6 +105,13 @@
             PathPatterns = @(
                 '^APP/tasks/storage/stream/'
                 '^Tests/storage_audio_stream/'
+            )
+        }
+        @{
+            Name = 'storage_catalog'
+            PathPatterns = @(
+                '^APP/tasks/storage/catalog/storage_catalog_name\.[ch]$'
+                '^Tests/storage_catalog/'
             )
         }
         @{
