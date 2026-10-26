@@ -11,6 +11,7 @@
   */
 
 #include "APP/tasks/monitor/monitor_task.h"
+#include "APP/tasks/gui/gui_task.h"
 #include "APP/tasks/monitor/monitor_task_config.h"
 #include "APP/tasks/monitor/monitor_warn.h"
 
@@ -20,6 +21,7 @@
 #include <string.h>
 
 #include "APP/tasks/app_tasks.h"
+#include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
 #include "Platform/led/platform_led.h"
 #include "Platform/temp/platform_temp.h"
 #include "Service/log/log_service.h"
@@ -203,6 +205,34 @@ static void monitor_log_temperature(void)
 }
 
 /**
+  * @brief  记录 GUI 启动以来的最长一帧耗时。
+  * @note   周期数来自 gui_task_get_max_frame_cycles()；换算为微秒（保留一位小数）
+  *         使用当前核心频率。尚无样本或频率不可用时不输出。
+  */
+static void monitor_log_gui_max_frame(void)
+{
+    const uint32_t cycles = gui_task_get_max_frame_cycles();
+    const uint32_t frequency_hz = CortexM7CycleCounter_GetFrequencyHz();
+    uint64_t us_x10;
+    char message[MONITOR_LOG_MESSAGE_LENGTH];
+
+    if ((cycles == 0U) || (frequency_hz == 0U))
+    {
+        return;
+    }
+
+    us_x10 = ((uint64_t)cycles * 10000000ULL) / frequency_hz;
+    (void)snprintf(message,
+                   sizeof(message),
+                   "GUI max frame: %lu cycles = %lu.%lu us @ %lu MHz",
+                   (unsigned long)cycles,
+                   (unsigned long)(us_x10 / 10ULL),
+                   (unsigned long)(us_x10 % 10ULL),
+                   (unsigned long)(frequency_hz / 1000000UL));
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "MONITOR", message);
+}
+
+/**
   * @brief  周期性记录任务栈历史峰值并翻转诊断 LED。
   * @param  handle 未使用，保留以满足 FreeRTOS TaskFunction_t。
   * @note   监控周期为 500 ms；每 10 个周期采集一次快照，避免监控日志本身持续
@@ -225,6 +255,7 @@ void monitor_task(void *handle)
         {
             monitor_log_stack_snapshot();
             monitor_log_temperature();
+            monitor_log_gui_max_frame();
         }
 
         (void)Platform_LED_Toggle(PLATFORM_LED_ID_STATUS);
