@@ -19,6 +19,23 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 | 7 | `card-06-mpeg2-22k.mp3` | 40229 | MPEG-2 22.05 kHz 单声道，不支持采样率，应被跳过 |
 | 8 | `bad-empty.mp3` | 0 | 空文件 |
 
+### 曲目显示名样本（`--set names`）
+
+给 #112 板测行 T7、T8 用。内容都是同一段可播音频（44.1 kHz 192 kbps 30 s，约 720 KB，与 `card-04` 同音频），只有文件名不同；放卡根目录，相对路径即文件名。不含在 `all` 内：换一张空卡（或格式化后）单独复制，期望显示名按 [#102](https://github.com/immorcoding/mp3_project/issues/102) 规则（只去末尾 `.mp3`，大小写不限，其余原样）。
+
+| 复制顺序 | 文件名 | 期望显示名 | 覆盖点 |
+|---:|---|---|---|
+| 1 | `a.b.MP3` | `a.b` | 多点号、大写后缀 |
+| 2 | `a.mp3.mp3` | `a.mp3` | 主名内含 `.mp3` |
+| 3 | `01 - 晴天.mp3` | `01 - 晴天` | 序号与空格原样保留 |
+| 4 | `Hello 世界 Mix 混排 Song.mp3` | `Hello 世界 Mix 混排 Song` | 中英混排 |
+| 5 | `繁體 龍 喆 镕.mp3` | `繁體 龍 喆 镕` | GBK 内、GB2312 外的字（T7：缺字占位框） |
+| 6 | `L` + 83 个汉字 + `.mp3` | 去掉 `.mp3` 的 250 B 主名 | 整名 254 B，逼近 `SERVICE_FILESYSTEM_PATH_MAX_BYTES`（255）；需滚动 |
+| 7–9 | 长 ASCII、纯中文、中英混排各一 | 去掉 `.mp3` | 12 px 下超过 160 px，需滚动 |
+
+- 所有字符都在固件 `_CODE_PAGE 936`（GBK）内；超出 GBK 的字符 FatFs 无法转换，文件不会入库，因此不放进样本。
+- 名字合同（FAT 合法字符、UTF-8 ≤ 255 B、主名 ≤ 251 B、字库外字、滚动宽度）由 `python Tools/board_test_card/test_card_names.py` 检查，不需要 `lameenc`。名字表在 [card_names.py](card_names.py)。
+
 - 固件按 FAT 目录项顺序入库，目录顺序等于创建顺序：必须按上表顺序逐个复制，不要整夹拖拽；`--copy-to` 已按此顺序。
 - `--set first-bad`（坏文件在首位）、`--set all-unsupported`（整库不可播，期望 ALL_BAD）复制子集，相对顺序不变；换子集前先格式化卡。
 - 每个和弦 1 s、起止采样为 0，循环拼接，曲内没有人为咔哒声；同一 `lameenc` 版本下输出逐字节一致，上表字节数以 `lameenc` 1.9.0 为准。

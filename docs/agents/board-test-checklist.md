@@ -27,6 +27,7 @@
   - ☐ 32 kHz、☐ 44.1 kHz、☐ 48 kHz，MPEG-1 L3 立体声 320 kbps，各 ≥ 3 分钟
   - ☐ 约 1 MB ID3v2 标签文件　☐ 短于 1 s 文件　☐ MPEG-2 22.05 kHz 单声道（应被跳过）
   - ☐ `bad-zero.mp3`（200000 B 全零）　☐ `bad-empty.mp3`（0 B）
+  - ☐ 曲目显示名文件名样本（`--set names`，9 个，换空卡单独复制；用于 0.7.0 T7、T8）
   - 配置：A 全集；B 首个文件是 `bad-zero.mp3`（`--set first-bad`）；C 整库不可播（`--set all-unsupported`）；D 空库
   - 另需至少 5 首真实歌曲和 1 张可拔插的卡用于交互项
 - 实际样本库（文件数、码率、采样率）：＿＿

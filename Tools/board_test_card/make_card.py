@@ -21,6 +21,8 @@ import sys
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Tests", "playback_service", "fixtures"))
 import generate_fixtures as gf  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import card_names  # noqa: E402
 
 # 整数 Hz 和弦：1 s 周期，包络 3 Hz 也是整周期，首尾采样都为 0。
 PROGRESSION = [
@@ -45,12 +47,15 @@ FILES = [
     ("bad-empty.mp3", "0 字节：坏文件"),
 ]
 SECTION_SECONDS = 210
+NAME_SAMPLE_SECONDS = 30  # 文件名样本的可播内容：44.1 kHz 192 kbps 30 s，与 card-04 同音频
 
 # 命名子集；顺序沿用 FILES 的相对顺序。
 SETS = {
     "all": [f for f, _ in FILES],
     "first-bad": ["bad-zero.mp3", "card-02-44k1-320k.mp3", "card-05-short.mp3"],
     "all-unsupported": ["bad-zero.mp3", "card-06-mpeg2-22k.mp3", "bad-empty.mp3"],
+    # 曲目显示名样本（#117）：内容都是同一段可播音频，只有文件名不同；不属于 all，需单独复制。
+    "names": [sample.filename for sample in card_names.NAME_SAMPLES],
 }
 
 
@@ -91,6 +96,9 @@ def make_all():
     out["card-05-short.mp3"] = gf.encode(short, 44100, 2, bitrate=128)
     loop = b"".join(gf.synth_pcm(22050, 1, 1.0, [c[0]]) for c in PROGRESSION)
     out["card-06-mpeg2-22k.mp3"] = gf.encode(loop * 2 + loop[: 2 * 22050 * 2], 22050, 1, bitrate=32)
+    name_audio = gf.encode(tile_pcm(44100, 2, NAME_SAMPLE_SECONDS), 44100, 2, bitrate=192)
+    for sample in card_names.NAME_SAMPLES:
+        out[sample.filename] = name_audio
     return out
 
 
@@ -116,6 +124,12 @@ def main():
             handle.write(data[name])
         digest = hashlib.sha256(data[name]).hexdigest()[:12]
         print("%d. %-24s %9d 字节  sha256:%s  %s" % (index, name, len(data[name]), digest, notes[name]))
+    print("\n曲目显示名样本（--set names；内容相同、只改文件名；不含在 all 内，按此顺序复制到另一张空卡）：")
+    for index, sample in enumerate(card_names.NAME_SAMPLES, 1):
+        with open(os.path.join(args.output_dir, sample.filename), "wb") as handle:
+            handle.write(data[sample.filename])
+        print("%d. %s  期望显示名 %r  %s%s" % (index, sample.filename, sample.display,
+              "[需滚动] " if sample.scroll else "", sample.note))
     print("\n子集（均按上面的相对顺序复制）：")
     for key, names in SETS.items():
         print("  --set %-16s %s" % (key, ", ".join(names)))
