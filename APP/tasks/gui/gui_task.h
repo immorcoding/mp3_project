@@ -8,6 +8,8 @@
 #ifndef GUI_TASK_H
 #define GUI_TASK_H
 
+#include <stdint.h>
+
 /**
  * @brief GUI Task 私有的任务通知槽。
  * @note  索引只在本任务的通知数组内有效；与 Storage Task 的槽位编号互不相关。
@@ -19,5 +21,6 @@ typedef enum
 } GUI_NotifyIndexTypeDef;
 
 void gui_task(void *handle);
+uint32_t gui_task_get_max_frame_cycles(void);
 
 #endif /* GUI_TASK_H */
