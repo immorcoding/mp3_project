@@ -14,6 +14,7 @@
 #include "Service/gui/view/gui_service_view_screens.h"
 
 #include "Service/gui/gui_service_config.h"
+#include "Service/gui/font/gui_service_font.h"
 #include "Service/gui/theme/gui_service_theme_style.h"
 
 #define SERVICE_GUI_VIEW_MUSIC_TAB_BAR_HEIGHT  (20)   /* 顶部标签栏高度，像素。 */
@@ -140,6 +141,7 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
     lv_obj_t *label;
     lv_obj_t *slider;
     lv_obj_t *icon;
+    const lv_font_t *title_font;
 
     service_gui_theme_style_add(tab, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_CHECKED);
     lv_obj_set_style_text_opa(tab, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_CHECKED);
@@ -214,15 +216,18 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
     /*
      * 曲名：唱盘与控制区之间单行居中，Ink 文字、底透明。长文本模式与文本由 main/title
      * 按像素宽度在每次 Apply 时决定；本处只定位置、尺寸、字体与滚动速度，不写文本。
+     * 字体取 font/ 的结果：资源包 FONT 解码成功时为 Noto 12 px，否则 Montserrat 12（GUI-22）；
+     * 只有这一个 Label 用它，高度随该字体行高。
      */
+    title_font = service_gui_font_title();
     label = lv_label_create(tab);
-    lv_obj_set_size(label, SERVICE_GUI_MUSIC_TITLE_WIDTH, lv_font_montserrat_12.line_height + 2);
+    lv_obj_set_size(label, SERVICE_GUI_MUSIC_TITLE_WIDTH, title_font->line_height + 2);
     lv_obj_set_pos(label, 0, SERVICE_GUI_VIEW_MUSIC_TITLE_Y);
     lv_obj_set_align(label, LV_ALIGN_TOP_MID);
     lv_obj_clear_flag(label, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label, title_font, LV_PART_MAIN | LV_STATE_DEFAULT);
     service_gui_theme_style_add(label, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(label, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);

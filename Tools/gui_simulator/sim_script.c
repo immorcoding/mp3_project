@@ -71,6 +71,7 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
 
     options->hidden = false;
     options->deterministic = false;
+    options->font_unavailable = false;
 
     for (i = 1; i < argc; i++)
     {
@@ -84,6 +85,11 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
         if (strcmp(argv[i], "--hidden") == 0)
         {
             options->hidden = true;
+            continue;
+        }
+        if (strcmp(argv[i], "--font-unavailable") == 0)
+        {
+            options->font_unavailable = true;
             continue;
         }
         if (strcmp(argv[i], "--realtime") == 0)

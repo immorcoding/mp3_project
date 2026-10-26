@@ -41,9 +41,22 @@ typedef struct
     uint16_t EntryCount;
 } Service_ResourceDiagnosticsTypeDef;
 
+/**
+ * @brief 可选字体载荷在 SDRAM 中的只读位置。
+ * @note  Data 指向 Resource Service 独占的 FONT SDRAM 区，内容为资源包 FONT 条目的
+ *        Data 原样字节（lv_font_conv bin），调用者只读、不写回；不是 NOR 或映射窗口地址。
+ */
+typedef struct
+{
+    bool IsAvailable;     /**< 字体载荷已复制、目标 CRC 已通过且 Cache 已 Clean。 */
+    const uint8_t *Data;  /**< 载荷起点；不可用时为 NULL。 */
+    uint32_t Length;      /**< 载荷字节数；不可用时为 0。 */
+} Service_ResourceFontTypeDef;
+
 Service_StatusTypeDef Service_Resource_Init(void);
 bool Service_Resource_IsReady(void);
 Service_StatusTypeDef Service_Resource_GetDiagnostics(
     Service_ResourceDiagnosticsTypeDef *diagnostics);
+Service_StatusTypeDef Service_Resource_GetFont(Service_ResourceFontTypeDef *font);
 
 #endif /* RESOURCE_SERVICE_H */

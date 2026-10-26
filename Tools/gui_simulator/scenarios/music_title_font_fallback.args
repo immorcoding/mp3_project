@@ -1,0 +1,12 @@
+# 字体不可用回退（GUI-22、RES-10、#121）：--font-unavailable 让资源替身像资源包 v2 一样报告字体不可用，
+# GUI 记 WARN `Title font fallback: resource unavailable.` 后照常启动，曲名 Label 改用 Montserrat 12。
+# 英文名正常显示；中文短名与中英混排里的汉字画占位框，ASCII 照常；播放与其他 Label 不受影响。
+--font-unavailable
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--shot 7400:fallback_english
+--tap 7500:60,260
+--tap 7800:60,260
+--shot 8200:fallback_cjk_short
+--tap 8300:60,260
+--shot 8700:fallback_mixed

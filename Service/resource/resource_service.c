@@ -35,6 +35,10 @@ extern uint8_t __external_resource_wallpaper_end__[];
 extern uint8_t __external_resource_vinyl_start__[];
 /** @brief 链接器为唱盘底图数据预留的 SDRAM 终点。 */
 extern uint8_t __external_resource_vinyl_end__[];
+/** @brief 链接器为可选 FONT 载荷预留的 SDRAM 起点。 */
+extern uint8_t __external_resource_font_start__[];
+/** @brief 链接器为可选 FONT 载荷预留的 SDRAM 终点。 */
+extern uint8_t __external_resource_font_end__[];
 
 /** @brief 单个启动资源的产品约束和 SDRAM 目标。 */
 typedef struct
@@ -43,9 +47,17 @@ typedef struct
     uint16_t ExpectedType;
     uint8_t *DestinationStart;
     uint8_t *DestinationEnd;
-    bool Required;
+    bool Required;          /**< 为假时失败只记 WARN 并继续，不写诊断快照。 */
     bool VerifyAfterCopy;
 } Service_ResourceTargetTypeDef;
+
+/** @brief 单项资源加载失败的位置；成功时 Stage 为 NONE。 */
+typedef struct
+{
+    Service_ResourceStageTypeDef Stage;
+    ResourcePack_StatusTypeDef ComponentStatus;
+    uint32_t DataLength;    /**< 成功时为已复制到目标区的字节数。 */
+} Service_ResourceLoadResultTypeDef;
 
 /** @brief 当前资源包物理位置和产品身份。 */
 typedef struct
@@ -64,7 +76,10 @@ static const Service_ResourceSourceConfigTypeDef resource_source_config = {
     .ProductID = SERVICE_RESOURCE_PRODUCT_ID
 };
 
-/** @brief 当前启动前必须加载完成的四项资源。 */
+/**
+ * @brief 启动前加载的资源：四项必需资源在前，可选 FONT 在最后。
+ * @note  可选项排在最后，必需项任一失败时不会先占用或改写可选项的状态。
+ */
 static const Service_ResourceTargetTypeDef resource_targets[] = {
     {
         .ResourceID = SERVICE_RESOURCE_ID_CP936_UNI2OEM,
@@ -97,11 +112,22 @@ static const Service_ResourceTargetTypeDef resource_targets[] = {
         .DestinationEnd = __external_resource_vinyl_end__,
         .Required = true,
         .VerifyAfterCopy = true
+    },
+    {
+        .ResourceID = SERVICE_RESOURCE_ID_FONT,
+        .ExpectedType = RESOURCE_PACK_TYPE_FONT,
+        .DestinationStart = __external_resource_font_start__,
+        .DestinationEnd = __external_resource_font_end__,
+        .Required = false,
+        .VerifyAfterCopy = true
     }
 };
 
-/** @brief Service 生命周期内保留的最终状态和最近失败信息。 */
+/** @brief Service 生命周期内保留的最终状态和最近失败信息；只记录必需资源与包级失败。 */
 static Service_ResourceDiagnosticsTypeDef resource_diagnostics;
+
+/** @brief 可选字体载荷的只读位置；只在 FONT 完整加载后置为可用。 */
+static Service_ResourceFontTypeDef resource_font;
 
 #if SERVICE_RESOURCE_LOG_ENABLE
 /**
@@ -242,6 +268,37 @@ static ResourcePack_StatusTypeDef resource_validate_true_color_alpha_image(
 }
 
 /**
+ * @brief 校验当前产品对曲名字体 FONT Metadata 的额外约束。
+ * @param[in] entry 当前 FONT Entry。
+ * @param[in] view 当前包内 View。
+ * @return Component 风格的约束校验状态。
+ * @note  Component 已核对 bin 分段与 Metadata 一致、位图总量小于 1 MiB；这里只要求
+ *        曲名使用的标称像素高度。字形表由 GUI 字体子模块解析。
+ */
+static ResourcePack_StatusTypeDef resource_validate_font_metadata(
+    const ResourcePack_EntryTypeDef *entry,
+    const ResourcePack_EntryViewTypeDef *view)
+{
+    ResourcePack_FontMetadataTypeDef metadata;
+    ResourcePack_StatusTypeDef status = ResourcePack_DecodeFontMetadata(
+        entry,
+        view,
+        &metadata);
+
+    if (status != RESOURCE_PACK_OK)
+    {
+        return status;
+    }
+
+    if (metadata.NominalPixelHeight != SERVICE_RESOURCE_FONT_PIXEL_HEIGHT)
+    {
+        return RESOURCE_PACK_FORMAT_ERROR;
+    }
+
+    return RESOURCE_PACK_OK;
+}
+
+/**
  * @brief 依据目标 ID 和类型执行当前产品的 Metadata 约束校验。
  * @param target 当前目标配置。
  * @param entry 匹配 Entry。
@@ -281,67 +338,92 @@ static ResourcePack_StatusTypeDef resource_validate_target_metadata(
             SERVICE_RESOURCE_VINYL_BYTES);
     }
 
+    if (target->ResourceID == SERVICE_RESOURCE_ID_FONT)
+    {
+        return resource_validate_font_metadata(entry, view);
+    }
+
     return RESOURCE_PACK_UNSUPPORTED_TYPE;
+}
+
+/**
+ * @brief 记录单项加载失败的阶段与 Component 状态。
+ * @param[out] result 接收失败位置。
+ * @param[in] stage 失败阶段。
+ * @param[in] component_status 最接近失败原因的 Component 状态。
+ * @return 固定返回 false，便于调用者直接上抛。
+ */
+static bool resource_load_failed(
+    Service_ResourceLoadResultTypeDef *result,
+    Service_ResourceStageTypeDef stage,
+    ResourcePack_StatusTypeDef component_status)
+{
+    result->Stage = stage;
+    result->ComponentStatus = component_status;
+    result->DataLength = 0U;
+    return false;
 }
 
 /**
  * @brief 查找、校验并加载一项目标资源到链接器预留的 SDRAM。
  * @param handle 当前启动期资源包句柄。
  * @param target 产品目标配置。
- * @return 加载结果。
+ * @param result 接收失败阶段与 Component 状态，成功时接收复制字节数。
+ * @retval true 已复制、校验目标 CRC 并 Clean Cache。
+ * @retval false 失败；本函数不写诊断快照，由调用者按必需/可选决定处理方式。
  */
-static Service_StatusTypeDef resource_load_target(
+static bool resource_load_target(
     const ResourcePack_HandleTypeDef *handle,
-    const Service_ResourceTargetTypeDef *target)
+    const Service_ResourceTargetTypeDef *target,
+    Service_ResourceLoadResultTypeDef *result)
 {
     ResourcePack_EntryTypeDef entry;
     ResourcePack_EntryViewTypeDef view;
     ResourcePack_StatusTypeDef component_status;
     uint32_t destination_size;
+#if SERVICE_RESOURCE_LOG_ENABLE && SERVICE_RESOURCE_LOG_ENTRY_ENABLE && \
+    SERVICE_RESOURCE_LOG_TIMING_ENABLE
+    const uint32_t start_cycles = CortexM7CycleCounter_Read();
+#endif
 
     component_status = ResourcePack_FindEntry(handle, target->ResourceID, &entry);
     if (component_status != RESOURCE_PACK_OK)
     {
-        if ((!target->Required) && (component_status == RESOURCE_PACK_NOT_FOUND))
-        {
-            return SERVICE_OK;
-        }
-
-        return resource_fail(target->ResourceID,
-                             SERVICE_RESOURCE_STAGE_FIND_ENTRY,
-                             component_status);
+        return resource_load_failed(result,
+                                    SERVICE_RESOURCE_STAGE_FIND_ENTRY,
+                                    component_status);
     }
 
     if (entry.ResourceType != target->ExpectedType)
     {
-        return resource_fail(target->ResourceID,
-                             SERVICE_RESOURCE_STAGE_CHECK_TYPE,
-                             RESOURCE_PACK_FORMAT_ERROR);
+        return resource_load_failed(result,
+                                    SERVICE_RESOURCE_STAGE_CHECK_TYPE,
+                                    RESOURCE_PACK_FORMAT_ERROR);
     }
 
     component_status = ResourcePack_GetEntryView(handle, &entry, &view);
     if (component_status != RESOURCE_PACK_OK)
     {
-        return resource_fail(target->ResourceID,
-                             SERVICE_RESOURCE_STAGE_CHECK_METADATA,
-                             component_status);
+        return resource_load_failed(result,
+                                    SERVICE_RESOURCE_STAGE_CHECK_METADATA,
+                                    component_status);
     }
 
     component_status = resource_validate_target_metadata(target, &entry, &view);
     if (component_status != RESOURCE_PACK_OK)
     {
-        return resource_fail(target->ResourceID,
-                             SERVICE_RESOURCE_STAGE_CHECK_METADATA,
-                             component_status);
+        return resource_load_failed(result,
+                                    SERVICE_RESOURCE_STAGE_CHECK_METADATA,
+                                    component_status);
     }
 
     destination_size = (uint32_t)(target->DestinationEnd - target->DestinationStart);
     if ((destination_size < entry.DataLength) ||
         (((uintptr_t)target->DestinationStart % CORTEX_M7_DCACHE_LINE_SIZE) != 0U))
     {
-        return resource_fail(target->ResourceID,
-                             SERVICE_RESOURCE_STAGE_CHECK_DESTINATION,
-                             RESOURCE_PACK_FORMAT_ERROR);
+        return resource_load_failed(result,
+                                    SERVICE_RESOURCE_STAGE_CHECK_DESTINATION,
+                                    RESOURCE_PACK_FORMAT_ERROR);
     }
 
     memcpy(target->DestinationStart, view.Data, entry.DataLength);
@@ -351,16 +433,16 @@ static Service_StatusTypeDef resource_load_target(
                                    entry.DataLength,
                                    entry.DataCRC32) != RESOURCE_PACK_OK))
     {
-        return resource_fail(target->ResourceID,
-                             SERVICE_RESOURCE_STAGE_VERIFY_DATA,
-                             RESOURCE_PACK_CRC_ERROR);
+        return resource_load_failed(result,
+                                    SERVICE_RESOURCE_STAGE_VERIFY_DATA,
+                                    RESOURCE_PACK_CRC_ERROR);
     }
 
     if (!CortexM7DCache_Clean_Rounded(target->DestinationStart, entry.DataLength))
     {
-        return resource_fail(target->ResourceID,
-                             SERVICE_RESOURCE_STAGE_CLEAN_CACHE,
-                             RESOURCE_PACK_INVALID_PARAM);
+        return resource_load_failed(result,
+                                    SERVICE_RESOURCE_STAGE_CLEAN_CACHE,
+                                    RESOURCE_PACK_INVALID_PARAM);
     }
 
 #if SERVICE_RESOURCE_LOG_ENABLE && SERVICE_RESOURCE_LOG_ENTRY_ENABLE
@@ -370,6 +452,31 @@ static Service_StatusTypeDef resource_load_target(
                               version_text,
                               sizeof(version_text));
 
+#if SERVICE_RESOURCE_LOG_TIMING_ENABLE
+    {
+        /* 单项耗时含 Metadata 校验、复制、目标 CRC 与 Clean，供板测核对各条目（含 FONT）的启动开销。 */
+        const uint32_t elapsed_cycles = CortexM7CycleCounter_Read() - start_cycles;
+        const uint32_t frequency_hz = CortexM7CycleCounter_GetFrequencyHz();
+        char elapsed_us_text[21] = "?";
+
+        if (frequency_hz != 0U)
+        {
+            (void)resource_format_u64(
+                (uint64_t)elapsed_cycles * 1000000ULL / frequency_hz,
+                elapsed_us_text,
+                sizeof(elapsed_us_text));
+        }
+
+        (void)LOG_Printf(LOG_LEVEL_INFO,
+                         "RESOURCE",
+                         "Loaded id=%lu, type=%u, version=%s, bytes=%lu, time=%s us.",
+                         (unsigned long)entry.ResourceID,
+                         (unsigned int)entry.ResourceType,
+                         version_text,
+                         (unsigned long)entry.DataLength,
+                         elapsed_us_text);
+    }
+#else
     (void)LOG_Printf(LOG_LEVEL_INFO,
                      "RESOURCE",
                      "Loaded id=%lu, type=%u, version=%s, bytes=%lu.",
@@ -378,15 +485,43 @@ static Service_StatusTypeDef resource_load_target(
                      version_text,
                      (unsigned long)entry.DataLength);
 #endif
+#endif
 
-    return SERVICE_OK;
+    result->Stage = SERVICE_RESOURCE_STAGE_NONE;
+    result->ComponentStatus = RESOURCE_PACK_OK;
+    result->DataLength = entry.DataLength;
+    return true;
 }
 
 /**
- * @brief 在任务启动前打开 RPKC1 并加载当前产品全部必需资源。
- * @retval SERVICE_OK 四项资源已校验并加载到 SDRAM。
- * @retval SERVICE_ERROR 映射、协议、身份、资源或目标校验失败。
- * @note 初始化成功后不保留或向外发布 NOR 映射 View。
+ * @brief 可选资源加载失败：记一条带 ResourceID、阶段与 Component 状态的 WARN 后继续。
+ * @param[in] target 失败的可选目标。
+ * @param[in] result 失败阶段与 Component 状态。
+ * @note  不写诊断快照，必需资源的最近失败信息不被覆盖；调度器启动前调用，直接用 LOG_Printf。
+ */
+static void resource_skip_optional(
+    const Service_ResourceTargetTypeDef *target,
+    const Service_ResourceLoadResultTypeDef *result)
+{
+#if SERVICE_RESOURCE_LOG_ENABLE
+    (void)LOG_Printf(LOG_LEVEL_WARN,
+                     "RESOURCE",
+                     "Optional resource unavailable: id=%lu, stage=%lu, component=%lu.",
+                     (unsigned long)target->ResourceID,
+                     (unsigned long)result->Stage,
+                     (unsigned long)result->ComponentStatus);
+#else
+    (void)target;
+    (void)result;
+#endif
+}
+
+/**
+ * @brief 在任务启动前打开 RPKC1，加载当前产品全部必需资源与可选字体。
+ * @retval SERVICE_OK 四项必需资源已校验并加载到 SDRAM；可选 FONT 是否可用见 Service_Resource_GetFont()。
+ * @retval SERVICE_ERROR 映射、协议、身份、必需资源或其目标校验失败。
+ * @note 初始化成功后不保留或向外发布 NOR 映射 View。可选 FONT 的任何失败只记 WARN，
+ *       不改变返回值与诊断快照。
  */
 Service_StatusTypeDef Service_Resource_Init(void)
 {
@@ -403,6 +538,7 @@ Service_StatusTypeDef Service_Resource_Init(void)
 #endif
 
     memset(&resource_diagnostics, 0, sizeof(resource_diagnostics));
+    memset(&resource_font, 0, sizeof(resource_font));
 
 #if SERVICE_RESOURCE_LOG_ENABLE && SERVICE_RESOURCE_LOG_TIMING_ENABLE
     if (!CortexM7CycleCounter_Start())
@@ -482,9 +618,27 @@ Service_StatusTypeDef Service_Resource_Init(void)
          index < sizeof(resource_targets) / sizeof(resource_targets[0]);
          index++)
     {
-        if (resource_load_target(&handle, &resource_targets[index]) != SERVICE_OK)
+        const Service_ResourceTargetTypeDef *target = &resource_targets[index];
+        Service_ResourceLoadResultTypeDef result;
+
+        if (!resource_load_target(&handle, target, &result))
         {
-            return SERVICE_ERROR;
+            if (target->Required)
+            {
+                return resource_fail(target->ResourceID,
+                                     result.Stage,
+                                     result.ComponentStatus);
+            }
+
+            resource_skip_optional(target, &result);
+            continue;
+        }
+
+        if (target->ResourceID == SERVICE_RESOURCE_ID_FONT)
+        {
+            resource_font.Data = target->DestinationStart;
+            resource_font.Length = result.DataLength;
+            resource_font.IsAvailable = true;
         }
     }
 
@@ -515,7 +669,7 @@ Service_StatusTypeDef Service_Resource_Init(void)
 }
 
 /**
- * @brief 查询当前四项启动资源是否全部可用。
+ * @brief 查询当前四项必需启动资源是否全部可用；不反映可选 FONT。
  * @retval true 初始化已经完整成功。
  * @retval false 尚未初始化或初始化失败。
  */
@@ -539,5 +693,24 @@ Service_StatusTypeDef Service_Resource_GetDiagnostics(
     }
 
     *diagnostics = resource_diagnostics;
+    return SERVICE_OK;
+}
+
+/**
+ * @brief 查询可选字体载荷是否可用及其在 SDRAM 中的位置。
+ * @param[out] font 接收可用标志、载荷起点与长度；不可用时起点为 NULL、长度为 0。
+ * @retval SERVICE_OK 已返回查询结果（可用与否见 IsAvailable）。
+ * @retval SERVICE_INVALID_PARAM 输出指针为空。
+ * @note  只发布 Resource Service 独占的 SDRAM 副本，不发布 NOR 指针或 Entry View；
+ *        结果在 Service_Resource_Init() 之后不再变化，任务期可只读查询。
+ */
+Service_StatusTypeDef Service_Resource_GetFont(Service_ResourceFontTypeDef *font)
+{
+    if (font == NULL)
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    *font = resource_font;
     return SERVICE_OK;
 }

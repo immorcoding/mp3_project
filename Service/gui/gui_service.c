@@ -14,6 +14,7 @@
 #include "Service/gui/gui_service.h"
 #include "Service/gui/gui_service_input.h"
 #include "Service/gui/boot/gui_service_boot.h"
+#include "Service/gui/font/gui_service_font.h"
 #include "Service/gui/gui_service_config.h"
 #include "Service/gui/main/gui_service_main.h"
 #include "Service/gui/main/queue/gui_service_main_queue.h"
@@ -243,6 +244,9 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
     }
 
     service_gui_last_tick = xTaskGetTickCount();
+
+    /* 曲名字体必须先于对象创建：view/ 创建曲名 Label 时取它的字体与行高；失败只回退 Montserrat。 */
+    service_gui_font_init();
 
     /* 共享颜色 style 必须先于对象创建，view/ 创建时直接引用它们。 */
     service_gui_theme_style_init();
