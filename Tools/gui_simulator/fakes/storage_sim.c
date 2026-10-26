@@ -11,6 +11,8 @@
   *          `E` 键可把曲库换成空库。窗口行给出曲库相对路径，曲目显示名经真实的
   *          storage_catalog_display_name() 提取。没有 Storage Task：
   *          sim_main.c 每圈先调 storage_sim_step()，上一圈 request 的窗口与名字在本圈填成 READY。
+  *          名称槽另有两个脚本开关：让某首的名字取不到（按生产防御分支应答代次 0），
+  *          让应答多等若干圈（制造空白帧与过期应答）。
   *
   *          播放游标归播放任务（假后端 playback_sim.c），本替身只给出当前代次与
   *          曲目数供假后端判定开启结果。SD 无消抖：已挂载即就绪。
@@ -64,6 +66,9 @@ Storage_NameBufferTypeDef storage_namebuffer;
 static bool storage_sim_mounted;
 static bool storage_sim_empty;
 static uint32_t storage_sim_generation;
+static bool storage_sim_name_fail[STORAGE_SIM_TITLE_COUNT]; /* 为真的位置名字取不到。 */
+static uint32_t storage_sim_name_delay;                     /* 名称槽应答额外等待的圈数。 */
+static uint32_t storage_sim_name_waited;                    /* 当前 PENDING 已等待的圈数。 */
 
 /**
  * @brief 复位为已挂载、第 1 代、固定曲库非空，窗口槽与名称槽 IDLE。
@@ -76,12 +81,16 @@ void storage_sim_init(void)
     storage_sim_mounted = true;
     storage_sim_empty = false;
     storage_sim_generation = 1U;
+    (void)memset(storage_sim_name_fail, 0, sizeof(storage_sim_name_fail));
+    storage_sim_name_delay = 0U;
+    storage_sim_name_waited = 0U;
 }
 
 /**
  * @brief 代替 Storage Task 走一圈：上一圈留下的 PENDING 窗口与名字在本圈填成 READY。
  * @note  每圈在 gui_music_step() 之前调用，因此 request 恰好在下一圈可 APPLY。
- *        名称槽与生产一样在未挂载时也应答（代次 0）。
+ *        名称槽与生产一样在未挂载时也应答（代次 0）；设了应答延迟时 PENDING
+ *        多等 storage_sim_name_delay 圈再填。
  */
 void storage_sim_step(void)
 {
@@ -89,6 +98,20 @@ void storage_sim_step(void)
     {
         (void)storage_listbuffer_load();
     }
+
+    if (storage_namebuffer.Status != STORAGE_NAMEBUFFER_PENDING)
+    {
+        storage_sim_name_waited = 0U;
+        return;
+    }
+
+    if (storage_sim_name_waited < storage_sim_name_delay)
+    {
+        storage_sim_name_waited++;
+        return;
+    }
+
+    storage_sim_name_waited = 0U;
     storage_namebuffer_load(storage_sim_mounted);
 }
 
@@ -148,6 +171,34 @@ void storage_sim_toggle_empty(void)
     printf("[storage] rescan %s (generation %u)\n",
            storage_sim_empty ? "empty" : "restored",
            (unsigned)storage_sim_generation);
+}
+
+/**
+ * @brief 脚本 --name-fail：切换第 index 首的名字是否取不到。
+ * @param[in] index 播放列表位置；超出固定曲库时忽略。
+ * @note  取不到时按生产防御分支应答代次 0 空名，并打印与生产 WARN 同形的一行。
+ */
+void storage_sim_toggle_name_fail(uint16_t index)
+{
+    if (index >= STORAGE_SIM_TITLE_COUNT)
+    {
+        return;
+    }
+
+    storage_sim_name_fail[index] = !storage_sim_name_fail[index];
+    printf("[storage] name of idx=%u %s\n",
+           (unsigned)index,
+           storage_sim_name_fail[index] ? "unavailable" : "available");
+}
+
+/**
+ * @brief 脚本 --name-delay：名称槽 PENDING 后多等 loops 圈再应答。
+ * @param[in] loops 额外等待的圈数；0 恢复为下一圈应答。
+ */
+void storage_sim_set_name_delay(uint32_t loops)
+{
+    storage_sim_name_delay = loops;
+    printf("[storage] name reply delay %u loop(s)\n", (unsigned)loops);
 }
 
 /**
@@ -304,7 +355,8 @@ static void storage_sim_name_complete_empty(void)
 /**
  * @brief 同生产：PENDING 时按当前代次给出固定曲库的曲名并打 READY。
  * @param[in] sd_ready 卷是否已挂载；为假时应答代次 0 空名。
- * @note  代次不符、越界或未挂载应答代次 0 空名。固定曲库不会进入生产的防御分支，不记日志。
+ * @note  代次不符、越界或未挂载应答代次 0 空名，不记日志。--name-fail 标记的位置走生产的
+ *        防御分支：应答代次 0 空名，并打印与生产 WARN 同形的一行。
  */
 void storage_namebuffer_load(bool sd_ready)
 {
@@ -322,14 +374,20 @@ void storage_namebuffer_load(bool sd_ready)
         return;
     }
 
-    if (!storage_catalog_display_name(storage_sim_titles[storage_namebuffer.Index],
+    /* --name-fail 与提取失败都是生产的防御分支：应答代次 0 空名并打印同形 WARN。 */
+    if (storage_sim_name_fail[storage_namebuffer.Index] ||
+        !storage_catalog_display_name(storage_sim_titles[storage_namebuffer.Index],
                                       (uint32_t)strlen(storage_sim_titles[storage_namebuffer.Index]),
                                       storage_namebuffer.Buffer,
                                       sizeof(storage_namebuffer.Buffer)))
     {
+        printf("[storage] Name fail idx=%u gen=%u\n",
+               (unsigned)storage_namebuffer.Index,
+               (unsigned)storage_namebuffer.Generation);
         storage_sim_name_complete_empty();
         return;
     }
+
     storage_namebuffer.Generation = storage_sim_generation;
     storage_namebuffer.Status = STORAGE_NAMEBUFFER_READY;
 }

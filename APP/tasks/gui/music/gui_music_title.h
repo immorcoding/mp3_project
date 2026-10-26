@@ -58,6 +58,7 @@ typedef struct
     bool in_flight;                         /**< 有一次请求尚未消费（槽 PENDING 或 READY）。 */
     GUI_MusicTitleIdentityTypeDef requested; /**< 在途请求所用的身份；应答按它判断是否过期。 */
     GUI_MusicTitleShowTypeDef shown;        /**< 曲名区应显示的内容。 */
+    uint32_t name_generation;               /**< 已显示名字的应答代次；冷启动 0 → G 时据此决定保留。 */
 } GUI_MusicTitleClientTypeDef;
 
 void gui_music_title_client_init(GUI_MusicTitleClientTypeDef *client);

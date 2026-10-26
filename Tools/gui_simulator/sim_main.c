@@ -14,7 +14,8 @@
   *          request）；S 挂起/恢复假后端的命令处理；B 让假后端之后一次开启为坏
   *          文件；R 让假后端以下一个非 NONE 停止原因停止；A 打印 LVGL 运行中动画数
   *          （核对唱盘与状态行闪烁不叠加）；L 淡出回到 Lock（核对 Lock 呼吸随屏幕
-  *          重启）；Esc 退出。脚本参数见 sim_script.h。
+  *          重启）；Esc 退出。脚本参数见 sim_script.h；名称槽开关（某首名字取不到、
+  *          应答延迟若干圈）只有脚本参数 --name-fail / --name-delay。
   ******************************************************************************
   */
 
@@ -111,6 +112,23 @@ static void sim_handle_key(char key)
 }
 
 /**
+ * @brief 处理脚本的名称槽开关，转给假 Storage。
+ * @param[in] control 开关种类。
+ * @param[in] value   --name-fail 为播放列表位置，--name-delay 为额外等待圈数。
+ */
+static void sim_handle_name(sim_script_name_control_t control, unsigned value)
+{
+    if (control == SIM_SCRIPT_NAME_FAIL)
+    {
+        storage_sim_toggle_name_fail((uint16_t)value);
+    }
+    else
+    {
+        storage_sim_set_name_delay((uint32_t)value);
+    }
+}
+
+/**
  * @return false 表示用户请求退出。
  */
 static bool sim_pump_events(void)
@@ -169,6 +187,7 @@ int main(int argc, char *argv[])
 {
     Service_StatusTypeDef status;
     sim_script_options_t options;
+    const sim_script_handlers_t handlers = {sim_handle_key, sim_handle_name};
     uint32_t start_ms;
 
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -210,7 +229,7 @@ int main(int argc, char *argv[])
     {
         Service_GUI_InputTypeDef input;
 
-        if (sim_script_step(sim_clock_now() - start_ms, sim_handle_key))
+        if (sim_script_step(sim_clock_now() - start_ms, &handlers))
         {
             break;
         }

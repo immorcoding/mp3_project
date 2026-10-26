@@ -7,6 +7,8 @@
   *          每圈两步：先按快照归约给出的身份决定是否换身份（换即清空旧名），
   *          再按槽状态推进一次握手。应答一律按“请求时的身份”判断，身份已变就丢弃，
   *          写回 IDLE 后下一圈按最新身份重请求，因此连续切歌只会采信最后一首。
+  *          唯一例外是冷启动的代次确认（同一位置代次 0 → G）：名字或在途应答的代次
+  *          等于 G 时视为同一首，不清空、不重请求。
   ******************************************************************************
   */
 
@@ -31,6 +33,21 @@ static bool gui_music_title_same_identity(
 
     return !a->has_track ||
            ((a->generation == b->generation) && (a->index == b->index));
+}
+
+/**
+ * @brief 判断 to 是否只是 from 的冷启动代次确认：同一位置，代次从 0（开启未确认）变为非 0。
+ * @param[in] from 原身份。
+ * @param[in] to 新身份。
+ * @return 两者都有当前曲、位置相同、from 代次为 0 且 to 代次非 0 时为真。
+ */
+static bool gui_music_title_is_confirmation(
+    const GUI_MusicTitleIdentityTypeDef *from,
+    const GUI_MusicTitleIdentityTypeDef *to)
+{
+    return from->has_track && to->has_track &&
+           (from->generation == 0U) && (to->generation != 0U) &&
+           (from->index == to->index);
 }
 
 /**
@@ -63,6 +80,7 @@ void gui_music_title_client_init(GUI_MusicTitleClientTypeDef *client)
     client->in_flight = false;
     client->requested = client->identity;
     client->shown = GUI_MUSIC_TITLE_SHOW_NONE;
+    client->name_generation = 0U;
 }
 
 /**
@@ -88,21 +106,52 @@ GUI_MusicTitleActionTypeDef gui_music_title_poll(
         current = *identity;
     }
 
-    if (!client->has_identity || !gui_music_title_same_identity(&current, &client->identity))
+    if (!client->has_identity)
     {
         gui_music_title_adopt(client, &current);
+    }
+    else if (!gui_music_title_same_identity(&current, &client->identity))
+    {
+        const bool confirmation = gui_music_title_is_confirmation(&client->identity, &current);
+        const bool name_is_confirmed =
+            (client->shown == GUI_MUSIC_TITLE_SHOW_NAME) &&
+            (client->name_generation == current.generation);
+        const bool reply_pending_for_previous =
+            client->in_flight && gui_music_title_same_identity(&client->requested, &client->identity);
+
+        if (confirmation && (name_is_confirmed || reply_pending_for_previous))
+        {
+            /* 冷启动代次确认：已显示的名字正是代次 G 的应答就保留，不闪空白；
+               代次 0 的请求仍在途则等应答，按应答代次是否为 G 决定采信或重请求。 */
+            client->identity = current;
+        }
+        else
+        {
+            gui_music_title_adopt(client, &current);
+        }
     }
 
     if (status == GUI_MUSIC_TITLE_READY)
     {
+        /* 应答按请求时的身份判断；代次 0 的请求在途时快照已确认为 G，应答代次为 G 也算当前。 */
         const bool reply_current =
-            client->in_flight && gui_music_title_same_identity(&client->requested, &client->identity);
+            client->in_flight &&
+            (gui_music_title_same_identity(&client->requested, &client->identity) ||
+             (gui_music_title_is_confirmation(&client->requested, &client->identity) &&
+              (reply_generation == client->identity.generation)));
 
-        client->in_flight = false;
         if (!reply_current)
         {
+            /* 自己的应答已过期：下一圈按最新身份重请求。复位前遗留的 READY 只丢弃。 */
+            if (client->in_flight)
+            {
+                client->need_request = client->identity.has_track;
+            }
+            client->in_flight = false;
             return GUI_MUSIC_TITLE_ACTION_DISCARD;
         }
+
+        client->in_flight = false;
 
         if (reply_generation == 0U)
         {
@@ -111,6 +160,7 @@ GUI_MusicTitleActionTypeDef gui_music_title_poll(
         }
 
         client->shown = GUI_MUSIC_TITLE_SHOW_NAME;
+        client->name_generation = reply_generation;
         return GUI_MUSIC_TITLE_ACTION_ACCEPT;
     }
 
