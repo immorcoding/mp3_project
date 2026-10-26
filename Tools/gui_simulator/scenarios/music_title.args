@@ -1,0 +1,19 @@
+# Now Playing 曲名（GUI-21）：无当前曲显示 `--`；开播后显示短名并静止居中；上一首绕到第 10 首超长英文名，
+# 宽于 160 px 循环滚动（24 px/s，两帧相隔 2 s 文字位置不同）；拔卡后 `--` 与 `No SD card`；
+# 重新挂载后按 E 换成空库再按播放：开启期间名字取不到为 `--`，随后 NO_TRACK 停止仍为 `--` 与 `No tracks`。
+# --key a 打印动画数（日志证据：长名滚动是常驻动画）
+--drag 6000:120,290:120,80:250
+--shot 7000:no_track
+--tap 7200:120,260
+--shot 7500:short
+--tap 7800:60,260
+--shot 8100:long
+--shot 10100:long_scrolled
+--key 10200:a
+--key 10500:c
+--shot 10800:no_card
+--key 11000:c
+--key 11100:e
+--tap 11300:120,260
+--shot 11440:empty_opening
+--shot 12000:empty_library

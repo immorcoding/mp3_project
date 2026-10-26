@@ -10,6 +10,7 @@
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark.h"
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark_config.h"
 #include "catalog/storage_listbuffer.h"
+#include "catalog/storage_namebuffer.h"
 #include "stream/storage_audio_block.h"
 #include "stream/storage_audio_stream.h"
 
@@ -77,6 +78,7 @@ static void storage_task_apply_sd_state(void)
     {
         storage_task_sd_state = STORAGE_TASK_SD_NOT_READY;
         storage_listbuffer_complete_unavailable();
+        storage_namebuffer_complete_unavailable();
     }
 }
 
@@ -226,7 +228,8 @@ bool storage_task_sd_is_mounted(void)
  *         主循环维护就绪 / 消抖中 / 未就绪。检测 FLAG 立刻进消抖中并重开
  *         30 ms 起点；wait 超时取消抖剩余与 100 ms 回收剩余的较小值。
  *         消抖截止到点后才 storage_sd_process()，再按 SD 是否已挂载回到就绪或未就绪。
- *         仅就绪时接受窗口 request 并 load。
+ *         仅就绪时接受窗口 request 并 load。名称槽任何状态下都接受 request，
+ *         未就绪时按代次 0 应答，GUI 显示 `--`。
  *
  *         STORAGE_NOTIFY_SD_TRANSFER 与 STORAGE_NOTIFY_FLASH_OPERATION 由同一任务
  *         调用栈中的 Filesystem SD/Flash 私有执行器等待。
@@ -241,6 +244,7 @@ void storage_task(void *handle)
     (void)handle;
     task_handle = xTaskGetCurrentTaskHandle();
     storage_listbuffer_bind(task_handle);
+    storage_namebuffer_bind(task_handle);
 
     _Static_assert((unsigned)STORAGE_NOTIFY_COUNT <=
                        (unsigned)configTASK_NOTIFICATION_ARRAY_ENTRIES,
@@ -301,9 +305,10 @@ void storage_task(void *handle)
             storage_task_apply_sd_state();
         }
 
-        /* 每圈顺序：请求信箱 → 列表窗口 → 最多读一块 → 回收。 */
+        /* 每圈顺序：请求信箱 → 列表窗口 → 曲目显示名 → 最多读一块 → 回收。 */
         storage_audio_stream_process_request(storage_task_audio_media());
         storage_task_load_listbuffer_if_allowed();
+        storage_namebuffer_load(storage_task_sd_state == STORAGE_TASK_SD_READY);
         storage_audio_stream_read_block(storage_task_audio_media());
 
         now = xTaskGetTickCount();

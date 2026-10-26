@@ -2,7 +2,7 @@
 
 GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后循环：Consume 一次输入、调用各产品分区 `step`、再 `Service_GUI_Process()`。SPI DMA 刷新期间的等待由 GUI Service 的 wait callback 完成。本目录不创建界面对象；界面由 `Service/gui/view/` 手写。
 
-`gui_task.c` 不包含 `storage_listbuffer.h` 或 `playback_contract.h`。音乐播放器在 `music/`：窗口协议、播放命令与播放快照的归约都在该分区内；GUI 不读写播放游标、不持 playing 真值。Books / Settings 以后各加一个 `step`，不要把它们的 `switch` 写回任务主循环。
+`gui_task.c` 不包含 `storage_listbuffer.h`、`storage_namebuffer.h` 或 `playback_contract.h`。音乐播放器在 `music/`：窗口协议、播放命令与播放快照的归约都在该分区内；GUI 不读写播放游标、不持 playing 真值。Books / Settings 以后各加一个 `step`，不要把它们的 `switch` 写回任务主循环。
 
 ## 公开 Interface
 
@@ -12,7 +12,7 @@ GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后�
 
 ## 编译期依赖
 
-- `Service_GUI_Init()` / `Service_GUI_Process()` / `Service_GUI_ConsumeInput()` / `Service_GUI_TransportApply()` / `Service_GUI_ProgressApply()` / `Service_GUI_TimeApply()` / `Service_GUI_VinylApply()` / `Service_GUI_QueueApply()`（后几项由 `music/` 调用）；
+- `Service_GUI_Init()` / `Service_GUI_Process()` / `Service_GUI_ConsumeInput()` / `Service_GUI_TransportApply()` / `Service_GUI_ProgressApply()` / `Service_GUI_TimeApply()` / `Service_GUI_TitleApply()` / `Service_GUI_VinylApply()` / `Service_GUI_QueueApply()`（后几项由 `music/` 调用）；
 - `music/gui_music.h`；
 - FreeRTOS Task 入口签名。
 
