@@ -5,6 +5,7 @@
         'gui_task'
         'gui_theme'
         'gui_canvas'
+        'gui_font'
         'w25qxx'
         'resource_pack'
         'storage_audio_stream'
@@ -90,6 +91,16 @@
                 '^Service/service\.h$'
                 '^Service/gui/gui_service\.h$'
                 '^Tests/gui_canvas/'
+            )
+        }
+        @{
+            Name = 'gui_font'
+            PathPatterns = @(
+                '^Service/gui/font/'
+                # 解码器按 Component 提供的分段定位读取 bin，并用 Component 的 Metadata 解码口径核对位图上限。
+                '^Components/resource_pack/'
+                '^Resources/fonts/'
+                '^Tests/gui_font/'
             )
         }
         @{

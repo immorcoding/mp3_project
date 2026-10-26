@@ -1,0 +1,34 @@
+# GUI 字体解码主机测试
+
+本目录验证 `Service/gui/font` 的 `lv_font_conv` bin 解码器。编译解码器、`Components/resource_pack`（分段定位）和一个最小 `lvgl.h` 替身，不链接 LVGL、FreeRTOS 或 HAL。
+
+从仓库根目录运行：
+
+```powershell
+./scripts/test-host.ps1 -Module gui_font
+```
+
+## 测试内容
+
+- `test_gui_font_decode_committed.c`：解码已入库的真实字体 `Resources/fonts/noto_sans_cjk_sc_12_4bpp.bin`。字形数 7541、cmap 55 个子表、位图 517698 B、4488 个字距对；字形表与位图总量的 CRC-32、整个基本平面的码点表 CRC-32，以及 ASCII、希腊字母、假名、汉字、全角符号的字形头、位图字节和字距，都与独立脚本对同一份 bin 的解析一致。字集外的相邻码点（U+007F、U+FFE6）必须落空。
+- `test_gui_font_decode_synthetic.c`：小型构造样本。两个合法样本覆盖 2/4 字节 loca、非整字节与整字节字形头、四种 cmap 子表、8 位字距对与类别字距、`bpp` 2/4、前进宽度的两种格式，位图重排逐字节对照手工推出的字面量；失败用例有截断（样本的每一个前缀）、表长与偏移不一致、码点越界、位图总量差一字节与恰为 1 MiB、不支持的变体、输出区不足、空指针与未对齐。每个失败用例同时断言输出区与字体对象未被写入。
+
+## 期望值的来源
+
+真实字体的期望值来自一份独立脚本：它按位串整体移位的方式重排位图（不是 LVGL 的逐字节循环），按 `font_spec` 的精确语义建立码点表（不含 LVGL 的 `rcp > range_length` 写法），用线性扫描查字距。脚本没有入库；要复现，对 bin 逐段解析 head、cmap、loca、glyf、kern 即可。表中的字面量是它的输出，不会被解码器的内部函数重新计算。
+
+测试里的 `gft_glyph_id()` 复刻 LVGL 8.3.11 的 `get_glyph_dsc_id`（含 `rcp > range_length`），所以“范围末尾的下一个码点得到 0”这类断言证明的是：用 LVGL 的真实查找写法也不会取到邻近字形或越界。
+
+## 保真边界
+
+PASS 证明：
+
+- 对这份真实 bin 与构造样本，解码结果（字形描述、cmap、字距、位图字节）与独立参照一致；
+- 截断、表长不一致、码点越界、位图 ≥ 1 MiB、输出区不足都以明确状态失败，且不写输出区；
+- 输出区只写到 `RegionSize` 之内（保护带未被改写），输入 bin 未被修改。
+
+PASS 不证明：
+
+- LVGL 真实的字形渲染、缺字占位框、文字布局和滚动（`lv_font_get_*_fmt_txt` 在这里只是占位符号，从不被调用）；
+- 替身 `lvgl.h` 的结构体布局与真实 LVGL 完全一致——字段和顺序照抄 v8.3.11，条件编译固定为本工程 `lv_conf.h` 的取值，换 LVGL 版本或改 `LV_FONT_FMT_TXT_LARGE` 时须重新对照；
+- Cortex-M7 上的指针宽度（主机为 64 位，输出区尺寸与板上略有差异）、SDRAM 链接位置、Cache 行为或解码耗时。
