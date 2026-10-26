@@ -1,7 +1,8 @@
 /**
   ******************************************************************************
   * @file    storage_sim.h
-  * @brief   假 Storage 的模拟器控制入口：推进窗口与名称槽、切换挂载、模拟重扫（含空库）与查询曲库。
+  * @brief   假 Storage 的模拟器控制入口：推进窗口与名称槽、切换挂载、模拟重扫（含空库）、
+  *          名称槽脚本开关（某首名字取不到、应答延迟若干圈）与查询曲库。
   *
   * @details
   *          音乐分区看到的 `storage_listbuffer_*`、`storage_namebuffer_*`、`storage_task_sd_is_ready/mounted()`
@@ -21,6 +22,8 @@ void storage_sim_step(void);
 bool storage_sim_toggle_mount(void);
 void storage_sim_rescan(void);
 void storage_sim_toggle_empty(void);
+void storage_sim_toggle_name_fail(uint16_t index);
+void storage_sim_set_name_delay(uint32_t loops);
 uint32_t storage_sim_generation_get(void);
 uint16_t storage_sim_track_count(void);
 

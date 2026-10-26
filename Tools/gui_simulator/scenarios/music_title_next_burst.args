@@ -1,0 +1,14 @@
+# 连按 NEXT（GUI-21、#120）：名称槽应答多等 20 圈（约 100 ms），每 100 ms 按一次 NEXT，共三次。
+# 每个应答到达时身份都已变，丢弃后按最新身份重请求；整个过程曲名区留空，不出现第 2、3 首的名字，
+# 最后只显示第 4 首（Nuvole Bianche）。
+--name-delay 5000:20
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--shot 7400:first_named
+--tap 7500:180,260
+--tap 7600:180,260
+--tap 7700:180,260
+--shot 7650:burst_blank_1
+--shot 7750:burst_blank_2
+--shot 7850:burst_blank_3
+--shot 8000:last_named
