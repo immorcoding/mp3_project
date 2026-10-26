@@ -87,6 +87,23 @@ typedef enum
     RESOURCE_PACK_ALPHA_MODE_OPAQUE = 3U          /**< 不透明，忽略 Alpha。 */
 } ResourcePack_AlphaModeTypeDef;
 
+/** @brief FONT Metadata V1 的字体载荷格式编号。 */
+typedef enum
+{
+    RESOURCE_PACK_FONT_FORMAT_UNKNOWN = 0U,              /**< 未声明字体载荷格式。 */
+    RESOURCE_PACK_FONT_FORMAT_LV_FONT_CONV_BIN = 1U      /**< lv_font_conv 1.5.3 未压缩 bin 原样字节。 */
+} ResourcePack_FontFormatTypeDef;
+
+/** @brief FONT Metadata V1 的码点编码编号。 */
+typedef enum
+{
+    RESOURCE_PACK_CODEPOINT_ENCODING_UNKNOWN = 0U,  /**< 未声明码点编码。 */
+    RESOURCE_PACK_CODEPOINT_ENCODING_UNICODE = 1U   /**< Unicode 码点。 */
+} ResourcePack_CodepointEncodingTypeDef;
+
+/** @brief 字体位图总量上限（不含）；LV_FONT_FMT_TXT_LARGE = 0 时位图索引只有 20 位。 */
+#define RESOURCE_PACK_FONT_BITMAP_LIMIT_BYTES  0x100000U
+
 /** @brief 已打开资源包的公共头信息。 */
 typedef struct
 {
@@ -153,6 +170,19 @@ typedef struct
     uint32_t AlphaMode;
 } ResourcePack_ImageMetadataTypeDef;
 
+/** @brief FONT Metadata V1 的已解码字段。 */
+typedef struct
+{
+    uint32_t MetadataVersion;
+    uint32_t MetadataSize;
+    uint32_t FontFormat;
+    uint32_t CodepointEncoding;
+    uint32_t GlyphCount;
+    uint32_t NominalPixelHeight;
+    int32_t Ascent;
+    int32_t Descent;
+} ResourcePack_FontMetadataTypeDef;
+
 /** @brief 零动态内存的已打开资源包句柄。 */
 typedef struct
 {
@@ -199,5 +229,9 @@ ResourcePack_StatusTypeDef ResourcePack_DecodeImageMetadata(
     const ResourcePack_EntryTypeDef *entry,
     const ResourcePack_EntryViewTypeDef *view,
     ResourcePack_ImageMetadataTypeDef *metadata);
+ResourcePack_StatusTypeDef ResourcePack_DecodeFontMetadata(
+    const ResourcePack_EntryTypeDef *entry,
+    const ResourcePack_EntryViewTypeDef *view,
+    ResourcePack_FontMetadataTypeDef *metadata);
 
 #endif /* RESOURCE_PACK_H */

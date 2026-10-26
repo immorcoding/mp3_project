@@ -15,6 +15,68 @@ from extract_project_resources import extract_byte_array, extract_project_resour
 from main import generate_project_package
 
 
+FONT_DIRECTORY = Path(__file__).resolve().parents[3] / "Resources" / "fonts"
+sys.path.insert(0, str(FONT_DIRECTORY))
+
+import generate_font
+
+FONT_BIN_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "Resources"
+    / "fonts"
+    / "noto_sans_cjk_sc_12_4bpp.bin"
+)
+MEBIBYTE = 1 << 20
+
+
+def put_bits(buffer: bytearray, bit_position: int, value: int, count: int) -> None:
+    """按 MSB 优先把 value 的低 count 位写入位流。"""
+
+    for index in range(count):
+        if (value >> (count - 1 - index)) & 1:
+            position = bit_position + index
+            buffer[position // 8] |= 0x80 >> (position % 8)
+
+
+def build_synthetic_font_bin(bitmap_bytes: list[int], loca_format: int = 1) -> bytes:
+    """构造合成的 lv_font_conv bin：字形 0 为零长度 notdef，其后各字形按位图字节数排列。
+
+    位图为 0 的字形是空盒子（如空格），只含 4 字节的字形头位流。
+    """
+
+    adv_bits, xy_bits, wh_bits = 9, 5, 4
+    glyph_count = len(bitmap_bytes) + 1
+    glyphs = [b""]
+
+    for bitmap in bitmap_bytes:
+        # 27 位字形头的最后几位落在第 4 字节，位图紧随其后共用该字节，与 lv_font_conv 的排布一致。
+        glyph = bytearray(3 + bitmap if bitmap else 4)
+        put_bits(glyph, 0, 5, adv_bits)
+        box = 1 if bitmap else 0
+        put_bits(glyph, adv_bits + 2 * xy_bits, box, wh_bits)
+        put_bits(glyph, adv_bits + 2 * xy_bits + wh_bits, box, wh_bits)
+        glyphs.append(bytes(glyph))
+
+    offsets = []
+    cursor = 8
+    for glyph in glyphs:
+        offsets.append(cursor)
+        cursor += len(glyph)
+
+    head = bytearray(48)
+    struct.pack_into("<I4s", head, 0, 48, b"head")
+    struct.pack_into("<IHHHh", head, 8, 1, 4, 12, 13, -3)
+    head[0x22:0x29] = bytes([loca_format, 1, 1, 4, xy_bits, wh_bits, adv_bits])
+
+    cmap = struct.pack("<I4sI", 12, b"cmap", 0)
+    entry_format = "<I" if loca_format else "<H"
+    loca_body = b"".join(struct.pack(entry_format, offset) for offset in offsets)
+    loca = struct.pack("<I4sI", 12 + len(loca_body), b"loca", glyph_count) + loca_body
+    glyf = struct.pack("<I4s", 8 + sum(len(g) for g in glyphs), b"glyf") + b"".join(glyphs)
+
+    return bytes(head) + cmap + loca + glyf
+
+
 class BuildPackageTests(unittest.TestCase):
 
     def test_builds_minimal_binary_resource_package(self) -> None:
@@ -183,6 +245,124 @@ class BuildPackageTests(unittest.TestCase):
                 )
 
 
+class FontResourceTests(unittest.TestCase):
+
+    def font_configuration(self, font_format: str = "LV_FONT_CONV_BIN") -> dict:
+        return {
+            "format_version": 1,
+            "header_size": 0x1000,
+            "data_alignment": 0x1000,
+            "metadata_alignment": 4,
+            "vendor_id": 1,
+            "product_id": 1,
+            "package_version": 3,
+            "resources": [
+                {
+                    "id": 5,
+                    "name": "font",
+                    "type": "FONT",
+                    "version": 1,
+                    "data": "font.bin",
+                    "metadata": {
+                        "version": 1,
+                        "font_format": font_format,
+                        "codepoint_encoding": "UNICODE",
+                    },
+                }
+            ],
+        }
+
+    def build_font_package(
+        self,
+        font_bin: bytes,
+        font_format: str = "LV_FONT_CONV_BIN",
+    ) -> tuple[bytes, dict]:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            working_directory = Path(temporary_directory)
+            (working_directory / "font.bin").write_bytes(font_bin)
+            build_package(
+                self.font_configuration(font_format),
+                working_directory,
+                working_directory / "package.bin",
+                working_directory / "manifest.json",
+            )
+            manifest = json.loads(
+                (working_directory / "manifest.json").read_text(encoding="utf-8")
+            )
+            return (working_directory / "package.bin").read_bytes(), manifest
+
+    def test_packs_font_entry_with_32_byte_metadata_derived_from_the_bin(self) -> None:
+        font_bin = build_synthetic_font_bin([9, 0, 7])
+        package, manifest = self.build_font_package(font_bin)
+
+        entry = struct.unpack_from("<IHHQIIIIII", package, 0x40)
+        self.assertEqual(entry[0], 5)
+        self.assertEqual(entry[1], 2)
+        self.assertEqual(entry[3], 1)
+        self.assertEqual(entry[5], len(font_bin))
+        self.assertEqual(entry[6], binascii.crc32(font_bin))
+        self.assertEqual(entry[8], 32)
+
+        metadata = package[entry[7]:entry[7] + 32]
+        self.assertEqual(
+            struct.unpack("<8I", metadata),
+            (1, 32, 1, 1, 4, 12, 13, 0xFFFFFFFD),
+        )
+        self.assertEqual(package[entry[4]:entry[4] + entry[5]], font_bin)
+        self.assertEqual(manifest["resources"][0]["metadata"]["glyph_count"], 4)
+
+    def test_font_metadata_handles_16_bit_loca(self) -> None:
+        package, _ = self.build_font_package(build_synthetic_font_bin([9, 7], loca_format=0))
+
+        entry = struct.unpack_from("<IHHQIIIIII", package, 0x40)
+        self.assertEqual(struct.unpack_from("<I", package, entry[7] + 0x10)[0], 3)
+
+    def test_font_bitmap_total_must_stay_below_one_mebibyte(self) -> None:
+        self.build_font_package(build_synthetic_font_bin([MEBIBYTE // 2, MEBIBYTE // 2 - 1]))
+
+        with self.assertRaisesRegex(ValueError, "位图总量"):
+            self.build_font_package(build_synthetic_font_bin([MEBIBYTE // 2, MEBIBYTE // 2]))
+
+        # 空盒子字形的头字节不计入位图总量。
+        self.build_font_package(build_synthetic_font_bin([MEBIBYTE - 1, 0, 0]))
+
+    def test_rejects_truncated_or_unknown_font_bin(self) -> None:
+        font_bin = build_synthetic_font_bin([9, 7])
+
+        with self.assertRaisesRegex(ValueError, "字体 bin"):
+            self.build_font_package(font_bin[:-3])
+
+        with self.assertRaisesRegex(ValueError, "字体 bin"):
+            self.build_font_package(b"\x00" * 64)
+
+    def test_rejects_unknown_font_format_names(self) -> None:
+        with self.assertRaisesRegex(ValueError, "font_format"):
+            self.build_font_package(build_synthetic_font_bin([9]), font_format="TTF")
+
+    def test_charset_rule_yields_the_documented_gb2312_counts(self) -> None:
+        symbols, hanzi = generate_font.gb2312_characters()
+
+        self.assertEqual(len(symbols), 682)
+        self.assertEqual(len(hanzi), 6763)
+        # 区位 1-1 为全角空格；16-1 为"啊"，87-94 为"齄"。
+        self.assertEqual(symbols[0], "　")
+        self.assertEqual(hanzi[0], "啊")
+        self.assertEqual(hanzi[-1], "齄")
+        self.assertEqual(len(set(symbols + hanzi)), 682 + 6763)
+
+    def test_committed_font_bin_has_expected_glyph_set(self) -> None:
+        package, manifest = self.build_font_package(FONT_BIN_PATH.read_bytes())
+
+        entry = struct.unpack_from("<IHHQIIIIII", package, 0x40)
+        metadata = struct.unpack_from("<8I", package, entry[7])
+        # 95 个 ASCII + 682 个符号 + 6763 个汉字 + 索引 0 的 notdef。
+        self.assertEqual(metadata[4], 95 + 682 + 6763 + 1)
+        self.assertEqual(metadata[5], 12)
+        self.assertEqual(metadata[6], 13)
+        self.assertEqual(metadata[7], 0xFFFFFFFD)
+        self.assertLess(manifest["resources"][0]["metadata"]["bitmap_bytes"], MEBIBYTE)
+
+
 class ExtractProjectResourcesTests(unittest.TestCase):
 
     def test_vinyl_pack_source_keeps_only_true_color_alpha_16bit(self) -> None:
@@ -252,15 +432,17 @@ class ExtractProjectResourcesTests(unittest.TestCase):
                 )
             )
 
-            self.assertEqual(len(package), 0x77000)
+            # 字体 bin 606504 B 位于 0x77000，向上对齐到 0x1000 后总长 0x10C000。
+            self.assertEqual(len(package), 0x10C000)
             self.assertEqual(package[:4], b"RPKC")
-            self.assertEqual(struct.unpack_from("<H", package, 0x14)[0], 4)
-            self.assertEqual(manifest["package_version"], 2)
+            self.assertEqual(struct.unpack_from("<H", package, 0x14)[0], 5)
+            self.assertEqual(manifest["package_version"], 3)
 
             first_entry = struct.unpack_from("<IHHQIIIIII", package, 0x40)
             second_entry = struct.unpack_from("<IHHQIIIIII", package, 0x68)
             third_entry = struct.unpack_from("<IHHQIIIIII", package, 0x90)
             fourth_entry = struct.unpack_from("<IHHQIIIIII", package, 0xB8)
+            fifth_entry = struct.unpack_from("<IHHQIIIIII", package, 0xE0)
 
             self.assertEqual(first_entry[0], 1)
             self.assertEqual(first_entry[4], 0x2000)
@@ -279,10 +461,20 @@ class ExtractProjectResourcesTests(unittest.TestCase):
             self.assertEqual(fourth_entry[7], 0x66400)
             self.assertEqual(fourth_entry[8], 40)
 
+            self.assertEqual(fifth_entry[0], 5)
+            self.assertEqual(fifth_entry[1], 2)
+            self.assertEqual(fifth_entry[3], 1)
+            self.assertEqual(fifth_entry[4], 0x77000)
+            self.assertEqual(fifth_entry[5], 606504)
+            self.assertEqual(fifth_entry[7], 0x76300)
+            self.assertEqual(fifth_entry[8], 32)
+            font_bin = FONT_BIN_PATH.read_bytes()
+            self.assertEqual(package[0x77000:0x77000 + len(font_bin)], font_bin)
+
             self.assertEqual(manifest["deployment"]["mapped_address"], "0x90401000")
             self.assertEqual(
                 [resource["id"] for resource in manifest["resources"]],
-                [1, 2, 3, 4],
+                [1, 2, 3, 4, 5],
             )
             self.assertEqual(
                 [resource["name"] for resource in manifest["resources"]],
@@ -291,8 +483,32 @@ class ExtractProjectResourcesTests(unittest.TestCase):
                     "cp936_oem2uni",
                     "ui_img_wallpaper_indigo_mist_soft_dark_png",
                     "vinyl_original_144px",
+                    "noto_sans_cjk_sc_12_4bpp",
                 ],
             )
+            self.assertEqual(
+                [resource["version"] for resource in manifest["resources"]],
+                [1, 1, 1, 1, 1],
+            )
+
+    def test_project_package_is_deterministic_and_fits_the_resource_area(self) -> None:
+        project_root = Path(__file__).resolve().parents[3]
+        configuration_path = PACKAGE_MAKER_DIRECTORY / "resource_pack.json"
+        packages = []
+
+        for _ in range(2):
+            with tempfile.TemporaryDirectory() as temporary_directory:
+                output_directory = Path(temporary_directory)
+                generate_project_package(
+                    project_root=project_root,
+                    configuration_path=configuration_path,
+                    output_directory=output_directory,
+                )
+                packages.append((output_directory / "resource_pack.bin").read_bytes())
+
+        self.assertEqual(packages[0], packages[1])
+        # 资源区起点 0x00401000，上限 0x003FE000；v3 实际 PackSize 0x10C000 远小于上限。
+        self.assertLessEqual(len(packages[0]), 0x003FE000)
 
 
 if __name__ == "__main__":

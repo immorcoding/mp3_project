@@ -7,6 +7,8 @@ from pathlib import Path
 import struct
 from typing import Any
 
+from lv_font_bin import parse_lv_font_bin
+
 
 MAGIC = b"RPKC"
 CURRENT_FORMAT_VERSION = 1
@@ -57,6 +59,15 @@ ALPHA_MODES = {
     "STRAIGHT": 1,
     "PREMULTIPLIED": 2,
     "OPAQUE": 3,
+}
+
+
+FONT_FORMATS = {
+    "LV_FONT_CONV_BIN": 1,
+}
+
+CODEPOINT_ENCODINGS = {
+    "UNICODE": 1,
 }
 
 
@@ -262,21 +273,80 @@ def build_image_metadata(metadata: dict[str, Any], data_length: int) -> tuple[by
     return encoded, description
 
 
+def build_font_metadata(metadata: dict[str, Any], data: bytes) -> tuple[bytes, dict[str, Any]]:
+    """编码 FONT Metadata V1（固定 32 B），字形数、字号与行高取自 bin 本身。
+
+    条目 Data 即 lv_font_conv 未压缩 bin 的原样字节；位图总量不小于 1 MiB 时拒绝。
+    """
+
+    version = parse_integer(metadata.get("version", 1), "metadata.version")
+
+    if version != 1:
+        raise ValueError(f"FONT metadata 只支持版本 1，当前为 {version}")
+
+    font_format = enum_value(FONT_FORMATS, metadata["font_format"], "metadata.font_format")
+    codepoint_encoding = enum_value(
+        CODEPOINT_ENCODINGS,
+        metadata["codepoint_encoding"],
+        "metadata.codepoint_encoding",
+    )
+
+    if font_format not in FONT_FORMATS.values():
+        raise ValueError(f"metadata.font_format 不是已知字体格式：{metadata['font_format']}")
+
+    if codepoint_encoding not in CODEPOINT_ENCODINGS.values():
+        raise ValueError(
+            f"metadata.codepoint_encoding 不是已知码点编码：{metadata['codepoint_encoding']}"
+        )
+
+    info = parse_lv_font_bin(data)
+    encoded = struct.pack(
+        "<6Iii",
+        version,
+        32,
+        font_format,
+        codepoint_encoding,
+        info.glyph_count,
+        info.pixel_height,
+        info.ascent,
+        info.descent,
+    )
+    description = {
+        "version": version,
+        "size": len(encoded),
+        "font_format": metadata["font_format"],
+        "codepoint_encoding": metadata["codepoint_encoding"],
+        "glyph_count": info.glyph_count,
+        "nominal_pixel_height": info.pixel_height,
+        "ascent": info.ascent,
+        "descent": info.descent,
+        "bitmap_bytes": info.bitmap_bytes,
+    }
+
+    return encoded, description
+
+
 def build_metadata(
     resource_type_name: str,
     metadata: dict[str, Any] | None,
-    data_length: int,
+    data: bytes,
 ) -> tuple[bytes, dict[str, Any] | None]:
-    """依据资源类型生成可选 Metadata；未配置时返回空 Metadata。"""
+    """依据资源类型生成 Metadata；BINARY/IMAGE 未配置时为空，FONT 必须配置。"""
 
     if metadata is None:
+        if resource_type_name == "FONT":
+            raise ValueError("FONT 资源必须配置 metadata")
+
         return b"", None
 
     if resource_type_name == "BINARY":
-        return build_binary_metadata(metadata, data_length)
+        return build_binary_metadata(metadata, len(data))
 
     if resource_type_name == "IMAGE":
-        return build_image_metadata(metadata, data_length)
+        return build_image_metadata(metadata, len(data))
+
+    if resource_type_name == "FONT":
+        return build_font_metadata(metadata, data)
 
     raise ValueError(f"暂不支持为 {resource_type_name} 生成 metadata")
 
@@ -350,7 +420,7 @@ def prepare_resources(
         metadata, metadata_description = build_metadata(
             resource_type_name,
             resource_configuration.get("metadata"),
-            len(data),
+            data,
         )
 
         if metadata:

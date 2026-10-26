@@ -1,0 +1,2 @@
+# 字体 bin 是字节契约的一部分：禁止换行转换、文本 diff 与自动合并。
+Resources/fonts/*.bin binary

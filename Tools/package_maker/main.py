@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+import shutil
 
 from extract_project_resources import (
     TRUE_COLOR_ALPHA_BYTES_PER_PIXEL,
@@ -48,9 +49,15 @@ def append_scanned_images(
     configuration: dict,
     images: list[ExtractedImage],
 ) -> None:
-    """把扫描到的 IMAGE 接到 JSON 中的 BINARY 之后，ID 从现有最大编号加一。"""
+    """把扫描到的 IMAGE 接到 JSON 中的 BINARY 之后。
 
-    if configuration["resources"]:
+    起始 ID 取 JSON 的 scanned_image_first_id；未配置时为现有最大编号加一。
+    JSON 里的 FONT 等已入库资源占用更大的固定 ID，所以图片不能从最大编号之后分配。
+    """
+
+    if "scanned_image_first_id" in configuration:
+        next_id = configuration["scanned_image_first_id"]
+    elif configuration["resources"]:
         next_id = max(resource["id"] for resource in configuration["resources"]) + 1
     else:
         next_id = 1
@@ -77,6 +84,26 @@ def append_scanned_images(
             }
         )
         next_id += 1
+
+
+def stage_committed_resources(
+    configuration: dict,
+    project_root: Path,
+    generated_directory: Path,
+) -> None:
+    """把带 source 的已入库资源（如字体 bin）原样复制到 generated，并改写其 data 路径。
+
+    打包只读已入库的文件，不经 Node 或 OTF 重新生成。
+    """
+
+    for resource in configuration["resources"]:
+        if "source" not in resource:
+            continue
+
+        source_path = project_root / resource["source"]
+        generated_directory.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_path, generated_directory / source_path.name)
+        resource["data"] = f"generated/{source_path.name}"
 
 
 def print_packing_order(configuration: dict) -> None:
@@ -107,6 +134,7 @@ def generate_project_package(
 
     configuration = json.loads(configuration_path.read_text(encoding="utf-8"))
     append_scanned_images(configuration, extracted.images)
+    stage_committed_resources(configuration, project_root, generated_directory)
 
     output_binary = output_directory / "resource_pack.bin"
     output_manifest = output_directory / "resource_pack_manifest.json"
