@@ -31,13 +31,6 @@ typedef struct
     uint64_t BitmapBytes;
 } ResourcePack_FontBinInfoTypeDef;
 
-/** @brief 一个已通过范围检查的 bin 分段。 */
-typedef struct
-{
-    uint32_t Offset;
-    uint32_t Length;
-} ResourcePack_FontSectionTypeDef;
-
 /**
  * @brief 定位并校验一个 bin 分段的标签与范围。
  * @param[in] data bin 首地址。
@@ -122,7 +115,86 @@ static uint32_t resource_pack_font_read_loca(
 }
 
 /**
- * @brief 解析 bin 的 head、cmap、loca、glyf 分段并统计位图总量。
+ * @brief 定位 lv_font_conv bin 的 head、cmap、loca、glyf 分段并解码 head 参数。
+ *
+ * 只核对分段框架（标签、长度、范围）与 head 参数的自洽，不读 cmap、kern 的内容，也不逐个检查字形条目；
+ * 字形表与位图重排由字体消费者在此基础上解析。kern 分段若存在，紧随 glyf，由消费者按 TablesCount 自行定位。
+ * @param[in] bin bin 首地址，调用者保证可读 length 字节。
+ * @param[in] length bin 总长度。
+ * @param[out] layout 接收分段范围与 head 参数；失败时内容未定义。
+ * @return 结构完整时返回 RESOURCE_PACK_OK；参数为空返回 RESOURCE_PACK_INVALID_PARAM；
+ *         分段缺失、越界或 head 参数自相矛盾返回 RESOURCE_PACK_FORMAT_ERROR。
+ */
+ResourcePack_StatusTypeDef ResourcePack_LocateFontBin(
+    const uint8_t *bin,
+    uint32_t length,
+    ResourcePack_FontBinLayoutTypeDef *layout)
+{
+    uint32_t header_bits;
+    uint32_t loca_entry_size;
+
+    if ((bin == NULL) || (layout == NULL))
+    {
+        return RESOURCE_PACK_INVALID_PARAM;
+    }
+
+    if (!resource_pack_font_find_section(bin, length, 0U, "head", &layout->Head) ||
+        (layout->Head.Length < RESOURCE_PACK_FONT_HEAD_SIZE))
+    {
+        return RESOURCE_PACK_FORMAT_ERROR;
+    }
+
+    layout->TablesCount = ResourcePack_InternalReadU16(bin + 0x0CU);
+    layout->PixelHeight = ResourcePack_InternalReadU16(bin + 0x0EU);
+    layout->Ascent = ResourcePack_InternalReadU16(bin + 0x10U);
+    layout->Descent = (int16_t)ResourcePack_InternalReadU16(bin + 0x12U);
+    layout->DefaultAdvanceWidth = ResourcePack_InternalReadU16(bin + 0x1EU);
+    layout->KerningScale = ResourcePack_InternalReadU16(bin + 0x20U);
+    layout->IndexToLocFormat = bin[0x22U];
+    layout->GlyphIdFormat = bin[0x23U];
+    layout->AdvanceWidthFormat = bin[0x24U];
+    layout->BitsPerPixel = bin[0x25U];
+    layout->XyBits = bin[0x26U];
+    layout->WhBits = bin[0x27U];
+    layout->AdvanceWidthBits = bin[0x28U];
+    layout->CompressionId = bin[0x29U];
+    layout->SubpixelsMode = bin[0x2AU];
+    layout->UnderlinePosition = (int16_t)ResourcePack_InternalReadU16(bin + 0x2CU);
+    layout->UnderlineThickness = ResourcePack_InternalReadU16(bin + 0x2EU);
+
+    header_bits = (uint32_t)layout->AdvanceWidthBits + (2U * layout->XyBits) + (2U * layout->WhBits);
+    if (((layout->IndexToLocFormat != 0U) && (layout->IndexToLocFormat != 1U)) ||
+        (layout->WhBits > RESOURCE_PACK_FONT_MAX_BOX_BITS) ||
+        (header_bits > RESOURCE_PACK_FONT_MAX_HEADER_BITS))
+    {
+        return RESOURCE_PACK_FORMAT_ERROR;
+    }
+
+    loca_entry_size = (layout->IndexToLocFormat == 0U) ? 2U : 4U;
+
+    if (!resource_pack_font_find_section(bin, length, layout->Head.Length, "cmap", &layout->Cmap) ||
+        !resource_pack_font_find_section(bin, length, layout->Cmap.Offset + layout->Cmap.Length, "loca",
+                                         &layout->Loca) ||
+        (layout->Loca.Length < RESOURCE_PACK_FONT_LOCA_FIXED_SIZE) ||
+        !resource_pack_font_find_section(bin, length, layout->Loca.Offset + layout->Loca.Length, "glyf",
+                                         &layout->Glyf))
+    {
+        return RESOURCE_PACK_FORMAT_ERROR;
+    }
+
+    layout->GlyphCount = ResourcePack_InternalReadU32(bin + layout->Loca.Offset + 8U);
+    if ((layout->GlyphCount == 0U) ||
+        (((uint64_t)RESOURCE_PACK_FONT_LOCA_FIXED_SIZE + ((uint64_t)layout->GlyphCount * loca_entry_size)) >
+         layout->Loca.Length))
+    {
+        return RESOURCE_PACK_FORMAT_ERROR;
+    }
+
+    return RESOURCE_PACK_OK;
+}
+
+/**
+ * @brief 解析 bin 的分段并统计位图总量。
  *
  * 统计口径与 LVGL 8.3 的 lv_font_load 一致：字形 0（notdef）不计，盒子宽或高为 0 的字形不计，
  * 其余字形的位图字节数为条目长度减去整字节的字形头。cmap 与 kern 的内容由消费者解析，这里只跳过。
@@ -136,74 +208,38 @@ static uint8_t resource_pack_font_scan_bin(
     uint32_t length,
     ResourcePack_FontBinInfoTypeDef *info)
 {
-    ResourcePack_FontSectionTypeDef head;
-    ResourcePack_FontSectionTypeDef cmap;
-    ResourcePack_FontSectionTypeDef loca;
-    ResourcePack_FontSectionTypeDef glyf;
-    uint32_t index_to_loc_format;
-    uint32_t xy_bits;
-    uint32_t wh_bits;
-    uint32_t advance_bits;
+    ResourcePack_FontBinLayoutTypeDef layout;
     uint32_t header_bits;
     uint32_t header_bytes;
     uint32_t loca_entry_size;
-    uint32_t glyph_count;
     uint32_t box_bit_position;
     uint64_t bitmap_bytes = 0U;
 
-    if (!resource_pack_font_find_section(data, length, 0U, "head", &head) ||
-        (head.Length < RESOURCE_PACK_FONT_HEAD_SIZE))
+    if (ResourcePack_LocateFontBin(data, length, &layout) != RESOURCE_PACK_OK)
     {
         return 0U;
     }
 
-    info->PixelHeight = ResourcePack_InternalReadU16(data + 0x0EU);
-    info->Ascent = (int32_t)ResourcePack_InternalReadU16(data + 0x10U);
-    info->Descent = (int32_t)(int16_t)ResourcePack_InternalReadU16(data + 0x12U);
-    index_to_loc_format = data[0x22U];
-    xy_bits = data[0x26U];
-    wh_bits = data[0x27U];
-    advance_bits = data[0x28U];
+    info->PixelHeight = layout.PixelHeight;
+    info->Ascent = (int32_t)layout.Ascent;
+    info->Descent = (int32_t)layout.Descent;
 
-    header_bits = advance_bits + (2U * xy_bits) + (2U * wh_bits);
-    if (((index_to_loc_format != 0U) && (index_to_loc_format != 1U)) ||
-        (wh_bits > RESOURCE_PACK_FONT_MAX_BOX_BITS) ||
-        (header_bits > RESOURCE_PACK_FONT_MAX_HEADER_BITS))
-    {
-        return 0U;
-    }
-
+    header_bits = (uint32_t)layout.AdvanceWidthBits + (2U * layout.XyBits) + (2U * layout.WhBits);
     header_bytes = (header_bits + 7U) / 8U;
-    box_bit_position = advance_bits + (2U * xy_bits);
-    loca_entry_size = (index_to_loc_format == 0U) ? 2U : 4U;
+    box_bit_position = (uint32_t)layout.AdvanceWidthBits + (2U * layout.XyBits);
+    loca_entry_size = (layout.IndexToLocFormat == 0U) ? 2U : 4U;
 
-    if (!resource_pack_font_find_section(data, length, head.Length, "cmap", &cmap) ||
-        !resource_pack_font_find_section(data, length, cmap.Offset + cmap.Length, "loca", &loca) ||
-        (loca.Length < RESOURCE_PACK_FONT_LOCA_FIXED_SIZE) ||
-        !resource_pack_font_find_section(data, length, loca.Offset + loca.Length, "glyf", &glyf))
+    for (uint32_t index = 0U; index < layout.GlyphCount; index++)
     {
-        return 0U;
-    }
-
-    glyph_count = ResourcePack_InternalReadU32(data + loca.Offset + 8U);
-    if ((glyph_count == 0U) ||
-        (((uint64_t)RESOURCE_PACK_FONT_LOCA_FIXED_SIZE + ((uint64_t)glyph_count * loca_entry_size)) >
-         loca.Length))
-    {
-        return 0U;
-    }
-
-    for (uint32_t index = 0U; index < glyph_count; index++)
-    {
-        uint32_t offset = resource_pack_font_read_loca(data + loca.Offset, loca_entry_size, index);
-        uint32_t next = (index + 1U < glyph_count)
-                            ? resource_pack_font_read_loca(data + loca.Offset, loca_entry_size, index + 1U)
-                            : glyf.Length;
+        uint32_t offset = resource_pack_font_read_loca(data + layout.Loca.Offset, loca_entry_size, index);
+        uint32_t next = (index + 1U < layout.GlyphCount)
+                            ? resource_pack_font_read_loca(data + layout.Loca.Offset, loca_entry_size, index + 1U)
+                            : layout.Glyf.Length;
         const uint8_t *glyph;
         uint32_t box_width;
         uint32_t box_height;
 
-        if ((offset > next) || (next > glyf.Length))
+        if ((offset > next) || (next > layout.Glyf.Length))
         {
             return 0U;
         }
@@ -219,9 +255,9 @@ static uint8_t resource_pack_font_scan_bin(
             return 0U;
         }
 
-        glyph = data + glyf.Offset + offset;
-        box_width = resource_pack_font_read_bits(glyph, box_bit_position, wh_bits);
-        box_height = resource_pack_font_read_bits(glyph, box_bit_position + wh_bits, wh_bits);
+        glyph = data + layout.Glyf.Offset + offset;
+        box_width = resource_pack_font_read_bits(glyph, box_bit_position, layout.WhBits);
+        box_height = resource_pack_font_read_bits(glyph, box_bit_position + layout.WhBits, layout.WhBits);
 
         if ((box_width * box_height) != 0U)
         {
@@ -233,7 +269,7 @@ static uint8_t resource_pack_font_scan_bin(
         }
     }
 
-    info->GlyphCount = glyph_count;
+    info->GlyphCount = layout.GlyphCount;
     info->BitmapBytes = bitmap_bytes;
     return 1U;
 }

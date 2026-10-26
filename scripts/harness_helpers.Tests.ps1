@@ -38,8 +38,19 @@ Assert-HarnessSequence -Expected @('flash_ftl', 'w25qxx') -Actual $ftlImpact.Hos
 Assert-HarnessEqual -Expected $false -Actual $ftlImpact.RequiresAllHostTests -Message '已知 FTL 路径不应回退全部测试'
 
 $resourceImpact = Get-HarnessImpact -ChangedPath @('Components/resource_pack/resource_pack.c')
-Assert-HarnessSequence -Expected @('resource_pack') -Actual $resourceImpact.HostModules `
-    -Message '资源包变化只选择资源包主机测试'
+Assert-HarnessSequence -Expected @('gui_font', 'resource_pack') -Actual $resourceImpact.HostModules `
+    -Message '资源包变化选择资源包主机测试与编译它的字体解码主机测试'
+
+$fontDecoderImpact = Get-HarnessImpact -ChangedPath @('Service/gui/font/gui_service_font_decoder.c')
+Assert-HarnessSequence -Expected @('gui_font') -Actual $fontDecoderImpact.HostModules `
+    -Message '字体解码器变化必须选择 GUI 字体主机测试'
+Assert-HarnessEqual -Expected $true -Actual $fontDecoderImpact.RequiresGuiScenarios -Message '字体解码器位于 Service/gui，须同时跑 GUI 场景回归'
+
+Assert-HarnessEqual -Expected $true -Actual $resourceImpact.RequiresGuiScenarios -Message '模拟器链接真实 ResourcePack Component，其变化须跑 GUI 场景回归'
+
+$fontBinImpact =Get-HarnessImpact -ChangedPath @('Resources/fonts/noto_sans_cjk_sc_12_4bpp.bin')
+Assert-HarnessSequence -Expected @('gui_font', 'resource_pack') -Actual $fontBinImpact.HostModules `
+    -Message '字体 bin 变化必须选择读取它的资源包与 GUI 字体主机测试'
 
 $docsImpact = Get-HarnessImpact -ChangedPath @('docs/shape/sources/verification.md', 'GLOSSARY.md')
 Assert-HarnessEqual -Expected 0 -Actual $docsImpact.HostModules.Count -Message '纯文档变化不跑主机测试'
@@ -207,7 +218,7 @@ Assert-HarnessSequence -Expected @('flash_ftl') -Actual $logHeaderHostImpact.Hos
     -Message 'Service Log 头与 APP 配置头变化必须选择 FTL 主机测试'
 
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'monitor_warn', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
     -Message 'Harness 变化必须回退全部主机测试'
 Assert-HarnessEqual -Expected $true -Actual $harnessImpact.RequiresAllHostTests -Message 'Harness 变化应标记全部测试'
 
@@ -220,7 +231,7 @@ Assert-HarnessEqual -Expected $false -Actual $doxygenCheckImpact.RequiresHardwar
     -Message 'Doxygen 检查脚本不要求上板'
 
 $unknownImpact = Get-HarnessImpact -ChangedPath @('Service/unmapped/player.c')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'monitor_warn', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $unknownImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $unknownImpact.HostModules `
     -Message '未知生产路径不得以零测试通过'
 Assert-HarnessSequence -Expected @('Service/unmapped/player.c') -Actual $unknownImpact.UnknownPaths `
     -Message '应保留触发保守回退的路径证据'

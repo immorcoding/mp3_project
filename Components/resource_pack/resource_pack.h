@@ -183,6 +183,40 @@ typedef struct
     int32_t Descent;
 } ResourcePack_FontMetadataTypeDef;
 
+/** @brief lv_font_conv bin 中一个已通过范围检查的分段，Offset 相对 bin 起点。 */
+typedef struct
+{
+    uint32_t Offset;
+    uint32_t Length;
+} ResourcePack_FontSectionTypeDef;
+
+/** @brief lv_font_conv bin 的分段位置与 head 参数；全部范围已核对位于 bin 内。 */
+typedef struct
+{
+    ResourcePack_FontSectionTypeDef Head;
+    ResourcePack_FontSectionTypeDef Cmap;
+    ResourcePack_FontSectionTypeDef Loca;
+    ResourcePack_FontSectionTypeDef Glyf;
+    uint32_t GlyphCount;              /**< loca 条目数，含索引 0 的 notdef。 */
+    uint16_t TablesCount;             /**< head 声明的分段数；不小于 4 时 glyf 之后应跟 kern。 */
+    uint16_t PixelHeight;
+    uint16_t Ascent;
+    int16_t Descent;
+    uint16_t DefaultAdvanceWidth;
+    uint16_t KerningScale;
+    uint8_t IndexToLocFormat;         /**< 0：loca 项 2 B；1：4 B。 */
+    uint8_t GlyphIdFormat;            /**< kern 中字形编号宽度：0 为 8 位，1 为 16 位。 */
+    uint8_t AdvanceWidthFormat;       /**< 0：前进宽度为整数像素；1：4 位小数。 */
+    uint8_t BitsPerPixel;
+    uint8_t XyBits;
+    uint8_t WhBits;
+    uint8_t AdvanceWidthBits;
+    uint8_t CompressionId;
+    uint8_t SubpixelsMode;
+    int16_t UnderlinePosition;
+    uint16_t UnderlineThickness;
+} ResourcePack_FontBinLayoutTypeDef;
+
 /** @brief 零动态内存的已打开资源包句柄。 */
 typedef struct
 {
@@ -233,5 +267,9 @@ ResourcePack_StatusTypeDef ResourcePack_DecodeFontMetadata(
     const ResourcePack_EntryTypeDef *entry,
     const ResourcePack_EntryViewTypeDef *view,
     ResourcePack_FontMetadataTypeDef *metadata);
+ResourcePack_StatusTypeDef ResourcePack_LocateFontBin(
+    const uint8_t *bin,
+    uint32_t length,
+    ResourcePack_FontBinLayoutTypeDef *layout);
 
 #endif /* RESOURCE_PACK_H */

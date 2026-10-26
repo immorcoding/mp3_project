@@ -689,6 +689,44 @@ static void test_decodes_committed_font_bin(void)
 }
 
 /**
+ * @brief 验证分段定位给出真实字体 bin 的分段范围与 head 参数，并拒绝截断与非法参数。
+ */
+static void test_locates_committed_font_bin_sections(void)
+{
+    ResourcePack_FontBinLayoutTypeDef layout;
+    FILE *file = fopen(TEST_FONT_BIN_PATH, "rb");
+    size_t length;
+
+    assert(file != NULL);
+    length = fread(test_font_bin, 1U, sizeof(test_font_bin), file);
+    assert(feof(file) != 0);
+    assert(fclose(file) == 0);
+
+    /* 分段范围与 head 参数由独立脚本逐段读出：head 48 B、cmap 13496 B、loca 30176 B、glyf 540328 B，其后是 kern。 */
+    assert(ResourcePack_LocateFontBin(test_font_bin, (uint32_t)length, &layout) == RESOURCE_PACK_OK);
+    assert((layout.Head.Offset == 0U) && (layout.Head.Length == 48U));
+    assert((layout.Cmap.Offset == 48U) && (layout.Cmap.Length == 13496U));
+    assert((layout.Loca.Offset == 13544U) && (layout.Loca.Length == 30176U));
+    assert((layout.Glyf.Offset == 43720U) && (layout.Glyf.Length == 540328U));
+    assert(layout.GlyphCount == 7541U);
+    assert(layout.TablesCount == 4U);
+    assert((layout.PixelHeight == 12U) && (layout.Ascent == 13) && (layout.Descent == -3));
+    assert((layout.IndexToLocFormat == 1U) && (layout.GlyphIdFormat == 1U));
+    assert((layout.AdvanceWidthFormat == 1U) && (layout.BitsPerPixel == 4U));
+    assert((layout.XyBits == 5U) && (layout.WhBits == 4U) && (layout.AdvanceWidthBits == 9U));
+    assert((layout.CompressionId == 0U) && (layout.SubpixelsMode == 0U));
+    assert((layout.DefaultAdvanceWidth == 0U) && (layout.KerningScale == 16U));
+    assert((layout.UnderlinePosition == 1) && (layout.UnderlineThickness == 0U));
+
+    /* glyf 被截断时分段越界。 */
+    assert(ResourcePack_LocateFontBin(test_font_bin, 43720U + 540328U - 1U, &layout) ==
+           RESOURCE_PACK_FORMAT_ERROR);
+    assert(ResourcePack_LocateFontBin(test_font_bin, 40U, &layout) == RESOURCE_PACK_FORMAT_ERROR);
+    assert(ResourcePack_LocateFontBin(NULL, (uint32_t)length, &layout) == RESOURCE_PACK_INVALID_PARAM);
+    assert(ResourcePack_LocateFontBin(test_font_bin, (uint32_t)length, NULL) == RESOURCE_PACK_INVALID_PARAM);
+}
+
+/**
  * @brief 运行全部 RPKC1 主机行为测试。
  * @return 成功时返回 0。
  */
@@ -704,6 +742,7 @@ int main(void)
     test_font_rejects_metadata_that_disagrees_with_bin();
     test_font_bitmap_total_limit();
     test_decodes_committed_font_bin();
+    test_locates_committed_font_bin_sections();
     test_allows_unknown_type_at_core_level();
     test_rejects_corrupt_header();
     test_rejects_overlapping_regions();

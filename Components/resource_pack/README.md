@@ -9,6 +9,7 @@
 - `GetEntryView` 返回映射窗口内的临时只读 Metadata/Data View。
 - `VerifyMetadata/VerifyBuffer` 分别校验 Metadata 公共前缀与任意数据 CRC。
 - `DecodeBinaryMetadata/DecodeImageMetadata/DecodeFontMetadata` 解码启用的三种 Metadata V1。
+- `ResourcePack_LocateFontBin()` 定位 `lv_font_conv` bin 的 head、cmap、loca、glyf 分段并解码 head 参数（`ResourcePack_FontBinLayoutTypeDef`），供字体消费者在其上解析内容；kern 紧随 glyf，由消费者按 `TablesCount` 自行定位。它与 `DecodeFontMetadata` 的扫描共用同一份分段与 head 校验。
 - `ResourcePack_DecodeFontMetadata()` 解码 FONT V1：Metadata 固定 32 B，条目 Data 是 `lv_font_conv` 1.5.3 未压缩 bin 的原样字节。`FontFormat`、`CodepointEncoding` 的枚举值（`RESOURCE_PACK_FONT_FORMAT_LV_FONT_CONV_BIN`、`RESOURCE_PACK_CODEPOINT_ENCODING_UNICODE`）与位图总量上限 `RESOURCE_PACK_FONT_BITMAP_LIMIT_BYTES`（1 MiB，不含）在公开头。
 
 ## 编译期依赖和运行路径

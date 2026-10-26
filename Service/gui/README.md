@@ -29,6 +29,7 @@
 ## 编译期依赖
 
 - LVGL v8.3.11 的公开入口 `lvgl.h`；
+- `Components/resource_pack` 的公开头（仅 `font/` 用，取 `ResourcePack_LocateFontBin()` 的分段定位与位图上限）；
 - `Platform/lcd`、`Platform/touch` 的公开 Interface；
 - FreeRTOS 的任务通知和 Tick Interface。
 
@@ -100,10 +101,13 @@ Service/gui/
 │  ├─ vinyl/                         假唱盘第一帧绑到唱盘 Image，并按 playing 旋转
 │  ├─ background/                    壁纸模糊、局部裁剪；Solid 薄层
 │  └─ README.md
-└─ canvas/                           可复用的 Canvas 离屏处理
-   ├─ gui_service_canvas.c / .h
-   ├─ gui_service_canvas_compositor.c / .h
-   ├─ gui_service_canvas_config.h
+├─ canvas/                           可复用的 Canvas 离屏处理
+│  ├─ gui_service_canvas.c / .h
+│  ├─ gui_service_canvas_compositor.c / .h
+│  ├─ gui_service_canvas_config.h
+│  └─ README.md
+└─ font/                             资源包 FONT 的 lv_font_conv bin 解码器（尚未接线）
+   ├─ gui_service_font_decoder.c / .h
    └─ README.md
 ```
 
@@ -129,6 +133,7 @@ Service/gui/
   Now Playing 假唱盘独立缓冲。模糊接收调用方给定的图片和半径；假唱盘由 compositor 写入纯色圆。
   隐藏 Canvas 对象挂在 display top layer，不随 Boot Screen 销毁。`gui_service_canvas_compositor.c`
   提供裁剪、毛玻璃区域合成和纯色圆合成；Canvas 不把图片绑到界面对象。
+- `font/gui_service_font_decoder.c`：把资源包 FONT 条目里的 `lv_font_conv` bin 解码成 LVGL `fmt_txt` 字体，只读输入 bin，把字形描述、cmap、字距和重排后的位图写进调用者给定的输出区（先 Measure 取大小，再 Build）；不使用 LVGL 堆。目前只有解码器和主机测试，`Service_GUI_Init()`、Resource Service 查询与 SDRAM 解码区的接线另有任务。详见 [font/README.md](font/README.md)。
 - `main/gui_service_main.c`：Main Screen 的私有编排入口。它先调用 Pager Module 解析布局、
   定位 MusicPage 至中间物理槽位并绑定循环分页，再让 Queue 打开 QueueTab 滚动，再绑定 Transport
   三键与进度条，再绑假唱盘第一帧，最后调用 Background Module。`service_gui_main_apply_theme()`
@@ -162,6 +167,6 @@ Service/gui/
 
 ## 验证
 
-- 主机测试：`Tests/gui_theme`（调色板）、`Tests/gui_canvas`（合成）、`Tests/gui_task`（输入单槽、窗口协议、Transport）。
+- 主机测试：`Tests/gui_theme`（调色板）、`Tests/gui_canvas`（合成）、`Tests/gui_font`（字体 bin 解码器）、`Tests/gui_task`（输入单槽、窗口协议、Transport）。
 - 界面等价性：`./Tools/gui_simulator/run-scenarios.ps1` 在 PC 上原样运行本 Module，逐帧比对场景基线；见 [Tools/gui_simulator/README.md](../../Tools/gui_simulator/README.md)。
 - 板级：显示刷新、DMA、触摸与真实帧率仍须上板（`hw:pending`）。

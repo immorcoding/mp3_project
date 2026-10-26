@@ -5,6 +5,7 @@
         'gui_task'
         'gui_theme'
         'gui_canvas'
+        'gui_font'
         'w25qxx'
         'resource_pack'
         'storage_audio_stream'
@@ -93,6 +94,16 @@
             )
         }
         @{
+            Name = 'gui_font'
+            PathPatterns = @(
+                '^Service/gui/font/'
+                # 解码器按 Component 提供的分段定位读取 bin，并用 Component 的 Metadata 解码口径核对位图上限。
+                '^Components/resource_pack/'
+                '^Resources/fonts/'
+                '^Tests/gui_font/'
+            )
+        }
+        @{
             Name = 'resource_pack'
             PathPatterns = @(
                 '^Components/resource_pack/'
@@ -163,6 +174,8 @@
         '^Tools/gui_simulator/'
         '^Resources/imgs/'
         '^Middlewares/Third_Party/LVGL/'
+        # 模拟器链接真实的 ResourcePack Component（Service/gui/font 的解码器依赖它）。
+        '^Components/resource_pack/'
         # 模拟器同时编译这些 Service/gui 之外的头文件（替身实现其 Interface）。
         '^Service/service\.h$'
         '^Platform/platform\.h$'
