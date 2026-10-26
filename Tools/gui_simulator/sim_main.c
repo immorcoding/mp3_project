@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
     }
     sim_clock_set_deterministic(options.deterministic);
 
-    if (!sim_resource_install())
+    if (!sim_resource_install(!options.font_unavailable))
     {
         fprintf(stderr, "resource install failed\n");
         return 1;

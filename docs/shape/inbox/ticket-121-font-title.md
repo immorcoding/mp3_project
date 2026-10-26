@@ -1,0 +1,5 @@
+# Inbox: ticket/121-font-title (#121 唱盘页中文曲名：可选字体加载、SDRAM 解码与回退)
+
+- 2026-10-26 · gui/music · proposed · GUI-22 补一句：`lv_font_conv` 的 FORMAT0_FULL 子表允许空位，字集外码点的偏移写 0，与范围首字相同；解码转 SPARSE 时首项之后偏移为 0 的码点视为空位，不进列表。_Why:_ #121 的模拟器缺字场景发现镕（U+9555，GBK、非 GB2312）被画成同一子表首字锝（U+951D）而不是占位框；整张字体有 517 个这样的空位误配，修正后能查到字形的码点恰为生成脚本的 7540 个字符。#119 的 SPARSE 转换只修了范围末尾的越界，没覆盖子表内部空位。_Source:_ `Service/gui/font/README.md`、`Tests/gui_font`、`Tools/gui_simulator/scenarios/music_title_missing_glyph.args`。
+- 2026-10-26 · harness · friction · HAR-4 · #121 验收要求在 `STM32H743xG_flash.ld` 新增两个 SDRAM NOLOAD 区，但 Agent Hook 按 `\.ld$` 拒绝一切链接脚本编辑，派发提示却称链接脚本自维护。沿用 #98 先例：Agent 在 scratch 生成合并文件、用 `-T` 指向它重链接 Debug/Release 验证、由用户拷入；在用户拷入前分支上的固件链接与 FULL 必然失败。是否把链接脚本的自定义段部分从 Hook 中放开，需用户决定。
+- 2026-10-26 · gui/ownership · cite · GUI-4 · 曲名改用新字体后有 20 个场景、约 130 帧的哈希变化。核对“只是曲名字体变了”的做法：用 `--font-unavailable`（回退 Montserrat，与改动前同字体同高度）重跑既有场景并与旧基线比对，17 个场景逐帧相同；剩下的 `music_bad_file` 两帧与 `music_title` 两帧可由曲库扩到 16 首解释（整轮坏文件经过的候选名、末首总时长）。这样看图只需看曲名区，不必逐帧比对整屏。

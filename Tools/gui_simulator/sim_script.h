@@ -15,6 +15,7 @@
   *            --out-dir DIR                 截图目录，默认当前目录
   *            --hidden                      不显示窗口
   *            --realtime                    脚本模式下仍用墙钟（默认虚拟时钟）
+  *            --font-unavailable            启动时不安装字体资源，曲名回退 Montserrat 12
   *          给出任一脚本动作时，默认使用确定性虚拟时钟，最后一个动作完成后自动退出。
   ******************************************************************************
   */
@@ -47,6 +48,7 @@ typedef struct
 {
     bool hidden;          /**< 不显示窗口。 */
     bool deterministic;   /**< 使用虚拟时钟。 */
+    bool font_unavailable;/**< 不安装字体资源（对应板上资源包 v2 或 FONT 损坏）。 */
 } sim_script_options_t;
 
 /** @return 参数无法解析时为 false，并已向 stderr 打印原因。 */

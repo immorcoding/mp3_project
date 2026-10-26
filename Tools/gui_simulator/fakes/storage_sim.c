@@ -6,9 +6,10 @@
   * @details
   *          按生产头实现 `storage_listbuffer` / `storage_namebuffer` 全局对象、
   *          `storage_listbuffer_*`、`storage_namebuffer_*` 与
-  *          `storage_task_sd_is_ready/mounted()`。曲库是 11 首固定曲目：原 10 首英文
-  *          曲目（与旧演示分区一致）加一首需要滚动的超长英文名；`E` 键可把曲库换成空库。
-  *          固定曲库没有路径，窗口行与曲目显示名都直接给出曲名。没有 Storage Task：
+  *          `storage_task_sd_is_ready/mounted()`。曲库是 16 首固定曲目：原 10 首英文
+  *          曲目（与旧演示分区一致）、5 个中文与文件名规则样本、一首需要滚动的超长英文名；
+  *          `E` 键可把曲库换成空库。窗口行给出曲库相对路径，曲目显示名经真实的
+  *          storage_catalog_display_name() 提取。没有 Storage Task：
   *          sim_main.c 每圈先调 storage_sim_step()，上一圈 request 的窗口与名字在本圈填成 READY。
   *          名称槽另有两个脚本开关：让某首的名字取不到（按生产防御分支应答代次 0），
   *          让应答多等若干圈（制造空白帧与过期应答）。
@@ -26,9 +27,17 @@
 #include <string.h>
 
 #include "APP/tasks/storage/storage_task.h"
+#include "APP/tasks/storage/catalog/storage_catalog_name.h"
 #include "APP/tasks/storage/catalog/storage_listbuffer.h"
 #include "APP/tasks/storage/catalog/storage_namebuffer.h"
 
+/*
+ * 固定曲库的曲库相对路径；窗口行原样给出（同生产 Queue 显示完整相对路径），曲目显示名经
+ * 真实的 storage_catalog_display_name() 提取。原 10 首英文曲目没有目录与扩展名，提取结果与
+ * 原文相同，保持既有场景的 Queue 行不变；第 10–14 首是中文与文件名规则样本，位于超长英文名之前，
+ * 使开播后“上一首”仍绕到超长英文名，再按上一首依次得到中文短名、中英混排、中文长名、缺字与点号名。
+ * 共 16 首，超过一窗 12 条，Queue 滚动到末尾时按窗口协议换窗。
+ */
 static const char *const storage_sim_titles[] = {
     "Clair de Lune",
     "Gymnopedie No.1",
@@ -40,14 +49,16 @@ static const char *const storage_sim_titles[] = {
     "Kiss the Rain",
     "Una Mattina",
     "Spring Waltz",
+    "Music/a.b.MP3",                                 /* 点号与大写扩展名：显示 `a.b`。 */
+    "Music/繁體 龍 喆 镕.mp3",                       /* 體、龍、喆、镕不在 GB2312：缺字画占位框。 */
+    "Music/周杰伦 - 晴天（2003 年演唱会现场版）故事的小黄花从出生那年就飘着.mp3", /* 中文长名，需要滚动。 */
+    "Music/Jay Chou 周杰伦 - 晴天.mp3",              /* 中英混排。 */
+    "Music/晴天.mp3",                                /* 中文短名。 */
     "An Unusually Long English Track Name That Has To Scroll Across Now Playing",
 };
 
 #define STORAGE_SIM_TITLE_COUNT \
     ((uint16_t)(sizeof(storage_sim_titles) / sizeof(storage_sim_titles[0])))
-
-_Static_assert(STORAGE_SIM_TITLE_COUNT <= STORAGE_LISTBUFFER_MAX_ENTRIES,
-               "fixed playlist must fit in one listbuffer window");
 
 Storage_ListBufferTypeDef storage_listbuffer;
 Storage_NameBufferTypeDef storage_namebuffer;
@@ -363,7 +374,12 @@ void storage_namebuffer_load(bool sd_ready)
         return;
     }
 
-    if (storage_sim_name_fail[storage_namebuffer.Index])
+    /* --name-fail 与提取失败都是生产的防御分支：应答代次 0 空名并打印同形 WARN。 */
+    if (storage_sim_name_fail[storage_namebuffer.Index] ||
+        !storage_catalog_display_name(storage_sim_titles[storage_namebuffer.Index],
+                                      (uint32_t)strlen(storage_sim_titles[storage_namebuffer.Index]),
+                                      storage_namebuffer.Buffer,
+                                      sizeof(storage_namebuffer.Buffer)))
     {
         printf("[storage] Name fail idx=%u gen=%u\n",
                (unsigned)storage_namebuffer.Index,
@@ -372,10 +388,6 @@ void storage_namebuffer_load(bool sd_ready)
         return;
     }
 
-    (void)snprintf(storage_namebuffer.Buffer,
-                   sizeof(storage_namebuffer.Buffer),
-                   "%s",
-                   storage_sim_titles[storage_namebuffer.Index]);
     storage_namebuffer.Generation = storage_sim_generation;
     storage_namebuffer.Status = STORAGE_NAMEBUFFER_READY;
 }

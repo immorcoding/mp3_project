@@ -21,7 +21,7 @@
 | `gui_service_view_boot.c` | Boot（壁纸根背景、启动环 Arc、LOADING）与 BootReveal（清晰壁纸） |
 | `gui_service_view_lock.c` | Lock：时间、日期、电量、解锁提示与 Home 指示条；上滑解锁与呼吸提示 |
 | `gui_service_view_main.c` | Main 外壳：状态栏 5%、横向分页视口 85%（Settings 0% / Music 100% / Books 200%）、圆点 10% |
-| `gui_service_view_music.c` | Music 标签视图（20 px 标签栏）：Now Playing 自上而下为唱盘（y=4）、曲名 Label（y=160、宽 160 居中、12 px、Ink 文字底透明，文本由 main/title 写入）与控制区（进度条 y=10、时间 y=18、三键 translate_y 4 px）；Queue 竖向 Flex 容器、Library 空页；Tabview 内部 Content 透明且不可滚动 |
+| `gui_service_view_music.c` | Music 标签视图（20 px 标签栏）：Now Playing 自上而下为唱盘（y=4）、曲名 Label（y=160、宽 160 居中、字体取 `font/` 的曲名字体（Noto 12 px，不可用时 Montserrat 12）、高为该字体行高 + 2、Ink 文字底透明，文本由 main/title 写入）与控制区（进度条 y=10、时间 y=18、三键 translate_y 4 px）；Queue 竖向 Flex 容器、Library 空页；Tabview 内部 Content 透明且不可滚动 |
 | `gui_service_view_wallpaper*.{c,h}` | 默认壁纸尺寸、描述符与固件像素区 |
 
 视觉规范与页面层级以 [docs/shape/gui.md](../../../docs/shape/gui.md) 为准；界面每推进一步先更新该文档。

@@ -189,7 +189,12 @@
         '^Service/log/log_service(?:_config)?\.h$'
         '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
         '^APP/tasks/storage/catalog/storage_namebuffer\.h$'
-        '^APP/tasks/storage/catalog/storage_catalog_name\.h$'
+        # 假 Storage 的曲目显示名经真实的提取纯函数产生（模拟器编译 storage_catalog_name.c）。
+        '^APP/tasks/storage/catalog/storage_catalog_name\.[ch]$'
+        # 模拟器嵌入同一份字体 bin，fakes/resource_sim.c 实现字体查询头，fakes/cycle_counter_sim.c 实现周期计数器头。
+        '^Resources/fonts/'
+        '^Service/resource/resource_service\.h$'
+        '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
         '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
         '^APP/tasks/storage/storage_task(?:_config)?\.h$'
         '^Service/filesystem/filesystem_types\.h$'

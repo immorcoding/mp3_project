@@ -135,9 +135,9 @@ static void test_committed_font_decodes_to_reference_tables(void)
     assert(info.BitmapBytes == 517698U);
     assert(info.KernPairCount == 4488U);
     {
-        /* 规模下限由各表的原始字节数相加：描述头、55 个 cmap 条目、列表 19404 B（见 README 的口径）、
+        /* 规模下限由各表的原始字节数相加：描述头、55 个 cmap 条目、列表 17336 B（见 README 的口径；FORMAT0 空位不入列表）、
          * 7541 个字形描述、位图、kern（4488 对 * 4 B 的编号加 4488 B 的值）；每一块按 8 B 取整，余量不超过 9 块 * 7 B。 */
-        uint32_t lower = (uint32_t)(sizeof(lv_font_fmt_txt_dsc_t) + (55U * sizeof(lv_font_fmt_txt_cmap_t)) + 19404U +
+        uint32_t lower = (uint32_t)(sizeof(lv_font_fmt_txt_dsc_t) + (55U * sizeof(lv_font_fmt_txt_cmap_t)) + 17336U +
                                     (7541U * sizeof(lv_font_fmt_txt_glyph_dsc_t)) + 517698U +
                                     sizeof(lv_font_fmt_txt_kern_pair_t) + (4488U * 4U) + 4488U);
 
@@ -166,7 +166,8 @@ static void test_committed_font_decodes_to_reference_tables(void)
     assert(test_glyph_table_crc(dsc, info.GlyphCount) == 0xE4EBCAA1U);
     assert(gft_crc32(dsc->glyph_bitmap, info.BitmapBytes) == 0x6EF52936U);
 
-    /* 整个基本平面的码点表与按 font_spec 精确语义建出的表一致；用 LVGL 的查找写法（含 rcp == range_length）。 */
+    /* 整个基本平面的码点表：能查到字形的码点恰为生成脚本的字集（GB2312 区位字符加 ASCII，共 7540 个），FORMAT0 空位落空；
+     * 期望 CRC 来自独立脚本（按 bin 逐子表建表并与字集逐一核对）；查找用 LVGL 的写法（含 rcp == range_length）。 */
     for (uint32_t letter = 0U; letter < 0x10000U; letter++)
     {
         uint8_t packed[2];
@@ -174,7 +175,7 @@ static void test_committed_font_decodes_to_reference_tables(void)
         gft_put_u16(packed, (uint16_t)gft_glyph_id(&font, letter));
         lookup_crc = gft_crc32_update(lookup_crc, packed, sizeof(packed));
     }
-    assert(lookup_crc == 0x6DA9D7FAU);
+    assert(lookup_crc == 0x0D974AB2U);
 
     /* 抽样：ASCII、希腊字母、假名、汉字、全角符号。 */
     assert(gft_glyph_id(&font, 0x20U) == 1U);
@@ -192,6 +193,16 @@ static void test_committed_font_decodes_to_reference_tables(void)
     assert(gft_glyph_id(&font, 0xFFE6U) == 0U);
     assert(gft_glyph_id(&font, 0x9F9CU) == 0U);
     assert(gft_glyph_id(&font, 0x10000U) == 0U);
+
+    /*
+     * FORMAT0 子表内部的空位：U+951D–U+957F 是一张带空位的 FORMAT0_FULL 子表，镕（U+9555）等 21 个
+     * 码点不在 GB2312，bin 里它们的偏移与范围首字锝（U+951D）一样是 0。它们必须得到 0（占位框），
+     * 而不是锝的字形；锝本身仍可查到。
+     */
+    assert(gft_glyph_id(&font, 0x9555U) == 0U);
+    assert(gft_glyph_id(&font, 0x9520U) == 0U);
+    assert(gft_glyph_id(&font, 0x957EU) == 0U);
+    assert(gft_glyph_id(&font, 0x951DU) != 0U);
 
     /* kern：独立脚本对 (A,V)、(A,A) 的字距对。 */
     assert(gft_kern_value(&font, 34U, 55U, info.GlyphCount) == -3);
