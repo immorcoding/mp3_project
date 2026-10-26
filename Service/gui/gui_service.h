@@ -53,6 +53,7 @@ Service_StatusTypeDef Service_GUI_TimeApply(uint32_t position_ms, uint32_t durat
 Service_StatusTypeDef Service_GUI_StatusApply(const char *text);
 Service_StatusTypeDef Service_GUI_SkipNoticeApply(uint32_t added);
 Service_StatusTypeDef Service_GUI_StatusFlash(void);
+Service_StatusTypeDef Service_GUI_TitleApply(const char *text);
 Service_StatusTypeDef Service_GUI_VinylApply(bool playing, bool reset_angle);
 Service_StatusTypeDef Service_GUI_QueueApply(
     const char **titles,

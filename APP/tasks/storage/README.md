@@ -5,7 +5,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 ## 公开 Interface
 
 - `storage_task.h` 的 `Storage_StatusTypeDef`：本 Task 编排函数的成功/失败。Filesystem 的细粒度结果仍用 `Service_StatusTypeDef`，在 Storage 边界收成 `STORAGE_OK` / `STORAGE_ERROR`。
-- `storage_task.h` 的 `Storage_NotifyIndexTypeDef`：本任务私有通知槽。`STORAGE_NOTIFY_EVENT` 由本任务主循环有界等待；卡检测边沿置 `STORAGE_NOTIFY_FLAG_SD_DETECT`，GUI `request` 置 `STORAGE_NOTIFY_FLAG_LISTBUFFER`。播放任务写音频流请求信箱置 `STORAGE_NOTIFY_FLAG_STREAM_REQUEST`，归还音频块置 `STORAGE_NOTIFY_FLAG_BLOCK_RETURNED`，均在同一事件槽、与前两个 FLAG 共存。`STORAGE_NOTIFY_SD_TRANSFER` 与 `STORAGE_NOTIFY_FLASH_OPERATION` 在 `InitSD`/`InitFlash` 时注入 Filesystem Service，不与主循环事件槽共用。
+- `storage_task.h` 的 `Storage_NotifyIndexTypeDef`：本任务私有通知槽。`STORAGE_NOTIFY_EVENT` 由本任务主循环有界等待；卡检测边沿置 `STORAGE_NOTIFY_FLAG_SD_DETECT`，GUI 窗口 `request` 置 `STORAGE_NOTIFY_FLAG_LISTBUFFER`，名字 `request` 置 `STORAGE_NOTIFY_FLAG_NAMEBUFFER`。播放任务写音频流请求信箱置 `STORAGE_NOTIFY_FLAG_STREAM_REQUEST`，归还音频块置 `STORAGE_NOTIFY_FLAG_BLOCK_RETURNED`，均在同一事件槽、与其余 FLAG 共存。`STORAGE_NOTIFY_SD_TRANSFER` 与 `STORAGE_NOTIFY_FLASH_OPERATION` 在 `InitSD`/`InitFlash` 时注入 Filesystem Service，不与主循环事件槽共用。
 - `storage_task_sd_is_ready()`：SD FatFs 卷已挂载且不在消抖中。GUI 可查询；消抖中与未就绪均为否。不表示曲库非空。`request` 仅在此时接受。
 - `storage_task_sd_is_mounted()`：FatFs 卷对象仍在。消抖中只要尚未卸载也为真。GUI 用它区分「暂时不能 request」和「卡已拔走该清空 Queue」。
 - `storage_task(void *argument)`：由 APP 创建的任务入口，保持 `void` 以满足 `TaskFunction_t`。
@@ -13,8 +13,9 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 - `storage_flash_init()` / `storage_flash_reclaim()`：Flash 启动、挂载策略与空闲回收，仅供本 Task 调用，返回 `Storage_StatusTypeDef`。`storage_flash_init()` 必须传入当前 Storage Task 句柄，句柄为空或与当前任务不符时拒绝。
 - `storage_catalog_*()`：曲库扫描与作废，返回 `Storage_StatusTypeDef`。曲库是 SD `Music/` 的路径事实表（SDRAM `.storage_catalog` 字符串池 + 偏移/长度，不存卷字段）；公开头不暴露表结构。启动不把该段并入 `.bss` 清零；扫描前只重置表头。没有 `Music/` 时为空表成功。条数满或池满则截断已收录部分，仍 `STORAGE_OK`。`storage_catalog_books_init()` 是空桩，恒成功，当前不调用。拔卡先 `storage_catalog_invalidate()`，再卸载。技术事实见 [storage.catalog.md](../../../docs/shape/storage.md#catalog)。
 - `storage_sheet_*()`：播放列表，与曲库同属 `catalog/`。首版是恒等下标序列 `SeqList[i] = i`，有效长度即建表时的 Catalog `IndexNum`，不另存 Count。`Generation` 记录对应的 Catalog 代次，`0` 表示已作废。表在 SDRAM `.music_sheet`（NOLOAD），作废不清整数组。曲库扫描成功后立即建表；`storage_catalog_invalidate()` 会一并作废。不向 GUI 暴露整表指针。随机/心动序列尚未实现。
-- `storage_catalog_display_name()`：曲目显示名纯函数（`catalog/storage_catalog_name.h`），由曲库 UTF-8 相对路径取最后一个 `/` 之后的文件主名并去掉末尾 `.mp3`（大小写同扫描），主名超过 251 B 或非法 UTF-8 返回 `false`，不截断。无 RTOS 依赖，主机测试见 `Tests/storage_catalog`；尚未接入名称槽。
+- `storage_catalog_display_name()`：曲目显示名纯函数（`catalog/storage_catalog_name.h`），由曲库 UTF-8 相对路径取最后一个 `/` 之后的文件主名并去掉末尾 `.mp3`（大小写同扫描），主名超过 251 B 或非法 UTF-8 返回 `false`，不截断。无 RTOS 依赖，主机测试见 `Tests/storage_catalog`；由名称槽 `load` 调用。
 - `storage_listbuffer_*()`：Queue 窗口单槽。GUI Task 仅在 SD 就绪且 `IDLE` 时 `request`（代次/播放列表起点 `Index`/请求条数 → `PENDING` 并通知 Storage）；Storage Task 仅 SD 就绪时 `load` 填路径拷贝，把 `Length` 改成实际条数后打 `READY`。GUI Task 按 `Length` 把路径和 `Index` 交给 `Service_GUI_QueueApply()` 后写回 `IDLE`。`Index` 随 `QueueTab` 竖滑移动，不是条数。`Generation` 须与 Catalog/Sheet 一致，`0` 为作废空窗。当前播放游标不在本槽，由播放任务持有（ADR-0020）。`Service/gui` 不得包含此头。宏见 `storage_catalog_config.h`。
+- `storage_namebuffer_*()`：曲目显示名单槽（STOR-14），与 Queue 窗口槽分开、互不争用，三态同上。GUI 音乐分区在 `IDLE` 时 `request`（播放列表位置 `Index`、代次，0 表示“当前”）→ `PENDING` 并置 `STORAGE_NOTIFY_FLAG_NAMEBUFFER`；`request` 不检查 SD 是否就绪，只在 Storage Task 尚未 `bind` 或槽位不是 `IDLE` 时被拒。Storage Task 每圈 `load`：SD 就绪、Sheet 有效且与 Catalog 一致、请求代次为 0 或与当前相符、位置不越界时，按 位置 → Sheet → Catalog 路径 取路径，经 `storage_catalog_display_name()` 把可直接显示的 UTF-8 文件主名写进 252 B `Buffer`，写入实际代次后打 `READY`；否则 `READY` 且 `Generation = 0`、空名。GUI 读完写回 `IDLE`。代次不符、SD 未就绪、请求“当前”时越界（空库开播）是正常竞态，不记日志；代次相符（或请求“当前”）仍提取失败、或代次非 0 相符却越界，是防御分支，记一条 WARN `Name fail idx=N gen=G`（N 为请求位置，G 为请求代次），不写名字（DIAG-3）。拔卡或离开就绪时 `complete_unavailable()` 收掉 `PENDING`。只允许 GUI 音乐分区包含，`Service/gui` 不得包含此头。
 - `storage_audio_stream_*()` / `storage_audio_block_*()`：音频流分区 `stream/`，见下文“音频流分区”。
 - `storage_sd_benchmark_run()`：仅读写测试分支使用的内部诊断入口；成功挂载后由 `storage_sd_init()` 调用，不向其他任务公开。
 - `storage_sdram_benchmark_run()`：本 Task 启动阶段的内部 SDRAM 硬件诊断与基准入口；不向其他任务公开。是否编译进调用由 `STORAGE_SDRAM_BENCHMARK_ENABLE` 门控；宏定义在 `APP/app_config.h`，但 `storage_task.c` 当前未包含该头。
@@ -31,7 +32,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 
 ## 运行时请求与事件路径
 
-卡检测 GPIO EXTI 经 Adapter、Platform SD 回调以 `eSetBits` 置本 Task `STORAGE_NOTIFY_EVENT` 的 `STORAGE_NOTIFY_FLAG_SD_DETECT`；GUI `request` 置同一槽的 `STORAGE_NOTIFY_FLAG_LISTBUFFER`。Filesystem 私有 DMA 执行器在同一 Task 上下文等待 `STORAGE_NOTIFY_SD_TRANSFER`。Filesystem Service Flash 私有执行器在 Task 启动时长期订阅 Platform Flash 的 QSPI IRQ，并以 `STORAGE_NOTIFY_FLASH_OPERATION` 等待 0xEC QSPI/MDMA 读取完成、`0x34/0x21` 自动状态轮询的匹配、错误或中止；任务醒来后才调用 Platform Flash 收尾。
+卡检测 GPIO EXTI 经 Adapter、Platform SD 回调以 `eSetBits` 置本 Task `STORAGE_NOTIFY_EVENT` 的 `STORAGE_NOTIFY_FLAG_SD_DETECT`；GUI 窗口与名字 `request` 分别置同一槽的 `STORAGE_NOTIFY_FLAG_LISTBUFFER`、`STORAGE_NOTIFY_FLAG_NAMEBUFFER`。Filesystem 私有 DMA 执行器在同一 Task 上下文等待 `STORAGE_NOTIFY_SD_TRANSFER`。Filesystem Service Flash 私有执行器在 Task 启动时长期订阅 Platform Flash 的 QSPI IRQ，并以 `STORAGE_NOTIFY_FLASH_OPERATION` 等待 0xEC QSPI/MDMA 读取完成、`0x34/0x21` 自动状态轮询的匹配、错误或中止；任务醒来后才调用 Platform Flash 收尾。
 
 `storage_task()` 主循环维护就绪 / 消抖中 / 未就绪，有界等待 `STORAGE_NOTIFY_EVENT`：检测 FLAG 立刻进消抖中并重开 30 ms 起点；`wait` 超时取消抖剩余与默认 100 ms 回收剩余的较小值。消抖截止到点后才 `storage_sd_process()`，再按 SD 是否已挂载回到就绪或未就绪。仅就绪时 `load`。回收截止到点才 `storage_flash_reclaim()`。FTL 决定是否回收，最长一次不可抢占擦除仍需板测。一次 Service 文件读写会在同一个 Task 的嵌套调用栈中进入 Filesystem 的 SD DMA 执行器，等待 `STORAGE_NOTIFY_SD_TRANSFER`、收尾当前分块后再启动下一分块；一次 Flash MDMA 读取则由 Service Flash 私有执行器在同一 Task 的嵌套调用栈中等待 `STORAGE_NOTIFY_FLASH_OPERATION`。ISR 只发布事件，绝不复制数据、维护 Cache 或启动下一笔传输。
 
@@ -57,7 +58,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 
 ## 约束
 
-- `STORAGE_NOTIFY_EVENT` 属于本 Module：GPIO EXTI 置 `STORAGE_NOTIFY_FLAG_SD_DETECT`，主循环立刻进入消抖中；静默 30 ms 后才调用 `Platform_SD_Process()`。GUI 窗口请求置 `STORAGE_NOTIFY_FLAG_LISTBUFFER`，且仅 SD 已挂载时 `request` 成功。两 FLAG 不得拆成轮流阻塞的独立槽。SD 就绪由挂载事实决定，不由播放列表代次决定。
+- `STORAGE_NOTIFY_EVENT` 属于本 Module：GPIO EXTI 置 `STORAGE_NOTIFY_FLAG_SD_DETECT`，主循环立刻进入消抖中；静默 30 ms 后才调用 `Platform_SD_Process()`。GUI 窗口请求置 `STORAGE_NOTIFY_FLAG_LISTBUFFER`，且仅 SD 已挂载时 `request` 成功；名字请求置 `STORAGE_NOTIFY_FLAG_NAMEBUFFER`，任何 SD 状态下都可提交，未就绪时按代次 0 应答。这些 FLAG 不得拆成轮流阻塞的独立槽。SD 就绪由挂载事实决定，不由播放列表代次决定。
 - `STORAGE_NOTIFY_SD_TRANSFER` 不由本任务主循环消费。它属于 Filesystem Service 的同步 SDMMC DMA 执行器；执行器在同一个 Storage Task 上下文、于 FatFs 读写期间等待它。
 - `STORAGE_NOTIFY_FLASH_OPERATION` 属于 Filesystem Service Flash 执行器。它承载一个 QSPI 异步操作的完成、状态匹配、错误或中止；Flash 物理 benchmark 经 `Service_Filesystem_ReadFlashArray()` 等诊断入口等待该通知并触发 `Platform_Flash_ProcessOperation()` 判定结果。读取通知不能直接视为数据可用，写擦的状态匹配通知也不能直接视为 Device 已恢复 READY。
 - APP 不注册 SDMMC 传输回调，不使用 `BSP_SD_*`、不调用 `HAL_SD_*`，也不访问 `hsd1` 或 DMA bounce buffer。

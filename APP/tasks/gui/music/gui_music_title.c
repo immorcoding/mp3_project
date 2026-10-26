@@ -1,0 +1,157 @@
+/**
+  ******************************************************************************
+  * @file    gui_music_title.c
+  * @brief   音乐分区私有的曲名客户：身份采信、名称槽请求与应答采信。
+  *
+  * @details
+  *          每圈两步：先按快照归约给出的身份决定是否换身份（换即清空旧名），
+  *          再按槽状态推进一次握手。应答一律按“请求时的身份”判断，身份已变就丢弃，
+  *          写回 IDLE 后下一圈按最新身份重请求，因此连续切歌只会采信最后一首。
+  ******************************************************************************
+  */
+
+#include "gui_music_title.h"
+
+#include <stddef.h>
+
+/**
+ * @brief 判断两个曲目身份是否相同。
+ * @param[in] a 身份一。
+ * @param[in] b 身份二。
+ * @return 无当前曲时只比较“无”；否则代次与位置都相等才为真。
+ */
+static bool gui_music_title_same_identity(
+    const GUI_MusicTitleIdentityTypeDef *a,
+    const GUI_MusicTitleIdentityTypeDef *b)
+{
+    if (a->has_track != b->has_track)
+    {
+        return false;
+    }
+
+    return !a->has_track ||
+           ((a->generation == b->generation) && (a->index == b->index));
+}
+
+/**
+ * @brief 采信新身份：清空旧名；有当前曲时留空并待请求，否则显示 `--`。
+ * @param[in,out] client 曲名客户状态。
+ * @param[in] identity 新身份。
+ * @note  在途请求不撤销：槽忙时只能等它 READY 后丢弃，再按最新身份请求。
+ */
+static void gui_music_title_adopt(
+    GUI_MusicTitleClientTypeDef *client,
+    const GUI_MusicTitleIdentityTypeDef *identity)
+{
+    client->has_identity = true;
+    client->identity = *identity;
+    client->need_request = identity->has_track;
+    client->shown = identity->has_track ? GUI_MUSIC_TITLE_SHOW_BLANK : GUI_MUSIC_TITLE_SHOW_NONE;
+}
+
+/**
+ * @brief 复位为尚未采信任何身份、没有在途请求，显示 `--`。
+ * @param[out] client 音乐分区持有的曲名客户状态。
+ */
+void gui_music_title_client_init(GUI_MusicTitleClientTypeDef *client)
+{
+    client->has_identity = false;
+    client->identity.has_track = false;
+    client->identity.generation = 0U;
+    client->identity.index = 0U;
+    client->need_request = false;
+    client->in_flight = false;
+    client->requested = client->identity;
+    client->shown = GUI_MUSIC_TITLE_SHOW_NONE;
+}
+
+/**
+ * @brief 推进曲名客户一步：先采信身份，再按槽状态决定本圈动作。
+ * @param[in,out] client 曲名客户状态。
+ * @param[in] identity 快照归约本圈已追上的曲目身份；NULL 视为无当前曲。
+ * @param[in] status 名称槽当前状态，取值须与 IDLE/PENDING/READY 宏一致。
+ * @param[in] reply_generation 槽 READY 时的应答代次；0 表示取不到。其他状态下忽略。
+ * @return 本圈对槽的动作。ACCEPT 与 DISCARD 之后调用方必须把槽写回 IDLE；
+ *         REQUEST 失败时调用方须调 gui_music_title_request_failed()。
+ * @note  READY 不属于在途请求（复位前遗留）时同样 DISCARD，避免槽停在 READY。
+ */
+GUI_MusicTitleActionTypeDef gui_music_title_poll(
+    GUI_MusicTitleClientTypeDef *client,
+    const GUI_MusicTitleIdentityTypeDef *identity,
+    uint32_t status,
+    uint32_t reply_generation)
+{
+    GUI_MusicTitleIdentityTypeDef current = {false, 0U, 0U};
+
+    if (identity != NULL)
+    {
+        current = *identity;
+    }
+
+    if (!client->has_identity || !gui_music_title_same_identity(&current, &client->identity))
+    {
+        gui_music_title_adopt(client, &current);
+    }
+
+    if (status == GUI_MUSIC_TITLE_READY)
+    {
+        const bool reply_current =
+            client->in_flight && gui_music_title_same_identity(&client->requested, &client->identity);
+
+        client->in_flight = false;
+        if (!reply_current)
+        {
+            return GUI_MUSIC_TITLE_ACTION_DISCARD;
+        }
+
+        if (reply_generation == 0U)
+        {
+            client->shown = GUI_MUSIC_TITLE_SHOW_NONE;
+            return GUI_MUSIC_TITLE_ACTION_DISCARD;
+        }
+
+        client->shown = GUI_MUSIC_TITLE_SHOW_NAME;
+        return GUI_MUSIC_TITLE_ACTION_ACCEPT;
+    }
+
+    if ((status == GUI_MUSIC_TITLE_IDLE) && client->need_request && !client->in_flight)
+    {
+        client->need_request = false;
+        client->in_flight = true;
+        client->requested = client->identity;
+        return GUI_MUSIC_TITLE_ACTION_REQUEST;
+    }
+
+    return GUI_MUSIC_TITLE_ACTION_NONE;
+}
+
+/**
+ * @brief 曲名区应显示的内容。
+ * @param[in] client 曲名客户状态。
+ * @return 名字 / 空白 / `--`。
+ */
+GUI_MusicTitleShowTypeDef gui_music_title_shown(const GUI_MusicTitleClientTypeDef *client)
+{
+    return client->shown;
+}
+
+/**
+ * @brief 本圈 REQUEST 应提交的身份。
+ * @param[in] client 曲名客户状态。
+ * @return 在途请求所用的身份；其代次与位置即名称槽 request 的参数。
+ */
+GUI_MusicTitleIdentityTypeDef gui_music_title_request_identity(
+    const GUI_MusicTitleClientTypeDef *client)
+{
+    return client->requested;
+}
+
+/**
+ * @brief 名称槽拒绝了本圈的 request：撤销在途标记，下一圈重试。
+ * @param[in,out] client 曲名客户状态。
+ */
+void gui_music_title_request_failed(GUI_MusicTitleClientTypeDef *client)
+{
+    client->in_flight = false;
+    client->need_request = client->identity.has_track;
+}

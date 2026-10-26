@@ -60,6 +60,9 @@ typedef struct
 {
     bool caught_up;                      /**< 回显已追上最后发出的命令（C1）。 */
     Playback_StateTypeDef state;         /**< 采信的三态；未追上时冻结。 */
+    bool has_track;                      /**< 采信的曲目身份：是否有当前曲；未追上时冻结。 */
+    uint32_t generation;                 /**< 采信的曲目身份：曲库代次；无当前曲时为 0。 */
+    uint16_t index;                      /**< 采信的曲目身份：播放列表位置；无当前曲时为 0。 */
     bool highlight_apply;                /**< 是否应覆盖 Queue 高亮；未追上时为假（C3）。 */
     uint16_t highlight_index;            /**< 应高亮的播放列表位置；无高亮为 GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT。 */
     uint8_t progress_percent;            /**< 进度条百分比 0..100（C4）。 */
