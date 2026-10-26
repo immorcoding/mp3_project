@@ -2,7 +2,7 @@
 
 界面所有权、交互边界与视觉效果生命周期。
 
-Next id: GUI-21
+Next id: GUI-23
 
 ## Pillars
 

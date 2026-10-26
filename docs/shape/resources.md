@@ -2,7 +2,7 @@
 
 资源容器兼容性、产品加载与安装边界。
 
-Next id: RES-9
+Next id: RES-11
 
 ## Pillars
 
@@ -13,7 +13,7 @@ Next id: RES-9
 ## Open questions
 
 - 设备侧整包安装、A/B 或掉电提交何时进入 spec？当前启动加载不能视为安装能力。
-- FONT/AUDIO/MODEL/FIRMWARE 解码器、运行期流式读取何时启用？预留格式不表示已有解码、验签或执行能力。
+- AUDIO/MODEL/FIRMWARE 解码器、运行期流式读取何时启用？FONT 已于 0.7.0 启用（RES-9、RES-10）；其余预留格式不表示已有解码、验签或执行能力。
 
 ## container
 
@@ -23,6 +23,7 @@ Next id: RES-9
 
 - **RES-1** · provisional · RPKC1 Type 只描述内容，加载、必需性、目标内存与失败策略由 Service 决定；Component 只解析调用者只读窗口，不依赖介质、RTOS 或 GUI。_Why:_ 格式可跨介质复用，不把产品部署写入协议。_Source:_ [Component](../../Components/resource_pack/README.md)
 - **RES-4** · provisional · 打包器与解析器共同遵循 RPKC1 字节契约；显式小端解码、64位范围运算，验证 CRC/对齐/任意重叠/严格升序非零 ID；未知类型公共合法则允许 Open，未启用类型解码返回不支持。_Why:_ 字节兼容不能依赖 C 布局或当前启用类型集合。_Source:_ [Core 契约](sources/rpkc1-layout.md)、[扩展类型契约](sources/rpkc1-extensions.md)
+- **RES-9** · exploring · FONT V1 的 Data 是 `lv_font_conv` 1.5.3 未压缩 bin 原样字节，Metadata 固定 32 B；Component 只解码 Metadata，字形表由消费者解析，位图总量须小于 1 MiB。_Why:_ 字节契约不绑定 LVGL 8.3 的内存布局；`LV_FONT_FMT_TXT_LARGE = 0` 时位图索引只有 20 位。_Source:_ [CJK 字体方案](https://github.com/immorcoding/mp3_project/issues/105)、[0.7.0 spec](https://github.com/immorcoding/mp3_project/issues/112)
 
 ## installation
 
@@ -41,6 +42,7 @@ Next id: RES-9
 - **RES-3** · provisional · 必需资源复制到归属明确的 SDRAM 后验证目标 CRC 和 Cache 交接，再启动消费者；任务期不持有 NOR 指针或 Entry View，未来按需读取经 Storage Task 串行接口。_Why:_ FTL 间接操作会退出 QSPI 映射，窗口不具备长期有效性。_Source:_ [Resource Service](../../Service/resource/README.md)
 - **RES-5** · provisional · Platform SDRAM/Flash 成功后才加载；先验证来源窗口、PackSize、ID/类型与业务 Metadata、目标容量，再复制和目标 CRC；必需项任何失败阻止任务启动并保留诊断，只有可选项可警告继续。_Why:_ 避免未初始化或不兼容资源被消费者使用，目标 CRC 同时验证复制结果。_Source:_ [Resource Service](../../Service/resource/README.md)
 - **RES-6** · provisional · 资源目标采用链接器预留 SDRAM NOLOAD 区域，32 B Cache 向外取整仍须在自身归属内；启动 CPU 复制链仅 Clean，不重复扫 NOR 或无因 Invalidate。_Why:_ 尾部 Cache Line 不能覆盖别的所有者，校验与可见性须对应真实数据方向。_Source:_ [Resource Service](../../Service/resource/README.md)
+- **RES-10** · exploring · FONT 是可选资源：缺失、类型或 Metadata 不符、目标区不足或 CRC 错误时，Resource Service 记 WARN 并继续启动，不覆盖必需项诊断；可用时消费者只读其 SDRAM 区，解码到自己的 NOLOAD 区，运行期不读 NOR 或映射窗口；不可用时消费者回退内建字体。_Why:_ 固件与资源包要能分步烧录与回滚，字体缺失不应阻止启动。_Source:_ [CJK 字体方案](https://github.com/immorcoding/mp3_project/issues/105)、[0.7.0 spec](https://github.com/immorcoding/mp3_project/issues/112)
 
 ## packaging
 
