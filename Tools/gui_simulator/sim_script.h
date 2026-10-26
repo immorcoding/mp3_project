@@ -10,6 +10,8 @@
   *            --drag  T:x0,y0:x1,y1:D       T 时按下，D ms 内线性移动后松开
   *            --anims T:name                T 时打印 "[anims] name N"（LVGL 运行中动画数）
   *            --key   T:c                   T 时触发按键 c（同窗口键盘）
+  *            --name-fail  T:N              T 时切换假 Storage 第 N 首（播放列表位置）的名字是否取不到
+  *            --name-delay T:K              T 起假 Storage 名称槽应答多等 K 圈（0 恢复为下一圈应答）
   *            --out-dir DIR                 截图目录，默认当前目录
   *            --hidden                      不显示窗口
   *            --realtime                    脚本模式下仍用墙钟（默认虚拟时钟）
@@ -25,6 +27,22 @@
 
 typedef void (*sim_script_key_handler_t)(char key);
 
+/** @brief 假 Storage 名称槽的脚本开关。 */
+typedef enum
+{
+    SIM_SCRIPT_NAME_FAIL = 0, /**< 切换某首名字取不到；值为播放列表位置。 */
+    SIM_SCRIPT_NAME_DELAY     /**< 设置应答额外等待的圈数。 */
+} sim_script_name_control_t;
+
+typedef void (*sim_script_name_handler_t)(sim_script_name_control_t control, unsigned value);
+
+/** @brief 脚本动作的处理函数（交互键盘与名称槽开关）。 */
+typedef struct
+{
+    sim_script_key_handler_t on_key;   /**< --key。 */
+    sim_script_name_handler_t on_name; /**< --name-fail / --name-delay。 */
+} sim_script_handlers_t;
+
 typedef struct
 {
     bool hidden;          /**< 不显示窗口。 */
@@ -38,6 +56,6 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options);
  * @brief 推进脚本；有脚本触点时覆盖鼠标。
  * @return 所有动作已完成、应退出时为 true。
  */
-bool sim_script_step(uint32_t elapsed_ms, sim_script_key_handler_t on_key);
+bool sim_script_step(uint32_t elapsed_ms, const sim_script_handlers_t *handlers);
 
 #endif /* SIM_SCRIPT_H */

@@ -22,7 +22,8 @@ typedef enum
     SIM_ACTION_SHOT = 0,
     SIM_ACTION_DRAG,
     SIM_ACTION_KEY,
-    SIM_ACTION_ANIMS
+    SIM_ACTION_ANIMS,
+    SIM_ACTION_NAME
 } sim_action_kind_t;
 
 typedef struct
@@ -35,6 +36,8 @@ typedef struct
     int x1;
     int y1;
     char key;
+    sim_script_name_control_t name_control;
+    unsigned name_value;
     const char *path;
     bool started;
     bool done;
@@ -161,6 +164,17 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
             }
             action.kind = SIM_ACTION_KEY;
         }
+        else if ((strcmp(argv[i], "--name-fail") == 0) || (strcmp(argv[i], "--name-delay") == 0))
+        {
+            if (sscanf(value, "%u:%u", &at, &action.name_value) != 2)
+            {
+                fprintf(stderr, "bad %s %s\n", argv[i], value);
+                return false;
+            }
+            action.kind = SIM_ACTION_NAME;
+            action.name_control = (strcmp(argv[i], "--name-fail") == 0) ?
+                                      SIM_SCRIPT_NAME_FAIL : SIM_SCRIPT_NAME_DELAY;
+        }
         else
         {
             fprintf(stderr, "unknown option %s\n", argv[i]);
@@ -180,13 +194,13 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
 }
 
 /**
- * @brief 推进脚本：执行到期的截图、动画计数、按键与触点动作。
+ * @brief 推进脚本：执行到期的截图、动画计数、按键、名称槽开关与触点动作。
  * @param[in] elapsed_ms 自 GUI 初始化完成起的毫秒数。
- * @param[in] on_key     按键动作的处理函数。
+ * @param[in] handlers   按键与名称槽开关的处理函数。
  * @retval true  所有动作已完成，应退出。
  * @retval false 无脚本或仍有未完成动作。
  */
-bool sim_script_step(uint32_t elapsed_ms, sim_script_key_handler_t on_key)
+bool sim_script_step(uint32_t elapsed_ms, const sim_script_handlers_t *handlers)
 {
     int i;
     bool all_done = true;
@@ -232,7 +246,12 @@ bool sim_script_step(uint32_t elapsed_ms, sim_script_key_handler_t on_key)
             break;
 
         case SIM_ACTION_KEY:
-            on_key(action->key);
+            handlers->on_key(action->key);
+            action->done = true;
+            break;
+
+        case SIM_ACTION_NAME:
+            handlers->on_name(action->name_control, action->name_value);
             action->done = true;
             break;
 
