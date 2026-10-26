@@ -2,7 +2,7 @@
 
 `main/` 是 Main Screen 的私有运行时编排 Module。它向 `Service/gui` 发布
 `service_gui_main_prepare()`：在 `view/` 创建界面后，按稳定顺序准备 Main 的循环分页、
-Queue、Transport、唱盘与 Background（Default 才做局部毛玻璃）；以及
+Queue、Transport、曲名、唱盘与 Background（Default 才做局部毛玻璃）；以及
 `service_gui_main_apply_theme()`：外观切换时更新 Music 毛玻璃或薄层。APP 与其他 Service
 不得包含或调用本目录中的任何头文件。
 
@@ -17,6 +17,7 @@ main/
 ├─ pager/                       Page 槽位、吸附、循环重排、分页指示器动画
 ├─ queue/                       按 QueueApply 的 Length 构造 Queue 可见行并滑窗复用
 ├─ transport/                   Now Playing 三键、进度条假 seek 与 PLAY/PAUSE 符号
+├─ title/                       Now Playing 曲名 Label：写文本并选静止居中或循环滚动
 ├─ vinyl/                       把 Canvas 假唱盘第一帧绑到唱盘 Image，并按 playing 旋转
 └─ background/                  壁纸模糊、局部裁剪；Solid 薄层
 ~~~
@@ -28,6 +29,7 @@ main/
   并从当前 `scroll_y` 扣整行高度；不包含 `storage_listbuffer.h`。
   Queue 滚动不是 Pager，不要等 `SCROLL_END` 吸附。
 - `transport/` 不依赖 Canvas 或 Queue 行；绑三键与进度条松手，并换播放符号 / 写回百分比。
+- `title/` 不依赖 Canvas、Queue 或 Transport；只写曲名 Label 的文本与长文本模式，不认识名字 / 空白 / `--` 的语义。
 - `vinyl/` 依赖 `canvas/`；合成假唱盘后绑到唱盘 Image。`service_gui_main_vinyl_apply(playing, reset_angle)`
   由 `Service_GUI_VinylApply()` 转发：playing 起转/续转、paused 停在当前角度、reset_angle 归零；
   同一 Image 至多一条 lv_anim。
@@ -44,8 +46,9 @@ main/
 - `pager/` 只依赖 LVGL 与 `view/`；
 - `queue/` 依赖 LVGL、`view/` 与 `theme/` 共享 style，不得包含 APP 头；
 - `transport/` 只依赖 LVGL、`view/` 与 GUI 输入单槽，不得包含 APP 头；
+- `title/` 只依赖 LVGL、`view/` 与 `gui_service_config.h`，不得包含 APP 头；
 - `vinyl/` 依赖 `canvas/`、LVGL 与 `view/`，不得包含 APP 头；
-- 根 `gui_service_main.c` 只依赖五个子 Module 的私有 Interface，不直接访问 UI 对象或
+- 根 `gui_service_main.c` 只依赖六个子 Module 的私有 Interface，不直接访问 UI 对象或
   离屏缓冲。
 
 ## 运行时路径
@@ -62,6 +65,8 @@ GUI Task
             -> 打开 QueueTab 滚动
        -> transport/service_gui_main_transport_prepare()
             -> 绑定上一首/播放暂停/下一首 CLICKED，以及进度条 RELEASED
+       -> title/service_gui_main_title_prepare()
+            -> 取得曲名 Label，写入初始 `--`
        -> vinyl/service_gui_main_vinyl_prepare()（角度 0、不起转）
             -> Canvas 合成假唱盘写入独立缓冲，绑到唱盘 Image
        -> background/service_gui_main_background_prepare(clear_wallpaper)

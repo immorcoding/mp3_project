@@ -19,6 +19,7 @@
   - `Service_GUI_SkipNoticeApply(added)`：累加跳过数并显示 `Skipped 1 file` / `Skipped k files`，单次 `lv_timer` 在 `SERVICE_GUI_MUSIC_SKIP_NOTICE_MS`（2000）后回到时间并清零累加数；期间再调用则累加并重新计时；有常驻文本时不显示也不累加；`added` 为 0 不做任何事。计时器创建失败返回 `SERVICE_ERROR`，状态行不变。
   - `Service_GUI_StatusFlash()`：以时间 Label 为 var 的 `lv_anim` 在 `SERVICE_GUI_MUSIC_STATUS_FLASH_MS`（300）内把 `text_opa` 淡出再淡回；同一 Label 至多一条闪烁动画，重复调用先删旧动画、恢复不透明再重启。
   - 计时器与动画都按 LVGL tick 计时，模拟器中来自虚拟时钟。两个时长常量在 `gui_service_config.h`。
+- `Service_GUI_TitleApply(text)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`；`text` 为 NULL 返回 `SERVICE_INVALID_PARAM`。在 Now Playing 曲名 Label（view 句柄 `music.title_label`，唱盘与进度条之间）显示调用方给出的 UTF-8 文本：曲目显示名、空串（留空）或 `--`；Service 不认识这三种语义，只负责画（GUI-21）。每次文本变化后按 Label 字体量出像素宽度：宽于 `SERVICE_GUI_MUSIC_TITLE_WIDTH`（160 px）用 `LV_LABEL_LONG_SCROLL_CIRCULAR` 单行循环滚动（`SERVICE_GUI_MUSIC_TITLE_SPEED`，24 px/s），否则 `LV_LABEL_LONG_CLIP` 静止居中；不换行、不截断、不加省略号。文本相同不重写，避免重启滚动。Label 拷贝文本，调用返回后调用方可把名称槽写回 `IDLE`。Init 时写入初始 `--`。字体暂为 `lv_font_montserrat_12`（只含 ASCII）。不包含 `storage_namebuffer.h`。
 - `Service_GUI_VinylApply(playing, reset_angle)`：仅由同一 GUI Task 调用。`playing` 为真时唱盘从当前角度顺时针匀速续转（`SERVICE_GUI_MAIN_VINYL_REVOLUTION_MS`，6 s 一圈），为假时停在当前角度；`reset_angle` 为真先把角度归零，用于切歌、同曲重选与停止归零。调用方按播放快照在三态变化或需要归零时调用，Service 不读播放快照；重复调用不叠加动画。
 - `Service_GUI_QueueScrollLead()`：仅由同一 GUI Task 调用。返回 `QueueTab` 顶部已滚出的整行数，供窗口协议计算下一窗 `Index`。换窗时从当前 `scroll_y` 扣整行高度，不把列表吸回整页。
 
@@ -70,7 +71,7 @@ LVGL Pointer read_cb
 
 ## 私有 Modules 与配置
 
-对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_ConsumeInput()`、`Service_GUI_TransportApply()`、`Service_GUI_ProgressApply()`、`Service_GUI_TimeApply()`、`Service_GUI_StatusApply()`、`Service_GUI_SkipNoticeApply()`、`Service_GUI_StatusFlash()`、`Service_GUI_VinylApply()`、`Service_GUI_QueueApply()` 与 `Service_GUI_ThemeApply()`；
+对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_ConsumeInput()`、`Service_GUI_TransportApply()`、`Service_GUI_ProgressApply()`、`Service_GUI_TimeApply()`、`Service_GUI_StatusApply()`、`Service_GUI_SkipNoticeApply()`、`Service_GUI_StatusFlash()`、`Service_GUI_TitleApply()`、`Service_GUI_VinylApply()`、`Service_GUI_QueueApply()` 与 `Service_GUI_ThemeApply()`；
 以下是 `Service/gui` 内部的实现拆分，不得被 APP 或其他 Service 直接包含或调用。
 
 ```text
@@ -95,6 +96,7 @@ Service/gui/
 │  ├─ pager/                         循环分页、吸附、重排与圆点动画
 │  ├─ queue/                         按 Length 构造 Queue 行并滑窗复用
 │  ├─ transport/                     Now Playing 三键、进度条假 seek、PLAY/PAUSE 与时间 Label（兼作状态行）
+│  ├─ title/                         Now Playing 曲名 Label：写文本，按像素宽度选静止居中或循环滚动
 │  ├─ vinyl/                         假唱盘第一帧绑到唱盘 Image，并按 playing 旋转
 │  ├─ background/                    壁纸模糊、局部裁剪；Solid 薄层
 │  └─ README.md

@@ -174,6 +174,8 @@
         '^APP/tasks/playback/playback_(?:contract|task_config)\.h$'
         '^Service/log/log_service(?:_config)?\.h$'
         '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
+        '^APP/tasks/storage/catalog/storage_namebuffer\.h$'
+        '^APP/tasks/storage/catalog/storage_catalog_name\.h$'
         '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
         '^APP/tasks/storage/storage_task(?:_config)?\.h$'
         '^Service/filesystem/filesystem_types\.h$'

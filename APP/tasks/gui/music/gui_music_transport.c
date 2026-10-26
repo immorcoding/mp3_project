@@ -264,6 +264,9 @@ void gui_music_transport_reduce(
     decision->highlight_apply = caught_up;
     decision->highlight_index = gui_music_transport_highlight_of(&adopted, window_generation);
     decision->state = adopted.State;
+    decision->has_track = adopted.HasTrack;
+    decision->generation = adopted.HasTrack ? adopted.Generation : 0U;
+    decision->index = adopted.HasTrack ? adopted.Index : 0U;
     decision->status_phrase = gui_music_transport_phrase_step(transport, &adopted);
     decision->position_ms = adopted.PositionMs;
     decision->duration_ms = adopted.DurationMs;

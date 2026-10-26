@@ -17,6 +17,7 @@
 #include "Service/gui/gui_service_config.h"
 #include "Service/gui/main/gui_service_main.h"
 #include "Service/gui/main/queue/gui_service_main_queue.h"
+#include "Service/gui/main/title/gui_service_main_title.h"
 #include "Service/gui/main/transport/gui_service_main_transport.h"
 #include "Service/gui/main/vinyl/gui_service_main_vinyl.h"
 #include "Service/gui/theme/gui_service_theme.h"
@@ -400,6 +401,21 @@ Service_StatusTypeDef Service_GUI_SkipNoticeApply(uint32_t added)
 Service_StatusTypeDef Service_GUI_StatusFlash(void)
 {
     return service_gui_main_transport_flash();
+}
+
+/**
+ * @brief 在 Now Playing 曲名 Label 显示一段文本（曲目显示名、空串或 `--`）。
+ * @param[in] text 以 ' ' 结尾的 UTF-8 文本，Label 会拷贝；空串表示留空。
+ * @retval SERVICE_OK 已写入，或与现有文本相同未重写。
+ * @retval SERVICE_INVALID_PARAM text 为 NULL。
+ * @retval SERVICE_NOT_READY 曲名 Label 尚未创建（Init 未成功）。
+ * @note 只能由同一 GUI Task 在 Init() 成功后调用。Service 不认识三种文本的语义，只负责画：
+ *       文本宽于可见窗口（SERVICE_GUI_MUSIC_TITLE_WIDTH）时单行循环滚动，否则静止居中。
+ *       调用返回后调用方可释放或复用 text（如把名称槽写回 IDLE）。
+ */
+Service_StatusTypeDef Service_GUI_TitleApply(const char *text)
+{
+    return service_gui_main_title_apply(text);
 }
 
 /**

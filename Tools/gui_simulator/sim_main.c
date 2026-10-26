@@ -67,6 +67,12 @@ static void sim_handle_key(char key)
         storage_sim_rescan();
         return;
     }
+    if ((key == 'e') || (key == 'E'))
+    {
+        /* 空库：模拟重扫得到 0 首，代次 +1；再按一次恢复固定曲库。 */
+        storage_sim_toggle_empty();
+        return;
+    }
     if ((key == 'b') || (key == 'B'))
     {
         playback_sim_mark_bad();

@@ -10,7 +10,7 @@
 - 屏幕自身的局部交互可以留在本层：Lock 的上滑解锁淡出到 Main、解锁提示呼吸动画。
 - 默认壁纸：`gui_service_view_wallpaper.c` 是描述符；`gui_service_view_wallpaper_region.c` 在固件 SDRAM 资源区预留像素（沿用原输入段名，链接脚本不变），由 Service/resource 从资源包装入。模拟器不编译 region 文件，由替身提供像素。
 
-不负责：跨屏时序（boot/）、分页吸附与圆点动画（main/pager）、Queue 行（main/queue）、事件到命令的转换（main/transport、main/queue）、毛玻璃（main/background）、外观切换（theme/、`gui_service.c`）。
+不负责：跨屏时序（boot/）、分页吸附与圆点动画（main/pager）、Queue 行（main/queue）、事件到命令的转换（main/transport、main/queue）、曲名文本与长文本模式（main/title）、毛玻璃（main/background）、外观切换（theme/、`gui_service.c`）。
 
 ## 文件
 
@@ -21,7 +21,7 @@
 | `gui_service_view_boot.c` | Boot（壁纸根背景、启动环 Arc、LOADING）与 BootReveal（清晰壁纸） |
 | `gui_service_view_lock.c` | Lock：时间、日期、电量、解锁提示与 Home 指示条；上滑解锁与呼吸提示 |
 | `gui_service_view_main.c` | Main 外壳：状态栏 5%、横向分页视口 85%（Settings 0% / Music 100% / Books 200%）、圆点 10% |
-| `gui_service_view_music.c` | Music 标签视图（20 px 标签栏）：Now Playing 唱盘与控制区、Queue 竖向 Flex 容器、Library 空页；Tabview 内部 Content 透明且不可滚动 |
+| `gui_service_view_music.c` | Music 标签视图（20 px 标签栏）：Now Playing 自上而下为唱盘（y=4）、曲名 Label（y=160、宽 160 居中、12 px、Ink 文字底透明，文本由 main/title 写入）与控制区（进度条 y=10、时间 y=18、三键 translate_y 4 px）；Queue 竖向 Flex 容器、Library 空页；Tabview 内部 Content 透明且不可滚动 |
 | `gui_service_view_wallpaper*.{c,h}` | 默认壁纸尺寸、描述符与固件像素区 |
 
 视觉规范与页面层级以 [docs/shape/gui.md](../../../docs/shape/gui.md) 为准；界面每推进一步先更新该文档。
