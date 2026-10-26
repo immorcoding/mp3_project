@@ -64,6 +64,11 @@ file(GLOB_RECURSE SERVICE_GUI_SOURCES CONFIGURE_DEPENDS
 # 壁纸像素区只在固件中由链接脚本放进 SDRAM 资源区；模拟器由 fakes/resource_sim.c 提供。
 list(FILTER SERVICE_GUI_SOURCES EXCLUDE REGEX "gui_service_view_wallpaper_region\\.c$")
 
+# Service/gui/font 的解码器用 ResourcePack Component 定位 bin 分段，模拟器链接真实的 Component（不是替身）。
+file(GLOB RESOURCE_PACK_SOURCES CONFIGURE_DEPENDS
+    "${REPO_ROOT}/Components/resource_pack/*.c"
+)
+
 # 真实的 APP 音乐分区；它依赖的 Storage 窗口槽与 SD 状态由 fakes/storage_sim.c 提供，
 # 播放合同由 fakes/playback_sim.c 提供，Service Log 由 fakes/log_sim.c 提供。
 file(GLOB APP_GUI_MUSIC_SOURCES CONFIGURE_DEPENDS
@@ -83,6 +88,7 @@ add_executable(gui_simulator
     fakes/playback_sim.c
     fakes/log_sim.c
     ${SERVICE_GUI_SOURCES}
+    ${RESOURCE_PACK_SOURCES}
     ${APP_GUI_MUSIC_SOURCES}
 )
 

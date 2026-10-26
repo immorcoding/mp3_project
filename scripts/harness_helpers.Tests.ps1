@@ -46,7 +46,9 @@ Assert-HarnessSequence -Expected @('gui_font') -Actual $fontDecoderImpact.HostMo
     -Message '字体解码器变化必须选择 GUI 字体主机测试'
 Assert-HarnessEqual -Expected $true -Actual $fontDecoderImpact.RequiresGuiScenarios -Message '字体解码器位于 Service/gui，须同时跑 GUI 场景回归'
 
-$fontBinImpact = Get-HarnessImpact -ChangedPath @('Resources/fonts/noto_sans_cjk_sc_12_4bpp.bin')
+Assert-HarnessEqual -Expected $true -Actual $resourceImpact.RequiresGuiScenarios -Message '模拟器链接真实 ResourcePack Component，其变化须跑 GUI 场景回归'
+
+$fontBinImpact =Get-HarnessImpact -ChangedPath @('Resources/fonts/noto_sans_cjk_sc_12_4bpp.bin')
 Assert-HarnessSequence -Expected @('gui_font', 'resource_pack') -Actual $fontBinImpact.HostModules `
     -Message '字体 bin 变化必须选择读取它的资源包与 GUI 字体主机测试'
 

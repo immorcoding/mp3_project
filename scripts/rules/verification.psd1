@@ -174,6 +174,8 @@
         '^Tools/gui_simulator/'
         '^Resources/imgs/'
         '^Middlewares/Third_Party/LVGL/'
+        # 模拟器链接真实的 ResourcePack Component（Service/gui/font 的解码器依赖它）。
+        '^Components/resource_pack/'
         # 模拟器同时编译这些 Service/gui 之外的头文件（替身实现其 Interface）。
         '^Service/service\.h$'
         '^Platform/platform\.h$'
