@@ -10,7 +10,7 @@
   * 与 lv_font_load 的两处刻意差别：
   *  - 所有 FORMAT0 子表都输出为 SPARSE 子表。LVGL 8.3 的码点查找用 `rcp > range_length` 判断范围，
   *    码点恰为范围末尾的下一个时，FORMAT0 会读到列表外一项或返回邻近字形；稀疏表二分查找不受影响，
-  *    缺字因此稳定落到占位框而不是错字。
+  *    缺字因此稳定落到占位框而不是错字。FORMAT0_FULL 中首项之后偏移为 0 的码点是空位，不进列表。
   *  - 先完整校验再写输出区；任何不一致都在写入前以明确的状态返回。
   ******************************************************************************
   */
@@ -203,7 +203,7 @@ static Service_GUI_FontDecodeStatusTypeDef gui_font_check_head(GuiFont_PlanTypeD
  * @brief 校验 cmap 并（给定输出块时）写出子表与列表。
  *
  * 校验：子表表头与数据落在 cmap 分段内；码点范围不超出 Unicode；稀疏列表严格升序且不超出范围；
- * 所有映射到的字形编号小于字形数。FORMAT0 子表展开为 SPARSE 子表（见文件头）。
+ * 所有映射到的字形编号小于字形数。FORMAT0 子表展开为 SPARSE 子表，FORMAT0_FULL 的空位跳过（见文件头）。
  * @param[in,out] plan 校验计划；校验时累加 ListBytes。
  * @param[in] region 输出区首地址；NULL 表示只校验。
  * @return 通过返回 OK。
@@ -241,7 +241,9 @@ static Service_GUI_FontDecodeStatusTypeDef gui_font_process_cmaps(GuiFont_PlanTy
         uint32_t entries = gui_font_read_u16(entry + 12U);
         uint8_t type = entry[14U];
         const uint8_t *data;
+        uint32_t source_count;
         uint32_t list_count;
+        uint32_t written = 0U;
         uint16_t *unicode_list = NULL;
         uint16_t *offset_list = NULL;
         uint8_t has_offsets;
@@ -265,15 +267,30 @@ static Service_GUI_FontDecodeStatusTypeDef gui_font_process_cmaps(GuiFont_PlanTy
             {
                 return SERVICE_GUI_FONT_DECODE_FORMAT_ERROR;
             }
-            list_count = range_length;
+            /*
+             * lv_font_conv 允许 FORMAT0_FULL 带空位：字集外的码点偏移写 0，与范围首字相同。
+             * 字形编号随码点递增且各不相同，所以首项之后的 0 只能是空位，不进稀疏列表，
+             * 查找落空后由占位框显示，而不是画成范围首字（LVGL 8.3 直接查 FORMAT0 会这样）。
+             */
+            source_count = range_length;
+            list_count = 1U;
+            for (uint32_t item = 1U; item < range_length; item++)
+            {
+                if (data[item] != 0U)
+                {
+                    list_count++;
+                }
+            }
             has_offsets = 1U;
             break;
         case LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY:
+            source_count = range_length;
             list_count = range_length;
             has_offsets = 0U;
             break;
         case LV_FONT_FMT_TXT_CMAP_SPARSE_TINY:
         case LV_FONT_FMT_TXT_CMAP_SPARSE_FULL:
+            source_count = entries;
             list_count = entries;
             has_offsets = (type == LV_FONT_FMT_TXT_CMAP_SPARSE_FULL) ? 1U : 0U;
             if (((uint64_t)list_count * (has_offsets ? 4U : 2U)) > (cmap_length - data_offset))
@@ -291,7 +308,7 @@ static Service_GUI_FontDecodeStatusTypeDef gui_font_process_cmaps(GuiFont_PlanTy
             offset_list = has_offsets ? (uint16_t *)(void *)(lists + list_bytes + (2U * list_count)) : NULL;
         }
 
-        for (uint32_t item = 0U; item < list_count; item++)
+        for (uint32_t item = 0U; item < source_count; item++)
         {
             uint32_t relative = item;
             uint32_t offset = item;
@@ -299,6 +316,10 @@ static Service_GUI_FontDecodeStatusTypeDef gui_font_process_cmaps(GuiFont_PlanTy
             if (type == LV_FONT_FMT_TXT_CMAP_FORMAT0_FULL)
             {
                 offset = data[item];
+                if ((item != 0U) && (offset == 0U))
+                {
+                    continue;
+                }
             }
             else if ((type == LV_FONT_FMT_TXT_CMAP_SPARSE_TINY) || (type == LV_FONT_FMT_TXT_CMAP_SPARSE_FULL))
             {
@@ -328,12 +349,13 @@ static Service_GUI_FontDecodeStatusTypeDef gui_font_process_cmaps(GuiFont_PlanTy
 
             if (unicode_list != NULL)
             {
-                unicode_list[item] = (uint16_t)relative;
+                unicode_list[written] = (uint16_t)relative;
                 if (offset_list != NULL)
                 {
-                    offset_list[item] = (uint16_t)offset;
+                    offset_list[written] = (uint16_t)offset;
                 }
             }
+            written++;
         }
 
         if (cmaps != NULL)
