@@ -7,6 +7,7 @@ GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后�
 ## 公开 Interface
 
 - `gui_task(void *handle)`：仅由 `APP/tasks/app_tasks.c` 创建。
+- `gui_task_get_max_frame_cycles()`：只读查询，返回启动以来单圈 `Service_GUI_Process()`（含渲染）的最大核心周期数；GUI Task 是唯一写者，Monitor 在周期日志中换算输出（WF-12）。
 - `GUI_NotifyIndexTypeDef`：本任务私有通知槽。`GUI_NOTIFY_LCD_TRANSFER` 由 GUI Service 等待 LCD SPI DMA 完成；槽位编号只在本任务通知数组内有效，与 Storage Task 互不相关。
 
 ## 编译期依赖
@@ -21,6 +22,7 @@ GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后�
 
 ## 资源与约束
 
+- 每圈用 DWT 周期计数器（`Service_Resource_Init()` 已启动，本任务只读不复位）测量 `Service_GUI_Process()`，只保存最大值；每帧路径不记日志（DIAG-3）。其他模块若在任务上下文复位计数器（如 Storage 基准），该圈样本可能失真，板测时需排除。
 - 不创建第二个 LVGL 执行上下文；
 - 不直接创建或修改 LVGL 对象，经 `Service_GUI_*` 公开 Interface 交互；
 - 初始化失败没有部分回滚；
