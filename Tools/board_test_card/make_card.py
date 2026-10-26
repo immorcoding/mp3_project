@@ -54,7 +54,7 @@ SETS = {
     "all": [f for f, _ in FILES],
     "first-bad": ["bad-zero.mp3", "card-02-44k1-320k.mp3", "card-05-short.mp3"],
     "all-unsupported": ["bad-zero.mp3", "card-06-mpeg2-22k.mp3", "bad-empty.mp3"],
-    # 曲目显示名样本（#117）：内容都是同一段可播音频，只有文件名不同；不属于 all，需单独复制。
+    # 曲目显示名样本（#117）：内容都是同一段可播音频，只有文件名不同；不属于 all，需单独复制进卡的 Music/ 目录（--copy-to 指向 Music）。
     "names": [sample.filename for sample in card_names.NAME_SAMPLES],
 }
 
@@ -124,7 +124,7 @@ def main():
             handle.write(data[name])
         digest = hashlib.sha256(data[name]).hexdigest()[:12]
         print("%d. %-24s %9d 字节  sha256:%s  %s" % (index, name, len(data[name]), digest, notes[name]))
-    print("\n曲目显示名样本（--set names；内容相同、只改文件名；不含在 all 内，按此顺序复制到另一张空卡）：")
+    print("\n曲目显示名样本（--set names；内容相同、只改文件名；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）：")
     for index, sample in enumerate(card_names.NAME_SAMPLES, 1):
         with open(os.path.join(args.output_dir, sample.filename), "wb") as handle:
             handle.write(data[sample.filename])

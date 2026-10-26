@@ -9,6 +9,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import card_names as cn  # noqa: E402
 
+LIBRARY_PREFIX = "Music/"  # STOR-1：曲库相对路径恒以 Music/ 开头
 PATH_MAX_BYTES = 255  # Service/filesystem/filesystem_types.h: SERVICE_FILESYSTEM_PATH_MAX_BYTES
 FAT_FORBIDDEN = set('\\/:*?"<>|') | {chr(c) for c in range(32)}
 
@@ -36,7 +37,7 @@ class CardNames(unittest.TestCase):
             self.assertNotIn(s.filename[-1], " .")
             self.assertFalse(s.filename.startswith("."), s.filename)
             self.assertLessEqual(len(s.filename.encode("utf-16-le")) // 2, 255)
-            self.assertLessEqual(len(s.filename.encode("utf-8")), PATH_MAX_BYTES, s.filename)
+            self.assertLessEqual(len((LIBRARY_PREFIX + s.filename).encode("utf-8")), PATH_MAX_BYTES, s.filename)
             self.assertNotIn(s.filename.lower(), seen)
             seen.add(s.filename.lower())
             s.filename.encode("gbk")  # 固件 _CODE_PAGE 936：必须能转成 OEM，否则不会入库
@@ -44,9 +45,9 @@ class CardNames(unittest.TestCase):
     def test_long_chinese_name_is_about_250_bytes(self):
         s = self.by_name(cn.LONG_NAME)
         stem_bytes = len(s.display.encode("utf-8"))
-        self.assertGreaterEqual(stem_bytes, 245)
+        self.assertEqual(stem_bytes, 245)
         self.assertLessEqual(stem_bytes, 251)
-        self.assertLessEqual(len(s.filename.encode("utf-8")), PATH_MAX_BYTES)
+        self.assertLessEqual(len((LIBRARY_PREFIX + s.filename).encode("utf-8")), PATH_MAX_BYTES)
 
     def test_missing_glyph_name_has_chars_outside_gb2312(self):
         s = self.by_name(cn.MISSING_GLYPH_NAME)
