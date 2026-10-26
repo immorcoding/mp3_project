@@ -353,10 +353,21 @@ static void storage_sim_name_complete_empty(void)
 }
 
 /**
+ * @brief 打印与生产 WARN 同形的一行 `Name fail idx=N gen=G`（G 为请求代次）。
+ */
+static void storage_sim_name_fail_report(void)
+{
+    printf("[storage] Name fail idx=%u gen=%u\n",
+           (unsigned)storage_namebuffer.Index,
+           (unsigned)storage_namebuffer.Generation);
+}
+
+/**
  * @brief 同生产：PENDING 时按当前代次给出固定曲库的曲名并打 READY。
  * @param[in] sd_ready 卷是否已挂载；为假时应答代次 0 空名。
- * @note  代次不符、越界或未挂载应答代次 0 空名，不记日志。--name-fail 标记的位置走生产的
- *        防御分支：应答代次 0 空名，并打印与生产 WARN 同形的一行。
+ * @note  未挂载或代次不符应答代次 0 空名，不记日志。代次相符（或请求为“当前”）仍越界/提取失败、
+ *        以及 --name-fail 标记的位置走生产的防御分支：应答代次 0 空名，并打印与生产 WARN 同形的一行
+ *        （请求为“当前”的越界是空库开播的正常过程，不记）。
  */
 void storage_namebuffer_load(bool sd_ready)
 {
@@ -367,9 +378,19 @@ void storage_namebuffer_load(bool sd_ready)
 
     if (!sd_ready ||
         ((storage_namebuffer.Generation != 0U) &&
-         (storage_namebuffer.Generation != storage_sim_generation)) ||
-        (storage_namebuffer.Index >= storage_sim_track_count()))
+         (storage_namebuffer.Generation != storage_sim_generation)))
     {
+        storage_sim_name_complete_empty();
+        return;
+    }
+
+    /* 同生产：请求为“当前”时越界是空库开播的正常过程，不记；代次相符的越界与提取失败才是防御分支。 */
+    if (storage_namebuffer.Index >= storage_sim_track_count())
+    {
+        if (storage_namebuffer.Generation != 0U)
+        {
+            storage_sim_name_fail_report();
+        }
         storage_sim_name_complete_empty();
         return;
     }
@@ -381,9 +402,7 @@ void storage_namebuffer_load(bool sd_ready)
                                       storage_namebuffer.Buffer,
                                       sizeof(storage_namebuffer.Buffer)))
     {
-        printf("[storage] Name fail idx=%u gen=%u\n",
-               (unsigned)storage_namebuffer.Index,
-               (unsigned)storage_namebuffer.Generation);
+        storage_sim_name_fail_report();
         storage_sim_name_complete_empty();
         return;
     }

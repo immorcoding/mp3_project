@@ -4,6 +4,7 @@
  */
 
 #include "storage_catalog.h"
+#include "storage_catalog_name.h"
 #include "storage_sheet.h"
 
 #include <stdbool.h>
@@ -63,6 +64,8 @@ static void storage_catalog_music_reset(void)
 
 /**
  * @brief 判断文件名是否以 `.mp3` / `.MP3` 结尾。
+ * @param[in] filename 以 '\0' 结尾的文件名；NULL 视为不收录。
+ * @return true 长度在 FatFs 名字上限内且扩展名符合；否则 false。
  */
 static bool storage_catalog_music_file_strcheck(const char *filename)
 {
@@ -74,24 +77,13 @@ static bool storage_catalog_music_file_strcheck(const char *filename)
     }
 
     length = (uint32_t)strlen(filename);
-    if ((length < 4U) || (length > SERVICE_FILESYSTEM_NAME_MAX_BYTES))
+    if (length > SERVICE_FILESYSTEM_NAME_MAX_BYTES)
     {
         return false;
     }
 
-    if (filename[length - 4U] != '.')
-    {
-        return false;
-    }
-
-    if (((filename[length - 3U] != 'm') && (filename[length - 3U] != 'M')) ||
-        ((filename[length - 2U] != 'p') && (filename[length - 2U] != 'P')) ||
-        (filename[length - 1U] != '3'))
-    {
-        return false;
-    }
-
-    return true;
+    /* 与显示名去扩展名共用同一判断，收录规则不会与显示规则漂移。 */
+    return storage_catalog_has_mp3_extension(filename, length);
 }
 
 /**

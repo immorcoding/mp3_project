@@ -19,7 +19,8 @@
 #define STORAGE_NOTIFY_FLAG_EVENT_MASK   (STORAGE_NOTIFY_FLAG_SD_DETECT | \
                                           STORAGE_NOTIFY_FLAG_LISTBUFFER | \
                                           STORAGE_NOTIFY_FLAG_STREAM_REQUEST | \
-                                          STORAGE_NOTIFY_FLAG_BLOCK_RETURNED |                                           STORAGE_NOTIFY_FLAG_NAMEBUFFER) /* 主循环一次收取并清除的事件位。 */
+                                          STORAGE_NOTIFY_FLAG_BLOCK_RETURNED | \
+                                          STORAGE_NOTIFY_FLAG_NAMEBUFFER) /* 主循环一次收取并清除的事件位。 */
 
 /* storage_task.c */
 #define STORAGE_SD_DEBOUNCE_MS           30U   /* SD 卡检测输入在最后一个边沿后的最短稳定时间，单位为毫秒。 */

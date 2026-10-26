@@ -126,6 +126,20 @@ static void test_capacity_boundary(void)
     expect_failure(path, 6U + 253U + 4U);
 }
 
+/** @brief 共享的 .mp3 扩展名判断：扫描收录与去扩展名共用。 */
+static void test_has_mp3_extension(void)
+{
+    assert(storage_catalog_has_mp3_extension("a.mp3", 5U));
+    assert(storage_catalog_has_mp3_extension("a.MP3", 5U));
+    assert(storage_catalog_has_mp3_extension("a.Mp3", 5U));
+    assert(storage_catalog_has_mp3_extension(".mp3", 4U));
+    assert(!storage_catalog_has_mp3_extension("a.mp4", 5U));
+    assert(!storage_catalog_has_mp3_extension("a.mP3x", 6U));
+    assert(!storage_catalog_has_mp3_extension("amp3", 4U));
+    assert(!storage_catalog_has_mp3_extension("mp3", 3U));
+    assert(!storage_catalog_has_mp3_extension(NULL, 5U));
+}
+
 /** @brief 非法 UTF-8 一律失败。 */
 static void test_invalid_utf8(void)
 {
@@ -147,6 +161,7 @@ static void test_invalid_utf8(void)
 int main(void)
 {
     test_extension_rules();
+    test_has_mp3_extension();
     test_names_preserved();
     test_extension_only_name();
     test_degenerate_inputs();

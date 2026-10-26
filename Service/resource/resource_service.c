@@ -452,39 +452,38 @@ static bool resource_load_target(
                               version_text,
                               sizeof(version_text));
 
+    /* 可选的耗时片段只构造一次：未启用计时时三段都为空串，日志格式随之回到不含 time= 的形式。 */
+    const char *time_label = "";
+    const char *time_value = "";
+    const char *time_unit = "";
 #if SERVICE_RESOURCE_LOG_TIMING_ENABLE
+    /* 单项耗时含 Metadata 校验、复制、目标 CRC 与 Clean，供板测核对各条目（含 FONT）的启动开销。 */
+    char elapsed_us_text[21] = "?";
+    const uint32_t elapsed_cycles = CortexM7CycleCounter_Read() - start_cycles;
+    const uint32_t frequency_hz = CortexM7CycleCounter_GetFrequencyHz();
+
+    if (frequency_hz != 0U)
     {
-        /* 单项耗时含 Metadata 校验、复制、目标 CRC 与 Clean，供板测核对各条目（含 FONT）的启动开销。 */
-        const uint32_t elapsed_cycles = CortexM7CycleCounter_Read() - start_cycles;
-        const uint32_t frequency_hz = CortexM7CycleCounter_GetFrequencyHz();
-        char elapsed_us_text[21] = "?";
-
-        if (frequency_hz != 0U)
-        {
-            (void)resource_format_u64(
-                (uint64_t)elapsed_cycles * 1000000ULL / frequency_hz,
-                elapsed_us_text,
-                sizeof(elapsed_us_text));
-        }
-
-        (void)LOG_Printf(LOG_LEVEL_INFO,
-                         "RESOURCE",
-                         "Loaded id=%lu, type=%u, version=%s, bytes=%lu, time=%s us.",
-                         (unsigned long)entry.ResourceID,
-                         (unsigned int)entry.ResourceType,
-                         version_text,
-                         (unsigned long)entry.DataLength,
-                         elapsed_us_text);
+        (void)resource_format_u64(
+            (uint64_t)elapsed_cycles * 1000000ULL / frequency_hz,
+            elapsed_us_text,
+            sizeof(elapsed_us_text));
     }
-#else
+    time_label = ", time=";
+    time_value = elapsed_us_text;
+    time_unit = " us";
+#endif
+
     (void)LOG_Printf(LOG_LEVEL_INFO,
                      "RESOURCE",
-                     "Loaded id=%lu, type=%u, version=%s, bytes=%lu.",
+                     "Loaded id=%lu, type=%u, version=%s, bytes=%lu%s%s%s.",
                      (unsigned long)entry.ResourceID,
                      (unsigned int)entry.ResourceType,
                      version_text,
-                     (unsigned long)entry.DataLength);
-#endif
+                     (unsigned long)entry.DataLength,
+                     time_label,
+                     time_value,
+                     time_unit);
 #endif
 
     result->Stage = SERVICE_RESOURCE_STAGE_NONE;
@@ -541,12 +540,7 @@ Service_StatusTypeDef Service_Resource_Init(void)
     memset(&resource_font, 0, sizeof(resource_font));
 
 #if SERVICE_RESOURCE_LOG_ENABLE && SERVICE_RESOURCE_LOG_TIMING_ENABLE
-    if (!CortexM7CycleCounter_Start())
-    {
-        return resource_fail(0U,
-                             SERVICE_RESOURCE_STAGE_MAP_FLASH,
-                             RESOURCE_PACK_INVALID_PARAM);
-    }
+    /* 计数器由 app_init() 在调用本函数前启动；这里只读。 */
     start_cycles = CortexM7CycleCounter_Read();
 #endif
 
