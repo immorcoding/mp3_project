@@ -75,7 +75,7 @@ void service_gui_font_init(void)
         return;
     }
 
-    /* 计数器由 Service_Resource_Init() 启动；这里只读，不复位，避免干扰其他测量。 */
+    /* 计数器由 app_init() 在 Resource 加载前启动；这里只读，不复位，避免干扰其他测量。 */
     start_cycles = CortexM7CycleCounter_Read();
 
     status = service_gui_font_decode_measure(payload.Data, payload.Length, &info);

@@ -66,7 +66,7 @@ void gui_task(void *handle)
         /* gui_settings_step(&input); */
 
         {
-            /* 计数器由 Service_Resource_Init() 启动；这里只读，不复位，避免干扰其他测量。 */
+            /* 计数器由 app_init() 在 Resource 加载前启动；这里只读，不复位，避免干扰其他测量。 */
             const uint32_t start_cycles = CortexM7CycleCounter_Read();
             uint32_t elapsed_cycles;
 

@@ -12,6 +12,8 @@
 
 #define STORAGE_CATALOG_NAME_BYTES 252U /* 显示名缓冲容量，含结尾 '\0'；覆盖全部合法文件主名（<= 251 B）。 */
 
+bool storage_catalog_has_mp3_extension(const char *name, uint32_t length);
+
 bool storage_catalog_display_name(const char *path,
                                   uint32_t path_bytes,
                                   char *out,

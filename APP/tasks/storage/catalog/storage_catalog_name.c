@@ -79,14 +79,15 @@ static bool catalog_name_utf8_valid(const char *text, uint32_t length)
 }
 
 /**
- * @brief 判断名字是否以 `.mp3` 结尾，m/p 大小写任意，与曲库扫描接受的形式一致。
- * @param[in] name 文件名起点。
+ * @brief 判断名字是否以 `.mp3` 结尾，m/p 大小写任意。
+ * @param[in] name 文件名起点；NULL 视为不匹配。
  * @param[in] length 文件名字节数。
- * @return true 以 `.mp3` 结尾。
+ * @return true 以 `.mp3` 结尾（含恰为 `.mp3` 的名字）。
+ * @note  曲库扫描的收录判断与显示名去扩展名共用本函数，两处不会各自漂移。
  */
-static bool catalog_name_has_mp3_extension(const char *name, uint32_t length)
+bool storage_catalog_has_mp3_extension(const char *name, uint32_t length)
 {
-    if ((length < 4U) || (name[length - 4U] != '.'))
+    if ((name == NULL) || (length < 4U) || (name[length - 4U] != '.'))
     {
         return false;
     }
@@ -100,7 +101,7 @@ static bool catalog_name_has_mp3_extension(const char *name, uint32_t length)
  * @param[in] path 相对路径，不要求以 '\0' 结尾。
  * @param[in] path_bytes 路径字节数。
  * @param[out] out 输出缓冲；失败时写空串（容量至少 1 字节时）。
- * @param[in] out_bytes 输出容量，含结尾 '\0'。
+ * @param[in] out_bytes 输出容量，含结尾 '\0'；调用方统一传 STORAGE_CATALOG_NAME_BYTES（即 STOR-14 的 251 B 主名上限）。
  * @return true 成功；false 参数无效、主名为空、放不下或非法 UTF-8。
  * @note 取最后一个 '/' 之后的部分，只去掉末尾 `.mp3`；去掉后为空（文件名恰为 `.mp3`）时保留整名。
  */
@@ -134,12 +135,12 @@ bool storage_catalog_display_name(const char *path,
     {
         return false;
     }
-    if (catalog_name_has_mp3_extension(path + base, length) && (length > 4U))
+    if (storage_catalog_has_mp3_extension(path + base, length) && (length > 4U))
     {
         length -= 4U;
     }
 
-    if ((length >= out_bytes) || (length >= STORAGE_CATALOG_NAME_BYTES) || !catalog_name_utf8_valid(path + base, length))
+    if ((length >= out_bytes) || !catalog_name_utf8_valid(path + base, length))
     {
         return false;
     }

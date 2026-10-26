@@ -409,7 +409,7 @@ Service_StatusTypeDef Service_GUI_StatusFlash(void)
 
 /**
  * @brief 在 Now Playing 曲名 Label 显示一段文本（曲目显示名、空串或 `--`）。
- * @param[in] text 以 ' ' 结尾的 UTF-8 文本，Label 会拷贝；空串表示留空。
+ * @param[in] text 以 '\0' 结尾的 UTF-8 文本，Label 会拷贝；空串表示留空。
  * @retval SERVICE_OK 已写入，或与现有文本相同未重写。
  * @retval SERVICE_INVALID_PARAM text 为 NULL。
  * @retval SERVICE_NOT_READY 曲名 Label 尚未创建（Init 未成功）。
