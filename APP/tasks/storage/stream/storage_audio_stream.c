@@ -489,12 +489,25 @@ void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media)
 }
 
 /**
- * @brief 确认拔卡（或换卡）时先关闭 FIL，再写 {当前流序号, CARD_REMOVED} 并唤醒播放任务。
- * @note  须在卸载 FatFs 卷之前调用（卷上仍有打开对象时卸载会失败）。没有打开的流时不写、不唤醒。
+ * @brief 判断当前流记录是否仍被播放任务持有（已成功开启、尚未终止或仅读尽）。
+ * @retval true  StreamSeq 非 0、OpenResult 为 OK，且 End 为 NONE（FIL 仍开）或 ENDED（读尽）。
+ * @retval false 从未开启、开启失败，或已以 READ_ERROR / CARD_REMOVED 终止。
+ */
+static bool storage_audio_stream_held_by_playback(void)
+{
+    return (storage_audio_record.StreamSeq != 0U) &&
+           (storage_audio_record.OpenResult == STORAGE_AUDIO_OPEN_OK) &&
+           ((storage_audio_record.End == STORAGE_AUDIO_END_NONE) ||
+            (storage_audio_record.End == STORAGE_AUDIO_END_ENDED));
+}
+
+/**
+ * @brief 确认拔卡（或换卡）时，若当前流仍被播放任务持有，先关闭 FIL，再写 {当前流序号, CARD_REMOVED} 并唤醒播放任务。
+ * @note  须在卸载 FatFs 卷之前调用。“当前流”的完整定义见 APP/tasks/storage/README.md 音频流分区的拔卡条目。
  */
 void storage_audio_stream_card_removed(void)
 {
-    if (!storage_audio_file_open)
+    if (!storage_audio_stream_held_by_playback())
     {
         return;
     }

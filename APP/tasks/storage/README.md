@@ -48,13 +48,13 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 - 主循环每圈顺序：请求信箱 → 列表窗口 → 最多读一块 → 回收。还有工作（待处理请求，或流已打开且有空闲块）时不阻塞等待。结构上界：取消 ≤ 一次块读取；开启 ≤ f_open + 标签探测（读头、读尾、seek）+ 一次块读取。
 - 有打开的流时（FIL 未关）不提供 Flash 回收机会，回收剩余不参与等待计时；流关闭（ENDED、读错、拔卡、无流请求）后照常，暂停期间因流保持而顺延。
 - 消抖期：暂缓处理流请求和补块，不应答；已打开的流保持打开；消抖结束后卡仍在就继续，卡已拔则以 NOT_READY 或 CARD_REMOVED 收尾。
-- 拔卡：`storage_sd_process()` 确认拔卡后，在作废曲库与卸载卷之前先 `storage_audio_stream_card_removed()`：关闭 FIL，再写 `{当前流序号, CARD_REMOVED}` 并唤醒播放任务；没有打开的流时不写、不唤醒。插卡事件同样先调用一次（换卡视同拔卡）。
+- 拔卡：`storage_sd_process()` 确认拔卡后，在作废曲库与卸载卷之前先 `storage_audio_stream_card_removed()`：按“当前流”而非“文件是否打开”判断：Storage 已为某个非 0 流序号发布过记录、播放任务尚未以无流请求或新流序号释放它，就先关闭 FIL（仍打开时），再写 `{当前流序号, CARD_REMOVED}` 并唤醒播放任务；因此文件已读完（ENDED）而播放任务仍在从内存放音时拔卡同样立即停止。没有当前流（从未开启、开启失败、已被无流请求释放）、或已以 READ_ERROR / CARD_REMOVED 终止时不写、不唤醒。若拔卡处理时仍有新流请求排队（命令紧跟在拔卡后几毫秒内），旧记录照常写 CARD_REMOVED，播放任务因该流已释放而忽略它，新请求的开启以 NOT_READY 结束，播放仍会停止；此情形可接受。插卡事件同样先调用一次（换卡视同拔卡）。
 - 块池内存与 HWD-2 审查：块池 32 × 32 KiB = 1 MiB 放 SDRAM NOLOAD 段，块内容入队才有效，不依赖清零，**块只由 CPU 读写，不是 DMA 目标**（SD DMA → bounce buffer → memcpy 进块 → 播放任务 memcpy 进窗口）。
   - 启动：`storage_audio_block_init()` 在 `storage_task()` 内、可选的 `storage_sdram_benchmark_run()` 全容量诊断之后、Flash/SD 初始化之前调用，只建队列并入队块指针，不触碰块内容；SDRAM 在 `main()` 经 `Platform/sdram` 完成正式初始化后任务才运行，满足“正式初始化之后、首次使用前”。队列控制块与存储放 DTCM `.bss`（约 416 B）。
   - MPU：`Core/Src/main.c` 的 Region 2 把 0xC0000000 起 32 MB 设为 Cacheable、Bufferable、不可执行、全访问，块池落其中；块只由单核 CPU 两个任务读写，无 DMA 与 Cache 一致性问题，ARC-18 不适用。
   - 全容量诊断：诊断是破坏性的，只能在块池入队前独占运行；`STORAGE_SDRAM_BENCHMARK_ENABLE` 开启时仍须保持在 `storage_audio_block_init()` 之前，产品默认关闭。
   - 链接段：块池在链接脚本 `STM32H743xG_flash.ld` 的独立段 `.storage_audio_pool` (NOLOAD, >SDRAM)，位于 `.sdram_framebuffer` 之后，不移动既有 SDRAM 段；段名由 `storage_audio_config.h` 的 `STORAGE_AUDIO_POOL_SECTION` 持有（用户授权，链接脚本由用户手改）。 `hw:pending`：上板确认 map 中块池落点、SDRAM 总用量在容量内。
-- 板级行为（单圈耗时、消抖、拔卡、播放中不回收、1 MiB 缓冲下的断流余量）归板级验收票，Storage 音频流主循环不做主机测试。
+- 板级行为（单圈耗时、消抖、拔卡、播放中不回收、1 MiB 缓冲下的断流余量）归板级验收票，Storage 音频流主循环（含拔卡写记录）不做主机测试，由板级验收覆盖；主机只在 `Tests/playback_task` 钉住播放侧前提（ENDED 后记录变 CARD_REMOVED 立即停止），保真边界止于此。
 
 ## 约束
 
