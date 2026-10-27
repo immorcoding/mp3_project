@@ -219,6 +219,37 @@ static void test_card_removed_stops_immediately_and_resets_cursor(void)
 }
 
 /**
+ * @brief 已读完（ENDED）、本流的块仍在队列里（从内存播放）时拔卡：同一流序号的记录变为 CARD_REMOVED，
+ *        立即停止，无当前曲，本流的块全部归还，停止次数 +1；暂停中同样成立。
+ */
+static void test_card_removed_after_ended_stops_immediately(void)
+{
+    for (uint32_t pause = 0U; pause <= 1U; pause++)
+    {
+        world_reset();
+        world_start_playing(GENERATION, TRACKS);
+        fake_storage_enqueue_block(world_current_seq(), 64U, 1U);
+        fake_storage_enqueue_block(world_current_seq(), 64U, 1U);
+        fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+        world_wake();
+        if (pause != 0U)
+        {
+            world_send(PLAYBACK_COMMAND_TOGGLE);
+            assert(world_snapshot().State == PLAYBACK_STATE_PAUSED);
+        }
+        assert(world_snapshot().State != PLAYBACK_STATE_STOPPED);
+
+        fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_CARD_REMOVED);
+        world_wake();
+
+        expect_stopped(PLAYBACK_STOP_REASON_CARD_REMOVED, 1U);
+        assert(!world_snapshot().HasTrack);
+        assert(fake_storage_outstanding() == 0U);
+        assert(fake_storage_ready_count() == 0U);
+    }
+}
+
+/**
  * @brief 开启应答之前就收到拔卡（消抖后以 CARD_REMOVED 收尾）：同样停止并重置游标。
  */
 static void test_card_removed_before_open_reply_stops(void)
@@ -308,6 +339,7 @@ int main(void)
     test_next_after_cursor_reset_is_ignored();
     test_stream_read_error_stops_keeping_cursor_and_returns_block();
     test_card_removed_stops_immediately_and_resets_cursor();
+    test_card_removed_after_ended_stops_immediately();
     test_card_removed_before_open_reply_stops();
     test_card_removed_while_paused_stops_and_does_not_resume();
     test_stale_stream_end_facts_are_ignored();
