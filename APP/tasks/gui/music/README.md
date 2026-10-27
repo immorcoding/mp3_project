@@ -1,6 +1,6 @@
 # GUI Task 音乐分区
 
-`music/` 是 GUI Task 的音乐播放器编排，不是独立 Service。它做两件事：把带 `MUSIC_` 前缀的输入翻译成 [#71](https://github.com/immorcoding/mp3_project/issues/71) 公开合同的播放命令，把每圈读到的播放快照画出来；同时推进 Queue 窗口协议。不持 playing 真值、不读写播放游标、不打开文件、不解码、不使用 LVGL（#72 A1–A3）。
+`music/` 是 GUI Task 的音乐播放器编排，不是独立 Service。它做两件事：把带 `MUSIC_` 前缀的输入翻译成 [#71](https://github.com/immorcoding/mp3_project/issues/71) 公开合同的播放命令，把每圈读到的播放快照画出来；同时推进 Queue 窗口协议与曲名请求。不持 playing 真值、不读写播放游标、不打开文件、不解码、不使用 LVGL（#72 A1–A3）。
 
 ## 私有 Interface
 
@@ -8,6 +8,7 @@
 - `gui_music_step(input)`：先发命令，再读一次快照归约，再跑窗口协议，最后只对与上一圈不同的显示部分调用 `Service_GUI_*`（见“运行时路径”）。
 - `gui_music_queue_window_*()`：listbuffer 窗口 request / APPLY / CLEAR 时机；APPLY 时记下已显示窗口的曲库代次。
 - `gui_music_transport_*()`：纯 C 快照归约（不含 LVGL，只包含 `playback_contract.h`），见下节。
+- `gui_music_title_*()`：纯 C 曲名客户（不含 LVGL，不包含 Storage 头），与 Queue 窗口客户并列，见“曲名”。
 
 ## 快照归约
 
@@ -19,11 +20,22 @@
 - 停止短语表是模块内静态表（合同枚举属 APP，Service 不得包含合同头）。
 - `gui_music_queue_window_displayed_generation()`：APPLY 时 `mark_applied()` 记下的窗口代次，即归约的 `window_generation` 输入，也是 SELECT 携带的代次；未显示或被 CLEAR 后为 0。
 
+## 曲名
+
+曲名区只显示三种内容（GUI-21）：名字；空白（已采信新身份、应答未到）；`--`（无当前曲，或有当前曲但取不到）。名字由 Storage 名称槽（`storage_namebuffer`，STOR-14）给出，本分区不解析路径。
+
+- 输入是快照归约**已追上**的曲目身份：`GUI_MusicTransportDecisionTypeDef` 的 `has_track` / `generation` / `index`，与 Queue 高亮、唱盘归零同源；回显未追上时身份冻结，不发新请求。
+- `gui_music_title_poll(client, identity, status, reply_generation)` 每圈一次：先比较身份，变化即采信并清空旧名（有当前曲留空并待请求，`HasTrack = false` 显示 `--` 不请求）；再按槽状态推进——`IDLE` 且待请求时返回 `REQUEST`，`READY` 时以**请求时的身份**判断：身份未变且应答代次非 0 返回 `ACCEPT`（显示名字），代次 0 返回 `DISCARD` 并显示 `--`，身份已变返回 `DISCARD`（不显示旧名，下一圈按最新身份重请求）。槽忙（`PENDING`）时身份再变也不撤销在途请求：等它 `READY`、丢弃、再按最新身份请求，因此连按 NEXT 只采信最后一首；坏文件跳过时快照位置已前进到候选，按身份变化处理，候选名立即被请求。
+- 冷启动：快照代次 0 时以代次 0（“当前”）请求，Storage 按实际代次 G 应答。之后快照代次 0 → G 且位置不变：已显示名字的应答代次等于 G 就保留名字、不重请求（不因唱盘这次归零闪空白）；代次 0 的请求仍在途则等应答，应答代次等于 G 照常采信，否则（含代次 0）丢弃并按 G 重请求；其余情况按普通身份变化清空并重请求。
+- `gui_music.c` 执行动作：`REQUEST` 调 `storage_namebuffer_request(位置, 代次)`，被拒时 `gui_music_title_request_failed()` 下一圈重试；`ACCEPT` 先 `Service_GUI_TitleApply(Buffer)` 再写回 `IDLE`；`DISCARD` 直接写回 `IDLE`。空白与 `--` 只在与上一圈不同时调用 `TitleApply("")` / `TitleApply("--")`。
+- 先读槽 `Status`，为 `READY` 时才读应答代次与名字：`READY` 期间 Storage 不再写槽。
+- 时序证据：主机测试 `Tests/gui_task` 覆盖以上全部规则；模拟器场景 `music_title_play_start`、`music_title_switch`、`music_title_next_burst`、`music_title_bad_file`、`music_title_unavailable` 用假 Storage 的应答延迟与“取不到”开关拍出对应画面（[#120](https://github.com/immorcoding/mp3_project/issues/120)）。真机 Storage 应答时延与 GUI 刷新节拍的组合进板级验收。
+
 ## 编译期依赖
 
 - `Service_GUI_*` 公开 Interface；
 - `APP/tasks/playback/playback_contract.h`（GUI 中只有本分区包含）；
-- `storage_listbuffer_*()` 与 `storage_task_sd_is_ready/mounted()`（只允许出现在本分区）；
+- `storage_listbuffer_*()`、`storage_namebuffer_*()` 与 `storage_task_sd_is_ready/mounted()`（只允许出现在本分区）；
 - `Service_Log_Post()`：命令队列满时记日志。
 
 不读写播放游标：游标只有播放任务一个写者。
@@ -39,6 +51,7 @@ ConsumeInput
        -> SEEK：不发命令，本圈按快照重写一次进度条（回位，B3）
        -> playback_snapshot_read -> gui_music_transport_reduce
        -> 窗口 REQUEST / APPLY（按已追上快照套高亮）/ CLEAR（只清空 Queue，C10）
+       -> 曲名：按已追上身份 REQUEST / ACCEPT（TitleApply 名字）/ DISCARD；空白或 `--` 变化时 TitleApply
        -> 回显已追上、窗口仍显示且 IDLE：高亮变化或点行后重套 QueueApply（不自动滚动）
        -> 与上一圈比较：TransportApply(三态 == PLAYING) / ProgressApply / TimeApply
        -> 三态变化或归零事件：VinylApply(playing, reset_angle)

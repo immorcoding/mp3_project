@@ -64,14 +64,41 @@ file(GLOB_RECURSE SERVICE_GUI_SOURCES CONFIGURE_DEPENDS
 # 壁纸像素区只在固件中由链接脚本放进 SDRAM 资源区；模拟器由 fakes/resource_sim.c 提供。
 list(FILTER SERVICE_GUI_SOURCES EXCLUDE REGEX "gui_service_view_wallpaper_region\\.c$")
 
+# Service/gui/font 的解码器用 ResourcePack Component 定位 bin 分段，模拟器链接真实的 Component（不是替身）。
+file(GLOB RESOURCE_PACK_SOURCES CONFIGURE_DEPENDS
+    "${REPO_ROOT}/Components/resource_pack/*.c"
+)
+
 # 真实的 APP 音乐分区；它依赖的 Storage 窗口槽与 SD 状态由 fakes/storage_sim.c 提供，
 # 播放合同由 fakes/playback_sim.c 提供，Service Log 由 fakes/log_sim.c 提供。
 file(GLOB APP_GUI_MUSIC_SOURCES CONFIGURE_DEPENDS
     "${REPO_ROOT}/APP/tasks/gui/music/*.c"
 )
+# 假 Storage 的曲目显示名经真实的提取纯函数产生（与 Storage 名称槽同一实现）。
+list(APPEND APP_GUI_MUSIC_SOURCES
+    "${REPO_ROOT}/APP/tasks/storage/catalog/storage_catalog_name.c"
+)
+
+# 字体资源：把板上同一份 lv_font_conv bin 在构建期原样生成为字节数组（不入库），
+# 由 fakes/resource_sim.c 拷入与固件同名的 FONT 区，等同 Resource Service 安装完成。
+set(SIM_FONT_BIN "${REPO_ROOT}/Resources/fonts/noto_sans_cjk_sc_12_4bpp.bin")
+set(SIM_FONT_BIN_C "${CMAKE_CURRENT_BINARY_DIR}/generated/sim_font_bin.c")
+add_custom_command(
+    OUTPUT "${SIM_FONT_BIN_C}"
+    COMMAND ${CMAKE_COMMAND}
+        "-DINPUT=${SIM_FONT_BIN}"
+        "-DOUTPUT=${SIM_FONT_BIN_C}"
+        -DSYMBOL=sim_font_bin
+        -P "${CMAKE_CURRENT_LIST_DIR}/cmake/embed_bin.cmake"
+    DEPENDS "${SIM_FONT_BIN}" "${CMAKE_CURRENT_LIST_DIR}/cmake/embed_bin.cmake"
+    COMMENT "Embedding font bin for gui_simulator"
+    VERBATIM
+)
 
 add_executable(gui_simulator
     sim_main.c
+    "${SIM_FONT_BIN_C}"
+    fakes/cycle_counter_sim.c
     sim_clock.c
     sim_display.c
     sim_script.c
@@ -83,6 +110,7 @@ add_executable(gui_simulator
     fakes/playback_sim.c
     fakes/log_sim.c
     ${SERVICE_GUI_SOURCES}
+    ${RESOURCE_PACK_SOURCES}
     ${APP_GUI_MUSIC_SOURCES}
 )
 

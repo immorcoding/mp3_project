@@ -11,7 +11,7 @@
   *
  *          当前初始化依赖顺序为：
   *          Platform_Log_Init() -> 启动日志入队 -> Platform_Init() ->
-  *          Service_Resource_Init() -> app_task_start()。
+  *          CortexM7CycleCounter_Start() -> Service_Resource_Init() -> app_task_start()。
    *          Platform_Init() 内部初始化 GPIO EXTI Adapter、PMIC、W25Q256 Flash、
    *          音频、LCD、LED 和 Touch；Storage Task 在 Log Service 就绪后处理
    *          可选 SD 卡。
@@ -32,6 +32,7 @@
 #include "Platform/log/platform_log.h"
 #include "Platform/power/platform_power.h"
 #include "Components/log/log.h"
+#include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
 #include "Service/resource/resource_service.h"
 /* Variables ------------------------------------------------------------------*/
 
@@ -129,6 +130,9 @@ void app_init(void)
             Error_Handler();
             break;
     }
+
+    /* 全局 DWT 周期计数器在此统一启动一次：之后的 Resource 计时、GUI 最大帧耗时与字体解码耗时只读它。 */
+    (void)CortexM7CycleCounter_Start();
 
     /* GUI 和 FatFs 使用这些地址前，先从只读 NOR 资源包校验并加载到 SDRAM。 */
     if (Service_Resource_Init() != SERVICE_OK)

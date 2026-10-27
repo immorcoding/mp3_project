@@ -5,9 +5,11 @@
         'gui_task'
         'gui_theme'
         'gui_canvas'
+        'gui_font'
         'w25qxx'
         'resource_pack'
         'storage_audio_stream'
+        'storage_catalog'
         'playback_service'
         'playback_task'
         'monitor_warn'
@@ -92,9 +94,20 @@
             )
         }
         @{
+            Name = 'gui_font'
+            PathPatterns = @(
+                '^Service/gui/font/'
+                # 解码器按 Component 提供的分段定位读取 bin，并用 Component 的 Metadata 解码口径核对位图上限。
+                '^Components/resource_pack/'
+                '^Resources/fonts/'
+                '^Tests/gui_font/'
+            )
+        }
+        @{
             Name = 'resource_pack'
             PathPatterns = @(
                 '^Components/resource_pack/'
+                '^Resources/fonts/'
                 '^Tests/resource_pack/'
             )
         }
@@ -103,6 +116,13 @@
             PathPatterns = @(
                 '^APP/tasks/storage/stream/'
                 '^Tests/storage_audio_stream/'
+            )
+        }
+        @{
+            Name = 'storage_catalog'
+            PathPatterns = @(
+                '^APP/tasks/storage/catalog/storage_catalog_name\.[ch]$'
+                '^Tests/storage_catalog/'
             )
         }
         @{
@@ -154,6 +174,8 @@
         '^Tools/gui_simulator/'
         '^Resources/imgs/'
         '^Middlewares/Third_Party/LVGL/'
+        # 模拟器链接真实的 ResourcePack Component（Service/gui/font 的解码器依赖它）。
+        '^Components/resource_pack/'
         # 模拟器同时编译这些 Service/gui 之外的头文件（替身实现其 Interface）。
         '^Service/service\.h$'
         '^Platform/platform\.h$'
@@ -166,6 +188,13 @@
         '^APP/tasks/playback/playback_(?:contract|task_config)\.h$'
         '^Service/log/log_service(?:_config)?\.h$'
         '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
+        '^APP/tasks/storage/catalog/storage_namebuffer\.h$'
+        # 假 Storage 的曲目显示名经真实的提取纯函数产生（模拟器编译 storage_catalog_name.c）。
+        '^APP/tasks/storage/catalog/storage_catalog_name\.[ch]$'
+        # 模拟器嵌入同一份字体 bin，fakes/resource_sim.c 实现字体查询头，fakes/cycle_counter_sim.c 实现周期计数器头。
+        '^Resources/fonts/'
+        '^Service/resource/resource_service\.h$'
+        '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
         '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
         '^APP/tasks/storage/storage_task(?:_config)?\.h$'
         '^Service/filesystem/filesystem_types\.h$'

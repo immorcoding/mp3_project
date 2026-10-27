@@ -36,3 +36,14 @@ target_compile_features(gui_service_input_tests PRIVATE c_std_11)
 target_compile_options(gui_service_input_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 
 add_test(NAME gui_service_input_mailbox COMMAND gui_service_input_tests)
+
+add_executable(gui_music_title_tests
+    test_gui_music_title.c
+    ../../APP/tasks/gui/music/gui_music_title.c
+)
+
+target_include_directories(gui_music_title_tests PRIVATE ../..)
+target_compile_features(gui_music_title_tests PRIVATE c_std_11)
+target_compile_options(gui_music_title_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+
+add_test(NAME gui_music_title_client COMMAND gui_music_title_tests)

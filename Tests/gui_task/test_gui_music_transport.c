@@ -264,6 +264,37 @@ static void test_unreached_echo_freezes_state_identity_and_duration(void)
 }
 
 /**
+ * @brief 决定给出采信的曲目身份（曲名请求的输入）：回显未追上时冻结，追上后跟随。
+ */
+static void test_decision_reports_caught_up_track_identity(void)
+{
+    GUI_MusicTransportTypeDef transport;
+    GUI_MusicTransportDecisionTypeDef decision;
+    Playback_SnapshotTypeDef snapshot = make_snapshot(PLAYBACK_STATE_PLAYING, true, 5U, 3U);
+
+    fake_send_reset();
+    gui_music_transport_init(&transport);
+    decision = reduce(&transport, &snapshot, 5U);
+    assert(decision.has_track);
+    assert(decision.generation == 5U);
+    assert(decision.index == 3U);
+
+    assert(gui_music_transport_send(&transport, PLAYBACK_COMMAND_NEXT, 0U, 0U) == PLAYBACK_OK);
+    snapshot = make_snapshot(PLAYBACK_STATE_PLAYING, true, 5U, 4U);
+    decision = reduce(&transport, &snapshot, 5U);
+    assert(decision.index == 3U);
+
+    snapshot.HandledCommandSeq = 1U;
+    decision = reduce(&transport, &snapshot, 5U);
+    assert(decision.index == 4U);
+
+    snapshot = make_snapshot(PLAYBACK_STATE_STOPPED, false, 0U, 0U);
+    snapshot.HandledCommandSeq = 1U;
+    decision = reduce(&transport, &snapshot, 5U);
+    assert(!decision.has_track);
+}
+
+/**
  * @brief 回显追上后立即采信新快照的全部字段。
  */
 static void test_echo_catching_up_adopts_the_new_snapshot(void)
@@ -949,6 +980,7 @@ int main(void)
     test_send_failure_does_not_consume_a_sequence_number();
     test_failed_send_alone_does_not_freeze();
     test_unreached_echo_freezes_state_identity_and_duration();
+    test_decision_reports_caught_up_track_identity();
     test_echo_catching_up_adopts_the_new_snapshot();
     test_sequence_comparison_survives_wraparound();
     test_highlight_follows_current_track_in_displayed_window();

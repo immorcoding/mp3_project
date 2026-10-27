@@ -19,6 +19,7 @@
   - `Service_GUI_SkipNoticeApply(added)`：累加跳过数并显示 `Skipped 1 file` / `Skipped k files`，单次 `lv_timer` 在 `SERVICE_GUI_MUSIC_SKIP_NOTICE_MS`（2000）后回到时间并清零累加数；期间再调用则累加并重新计时；有常驻文本时不显示也不累加；`added` 为 0 不做任何事。计时器创建失败返回 `SERVICE_ERROR`，状态行不变。
   - `Service_GUI_StatusFlash()`：以时间 Label 为 var 的 `lv_anim` 在 `SERVICE_GUI_MUSIC_STATUS_FLASH_MS`（300）内把 `text_opa` 淡出再淡回；同一 Label 至多一条闪烁动画，重复调用先删旧动画、恢复不透明再重启。
   - 计时器与动画都按 LVGL tick 计时，模拟器中来自虚拟时钟。两个时长常量在 `gui_service_config.h`。
+- `Service_GUI_TitleApply(text)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`；`text` 为 NULL 返回 `SERVICE_INVALID_PARAM`。在 Now Playing 曲名 Label（view 句柄 `music.title_label`，唱盘与进度条之间）显示调用方给出的 UTF-8 文本：曲目显示名、空串（留空）或 `--`；Service 不认识这三种语义，只负责画（GUI-21）。每次文本变化后按 Label 字体量出像素宽度：宽于 `SERVICE_GUI_MUSIC_TITLE_WIDTH`（160 px）用 `LV_LABEL_LONG_SCROLL_CIRCULAR` 单行循环滚动（`SERVICE_GUI_MUSIC_TITLE_SPEED`，24 px/s），否则 `LV_LABEL_LONG_CLIP` 静止居中；不换行、不截断、不加省略号。文本相同不重写，避免重启滚动。Label 拷贝文本，调用返回后调用方可把名称槽写回 `IDLE`。Init 时写入初始 `--`。字体由 `font/` 决定：资源包 FONT 解码成功为 Noto Sans CJK SC 12 px（GB2312 与 ASCII），否则回退 `lv_font_montserrat_12`；字集外的字符画占位框（GUI-22）。不包含 `storage_namebuffer.h`。
 - `Service_GUI_VinylApply(playing, reset_angle)`：仅由同一 GUI Task 调用。`playing` 为真时唱盘从当前角度顺时针匀速续转（`SERVICE_GUI_MAIN_VINYL_REVOLUTION_MS`，6 s 一圈），为假时停在当前角度；`reset_angle` 为真先把角度归零，用于切歌、同曲重选与停止归零。调用方按播放快照在三态变化或需要归零时调用，Service 不读播放快照；重复调用不叠加动画。
 - `Service_GUI_QueueScrollLead()`：仅由同一 GUI Task 调用。返回 `QueueTab` 顶部已滚出的整行数，供窗口协议计算下一窗 `Index`。换窗时从当前 `scroll_y` 扣整行高度，不把列表吸回整页。
 
@@ -28,6 +29,8 @@
 ## 编译期依赖
 
 - LVGL v8.3.11 的公开入口 `lvgl.h`；
+- `Components/resource_pack` 的公开头（仅 `font/` 用，取 `ResourcePack_LocateFontBin()` 的分段定位与位图上限）；
+- `Service/resource` 的 `Service_Resource_GetFont()`、`Service/log` 的 `Service_Log_Post()` 与 Cortex-M7 周期计数器 Adapter（仅 `font/` 用：查询字体载荷、记启动 INFO/WARN、只读测量解码耗时）；
 - `Platform/lcd`、`Platform/touch` 的公开 Interface；
 - FreeRTOS 的任务通知和 Tick Interface。
 
@@ -36,6 +39,8 @@
 ## 资源与运行时路径
 
 两块完整 RGB565 绘制缓冲由本 Module 静态持有，并通过 `.sdram_framebuffer` 放入外部 SDRAM。缓冲首地址按 `PLATFORM_DCACHE_LINE_SIZE` 对齐；SPI DMA 发起前的 D-Cache Clean 仍由下层 LCD Adapter 负责。
+
+曲名字体的解码区 `.sdram_gui_font`（0x98000 B）归 `font/` 独占，`Service_GUI_Init()` 在创建 Screen 前写入；只经 CPU 读写，不作 DMA 源或目标。启动顺序、MPU、Cache 与容量的 HWD-2 审查见 [font/README.md](font/README.md)。
 
 ```text
 GUI Task
@@ -70,7 +75,7 @@ LVGL Pointer read_cb
 
 ## 私有 Modules 与配置
 
-对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_ConsumeInput()`、`Service_GUI_TransportApply()`、`Service_GUI_ProgressApply()`、`Service_GUI_TimeApply()`、`Service_GUI_StatusApply()`、`Service_GUI_SkipNoticeApply()`、`Service_GUI_StatusFlash()`、`Service_GUI_VinylApply()`、`Service_GUI_QueueApply()` 与 `Service_GUI_ThemeApply()`；
+对外仍只有 `Service_GUI_Init()`、`Service_GUI_Process()`、`Service_GUI_QueueScrollLead()`、`Service_GUI_ConsumeInput()`、`Service_GUI_TransportApply()`、`Service_GUI_ProgressApply()`、`Service_GUI_TimeApply()`、`Service_GUI_StatusApply()`、`Service_GUI_SkipNoticeApply()`、`Service_GUI_StatusFlash()`、`Service_GUI_TitleApply()`、`Service_GUI_VinylApply()`、`Service_GUI_QueueApply()` 与 `Service_GUI_ThemeApply()`；
 以下是 `Service/gui` 内部的实现拆分，不得被 APP 或其他 Service 直接包含或调用。
 
 ```text
@@ -95,13 +100,18 @@ Service/gui/
 │  ├─ pager/                         循环分页、吸附、重排与圆点动画
 │  ├─ queue/                         按 Length 构造 Queue 行并滑窗复用
 │  ├─ transport/                     Now Playing 三键、进度条假 seek、PLAY/PAUSE 与时间 Label（兼作状态行）
+│  ├─ title/                         Now Playing 曲名 Label：写文本，按像素宽度选静止居中或循环滚动
 │  ├─ vinyl/                         假唱盘第一帧绑到唱盘 Image，并按 playing 旋转
 │  ├─ background/                    壁纸模糊、局部裁剪；Solid 薄层
 │  └─ README.md
-└─ canvas/                           可复用的 Canvas 离屏处理
-   ├─ gui_service_canvas.c / .h
-   ├─ gui_service_canvas_compositor.c / .h
-   ├─ gui_service_canvas_config.h
+├─ canvas/                           可复用的 Canvas 离屏处理
+│  ├─ gui_service_canvas.c / .h
+│  ├─ gui_service_canvas_compositor.c / .h
+│  ├─ gui_service_canvas_config.h
+│  └─ README.md
+└─ font/                             曲名字体：启动时解码资源包 FONT，失败回退 Montserrat
+   ├─ gui_service_font.c / .h         查询资源、解码到 .sdram_gui_font、给出曲名字体
+   ├─ gui_service_font_decoder.c / .h
    └─ README.md
 ```
 
@@ -127,6 +137,7 @@ Service/gui/
   Now Playing 假唱盘独立缓冲。模糊接收调用方给定的图片和半径；假唱盘由 compositor 写入纯色圆。
   隐藏 Canvas 对象挂在 display top layer，不随 Boot Screen 销毁。`gui_service_canvas_compositor.c`
   提供裁剪、毛玻璃区域合成和纯色圆合成；Canvas 不把图片绑到界面对象。
+- `font/gui_service_font_decoder.c`：把资源包 FONT 条目里的 `lv_font_conv` bin 解码成 LVGL `fmt_txt` 字体，只读输入 bin，把字形描述、cmap、字距和重排后的位图写进调用者给定的输出区（先 Measure 取大小，再 Build）；不使用 LVGL 堆。`font/gui_service_font.c` 在 `Service_GUI_Init()` 中（创建 Screen 前）查询 `Service_Resource_GetFont()` 并调用它，结果写进 `.sdram_gui_font`；成功记 INFO（字形数、解码耗时），不可用或失败记 WARN 并让曲名 Label 回退 Montserrat 12，其他 Label 不变。详见 [font/README.md](font/README.md)。
 - `main/gui_service_main.c`：Main Screen 的私有编排入口。它先调用 Pager Module 解析布局、
   定位 MusicPage 至中间物理槽位并绑定循环分页，再让 Queue 打开 QueueTab 滚动，再绑定 Transport
   三键与进度条，再绑假唱盘第一帧，最后调用 Background Module。`service_gui_main_apply_theme()`
@@ -160,6 +171,6 @@ Service/gui/
 
 ## 验证
 
-- 主机测试：`Tests/gui_theme`（调色板）、`Tests/gui_canvas`（合成）、`Tests/gui_task`（输入单槽、窗口协议、Transport）。
+- 主机测试：`Tests/gui_theme`（调色板）、`Tests/gui_canvas`（合成）、`Tests/gui_font`（字体 bin 解码器）、`Tests/gui_task`（输入单槽、窗口协议、Transport）。
 - 界面等价性：`./Tools/gui_simulator/run-scenarios.ps1` 在 PC 上原样运行本 Module，逐帧比对场景基线；见 [Tools/gui_simulator/README.md](../../Tools/gui_simulator/README.md)。
 - 板级：显示刷新、DMA、触摸与真实帧率仍须上板（`hw:pending`）。

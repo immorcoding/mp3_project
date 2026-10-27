@@ -1,6 +1,6 @@
 # 主机回归
 
-`external_loader`、`flash_ftl`、`gui_task`、`gui_theme`、`gui_canvas`、`w25qxx`、`resource_pack`、`storage_audio_stream`、`playback_service`、`playback_task` 与 `monitor_warn` 是十一个独立的 CMake 工程，共 40 个 CTest：`external_loader` 1 个，`flash_ftl` 16 个（3 个固定测试、12 个文件场景测试、1 个卷感知 Service 测试），`gui_task` 3 个，`gui_theme` 1 个，`gui_canvas` 2 个，`w25qxx` 1 个，`resource_pack` 1 个，`storage_audio_stream` 1 个，`playback_service` 5 个（真实 minimp3 加小 MP3 夹具，输出管线链接假 Platform 音频），`playback_task` 8 个（纯 C 状态机 `playback_machine`，假存储窗口加假播放模块），`monitor_warn` 1 个（Monitor 未登记任务告警的去重记录，纯 C）。
+`external_loader`、`flash_ftl`、`gui_task`、`gui_theme`、`gui_canvas`、`gui_font`、`w25qxx`、`resource_pack`、`storage_audio_stream`、`storage_catalog`、`playback_service`、`playback_task` 与 `monitor_warn` 是十三个独立的 CMake 工程，共 44 个 CTest：`external_loader` 1 个，`flash_ftl` 16 个（3 个固定测试、12 个文件场景测试、1 个卷感知 Service 测试），`gui_task` 4 个（含音乐分区曲名客户），`gui_theme` 1 个，`gui_canvas` 2 个，`gui_font` 2 个（字体 bin 解码器：真实字体对独立参照加构造样本与失败输入，只编译解码器与 Component，不链接 LVGL，保真边界见模块 README），`w25qxx` 1 个，`resource_pack` 1 个，`storage_audio_stream` 1 个，`storage_catalog` 1 个（曲目显示名提取纯函数，纯 C，保真边界见模块 README），`playback_service` 5 个（真实 minimp3 加小 MP3 夹具，输出管线链接假 Platform 音频），`playback_task` 8 个（纯 C 状态机 `playback_machine`，假存储窗口加假播放模块），`monitor_warn` 1 个（Monitor 未登记任务告警的去重记录，纯 C）。
 
 ## 环境
 

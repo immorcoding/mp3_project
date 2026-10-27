@@ -7,13 +7,15 @@
   *          只经 #71 公开合同的 playback_command_send() 与 playback_snapshot_read()
   *          与播放任务交互（#72 A1）；不读写播放游标、不持 playing 真值（A2）。
   *          每圈先处理输入，再读一次快照交给 gui_music_transport 归约，与上次显示
-  *          的结果比较后只对变化的部分调用 Service_GUI_*（#72 C 节）。不打开文件、
-  *          不解码，不使用 LVGL。listbuffer 头只出现在本分区。
+  *          的结果比较后只对变化的部分调用 Service_GUI_*（#72 C 节）。曲名按归约
+  *          已追上的曲目身份经名称槽向 Storage 请求（gui_music_title）。不打开文件、
+  *          不解码，不使用 LVGL。listbuffer 与 namebuffer 头只出现在本分区。
   ******************************************************************************
   */
 
 #include "gui_music.h"
 #include "gui_music_queue_window.h"
+#include "gui_music_title.h"
 #include "gui_music_transport.h"
 
 #include <stddef.h>
@@ -22,12 +24,21 @@
 
 #include "APP/tasks/playback/playback_contract.h"
 #include "APP/tasks/storage/catalog/storage_listbuffer.h"
+#include "APP/tasks/storage/catalog/storage_namebuffer.h"
 #include "Service/log/log_service.h"
 
 /** @brief 本分区日志 tag。 */
 static const char gui_music_log_tag[] = "gui_music";
 
 static GUI_MusicQueueWindowClientTypeDef gui_music_queue_window_client;
+
+/** @brief 曲名客户：身份采信与名称槽握手。 */
+static GUI_MusicTitleClientTypeDef gui_music_title_client;
+
+/** @brief 曲名区上一圈已写到界面的显示。 */
+static GUI_MusicTitleShowTypeDef gui_music_title_shown_last;
+/** @brief 已写过至少一次曲名显示；为假时首圈无条件写入。 */
+static bool gui_music_title_has_shown;
 
 /** @brief 快照归约状态：命令序号、最后一份已追上的快照与各规则的历史基准。 */
 static GUI_MusicTransportTypeDef gui_music_transport;
@@ -287,6 +298,64 @@ static GUI_MusicQueueWindowActionTypeDef gui_music_window_step(void)
 }
 
 /**
+ * @brief 推进曲名一步：按已追上的曲目身份推进名称槽握手，只在显示变化时调 TitleApply。
+ * @param[in] decision 本圈归约结果，提供采信的曲目身份。
+ * @note  先读槽状态，READY 时再读应答代次与名字：READY 期间 Storage 不再写槽。
+ *        ACCEPT 时名字拷给 Service 后才写回 IDLE；空白与 `--` 只在与上一圈不同时写。
+ */
+static void gui_music_title_step(const GUI_MusicTransportDecisionTypeDef *decision)
+{
+    GUI_MusicTitleIdentityTypeDef identity;
+    GUI_MusicTitleIdentityTypeDef requested;
+    GUI_MusicTitleActionTypeDef action;
+    GUI_MusicTitleShowTypeDef shown;
+    uint32_t status;
+    uint32_t reply_generation;
+
+    identity.has_track = decision->has_track;
+    identity.generation = decision->generation;
+    identity.index = decision->index;
+
+    status = storage_namebuffer.Status;
+    reply_generation = (status == STORAGE_NAMEBUFFER_READY) ? storage_namebuffer.Generation : 0U;
+    action = gui_music_title_poll(&gui_music_title_client, &identity, status, reply_generation);
+
+    switch (action)
+    {
+        case GUI_MUSIC_TITLE_ACTION_REQUEST:
+            requested = gui_music_title_request_identity(&gui_music_title_client);
+            if (storage_namebuffer_request(requested.index, requested.generation) != STORAGE_OK)
+            {
+                gui_music_title_request_failed(&gui_music_title_client);
+            }
+            break;
+
+        case GUI_MUSIC_TITLE_ACTION_ACCEPT:
+            (void)Service_GUI_TitleApply(storage_namebuffer.Buffer);
+            storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
+            break;
+
+        case GUI_MUSIC_TITLE_ACTION_DISCARD:
+            storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
+            break;
+
+        case GUI_MUSIC_TITLE_ACTION_NONE:
+        default:
+            break;
+    }
+
+    shown = gui_music_title_shown(&gui_music_title_client);
+    if ((action != GUI_MUSIC_TITLE_ACTION_ACCEPT) &&
+        (!gui_music_title_has_shown || (shown != gui_music_title_shown_last)))
+    {
+        (void)Service_GUI_TitleApply((shown == GUI_MUSIC_TITLE_SHOW_BLANK) ? "" : "--");
+    }
+
+    gui_music_title_shown_last = shown;
+    gui_music_title_has_shown = true;
+}
+
+/**
  * @brief 把一次显示决定写到界面：只对与上次不同的部分调用 Service_GUI_*。
  * @param[in] decision 本圈归约结果。
  * @param[in] seek_released 进度条刚松手，须无条件重写进度条（B3）。
@@ -347,8 +416,8 @@ static void gui_music_show(const GUI_MusicTransportDecisionTypeDef *decision, bo
 }
 
 /**
- * @brief 复位窗口客户与快照归约，并把播放键画成 PLAY、进度条为 0、唱盘归零。
- * @note  时间 Label 的初始 `0:00/--:--` 由 Service 在 Init 时写入。首圈 step 按
+ * @brief 复位窗口客户、曲名客户与快照归约，并把播放键画成 PLAY、进度条为 0、唱盘归零。
+ * @note  时间 Label 的初始 `0:00/--:--` 与曲名的初始 `--` 由 Service 在 Init 时写入。首圈 step 按
  *        快照把各部分全部写一次。
  */
 void gui_music_init(void)
@@ -361,9 +430,17 @@ void gui_music_init(void)
                    "music queue window READY must match listbuffer");
     _Static_assert(GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT == SERVICE_GUI_QUEUE_NO_CURRENT,
                    "music queue window no-current must match QueueApply sentinel");
+    _Static_assert(GUI_MUSIC_TITLE_IDLE == STORAGE_NAMEBUFFER_IDLE,
+                   "music title IDLE must match namebuffer");
+    _Static_assert(GUI_MUSIC_TITLE_PENDING == STORAGE_NAMEBUFFER_PENDING,
+                   "music title PENDING must match namebuffer");
+    _Static_assert(GUI_MUSIC_TITLE_READY == STORAGE_NAMEBUFFER_READY,
+                   "music title READY must match namebuffer");
 
     gui_music_queue_window_client_init(&gui_music_queue_window_client);
     gui_music_transport_init(&gui_music_transport);
+    gui_music_title_client_init(&gui_music_title_client);
+    gui_music_title_has_shown = false;
     gui_music_shown.has_decision = false;
     gui_music_shown.highlight = GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT;
     gui_music_shown.highlight_stale = false;
@@ -373,7 +450,7 @@ void gui_music_init(void)
 }
 
 /**
- * @brief 推进音乐分区一步：输入发命令、读快照归约、窗口协议、按需刷新显示。
+ * @brief 推进音乐分区一步：输入发命令、读快照归约、窗口协议、曲名、按需刷新显示。
  * @param[in] input 本圈已 Consume 的输入；NULL 视为 NONE。
  * @note  只由 GUI Task 调用。每圈只读一次快照；高亮在窗口仍显示且槽位 IDLE 时
  *        才重套（C3），Queue 不随当前曲自动滚动。
@@ -395,6 +472,7 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
         &decision);
 
     action = gui_music_window_step();
+    gui_music_title_step(&decision);
 
     /* APPLY 已按快照重套本窗；其余情况在高亮变化或 Service 即时高亮待覆盖时重套。 */
     if (decision.highlight_apply &&

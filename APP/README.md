@@ -16,7 +16,7 @@
 - `Platform_*` 产品硬件能力；
 - `Service` 目录的公开 Interface；
 - FreeRTOS 的任务创建和启动 Interface；
-- `Adapters/cortex/cycle_counter` 的 DWT 周期计数 Interface，仅供启动早期、串行执行的硬件 benchmark 取得高精度时间；
+- `Adapters/cortex/cycle_counter` 的 DWT 周期计数 Interface，由 `app_init()` 在 Resource 加载前启动一次；启动早期的硬件 benchmark、GUI 最大帧耗时等只读取得高精度时间；
 - CubeMX `Error_Handler()` 等明确的启动接缝。
 
 ## 运行时请求路径

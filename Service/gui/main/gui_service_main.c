@@ -18,6 +18,7 @@
 #include "Service/gui/main/background/gui_service_main_background.h"
 #include "Service/gui/main/pager/gui_service_main_pager.h"
 #include "Service/gui/main/queue/gui_service_main_queue.h"
+#include "Service/gui/main/title/gui_service_main_title.h"
 #include "Service/gui/main/transport/gui_service_main_transport.h"
 #include "Service/gui/main/vinyl/gui_service_main_vinyl.h"
 
@@ -30,7 +31,7 @@
  * @retval SERVICE_INVALID_PARAM 壁纸图片、局部裁剪区域、唱盘尺寸或 Canvas 参数不满足约束。
  * @note 必须在 view/ 创建界面后、Boot 背景准备前由 GUI Service 调用一次。先初始化
  *       Pager 可保证 Background 的首帧裁剪以居中的 MusicPage 实际坐标为准；Queue
- *       在 Pager 之后打开 QueueTab 滚动，Transport 绑定三键，Vinyl 绑假唱盘第一帧，Background 最后。可见行由
+ *       在 Pager 之后打开 QueueTab 滚动，Transport 绑定三键，Title 写入初始 `--`，Vinyl 绑假唱盘第一帧，Background 最后。可见行由
  *       GUI Task 经 QueueApply 填入。调用者不得直接调用任何 Main 子 Module。
  */
 Service_StatusTypeDef service_gui_main_prepare(
@@ -53,6 +54,13 @@ Service_StatusTypeDef service_gui_main_prepare(
     }
 
     status = service_gui_main_transport_prepare();
+
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
+
+    status = service_gui_main_title_prepare();
 
     if (status != SERVICE_OK)
     {

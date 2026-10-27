@@ -5,17 +5,23 @@
   *
   * @details
   *          标签只能点击切换；内部 Content 不可滚动，横滑交给 Main 分页视口。
-  *          Now Playing 含唱盘 Image 与控制区（时间、进度条、三键），事件由
-  *          main/transport 绑定；Queue 行由 main/queue 按 Length 运行时构造。
+  *          Now Playing 自上而下为唱盘 Image、曲名 Label 与控制区（进度条、时间、
+  *          三键），事件由 main/transport 绑定，曲名文本由 main/title 写入；Queue 行由
+  *          main/queue 按 Length 运行时构造。
   ******************************************************************************
   */
 
 #include "Service/gui/view/gui_service_view_screens.h"
 
+#include "Service/gui/gui_service_config.h"
+#include "Service/gui/font/gui_service_font.h"
 #include "Service/gui/theme/gui_service_theme_style.h"
 
 #define SERVICE_GUI_VIEW_MUSIC_TAB_BAR_HEIGHT  (20)   /* 顶部标签栏高度，像素。 */
 #define SERVICE_GUI_VIEW_MUSIC_VINYL_SIZE      (144)  /* 唱盘 Image 边长；须等于 SERVICE_GUI_MUSIC_VINYL_DIAMETER。 */
+#define SERVICE_GUI_VIEW_MUSIC_VINYL_Y         (4)    /* 唱盘相对 Playing 标签页内容区顶部的纵向位置，像素。 */
+#define SERVICE_GUI_VIEW_MUSIC_TITLE_Y         (160)  /* 曲名 Label 顶部相对 Playing 标签页内容区的纵向位置，像素。 */
+#define SERVICE_GUI_VIEW_MUSIC_BUTTON_SHIFT    (4)    /* 三键在控制区内整体下移的像素，为曲名让出间距。 */
 
 /**
  * @brief 设置标签栏（按钮矩阵）样式：薄 Wash 底、顶边细线；选中项 Accent 文字加底边线。
@@ -125,7 +131,7 @@ static lv_obj_t *service_gui_view_music_create_control(lv_obj_t *parent,
 }
 
 /**
- * @brief 创建 Now Playing：唱盘 Image 与底部控制区。
+ * @brief 创建 Now Playing：唱盘 Image、曲名 Label 与底部控制区。
  * @param[out] music Music 页句柄。
  * @param[in] tab Now Playing 标签页。
  */
@@ -135,13 +141,14 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
     lv_obj_t *label;
     lv_obj_t *slider;
     lv_obj_t *icon;
+    const lv_font_t *title_font;
 
     service_gui_theme_style_add(tab, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_CHECKED);
     lv_obj_set_style_text_opa(tab, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_CHECKED);
 
     music->vinyl_image = lv_img_create(tab);
     lv_obj_set_size(music->vinyl_image, SERVICE_GUI_VIEW_MUSIC_VINYL_SIZE, SERVICE_GUI_VIEW_MUSIC_VINYL_SIZE);
-    lv_obj_set_pos(music->vinyl_image, 0, 15);
+    lv_obj_set_pos(music->vinyl_image, 0, SERVICE_GUI_VIEW_MUSIC_VINYL_Y);
     lv_obj_set_align(music->vinyl_image, LV_ALIGN_TOP_MID);
     lv_obj_add_flag(music->vinyl_image, LV_OBJ_FLAG_ADV_HITTEST);
     lv_obj_clear_flag(music->vinyl_image, LV_OBJ_FLAG_SCROLLABLE);
@@ -156,7 +163,7 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
 
     label = lv_label_create(controls);
     lv_obj_set_size(label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_pos(label, 0, lv_pct(5));
+    lv_obj_set_pos(label, 0, 18);
     lv_obj_set_align(label, LV_ALIGN_TOP_MID);
     /* 初始文本 `0:00/--:--` 由 main/transport prepare 按同一格式写入，本处不另写一份。 */
     service_gui_theme_style_add(label, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -168,7 +175,7 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
     slider = lv_slider_create(controls);
     lv_slider_set_value(slider, 0, LV_ANIM_OFF);
     lv_obj_set_size(slider, lv_pct(90), lv_pct(7));
-    lv_obj_set_pos(slider, lv_pct(0), lv_pct(20));
+    lv_obj_set_pos(slider, lv_pct(0), 10);
     lv_obj_set_align(slider, LV_ALIGN_TOP_MID);
     lv_obj_set_style_radius(slider, LV_RADIUS_CIRCLE, LV_PART_MAIN | LV_STATE_DEFAULT);
     service_gui_theme_style_add(slider, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_MUTED, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -198,6 +205,34 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
         controls, 44, lv_pct(0), lv_pct(18), LV_SYMBOL_PLAY, &music->play_pause_icon);
     lv_obj_set_style_text_font(music->play_pause_icon, &lv_font_montserrat_14,
                                LV_PART_MAIN | LV_STATE_DEFAULT);
+    /* 三键沿用原百分比坐标，只用 translate 整体下移，点击区随之移动。 */
+    lv_obj_set_style_translate_y(music->previous_button, SERVICE_GUI_VIEW_MUSIC_BUTTON_SHIFT,
+                                 LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_translate_y(music->next_button, SERVICE_GUI_VIEW_MUSIC_BUTTON_SHIFT,
+                                 LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_translate_y(music->play_pause_button, SERVICE_GUI_VIEW_MUSIC_BUTTON_SHIFT,
+                                 LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    /*
+     * 曲名：唱盘与控制区之间单行居中，Ink 文字、底透明。长文本模式与文本由 main/title
+     * 按像素宽度在每次 Apply 时决定；本处只定位置、尺寸、字体与滚动速度，不写文本。
+     * 字体取 font/ 的结果：资源包 FONT 解码成功时为 Noto 12 px，否则 Montserrat 12（GUI-22）；
+     * 只有这一个 Label 用它，高度随该字体行高。
+     */
+    title_font = service_gui_font_title();
+    label = lv_label_create(tab);
+    lv_obj_set_size(label, SERVICE_GUI_MUSIC_TITLE_WIDTH, title_font->line_height + 2);
+    lv_obj_set_pos(label, 0, SERVICE_GUI_VIEW_MUSIC_TITLE_Y);
+    lv_obj_set_align(label, LV_ALIGN_TOP_MID);
+    lv_obj_clear_flag(label, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label, title_font, LV_PART_MAIN | LV_STATE_DEFAULT);
+    service_gui_theme_style_add(label, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(label, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_anim_speed(label, SERVICE_GUI_MUSIC_TITLE_SPEED, LV_PART_MAIN | LV_STATE_DEFAULT);
+    music->title_label = label;
 }
 
 /**

@@ -8,7 +8,7 @@
 - `Service_Log_*`：普通任务上下文的异步日志投递与消费；
 - `Service_Filesystem_*`：Storage Task 独占期间的 FatFs 卷生命周期、卷感知文件/目录访问和启动诊断；调用者按需包含 `filesystem_types.h`、`filesystem_service.h`、`filesystem_file.h`、`filesystem_directory.h` 或 `filesystem_flash_access.h`。
 - `Service_GUI_*`：GUI Task 内的 LVGL 生命周期推进、显示 DMA 刷新协调和触摸输入接入。
-- `Service_Resource_*`：任务启动前映射并校验 RPKC1，把当前必需资源加载到链接器预留的 SDRAM。
+- `Service_Resource_*`：任务启动前映射并校验 RPKC1，把四项必需资源与可选字体加载到链接器预留的 SDRAM；可选字体失败只告警，另以只读查询发布字体载荷的 SDRAM 位置。
 - `Service_Playback_*`：播放任务交来的音频帧字节经线性输入窗口解码为 PCM 帧，再经 Platform 音频的 PCM 半区循环 DMA 放出（预填、补满、欠载恢复、暂停与恢复、流尾排空），只回报事实，不认识曲目与文件；详见 [playback/README.md](playback/README.md)。
 
 ## 编译期依赖
