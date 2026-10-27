@@ -38,5 +38,5 @@
 
 ## 完成前
 
-按 [verification](docs/shape/sources/verification.md) 验证：声称软件验证完成前 `./scripts/verify.ps1`（FULL）必须通过；GUI 变化另跑 `./Tools/gui_simulator/run-scenarios.ps1`，基线变更遵守 GUI-4。
+按 [verification](docs/shape/sources/verification.md) 验证：声称软件验证完成前 `./scripts/verify.ps1`（FULL，含 GUI 模拟器场景）必须通过；GUI 基线变更遵守 GUI-4。
 `PASS_HOST_ONLY`、`NEEDS_HARDWARE_VALIDATION` 和 PC 像素等价都不是板级验收；待上板事项标 `hw:pending`。非 trivial 变化统一用 `mattpocock-skills:code-review` 审阅（名称带插件前缀；规范轴对照 [CODING_STANDARDS](CODING_STANDARDS.md)，需求轴对照 spec/ticket），本仓库其他文档说“审阅”即指它；范围与证据要求见 [harness](docs/shape/harness.md#verification)。

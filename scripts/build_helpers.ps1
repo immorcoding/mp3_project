@@ -158,14 +158,23 @@ function Invoke-ExternalCommand {
         [switch]$CaptureOutput
     )
 
-    if ($CaptureOutput) {
-        $commandOutput = & $CommandPath @Arguments 2>&1
+    # 成败只看退出码：Windows PowerShell 5.1 在 stderr 被合并或重定向时把原生 stderr 行包成
+    # ErrorRecord，'Stop' 下会抛错，而 cmake 等工具的正常状态输出就写 stderr。
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        if ($CaptureOutput) {
+            $commandOutput = @(& $CommandPath @Arguments 2>&1 | ForEach-Object { [string]$_ })
+        }
+        else {
+            & $CommandPath @Arguments
+        }
+        $exitCode = $LASTEXITCODE
     }
-    else {
-        & $CommandPath @Arguments
+    finally {
+        $ErrorActionPreference = $previousPreference
     }
 
-    $exitCode = $LASTEXITCODE
     if (($null -ne $exitCode) -and ($exitCode -ne 0)) {
         throw "外部命令执行失败：$CommandPath，退出码：$exitCode。"
     }
