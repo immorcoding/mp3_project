@@ -47,17 +47,20 @@ try {
     [void]$lines.Add("[会话简报] 分支 $(([string]$branch).Trim())，未提交文件 $dirtyCount 个。进度与板上状态在 GitHub Issues（见 docs/agents/issue-tracker.md）。")
 
     $ghQueries = @(
-        @{ Label = 'ready-for-agent'; Title = '可交给 Agent' }
-        @{ Label = 'hw:pending'; Title = '待上板' }
+        # 软件已完成、只等板上证据的票不再算“可交给 Agent”（WF-3）。
+        @{ Label = 'ready-for-agent'; Title = '可交给 Agent'; Exclude = 'hw:pending' }
+        @{ Label = 'hw:pending'; Title = '待上板'; Exclude = '' }
     )
     foreach ($query in $ghQueries) {
-        $json = Invoke-BriefCommand -FileName 'gh' -Arguments "issue list --state open --label $($query.Label) --limit 5 --json number,title"
+        $json = Invoke-BriefCommand -FileName 'gh' -Arguments "issue list --state open --label $($query.Label) --limit 10 --json number,title,labels"
         if ($null -eq $json) {
             [void]$lines.Add('GitHub 事项未取到（离线、超时或 gh 未登录）；需要时手动 gh issue list。')
             break
         }
         # PowerShell 5.1 把 "[]" 解析为单个空数组对象；经管道展开后再过滤。
-        $issues = @($json | ConvertFrom-Json | ForEach-Object { $_ } | Where-Object { $null -ne $_ })
+        $issues = @($json | ConvertFrom-Json | ForEach-Object { $_ } | Where-Object { $null -ne $_ } |
+            Where-Object { [string]::IsNullOrEmpty($query.Exclude) -or (@($_.labels | ForEach-Object { $_.name }) -notcontains $query.Exclude) } |
+            Select-Object -First 5)
         if ($issues.Count -gt 0) {
             $items = ($issues | ForEach-Object { "#$($_.number) $($_.title)" }) -join '；'
             [void]$lines.Add("$($query.Title)（$($query.Label)）：$items")

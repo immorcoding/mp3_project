@@ -11,7 +11,6 @@ $script:AgentHookAskUnsupportedTools = @('apply_patch')
 
 $script:AgentHookCubeMxSourcePatterns = @(
     '(?i)\.ioc$'
-    '(?i)\.ld$'
     '(?i)(^|/)startup_[^/]*\.s$'
     '(?i)^\.mxproject$'
 )
@@ -25,6 +24,9 @@ $script:AgentHookGeneratorConfigHeaders = @(
 )
 
 $script:AgentHookUserCodeRoots = @('Core/', 'FATFS/', 'USB_DEVICE/')
+
+# 链接脚本自维护（含手加的资源与字体段），但改动影响内存布局与启动（HWD-2），须逐次经用户确认。
+$script:AgentHookLinkerScriptPatterns = @('(?i)\.ld$')
 
 function Get-AgentHookProperty {
     param(
@@ -155,6 +157,12 @@ function Get-AgentHookEditDecision {
 
     if (Test-GeneratedWriteProtectedPath -RelativePath $normalized) {
         return @{ Decision = 'deny'; Reason = "$normalized 属于 CubeMX/Vendor 生成目录，只认生成器（ARC-2）；请给出源工程配置步骤，由用户导出。" }
+    }
+
+    foreach ($pattern in $script:AgentHookLinkerScriptPatterns) {
+        if ($normalized -match $pattern) {
+            return @{ Decision = $askOrDeny; Reason = "$normalized 是自维护链接脚本，改动影响内存布局与启动（HWD-2），须经用户确认。" }
+        }
     }
 
     foreach ($pattern in $script:AgentHookCubeMxSourcePatterns) {

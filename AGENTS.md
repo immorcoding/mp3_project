@@ -4,7 +4,7 @@
 
 ## 开始任务
 
-- GitHub spec/ticket：先读事项及评论，再按 [workflow](docs/shape/workflow.md) 与 [tracker](docs/agents/issue-tracker.md) 处理依赖、进度和证据；提交与 PR 读 [git](docs/shape/git.md)。implement-spec 止于 draft PR，转 ready 与合并须用户明确授权（GIT-3）。
+- GitHub spec/ticket：先读事项及评论，再按 [workflow](docs/shape/workflow.md) 与 [tracker](docs/agents/issue-tracker.md) 处理依赖、进度和证据；提交与 PR 读 [git](docs/shape/git.md)。implement-spec 止于 draft PR，转 ready 与合并须用户明确授权（GIT-3）；实施分支合入集成分支用 `scripts/merge-into-integration.ps1`，冲突时再派 subagent。
 - 修改文件：先读路径上最近的子 `AGENTS.md`，按 [ROUTES](docs/shape/ROUTES.md) 找目标模块 README、领域规则与技术正文；其他文档从 [文档地图](docs/shape/README.md) 找。
 - 跨层、边界或公开接口变化：读 [architecture](docs/shape/architecture.md) 与相关模块 README，分别判断所有权、include 和运行时路径；完成事件沿相关模块 README 核对，C 代码另读 [code-style](docs/shape/code-style.md)。
 - GUI 变化：先读 [gui](docs/shape/gui.md)，更新其中受影响的规则或待决设计，再改手写 view。
