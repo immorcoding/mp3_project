@@ -36,6 +36,8 @@ gcc -std=c11 -Wall -Wextra -Werror -I include tests/loader_geometry_test.c src/l
 
 ## CubeProgrammer 使用
 
+板测时的勾选项速查（DFU 写固件、ST-LINK 加本 Loader 写资源包）见 [板级验收清单](../../docs/agents/board-test-checklist.md#烧录与日志)；以下是首次安装与参数细节。
+
 1. 完全退出 STM32CubeProgrammer。
 2. 把 `build/arm-gcc/W25Q256_STM32H743ZG.stldr` 复制到 CubeProgrammer 安装目录的 `bin/ExternalLoader/`。
 3. 重新打开 CubeProgrammer，用 ST-LINK/SWD 连接目标板。

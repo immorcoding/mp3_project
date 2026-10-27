@@ -2,6 +2,12 @@
 
 每次上板复制本模板为一条 issue 评论（标题 `## 板级验收 <n>/<m>：<主题>（#<票>）`），填完贴出；规则见 WF-3。样本由 [make_card.py](../../Tools/board_test_card/README.md) 生成。
 
+## 烧录与日志
+
+- 固件：DFU 只写内部 Flash，不动 NOR。
+- 资源包：STM32CubeProgrammer 用 ST-LINK 连接，**External loaders** 勾选 `W25Q256_STM32H743ZG`（已安装，无需辅助固件）；地址 `0x90401000`，勾 **Verify programming**，不用 **Full chip erase**、不用 **Run after programming**；写后读 `0x90401028`（8 B）核对 PackageVersion。参数与排查见 [External Loader](../../Tools/external_loader/README.md)。
+- 串口日志：板子 USB CDC 口（本机常为 COM3），`./Tools/board_test_card/capture-serial.ps1 -Port COM3 -OutFile <日志路径>` 逐行加时间戳写文件，复位或重新枚举后自动重连；日志放会话临时目录，不进仓库。
+
 ## 怎么填
 
 1. 烧录后按启动日志 `BOOT: FW <提交号>[-dirty] <构建类型>` 填页首“固件提交”与“构建”（日志为 `FW unknown` 说明版本串生成有问题，在票里报）；中途重烧，在每个受影响行的“固件提交”列写新的提交号。

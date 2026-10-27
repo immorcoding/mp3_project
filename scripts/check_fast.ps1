@@ -39,6 +39,7 @@ function Invoke-FastWorkingTreeCheck {
         'capture-verification.MergedStderr.Tests.ps1'
         'build_helpers.Tests.ps1'
         'merge-into-integration.Tests.ps1'
+        'check-ps1-encoding.Tests.ps1'
     )
     # 自测成功时静默（夹具仓库、证据目录等噪声不进入工具结果），失败时输出完整细节。
     foreach ($selfTest in $selfTests) {
@@ -52,6 +53,7 @@ function Invoke-FastWorkingTreeCheck {
     Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'check-layer-includes.ps1') `
         -Parameters @{ Snapshot = 'WorkingTree' }
     Invoke-PowerShellScript -ScriptPath (Join-Path $PSScriptRoot 'check-docs.ps1')
+    Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'check-ps1-encoding.ps1')
 
     # 主机测试 PathPatterns 与各模块真实编译依赖的漂移检查；只读仓库文件，索引快照里同样适用，故不受快照分支限制。
     Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'check-test-paths.ps1')
@@ -150,7 +152,7 @@ Complete-Utf8EntryScript -Action {
 
         if (-not $SuppressStatus) {
             Write-HarnessStatus -Status PASS `
-                -Summary "FAST 通过：已验证 Harness 自测、文档与 shape、改动函数的 Doxygen（STY-2）、分层 include、主机测试路径覆盖与生成目录写保护（$Snapshot）。"
+                -Summary "FAST 通过：已验证 Harness 自测、文档与 shape、PowerShell 编码、改动函数的 Doxygen（STY-2）、分层 include、主机测试路径覆盖与生成目录写保护（$Snapshot）。"
         }
     }
     catch {

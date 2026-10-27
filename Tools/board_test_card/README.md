@@ -39,3 +39,5 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 - 固件按 FAT 目录项顺序入库，目录顺序等于创建顺序：必须按上表顺序逐个复制，不要整夹拖拽；`--copy-to` 已按此顺序。
 - `--set first-bad`（坏文件在首位）、`--set all-unsupported`（整库不可播，期望 ALL_BAD）复制子集，相对顺序不变；换子集前先格式化卡。
 - 每个和弦 1 s、起止采样为 0，循环拼接，曲内没有人为咔哒声；同一 `lameenc` 版本下输出逐字节一致，上表字节数以 `lameenc` 1.9.0 为准。
+
+- 串口日志：`capture-serial.ps1 -Port <COM口> -OutFile <路径>` 采集板子 USB CDC 日志（时间戳、自动重连），用法见[板级验收清单](../../docs/agents/board-test-checklist.md#烧录与日志)。
