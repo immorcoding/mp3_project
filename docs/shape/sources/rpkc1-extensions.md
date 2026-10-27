@@ -1,12 +1,12 @@
 # RPKC1 扩展载荷数据字典
 
-[Resources](../resources.md) 的预留兼容契约，当前解码器未启用；固件执行与发布认证策略见 RES-8，公共编码见[容器字典](rpkc1-layout.md)。Offset 相对所属结构起点，显式说明相对基准的字段除外。
+[Resources](../resources.md) 的预留兼容契约；0.7.0 起 FONT 解码器已启用（RES-9、RES-10），其余类型的解码器未启用；固件执行与发布认证策略见 RES-8，公共编码见[容器字典](rpkc1-layout.md)。Offset 相对所属结构起点，显式说明相对基准的字段除外。
 
 ## 载荷约束
 
 | 类型 | 固定区与附加约束 |
 | --- | --- |
-| FONT V1 | 至少32 B；载荷为可重定位序列化字体（如TTF/OTF/自描述点阵），不含MCU指针、函数指针或编译器结构填充；其余为格式专用尾部。 |
+| FONT V1 | 至少32 B；载荷为可重定位序列化字体（如TTF/OTF/自描述点阵），不含MCU指针、函数指针或编译器结构填充；其余为格式专用尾部。当前产品：MetadataSize = 32、无格式专用尾部，条目 Data 即 `lv_font_conv` 1.5.3 未压缩 bin 原样字节；Component 核对 GlyphCount、NominalPixelHeight、Ascent、Descent 与 bin 一致，拒绝位图总量（不计字形 0 与空盒字形）≥ 1 MiB 的字体，打包器同口径。 |
 | AUDIO V1 | 48 B；容器与Codec独立；SampleRate/ChannelCount > 0；未知或不适用字段为0；时长由TotalSamples/SampleRate推导，无DurationMs字段。 |
 | MODEL V1 | 至少40 B加Tensor表；RequiredAlignment为2的幂；Tensor表完整位于Metadata内。 |
 | Tensor V1 | 32 B固定头加Rank个uint32维度及量化数据；DescriptorSize覆盖整条记录；无量化时类型为NONE且量化Offset/Length同时为0。 |
@@ -19,9 +19,9 @@
 | --- | ---: | ---: | --- |
 | FONT V1 | `0x00` | 4 | MetadataVersion = 1 |
 | FONT V1 | `0x04` | 4 | MetadataSize，至少为 32 |
-| FONT V1 | `0x08` | 4 | FontFormat |
-| FONT V1 | `0x0C` | 4 | CodepointEncoding |
-| FONT V1 | `0x10` | 4 | GlyphCount |
+| FONT V1 | `0x08` | 4 | FontFormat；1 = `lv_font_conv` 1.5.3 未压缩 bin |
+| FONT V1 | `0x0C` | 4 | CodepointEncoding；1 = Unicode 码点 |
+| FONT V1 | `0x10` | 4 | GlyphCount；`lv_font_conv` bin 为 loca 条目数，含索引 0 的 notdef |
 | FONT V1 | `0x14` | 4 | NominalPixelHeight，矢量字体可为 0 |
 | FONT V1 | `0x18` | 4 | Ascent，int32_t |
 | FONT V1 | `0x1C` | 4 | Descent，int32_t |

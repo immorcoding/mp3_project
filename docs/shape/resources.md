@@ -23,7 +23,7 @@ Next id: RES-11
 
 - **RES-1** · provisional · RPKC1 Type 只描述内容，加载、必需性、目标内存与失败策略由 Service 决定；Component 只解析调用者只读窗口，不依赖介质、RTOS 或 GUI。_Why:_ 格式可跨介质复用，不把产品部署写入协议。_Source:_ [Component](../../Components/resource_pack/README.md)
 - **RES-4** · provisional · 打包器与解析器共同遵循 RPKC1 字节契约；显式小端解码、64位范围运算，验证 CRC/对齐/任意重叠/严格升序非零 ID；未知类型公共合法则允许 Open，未启用类型解码返回不支持。_Why:_ 字节兼容不能依赖 C 布局或当前启用类型集合。_Source:_ [Core 契约](sources/rpkc1-layout.md)、[扩展类型契约](sources/rpkc1-extensions.md)
-- **RES-9** · exploring · FONT V1 的 Data 是 `lv_font_conv` 1.5.3 未压缩 bin 原样字节，Metadata 固定 32 B；Component 只解码 Metadata，字形表由消费者解析，位图总量须小于 1 MiB。_Why:_ 字节契约不绑定 LVGL 8.3 的内存布局；`LV_FONT_FMT_TXT_LARGE = 0` 时位图索引只有 20 位。_Source:_ [CJK 字体方案](https://github.com/immorcoding/mp3_project/issues/105)、[0.7.0 spec](https://github.com/immorcoding/mp3_project/issues/112)
+- **RES-9** · exploring · FONT V1 的 Data 是 `lv_font_conv` 1.5.3 未压缩 bin 原样字节，Metadata 固定 32 B；Component 解码 Metadata、核对 bin 结构与位图总量（须小于 1 MiB），并公开 bin 分段定位供消费者复用；字形表、cmap 与位图重排由消费者负责。_Why:_ 字节契约不绑定 LVGL 8.3 的内存布局；`LV_FONT_FMT_TXT_LARGE = 0` 时位图索引只有 20 位。_Source:_ [CJK 字体方案](https://github.com/immorcoding/mp3_project/issues/105)、[0.7.0 spec](https://github.com/immorcoding/mp3_project/issues/112)
 
 ## installation
 
@@ -50,7 +50,7 @@ Next id: RES-11
 
 ### Rules
 
-- **RES-7** · provisional · 相同输入生成同包，ResourceID 保持语义身份而非文件排序位置，同一 ID 内容变化递增 ResourceVersion；名称/来源留外部 Manifest；用已验证 External Loader 写后校验，并按实际 PackSize 核对资源区边界，旧 RPK1 长度不沿用。_Why:_ 确定性与稳定身份防止资源误绑，独立回读与边界核对防止覆盖 FTL。_Source:_ [打包入口](../../Tools/package_maker/main.py)、[烧录工具](../../Tools/external_loader/README.md)
+- **RES-7** · provisional · 相同输入生成同包，ResourceID 保持语义身份而非文件排序位置，同一 ID 内容变化递增 ResourceVersion；名称/来源留外部 Manifest；用已验证 External Loader 写后校验，并按实际 PackSize 核对资源区边界，旧 RPK1 长度不沿用。_Why:_ 确定性与稳定身份防止资源误绑，独立回读与边界核对防止覆盖 FTL。_Source:_ [打包入口](../../Tools/package_maker/main.py)、[烧录工具](../../Tools/external_loader/README.md)、[字体生成](../../Resources/fonts/README.md)（`generate_font.py --check` 复现已入库的 bin）
 
 ## firmware-trust
 

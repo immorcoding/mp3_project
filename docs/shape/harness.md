@@ -39,6 +39,7 @@ Next id: HAR-15
 ### Signals
 
 - 2026-10-20 · cite · HAR-4 · Agent Hook 按 `\.ld$` 拒绝所有链接脚本编辑（`scripts/hooks/agent_hook_helpers.ps1`），#98 并入自定义段时 Agent 只能在 scratch 目录生成合并文件、由用户拷入；用 `ld` 重链接（`-T` 指向 scratch 文件）可在不动仓库文件时验证各段地址不变。
+- 2026-10-26 · friction · HAR-4 · #121 验收要求在 `STM32H743xG_flash.ld` 新增两个 SDRAM NOLOAD 区，Hook 按 `\.ld$` 拒绝编辑，派发提示却称链接脚本自维护；沿用 #98 先例由用户拷入，拷入前分支上固件链接与 FULL 必然失败。是否放开链接脚本自定义段的 Agent 编辑，待用户决定。
 
 ## verification
 
