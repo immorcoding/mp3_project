@@ -2,7 +2,7 @@
 
 事项、规划、交接与板上状态放在哪里，以及会话按需读取什么。
 
-Next id: WF-14
+Next id: WF-15
 
 ## Pillars
 
@@ -22,7 +22,7 @@ Next id: WF-14
 
 - **WF-1** · provisional · 事项、spec 与 ticket 都是 GitHub Issues（`immorcoding/mp3_project`），用 `gh` 操作。 _Why:_ 规格、依赖和进度集中，避免多处任务状态失步。 _Source:_ [issue-tracker.md](../agents/issue-tracker.md)
 - **WF-2** · exploring · 雾里的大块工作走 `/wayfinder`；已清晰的功能走 `/to-spec` → `/to-tickets` → `/implement`。 _Why:_ 流程深度随不确定性选择，清晰任务无需重复探索。
-- **WF-13** · exploring · 一个次版本只做一个用户可见功能；补丁版本（如 0.6.1）只放修复与小打磨，不加新功能；补丁同样以一份 spec 作父事项，只写范围、交付与板级验收，不做设计展开。 _Why:_ 每个版本的范围能在一次集成分支上完成板级验收，避免把多个功能挤进同一版本；集成 PR 与合并板测清单需要父事项（GIT-3）。 _Source:_ [打磨阶段地图](https://github.com/immorcoding/mp3_project/issues/100)
+- **WF-14** · exploring · 一个次版本只做一个带来新能力的用户可见功能（新数据来源或格式解析、新任务或模块、新资源类型或字节契约变化、公开 Interface 变化、新领域词条，满足其一即算）；补丁版本放修复、打磨与小功能，小功能只在已有页面上、用已有数据路径中的数据新增或调整呈现，不触及上述任何一项，板级验收一次板测可完成；补丁同样以一份 spec 作父事项，写范围、交付与板级验收，可带一节呈现设计或一张原型票，不做边界或架构决定。 _Why:_ 次版本的范围仍能在一条集成分支上完成板级验收；呈现层的小增量不必等下一个次版本，涉及新能力的改动仍需完整规划；集成 PR 与合并板测清单需要父事项（GIT-3）。 _Source:_ [打磨阶段地图](https://github.com/immorcoding/mp3_project/issues/100)、2026-10-27 ID3/字体版本规划
 
 ## hardware-evidence
 
@@ -68,6 +68,7 @@ Next id: WF-14
 
 ### Rejected
 
+- 一个次版本只做一个用户可见功能、补丁只放修复与小打磨不加新功能、补丁 spec 不做设计展开：容不下呈现层的小增量（2026-10-27 ID3/字体版本规划），由 WF-14 替代。（was WF-13）
 - 把 docs 根 Markdown 收拢进 shape 的迁移规则：迁移已完成（docs 下只剩 adr、agents、shape），各材料归属表留在 [domain](../agents/domain.md)。（was WF-10）
 
 ## vocabulary
