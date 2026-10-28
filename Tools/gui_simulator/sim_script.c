@@ -170,7 +170,8 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
             }
             action.kind = SIM_ACTION_KEY;
         }
-        else if ((strcmp(argv[i], "--name-fail") == 0) || (strcmp(argv[i], "--name-delay") == 0))
+        else if ((strcmp(argv[i], "--name-fail") == 0) || (strcmp(argv[i], "--name-delay") == 0) ||
+                 (strcmp(argv[i], "--window-delay") == 0))
         {
             if (sscanf(value, "%u:%u", &at, &action.name_value) != 2)
             {
@@ -178,8 +179,18 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
                 return false;
             }
             action.kind = SIM_ACTION_NAME;
-            action.name_control = (strcmp(argv[i], "--name-fail") == 0) ?
-                                      SIM_SCRIPT_NAME_FAIL : SIM_SCRIPT_NAME_DELAY;
+            if (strcmp(argv[i], "--name-fail") == 0)
+            {
+                action.name_control = SIM_SCRIPT_NAME_FAIL;
+            }
+            else if (strcmp(argv[i], "--name-delay") == 0)
+            {
+                action.name_control = SIM_SCRIPT_NAME_DELAY;
+            }
+            else
+            {
+                action.name_control = SIM_SCRIPT_WINDOW_DELAY;
+            }
         }
         else
         {

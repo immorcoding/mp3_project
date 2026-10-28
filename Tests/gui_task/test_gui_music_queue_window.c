@@ -285,35 +285,48 @@ static void test_applies_ready_before_clear_when_sd_removed(void)
 }
 
 /**
- * @brief 第一窗 Index=0；滚动未满一行上沿缓冲时不改起点。
+ * @brief 第一窗 Index=0；滚动未满回滑行数时不改起点。
  */
-static void test_scroll_one_row_keeps_index_zero_for_upward_slack(void)
+static void test_scroll_within_back_rows_keeps_index_zero(void)
 {
-    assert(gui_music_queue_window_desired_index(0U, 8U, 1U, 8U) == 0U);
+    assert(gui_music_queue_window_desired_index(
+               0U, 8U, GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS, 8U) == 0U);
 }
 
 /**
- * @brief 滚过两行后窗口起点跟上可见行，并留一行给回滑。
+ * @brief 滚过回滑行数再多一行，窗口起点跟上可见行，首行之上仍留回滑行。
  */
-static void test_scroll_two_rows_requests_index_one(void)
+static void test_scroll_past_back_rows_requests_index_one(void)
 {
-    assert(gui_music_queue_window_desired_index(0U, 8U, 2U, 8U) == 1U);
+    assert(gui_music_queue_window_desired_index(
+               0U, 8U, GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS + 1U, 8U) == 1U);
 }
 
 /**
- * @brief 窗口已含一行上沿缓冲且仍停在该缓冲时保持 Index。
+ * @brief 窗口已含回滑行且可见首行正好在其下时保持 Index。
  */
-static void test_stable_when_lead_matches_upward_slack(void)
+static void test_stable_when_lead_matches_back_rows(void)
 {
-    assert(gui_music_queue_window_desired_index(4U, 8U, 1U, 8U) == 4U);
+    assert(gui_music_queue_window_desired_index(
+               6U, 8U, GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS, 8U) == 6U);
 }
 
 /**
- * @brief 回到窗口顶部时 Index 减一，才能 request 上一窗。
+ * @brief 回到窗口顶部时一次退回整份回滑行（#157）：快速回滑每次换窗都补足首行之上的行，
+ *        不是一窗只退一行。
  */
-static void test_scroll_back_to_top_requests_previous_index(void)
+static void test_scroll_back_to_top_requests_back_rows_earlier(void)
 {
-    assert(gui_music_queue_window_desired_index(4U, 8U, 0U, 8U) == 3U);
+    assert(gui_music_queue_window_desired_index(6U, 8U, 0U, 8U) ==
+           (uint16_t)(6U - GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS));
+}
+
+/**
+ * @brief 列表前部不足回滑行数时退到 Index=0，不越过列表起点。
+ */
+static void test_scroll_back_near_start_clamps_to_zero(void)
+{
+    assert(gui_music_queue_window_desired_index(1U, 8U, 0U, 8U) == 0U);
 }
 
 /**
@@ -321,7 +334,8 @@ static void test_scroll_back_to_top_requests_previous_index(void)
  */
 static void test_does_not_advance_index_when_window_is_short(void)
 {
-    assert(gui_music_queue_window_desired_index(5U, 3U, 2U, 8U) == 5U);
+    assert(gui_music_queue_window_desired_index(
+               5U, 3U, GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS + 2U, 8U) == 5U);
 }
 
 /**
@@ -337,7 +351,8 @@ static void test_index_zero_has_no_previous_window(void)
  */
 static void test_jump_scroll_requests_target_index_in_one_shot(void)
 {
-    assert(gui_music_queue_window_desired_index(0U, 8U, 5U, 8U) == 4U);
+    assert(gui_music_queue_window_desired_index(0U, 8U, 7U, 8U) ==
+           (uint16_t)(7U - GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS));
 }
 
 /**
@@ -355,7 +370,7 @@ static void test_note_lead_requests_when_desired_index_moves(void)
         true,
         GUI_MUSIC_QUEUE_WINDOW_READY);
     gui_music_queue_window_mark_applied(&client, 0U, 8U, 1U);
-    gui_music_queue_window_note_lead(&client, 2U, 8U);
+    gui_music_queue_window_note_lead(&client, GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS + 1U, 8U);
     assert(gui_music_queue_window_request_index(&client) == 1U);
     action = gui_music_queue_window_poll(
         &client,
@@ -366,9 +381,9 @@ static void test_note_lead_requests_when_desired_index_moves(void)
 }
 
 /**
- * @brief 上沿缓冲消耗完之前，不因为滚动就重新 request。
+ * @brief 第一窗内滚动未越过回滑行数时，不因为滚动就重新 request。
  */
-static void test_note_lead_does_not_rerequest_for_slack_row(void)
+static void test_note_lead_does_not_rerequest_within_back_rows(void)
 {
     GUI_MusicQueueWindowClientTypeDef client;
     GUI_MusicQueueWindowActionTypeDef action;
@@ -380,7 +395,7 @@ static void test_note_lead_does_not_rerequest_for_slack_row(void)
         true,
         GUI_MUSIC_QUEUE_WINDOW_READY);
     gui_music_queue_window_mark_applied(&client, 0U, 8U, 1U);
-    gui_music_queue_window_note_lead(&client, 1U, 8U);
+    gui_music_queue_window_note_lead(&client, GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS, 8U);
     assert(gui_music_queue_window_request_index(&client) == 0U);
     action = gui_music_queue_window_poll(
         &client,
@@ -454,15 +469,16 @@ int main(void)
     test_does_not_clear_twice_while_sd_absent();
     test_requests_again_after_sd_reinserted();
     test_applies_ready_before_clear_when_sd_removed();
-    test_scroll_one_row_keeps_index_zero_for_upward_slack();
-    test_scroll_two_rows_requests_index_one();
-    test_stable_when_lead_matches_upward_slack();
-    test_scroll_back_to_top_requests_previous_index();
+    test_scroll_within_back_rows_keeps_index_zero();
+    test_scroll_past_back_rows_requests_index_one();
+    test_stable_when_lead_matches_back_rows();
+    test_scroll_back_to_top_requests_back_rows_earlier();
+    test_scroll_back_near_start_clamps_to_zero();
     test_does_not_advance_index_when_window_is_short();
     test_index_zero_has_no_previous_window();
     test_jump_scroll_requests_target_index_in_one_shot();
     test_note_lead_requests_when_desired_index_moves();
-    test_note_lead_does_not_rerequest_for_slack_row();
+    test_note_lead_does_not_rerequest_within_back_rows();
     test_clear_resets_request_index_to_zero();
     test_apply_records_displayed_window_generation();
     puts("gui_music_queue_window_tests: all tests passed");

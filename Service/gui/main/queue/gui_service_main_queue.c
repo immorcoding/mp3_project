@@ -534,6 +534,25 @@ static void service_gui_main_queue_adjust_scroll(int32_t index_delta)
 }
 
 /**
+ * @brief 只有从列表起点开始的窗口才允许弹性滚动（#157）。
+ * @param[in] window_index 本窗在播放列表上的起点。
+ * @note 非首窗的上沿之外还有曲目，只是不在本窗：弹性会把手指拉过本窗首行、露出空白，
+ *       直到上一窗 READY 才补回。关掉弹性后滚动停在本窗首行，换窗后从扣好的 scroll_y 接着滑。
+ *       LVGL 8.3 的弹性不分上下沿，因此非首窗在列表末尾也不回弹。
+ */
+static void service_gui_main_queue_set_elastic(uint16_t window_index)
+{
+    if (window_index == 0U)
+    {
+        lv_obj_add_flag(service_gui_main_queue_music->queue_tab, LV_OBJ_FLAG_SCROLL_ELASTIC);
+    }
+    else
+    {
+        lv_obj_clear_flag(service_gui_main_queue_music->queue_tab, LV_OBJ_FLAG_SCROLL_ELASTIC);
+    }
+}
+
+/**
  * @brief 打开 QueueTab 竖向滚动，不预先造行。
  * @retval SERVICE_OK 已就绪。
  * @retval SERVICE_NOT_READY QueueTab 尚未创建。
@@ -604,6 +623,7 @@ Service_StatusTypeDef service_gui_main_queue_apply(
 
         service_gui_main_queue_applied_index = 0U;
         service_gui_main_queue_applied_length = 0U;
+        service_gui_main_queue_set_elastic(0U);
         service_gui_input_drop_queue_select();
         lv_obj_scroll_to_y(service_gui_main_queue_music->queue_tab, 0, LV_ANIM_OFF);
         (void)current_index;
@@ -649,6 +669,7 @@ Service_StatusTypeDef service_gui_main_queue_apply(
             true);
     }
 
+    service_gui_main_queue_set_elastic(window_index);
     service_gui_main_queue_adjust_scroll(delta);
     service_gui_main_queue_applied_index = window_index;
     service_gui_main_queue_applied_length = length;

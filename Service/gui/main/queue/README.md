@@ -36,7 +36,9 @@ Long mode 和右侧符号 Opa。不改 Border Width，以免文字漂移。点�
   返回顶部已滚出的整行数。
 - `service_gui_main_queue_apply()`：仅由 `Service_GUI_QueueApply()` 转发。按 `titles[i]` / `artists[i]` 填曲名与歌手（`artists` 为 NULL 时歌手全空）；按 `Length`
   补造或 Hidden 已有行；`window_index` 变化时转 head，并从当前 `scroll_y` 扣整行高度，
-  不把列表吸回整页。`current_index` 决定哪一行是当前曲。
+  不把列表吸回整页。`current_index` 决定哪一行是当前曲。只有 `window_index` 为 0 的窗口
+  打开 `QueueTab` 弹性滚动：非首窗上沿之外还有曲目，弹性会把手指拉过本窗首行、在上一窗
+  READY 前露出空白（#157），关掉后滚动停在本窗首行；LVGL 8.3 弹性不分上下沿，非首窗在列表末尾也不回弹。
 
 ## 运行时路径
 

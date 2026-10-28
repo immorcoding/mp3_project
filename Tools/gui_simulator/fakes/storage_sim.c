@@ -98,6 +98,8 @@ static uint32_t storage_sim_generation;
 static bool storage_sim_name_fail[STORAGE_SIM_TITLE_COUNT]; /* 为真的位置名字取不到。 */
 static uint32_t storage_sim_name_delay;                     /* 名称槽应答额外等待的圈数。 */
 static uint32_t storage_sim_name_waited;                    /* 当前 PENDING 已等待的圈数。 */
+static uint32_t storage_sim_window_delay;                   /* 窗口槽应答额外等待的圈数。 */
+static uint32_t storage_sim_window_waited;                  /* 当前窗口 PENDING 已等待的圈数。 */
 
 /**
  * @brief 同生产曲目文本：有假 TIT2 取标题与歌手，否则回退文件主名、歌手为空。
@@ -150,18 +152,29 @@ void storage_sim_init(void)
     (void)memset(storage_sim_name_fail, 0, sizeof(storage_sim_name_fail));
     storage_sim_name_delay = 0U;
     storage_sim_name_waited = 0U;
+    storage_sim_window_delay = 0U;
+    storage_sim_window_waited = 0U;
 }
 
 /**
  * @brief 代替 Storage Task 走一圈：上一圈留下的 PENDING 窗口与名字在本圈填成 READY。
  * @note  每圈在 gui_music_step() 之前调用，因此 request 恰好在下一圈可 APPLY。
  *        名称槽与生产一样在未挂载时也应答（代次 0）；设了应答延迟时 PENDING
- *        多等 storage_sim_name_delay 圈再填。
+ *        多等 storage_sim_name_delay 圈再填。窗口槽同理多等 storage_sim_window_delay 圈。
  */
 void storage_sim_step(void)
 {
-    if (storage_sim_mounted)
+    if (storage_listbuffer.Status != STORAGE_LISTBUFFER_PENDING)
     {
+        storage_sim_window_waited = 0U;
+    }
+    else if (storage_sim_window_waited < storage_sim_window_delay)
+    {
+        storage_sim_window_waited++;
+    }
+    else if (storage_sim_mounted)
+    {
+        storage_sim_window_waited = 0U;
         (void)storage_listbuffer_load();
     }
 
@@ -265,6 +278,17 @@ void storage_sim_set_name_delay(uint32_t loops)
 {
     storage_sim_name_delay = loops;
     printf("[storage] name reply delay %u loop(s)\n", (unsigned)loops);
+}
+
+/**
+ * @brief 脚本 --window-delay：窗口槽 PENDING 后多等 loops 圈再应答。
+ * @param[in] loops 额外等待的圈数；0 恢复为下一圈应答。
+ * @note  生产窗口槽每圈只读一行标签，整窗就绪要等十余圈；默认一圈填完拍不到这段空窗期。
+ */
+void storage_sim_set_window_delay(uint32_t loops)
+{
+    storage_sim_window_delay = loops;
+    printf("[storage] window reply delay %u loop(s)\n", (unsigned)loops);
 }
 
 /**

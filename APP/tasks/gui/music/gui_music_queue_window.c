@@ -60,8 +60,10 @@ uint32_t gui_music_queue_window_displayed_generation(
  * @param[in] applied_length 已展示窗口的实际条数。
  * @param[in] lead QueueTab 顶部已滚出的整行数。
  * @param[in] max_entries 窗口槽位上限；Length 不足此值表示已到列表末尾。
- * @return 应 request 的播放列表起点。Index=0 时不留上一窗；其余情况留一行给回滑。
- * @note 不把 listbuffer 改成环形数组；只移动窗口起点。
+ * @return 应 request 的播放列表起点。可见首行之上留 GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS 行给回滑，
+ *         列表前部不足时为 0。
+ * @note 不把 listbuffer 改成环形数组；只移动窗口起点。回滑余量是多行而不是一行（#157）：
+ *       快速回滑时手指在下一窗 READY 之前就用完一行余量；回到窗口顶部时一次退回整份余量。
  */
 uint16_t gui_music_queue_window_desired_index(
     uint16_t applied_index,
@@ -78,13 +80,13 @@ uint16_t gui_music_queue_window_desired_index(
         first_visible = (uint32_t)UINT16_MAX;
     }
 
-    if (first_visible == 0U)
+    if (first_visible < GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS)
     {
         desired = 0U;
     }
     else
     {
-        desired = (uint16_t)(first_visible - 1U);
+        desired = (uint16_t)(first_visible - GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS);
     }
 
     if ((applied_length < max_entries) && (desired > applied_index))

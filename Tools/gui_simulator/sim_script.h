@@ -12,6 +12,7 @@
   *            --key   T:c                   T 时触发按键 c（同窗口键盘）
   *            --name-fail  T:N              T 时切换假 Storage 第 N 首（播放列表位置）的名字是否取不到
   *            --name-delay T:K              T 起假 Storage 名称槽应答多等 K 圈（0 恢复为下一圈应答）
+  *            --window-delay T:K            T 起假 Storage 窗口槽应答多等 K 圈（0 恢复为下一圈应答）
   *            --out-dir DIR                 截图目录，默认当前目录
   *            --hidden                      不显示窗口
   *            --realtime                    脚本模式下仍用墙钟（默认虚拟时钟）
@@ -28,11 +29,12 @@
 
 typedef void (*sim_script_key_handler_t)(char key);
 
-/** @brief 假 Storage 名称槽的脚本开关。 */
+/** @brief 假 Storage 名称槽与窗口槽的脚本开关。 */
 typedef enum
 {
     SIM_SCRIPT_NAME_FAIL = 0, /**< 切换某首名字取不到；值为播放列表位置。 */
-    SIM_SCRIPT_NAME_DELAY     /**< 设置应答额外等待的圈数。 */
+    SIM_SCRIPT_NAME_DELAY,    /**< 设置名称槽应答额外等待的圈数。 */
+    SIM_SCRIPT_WINDOW_DELAY   /**< 设置窗口槽应答额外等待的圈数。 */
 } sim_script_name_control_t;
 
 typedef void (*sim_script_name_handler_t)(sim_script_name_control_t control, unsigned value);
@@ -41,7 +43,7 @@ typedef void (*sim_script_name_handler_t)(sim_script_name_control_t control, uns
 typedef struct
 {
     sim_script_key_handler_t on_key;   /**< --key。 */
-    sim_script_name_handler_t on_name; /**< --name-fail / --name-delay。 */
+    sim_script_name_handler_t on_name; /**< --name-fail / --name-delay / --window-delay。 */
 } sim_script_handlers_t;
 
 typedef struct
