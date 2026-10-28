@@ -21,7 +21,7 @@
 | `gui_service_view_boot.c` | Boot（壁纸根背景、启动环 Arc、LOADING）与 BootReveal（清晰壁纸） |
 | `gui_service_view_lock.c` | Lock：时间、日期、电量、解锁提示与 Home 指示条；上滑解锁与呼吸提示 |
 | `gui_service_view_main.c` | Main 外壳：状态栏 5%、横向分页视口 85%（Settings 0% / Music 100% / Books 200%）、圆点 10% |
-| `gui_service_view_music.c` | Music 标签视图（20 px 标签栏）：Now Playing 自上而下为唱盘（y=4）、曲名 Label（y=160、宽 160 居中、字体取 `font/` 的曲名字体（Noto 12 px，不可用时 Montserrat 12）、高为该字体行高 + 2、Ink 文字底透明，文本由 main/title 写入）与控制区（进度条 y=10、时间 y=18、三键 translate_y 4 px）；Queue 竖向 Flex 容器、Library 空页；Tabview 内部 Content 透明且不可滚动 |
+| `gui_service_view_music.c` | Music 标签视图（20 px 标签栏）：Now Playing 按 GUI-27 分四组——唱盘 / 曲名与歌手 / 进度条与时间 / 三键，各元素都是标签页的直接子对象、左上对齐像素坐标，不用百分比或 translate。取值集中在 `gui_service_config.h` 的 `SERVICE_GUI_MUSIC_LAYOUT_*`，`service_gui_view_music_solve_layout()` 由它们与 Playing 内容区高度 H 推出组间距 S、唱盘直径 D 与各元素 Y（4S + 4 + D + 30 + 17 + 44 = H；当前 H = 249 → S = 8、D = 122）。唱盘：D×D 透明裁切容器内放 144 见方 Image（main/vinyl 按 144 校验与合成），`lv_img` zoom ⌈D·256/144⌉ = 217，底图不动。曲名、歌手：宽 192（`SERVICE_GUI_MUSIC_TITLE_WIDTH`）、高为曲目元数据字体行高（Noto 12 为 16，不可用时 Montserrat 12）、Ink 底透明，盒子上沿 = 完整字形上沿 − 3；歌手 Opa 180、`LONG_DOT`，文本都由 main/title 写入。进度条宽 192、高 4；时间 Montserrat 10 居中；三键侧键 36、主键 44，共用中线，侧键外沿对齐进度条两端，播放三角形右移 1 px 光学居中（main/transport 随 PLAY/PAUSE 切换重设）。Queue 竖向 Flex 容器、Library 空页；Tabview 内部 Content 透明且不可滚动 |
 | `gui_service_view_wallpaper*.{c,h}` | 默认壁纸尺寸、描述符与固件像素区 |
 
 视觉规范与页面层级以 [docs/shape/gui.md](../../../docs/shape/gui.md) 为准；界面每推进一步先更新该文档。

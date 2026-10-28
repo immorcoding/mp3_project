@@ -42,7 +42,8 @@ typedef struct
     lv_obj_t *tabs;               /**< Playing / Queue / Library 标签视图。 */
     lv_obj_t *queue_tab;          /**< Queue 竖向滚动列表容器。 */
     lv_obj_t *vinyl_image;        /**< Now Playing 唱盘 Image。 */
-    lv_obj_t *title_label;        /**< 曲名 Label（唱盘与进度条之间）；文本与长文本模式由 main/title 写入。 */
+    lv_obj_t *title_label;        /**< 曲名 Label（唱盘与歌手之间）；文本与长文本模式由 main/title 写入。 */
+    lv_obj_t *artist_label;       /**< 歌手 Label（曲名与进度条之间）；文本由 main/title 与曲名同次写入。 */
     lv_obj_t *time_label;         /**< 时间 Label（“已解码/总时长”）；文本由 main/transport 写入。 */
     lv_obj_t *slider;             /**< 播放进度条。 */
     lv_obj_t *previous_button;    /**< 上一首。 */

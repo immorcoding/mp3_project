@@ -4,7 +4,7 @@
 --tap 7000:120,260
 --shot 7400:first_named
 --key 7450:b
---tap 7500:180,260
+--tap 7500:198,260
 --shot 7640:bad_named
 --shot 7720:candidate_named
 --shot 7900:candidate_opened

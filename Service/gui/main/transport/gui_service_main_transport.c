@@ -290,22 +290,26 @@ Service_StatusTypeDef service_gui_main_transport_prepare(void)
 }
 
 /**
- * @brief 按 playing 把播放键图标换成 PAUSE 或 PLAY。
+ * @brief 按 playing 把播放键图标换成 PAUSE 或 PLAY，并按字形重新光学居中。
  * @param[in] playing 为真显示暂停符号。
- * @retval SERVICE_OK 已改文字。
+ * @retval SERVICE_OK 已改文字与水平偏移。
  * @retval SERVICE_NOT_READY 图标对象尚未创建。
+ * @note  播放三角形的质心偏左，右移 SERVICE_GUI_MUSIC_PLAY_ICON_SHIFT_X；暂停符号对称，
+ *        回到包围盒居中。每次切换都重设，偏移不随旧字形残留。
  */
 Service_StatusTypeDef service_gui_main_transport_apply(bool playing)
 {
+    lv_obj_t *icon;
+
     if ((service_gui_main_transport_music == NULL) ||
         (service_gui_main_transport_music->play_pause_icon == NULL))
     {
         return SERVICE_NOT_READY;
     }
 
-    lv_label_set_text(
-        service_gui_main_transport_music->play_pause_icon,
-        playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+    icon = service_gui_main_transport_music->play_pause_icon;
+    lv_label_set_text(icon, playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+    lv_obj_set_x(icon, playing ? 0 : SERVICE_GUI_MUSIC_PLAY_ICON_SHIFT_X);
     return SERVICE_OK;
 }
 

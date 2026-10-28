@@ -1,5 +1,5 @@
 anims.lock_before 1
-main_after_unlock e0201d81
+main_after_unlock 132a5c1b
 anims.main_unlocked 0
 lock_again bc9ba2f9
 anims.lock_returned 1

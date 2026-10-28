@@ -59,11 +59,12 @@ class CardNames(unittest.TestCase):
                 outside.append(ch)
         self.assertGreaterEqual(len(outside), 3)
 
-    def test_scrolling_names_exceed_160px(self):
+    def test_scrolling_names_exceed_title_width(self):
         scrolling = [s for s in cn.NAME_SAMPLES if s.scroll]
         self.assertGreaterEqual(len(scrolling), 3)
         for s in scrolling:
-            self.assertGreater(width_px_12(s.display), 160, s.filename)
+            # 唱盘页曲名可见宽 192 px（SERVICE_GUI_MUSIC_TITLE_WIDTH，GUI-26）。
+            self.assertGreater(width_px_12(s.display), 192, s.filename)
 
     def test_mixed_name_has_both_scripts(self):
         s = self.by_name(cn.MIXED_NAME)

@@ -4,13 +4,13 @@
 --drag 6000:120,290:120,80:250
 --tap 7000:120,260
 --key 7800:b
---tap 8000:180,260
+--tap 8000:198,260
 --shot 8400:skip_one
 --shot 10000:skip_one_hold
 --shot 10400:skip_expired
 --key 10500:b
 --key 10510:b
---tap 10700:180,260
+--tap 10700:198,260
 --shot 10950:skip_first_of_two
 --shot 11200:skip_accumulated
 --shot 12950:skip_restarted
@@ -31,7 +31,7 @@
 --key 13530:b
 --key 13540:b
 --key 13550:b
---tap 13700:180,260
+--tap 13700:198,260
 --shot 14400:all_bad_skipping
 --shot 15200:all_bad
 --shot 17000:all_bad_hold

@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "APP/tasks/gui/music/gui_music_title.h"
 
@@ -363,6 +364,249 @@ static void test_frozen_identity_keeps_name_without_request(void)
     }
 }
 
+/** @brief 测试用名称槽内容：每个用例按需改写，模拟应答到达时槽里的两列。 */
+static const char *slot_title = "Clair de Lune";
+static const char *slot_artist = "Claude Debussy";
+
+/**
+ * @brief 推进一圈并取本圈要 Apply 的曲名与歌手，与 gui_music.c 的编排一致。
+ * @param[in,out] client 曲名客户。
+ * @param[in] identity 本圈已追上的曲目身份。
+ * @param[in] status 名称槽状态。
+ * @param[in] reply_generation READY 时的应答代次，否则 0。
+ * @param[out] action 本圈动作；可为 NULL。
+ * @param[out] text 本圈要 Apply 的两列；返回 false 时不改。
+ * @return 本圈是否需要 Apply。
+ */
+static bool step(GUI_MusicTitleClientTypeDef *client,
+                 const GUI_MusicTitleIdentityTypeDef *identity,
+                 uint32_t status,
+                 uint32_t reply_generation,
+                 GUI_MusicTitleActionTypeDef *action,
+                 GUI_MusicTitleTextTypeDef *text)
+{
+    GUI_MusicTitleActionTypeDef a = gui_music_title_poll(client, identity, status, reply_generation);
+
+    if (action != NULL)
+    {
+        *action = a;
+    }
+    return gui_music_title_text(client, a, slot_title, slot_artist, text);
+}
+
+/**
+ * @brief 断言一次 Apply 的曲名与歌手。
+ * @param[in] text 实际两列。
+ * @param[in] title 期望曲名。
+ * @param[in] artist 期望歌手。
+ */
+static void assert_text(const GUI_MusicTitleTextTypeDef *text, const char *title, const char *artist)
+{
+    assert(text->title != NULL);
+    assert(text->artist != NULL);
+    assert(strcmp(text->title, title) == 0);
+    assert(strcmp(text->artist, artist) == 0);
+}
+
+/**
+ * @brief 同一身份的应答到达：曲名与歌手在同一次 Apply 里一起出现。
+ */
+static void test_accept_applies_title_and_artist_together(void)
+{
+    GUI_MusicTitleClientTypeDef client;
+    const GUI_MusicTitleIdentityTypeDef track = identity_of(true, 3U, 7U);
+    GUI_MusicTitleTextTypeDef text;
+    GUI_MusicTitleActionTypeDef action;
+
+    gui_music_title_client_init(&client);
+    slot_title = "Clair de Lune";
+    slot_artist = "Claude Debussy";
+    assert(step(&client, &track, GUI_MUSIC_TITLE_IDLE, 0U, &action, &text));
+    assert(action == GUI_MUSIC_TITLE_ACTION_REQUEST);
+    assert_text(&text, "", "");
+    assert(step(&client, &track, GUI_MUSIC_TITLE_READY, 3U, &action, &text));
+    assert(action == GUI_MUSIC_TITLE_ACTION_ACCEPT);
+    assert_text(&text, "Clair de Lune", "Claude Debussy");
+    assert(!step(&client, &track, GUI_MUSIC_TITLE_IDLE, 0U, &action, &text));
+}
+
+/**
+ * @brief 应答里歌手为空串或 NULL：歌手位交出界面文案 `Unknown Artist`，与 Queue 一致（GUI-25、GUI-26）。
+ */
+static void test_accept_without_artist_applies_unknown_artist(void)
+{
+    const char *const missing[] = {"", NULL};
+    size_t i;
+
+    for (i = 0U; i < (sizeof(missing) / sizeof(missing[0])); i++)
+    {
+        GUI_MusicTitleClientTypeDef client;
+        const GUI_MusicTitleIdentityTypeDef track = identity_of(true, 3U, 7U);
+        GUI_MusicTitleTextTypeDef text;
+
+        gui_music_title_client_init(&client);
+        slot_title = "Kiss the Rain (Live)";
+        slot_artist = missing[i];
+        (void)step(&client, &track, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text);
+        assert(step(&client, &track, GUI_MUSIC_TITLE_READY, 3U, NULL, &text));
+        assert_text(&text, "Kiss the Rain (Live)", "Unknown Artist");
+    }
+}
+
+/**
+ * @brief 切歌：身份一变，曲名与歌手同时清空成一次 ("", "")，新应答到达后同时换成新歌的。
+ */
+static void test_switch_clears_both_then_applies_new_pair(void)
+{
+    GUI_MusicTitleClientTypeDef client;
+    const GUI_MusicTitleIdentityTypeDef first = identity_of(true, 3U, 5U);
+    const GUI_MusicTitleIdentityTypeDef second = identity_of(true, 3U, 6U);
+    GUI_MusicTitleTextTypeDef text;
+    GUI_MusicTitleActionTypeDef action;
+
+    gui_music_title_client_init(&client);
+    slot_title = "Experience (Einaudi Live)";
+    slot_artist = "Ludovico Einaudi";
+    (void)step(&client, &first, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text);
+    (void)step(&client, &first, GUI_MUSIC_TITLE_READY, 3U, NULL, &text);
+
+    assert(step(&client, &second, GUI_MUSIC_TITLE_IDLE, 0U, &action, &text));
+    assert(action == GUI_MUSIC_TITLE_ACTION_REQUEST);
+    assert_text(&text, "", "");
+    assert(!step(&client, &second, GUI_MUSIC_TITLE_PENDING, 0U, NULL, &text));
+    slot_title = "Merry Christmas Mr. Lawrence";
+    slot_artist = "";
+    assert(step(&client, &second, GUI_MUSIC_TITLE_READY, 3U, &action, &text));
+    assert(action == GUI_MUSIC_TITLE_ACTION_ACCEPT);
+    assert_text(&text, "Merry Christmas Mr. Lawrence", "Unknown Artist");
+}
+
+/**
+ * @brief 连按 NEXT：中间歌曲的应答被丢弃、不交出它的歌手；只有最后一首的两列出现。
+ */
+static void test_next_burst_never_applies_intermediate_artist(void)
+{
+    GUI_MusicTitleClientTypeDef client;
+    const GUI_MusicTitleIdentityTypeDef first = identity_of(true, 3U, 1U);
+    const GUI_MusicTitleIdentityTypeDef second = identity_of(true, 3U, 2U);
+    const GUI_MusicTitleIdentityTypeDef last = identity_of(true, 3U, 4U);
+    GUI_MusicTitleTextTypeDef text;
+    GUI_MusicTitleActionTypeDef action;
+
+    gui_music_title_client_init(&client);
+    assert(step(&client, &first, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text));
+    assert_text(&text, "", "");
+    assert(!step(&client, &second, GUI_MUSIC_TITLE_PENDING, 0U, NULL, &text));
+    slot_title = "Gymnopedie No.1";
+    slot_artist = "Erik Satie";
+    assert(!step(&client, &last, GUI_MUSIC_TITLE_READY, 3U, &action, &text));
+    assert(action == GUI_MUSIC_TITLE_ACTION_DISCARD);
+    assert(!step(&client, &last, GUI_MUSIC_TITLE_IDLE, 0U, &action, &text));
+    assert(action == GUI_MUSIC_TITLE_ACTION_REQUEST);
+    slot_title = "Nuvole Bianche";
+    slot_artist = "Ludovico Einaudi";
+    assert(step(&client, &last, GUI_MUSIC_TITLE_READY, 3U, &action, &text));
+    assert(action == GUI_MUSIC_TITLE_ACTION_ACCEPT);
+    assert_text(&text, "Nuvole Bianche", "Ludovico Einaudi");
+}
+
+/**
+ * @brief 坏文件跳过：坏文件的两列清空，候选的曲名与歌手同一次出现。
+ */
+static void test_bad_file_skip_applies_candidate_pair(void)
+{
+    GUI_MusicTitleClientTypeDef client;
+    const GUI_MusicTitleIdentityTypeDef bad = identity_of(true, 3U, 5U);
+    const GUI_MusicTitleIdentityTypeDef candidate = identity_of(true, 3U, 6U);
+    GUI_MusicTitleTextTypeDef text;
+
+    gui_music_title_client_init(&client);
+    slot_title = "Broken";
+    slot_artist = "Nobody";
+    (void)step(&client, &bad, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text);
+    (void)step(&client, &bad, GUI_MUSIC_TITLE_READY, 3U, NULL, &text);
+    assert(step(&client, &candidate, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text));
+    assert_text(&text, "", "");
+    slot_title = "周杰伦 - 晴天";
+    slot_artist = "周杰伦 / 五月天";
+    assert(step(&client, &candidate, GUI_MUSIC_TITLE_READY, 3U, NULL, &text));
+    assert_text(&text, "周杰伦 - 晴天", "周杰伦 / 五月天");
+}
+
+/**
+ * @brief 过期应答：在途期间身份变化，旧应答不交出任何文本，重请求后才交出新的两列。
+ */
+static void test_stale_reply_applies_nothing(void)
+{
+    GUI_MusicTitleClientTypeDef client;
+    const GUI_MusicTitleIdentityTypeDef first = identity_of(true, 3U, 7U);
+    const GUI_MusicTitleIdentityTypeDef second = identity_of(true, 3U, 8U);
+    GUI_MusicTitleTextTypeDef text;
+
+    gui_music_title_client_init(&client);
+    (void)step(&client, &first, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text);
+    assert(!step(&client, &second, GUI_MUSIC_TITLE_PENDING, 0U, NULL, &text));
+    slot_title = "Old Song";
+    slot_artist = "Old Artist";
+    assert(!step(&client, &second, GUI_MUSIC_TITLE_READY, 3U, NULL, &text));
+    assert(!step(&client, &second, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text));
+    slot_title = "New Song";
+    slot_artist = "New Artist";
+    assert(step(&client, &second, GUI_MUSIC_TITLE_READY, 3U, NULL, &text));
+    assert_text(&text, "New Song", "New Artist");
+}
+
+/**
+ * @brief 冷启动代次 0 → G 的同一首：名字与歌手都保留，不再交出清空。
+ */
+static void test_cold_start_confirmation_keeps_pair(void)
+{
+    GUI_MusicTitleClientTypeDef client;
+    const GUI_MusicTitleIdentityTypeDef opening = identity_of(true, 0U, 0U);
+    const GUI_MusicTitleIdentityTypeDef confirmed = identity_of(true, 5U, 0U);
+    GUI_MusicTitleTextTypeDef text;
+
+    gui_music_title_client_init(&client);
+    slot_title = "Clair de Lune";
+    slot_artist = "Claude Debussy";
+    (void)step(&client, &opening, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text);
+    assert(step(&client, &opening, GUI_MUSIC_TITLE_READY, 5U, NULL, &text));
+    assert_text(&text, "Clair de Lune", "Claude Debussy");
+    assert(!step(&client, &confirmed, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text));
+    assert(!step(&client, &confirmed, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text));
+}
+
+/**
+ * @brief 无当前曲、拔卡、空库（失去当前曲）与取不到名字：曲名 `--`、歌手为空串，不显示 `Unknown Artist`。
+ */
+static void test_none_states_apply_dash_and_empty_artist(void)
+{
+    GUI_MusicTitleClientTypeDef client;
+    const GUI_MusicTitleIdentityTypeDef none = identity_of(false, 0U, 0U);
+    const GUI_MusicTitleIdentityTypeDef track = identity_of(true, 3U, 7U);
+    GUI_MusicTitleTextTypeDef text;
+
+    /* 冷启动无当前曲。 */
+    gui_music_title_client_init(&client);
+    assert(step(&client, &none, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text));
+    assert_text(&text, "--", "");
+    assert(!step(&client, &none, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text));
+
+    /* 有名字与歌手后拔卡或换成空库：两列一起换成 `--` 与空串。 */
+    slot_title = "Clair de Lune";
+    slot_artist = "Claude Debussy";
+    (void)step(&client, &track, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text);
+    (void)step(&client, &track, GUI_MUSIC_TITLE_READY, 3U, NULL, &text);
+    assert(step(&client, &none, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text));
+    assert_text(&text, "--", "");
+
+    /* 有当前曲但应答代次 0（取不到名字）：`--`，歌手为空串。 */
+    gui_music_title_client_init(&client);
+    (void)step(&client, &track, GUI_MUSIC_TITLE_IDLE, 0U, NULL, &text);
+    assert(step(&client, &track, GUI_MUSIC_TITLE_READY, 0U, NULL, &text));
+    assert_text(&text, "--", "");
+}
+
 /**
  * @brief 主机测试入口。
  * @return 0 表示全部通过。
@@ -386,6 +630,14 @@ int main(void)
     test_losing_track_while_in_flight_discards_without_rerequest();
     test_bad_file_skip_requests_candidate();
     test_frozen_identity_keeps_name_without_request();
+    test_accept_applies_title_and_artist_together();
+    test_accept_without_artist_applies_unknown_artist();
+    test_switch_clears_both_then_applies_new_pair();
+    test_next_burst_never_applies_intermediate_artist();
+    test_bad_file_skip_applies_candidate_pair();
+    test_stale_reply_applies_nothing();
+    test_cold_start_confirmation_keeps_pair();
+    test_none_states_apply_dash_and_empty_artist();
     printf("gui_music_title tests passed\n");
     return 0;
 }

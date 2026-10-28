@@ -6,8 +6,8 @@
   * @details
   *          纯 C，不依赖 LVGL、FreeRTOS 与 Storage 头；与 Queue 窗口客户并列。
   *          输入是快照归约已追上的曲目身份与名称槽的状态、应答代次，输出本圈对槽的
-  *          动作与曲名区的三种显示（名字 / 空白 / `--`）。名字文本本身由调用方从槽里
-  *          拷给 Service，本模块不持有。
+  *          动作、曲名区的三种显示（名字 / 空白 / `--`），以及本圈要不要 Apply、
+  *          Apply 哪一对曲名与歌手。文本本身留在名称槽里，本模块只交出指针。
   ******************************************************************************
   */
 
@@ -46,6 +46,13 @@ typedef enum
     GUI_MUSIC_TITLE_ACTION_DISCARD    /**< 应答已过期或代次 0：不读名字，直接写回 IDLE。 */
 } GUI_MusicTitleActionTypeDef;
 
+/** @brief 一次 TitleApply 的两列文本；两者属于同一次应答的曲目身份（GUI-26）。 */
+typedef struct
+{
+    const char *title;  /**< 曲名：槽内名字、空串（留空）或 `--`。 */
+    const char *artist; /**< 歌手：槽内歌手、`Unknown Artist`，或空串（曲名为空白或 `--`）。 */
+} GUI_MusicTitleTextTypeDef;
+
 /**
  * @brief 曲名客户状态。
  * @note  字段只供 gui_music_title.c 使用；调用方不直接读写。
@@ -59,6 +66,8 @@ typedef struct
     GUI_MusicTitleIdentityTypeDef requested; /**< 在途请求所用的身份；应答按它判断是否过期。 */
     GUI_MusicTitleShowTypeDef shown;        /**< 曲名区应显示的内容。 */
     uint32_t name_generation;               /**< 已显示名字的应答代次；冷启动 0 → G 时据此决定保留。 */
+    bool has_applied;                       /**< 已交出过至少一次 Apply。 */
+    GUI_MusicTitleShowTypeDef applied;      /**< 最近一次交出的显示；空白与 `--` 只在与它不同时再交出。 */
 } GUI_MusicTitleClientTypeDef;
 
 void gui_music_title_client_init(GUI_MusicTitleClientTypeDef *client);
@@ -71,5 +80,11 @@ GUI_MusicTitleShowTypeDef gui_music_title_shown(const GUI_MusicTitleClientTypeDe
 GUI_MusicTitleIdentityTypeDef gui_music_title_request_identity(
     const GUI_MusicTitleClientTypeDef *client);
 void gui_music_title_request_failed(GUI_MusicTitleClientTypeDef *client);
+bool gui_music_title_text(
+    GUI_MusicTitleClientTypeDef *client,
+    GUI_MusicTitleActionTypeDef action,
+    const char *slot_title,
+    const char *slot_artist,
+    GUI_MusicTitleTextTypeDef *text);
 
 #endif /* GUI_MUSIC_TITLE_H */

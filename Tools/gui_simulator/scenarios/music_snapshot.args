@@ -11,7 +11,7 @@
 --shot 10600:paused_hold
 --tap 10700:120,260
 --shot 11800:resumed
---tap 12000:180,260
+--tap 12000:198,260
 --shot 12140:next_opening
 --shot 12500:next_playing
 --tap 12700:125,28
@@ -19,8 +19,8 @@
 --drag 13200:120,250:120,90:400
 --shot 13800:queue_scrolled
 --tap 14000:60,28
---tap 14300:180,260
---tap 14500:180,260
---tap 14700:180,260
+--tap 14300:198,260
+--tap 14500:198,260
+--tap 14700:198,260
 --tap 15000:125,28
 --shot 15300:queue_after_next

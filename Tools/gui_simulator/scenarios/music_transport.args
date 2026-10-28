@@ -5,10 +5,10 @@
 --shot 9500:playing_progress
 --tap 9600:120,260
 --shot 9800:paused
---tap 10000:180,260
+--tap 10000:198,260
 --shot 10300:next
---tap 10500:60,260
+--tap 10500:42,260
 --shot 10800:previous
---drag 11000:40,224:160,224:300
+--drag 11000:40,212:160,212:300
 --shot 11200:seek_dragging
 --shot 11600:seek_released
