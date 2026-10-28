@@ -4,6 +4,10 @@ switch_blank 64a589a6
 multi_artist 129b8345
 cjk_artist 33b47259
 long_artist c0c0c694
-long_artist_solid 4039f793
-cjk_artist_solid 4988a905
-no_card 91091976
+long_artist_default 4039f793
+cjk_artist_default 4988a905
+no_card_default 91091976
+no_card 5c1937e8
+unknown_artist_default 8a9ff029
+artist_default 63be1080
+multi_artist_default 71798090
