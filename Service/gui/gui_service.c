@@ -450,7 +450,7 @@ Service_StatusTypeDef Service_GUI_VinylApply(bool playing, bool reset_angle)
  * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
  * @note 只能由完成 Service_GUI_Init() 的同一 GUI Task 调用。曲名由调用方持有，
  *       Label 会拷贝文本，调用返回后调用方可把 listbuffer 写回 IDLE。曲名与歌手由调用方备好，
- *       本函数不解析路径、不替换空歌手（GUI-23）。
+ *       本函数不解析路径、不替换空歌手（GUI-25）。
  *       已有行转 head 回收，不按整表无限 create。
  */
 Service_StatusTypeDef Service_GUI_QueueApply(

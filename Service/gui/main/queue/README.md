@@ -5,7 +5,7 @@
 窗口滑动时在已有 panel 上转 head 改字，不按整表无限 `create`。
 
 本 Module 不包含 `storage_listbuffer.h`，也不向 APP 公开 Interface。曲名与歌手由 GUI Task
-把窗口行的 {曲目显示名, 歌手} 原样传入（GUI-23），见 `docs/shape/storage.md#catalog`。
+把窗口行的 {曲目显示名, 歌手} 原样传入（GUI-25），见 `docs/shape/storage.md#catalog`。
 `Length` 为 0 则没有可见行。
 
 行结构：Wash 薄底、圆角 8 的 Panel（左侧 4 px Accent 边条，按下时提高底 Opa 并加 1 px Ink
@@ -19,7 +19,8 @@ Outline）→ 80% 宽文字组（曲名、歌手 Ink Opa 180）+ 右侧 `LV_SYMB
 Noto 下为 46 px，曲名 Y 6、歌手 Y 24（从 Panel 上沿量起），一屏约 5 行；Montserrat 回退时随其行高变矮。
 取值在 `gui_service_main_queue_config.h`。整行滚动步长取首行实际高度加 `QueueTab` 行距，不写死像素（GUI-16）。
 
-歌手为空（NULL 或空串）时显示什么只由 `service_gui_main_queue_artist_text()` 决定，当前为空串（GUI-23）。
+歌手 Label 原样显示传入的文本；歌手为空串时的占位文案 `Unknown Artist` 由 GUI Task 的
+`gui_music_queue_rows()` 备好（GUI-25，文案定义在 `APP/tasks/gui/music/gui_music_text.h`），本 Module 不替换。
 
 当前/非当前只改 Border Opa、曲名颜色角色（Accent ↔ Ink，经 `service_gui_theme_style_replace()`）、
 Long mode 和右侧符号 Opa。不改 Border Width，以免文字漂移。点按 `CLICKED` 立刻只刷新这些样式，

@@ -279,25 +279,10 @@ static void service_gui_main_queue_apply_row_style(
 }
 
 /**
- * @brief 歌手 Label 要显示的文本；“歌手为空时显示什么”只在这里决定。
- * @param[in] artist 窗口行的歌手，NULL 或空串表示取不到。
- * @return 取到时原样返回；取不到时为空串（GUI-23）。
- */
-static const char *service_gui_main_queue_artist_text(const char *artist)
-{
-    if ((artist == NULL) || (artist[0] == '\0'))
-    {
-        return "";
-    }
-
-    return artist;
-}
-
-/**
  * @brief 填写一行文字并套用当前/非当前样式。
  * @param[in,out] row 已构造的行。
  * @param[in] title 曲名显示文本。
- * @param[in] artist 歌手文本；NULL 或空串表示取不到。
+ * @param[in] artist 歌手文本，原样显示；空歌手的占位文案由 GUI Task 备好（GUI-25）。
  * @param[in] is_current 是否为窗口内正在播放的那一行。
  */
 static void service_gui_main_queue_apply_row(
@@ -308,7 +293,7 @@ static void service_gui_main_queue_apply_row(
 {
     service_gui_main_queue_apply_row_style(row, is_current);
     lv_label_set_text(row->name, title);
-    lv_label_set_text(row->creator, service_gui_main_queue_artist_text(artist));
+    lv_label_set_text(row->creator, artist);
 }
 
 /**
@@ -657,7 +642,7 @@ Service_StatusTypeDef service_gui_main_queue_apply(
         service_gui_main_queue_apply_row(
             &service_gui_main_queue_rows[i],
             (titles[i] != NULL) ? titles[i] : "",
-            (artists != NULL) ? artists[i] : NULL,
+            ((artists != NULL) && (artists[i] != NULL)) ? artists[i] : "",
             (current_index != SERVICE_GUI_QUEUE_NO_CURRENT) &&
                 (((uint32_t)window_index + (uint32_t)i) ==
                  (uint32_t)current_index));
