@@ -1,9 +1,9 @@
 /**
- * @file storage_audio_tag.c
+ * @file storage_audio_range.c
  * @brief 越过标签纯函数的实现：ID3v2 头、尾部 ID3v1 与 APEv2。
  */
 
-#include "storage_audio_tag.h"
+#include "storage_audio_range.h"
 
 #include <string.h>
 
@@ -132,7 +132,7 @@ static bool audio_tag_parse_trailer(const uint8_t *tail,
  * @retval true 区间非空且在文件内。
  * @retval false 指针/长度不符约定、标签长度越界或音频区间为空（Storage 应报 BAD_FILE）。
  */
-bool storage_audio_tag_locate(const uint8_t *head,
+bool storage_audio_range_locate(const uint8_t *head,
                               uint32_t head_bytes,
                               const uint8_t *tail,
                               uint32_t tail_bytes,
@@ -148,8 +148,8 @@ bool storage_audio_tag_locate(const uint8_t *head,
     {
         return false;
     }
-    expect_head = (file_size < STORAGE_AUDIO_TAG_HEAD_BYTES) ? file_size : STORAGE_AUDIO_TAG_HEAD_BYTES;
-    expect_tail = (file_size < STORAGE_AUDIO_TAG_TAIL_BYTES) ? file_size : STORAGE_AUDIO_TAG_TAIL_BYTES;
+    expect_head = (file_size < STORAGE_AUDIO_RANGE_HEAD_BYTES) ? file_size : STORAGE_AUDIO_RANGE_HEAD_BYTES;
+    expect_tail = (file_size < STORAGE_AUDIO_RANGE_TAIL_BYTES) ? file_size : STORAGE_AUDIO_RANGE_TAIL_BYTES;
     if ((head_bytes != expect_head) || (tail_bytes != expect_tail))
     {
         return false;

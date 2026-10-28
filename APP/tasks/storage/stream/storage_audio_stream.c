@@ -1,13 +1,13 @@
 /**
  * @file storage_audio_stream.c
  * @brief Storage 音频流主循环：请求信箱 → 开启（越过标签）→ 每圈最多读一块 → 终止记录。
- * @note  本文件不做主机测试（FatFs、信箱、盖章），进板级验收；纯函数部分在 storage_audio_tag。
+ * @note  本文件不做主机测试（FatFs、信箱、盖章），进板级验收；纯函数部分在 storage_audio_range。
  *        除标注“播放任务调用”的接口外，全部只在 Storage Task 普通上下文调用。
  */
 
 #include "storage_audio_stream.h"
 
-#include "storage_audio_tag.h"
+#include "storage_audio_range.h"
 
 #include "APP/tasks/storage/catalog/storage_catalog.h"
 #include "APP/tasks/storage/catalog/storage_sheet.h"
@@ -38,8 +38,8 @@ static Service_Filesystem_FileHandleTypeDef storage_audio_file;
 static bool storage_audio_file_open;
 static uint32_t storage_audio_remaining;                       /* 音频区间内尚未读出的字节数。 */
 static char storage_audio_path[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
-static uint8_t storage_audio_head[STORAGE_AUDIO_TAG_HEAD_BYTES];
-static uint8_t storage_audio_tail[STORAGE_AUDIO_TAG_TAIL_BYTES];
+static uint8_t storage_audio_head[STORAGE_AUDIO_RANGE_HEAD_BYTES];
+static uint8_t storage_audio_tail[STORAGE_AUDIO_RANGE_TAIL_BYTES];
 
 /**
  * @brief 创建信箱并绑定 Storage Task 句柄，复位流状态。
@@ -286,8 +286,8 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t *audio_b
     else
     {
         size = (uint32_t)size64;
-        head_bytes = (size < STORAGE_AUDIO_TAG_HEAD_BYTES) ? size : STORAGE_AUDIO_TAG_HEAD_BYTES;
-        tail_bytes = (size < STORAGE_AUDIO_TAG_TAIL_BYTES) ? size : STORAGE_AUDIO_TAG_TAIL_BYTES;
+        head_bytes = (size < STORAGE_AUDIO_RANGE_HEAD_BYTES) ? size : STORAGE_AUDIO_RANGE_HEAD_BYTES;
+        tail_bytes = (size < STORAGE_AUDIO_RANGE_TAIL_BYTES) ? size : STORAGE_AUDIO_RANGE_TAIL_BYTES;
 
         result = storage_audio_read_exact(0U, storage_audio_head, head_bytes);
         if (result == STORAGE_AUDIO_OPEN_OK)
@@ -296,7 +296,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t *audio_b
         }
         if (result == STORAGE_AUDIO_OPEN_OK)
         {
-            if (!storage_audio_tag_locate(storage_audio_head, head_bytes, storage_audio_tail, tail_bytes, size, &range))
+            if (!storage_audio_range_locate(storage_audio_head, head_bytes, storage_audio_tail, tail_bytes, size, &range))
             {
                 result = STORAGE_AUDIO_OPEN_BAD_FILE;
             }
