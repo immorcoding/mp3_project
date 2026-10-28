@@ -29,12 +29,11 @@
 #define SERVICE_GUI_MUSIC_LAYOUT_TEXT_PROGRESS (4)    /* 歌手字形下沿 → 进度条上沿；独立于 S，曲名、歌手、进度条读作一组。 */
 #define SERVICE_GUI_MUSIC_LAYOUT_PROGRESS_GAP  (4)    /* 进度条下沿 → 时间字形上沿。 */
 #define SERVICE_GUI_MUSIC_LAYOUT_SLIDER_HEIGHT (4)    /* 进度条高（含 1 px 边）；取 4 使唱盘直径为偶数，奇数余量加给进度条。 */
+#define SERVICE_GUI_MUSIC_LAYOUT_COLUMN_WIDTH  (192)  /* 横向内容列宽：进度条两端与两侧键外沿；曲名、歌手窗口在列内居中。 */
 #define SERVICE_GUI_MUSIC_LAYOUT_SIDE_BUTTON   (36)   /* 上一首、下一首直径；外沿对齐内容列两端。 */
 #define SERVICE_GUI_MUSIC_LAYOUT_MAIN_BUTTON   (44)   /* 播放/暂停直径；三键共用水平中线。 */
-#define SERVICE_GUI_MUSIC_LAYOUT_TEXT_INK_TOP  (3)    /* 曲名、歌手完整字形（上伸部顶至下伸部底）在 Label 内的首行：Noto 12 为第 3–15 行。 */
-#define SERVICE_GUI_MUSIC_LAYOUT_TEXT_INK_H    (13)   /* 曲名、歌手完整字形高度，行数。 */
-#define SERVICE_GUI_MUSIC_LAYOUT_TIME_INK_TOP  (1)    /* 时间完整字形在 Label 内的首行：Montserrat 10 为第 1–9 行。 */
-#define SERVICE_GUI_MUSIC_LAYOUT_TIME_INK_H    (9)    /* 时间完整字形高度，行数。 */
+#define SERVICE_GUI_MUSIC_LAYOUT_TEXT_INK_REF  "Hdg"  /* 曲名、歌手完整字形的参考字符（大写、上伸部、下伸部），取最高上沿与最低下沿；Noto 12 推出 Label 内第 3–15 行（d 比 H 高 1 行）。 */
+#define SERVICE_GUI_MUSIC_LAYOUT_TIME_INK_REF  "0123456789:/-" /* 时间文本可能出现的全部字符；Montserrat 10 推出 Label 内第 1–9 行。 */
 
 /* view/gui_service_view_music.c、main/transport/gui_service_main_transport.c */
 #define SERVICE_GUI_MUSIC_PLAY_ICON_SHIFT_X    (1)    /* 播放三角形质心偏左约 1.5 px，右移 1 px 光学居中；暂停与两侧键图标不移。 */
