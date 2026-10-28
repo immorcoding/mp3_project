@@ -10,7 +10,7 @@
 - 每次 Apply：文本与 Label 现有文本相同则不动（避免重启滚动）；否则用 Label 当前字体与字距量出像素宽度，宽于可见窗口设 `LV_LABEL_LONG_SCROLL_CIRCULAR`，否则 `LV_LABEL_LONG_CLIP`（静止、居中），再写文本。先设模式再写文本：切模式会删旧滚动动画并复位偏移，写文本后 LVGL 按新模式重建动画。
 - 不换行、不截断、不加省略号；单行高度为字体行高 + 2 px。
 - 循环滚动是常驻 LVGL 动画：长名显示期间动画链表不空，会移动其他动画（唱盘、状态行闪烁、翻页回弹）的采样相位（GUI-4）。
-- 字体由 view 按 `font/` 的结果设置：资源包 FONT 解码成功为 Noto Sans CJK SC 12 px，否则 `lv_font_montserrat_12`；宽度按 Label 当前字体量，因此两种字体下滚动判定都正确。缺字画占位框，本 Module 不感知（GUI-22）。
+- 字体由 view 按 `font/` 的结果设置：资源包 FONT 解码成功为 Noto Sans CJK SC 12 px，否则 `lv_font_montserrat_12`；宽度按 Label 当前字体量，因此两种字体下滚动判定都正确。缺字画占位框，本 Module 不感知（GUI-24）。
 
 ## 私有 Interface
 

@@ -7,7 +7,7 @@
 ## 曲名字体子模块
 
 - `service_gui_font_init()`：只在 GUI Task 的 `Service_GUI_Init()` 中、创建 Screen 之前调用一次。经 `Service_Resource_GetFont()` 查询可选 FONT 载荷；可用时先 Measure、核对解码区容量，再 Build 到解码区，本模块持有得到的 `lv_font_t`。成功记一条 INFO `Title font ready: glyphs=N, bytes=B, decode=T us.`；载荷不可用或解码失败记一条 WARN `Title font fallback: <原因>.`（原因为 `resource unavailable` 或解码器的状态短语）。不返回错误，GUI 照常启动。
-- `service_gui_font_title()`：曲名 Label 的字体。解码成功为 Noto Sans CJK SC 12 px，否则 `lv_font_montserrat_12`。`view/` 创建曲名 Label 时取它的字体与行高；其他 Label 一律不用它（GUI-22）。
+- `service_gui_font_title()`：曲名 Label 的字体。解码成功为 Noto Sans CJK SC 12 px，否则 `lv_font_montserrat_12`。`view/` 创建曲名 Label 时取它的字体与行高；其他 Label 一律不用它（GUI-24）。
 
 缺字由已启用的 `LV_USE_FONT_PLACEHOLDER` 画占位框，不记日志。日志经 `Service_Log_Post()` 投递（GUI Task 在调度器启动后运行，DIAG-1）；解码耗时用 DWT 周期计数器只读测量（计数器由 `app_init()` 在 Resource 加载前启动，本模块不复位）。
 

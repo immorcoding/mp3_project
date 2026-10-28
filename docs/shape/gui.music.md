@@ -15,7 +15,7 @@
 - **GUI-19** · provisional · 时间 Label 兼作状态行，不另建提示对象：停止且原因非 NONE 时常驻原因的英文短语，直到离开停止态或停止期间曲目身份变化，之后显示 `0:00/--:--`；已跳过坏文件数增加时临时显示 `Skipped k file(s)` 约 2 s，期间再增加则累加并重新计时，停止原因优先；停止次数增加时闪一次（约 300 ms）；两个计数以首次读快照为基线，只看差值；提示用单次 lv_timer、闪烁用 lv_anim，都按 LVGL tick 计时；三键与进度条不置灰，可用性只由停止原因表达。_Why:_ 合同只保证计数不漏、不保证逐次；固件只有 Montserrat 拉丁字形；按 LVGL tick 计时在模拟器中可重现；GUI 不另设可用状态源。_Source:_ [音乐页呈现](https://github.com/immorcoding/mp3_project/issues/65)、[播放后端公开合同](https://github.com/immorcoding/mp3_project/issues/53)、[GUI 侧 drain](https://github.com/immorcoding/mp3_project/issues/70)
 - **GUI-20** · provisional · 唱盘当且仅当显示的三态为播放时旋转，暂停原地停、恢复从原角度续转；曲目身份变化或 position_ms 变小（同曲重选、停止归 0）时角度归零；角度由现有 Image 持有，同一 Image 至多一条旋转动画。_Why:_ 播放反馈与播放进度分离，输入只来自快照。_Source:_ [唱盘模块](../../Service/gui/main/vinyl/README.md)、[采用决定](https://github.com/immorcoding/mp3_project/issues/26)、[音乐页呈现](https://github.com/immorcoding/mp3_project/issues/65)
 - **GUI-21** · exploring · Now Playing 在唱盘与进度条之间显示当前曲目显示名：12 px 居中，可见宽 160 px 单行，超宽循环滚动，不换行、不截断、不加省略号；曲名区只显示名字、空白（已采信新身份、应答未到）或 `--`（无当前曲，或防御性取不到），不保留旧名、不显示加载中；按快照归约已追上的曲目身份请求，以请求时的身份采信应答，身份已变即丢弃并重新请求。_Why:_ 切歌与连按时名字须与当前曲一致，异步应答不能把旧名写回。_Source:_ [唱盘页曲名的呈现](https://github.com/immorcoding/mp3_project/issues/103)、[曲目显示名的数据路径与所有权](https://github.com/immorcoding/mp3_project/issues/104)、[0.7.0 spec](https://github.com/immorcoding/mp3_project/issues/112)
-- **GUI-22** · exploring · 只有曲名 Label 用资源包 FONT 解码出的 Noto 12 px 字体，ASCII 同源；字体不可用时该 Label 回退 Montserrat 12；缺字画占位框，整名不改 `--`；其他 Label 仍用 Montserrat。_Why:_ 中英混排的行高与基线须一致，字体缺失不能让播放器不可用。_Source:_ [CJK 字体方案](https://github.com/immorcoding/mp3_project/issues/105)、[0.7.0 spec](https://github.com/immorcoding/mp3_project/issues/112)
+- **GUI-24** · exploring · 界面语言与曲目元数据的语言相互独立：显示曲目元数据（曲名、歌手）的 Label 一律用资源包 FONT 解码出的 Noto 12 px，ASCII 同源；字体不可用时回退 Montserrat 12，缺字画占位框，整条文本不改 `--`；界面文案的 Label 用固件内字体，不随曲目文本的语言变化。_Why:_ 曲目元数据的语言由用户的文件决定，与界面语言无关，英文界面也要正确显示中文曲名与歌手；中英混排的行高与基线须一致，字体缺失不能让播放器不可用。_Source:_ [CJK 字体方案](https://github.com/immorcoding/mp3_project/issues/105)、[0.7.0 spec](https://github.com/immorcoding/mp3_project/issues/112)、2026-10-28 0.8.1 范围讨论
 - **GUI-23** · exploring · Queue 行的曲名位显示窗口行的曲目显示名，歌手 Label 显示歌手或空串；不显示路径，也不显示 `--`；行结构、字体、行高与 Long mode 不变（GUI-18）。_Why:_ 路径不是给人看的名字；显示文本由 Storage 备好，GUI 不解析路径（GUI-9）在数据上就此落实。_Source:_ [读标签的接口与槽](https://github.com/immorcoding/mp3_project/issues/133)、[0.8.0 spec](https://github.com/immorcoding/mp3_project/issues/135)
 
 ### Signals
@@ -24,3 +24,7 @@
 - 2026-10-07 · cite · GUI-14 · 旋转沿用 vinyl 合成后的同一 Image 与 SDRAM 缓冲，不新增资源；角度 0 与原基线一致。
 - 2026-10-19 · cite · GUI-19 · 优先级“常驻文本 > 跳过提示 > 时间”只在 `Service/gui/main/transport` 内；跳过提示为单次 `lv_timer`（2000 ms，累加时 `lv_timer_reset`），闪烁为以时间 Label 为 var 的 `lv_anim`，重复调用先删旧动画；模拟器日志 `music_stop_reasons` 连按两次播放后动画数只比静止时多一条。
 - 2026-10-26 · cite · GUI-21 · “以请求时的身份采信应答”在冷启动有一个按 #104 定下的例外：同一位置代次 0 → G 时，已显示名字或在途应答的代次等于 G 视为同一首，不清空、不重请求；其余身份变化一律清空并重请求。实现在 `gui_music_title_poll()` 内，调用方不变（#120）。
+
+### Rejected
+
+- 只有曲名 Label 用资源包 Noto、其他 Label 一律 Montserrat：0.8.1 起 Queue 曲名与歌手同样显示曲目元数据，须能显示中文；由 GUI-24 替代。（was GUI-22）

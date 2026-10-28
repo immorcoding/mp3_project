@@ -216,7 +216,7 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
     /*
      * 曲名：唱盘与控制区之间单行居中，Ink 文字、底透明。长文本模式与文本由 main/title
      * 按像素宽度在每次 Apply 时决定；本处只定位置、尺寸、字体与滚动速度，不写文本。
-     * 字体取 font/ 的结果：资源包 FONT 解码成功时为 Noto 12 px，否则 Montserrat 12（GUI-22）；
+     * 字体取 font/ 的结果：资源包 FONT 解码成功时为 Noto 12 px，否则 Montserrat 12（GUI-24）；
      * 只有这一个 Label 用它，高度随该字体行高。
      */
     title_font = service_gui_font_title();
