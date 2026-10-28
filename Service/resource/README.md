@@ -16,7 +16,7 @@
 | 1 / 2 | CP936 Unicode↔OEM 表 | BINARY | 是 | `__external_resource_uni2oem_*` / `__external_resource_oem2uni_*` |
 | 3 | 默认壁纸 | IMAGE | 是 | `__external_resource_wallpaper_*` |
 | 4 | 唱盘底图 | IMAGE | 是 | `__external_resource_vinyl_*` |
-| 5 | 曲名 CJK 字体（`lv_font_conv` bin） | FONT | 否 | `__external_resource_font_*`（`.sdram_font_resource`，0x94800 B） |
+| 5 | 曲名 CJK 字体（`lv_font_conv` bin） | FONT | 否 | `__external_resource_font_*`（`.sdram_font_resource`，0xA4800 B） |
 
 可选项排在最后加载。FONT 的业务约束是 `ResourcePack_DecodeFontMetadata()` 通过（格式、编码、bin 分段与 Metadata 一致、位图小于 1 MiB）且标称像素高度为 12。
 
@@ -39,10 +39,10 @@ FONT 是可选资源（RES-5、RES-10）：同样的任何失败只记一条 WAR
 - 启动顺序：`.sdram_font_resource` 是 NOLOAD，由本 Module 在 Platform SDRAM 正式初始化之后、任务启动之前一次写完；破坏性 SDRAM 诊断只在业务占用前运行。复制或 CRC 失败时不发布给消费者。
 - MPU：位于 `0xC0000000` 32 MiB 可缓存写回区域内，只放数据，不需要新区域。
 - Cache：CPU 复制后按 32 B 取整 Clean（RES-6）；区起点 32 B 对齐、大小为 32 的倍数，取整不越出本区。消费者经 Cache 只读，同一 CPU 写读，不需要 Invalidate；不作 DMA 源或目标。
-- 容量：0x94800 = 608,256 B，入库字体 bin 606,504 B（余量约 1.7 KiB）；链接脚本断言大小，运行期仍核对目标容量，超出时走可选资源 WARN。
+- 容量：0xA4800 = 673,792 B，入库字体 bin 623,520 B（余量 50,272 B；Pack v4 起比 v3 扩 64 KiB）；链接脚本断言大小，运行期仍核对目标容量，超出时走可选资源 WARN。
 
 来源地址、容量、产品身份、资源 ID 和日志开关集中在 `resource_service_config.h`。完整链路见 [RPKC1 设计](../../docs/shape/resources.md)。设备侧从 SD 更新壁纸或模型时，须先经 FTL 暂存再写 Pack，见 [ADR-0015](../../docs/adr/0015-volume-roles-and-resource-install.md)；本 Module 当前仍只做启动一次性加载。
 
 ## 验证
 
-可选路径不做主机测试，进板级验收（启动日志：只烧固件、板上仍为资源包 v2 时应见 FONT 的 WARN 与 GUI 的字体回退 WARN；写入 v3 后应见 `Loaded id=5` 与 GUI 的 `Title font ready`）。模拟器以替身实现 `Service_Resource_GetFont()`（`Tools/gui_simulator/fakes/resource_sim.c`），覆盖消费者侧的可用与不可用两条路径。
+可选路径不做主机测试，进板级验收（启动日志：只烧固件、板上仍为资源包 v2 时应见 FONT 的 WARN 与 GUI 的字体回退 WARN；写入 v3 或 v4 后应见 `Loaded id=5` 与 GUI 的 `Title font ready`）。模拟器以替身实现 `Service_Resource_GetFont()`（`Tools/gui_simulator/fakes/resource_sim.c`），覆盖消费者侧的可用与不可用两条路径。

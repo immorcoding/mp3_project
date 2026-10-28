@@ -5,8 +5,9 @@
 ``Tools/package_maker`` 直接读取。日常打包与 CI 不运行本脚本，也不依赖
 Node 或 OTF。
 
-字表由 CPython 的 ``gb2312`` 编解码器按区位确定性生成：
-GB2312 第 16–87 区全部 6763 个汉字、第 1–9 区 682 个符号、ASCII 0x20–0x7E。
+字集（本脚本是唯一来源）：ASCII 0x20–0x7E、Latin-1 补充区 U+00A0–U+00FF、U+2013、U+2122，
+与 CPython 的 ``gb2312`` 编解码器按区位确定性生成的 GB2312 第 1–9 区 682 个符号、
+第 16–87 区 6763 个汉字取并集去重。
 
 用法::
 
@@ -31,6 +32,9 @@ FONT_BITS_PER_PIXEL = 4
 
 ASCII_FIRST = 0x20
 ASCII_LAST = 0x7E
+LATIN1_FIRST = 0xA0
+LATIN1_LAST = 0xFF
+EXTRA_PUNCTUATION = (0x2013, 0x2122)
 GB2312_SYMBOL_COUNT = 682
 GB2312_HANZI_COUNT = 6763
 GB2312_FIRST_BYTE_RANGE = range(0xA1, 0xF8)
@@ -67,11 +71,21 @@ def gb2312_characters() -> tuple[str, str]:
     return "".join(symbols), "".join(hanzi)
 
 
-def charset_symbols() -> str:
-    """返回传给 ``--symbols`` 的全部非 ASCII 字符（符号在前，汉字在后）。"""
+def charset_codepoints() -> list[int]:
+    """返回去重后的全部码点（升序）：ASCII、Latin-1 补充区、两个标点与 GB2312 符号和汉字。"""
 
     symbols, hanzi = gb2312_characters()
-    return symbols + hanzi
+    codepoints = set(range(ASCII_FIRST, ASCII_LAST + 1))
+    codepoints.update(range(LATIN1_FIRST, LATIN1_LAST + 1))
+    codepoints.update(EXTRA_PUNCTUATION)
+    codepoints.update(ord(character) for character in symbols + hanzi)
+    return sorted(codepoints)
+
+
+def charset_symbols() -> str:
+    """返回传给 ``--symbols`` 的全部非 ASCII 字符（升序）。"""
+
+    return "".join(chr(code) for code in charset_codepoints() if code > ASCII_LAST)
 
 
 def sha256_of(path: Path) -> str:
@@ -154,6 +168,7 @@ def main() -> int:
         return 0
 
     generate(arguments.otf, arguments.output)
+    print(f"字集 {len(charset_codepoints())} 个字符")
     print(f"已生成 {arguments.output}（{arguments.output.stat().st_size} B，SHA-256 {sha256_of(arguments.output)}）")
     return 0
 
