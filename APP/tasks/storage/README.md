@@ -40,7 +40,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 
 `stream/` 把 SD 上的 MP3 以“音频块”交给播放任务（本分区只定义 Storage 一侧与调用契约，播放任务见 `APP/tasks/playback/`）。FIL 的打开、读取、关闭（含拔卡）都在 Storage Task（ARC-12）；播放任务只持流序号。
 
-- 文件：`storage_audio_stream.*`（信箱、开启、读块、终止记录）、`storage_audio_block.*`（块池与两个队列）、`storage_audio_tag.*`（越过标签纯函数，主机测试见 `Tests/storage_audio_stream/`）、`storage_audio_config.h`（块长 32 KiB、块数 32，均为配置常量）。
+- 文件：`storage_audio_stream.*`（信箱、开启、读块、终止记录）、`storage_audio_block.*`（块池与两个队列）、`storage_audio_range.*`（越过标签纯函数，主机测试见 `Tests/storage_audio_stream/`）、`storage_audio_config.h`（块长 32 KiB、块数 32，均为配置常量）。
 - 请求信箱（播放任务 → Storage）：长度 1 的覆盖队列，内容 `{StreamSeq, Generation, Position}`，`StreamSeq` 为 0 表示无流；开启、关闭、取消是同一种写入，经 `storage_audio_stream_request()` 写入并置 `STORAGE_NOTIFY_FLAG_STREAM_REQUEST`。代次 0 表示“当前”。
 - 流记录信箱（Storage → 播放任务）：长度 1 的覆盖队列，内容 `{StreamSeq, OpenResult, Generation, TrackCount, AudioBytes, End}`，整份覆盖，开启参数一直保留；播放任务用 `storage_audio_stream_get_record()` 非消费读取。开启结果：OK、NOT_READY、STALE、NO_TRACK、BAD_FILE（打不开、标签长度越界、音频区间为空）、IO_ERROR；终止：ENDED（只在最后一块入队之后写）、READ_ERROR、CARD_REMOVED。Service 无法区分“文件不存在”与“打开时 I/O 错误”，打开失败一律 BAD_FILE；位置超出列表按 STALE。BAD_FILE 时记录仍带 Generation 与 TrackCount（AudioBytes 为 0），其他失败三者皆 0。
 - 块：`{StreamSeq, ValidBytes}` 加数据，有效字节数 1..块容量，任何块都可以是短块，不设 kind、末块标志或块序号。Storage 只用当前正在读的流序号盖章；读完后若请求信箱已有新请求，半读的块不入就绪队列，直接放回空闲队列。播放任务用 `storage_audio_block_take_ready()` / `peek_ready()` 取块，用 `storage_audio_stream_return_block()` 归还（放回空闲队列并置 `STORAGE_NOTIFY_FLAG_BLOCK_RETURNED`）。

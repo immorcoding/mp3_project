@@ -1,9 +1,9 @@
 /**
- * @file test_storage_audio_tag.c
- * @brief 越过标签纯函数的主机测试：只经 storage_audio_tag_locate 观察音频区间。
+ * @file test_storage_audio_range.c
+ * @brief 越过标签纯函数的主机测试：只经 storage_audio_range_locate 观察音频区间。
  */
 
-#include "APP/tasks/storage/stream/storage_audio_tag.h"
+#include "APP/tasks/storage/stream/storage_audio_range.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -72,10 +72,10 @@ static void put_ape_footer(uint32_t offset, uint32_t tag_size, bool has_header)
  */
 static bool locate(Storage_AudioRangeTypeDef *range)
 {
-    uint32_t head_bytes = file_size < STORAGE_AUDIO_TAG_HEAD_BYTES ? file_size : STORAGE_AUDIO_TAG_HEAD_BYTES;
-    uint32_t tail_bytes = file_size < STORAGE_AUDIO_TAG_TAIL_BYTES ? file_size : STORAGE_AUDIO_TAG_TAIL_BYTES;
+    uint32_t head_bytes = file_size < STORAGE_AUDIO_RANGE_HEAD_BYTES ? file_size : STORAGE_AUDIO_RANGE_HEAD_BYTES;
+    uint32_t tail_bytes = file_size < STORAGE_AUDIO_RANGE_TAIL_BYTES ? file_size : STORAGE_AUDIO_RANGE_TAIL_BYTES;
 
-    return storage_audio_tag_locate(file_bytes,
+    return storage_audio_range_locate(file_bytes,
                                     head_bytes,
                                     &file_bytes[file_size - tail_bytes],
                                     tail_bytes,
@@ -273,7 +273,7 @@ static void empty_file_is_bad(void)
 {
     Storage_AudioRangeTypeDef r;
 
-    assert(!storage_audio_tag_locate(file_bytes, 0U, file_bytes, 0U, 0U, &r));
+    assert(!storage_audio_range_locate(file_bytes, 0U, file_bytes, 0U, 0U, &r));
 }
 
 /** @brief 短于标签头的文件按无标签处理。 */
@@ -310,6 +310,6 @@ int main(void)
     id3v2_overlapping_trailer_is_bad();
     empty_file_is_bad();
     short_file_without_tags_is_whole_range();
-    puts("storage_audio_tag tests passed");
+    puts("storage_audio_range tests passed");
     return 0;
 }

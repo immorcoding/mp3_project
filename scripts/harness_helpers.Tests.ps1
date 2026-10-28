@@ -160,8 +160,8 @@ $minimp3Impact = Get-HarnessImpact -ChangedPath @('Middlewares/Third_Party/minim
 Assert-HarnessSequence -Expected @('playback_service') -Actual $minimp3Impact.HostModules `
     -Message 'minimp3 升级必须选择播放模块主机测试'
 
-$audioTagImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_tag.c')
-Assert-HarnessSequence -Expected @('storage_audio_stream') -Actual $audioTagImpact.HostModules `
+$audioRangeImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_range.c')
+Assert-HarnessSequence -Expected @('storage_audio_stream') -Actual $audioRangeImpact.HostModules `
     -Message '越过标签纯函数变化必须选择 Storage 音频流主机测试'
 
 $audioStreamImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_stream.c')
