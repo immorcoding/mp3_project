@@ -219,7 +219,7 @@ static void service_gui_view_music_create_now_playing(Service_GUI_ViewMusicTypeD
      * 字体取 font/ 的结果：资源包 FONT 解码成功时为 Noto 12 px，否则 Montserrat 12（GUI-24）；
      * 只有这一个 Label 用它，高度随该字体行高。
      */
-    title_font = service_gui_font_title();
+    title_font = service_gui_font_track_text();
     label = lv_label_create(tab);
     lv_obj_set_size(label, SERVICE_GUI_MUSIC_TITLE_WIDTH, title_font->line_height + 2);
     lv_obj_set_pos(label, 0, SERVICE_GUI_VIEW_MUSIC_TITLE_Y);

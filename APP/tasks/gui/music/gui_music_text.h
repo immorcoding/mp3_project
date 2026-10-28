@@ -12,7 +12,7 @@
 #ifndef GUI_MUSIC_TEXT_H
 #define GUI_MUSIC_TEXT_H
 
-/* 歌手为空串时 Queue 歌手 Label 显示的文案（GUI-25）。样式同歌手：Noto 12 px，Opa 180。 */
+/* 歌手为空串时 Queue 歌手 Label 显示的文案（GUI-25）。样式同歌手 Label，字体与 Opa 见 Service/gui/main/queue/gui_service_main_queue_config.h 与该目录 README。 */
 #define GUI_MUSIC_TEXT_UNKNOWN_ARTIST "Unknown Artist"
 
 #endif /* GUI_MUSIC_TEXT_H */

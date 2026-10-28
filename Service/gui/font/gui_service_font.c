@@ -120,7 +120,7 @@ void service_gui_font_init(void)
  * @return 解码成功时为资源包 FONT 解码出的字体，否则为 lv_font_montserrat_12。
  * @note  在 service_gui_font_init() 之后调用；结果在 GUI 生命周期内不变。
  */
-const lv_font_t *service_gui_font_title(void)
+const lv_font_t *service_gui_font_track_text(void)
 {
     return service_gui_font_ready ? &service_gui_font_decoded : &lv_font_montserrat_12;
 }
