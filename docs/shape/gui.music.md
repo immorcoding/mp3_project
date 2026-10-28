@@ -7,7 +7,7 @@
 ### Rules
 
 - **GUI-9** · provisional · Queue 只消费 READY 窗口副本，行数按 Length 且不超过容量，高亮须与当前 Catalog 代次一致；GUI 不解析路径或依赖 storage_listbuffer.h。 _Why:_ 窗口是跨任务快照，不能泄漏整表或混用旧代次。 _Source:_ [Queue 基线](../../Tools/gui_simulator/scenarios/queue.expected)、[GUI 任务](../../APP/tasks/gui/README.md)
-- **GUI-16** · provisional · Queue 换窗回收 panel 并保留余像素，非首窗保留回滑行。 _Why:_ 换窗不能改变手指对应的像素位置或阻断反向滚动。 _Source:_ [Queue 基线](../../Tools/gui_simulator/scenarios/queue.expected)、[GUI 任务](../../APP/tasks/gui/README.md)
+- **GUI-16** · provisional · Queue 换窗回收 panel 并保留余像素；非首窗在可见首行之上留 3 行回滑行；窗口边沿之外还有曲目时滚动停在该边沿、不露空白，只有列表真正的首尾弹性回弹。 _Why:_ 换窗不能改变手指对应的像素位置或阻断反向滚动；窗口边沿之外的曲目尚未就绪时不能露出空白；列表首尾的回弹行为要一致。 _Source:_ [Queue 基线](../../Tools/gui_simulator/scenarios/queue.expected)、[回滑跨窗基线](../../Tools/gui_simulator/scenarios/queue_back_scroll.expected)、[GUI 任务](../../APP/tasks/gui/README.md)、[#157](https://github.com/immorcoding/mp3_project/issues/157)
 - **GUI-17** · provisional · Queue 点行先由 Service 即时高亮本窗再 post 下标，GUI 发 SELECT{已显示窗口代次, 位置}；GUI 给发送成功的命令编递增序号，快照回显序号落后时曲目与三态冻结在最后一份已追上的快照、位置照用；命令队列满则丢弃本次输入、记日志，并把即时高亮撤回到快照所示；当前曲高亮须回显已追上、快照代次非 0 且等于窗口代次；Queue 不随当前曲自动滚动。 _Why:_ 异步回显不能把刚选中的行或刚按下的状态覆盖回旧值，GUI 也不预测后端。 _Source:_ [Queue 基线](../../Tools/gui_simulator/scenarios/queue.expected)、[播放后端公开合同](https://github.com/immorcoding/mp3_project/issues/53)、[音乐页输入与列表](https://github.com/immorcoding/mp3_project/issues/66)
 - **GUI-18** · provisional · Queue 行保持边宽和状态占位固定，只切换 Opa、调色板角色和 Long mode；封面归 Now Playing。 _Why:_ 状态变化不应挪动文字，列表行与播放封面各有展示职责。 _Source:_ [Queue 基线](../../Tools/gui_simulator/scenarios/queue.expected)、[GUI 任务](../../APP/tasks/gui/README.md)
 - **GUI-10** · provisional · 时间、进度与三键仅在 Now Playing；三键发 PREV/TOGGLE/NEXT，连按不合并，GUI 不持 playing 与游标，三态与曲目按 GUI-17 采信；时间 Label 显示“已解码/总时长”，总时长未知写 `--:--`、进度条停 0；时间与进度只读播放快照，不按墙钟走表；拖动时不写回，松手不发命令，下一次读快照回位；切歌、拔卡与停止态归零。_Why:_ 三态与进度的唯一真值是播放任务发布的快照，GUI 只发命令、读快照。_Source:_ [播放控制基线](../../Tools/gui_simulator/scenarios/music_transport.expected)、[ADR-0020](../adr/0020-playback-state-machine-ownership.md)、[播放后端公开合同](https://github.com/immorcoding/mp3_project/issues/53)、[音乐页呈现](https://github.com/immorcoding/mp3_project/issues/65)、[音乐页输入与列表](https://github.com/immorcoding/mp3_project/issues/66)
@@ -30,6 +30,7 @@
 - 2026-10-28 · cite · GUI-27 · 像素常量配置放在 `Service/gui/gui_service_config.h` 的 `SERVICE_GUI_MUSIC_LAYOUT_*` 一组（与 `SERVICE_GUI_MUSIC_TITLE_WIDTH` 同一份 config，STY-3），`service_gui_view_music_solve_layout()` 由它们与运行时读到的 Playing 内容区高度推出 S、D 与各元素 Y；模拟器实测盒子坐标与 #152 结论表逐项相同。
 - 2026-10-28 · friction · GUI-27 · “按字体完整字形高度计量”在实现里是两组手填常量（Noto 12：Label 内第 3 行起 13 行；Montserrat 10：第 1 行起 9 行），不随字体自动推出。资源包字体不可用时曲名与歌手回退 Montserrat 12，Label 高随行高变化，但字形上沿仍按 Noto 的 3 计算，字形与设计间距有像素级偏差（`music_title_font_fallback` 截图可见，未逐项实测）。以后换字体或字号须同步这两组常量；是否改为运行时从字形描述推出待定。
 - 2026-10-28 · cite · GUI-26 · 歌手的 `Unknown Artist` 与空串由 APP 音乐分区 `gui_music_title_text()` 决定（与 Queue 同一个 `GUI_MUSIC_TEXT_UNKNOWN_ARTIST`），Service 只画；曲名为空白或 `--` 时歌手为空串。
+- 2026-10-28 · friction · GUI-16 · #157：非首窗只留一行回滑行，弹性把手指拉过窗口首行，快速回滑时在上一窗 READY 前露出整行空白；改为留 3 行，并在窗口边沿之外还有曲目时按边沿拉回。先试过“只在首窗开弹性”，用户否决：列表首尾回弹不一致（首行回弹、末尾不回弹）。
 
 ### Rejected
 
