@@ -677,13 +677,13 @@ static void test_decodes_committed_font_bin(void)
     assert(feof(file) != 0);
     assert(fclose(file) == 0);
 
-    /* 7540 个字符加索引 0 的 notdef；字号 12，ascent 13，descent -3。 */
-    test_write_font_metadata(metadata_bytes, 7541U);
+    /* 7619 个字符加索引 0 的 notdef；字号 12，ascent 13，descent -3。 */
+    test_write_font_metadata(metadata_bytes, 7620U);
     test_make_font_entry(metadata_bytes, (uint32_t)length, &entry, &view);
     assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_OK);
-    assert(metadata.GlyphCount == 7541U);
+    assert(metadata.GlyphCount == 7620U);
 
-    test_write_font_metadata(metadata_bytes, 7540U);
+    test_write_font_metadata(metadata_bytes, 7619U);
     test_make_font_entry(metadata_bytes, (uint32_t)length, &entry, &view);
     assert(ResourcePack_DecodeFontMetadata(&entry, &view, &metadata) == RESOURCE_PACK_FORMAT_ERROR);
 }
@@ -702,13 +702,13 @@ static void test_locates_committed_font_bin_sections(void)
     assert(feof(file) != 0);
     assert(fclose(file) == 0);
 
-    /* 分段范围与 head 参数由独立脚本逐段读出：head 48 B、cmap 13496 B、loca 30176 B、glyf 540328 B，其后是 kern。 */
+    /* 分段范围与 head 参数由独立脚本逐段读出：head 48 B、cmap 13476 B、loca 30492 B、glyf 543228 B，其后是 kern。 */
     assert(ResourcePack_LocateFontBin(test_font_bin, (uint32_t)length, &layout) == RESOURCE_PACK_OK);
     assert((layout.Head.Offset == 0U) && (layout.Head.Length == 48U));
-    assert((layout.Cmap.Offset == 48U) && (layout.Cmap.Length == 13496U));
-    assert((layout.Loca.Offset == 13544U) && (layout.Loca.Length == 30176U));
-    assert((layout.Glyf.Offset == 43720U) && (layout.Glyf.Length == 540328U));
-    assert(layout.GlyphCount == 7541U);
+    assert((layout.Cmap.Offset == 48U) && (layout.Cmap.Length == 13476U));
+    assert((layout.Loca.Offset == 13524U) && (layout.Loca.Length == 30492U));
+    assert((layout.Glyf.Offset == 44016U) && (layout.Glyf.Length == 543228U));
+    assert(layout.GlyphCount == 7620U);
     assert(layout.TablesCount == 4U);
     assert((layout.PixelHeight == 12U) && (layout.Ascent == 13) && (layout.Descent == -3));
     assert((layout.IndexToLocFormat == 1U) && (layout.GlyphIdFormat == 1U));
@@ -719,7 +719,7 @@ static void test_locates_committed_font_bin_sections(void)
     assert((layout.UnderlinePosition == 1) && (layout.UnderlineThickness == 0U));
 
     /* glyf 被截断时分段越界。 */
-    assert(ResourcePack_LocateFontBin(test_font_bin, 43720U + 540328U - 1U, &layout) ==
+    assert(ResourcePack_LocateFontBin(test_font_bin, 44016U + 543228U - 1U, &layout) ==
            RESOURCE_PACK_FORMAT_ERROR);
     assert(ResourcePack_LocateFontBin(test_font_bin, 40U, &layout) == RESOURCE_PACK_FORMAT_ERROR);
     assert(ResourcePack_LocateFontBin(NULL, (uint32_t)length, &layout) == RESOURCE_PACK_INVALID_PARAM);
