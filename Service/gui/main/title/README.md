@@ -1,6 +1,6 @@
 # Now Playing 曲名
 
-`title/` 是 Main Screen 的私有曲名 Module。`view/` 在唱盘与进度条之间创建曲名 Label（y=160、宽 `SERVICE_GUI_MUSIC_TITLE_WIDTH` 160 px、居中、theme TEXT × INK、文字底透明、滚动速度 `SERVICE_GUI_MUSIC_TITLE_SPEED` 24 px/s），本 Module 只写它的文本与长文本模式（GUI-21）。
+`title/` 是 Main Screen 的私有曲名 Module。`view/` 在唱盘与进度条之间创建曲名 Label（y=160、宽 `SERVICE_GUI_MUSIC_TITLE_WIDTH` 160 px、居中、theme TEXT × INK、文字底透明、滚动速度 `SERVICE_GUI_MUSIC_TITLE_SPEED` 24 px/s），本 Module 只写它的文本与长文本模式（GUI-26）。
 
 调用方给什么就画什么：曲目显示名、空串（留空）或 `--`。名字 / 空白 / `--` 的语义与何时调用由 APP 音乐分区的曲名客户决定，本 Module 不包含 APP 或 Storage 头。
 

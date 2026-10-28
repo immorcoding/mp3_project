@@ -16,7 +16,7 @@
 #define SERVICE_GUI_MUSIC_STATUS_FLASH_MS  (300U)   /* 状态行闪一次（text_opa 淡出再淡回）的总时长（GUI-19）。按 LVGL tick 计时。 */
 
 /* view/gui_service_view_music.c、main/title/gui_service_main_title.c */
-#define SERVICE_GUI_MUSIC_TITLE_WIDTH      (160)    /* Now Playing 曲名可见窗口宽度，像素；文本更宽时循环滚动（GUI-21）。 */
+#define SERVICE_GUI_MUSIC_TITLE_WIDTH      (160)    /* Now Playing 曲名可见窗口宽度，像素；文本更宽时循环滚动（GUI-26）。 */
 #define SERVICE_GUI_MUSIC_TITLE_SPEED      (24)     /* 曲名循环滚动速度，像素每秒。 */
 
 #endif /* GUI_SERVICE_CONFIG_H */
