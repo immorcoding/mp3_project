@@ -41,6 +41,7 @@
 #include "prototype_artist_layout.h" /* PROTOTYPE #152 */
 
 extern bool storage_sim_proto_tags; /* PROTOTYPE #152：fakes/storage_sim.c */
+extern uint32_t proto_artist_hide;  /* PROTOTYPE #152 第三轮：prototype_artist_layout.c */
 
 /** @brief 与产品 GUI_NOTIFY_LCD_TRANSFER 对应的通知槽。 */
 #define SIM_GUI_NOTIFY_LCD_TRANSFER  0U
@@ -211,6 +212,11 @@ int main(int argc, char *argv[])
         if ((strcmp(argv[proto_i], "--artist-perf") == 0) && (proto_i + 1 < argc))
         {
             proto_artist_perf_window(argv[++proto_i]);
+            continue;
+        }
+        if ((strcmp(argv[proto_i], "--artist-hide") == 0) && (proto_i + 1 < argc))
+        {
+            proto_artist_hide = (uint32_t)strtoul(argv[++proto_i], NULL, 10);
             continue;
         }
         argv[proto_j++] = argv[proto_i];
