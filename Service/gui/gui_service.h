@@ -57,6 +57,7 @@ Service_StatusTypeDef Service_GUI_TitleApply(const char *text);
 Service_StatusTypeDef Service_GUI_VinylApply(bool playing, bool reset_angle);
 Service_StatusTypeDef Service_GUI_QueueApply(
     const char **titles,
+    const char **artists,
     uint16_t length,
     uint16_t window_index,
     uint16_t current_index);

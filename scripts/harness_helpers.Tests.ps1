@@ -82,6 +82,7 @@ $logHeaderGuiImpact = Get-HarnessImpact -ChangedPath @('Service/log/log_service.
 Assert-HarnessEqual -Expected $true -Actual $logHeaderGuiImpact.RequiresGuiScenarios -Message '假日志实现的 Service Log 头变化必须跑场景回归'
 $listbufferHeaderImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_listbuffer.h')
 Assert-HarnessEqual -Expected $true -Actual $listbufferHeaderImpact.RequiresGuiScenarios -Message '假 Storage 实现的窗口槽头变化必须跑场景回归'
+Assert-HarnessEqual -Expected $true -Actual (@($listbufferHeaderImpact.HostModules) -contains 'gui_task') -Message '窗口槽头变化必须选中 gui_task（Queue 行测试按该头构造窗口）'
 $namebufferHeaderImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_namebuffer.h')
 Assert-HarnessEqual -Expected $true -Actual $namebufferHeaderImpact.RequiresGuiScenarios -Message '假 Storage 实现的名称槽头变化必须跑场景回归'
 $namebufferSourceImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_namebuffer.c')
@@ -160,8 +161,8 @@ $minimp3Impact = Get-HarnessImpact -ChangedPath @('Middlewares/Third_Party/minim
 Assert-HarnessSequence -Expected @('playback_service') -Actual $minimp3Impact.HostModules `
     -Message 'minimp3 升级必须选择播放模块主机测试'
 
-$audioTagImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_tag.c')
-Assert-HarnessSequence -Expected @('storage_audio_stream') -Actual $audioTagImpact.HostModules `
+$audioRangeImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_range.c')
+Assert-HarnessSequence -Expected @('storage_audio_stream') -Actual $audioRangeImpact.HostModules `
     -Message '越过标签纯函数变化必须选择 Storage 音频流主机测试'
 
 $audioStreamImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_stream.c')
@@ -172,6 +173,22 @@ $catalogNameImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog
 Assert-HarnessSequence -Expected @('storage_catalog') -Actual $catalogNameImpact.HostModules `
     -Message '曲目显示名纯函数变化必须选择 Storage 曲库主机测试'
 
+$catalogTextImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_catalog_text.c')
+Assert-HarnessSequence -Expected @('storage_catalog') -Actual $catalogTextImpact.HostModules `
+    -Message '曲目文本纯函数变化必须选择 Storage 曲库主机测试'
+
+$id3ReaderImpact = Get-HarnessImpact -ChangedPath @('Components/id3_reader/id3_reader.c')
+Assert-HarnessSequence -Expected @('storage_catalog') -Actual $id3ReaderImpact.HostModules `
+    -Message 'id3_reader Component 变化必须选择 Storage 曲库主机测试（它只经曲目文本函数被测）'
+
+$cc936Impact = Get-HarnessImpact -ChangedPath @('Middlewares/Third_Party/FatFs/src/option/cc936.c')
+Assert-HarnessSequence -Expected @('flash_ftl', 'storage_catalog') -Actual $cc936Impact.HostModules `
+    -Message 'CP936 表变化必须同时选择 Flash 与 Storage 曲库主机测试（后者链接真实 cc936.c 做 GBK 查表）'
+
+$catalogConfigImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_catalog_config.h')
+Assert-HarnessSequence -Expected @('gui_task', 'storage_catalog') -Actual $catalogConfigImpact.HostModules `
+    -Message '曲库配置头（含曲目标签读取常量与窗口条数）变化必须选择 Storage 曲库与 GUI Task 主机测试'
+
 $monitorWarnImpact =Get-HarnessImpact -ChangedPath @('APP/tasks/monitor/monitor_warn.c')
 Assert-HarnessSequence -Expected @('monitor_warn') -Actual $monitorWarnImpact.HostModules `
     -Message 'Monitor 变化选择 monitor_warn 主机测试'
@@ -179,6 +196,12 @@ Assert-HarnessSequence -Expected @('monitor_warn') -Actual $monitorWarnImpact.Ho
 $playbackMachineImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/playback/playback_machine.c')
 Assert-HarnessSequence -Expected @('playback_task') -Actual $playbackMachineImpact.HostModules `
     -Message '播放任务状态机变化必须选择播放任务主机测试'
+
+$playbackConfigHostImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/playback/playback_task_config.h')
+Assert-HarnessEqual -Expected $true -Actual (@($playbackConfigHostImpact.HostModules) -contains 'storage_catalog') `
+    -Message 'T_data 变化必须选中 Storage 曲库主机测试（超预算阈值 = T_data/2 的编译期断言在其中）'
+Assert-HarnessEqual -Expected $true -Actual (@($playbackConfigHostImpact.HostModules) -contains 'playback_task') `
+    -Message 'T_data 变化必须选中播放任务主机测试'
 
 $playbackContractImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/playback/playback_contract.h')
 Assert-HarnessSequence -Expected @('gui_task', 'playback_task') -Actual $playbackContractImpact.HostModules `

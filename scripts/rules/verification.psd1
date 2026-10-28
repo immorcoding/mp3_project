@@ -66,6 +66,13 @@
                 '^Platform/lcd/platform_lcd\.h$'
                 '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
                 '^Service/service\.h$'
+                # gui_music_queue_rows 的测试按窗口槽头构造 READY 窗口（#140）。
+                '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
+                '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
+                '^APP/tasks/storage/catalog/storage_catalog_name\.h$'
+                '^APP/tasks/storage/storage_task\.h$'
+                '^APP/tasks/storage/storage_task_config\.h$'
+                '^Service/filesystem/filesystem_types\.h$'
                 '^Tests/gui_task/'
             )
         }
@@ -121,7 +128,16 @@
         @{
             Name = 'storage_catalog'
             PathPatterns = @(
-                '^APP/tasks/storage/catalog/storage_catalog_name\.[ch]$'
+                '^APP/tasks/storage/catalog/storage_catalog_(?:name|text)\.[ch]$'
+                '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
+                # 超预算阈值与 T_data/2 的编译期断言在 test_storage_catalog_text.c。
+                '^APP/tasks/playback/playback_task_config\.h$'
+                '^Service/filesystem/filesystem_types\.h$'
+                '^Components/id3_reader/'
+                '^Service/filesystem/filesystem_text\.[ch]$'
+                # GBK 查表测试链接真实 cc936.c，并复制 FATFS/Target/ffconf.h。
+                '^Middlewares/Third_Party/FatFs/src/(?:ff\.h|integer\.h|option/cc936\.c)$'
+                '^FATFS/Target/ffconf\.h$'
                 '^Tests/storage_catalog/'
             )
         }

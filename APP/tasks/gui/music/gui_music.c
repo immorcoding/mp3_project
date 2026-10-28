@@ -14,6 +14,7 @@
   */
 
 #include "gui_music.h"
+#include "gui_music_queue_rows.h"
 #include "gui_music_queue_window.h"
 #include "gui_music_title.h"
 #include "gui_music_transport.h"
@@ -64,8 +65,8 @@ static GUI_MusicShownTypeDef gui_music_shown;
 
 /**
  * @brief 判断已显示窗口能否立即重套：仍显示、槽位 IDLE 且卷仍挂载。
- * @return 为真时可以读 storage_listbuffer 的 Buffer 重新 QueueApply。
- * @note  槽位不是 IDLE 时 Buffer 可能正被 Storage 改写，不能读。
+ * @return 为真时可以读 storage_listbuffer 的 Rows 重新 QueueApply。
+ * @note  槽位不是 IDLE 时 Rows 可能正被 Storage 改写，不能读。
  */
 static bool gui_music_displayed_window_idle(void)
 {
@@ -75,43 +76,34 @@ static bool gui_music_displayed_window_idle(void)
 }
 
 /**
- * @brief 把当前 Buffer 里的窗口填进 Queue，并记下交给 Service 的高亮。
+ * @brief 把窗口槽 Rows 里的曲目显示名与歌手按行填进 Queue，并记下交给 Service 的高亮。
  * @param[in] highlight_index 应高亮的播放列表位置；无高亮为 GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT。
  * @return QueueApply 的返回值。
- * @note  卷已卸载时不读 Buffer，填空窗以免画出已拔卡路径。
+ * @note  卷已卸载时不读 Rows，填空窗以免画出已拔卡曲目。
  */
 static Service_StatusTypeDef gui_music_apply_window(uint16_t highlight_index)
 {
     const char *titles[STORAGE_LISTBUFFER_MAX_ENTRIES];
+    const char *artists[STORAGE_LISTBUFFER_MAX_ENTRIES];
     uint16_t length;
-    uint16_t i;
 
     gui_music_shown.highlight = highlight_index;
     gui_music_shown.highlight_stale = false;
 
     if (!storage_task_sd_is_mounted())
     {
-        return Service_GUI_QueueApply(NULL, 0U, 0U, SERVICE_GUI_QUEUE_NO_CURRENT);
+        return Service_GUI_QueueApply(NULL, NULL, 0U, 0U, SERVICE_GUI_QUEUE_NO_CURRENT);
     }
 
-    length = storage_listbuffer.Length;
-    if (length > STORAGE_LISTBUFFER_MAX_ENTRIES)
-    {
-        length = STORAGE_LISTBUFFER_MAX_ENTRIES;
-    }
-
-    for (i = 0U; i < length; i++)
-    {
-        titles[i] = storage_listbuffer.Buffer[i];
-    }
-
+    length = gui_music_queue_rows(&storage_listbuffer, titles, artists);
     if (length == 0U)
     {
-        return Service_GUI_QueueApply(NULL, 0U, 0U, highlight_index);
+        return Service_GUI_QueueApply(NULL, NULL, 0U, 0U, highlight_index);
     }
 
     return Service_GUI_QueueApply(
         titles,
+        artists,
         length,
         storage_listbuffer.Index,
         highlight_index);
@@ -192,7 +184,7 @@ static bool gui_music_dispatch_input_seek_released(const Service_GUI_InputTypeDe
             }
             else
             {
-                /* 窗口正在换，Buffer 不可读；等下一次 APPLY 或回显追上时按快照重套。 */
+                /* 窗口正在换，Rows 不可读；等下一次 APPLY 或回显追上时按快照重套。 */
                 gui_music_shown.highlight_stale = true;
             }
             break;
@@ -285,7 +277,7 @@ static GUI_MusicQueueWindowActionTypeDef gui_music_window_step(void)
             break;
 
         case GUI_MUSIC_QUEUE_WINDOW_ACTION_CLEAR:
-            (void)Service_GUI_QueueApply(NULL, 0U, 0U, SERVICE_GUI_QUEUE_NO_CURRENT);
+            (void)Service_GUI_QueueApply(NULL, NULL, 0U, 0U, SERVICE_GUI_QUEUE_NO_CURRENT);
             gui_music_shown.highlight = GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT;
             gui_music_shown.highlight_stale = false;
             break;
@@ -331,7 +323,7 @@ static void gui_music_title_step(const GUI_MusicTransportDecisionTypeDef *decisi
             break;
 
         case GUI_MUSIC_TITLE_ACTION_ACCEPT:
-            (void)Service_GUI_TitleApply(storage_namebuffer.Buffer);
+            (void)Service_GUI_TitleApply(storage_namebuffer.Title);
             storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
             break;
 

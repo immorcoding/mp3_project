@@ -547,6 +547,7 @@ Service_StatusTypeDef service_gui_main_queue_prepare(void)
 /**
  * @brief 按 Length 填 Queue 可见行；不够的 Hidden，不够用的补造。
  * @param[in] titles 曲名字符串指针表，Length 为 0 时允许为 NULL。
+ * @param[in] artists 与 titles 平行的歌手字符串指针表；NULL 表示全部行歌手为空，单项可为 ""。
  * @param[in] length 本窗实际条数，0..SERVICE_GUI_MAIN_QUEUE_MAX_ROWS。
  * @param[in] window_index 本窗在播放列表上的起点。
  * @param[in] current_index 正在播放的播放列表下标；无当前曲时为
@@ -555,10 +556,11 @@ Service_StatusTypeDef service_gui_main_queue_prepare(void)
  * @retval SERVICE_INVALID_PARAM Length 超上限，或 Length 非 0 但 titles 为空。
  * @retval SERVICE_NOT_READY QueueTab 尚未创建。
  * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
- * @note 歌手空串。不包含 storage_listbuffer.h。已有行转 head，不无限 create。
+ * @note 歌手按 artists[i] 填写，NULL 表与 NULL 项都显示空串。不包含 storage_listbuffer.h。已有行转 head，不无限 create。
  */
 Service_StatusTypeDef service_gui_main_queue_apply(
     const char **titles,
+    const char **artists,
     uint16_t length,
     uint16_t window_index,
     uint16_t current_index)
@@ -625,7 +627,7 @@ Service_StatusTypeDef service_gui_main_queue_apply(
         service_gui_main_queue_apply_row(
             &service_gui_main_queue_rows[i],
             (titles[i] != NULL) ? titles[i] : "",
-            "",
+            ((artists != NULL) && (artists[i] != NULL)) ? artists[i] : "",
             (current_index != SERVICE_GUI_QUEUE_NO_CURRENT) &&
                 (((uint32_t)window_index + (uint32_t)i) ==
                  (uint32_t)current_index));

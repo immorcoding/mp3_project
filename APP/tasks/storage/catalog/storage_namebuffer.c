@@ -1,12 +1,14 @@
 /**
  * @file storage_namebuffer.c
- * @brief 曲目显示名单槽：GUI 音乐分区写入请求，Storage Task 按位置解析路径并提取文件主名。
+ * @brief 曲目显示名单槽：GUI 音乐分区写入请求，Storage Task 按位置解析路径、读曲目标签，应答曲目显示名与歌手。
  */
 
 #include "storage_namebuffer.h"
 
 #include "storage_catalog.h"
 #include "storage_sheet.h"
+#include "storage_track_diag.h"
+#include "storage_track_text.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -30,7 +32,8 @@ Storage_NameBufferTypeDef storage_namebuffer;
  */
 static void storage_namebuffer_complete_empty(void)
 {
-    storage_namebuffer.Buffer[0] = '\0';
+    storage_namebuffer.Title[0] = '\0';
+    storage_namebuffer.Artist[0] = '\0';
     storage_namebuffer.Generation = 0U;
     storage_namebuffer.Status = STORAGE_NAMEBUFFER_READY;
 }
@@ -46,7 +49,8 @@ void storage_namebuffer_bind(void *storage_task)
     storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
     storage_namebuffer.Generation = 0U;
     storage_namebuffer.Index = 0U;
-    storage_namebuffer.Buffer[0] = '\0';
+    storage_namebuffer.Title[0] = '\0';
+    storage_namebuffer.Artist[0] = '\0';
     storage_namebuffer_task = (TaskHandle_t)storage_task;
 }
 
@@ -80,9 +84,12 @@ Storage_StatusTypeDef storage_namebuffer_request(uint16_t index, uint32_t genera
 }
 
 /**
- * @brief Storage Task 在 PENDING 时按 位置 → Sheet → Catalog 路径 提取文件主名并打 READY。
+ * @brief Storage Task 在 PENDING 时按 位置 → Sheet → Catalog 路径 读曲目标签，填曲目显示名与歌手并打 READY。
  * @param[in] sd_ready SD 是否处于就绪态；消抖中与未就绪均为假。
- * @note 仅 Storage Task 主循环调用；槽位不是 PENDING 时无事可做。
+ * @note 仅 Storage Task 主循环调用；槽位不是 PENDING 时无事可做。一次 load 只读一个文件，在当圈完成
+ *       （storage_track_text_read()，最坏 f_open + 取长度 + 至多 STORAGE_CATALOG_TEXT_MAX_READS 次读取）。
+ * @note 标签侧失败（打开失败、读取错误、超读取上限、无 ID3v2、帧缺失、解码失败）不是槽失败：
+ *       照常带实际代次 READY，曲目显示名回退文件主名、歌手为空串（STOR-15）。
  * @note SD 未就绪、Sheet 无效或与 Catalog 不一致、请求代次非 0 且与当前不符，都是重扫与
  *       拔卡时的正常竞态：代次 0 空名，不记日志。代次相符（或请求为“当前”）仍取不到时是
  *       防御分支，记一条 WARN（只含位置与请求代次，不含名字）；请求为“当前”时越界属于空库
@@ -94,7 +101,7 @@ void storage_namebuffer_load(bool sd_ready)
     uint32_t requested_generation;
     uint16_t index;
     uint16_t catalog_index;
-    bool extracted;
+    const StorageTrackText_ResultTypeDef *track = NULL;
     char text[48];
 
     if (storage_namebuffer.Status != STORAGE_NAMEBUFFER_PENDING)
@@ -121,23 +128,23 @@ void storage_namebuffer_load(bool sd_ready)
             storage_namebuffer_complete_empty();
             return;
         }
-        extracted = false;
     }
     else
     {
         catalog_index = storage_sheet_catalog_index(index);
-        extracted =
-            (catalog_index != UINT16_MAX) &&
+        if ((catalog_index != UINT16_MAX) &&
             (storage_catalog_copy_path(catalog_index,
                                        storage_namebuffer_path,
-                                       sizeof(storage_namebuffer_path)) == STORAGE_OK) &&
-            storage_catalog_display_name(storage_namebuffer_path,
-                                         (uint32_t)strlen(storage_namebuffer_path),
-                                         storage_namebuffer.Buffer,
-                                         sizeof(storage_namebuffer.Buffer));
+                                       sizeof(storage_namebuffer_path)) == STORAGE_OK))
+        {
+            const uint32_t start_cycles = storage_track_diag_begin();
+
+            track = storage_track_text_read(storage_namebuffer_path);
+            storage_track_diag_name_done(index, start_cycles, track);
+        }
     }
 
-    if (!extracted)
+    if (track == NULL)
     {
         storage_namebuffer_complete_empty();
         (void)snprintf(text, sizeof(text), "Name fail idx=%u gen=%lu",
@@ -146,6 +153,8 @@ void storage_namebuffer_load(bool sd_ready)
         return;
     }
 
+    (void)memcpy(storage_namebuffer.Title, track->Text.Title, sizeof(storage_namebuffer.Title));
+    (void)memcpy(storage_namebuffer.Artist, track->Text.Artist, sizeof(storage_namebuffer.Artist));
     storage_namebuffer.Generation = sheet_generation;
     storage_namebuffer.Status = STORAGE_NAMEBUFFER_READY;
 }
