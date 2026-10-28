@@ -1,7 +1,7 @@
 /**
  * @file storage_catalog_name.h
  * @brief 曲目显示名纯函数：从曲库 UTF-8 相对路径提取去掉 MP3 扩展名的文件主名。
- * @note  不依赖 FreeRTOS、FatFs 或 HAL，可在主机上直接测试。规则见 STOR-1、STOR-14。
+ * @note  不依赖 FreeRTOS、FatFs 或 HAL，可在主机上直接测试。规则见 STOR-1、STOR-15。
  */
 
 #ifndef STORAGE_CATALOG_NAME_H

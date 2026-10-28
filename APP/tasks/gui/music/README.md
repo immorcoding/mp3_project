@@ -22,7 +22,7 @@
 
 ## 曲名
 
-曲名区只显示三种内容（GUI-21）：名字；空白（已采信新身份、应答未到）；`--`（无当前曲，或有当前曲但取不到）。名字由 Storage 名称槽（`storage_namebuffer`，STOR-14）给出，本分区不解析路径。
+曲名区只显示三种内容（GUI-21）：名字；空白（已采信新身份、应答未到）；`--`（无当前曲，或有当前曲但取不到）。名字由 Storage 名称槽（`storage_namebuffer`，STOR-15）给出，本分区不解析路径。
 
 - 输入是快照归约**已追上**的曲目身份：`GUI_MusicTransportDecisionTypeDef` 的 `has_track` / `generation` / `index`，与 Queue 高亮、唱盘归零同源；回显未追上时身份冻结，不发新请求。
 - `gui_music_title_poll(client, identity, status, reply_generation)` 每圈一次：先比较身份，变化即采信并清空旧名（有当前曲留空并待请求，`HasTrack = false` 显示 `--` 不请求）；再按槽状态推进——`IDLE` 且待请求时返回 `REQUEST`，`READY` 时以**请求时的身份**判断：身份未变且应答代次非 0 返回 `ACCEPT`（显示名字），代次 0 返回 `DISCARD` 并显示 `--`，身份已变返回 `DISCARD`（不显示旧名，下一圈按最新身份重请求）。槽忙（`PENDING`）时身份再变也不撤销在途请求：等它 `READY`、丢弃、再按最新身份请求，因此连按 NEXT 只采信最后一首；坏文件跳过时快照位置已前进到候选，按身份变化处理，候选名立即被请求。

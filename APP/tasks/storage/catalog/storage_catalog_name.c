@@ -101,7 +101,7 @@ bool storage_catalog_has_mp3_extension(const char *name, uint32_t length)
  * @param[in] path 相对路径，不要求以 '\0' 结尾。
  * @param[in] path_bytes 路径字节数。
  * @param[out] out 输出缓冲；失败时写空串（容量至少 1 字节时）。
- * @param[in] out_bytes 输出容量，含结尾 '\0'；调用方统一传 STORAGE_CATALOG_NAME_BYTES（即 STOR-14 的 251 B 主名上限）。
+ * @param[in] out_bytes 输出容量，含结尾 '\0'；调用方统一传 STORAGE_CATALOG_NAME_BYTES（即 STOR-15 的 251 B 主名上限）。
  * @return true 成功；false 参数无效、主名为空、放不下或非法 UTF-8。
  * @note 取最后一个 '/' 之后的部分，只去掉末尾 `.mp3`；去掉后为空（文件名恰为 `.mp3`）时保留整名。
  */
