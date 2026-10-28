@@ -208,6 +208,11 @@ int main(int argc, char *argv[])
             proto_layout = atoi(argv[++proto_i]);
             continue;
         }
+        if ((strcmp(argv[proto_i], "--artist-perf") == 0) && (proto_i + 1 < argc))
+        {
+            proto_artist_perf_window(argv[++proto_i]);
+            continue;
+        }
         argv[proto_j++] = argv[proto_i];
     }
     argc = proto_j;
@@ -265,7 +270,9 @@ int main(int argc, char *argv[])
         gui_music_step(&input);
         proto_artist_layout_step();
 
+        proto_artist_perf_begin();
         Service_GUI_Process();
+        proto_artist_perf_end(sim_clock_now() - start_ms);
 
         if (!options.hidden)
         {
@@ -283,6 +290,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    proto_artist_perf_report();
     sim_display_deinit();
     return 0;
 }

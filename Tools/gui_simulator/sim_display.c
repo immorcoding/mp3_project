@@ -19,6 +19,8 @@ static SDL_Renderer *sim_renderer;
 static SDL_Texture *sim_texture;
 static uint16_t sim_framebuffer[PLATFORM_LCD_WIDTH * PLATFORM_LCD_HEIGHT];
 static bool sim_dirty;
+/* PROTOTYPE #152：累计写入 LCD 的像素数，供唱盘缩放的帧开销对比（prototype_artist_layout.c）。 */
+uint32_t proto_sim_flush_pixels;
 
 static bool sim_pointer_pressed;
 static uint16_t sim_pointer_x;
@@ -89,6 +91,14 @@ void sim_display_deinit(void)
     SDL_Quit();
 }
 
+/**
+ * @brief 把一块 RGB565 像素写入帧缓冲并标记需要刷新窗口。
+ * @param[in] x_start 左边界（含）。
+ * @param[in] y_start 上边界（含）。
+ * @param[in] x_end 右边界（含）。
+ * @param[in] y_end 下边界（含）。
+ * @param[in] pixels 行优先的像素，宽 x_end - x_start + 1。
+ */
 void sim_display_write(uint16_t x_start,
                        uint16_t y_start,
                        uint16_t x_end,
@@ -106,6 +116,7 @@ void sim_display_write(uint16_t x_start,
         pixels += width;
     }
 
+    proto_sim_flush_pixels += width * ((uint32_t)y_end - y_start + 1U); /* PROTOTYPE #152 */
     sim_dirty = true;
 }
 
