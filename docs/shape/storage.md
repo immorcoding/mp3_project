@@ -27,6 +27,10 @@ Next id: STOR-17
 - **STOR-15** · exploring · 曲目显示名经独立于窗口的名称单槽交接，按空闲、请求、就绪、消费释放；请求只含代次与播放列表位置（代次 0 表示当前），应答带实际代次、曲目显示名（有可用标题取标题，否则取文件主名，可直接显示的 UTF-8）和歌手（可为空串）；标题与歌手超长按 UTF-8 字符边界截断、不加省略号，文件主名不截断；读标签失败不是槽失败，照常就绪并回退；代次不符、越界、SD 未就绪或文件主名提取失败回代次 0 空名，只有代次相符仍失败的防御分支记 WARN；只由 GUI 音乐分区请求，GUI 不解析路径。_Why:_ 名字不进播放快照，坏文件跳过时才能立即取候选名，也不与 Queue 换窗争用同一槽；标签缺失或损坏是常态，不能让曲名区退成 `--`。_Source:_ [曲目显示名的数据路径与所有权](https://github.com/immorcoding/mp3_project/issues/104)、[0.7.0 spec](https://github.com/immorcoding/mp3_project/issues/112)、[读标签的接口与槽](https://github.com/immorcoding/mp3_project/issues/133)、[0.8.0 spec](https://github.com/immorcoding/mp3_project/issues/135)
 - **STOR-16** · exploring · 曲目标签只在名称槽与 Queue 窗口槽 `load` 时按需读 TIT2/TPE1，曲库扫描与建表不读；单个文件先读首块 4 KiB，按帧头 seek 跳读、不读 APIC 等负载，含首块最多 4 次读取且不越过标签总长（初值为配置常量，由板测修正）；窗口槽每圈最多读一行，读完前保持 `PENDING`，GUI 只见整窗；0.8.0 不缓存，每次 `load` 重读；窗口行只含曲目显示名与歌手，不含路径。_Why:_ 扫描时读标签会拖长插卡后不可播放的时间；单行读取上界须小于 Storage 单圈余量 T_data/2，逐圈分摊才不饿死音频流。_Source:_ [读标签的时机与范围](https://github.com/immorcoding/mp3_project/issues/132)、[0.8.0 spec](https://github.com/immorcoding/mp3_project/issues/135)
 
+### Signals
+
+- 2026-10-27 · friction · STOR-16 · #135 H 节写“途中代次变化或 SD 离开就绪以无效空窗收尾”，而 Storage Task 把消抖中也算“离开就绪”；STOR-8（settled）要求消抖只暂缓窗口请求、不等于卸载。#140 按 STOR-8 实现：消抖中窗口暂停逐行填写，恢复就绪后按 Sheet 代次续填或以空窗收尾，只有消抖后未挂载才经 `complete_unavailable()` 收尾。建议 STOR-16 把“SD 离开就绪”写成“卷卸载”，并注明消抖中暂停。
+
 ### Rejected
 
 - 名称槽只回文件主名、主名不截断即全部应答：0.8.0 起应答优先取曲目标签中的标题并带歌手，由 STOR-15 替代。（was STOR-14）
