@@ -130,6 +130,8 @@
             PathPatterns = @(
                 '^APP/tasks/storage/catalog/storage_catalog_(?:name|text)\.[ch]$'
                 '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
+                # 超预算阈值与 T_data/2 的编译期断言在 test_storage_catalog_text.c。
+                '^APP/tasks/playback/playback_task_config\.h$'
                 '^Service/filesystem/filesystem_types\.h$'
                 '^Components/id3_reader/'
                 '^Service/filesystem/filesystem_text\.[ch]$'

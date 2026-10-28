@@ -197,6 +197,12 @@ $playbackMachineImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/playback/pl
 Assert-HarnessSequence -Expected @('playback_task') -Actual $playbackMachineImpact.HostModules `
     -Message '播放任务状态机变化必须选择播放任务主机测试'
 
+$playbackConfigHostImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/playback/playback_task_config.h')
+Assert-HarnessEqual -Expected $true -Actual (@($playbackConfigHostImpact.HostModules) -contains 'storage_catalog') `
+    -Message 'T_data 变化必须选中 Storage 曲库主机测试（超预算阈值 = T_data/2 的编译期断言在其中）'
+Assert-HarnessEqual -Expected $true -Actual (@($playbackConfigHostImpact.HostModules) -contains 'playback_task') `
+    -Message 'T_data 变化必须选中播放任务主机测试'
+
 $playbackContractImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/playback/playback_contract.h')
 Assert-HarnessSequence -Expected @('gui_task', 'playback_task') -Actual $playbackContractImpact.HostModules `
     -Message '播放任务公开合同变化必须选择播放任务与编译它的 GUI Task（音乐传输 reducer）主机测试'

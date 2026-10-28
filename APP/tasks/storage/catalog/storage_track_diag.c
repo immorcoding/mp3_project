@@ -5,8 +5,6 @@
 
 #include "storage_track_diag.h"
 
-#include "storage_track_diag_config.h"
-
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -29,7 +27,7 @@ typedef enum
 /** @brief 自启动累加的计数器；只由 Storage Task 读写，供调试器与日志汇总使用。 */
 typedef struct
 {
-    uint32_t Reads;                                     /**< 标签读取次数（每个文件一次）。 */
+    uint32_t Reads;                                     /**< 读回调调用次数合计（含首块，打开失败为 0），与名称槽日志 reads= 同口径。 */
     uint32_t ByReason[STORAGE_TRACK_DIAG_COUNT];        /**< 按结果归类的次数；[TAGGED] 为取到数，其余为六类回退数。 */
     uint32_t MaxUs;                                     /**< 单行耗时最长值，单位 µs。 */
     uint64_t TotalUs;                                   /**< 单行耗时累计值，单位 µs。 */
@@ -40,7 +38,7 @@ typedef struct
 {
     uint16_t Rows;                                      /**< 已填行数。 */
     uint16_t ByReason[STORAGE_TRACK_DIAG_COUNT];        /**< 本窗按结果归类的行数。 */
-    uint32_t Reads;                                     /**< 本窗读取次数合计（读回调调用次数）。 */
+    uint32_t Reads;                                     /**< 本窗读回调调用次数合计，与自启动 Reads 同口径。 */
     uint32_t TotalUs;                                   /**< 本窗总耗时，单位 µs。 */
     uint32_t MaxUs;                                     /**< 本窗最长单行耗时，单位 µs。 */
 } StorageTrackDiag_WindowTypeDef;
@@ -113,11 +111,12 @@ static uint32_t storage_track_diag_elapsed_us(uint32_t start_cycles)
 /**
  * @brief 累加自启动计数器。
  * @param[in] reason 归类。
+ * @param[in] reads 本行读回调调用次数。
  * @param[in] us 单行耗时。
  */
-static void storage_track_diag_count(StorageTrackDiag_ReasonTypeDef reason, uint32_t us)
+static void storage_track_diag_count(StorageTrackDiag_ReasonTypeDef reason, uint32_t reads, uint32_t us)
 {
-    storage_track_diag_counters.Reads++;
+    storage_track_diag_counters.Reads += reads;
     storage_track_diag_counters.ByReason[reason]++;
     storage_track_diag_counters.TotalUs += us;
     if (us > storage_track_diag_counters.MaxUs)
@@ -155,7 +154,7 @@ void storage_track_diag_name_done(uint16_t index, uint32_t start_cycles, const S
 
     reason = storage_track_diag_classify(track);
     us = storage_track_diag_elapsed_us(start_cycles);
-    storage_track_diag_count(reason, us);
+    storage_track_diag_count(reason, track->Text.Reads, us);
 
     if (reason == STORAGE_TRACK_DIAG_TAGGED)
     {
@@ -204,7 +203,7 @@ void storage_track_diag_row_done(uint32_t start_cycles, const StorageTrackText_R
 
     reason = storage_track_diag_classify(track);
     us = storage_track_diag_elapsed_us(start_cycles);
-    storage_track_diag_count(reason, us);
+    storage_track_diag_count(reason, track->Text.Reads, us);
 
     storage_track_diag_window.ByReason[reason]++;
     storage_track_diag_window.Reads += track->Text.Reads;
@@ -224,32 +223,32 @@ void storage_track_diag_window_end(void)
     const StorageTrackDiag_WindowTypeDef *window = &storage_track_diag_window;
     bool warn;
     bool over_budget;
-    char text[128];
+    char text[128]; /* 与 Service_Log 单条文本容量相同；12 行窗口的最长一行约 117 字符，放得下。 */
 
     warn = (window->ByReason[STORAGE_TRACK_DIAG_DECODE] != 0U) ||
            (window->ByReason[STORAGE_TRACK_DIAG_LIMIT] != 0U) ||
            (window->ByReason[STORAGE_TRACK_DIAG_OPEN] != 0U) ||
            (window->ByReason[STORAGE_TRACK_DIAG_READ] != 0U);
-    over_budget = window->MaxUs > STORAGE_TRACK_DIAG_BUDGET_US;
+    over_budget = window->MaxUs > STORAGE_CATALOG_TRACK_BUDGET_US;
     if (!warn && !over_budget)
     {
         return;
     }
 
     (void)snprintf(text, sizeof(text),
-                   "Tag win rows=%u ok=%u nid3=%u nofr=%u dec=%u lim=%u open=%u rerr=%u rd=%lu us=%lu max=%lu top=%lu",
+                   "Tag win rows=%u max=%lu top=%lu us=%lu rd=%lu ok=%u nid3=%u nofr=%u dec=%u lim=%u open=%u rerr=%u",
                    (unsigned)window->Rows,
+                   (unsigned long)window->MaxUs,
+                   (unsigned long)storage_track_diag_counters.MaxUs,
+                   (unsigned long)window->TotalUs,
+                   (unsigned long)window->Reads,
                    (unsigned)window->ByReason[STORAGE_TRACK_DIAG_TAGGED],
                    (unsigned)window->ByReason[STORAGE_TRACK_DIAG_NO_ID3V2],
                    (unsigned)window->ByReason[STORAGE_TRACK_DIAG_NO_FRAME],
                    (unsigned)window->ByReason[STORAGE_TRACK_DIAG_DECODE],
                    (unsigned)window->ByReason[STORAGE_TRACK_DIAG_LIMIT],
                    (unsigned)window->ByReason[STORAGE_TRACK_DIAG_OPEN],
-                   (unsigned)window->ByReason[STORAGE_TRACK_DIAG_READ],
-                   (unsigned long)window->Reads,
-                   (unsigned long)window->TotalUs,
-                   (unsigned long)window->MaxUs,
-                   (unsigned long)storage_track_diag_counters.MaxUs);
+                   (unsigned)window->ByReason[STORAGE_TRACK_DIAG_READ]);
     (void)Service_Log_Post(warn ? SERVICE_LOG_LEVEL_WARN : SERVICE_LOG_LEVEL_INFO,
                            storage_track_diag_tag, text);
 }

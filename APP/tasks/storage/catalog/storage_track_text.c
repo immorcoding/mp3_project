@@ -55,6 +55,25 @@ static uint16_t storage_track_text_gbk(uint16_t gbk_code, void *context)
 }
 
 /**
+ * @brief 标签读不出时的回退：标题取文件主名、歌手为空，结果分类由调用者指定，读取次数为 0。
+ * @param[in,out] result 本 Module 的结果；写入标题、歌手、分类与读取次数。
+ * @param[in] path 曲库 UTF-8 相对路径。
+ * @param[in] path_bytes 路径字节数。
+ * @param[in] reason 回退的结果分类。
+ * @return result；NULL 表示文件主名提取失败（STOR-15 的防御分支）。
+ */
+static const StorageTrackText_ResultTypeDef *storage_track_text_fallback(StorageTrackText_ResultTypeDef *result,
+                                                                          const char *path,
+                                                                          uint32_t path_bytes,
+                                                                          StorageCatalog_TextResultTypeDef reason)
+{
+    result->Text.Artist[0] = '\0';
+    result->Text.Result = reason;
+    result->Text.Reads = 0U;
+    return storage_catalog_display_name(path, path_bytes, result->Text.Title, sizeof(result->Text.Title)) ? result : NULL;
+}
+
+/**
  * @brief 读一首曲目的显示名与歌手。
  * @param[in] path 曲库 UTF-8 相对路径（SD 卷）。
  * @return 本 Module 持有的结果，下一次调用前有效；NULL 表示文件主名提取失败（STOR-15 的防御分支）。
@@ -84,23 +103,13 @@ const StorageTrackText_ResultTypeDef *storage_track_text_read(const char *path)
                                     &file) != SERVICE_OK)
     {
         result->OpenFailed = true;
-        result->Text.Artist[0] = '\0';
-        result->Text.Result = STORAGE_CATALOG_TEXT_NO_ID3V2;
-        result->Text.Reads = 0U;
-        return storage_catalog_display_name(path, path_bytes, result->Text.Title, sizeof(result->Text.Title))
-                   ? result
-                   : NULL;
+        return storage_track_text_fallback(result, path, path_bytes, STORAGE_CATALOG_TEXT_NO_ID3V2);
     }
 
     if (Service_Filesystem_GetFileSize(file, &size64) != SERVICE_OK)
     {
         (void)Service_Filesystem_CloseFile(file);
-        result->Text.Artist[0] = '\0';
-        result->Text.Result = STORAGE_CATALOG_TEXT_READ_ERROR;
-        result->Text.Reads = 0U;
-        return storage_catalog_display_name(path, path_bytes, result->Text.Title, sizeof(result->Text.Title))
-                   ? result
-                   : NULL;
+        return storage_track_text_fallback(result, path, path_bytes, STORAGE_CATALOG_TEXT_READ_ERROR);
     }
 
     request.Path = path;
