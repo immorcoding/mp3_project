@@ -25,7 +25,7 @@ Long mode 和右侧符号 Opa。不改 Border Width，以免文字漂移。点�
   Background 准备前调用。只打开 `QueueTab` 滚动。
 - `service_gui_main_queue_scroll_lead()`：仅由 `Service_GUI_QueueScrollLead()` 转发。
   返回顶部已滚出的整行数。
-- `service_gui_main_queue_apply()`：仅由 `Service_GUI_QueueApply()` 转发。按 `Length`
+- `service_gui_main_queue_apply()`：仅由 `Service_GUI_QueueApply()` 转发。按 `titles[i]` / `artists[i]` 填曲名与歌手（`artists` 为 NULL 时歌手全空）；按 `Length`
   补造或 Hidden 已有行；`window_index` 变化时转 head，并从当前 `scroll_y` 扣整行高度，
   不把列表吸回整页。`current_index` 决定哪一行是当前曲。
 
@@ -35,8 +35,8 @@ Long mode 和右侧符号 Opa。不改 Border Width，以免文字漂移。点�
 view/ 创建空 QueueTab
   -> GUI Task 按 ScrollLead 改 Index 并 request
   -> 看见 READY
-  -> Service_GUI_QueueApply(titles, Length, Index, current_index)
-  -> 已有行转 head，不够的行由行工厂补造，按 Length 填曲名
+  -> Service_GUI_QueueApply(titles, artists, Length, Index, current_index)
+  -> 已有行转 head，不够的行由行工厂补造，按 Length 填曲名与歌手
   -> Length 之后已构造行 Hidden
   -> current_index 落在本窗则高亮该行
   -> Process() 内 CLICKED 只改行样式并 post 选曲

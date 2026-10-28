@@ -66,6 +66,13 @@
                 '^Platform/lcd/platform_lcd\.h$'
                 '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
                 '^Service/service\.h$'
+                # gui_music_queue_rows 的测试按窗口槽头构造 READY 窗口（#140）。
+                '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
+                '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
+                '^APP/tasks/storage/catalog/storage_catalog_name\.h$'
+                '^APP/tasks/storage/storage_task\.h$'
+                '^APP/tasks/storage/storage_task_config\.h$'
+                '^Service/filesystem/filesystem_types\.h$'
                 '^Tests/gui_task/'
             )
         }
