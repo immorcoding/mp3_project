@@ -7,6 +7,7 @@
 
 #include "storage_catalog.h"
 #include "storage_sheet.h"
+#include "storage_track_diag.h"
 #include "storage_track_text.h"
 
 #include <stdbool.h>
@@ -122,6 +123,7 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
     const StorageTrackText_ResultTypeDef *track;
     uint32_t sheet_generation;
     uint32_t list_index;
+    uint32_t start_cycles;
     uint16_t catalog_index;
     bool stop;
 
@@ -145,6 +147,7 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
         storage_listbuffer_fill.Started = true;
         storage_listbuffer_fill.Generation = sheet_generation;
         storage_listbuffer_fill.Filled = 0U;
+        storage_track_diag_window_begin();
     }
     else if ((sheet_generation != storage_listbuffer_fill.Generation) ||
              (sheet_generation != storage_catalog_generation()))
@@ -169,7 +172,9 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
     if (!stop)
     {
         row = &storage_listbuffer.Rows[storage_listbuffer_fill.Filled];
+        start_cycles = storage_track_diag_begin();
         track = storage_track_text_read(storage_listbuffer_path);
+        storage_track_diag_row_done(start_cycles, track);
         if (track != NULL)
         {
             (void)memcpy(row->Title, track->Text.Title, sizeof(row->Title));
@@ -192,6 +197,7 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
         return STORAGE_OK;
     }
 
+    storage_track_diag_window_end();
     storage_listbuffer.Length = storage_listbuffer_fill.Filled;
     storage_listbuffer.Generation = storage_listbuffer_fill.Generation;
     storage_listbuffer_fill.Started = false;

@@ -7,6 +7,7 @@
 
 #include "storage_catalog.h"
 #include "storage_sheet.h"
+#include "storage_track_diag.h"
 #include "storage_track_text.h"
 
 #include <stdio.h>
@@ -136,7 +137,10 @@ void storage_namebuffer_load(bool sd_ready)
                                        storage_namebuffer_path,
                                        sizeof(storage_namebuffer_path)) == STORAGE_OK))
         {
+            const uint32_t start_cycles = storage_track_diag_begin();
+
             track = storage_track_text_read(storage_namebuffer_path);
+            storage_track_diag_name_done(index, start_cycles, track);
         }
     }
 
