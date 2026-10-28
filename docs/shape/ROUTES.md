@@ -4,7 +4,7 @@
 
 Routed: `Components/*/`, `Platform/*/`, `Service/*/`, `APP/tasks/*/`, `Tools/*/`, `Adapters/*/`, `Resources/fonts/`, `Tests/`, `scripts/`
 
-- `Components/*/`: 可复用设备协议与算法，每模块一目录。Entry: [层说明](../../Components/README.md) → 目标模块 README。Areas: [Architecture](architecture.md) · [Code style](code-style.md)；另按模块：[Hardware](hardware.md)（axp2101、ft6x36、soft_i2c）· [Storage](storage.md)（flash_ftl、sd、w25qxx）· [Diagnostics](diagnostics.md)（log）· [Resources](resources.md)（resource_pack）· [GUI](gui.md)（st7789）
+- `Components/*/`: 可复用设备协议与算法，每模块一目录。Entry: [层说明](../../Components/README.md) → 目标模块 README。Areas: [Architecture](architecture.md) · [Code style](code-style.md)；另按模块：[Hardware](hardware.md)（axp2101、ft6x36、soft_i2c）· [Storage](storage.md)（flash_ftl、id3_reader、sd、w25qxx）· [Diagnostics](diagnostics.md)（log）· [Resources](resources.md)（resource_pack）· [GUI](gui.md)（st7789）
 - `Platform/*/`: 本板资源装配与产品硬件能力。Entry: [层说明](../../Platform/README.md) → 目标模块 README。Areas: [Architecture](architecture.md) · [Code style](code-style.md)；另按模块：[Hardware](hardware.md)（power、sdram、temp、touch）· [Storage](storage.md)（flash、sd）· [Diagnostics](diagnostics.md)（log）· [GUI](gui.md)（lcd）
 - `Service/*/`: 跨模块产品流程。Entry: [层说明](../../Service/README.md) → 目标模块 README。Areas: [Architecture](architecture.md) · [Code style](code-style.md)；另按模块：[Storage](storage.md)（filesystem）· [GUI](gui.md)（gui）· [Diagnostics](diagnostics.md)（log）· [Resources](resources.md)（resource）
 - `APP/tasks/*/`: 任务外壳、状态机与跨任务交接。Entry: [任务总览](../../APP/tasks/README.md) → 目标 Task README。Areas: [Architecture](architecture.md)；另按任务：[Storage](storage.md)（storage）· [GUI](gui.md)（gui）· [Hardware](hardware.md)（monitor、playback）· [Diagnostics](diagnostics.md)（log、playback）
