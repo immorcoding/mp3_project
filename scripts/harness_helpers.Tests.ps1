@@ -172,6 +172,18 @@ $catalogNameImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog
 Assert-HarnessSequence -Expected @('storage_catalog') -Actual $catalogNameImpact.HostModules `
     -Message '曲目显示名纯函数变化必须选择 Storage 曲库主机测试'
 
+$catalogTextImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_catalog_text.c')
+Assert-HarnessSequence -Expected @('storage_catalog') -Actual $catalogTextImpact.HostModules `
+    -Message '曲目文本纯函数变化必须选择 Storage 曲库主机测试'
+
+$id3ReaderImpact = Get-HarnessImpact -ChangedPath @('Components/id3_reader/id3_reader.c')
+Assert-HarnessSequence -Expected @('storage_catalog') -Actual $id3ReaderImpact.HostModules `
+    -Message 'id3_reader Component 变化必须选择 Storage 曲库主机测试（它只经曲目文本函数被测）'
+
+$cc936Impact = Get-HarnessImpact -ChangedPath @('Middlewares/Third_Party/FatFs/src/option/cc936.c')
+Assert-HarnessSequence -Expected @('flash_ftl', 'storage_catalog') -Actual $cc936Impact.HostModules `
+    -Message 'CP936 表变化必须同时选择 Flash 与 Storage 曲库主机测试（后者链接真实 cc936.c 做 GBK 查表）'
+
 $monitorWarnImpact =Get-HarnessImpact -ChangedPath @('APP/tasks/monitor/monitor_warn.c')
 Assert-HarnessSequence -Expected @('monitor_warn') -Actual $monitorWarnImpact.HostModules `
     -Message 'Monitor 变化选择 monitor_warn 主机测试'
