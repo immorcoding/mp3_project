@@ -198,10 +198,20 @@ static void test_committed_font_decodes_to_reference_tables(void)
     test_expect_glyph(&font, 0xE9U, 169U, 106U, 7U, 11U, 0, 0, 4952U, bitmap_eacute, sizeof(bitmap_eacute));
     test_expect_glyph(&font, 0x2013U, 322U, 103U, 6U, 1U, 0, 3, 10070U, bitmap_endash, sizeof(bitmap_endash));
     test_expect_glyph(&font, 0x2122U, 336U, 137U, 8U, 6U, 0, 4, 10398U, bitmap_trademark, sizeof(bitmap_trademark));
-    /* 西文扩展字符：Latin-1 补充区全部 96 个码点与 U+2013、U+2122 都能查到字形（编号按码点升序，由字集推出）。 */
+    /* 西文扩展字符：Latin-1 补充区 U+00A0–U+00FF 全部 96 个码点与 U+2013、U+2122 都能查到字形；
+     * latin1_glyph_ids 是独立脚本逐子表解析同一份 bin 得到的字形编号，下标为 码点 - 0xA0。 */
+    static const uint16_t latin1_glyph_ids[96] = {
+        96U, 97U, 98U, 99U, 100U, 101U, 102U, 103U, 104U, 105U, 106U, 107U,
+        108U, 109U, 110U, 111U, 112U, 113U, 114U, 115U, 116U, 117U, 118U, 119U,
+        120U, 121U, 122U, 123U, 124U, 125U, 126U, 127U, 128U, 129U, 130U, 131U,
+        132U, 133U, 134U, 135U, 136U, 137U, 138U, 139U, 140U, 141U, 142U, 143U,
+        144U, 145U, 146U, 147U, 148U, 149U, 150U, 151U, 152U, 153U, 154U, 155U,
+        156U, 157U, 158U, 159U, 160U, 161U, 162U, 163U, 164U, 165U, 166U, 167U,
+        168U, 169U, 170U, 171U, 172U, 173U, 174U, 175U, 176U, 177U, 178U, 179U,
+        180U, 181U, 182U, 183U, 184U, 185U, 186U, 187U, 188U, 189U, 190U, 191U};
     for (uint32_t letter = 0xA0U; letter <= 0xFFU; letter++)
     {
-        assert(gft_glyph_id(&font, letter) == (96U + (letter - 0xA0U)));
+        assert(gft_glyph_id(&font, letter) == latin1_glyph_ids[letter - 0xA0U]);
     }
     assert(gft_glyph_id(&font, 0x2013U) == 322U);
     assert(gft_glyph_id(&font, 0x2122U) == 336U);

@@ -5,6 +5,12 @@ import os
 import sys
 import unittest
 
+try:
+    import lameenc  # noqa: F401  整文件生成需要 MP3 编码器
+    HAVE_LAMEENC = True
+except ImportError:
+    HAVE_LAMEENC = False
+
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import card_glyphs as cg  # noqa: E402
@@ -119,6 +125,19 @@ class CardGlyphs(unittest.TestCase):
         self.assertIn("glyphs", make_card.SETS)
         self.assertEqual(make_card.SETS["glyphs"], [s.filename for s in cg.GLYPH_SAMPLES])
         self.assertFalse(set(make_card.SETS["glyphs"]) & set(make_card.SETS["all"]))
+
+
+@unittest.skipUnless(HAVE_LAMEENC, "整文件确定性需要 lameenc（pip install lameenc）；缺包时跳过")
+class CardGlyphsFiles(unittest.TestCase):
+    def test_glyphs_set_files_are_byte_identical_across_two_generations(self):
+        import make_card
+        first = make_card.make_all()
+        second = make_card.make_all()
+        for name in make_card.SETS["glyphs"]:
+            self.assertIn(name, first, name)
+            self.assertIn(name, second, name)
+            self.assertGreater(len(first[name]), 0, name)
+            self.assertEqual(first[name], second[name], "%s differs between two generations" % name)
 
 
 if __name__ == "__main__":
