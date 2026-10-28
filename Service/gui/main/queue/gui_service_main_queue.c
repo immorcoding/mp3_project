@@ -558,7 +558,7 @@ static void service_gui_main_queue_on_scroll(lv_event_t *e)
         return;
     }
 
-    tab = lv_event_get_target(e);
+    tab = lv_event_get_current_target(e);
     top = lv_obj_get_scroll_top(tab);
     bottom = lv_obj_get_scroll_bottom(tab);
     if (service_gui_main_queue_more_before && (top < 0))
@@ -576,7 +576,9 @@ static void service_gui_main_queue_on_scroll(lv_event_t *e)
  * @param[in] window_index 本窗在播放列表上的起点。
  * @param[in] length 本窗实际条数。
  * @note 窗口不满上限说明已到列表末尾；满上限时按可能还有处理。GUI Task 在末尾附近 request 的窗口
- *       起点会让可见首行之上只留回滑行，末窗因此不满，滚到列表末尾时下沿照常回弹。
+ *       起点会让可见首行之上只留回滑行，末窗因此不满，滚到列表末尾时下沿照常回弹。已知瞬态：
+ *       曲库恰为上限行，或末尾所在窗口恰好满上限时，快速滑到末尾的那一下停在末行不回弹，
+ *       等不满上限的末窗 READY 后才回弹（窗口槽不带曲目总数，Service 无从区分）。
  */
 static void service_gui_main_queue_note_edges(uint16_t window_index, uint16_t length)
 {
