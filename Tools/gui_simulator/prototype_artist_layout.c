@@ -13,6 +13,7 @@
   *          歌手为空时显示 `Unknown Artist`），取值见 PROTOTYPE.md。
   *          6 = 第三轮：#146 布局需求七条，整页由 proto_r3_cfg 一份像素常量推出
   *          （曲名在上、歌手在下，四组等距 S，按 ink 计量）；`--artist-hide 1|2` 只供测量。
+  *          7 = 第四轮：在 6 上把文字组 → 进度组收紧为 4，腾出的 4 px 给唱盘，Label 高 16。
   ******************************************************************************
   */
 
@@ -87,7 +88,8 @@ static const proto_layout_t proto_layout_rhythm =
 static bool proto_unknown_artist;
 
 #define PROTO_R3_LAYOUT (6)
-static void proto_r3_init(void);
+#define PROTO_R4_LAYOUT (7)
+static void proto_r3_init_layout(int layout);
 static void proto_r3_step(void);
 
 static const proto_layout_t *proto_layout;
@@ -188,9 +190,9 @@ void proto_artist_layout_init(int layout)
     const lv_font_t *font = service_gui_font_title();
     const proto_layout_t *l;
 
-    if (layout == PROTO_R3_LAYOUT)
+    if ((layout == PROTO_R3_LAYOUT) || (layout == PROTO_R4_LAYOUT))
     {
-        proto_r3_init();
+        proto_r3_init_layout(layout);
         return;
     }
     if ((layout < 0) || (layout >= PROTO_RHYTHM_FIRST + PROTO_RHYTHM_COUNT))
@@ -319,9 +321,13 @@ typedef struct
     lv_coord_t slider_h;      /* 进度条高度（含 1 px 边）。 */
     lv_coord_t side_btn;      /* 侧键直径。 */
     lv_coord_t main_btn;      /* 主键直径。 */
+    lv_coord_t text_progress_gap; /* 文字组 → 进度组；0 = 等于 S（layout 6），layout 7 为独立常量 4。 */
+    lv_coord_t label_pad;     /* 曲名、歌手 Label 高 = line_height + label_pad（6：2，7：0）。 */
 } proto_r3_cfg_t;
 
-static const proto_r3_cfg_t proto_r3_cfg = {
+/* [0] = layout 6（第三轮）；[1] = layout 7（第四轮：文字组 → 进度组收紧为 4，腾出的 4 px 给唱盘，Label 高 16）。 */
+static const proto_r3_cfg_t proto_r3_cfgs[] = {
+  {
     .grid = 4,
     .s_max = 12,
     .s_min = 4,
@@ -333,7 +339,27 @@ static const proto_r3_cfg_t proto_r3_cfg = {
     .slider_h = 4,
     .side_btn = 36,
     .main_btn = 44,
+    .text_progress_gap = 0,
+    .label_pad = 2,
+  },
+  {
+    .grid = 4,
+    .s_max = 12,
+    .s_min = 4,
+    .disc_min = 112,
+    .disc_src = 144,
+    .text_gap = 4,
+    .progress_gap = 4,
+    .column_w = 192,
+    .slider_h = 4,
+    .side_btn = 36,
+    .main_btn = 44,
+    .text_progress_gap = 4,
+    .label_pad = 0,
+  },
 };
+
+static const proto_r3_cfg_t *proto_r3_c = &proto_r3_cfgs[0];
 
 /* 字体 ink 带的参考字形：曲名/歌手覆盖拉丁大小写、数字与常见 CJK；时间覆盖数字与分隔符。 */
 #define PROTO_R3_TEXT_INK_REF "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" \
@@ -452,7 +478,8 @@ static proto_ink_t proto_r3_ink(const lv_font_t *font, const char *ref)
  * @param[in] h 内容区高度。
  * @param[in] w 内容区宽度。
  * @return 版面。
- * @note  5S + D + (2·text.h + text_gap) + (slider_h + progress_gap + time.h) + main_btn = H。
+ * @note  4S + G + D + (2·text.h + text_gap) + (slider_h + progress_gap + time.h) + main_btn = H，
+ *        G = 文字组 → 进度组（text_progress_gap，为 0 时等于 S）。
  *        S 从 s_max 起按 grid 递减，取第一个使 D ≥ disc_min 的值。D 取偶数（唱盘绕中心缩放，
  *        奇数直径无法在像素上对称），余下的 1 行加给进度条高度。
  */
@@ -461,12 +488,14 @@ static proto_r3_layout_t proto_r3_solve(const proto_r3_cfg_t *c, proto_ink_t tex
 {
     proto_r3_layout_t l;
     lv_coord_t fixed = (lv_coord_t)(2 * text.h + c->text_gap + c->slider_h + c->progress_gap + time.h + c->main_btn);
+    lv_coord_t g;
 
     memset(&l, 0, sizeof(l));
     l.h = h;
     for (l.s = c->s_max; l.s >= c->s_min; l.s = (lv_coord_t)(l.s - c->grid))
     {
-        l.disc = (lv_coord_t)(h - 5 * l.s - fixed);
+        g = (c->text_progress_gap > 0) ? c->text_progress_gap : l.s;
+        l.disc = (lv_coord_t)(h - 4 * l.s - g - fixed);
         if (l.disc >= c->disc_min)
         {
             break;
@@ -478,7 +507,7 @@ static proto_r3_layout_t proto_r3_solve(const proto_r3_cfg_t *c, proto_ink_t tex
     l.disc_top = l.s;
     l.title_ink_top = (lv_coord_t)(l.disc_top + l.disc + l.s);
     l.artist_ink_top = (lv_coord_t)(l.title_ink_top + text.h + c->text_gap);
-    l.slider_top = (lv_coord_t)(l.artist_ink_top + text.h + l.s);
+    l.slider_top = (lv_coord_t)(l.artist_ink_top + text.h + ((c->text_progress_gap > 0) ? c->text_progress_gap : l.s));
     l.time_ink_top = (lv_coord_t)(l.slider_top + c->slider_h + l.slack + c->progress_gap);
     l.btn_top = (lv_coord_t)(l.time_ink_top + time.h + l.s);
     l.col_x = (lv_coord_t)((w - c->column_w) / 2);
@@ -575,12 +604,12 @@ static void proto_r3_hide(lv_obj_t *obj)
 }
 
 /**
- * @brief 第三轮：按 proto_r3_cfg 推出版面并重排 Now Playing。
+ * @brief 第三轮 / 第四轮：按常量配置推出版面并重排 Now Playing。
+ * @param[in] c 常量配置（layout 6 或 7）。
  */
-static void proto_r3_init(void)
+static void proto_r3_init(const proto_r3_cfg_t *c)
 {
     const Service_GUI_ViewMusicTypeDef *music = &service_gui_view_get()->music;
-    const proto_r3_cfg_t *c = &proto_r3_cfg;
     const lv_font_t *font = service_gui_font_title();
     lv_obj_t *tab = lv_obj_get_parent(music->title_label);
     lv_obj_t *controls = lv_obj_get_parent(music->slider);
@@ -592,6 +621,7 @@ static void proto_r3_init(void)
     lv_area_t a;
 
     proto_r3_active = true;
+    proto_r3_c = c;
     lv_obj_update_layout(tab);
     tab_w = lv_obj_get_content_width(tab);
     tab_h = lv_obj_get_content_height(tab);
@@ -626,11 +656,11 @@ static void proto_r3_init(void)
     lv_img_set_zoom(music->vinyl_image, proto_r3.zoom);
 
     /* 曲名与歌手：同宽 column_w，Label 盒子顶 = ink 顶 - ink 带偏移。 */
-    lv_obj_set_width(music->title_label, c->column_w);
+    lv_obj_set_size(music->title_label, c->column_w, (lv_coord_t)(font->line_height + c->label_pad));
     proto_r3_place(music->title_label, proto_r3.col_x, (lv_coord_t)(proto_r3.title_ink_top - text_ink.top));
 
     proto_r3_artist = lv_label_create(tab);
-    lv_obj_set_size(proto_r3_artist, c->column_w, font->line_height + 2);
+    lv_obj_set_size(proto_r3_artist, c->column_w, (lv_coord_t)(font->line_height + c->label_pad));
     proto_r3_place(proto_r3_artist, proto_r3.col_x, (lv_coord_t)(proto_r3.artist_ink_top - text_ink.top));
     lv_obj_clear_flag(proto_r3_artist, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     lv_label_set_long_mode(proto_r3_artist, LV_LABEL_LONG_DOT);
@@ -697,6 +727,15 @@ static void proto_r3_init(void)
 }
 
 /**
+ * @brief 按 layout 6 / 7 选常量配置并重排。
+ * @param[in] layout PROTO_R3_LAYOUT 或 PROTO_R4_LAYOUT。
+ */
+static void proto_r3_init_layout(int layout)
+{
+    proto_r3_init(&proto_r3_cfgs[(layout == PROTO_R4_LAYOUT) ? 1 : 0]);
+}
+
+/**
  * @brief 第三轮每圈：曲名变化时写歌手、按 column_w 重定曲名 Long mode；主键图标换字形时重新居中。
  */
 static void proto_r3_step(void)
@@ -730,7 +769,7 @@ static void proto_r3_step(void)
     /* main/title 按 160 判定滚动；原型的曲名窗是 column_w，按它重判（只在不同时改，避免重启动画）。 */
     width = lv_txt_get_width(title, (uint32_t)strlen(title), lv_obj_get_style_text_font(music->title_label, LV_PART_MAIN),
                              0, LV_TEXT_FLAG_NONE);
-    mode = (width > proto_r3_cfg.column_w) ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_CLIP;
+    mode = (width > proto_r3_c->column_w) ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_CLIP;
     if (lv_label_get_long_mode(music->title_label) != mode)
     {
         lv_label_set_long_mode(music->title_label, mode);
