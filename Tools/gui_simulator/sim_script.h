@@ -35,15 +35,15 @@ typedef enum
     SIM_SCRIPT_NAME_FAIL = 0, /**< 切换某首名字取不到；值为播放列表位置。 */
     SIM_SCRIPT_NAME_DELAY,    /**< 设置名称槽应答额外等待的圈数。 */
     SIM_SCRIPT_WINDOW_DELAY   /**< 设置窗口槽应答额外等待的圈数。 */
-} sim_script_name_control_t;
+} sim_script_slot_control_t;
 
-typedef void (*sim_script_name_handler_t)(sim_script_name_control_t control, unsigned value);
+typedef void (*sim_script_slot_handler_t)(sim_script_slot_control_t control, unsigned value);
 
 /** @brief 脚本动作的处理函数（交互键盘与名称槽开关）。 */
 typedef struct
 {
     sim_script_key_handler_t on_key;   /**< --key。 */
-    sim_script_name_handler_t on_name; /**< --name-fail / --name-delay / --window-delay。 */
+    sim_script_slot_handler_t on_slot; /**< --name-fail / --name-delay / --window-delay。 */
 } sim_script_handlers_t;
 
 typedef struct

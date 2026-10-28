@@ -406,6 +406,8 @@ void gui_music_init(void)
                    "music queue window PENDING must match listbuffer");
     _Static_assert(GUI_MUSIC_QUEUE_WINDOW_READY == STORAGE_LISTBUFFER_READY,
                    "music queue window READY must match listbuffer");
+    _Static_assert(GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS < STORAGE_LISTBUFFER_MAX_ENTRIES,
+                   "music queue back rows must leave room for visible rows in one window");
     _Static_assert(GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT == SERVICE_GUI_QUEUE_NO_CURRENT,
                    "music queue window no-current must match QueueApply sentinel");
     _Static_assert(GUI_MUSIC_TITLE_IDLE == STORAGE_NAMEBUFFER_IDLE,

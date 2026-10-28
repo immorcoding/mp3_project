@@ -15,7 +15,7 @@
 #define GUI_MUSIC_QUEUE_WINDOW_PENDING 1U  /* 与 STORAGE_LISTBUFFER_PENDING 同值。 */
 #define GUI_MUSIC_QUEUE_WINDOW_READY   2U  /* 与 STORAGE_LISTBUFFER_READY 同值。 */
 #define GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT  0xFFFFU  /* 无当前曲或代次不符；与 QueueApply 无当前曲同值。 */
-#define GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS   3U       /* 非首窗在可见首行之上留给回滑的行数；一窗 12 行、一屏约 5 行，上 3 下 4（#157）。 */
+#define GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS   3U       /* 非首窗在可见首行之上留给回滑的行数，须小于窗口容量；一屏约 5 行，余下的留在下方（#157）。 */
 
 typedef enum
 {

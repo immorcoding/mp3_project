@@ -23,7 +23,7 @@ typedef enum
     SIM_ACTION_DRAG,
     SIM_ACTION_KEY,
     SIM_ACTION_ANIMS,
-    SIM_ACTION_NAME
+    SIM_ACTION_SLOT
 } sim_action_kind_t;
 
 typedef struct
@@ -36,8 +36,8 @@ typedef struct
     int x1;
     int y1;
     char key;
-    sim_script_name_control_t name_control;
-    unsigned name_value;
+    sim_script_slot_control_t slot_control;
+    unsigned slot_value;
     const char *path;
     bool started;
     bool done;
@@ -57,6 +57,39 @@ static bool sim_script_add(const sim_action_t *action)
 
     sim_actions[sim_action_count++] = *action;
     return true;
+}
+
+/** @brief 假 Storage 槽位开关的命令行名与对应开关。 */
+static const struct
+{
+    const char *option;
+    sim_script_slot_control_t control;
+} sim_script_slot_options[] = {
+    {"--name-fail", SIM_SCRIPT_NAME_FAIL},
+    {"--name-delay", SIM_SCRIPT_NAME_DELAY},
+    {"--window-delay", SIM_SCRIPT_WINDOW_DELAY},
+};
+
+/**
+ * @brief 按命令行名查假 Storage 槽位开关。
+ * @param[in]  option  命令行参数名，如 `--window-delay`。
+ * @param[out] control 查到时写入对应开关。
+ * @return 是槽位开关时为 true。
+ */
+static bool sim_script_find_slot_option(const char *option, sim_script_slot_control_t *control)
+{
+    size_t i;
+
+    for (i = 0U; i < sizeof(sim_script_slot_options) / sizeof(sim_script_slot_options[0]); i++)
+    {
+        if (strcmp(option, sim_script_slot_options[i].option) == 0)
+        {
+            *control = sim_script_slot_options[i].control;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -170,27 +203,14 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
             }
             action.kind = SIM_ACTION_KEY;
         }
-        else if ((strcmp(argv[i], "--name-fail") == 0) || (strcmp(argv[i], "--name-delay") == 0) ||
-                 (strcmp(argv[i], "--window-delay") == 0))
+        else if (sim_script_find_slot_option(argv[i], &action.slot_control))
         {
-            if (sscanf(value, "%u:%u", &at, &action.name_value) != 2)
+            if (sscanf(value, "%u:%u", &at, &action.slot_value) != 2)
             {
                 fprintf(stderr, "bad %s %s\n", argv[i], value);
                 return false;
             }
-            action.kind = SIM_ACTION_NAME;
-            if (strcmp(argv[i], "--name-fail") == 0)
-            {
-                action.name_control = SIM_SCRIPT_NAME_FAIL;
-            }
-            else if (strcmp(argv[i], "--name-delay") == 0)
-            {
-                action.name_control = SIM_SCRIPT_NAME_DELAY;
-            }
-            else
-            {
-                action.name_control = SIM_SCRIPT_WINDOW_DELAY;
-            }
+            action.kind = SIM_ACTION_SLOT;
         }
         else
         {
@@ -267,8 +287,8 @@ bool sim_script_step(uint32_t elapsed_ms, const sim_script_handlers_t *handlers)
             action->done = true;
             break;
 
-        case SIM_ACTION_NAME:
-            handlers->on_name(action->name_control, action->name_value);
+        case SIM_ACTION_SLOT:
+            handlers->on_slot(action->slot_control, action->slot_value);
             action->done = true;
             break;
 
