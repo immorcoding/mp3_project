@@ -41,3 +41,23 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 - 每个和弦 1 s、起止采样为 0，循环拼接，曲内没有人为咔哒声；同一 `lameenc` 版本下输出逐字节一致，上表字节数以 `lameenc` 1.9.0 为准。
 
 - 串口日志：`capture-serial.ps1 -Port <COM口> -OutFile <路径>` 采集板子 USB CDC 日志（时间戳、自动重连），用法见[板级验收清单](../../docs/agents/board-test-checklist.md#烧录与日志)。
+
+### ID3 标签样本（`--set tags`）
+
+给 [#135](https://github.com/immorcoding/mp3_project/issues/135) 板级验收 I1–I6 用（#142）。音频与 `--set names` 相同（44.1 kHz 192 kbps 30 s，约 720 KB），只在文件头加不同的 ID3v2 标签；复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set tags`）。不含在 `all` 内：换一张空卡（或格式化后）单独复制，与 `--set names` 同写法；按下表顺序逐个复制。样本内容以 ASCII 为主，标签表在 [card_tags.py](card_tags.py)。
+
+| 顺序 | 文件名 | 字节 | 唱盘页曲名 | Queue 曲名 / 歌手 | 名称槽 INFO：来源，读取次数 | 验收项 |
+|---:|---|---:|---|---|---|---|
+| 1 | `tag-1-v23-utf16le.mp3` | 721077 | `Tag Sample UTF16LE` | `Tag Sample UTF16LE` / `Test Artist A` | 标题，1 | I1 |
+| 2 | `tag-2-v24-utf8.mp3` | 721039 | `Tag Sample UTF8` | `Tag Sample UTF8` / `Test Artist B` | 标题，1 | I2 |
+| 3 | `tag-3-latin1-gbk.mp3` | 721031 | `测试标题 GBK`（中文正确） | 曲名与歌手 `测试歌手` 均为占位框（0.8.1 解决） | 标题，1 | I3 |
+| 4 | `tag-4-apic-first.mp3` | 729107 | `Tag Sample APIC First` | `Tag Sample APIC First` / `Test Artist D` | 标题，2；无 WARN；记录耗时 | I4 |
+| 5 | `tag-5-blank-title.mp3` | 721028 | `tag-5-blank-title`（文件主名） | `tag-5-blank-title` / 空 | 文件主名，原因=帧缺失，1；无 WARN | I5 |
+| 6 | `tag-6-no-tag.mp3` | 720979 | `tag-6-no-tag`（文件主名） | `tag-6-no-tag` / 空 | 文件主名，原因=无 ID3v2，1；无 WARN | I6 |
+
+- 样本 1：v2.3，编码字节 1（UTF-16 + BOM），与 [#128](https://github.com/immorcoding/mp3_project/issues/128) 实测的 42 个文件同形。样本 2：v2.4，编码字节 3（UTF-8），帧大小 syncsafe。
+- 样本 3：v2.3，声明编码字节 0（Latin-1）实为 GBK。唱盘页（Noto）中文正确，Queue（Montserrat）显示占位框，不算退化。
+- 样本 4：8000 B 的 APIC 位于 TIT2/TPE1 之前，TIT2 帧头在偏移 8040，越过首块 4 KiB，故读取次数为 2（首块 + 一次 seek），不读 APIC 负载。
+- 样本 5：只有 TALB 与全空白的 TIT2，无 TPE1，清理后为空按“帧缺失”回退。样本 6：文件开头即 MP3 帧，无 ID3 头。
+- 缺 BOM、多值、超长、非法编码、控制字符不做成样本，只在主机测试中用字节块覆盖。
+- 字节数以 `lameenc` 1.9.0 为准；同参数两次生成逐字节一致。合同由 `python Tools/board_test_card/test_card_tags.py` 检查（不需要 `lameenc`）。
