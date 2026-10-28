@@ -1,4 +1,4 @@
-﻿# Queue 行显示曲目显示名与歌手（GUI-23、STOR-16、#140）：不显示路径，也不显示 `--`。
+﻿# Queue 行显示曲目显示名与歌手（GUI-25、STOR-16、#140）：不显示路径，也不显示 `--`。
 # 滚到第 4–9 首，一屏混排三类行态：`Experience (Einaudi Live)` + 歌手 `Ludovico Einaudi`（标题 + 歌手）、
 # `Kiss the Rain (Live)`（标题无歌手）、`Comptine d'un autre ete` 等（回退文件主名，歌手空）。全部 ASCII。
 # 再滚到末尾换窗：`Music/a.b.MP3` 显示文件主名 `a.b`，中文文件主名在 Montserrat 下画占位框（0.8.1 解决），均无 `Music/` 前缀。
