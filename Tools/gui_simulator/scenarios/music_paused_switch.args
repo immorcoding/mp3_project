@@ -3,9 +3,9 @@
 --tap 7000:120,260
 --tap 8000:120,260
 --shot 8300:paused
---tap 8500:180,260
+--tap 8500:198,260
 --shot 8800:paused_next
---tap 9000:60,260
+--tap 9000:42,260
 --shot 9300:paused_previous
 --tap 9500:125,28
 --shot 9800:queue_paused

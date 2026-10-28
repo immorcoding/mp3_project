@@ -1,14 +1,14 @@
 # 拖动进度条：滑块跟手、时间仍显示真实时间；松手不发命令，按快照回位（总时长未知、播放中、暂停中）
 --drag 6000:120,290:120,80:250
---drag 7000:40,224:160,224:300
+--drag 7000:40,212:160,212:300
 --shot 7200:unknown_dragging
 --shot 7600:unknown_released
 --tap 7800:120,260
 --shot 9800:playing
---drag 10000:40,224:160,224:300
+--drag 10000:40,212:160,212:300
 --shot 10200:playing_dragging
 --shot 10600:playing_released
 --tap 10800:120,260
---drag 11100:40,224:160,224:300
+--drag 11100:40,212:160,212:300
 --shot 11300:paused_dragging
 --shot 11700:paused_released

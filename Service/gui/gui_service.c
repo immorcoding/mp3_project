@@ -408,18 +408,20 @@ Service_StatusTypeDef Service_GUI_StatusFlash(void)
 }
 
 /**
- * @brief 在 Now Playing 曲名 Label 显示一段文本（曲目显示名、空串或 `--`）。
- * @param[in] text 以 '\0' 结尾的 UTF-8 文本，Label 会拷贝；空串表示留空。
- * @retval SERVICE_OK 已写入，或与现有文本相同未重写。
- * @retval SERVICE_INVALID_PARAM text 为 NULL。
- * @retval SERVICE_NOT_READY 曲名 Label 尚未创建（Init 未成功）。
- * @note 只能由同一 GUI Task 在 Init() 成功后调用。Service 不认识三种文本的语义，只负责画：
- *       文本宽于可见窗口（SERVICE_GUI_MUSIC_TITLE_WIDTH）时单行循环滚动，否则静止居中。
- *       调用返回后调用方可释放或复用 text（如把名称槽写回 IDLE）。
+ * @brief 在 Now Playing 曲名与歌手 Label 一次写入同一曲目身份的两列文本。
+ * @param[in] text 曲名，以 '\0' 结尾的 UTF-8 文本（曲目显示名、空串或 `--`），Label 会拷贝；空串表示留空。
+ * @param[in] artist 歌手，以 '\0' 结尾的 UTF-8 文本，Label 会拷贝；NULL 或空串表示无歌手（留空）。
+ * @retval SERVICE_OK 两列已写入，或与现有文本相同未重写。
+ * @retval SERVICE_INVALID_PARAM text 为 NULL；此时两列都不改。
+ * @retval SERVICE_NOT_READY 曲名或歌手 Label 尚未创建（Init 未成功）。
+ * @note 只能由同一 GUI Task 在 Init() 成功后调用。Service 不认识文本的语义，只负责画：
+ *       曲名宽于可见窗口（SERVICE_GUI_MUSIC_TITLE_WIDTH）时单行循环滚动，否则静止居中；
+ *       歌手宽于同一窗口时截断加省略号。占位文案（如 `Unknown Artist`）由调用方决定。
+ *       调用返回后调用方可释放或复用两段文本（如把名称槽写回 IDLE）。
  */
-Service_StatusTypeDef Service_GUI_TitleApply(const char *text)
+Service_StatusTypeDef Service_GUI_TitleApply(const char *text, const char *artist)
 {
-    return service_gui_main_title_apply(text);
+    return service_gui_main_title_apply(text, artist);
 }
 
 /**

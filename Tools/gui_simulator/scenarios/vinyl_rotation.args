@@ -12,11 +12,11 @@
 --shot 12300:paused_hold
 --tap 12500:120,260
 --shot 12800:resumed
---tap 13000:180,260
+--tap 13000:198,260
 --shot 13300:next_zero_playing
 --tap 13500:120,260
 --shot 13800:paused_after_next
---tap 14000:180,260
+--tap 14000:198,260
 --shot 14300:next_while_paused
 --tap 14500:120,260
 --drag 15000:200,160:30,160:200

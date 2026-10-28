@@ -4,7 +4,7 @@
 --tap 7000:120,260
 --key 7500:s
 --tap 7600:120,260
---tap 7800:180,260
+--tap 7800:198,260
 --shot 8100:frozen_playing
 --shot 9200:frozen_position_moves
 --tap 9300:125,28

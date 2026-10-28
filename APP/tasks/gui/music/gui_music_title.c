@@ -13,6 +13,7 @@
   */
 
 #include "gui_music_title.h"
+#include "gui_music_text.h"
 
 #include <stddef.h>
 
@@ -81,6 +82,8 @@ void gui_music_title_client_init(GUI_MusicTitleClientTypeDef *client)
     client->requested = client->identity;
     client->shown = GUI_MUSIC_TITLE_SHOW_NONE;
     client->name_generation = 0U;
+    client->has_applied = false;
+    client->applied = GUI_MUSIC_TITLE_SHOW_NONE;
 }
 
 /**
@@ -204,4 +207,48 @@ void gui_music_title_request_failed(GUI_MusicTitleClientTypeDef *client)
 {
     client->in_flight = false;
     client->need_request = client->identity.has_track;
+}
+
+/**
+ * @brief 在 poll 之后决定本圈要不要 TitleApply，以及 Apply 哪一对曲名与歌手。
+ * @param[in,out] client 曲名客户状态；记下本圈交出的显示。
+ * @param[in] action 本圈 gui_music_title_poll() 的返回值。
+ * @param[in] slot_title 名称槽里的曲名；只在 action 为 ACCEPT 时读。
+ * @param[in] slot_artist 名称槽里的歌手；只在 action 为 ACCEPT 时读。NULL 或空串交出
+ *            GUI_MUSIC_TEXT_UNKNOWN_ARTIST。
+ * @param[out] text 返回 true 时写入两列；指针指向槽内文本或常量文案。
+ * @return true 表示本圈须 Apply：ACCEPT 时一律交出槽内名字；否则只在空白 / `--`
+ *         与上次交出的显示不同时交出。
+ * @note  曲名与歌手由同一次应答给出，同时出现、同时清空（GUI-26）。指向槽内的指针
+ *        只在调用方把槽写回 IDLE 之前有效。
+ */
+bool gui_music_title_text(
+    GUI_MusicTitleClientTypeDef *client,
+    GUI_MusicTitleActionTypeDef action,
+    const char *slot_title,
+    const char *slot_artist,
+    GUI_MusicTitleTextTypeDef *text)
+{
+    const GUI_MusicTitleShowTypeDef shown = client->shown;
+
+    if (action == GUI_MUSIC_TITLE_ACTION_ACCEPT)
+    {
+        text->title = slot_title;
+        /* 取不到歌手是常态：与 Queue 同一份界面文案，只在 GUI 侧替换（GUI-25）。 */
+        text->artist = ((slot_artist == NULL) || (slot_artist[0] == '\0')) ? GUI_MUSIC_TEXT_UNKNOWN_ARTIST
+                                                                          : slot_artist;
+    }
+    else if (!client->has_applied || (shown != client->applied))
+    {
+        text->title = (shown == GUI_MUSIC_TITLE_SHOW_BLANK) ? "" : "--";
+        text->artist = "";
+    }
+    else
+    {
+        return false;
+    }
+
+    client->has_applied = true;
+    client->applied = shown;
+    return true;
 }
