@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    gui_service_main_title.h
-  * @brief   Main Screen 私有 Now Playing 曲名 Label Interface。
+  * @brief   Main Screen 私有 Now Playing 曲名与歌手 Label Interface。
   ******************************************************************************
   */
 
@@ -11,6 +11,6 @@
 #include "Service/service.h"
 
 Service_StatusTypeDef service_gui_main_title_prepare(void);
-Service_StatusTypeDef service_gui_main_title_apply(const char *text);
+Service_StatusTypeDef service_gui_main_title_apply(const char *text, const char *artist);
 
 #endif /* GUI_SERVICE_MAIN_TITLE_H */

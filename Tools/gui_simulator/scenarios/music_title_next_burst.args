@@ -5,9 +5,9 @@
 --drag 6000:120,290:120,80:250
 --tap 7000:120,260
 --shot 7400:first_named
---tap 7500:180,260
---tap 7600:180,260
---tap 7700:180,260
+--tap 7500:198,260
+--tap 7600:198,260
+--tap 7700:198,260
 --shot 7650:burst_blank_1
 --shot 7750:burst_blank_2
 --shot 7850:burst_blank_3

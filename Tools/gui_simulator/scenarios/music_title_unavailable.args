@@ -4,7 +4,7 @@
 --drag 6000:120,290:120,80:250
 --tap 7000:120,260
 --shot 7400:first_named
---tap 7500:180,260
+--tap 7500:198,260
 --shot 7800:unavailable_dashes
---tap 7900:180,260
+--tap 7900:198,260
 --shot 8200:third_named

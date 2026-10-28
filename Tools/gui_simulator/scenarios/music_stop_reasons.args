@@ -22,7 +22,7 @@
 --tap 11500:120,260
 --key 12000:r
 --shot 12400:reason_read_error
---tap 12500:180,260
+--tap 12500:198,260
 --shot 12800:next_clears_reason
 --tap 13000:120,260
 --key 13500:r

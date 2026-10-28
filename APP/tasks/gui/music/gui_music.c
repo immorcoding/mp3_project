@@ -36,11 +36,6 @@ static GUI_MusicQueueWindowClientTypeDef gui_music_queue_window_client;
 /** @brief 曲名客户：身份采信与名称槽握手。 */
 static GUI_MusicTitleClientTypeDef gui_music_title_client;
 
-/** @brief 曲名区上一圈已写到界面的显示。 */
-static GUI_MusicTitleShowTypeDef gui_music_title_shown_last;
-/** @brief 已写过至少一次曲名显示；为假时首圈无条件写入。 */
-static bool gui_music_title_has_shown;
-
 /** @brief 快照归约状态：命令序号、最后一份已追上的快照与各规则的历史基准。 */
 static GUI_MusicTransportTypeDef gui_music_transport;
 
@@ -292,15 +287,16 @@ static GUI_MusicQueueWindowActionTypeDef gui_music_window_step(void)
 /**
  * @brief 推进曲名一步：按已追上的曲目身份推进名称槽握手，只在显示变化时调 TitleApply。
  * @param[in] decision 本圈归约结果，提供采信的曲目身份。
- * @note  先读槽状态，READY 时再读应答代次与名字：READY 期间 Storage 不再写槽。
- *        ACCEPT 时名字拷给 Service 后才写回 IDLE；空白与 `--` 只在与上一圈不同时写。
+ * @note  先读槽状态，READY 时再读应答代次与两列：READY 期间 Storage 不再写槽。
+ *        曲名与歌手由曲名客户一起给出、同一次 TitleApply 写入（GUI-26），Service 拷完
+ *        文本后才把槽写回 IDLE；空白与 `--` 只在与上一次不同时写。
  */
 static void gui_music_title_step(const GUI_MusicTransportDecisionTypeDef *decision)
 {
     GUI_MusicTitleIdentityTypeDef identity;
     GUI_MusicTitleIdentityTypeDef requested;
     GUI_MusicTitleActionTypeDef action;
-    GUI_MusicTitleShowTypeDef shown;
+    GUI_MusicTitleTextTypeDef text;
     uint32_t status;
     uint32_t reply_generation;
 
@@ -312,39 +308,29 @@ static void gui_music_title_step(const GUI_MusicTransportDecisionTypeDef *decisi
     reply_generation = (status == STORAGE_NAMEBUFFER_READY) ? storage_namebuffer.Generation : 0U;
     action = gui_music_title_poll(&gui_music_title_client, &identity, status, reply_generation);
 
-    switch (action)
+    if (action == GUI_MUSIC_TITLE_ACTION_REQUEST)
     {
-        case GUI_MUSIC_TITLE_ACTION_REQUEST:
-            requested = gui_music_title_request_identity(&gui_music_title_client);
-            if (storage_namebuffer_request(requested.index, requested.generation) != STORAGE_OK)
-            {
-                gui_music_title_request_failed(&gui_music_title_client);
-            }
-            break;
-
-        case GUI_MUSIC_TITLE_ACTION_ACCEPT:
-            (void)Service_GUI_TitleApply(storage_namebuffer.Title);
-            storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
-            break;
-
-        case GUI_MUSIC_TITLE_ACTION_DISCARD:
-            storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
-            break;
-
-        case GUI_MUSIC_TITLE_ACTION_NONE:
-        default:
-            break;
+        requested = gui_music_title_request_identity(&gui_music_title_client);
+        if (storage_namebuffer_request(requested.index, requested.generation) != STORAGE_OK)
+        {
+            gui_music_title_request_failed(&gui_music_title_client);
+        }
     }
 
-    shown = gui_music_title_shown(&gui_music_title_client);
-    if ((action != GUI_MUSIC_TITLE_ACTION_ACCEPT) &&
-        (!gui_music_title_has_shown || (shown != gui_music_title_shown_last)))
+    /* 只有 ACCEPT 读槽内两列；READY 期间 Storage 不写槽，Service 拷完文本后才写回 IDLE。 */
+    if (gui_music_title_text(&gui_music_title_client,
+                             action,
+                             storage_namebuffer.Title,
+                             storage_namebuffer.Artist,
+                             &text))
     {
-        (void)Service_GUI_TitleApply((shown == GUI_MUSIC_TITLE_SHOW_BLANK) ? "" : "--");
+        (void)Service_GUI_TitleApply(text.title, text.artist);
     }
 
-    gui_music_title_shown_last = shown;
-    gui_music_title_has_shown = true;
+    if ((action == GUI_MUSIC_TITLE_ACTION_ACCEPT) || (action == GUI_MUSIC_TITLE_ACTION_DISCARD))
+    {
+        storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
+    }
 }
 
 /**
@@ -432,7 +418,6 @@ void gui_music_init(void)
     gui_music_queue_window_client_init(&gui_music_queue_window_client);
     gui_music_transport_init(&gui_music_transport);
     gui_music_title_client_init(&gui_music_title_client);
-    gui_music_title_has_shown = false;
     gui_music_shown.has_decision = false;
     gui_music_shown.highlight = GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT;
     gui_music_shown.highlight_stale = false;

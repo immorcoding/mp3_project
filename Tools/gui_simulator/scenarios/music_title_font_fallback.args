@@ -2,17 +2,18 @@
 # GUI 记 WARN `Title font fallback: resource unavailable.` 后照常启动，曲名 Label 改用 Montserrat 12。
 # 英文名正常显示；中文短名与中英混排里的汉字画占位框，ASCII 照常；播放与其他 Label 不受影响。
 # 再按四次上一首到第 10 首（位置 9）：标题 `Beyoncé® – Halo™` 里的西文扩展字符在 Montserrat 下同样画占位框（#148）。
+# 唱盘页曲名、歌手的完整字形范围按 Montserrat 12 推出（Label 内第 2 行起 13 行，GUI-27），字形上沿与 Noto 下落在同一行。
 --font-unavailable
 --drag 6000:120,290:120,80:250
 --tap 7000:120,260
 --shot 7400:fallback_english
---tap 7500:60,260
---tap 7800:60,260
+--tap 7500:42,260
+--tap 7800:42,260
 --shot 8200:fallback_cjk_short
---tap 8300:60,260
+--tap 8300:42,260
 --shot 8700:fallback_mixed
---tap 9000:60,260
---tap 9300:60,260
---tap 9600:60,260
---tap 9900:60,260
+--tap 9000:42,260
+--tap 9300:42,260
+--tap 9600:42,260
+--tap 9900:42,260
 --shot 10300:fallback_latin1

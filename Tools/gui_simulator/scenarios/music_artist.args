@@ -1,0 +1,43 @@
+# 唱盘页歌手行（GUI-26、GUI-27、#154）：曲名在上、歌手在下，Noto 12 px，歌手 Ink、Opa 180，宽 192 px 超宽截断加省略号。
+# 名称槽应答多等 20 圈（约 100 ms），拍切歌时两行同时留空、应答到达后同时出现。
+# 位置 0 无标签：歌手为空串，显示 `Unknown Artist`；位置 5：`Ludovico Einaudi`；位置 6：多歌手 `Ryuichi Sakamoto / David Sylvian`；
+# 位置 8：中文歌手 `周杰伦`；位置 9：超长西文歌手截断加省略号；拔卡后曲名 `--`、歌手为空。六类状态 Solid 与 Default 外观各拍一遍：
+# 先在上电外观 Solid 拍前五类，按 T 切 Default 拍超长、中文与拔卡（`*_default`）；切回 Solid 补拍拔卡，重新挂载后切 Default 从位置 0 开播，补拍无歌手、有歌手与多歌手。
+--name-delay 5000:20
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--shot 7400:unknown_artist
+--tap 7500:198,260
+--tap 7800:198,260
+--tap 8100:198,260
+--tap 8400:198,260
+--tap 8700:198,260
+--shot 9100:artist
+--tap 9200:198,260
+--shot 9340:switch_blank
+--shot 9460:multi_artist
+--tap 9600:198,260
+--tap 9900:198,260
+--shot 10300:cjk_artist
+--tap 10400:198,260
+--shot 10800:long_artist
+--key 10900:t
+--shot 11300:long_artist_default
+--tap 11400:42,260
+--shot 11800:cjk_artist_default
+--key 12000:c
+--shot 12400:no_card_default
+--key 12500:t
+--shot 12900:no_card
+--key 13000:c
+--key 13100:t
+--tap 13500:120,260
+--shot 13900:unknown_artist_default
+--tap 14000:198,260
+--tap 14300:198,260
+--tap 14600:198,260
+--tap 14900:198,260
+--tap 15200:198,260
+--shot 15600:artist_default
+--tap 15700:198,260
+--shot 16100:multi_artist_default

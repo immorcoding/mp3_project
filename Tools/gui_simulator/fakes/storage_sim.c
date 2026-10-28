@@ -75,9 +75,11 @@ typedef struct
  * 有标题、无歌手。Queue 第一窗由此混排三类行态（GUI-25）：标题 + 歌手、标题无歌手、
  * 回退文件主名（歌手空）。第 10 首（位置 9）的标题带 Latin-1 补充区字符与 U+2013、U+2122
  * （`®`、`é`、`–`、`™`，#148），唱盘页与 Queue 用资源包字体显示，歌手宽于 Queue 一行。第 9 首（位置 8）是中文标题 +
- * 中文歌手（#149），放在唱盘页场景不经过的位置，只进 Queue 场景；其余标签为 ASCII。
+ * 中文歌手（#149），唱盘页歌手场景 `music_artist` 也经过它。第 7 首（位置 6）的标题与文件主名相同、
+ * 歌手为多值 TPE1 按 ` / ` 连写的结果（#154），唱盘页与 Queue 都显示；其余标签为 ASCII。
  */
 static const StorageSim_TagTypeDef storage_sim_tags[] = {
+    {6U, "Merry Christmas Mr. Lawrence", "Ryuichi Sakamoto / David Sylvian"},
     {7U, "Kiss the Rain (Live)", NULL},
     {5U, "Experience (Einaudi Live)", "Ludovico Einaudi"},
     {8U, "晴天（2003 年演唱会现场版）", "周杰伦"},

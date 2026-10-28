@@ -17,7 +17,7 @@ main/
 ├─ pager/                       Page 槽位、吸附、循环重排、分页指示器动画
 ├─ queue/                       按 QueueApply 的 Length 构造 Queue 可见行并滑窗复用
 ├─ transport/                   Now Playing 三键、进度条假 seek 与 PLAY/PAUSE 符号
-├─ title/                       Now Playing 曲名 Label：写文本并选静止居中或循环滚动
+├─ title/                       Now Playing 曲名与歌手 Label：同次写两列，曲名选静止居中或循环滚动
 ├─ vinyl/                       把 Canvas 假唱盘第一帧绑到唱盘 Image，并按 playing 旋转
 └─ background/                  壁纸模糊、局部裁剪；Solid 薄层
 ~~~
@@ -29,7 +29,7 @@ main/
   并从当前 `scroll_y` 扣整行高度；不包含 `storage_listbuffer.h`。
   Queue 滚动不是 Pager，不要等 `SCROLL_END` 吸附。
 - `transport/` 不依赖 Canvas 或 Queue 行；绑三键与进度条松手，并换播放符号 / 写回百分比。
-- `title/` 不依赖 Canvas、Queue 或 Transport；只写曲名 Label 的文本与长文本模式，不认识名字 / 空白 / `--` 的语义。
+- `title/` 不依赖 Canvas、Queue 或 Transport；只写曲名与歌手 Label 的文本和曲名的长文本模式，不认识名字 / 空白 / `--` / `Unknown Artist` 的语义。
 - `vinyl/` 依赖 `canvas/`；合成假唱盘后绑到唱盘 Image。`service_gui_main_vinyl_apply(playing, reset_angle)`
   由 `Service_GUI_VinylApply()` 转发：playing 起转/续转、paused 停在当前角度、reset_angle 归零；
   同一 Image 至多一条 lv_anim。
@@ -66,7 +66,7 @@ GUI Task
        -> transport/service_gui_main_transport_prepare()
             -> 绑定上一首/播放暂停/下一首 CLICKED，以及进度条 RELEASED
        -> title/service_gui_main_title_prepare()
-            -> 取得曲名 Label，写入初始 `--`
+            -> 取得曲名与歌手 Label，曲名写入初始 `--`、歌手为空
        -> vinyl/service_gui_main_vinyl_prepare()（角度 0、不起转）
             -> Canvas 合成假唱盘写入独立缓冲，绑到唱盘 Image
        -> background/service_gui_main_background_prepare(clear_wallpaper)
