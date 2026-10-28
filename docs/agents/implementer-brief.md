@@ -12,3 +12,8 @@
 6. 不用 `--no-verify`、不强推、不设置 `ALLOW_GENERATED_UPDATE`（GIT-4、HAR-4）。
 7. shape：不改 `docs/shape/*.md`，写 `docs/shape/inbox/<分支>.md`（HAR-8）。
 8. 收尾汇报：提交哈希、FULL 结果（`HARNESS_STATUS` 与证据目录）、未决问题、遗留的临时文件位置。
+
+## 编排者
+
+- 并行派出带 worktree 的 subagent 时分条消息错开创建（同一条消息里多个会争用 `.git/worktrees`），或先建好 worktree 再用 `path` 交给它。
+- 合并或解决冲突的 subagent 交回后，用 `git log` 与 `git diff <合并前>..<合并后>` 核对结果再继续，不以它的报告为准。

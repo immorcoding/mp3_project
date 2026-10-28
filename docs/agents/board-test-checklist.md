@@ -4,6 +4,7 @@
 
 ## 烧录与日志
 
+- 产物：固件 `cmake --preset firmware-debug` 后 `cmake --build --preset firmware-debug`，得 `build/firmware-debug/mp3_project.hex`；资源包 `python Tools/package_maker/main.py`，得 `build/external-resources/resource_pack.bin`（包长与 PackageVersion 见同目录 `resource_pack_manifest.json`）；样本卡 `python Tools/board_test_card/make_card.py <输出目录> --copy-to <盘符>:\Music --set <子集>`。在集成分支末端的独立 worktree 里构建。
 - 固件：DFU 只写内部 Flash，不动 NOR。
 - 资源包：STM32CubeProgrammer 用 ST-LINK 连接，**External loaders** 勾选 `W25Q256_STM32H743ZG`（已安装，无需辅助固件）；地址 `0x90401000`，勾 **Verify programming**，不用 **Full chip erase**、不用 **Run after programming**；写后读 `0x90401028`（8 B）核对 PackageVersion。参数与排查见 [External Loader](../../Tools/external_loader/README.md)。
 - 串口日志：板子 USB CDC 口（本机常为 COM3），`./Tools/board_test_card/capture-serial.ps1 -Port COM3 -OutFile <日志路径>` 逐行加时间戳写文件，复位或重新枚举后自动重连；日志放会话临时目录，不进仓库。
