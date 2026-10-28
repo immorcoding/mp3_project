@@ -1,13 +1,13 @@
 # GUI 字体 Module
 
-把资源包 FONT 条目里的 `lv_font_conv` 1.5.3 未压缩 bin 解码成 LVGL 8.3 `fmt_txt` 字体，并决定曲名 Label 用哪个字体。它是 `Service/gui` 的私有 Module，不属于 `Service_GUI_*` 公开 Interface，APP 与其他 Service 不得包含。
+把资源包 FONT 条目里的 `lv_font_conv` 1.5.3 未压缩 bin 解码成 LVGL 8.3 `fmt_txt` 字体，并决定显示曲目元数据的 Label（唱盘页曲名、Queue 曲名与歌手）用哪个字体。它是 `Service/gui` 的私有 Module，不属于 `Service_GUI_*` 公开 Interface，APP 与其他 Service 不得包含。
 
 两个文件：`gui_service_font.c` 是曲名字体子模块（启动接线与回退），`gui_service_font_decoder.c` 是纯解码器。
 
 ## 曲名字体子模块
 
 - `service_gui_font_init()`：只在 GUI Task 的 `Service_GUI_Init()` 中、创建 Screen 之前调用一次。经 `Service_Resource_GetFont()` 查询可选 FONT 载荷；可用时先 Measure、核对解码区容量，再 Build 到解码区，本模块持有得到的 `lv_font_t`。成功记一条 INFO `Title font ready: glyphs=N, bytes=B, decode=T us.`；载荷不可用或解码失败记一条 WARN `Title font fallback: <原因>.`（原因为 `resource unavailable` 或解码器的状态短语）。不返回错误，GUI 照常启动。
-- `service_gui_font_title()`：曲名 Label 的字体。解码成功为 Noto Sans CJK SC 12 px，否则 `lv_font_montserrat_12`。`view/` 创建曲名 Label 时取它的字体与行高；其他 Label 一律不用它（GUI-24）。
+- `service_gui_font_title()`：显示曲目元数据的 Label 的字体。解码成功为 Noto Sans CJK SC 12 px，否则 `lv_font_montserrat_12`。使用者：`view/` 创建唱盘页曲名 Label 时取它的字体与行高；`main/queue/` 构造 Queue 行时曲名与歌手两个 Label 取它的字体，并按其行高算行高（#149）。界面文案 Label 一律不用它（GUI-24）。名称沿用 0.7.0，字体用途以 GUI-24 为准。
 
 缺字由已启用的 `LV_USE_FONT_PLACEHOLDER` 画占位框，不记日志。日志经 `Service_Log_Post()` 投递（GUI Task 在调度器启动后运行，DIAG-1）；解码耗时用 DWT 周期计数器只读测量（计数器由 `app_init()` 在 Resource 加载前启动，本模块不复位）。
 
@@ -16,7 +16,7 @@
 | 区 | 所有者 | 写入时机 | 读者 |
 |---|---|---|---|
 | `.sdram_font_resource`（`__external_resource_font_*`，0xA4800 B） | Resource Service | `Service_Resource_Init()`：正式 SDRAM 初始化后、任务启动前复制，校验目标 CRC 后 Clean | 本模块在 `Service_GUI_Init()` 中只读一次 |
-| `.sdram_gui_font`（`__gui_font_decode_*`，0xA8000 B） | 本模块 | `Service_GUI_Init()`：GUI Task 中、曲名 Label 创建前，解码器一次写完 | LVGL 渲染（GUI Task，CPU） |
+| `.sdram_gui_font`（`__gui_font_decode_*`，0xA8000 B） | 本模块 | `Service_GUI_Init()`：GUI Task 中、曲名 Label 创建前，解码器一次写完 | LVGL 渲染（GUI Task，CPU）：唱盘页曲名、Queue 曲名与歌手 |
 
 - 启动顺序：两区都是 NOLOAD，内容在各自所有者写入前无效；FONT 区在消费者任务启动前填好，解码区在第一次渲染前填好。破坏性 SDRAM 诊断只在业务占用前运行，与两区不重叠使用。
 - MPU：两区都在 `0xC0000000` 32 MiB 区域内（可缓存、写回、不可执行），只放数据，不需要新区域。

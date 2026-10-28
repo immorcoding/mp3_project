@@ -1,8 +1,8 @@
-﻿# Queue 行显示曲目显示名与歌手（GUI-23、STOR-16、#140）：不显示路径，也不显示 `--`。
-# 滚到第 4–9 首，一屏混排三类行态：`Experience (Einaudi Live)` + 歌手 `Ludovico Einaudi`（标题 + 歌手）、
+﻿# Queue 行显示曲目显示名与歌手（GUI-25、STOR-16、#140）：不显示路径，也不显示 `--`。
+# 滚到位置 4–8，一屏混排三类行态：`Experience (Einaudi Live)` + 歌手 `Ludovico Einaudi`（标题 + 歌手）、
 # `Kiss the Rain (Live)`（标题无歌手）、`Comptine d'un autre ete` 等（回退文件主名，歌手空）。
-# 位置 9 的假 TIT2 带 `é ® – ™`（#148 为唱盘页准备的样本）：Queue 的曲名仍是 Montserrat，这几个字符与歌手里的 `é` 画占位框，待 Queue 换用资源包字体后重录。
-# 再滚到末尾换窗：`Music/a.b.MP3` 显示文件主名 `a.b`，中文文件主名在 Montserrat 下画占位框（0.8.1 解决），均无 `Music/` 前缀。
+# 曲名与歌手用资源包 Noto 12 px（GUI-24、#149）；位置 8 的中文假标签在本帧最下一行。
+# 再滚到末尾换窗：`Music/a.b.MP3` 显示文件主名 `a.b`，中文文件主名用 Noto 显示（`繁體 龍 喆 镕` 中字集外的 4 个字仍画占位框），均无 `Music/` 前缀。
 --drag 6000:120,290:120,80:250
 --tap 7500:125,28
 --drag 8000:120,250:120,90:400

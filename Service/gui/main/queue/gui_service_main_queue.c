@@ -9,6 +9,7 @@
  *          曲名色、Long mode 和右侧符号 Opa，不改 Border Width。点按 CLICKED
  *          只刷新行样式并记下播放列表下标，不打开文件。可见行数跟 Apply
  *          传入的 Length 走，至多 SERVICE_GUI_MAIN_QUEUE_MAX_ROWS；曲名是 GUI Task 传入的窗口文本。
+ *          曲名与歌手显示曲目元数据，字体取 GUI 字体子模块（GUI-24），行高按其行高算出。
  *          窗口滑动时在已有 panel 上转 head 改字，不无限 create。不得包含
  *          storage_listbuffer.h。
   ******************************************************************************
@@ -18,6 +19,7 @@
 #include "Service/gui/main/queue/gui_service_main_queue_config.h"
 #include "Service/gui/gui_service.h"
 #include "Service/gui/gui_service_input.h"
+#include "Service/gui/font/gui_service_font.h"
 #include "Service/gui/theme/gui_service_theme_style.h"
 
 #include <stdbool.h>
@@ -61,6 +63,8 @@ static void service_gui_main_queue_on_panel_clicked(lv_event_t *e);
  * @retval SERVICE_ERROR LVGL 未能创建对象；已挂到 QueueTab 的半成品 panel 会删除。
  * @note 行结构：Wash 薄底圆角 Panel（左侧 Accent 边条）→ 80% 宽文字组（曲名、歌手）
  *       + 右侧 `LV_SYMBOL_AUDIO` 符号（montserrat_14 含该字形）。颜色经共享主题 style。
+ *       曲名与歌手显示曲目元数据，都取 GUI 字体子模块的字体（GUI-24：资源包 Noto 12 px，
+ *       不可用时 Montserrat 12）；行高按该字体行高算出（#147 方案 B），整行滚动步长再取实际行高。
  */
 static Service_StatusTypeDef service_gui_main_queue_create_row(
     Service_GUI_MainQueueRowTypeDef *row)
@@ -70,6 +74,11 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_t *name;
     lv_obj_t *creator;
     lv_obj_t *status;
+    const lv_font_t *text_font;
+    lv_coord_t line_h;
+
+    text_font = service_gui_font_title();
+    line_h = lv_font_get_line_height(text_font);
 
     panel = lv_obj_create(service_gui_main_queue_music->queue_tab);
     if (panel == NULL)
@@ -78,7 +87,11 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     }
 
     lv_obj_set_width(panel, lv_pct(100));
-    lv_obj_set_height(panel, lv_pct(17));
+    lv_obj_set_height(panel,
+                      (lv_coord_t)((2 * line_h) +
+                                   SERVICE_GUI_MAIN_QUEUE_ROW_LINE_GAP +
+                                   (2 * SERVICE_GUI_MAIN_QUEUE_ROW_PAD_VER) +
+                                   (2 * SERVICE_GUI_MAIN_QUEUE_ROW_BORDER)));
     lv_obj_set_align(panel, LV_ALIGN_CENTER);
     lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -88,12 +101,12 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_style_bg_opa(panel, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
     service_gui_theme_style_add(panel, SERVICE_GUI_THEME_BORDER, SERVICE_GUI_THEME_ACCENT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_opa(panel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(panel, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(panel, SERVICE_GUI_MAIN_QUEUE_ROW_BORDER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_side(panel, LV_BORDER_SIDE_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_left(panel, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_right(panel, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_top(panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_bottom(panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_top(panel, SERVICE_GUI_MAIN_QUEUE_ROW_PAD_VER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_bottom(panel, SERVICE_GUI_MAIN_QUEUE_ROW_PAD_VER, LV_PART_MAIN | LV_STATE_DEFAULT);
     service_gui_theme_style_add(panel, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(panel, 80, LV_PART_MAIN | LV_STATE_PRESSED);
     service_gui_theme_style_add(panel, SERVICE_GUI_THEME_OUTLINE, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_PRESSED);
@@ -114,6 +127,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_align(info, LV_ALIGN_CENTER);
     lv_obj_set_flex_flow(info, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(info, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_row(info, SERVICE_GUI_MAIN_QUEUE_ROW_LINE_GAP, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(info, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
     name = lv_label_create(info);
@@ -132,16 +146,17 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_clear_flag(name, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     service_gui_theme_style_add(name, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_ACCENT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(name, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(name, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(name, text_font, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+    /* 高度锁成一行：LVGL 8 的 DOT 看高度溢出，SIZE_CONTENT 会让长歌手换行而不加省略号。 */
     lv_obj_set_width(creator, lv_pct(100));
-    lv_obj_set_height(creator, LV_SIZE_CONTENT);
+    lv_obj_set_height(creator, line_h);
     lv_obj_set_align(creator, LV_ALIGN_CENTER);
     lv_label_set_long_mode(creator, LV_LABEL_LONG_DOT);
     lv_obj_clear_flag(creator, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     service_gui_theme_style_add(creator, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(creator, 180, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(creator, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(creator, SERVICE_GUI_MAIN_QUEUE_ARTIST_OPA, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(creator, text_font, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_set_width(status, LV_SIZE_CONTENT);
     lv_obj_set_height(status, LV_SIZE_CONTENT);
@@ -267,7 +282,7 @@ static void service_gui_main_queue_apply_row_style(
  * @brief 填写一行文字并套用当前/非当前样式。
  * @param[in,out] row 已构造的行。
  * @param[in] title 曲名显示文本。
- * @param[in] artist 歌手文本。
+ * @param[in] artist 歌手文本，原样显示；空歌手的占位文案由 GUI Task 备好（GUI-25）。
  * @param[in] is_current 是否为窗口内正在播放的那一行。
  */
 static void service_gui_main_queue_apply_row(

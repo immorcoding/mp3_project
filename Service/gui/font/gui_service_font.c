@@ -116,7 +116,7 @@ void service_gui_font_init(void)
 }
 
 /**
- * @brief 曲名 Label 应使用的字体。
+ * @brief 显示曲目元数据的 Label（唱盘页曲名、Queue 曲名与歌手）应使用的字体（GUI-24）。
  * @return 解码成功时为资源包 FONT 解码出的字体，否则为 lv_font_montserrat_12。
  * @note  在 service_gui_font_init() 之后调用；结果在 GUI 生命周期内不变。
  */
