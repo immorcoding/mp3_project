@@ -8,8 +8,9 @@
   *          `storage_listbuffer_*`、`storage_namebuffer_*` 与
   *          `storage_task_sd_is_ready/mounted()`。曲库是 16 首固定曲目：原 10 首英文
   *          曲目（与旧演示分区一致）、5 个中文与文件名规则样本、一首需要滚动的超长英文名；
-  *          `E` 键可把曲库换成空库。窗口行给出曲库相对路径，曲目显示名经真实的
-  *          storage_catalog_display_name() 提取。没有 Storage Task：
+  *          `E` 键可把曲库换成空库。窗口行给出曲库相对路径；名称槽应答曲目显示名与歌手：
+  *          storage_sim_tags 里的曲目给出假 TIT2/TPE1（替代生产读标签），其余经真实的
+  *          storage_catalog_display_name() 回退文件主名、歌手为空。没有 Storage Task：
   *          sim_main.c 每圈先调 storage_sim_step()，上一圈 request 的窗口与名字在本圈填成 READY。
   *          名称槽另有两个脚本开关：让某首的名字取不到（按生产防御分支应答代次 0），
   *          让应答多等若干圈（制造空白帧与过期应答）。
@@ -59,6 +60,25 @@ static const char *const storage_sim_titles[] = {
 
 #define STORAGE_SIM_TITLE_COUNT \
     ((uint16_t)(sizeof(storage_sim_titles) / sizeof(storage_sim_titles[0])))
+
+/** @brief 一首曲目的假标签：替代生产 storage_catalog_track_text() 的“取到”结果。 */
+typedef struct
+{
+    uint16_t Index;      /* 播放列表位置。 */
+    const char *Title;   /* 可用 TIT2，ASCII。 */
+    const char *Artist;  /* 可用 TPE1，ASCII；NULL 表示歌手取不到。 */
+} StorageSim_TagTypeDef;
+
+/*
+ * 有可用 TIT2 的曲目；其余曲目视为无标签，名称槽回退文件主名、歌手为空（同生产的标签侧回退）。
+ * 第 6 首（位置 5）的标题与文件主名不同，唱盘页可据此区分来源；它不出现在既有曲名场景里。
+ */
+static const StorageSim_TagTypeDef storage_sim_tags[] = {
+    {5U, "Experience (Einaudi Live)", "Ludovico Einaudi"},
+};
+
+#define STORAGE_SIM_TAG_COUNT \
+    ((uint16_t)(sizeof(storage_sim_tags) / sizeof(storage_sim_tags[0])))
 
 Storage_ListBufferTypeDef storage_listbuffer;
 Storage_NameBufferTypeDef storage_namebuffer;
@@ -320,7 +340,8 @@ void storage_namebuffer_bind(void *storage_task)
     storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
     storage_namebuffer.Generation = 0U;
     storage_namebuffer.Index = 0U;
-    storage_namebuffer.Buffer[0] = '\0';
+    storage_namebuffer.Title[0] = '\0';
+    storage_namebuffer.Artist[0] = '\0';
 }
 
 /**
@@ -347,7 +368,8 @@ Storage_StatusTypeDef storage_namebuffer_request(uint16_t index, uint32_t genera
  */
 static void storage_sim_name_complete_empty(void)
 {
-    storage_namebuffer.Buffer[0] = '\0';
+    storage_namebuffer.Title[0] = '\0';
+    storage_namebuffer.Artist[0] = '\0';
     storage_namebuffer.Generation = 0U;
     storage_namebuffer.Status = STORAGE_NAMEBUFFER_READY;
 }
@@ -363,7 +385,7 @@ static void storage_sim_name_fail_report(void)
 }
 
 /**
- * @brief 同生产：PENDING 时按当前代次给出固定曲库的曲名并打 READY。
+ * @brief 同生产：PENDING 时按当前代次给出固定曲库的曲目显示名与歌手并打 READY。
  * @param[in] sd_ready 卷是否已挂载；为假时应答代次 0 空名。
  * @note  未挂载或代次不符应答代次 0 空名，不记日志。代次相符（或请求为“当前”）仍越界/提取失败、
  *        以及 --name-fail 标记的位置走生产的防御分支：应答代次 0 空名，并打印与生产 WARN 同形的一行
@@ -371,6 +393,8 @@ static void storage_sim_name_fail_report(void)
  */
 void storage_namebuffer_load(bool sd_ready)
 {
+    uint16_t i;
+
     if (storage_namebuffer.Status != STORAGE_NAMEBUFFER_PENDING)
     {
         return;
@@ -395,16 +419,33 @@ void storage_namebuffer_load(bool sd_ready)
         return;
     }
 
-    /* --name-fail 与提取失败都是生产的防御分支：应答代次 0 空名并打印同形 WARN。 */
+    /* --name-fail 与文件主名提取失败都是生产的防御分支：应答代次 0 空名并打印同形 WARN。 */
     if (storage_sim_name_fail[storage_namebuffer.Index] ||
         !storage_catalog_display_name(storage_sim_titles[storage_namebuffer.Index],
                                       (uint32_t)strlen(storage_sim_titles[storage_namebuffer.Index]),
-                                      storage_namebuffer.Buffer,
-                                      sizeof(storage_namebuffer.Buffer)))
+                                      storage_namebuffer.Title,
+                                      sizeof(storage_namebuffer.Title)))
     {
         storage_sim_name_fail_report();
         storage_sim_name_complete_empty();
         return;
+    }
+
+    /* 同生产：有可用 TIT2 时取标题与歌手，否则保留文件主名、歌手为空。 */
+    storage_namebuffer.Artist[0] = '\0';
+    for (i = 0U; i < STORAGE_SIM_TAG_COUNT; i++)
+    {
+        if (storage_sim_tags[i].Index == storage_namebuffer.Index)
+        {
+            (void)snprintf(storage_namebuffer.Title, sizeof(storage_namebuffer.Title),
+                           "%s", storage_sim_tags[i].Title);
+            if (storage_sim_tags[i].Artist != NULL)
+            {
+                (void)snprintf(storage_namebuffer.Artist, sizeof(storage_namebuffer.Artist),
+                               "%s", storage_sim_tags[i].Artist);
+            }
+            break;
+        }
     }
 
     storage_namebuffer.Generation = storage_sim_generation;

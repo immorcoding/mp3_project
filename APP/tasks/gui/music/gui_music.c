@@ -331,7 +331,7 @@ static void gui_music_title_step(const GUI_MusicTransportDecisionTypeDef *decisi
             break;
 
         case GUI_MUSIC_TITLE_ACTION_ACCEPT:
-            (void)Service_GUI_TitleApply(storage_namebuffer.Buffer);
+            (void)Service_GUI_TitleApply(storage_namebuffer.Title);
             storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
             break;
 

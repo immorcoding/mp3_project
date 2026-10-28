@@ -22,12 +22,12 @@
 
 ## 曲名
 
-曲名区只显示三种内容（GUI-21）：名字；空白（已采信新身份、应答未到）；`--`（无当前曲，或有当前曲但取不到）。名字由 Storage 名称槽（`storage_namebuffer`，STOR-15）给出，本分区不解析路径。
+曲名区只显示三种内容（GUI-21）：名字；空白（已采信新身份、应答未到）；`--`（无当前曲，或有当前曲但取不到）。名字是名称槽（`storage_namebuffer`，STOR-15）应答的曲目显示名 `Title`（有可用 TIT2 时是标题，否则是文件主名），由 Storage 给出，本分区不解析路径；身份、空白与 `--` 按（代次, 位置）判定，与文本来源无关。应答中的歌手 `Artist` 0.8.0 不显示（唱盘页歌手行是 0.8.2）。
 
 - 输入是快照归约**已追上**的曲目身份：`GUI_MusicTransportDecisionTypeDef` 的 `has_track` / `generation` / `index`，与 Queue 高亮、唱盘归零同源；回显未追上时身份冻结，不发新请求。
 - `gui_music_title_poll(client, identity, status, reply_generation)` 每圈一次：先比较身份，变化即采信并清空旧名（有当前曲留空并待请求，`HasTrack = false` 显示 `--` 不请求）；再按槽状态推进——`IDLE` 且待请求时返回 `REQUEST`，`READY` 时以**请求时的身份**判断：身份未变且应答代次非 0 返回 `ACCEPT`（显示名字），代次 0 返回 `DISCARD` 并显示 `--`，身份已变返回 `DISCARD`（不显示旧名，下一圈按最新身份重请求）。槽忙（`PENDING`）时身份再变也不撤销在途请求：等它 `READY`、丢弃、再按最新身份请求，因此连按 NEXT 只采信最后一首；坏文件跳过时快照位置已前进到候选，按身份变化处理，候选名立即被请求。
 - 冷启动：快照代次 0 时以代次 0（“当前”）请求，Storage 按实际代次 G 应答。之后快照代次 0 → G 且位置不变：已显示名字的应答代次等于 G 就保留名字、不重请求（不因唱盘这次归零闪空白）；代次 0 的请求仍在途则等应答，应答代次等于 G 照常采信，否则（含代次 0）丢弃并按 G 重请求；其余情况按普通身份变化清空并重请求。
-- `gui_music.c` 执行动作：`REQUEST` 调 `storage_namebuffer_request(位置, 代次)`，被拒时 `gui_music_title_request_failed()` 下一圈重试；`ACCEPT` 先 `Service_GUI_TitleApply(Buffer)` 再写回 `IDLE`；`DISCARD` 直接写回 `IDLE`。空白与 `--` 只在与上一圈不同时调用 `TitleApply("")` / `TitleApply("--")`。
+- `gui_music.c` 执行动作：`REQUEST` 调 `storage_namebuffer_request(位置, 代次)`，被拒时 `gui_music_title_request_failed()` 下一圈重试；`ACCEPT` 先 `Service_GUI_TitleApply(Title)` 再写回 `IDLE`；`DISCARD` 直接写回 `IDLE`。空白与 `--` 只在与上一圈不同时调用 `TitleApply("")` / `TitleApply("--")`。
 - 先读槽 `Status`，为 `READY` 时才读应答代次与名字：`READY` 期间 Storage 不再写槽。
 - 时序证据：主机测试 `Tests/gui_task` 覆盖以上全部规则；模拟器场景 `music_title_play_start`、`music_title_switch`、`music_title_next_burst`、`music_title_bad_file`、`music_title_unavailable` 用假 Storage 的应答延迟与“取不到”开关拍出对应画面（[#120](https://github.com/immorcoding/mp3_project/issues/120)）。真机 Storage 应答时延与 GUI 刷新节拍的组合进板级验收。
 
