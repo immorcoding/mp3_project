@@ -24,6 +24,7 @@ import generate_fixtures as gf  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import card_names  # noqa: E402
 import card_tags  # noqa: E402
+import card_glyphs  # noqa: E402
 
 # 整数 Hz 和弦：1 s 周期，包络 3 Hz 也是整周期，首尾采样都为 0。
 PROGRESSION = [
@@ -59,6 +60,8 @@ SETS = {
     "names": [sample.filename for sample in card_names.NAME_SAMPLES],
     # ID3 标签样本（#142）：六类标签形态，音频同 names；不属于 all，换空卡单独复制进 Music/。
     "tags": [sample.filename for sample in card_tags.TAG_SAMPLES],
+    # 曲目元数据字形样本（#150）：中文、西文扩展字符、多值与超长歌手，音频同 names；不属于 all，换空卡单独复制进 Music/。
+    "glyphs": [sample.filename for sample in card_glyphs.GLYPH_SAMPLES],
 }
 
 
@@ -102,7 +105,7 @@ def make_all():
     name_audio = gf.encode(tile_pcm(44100, 2, NAME_SAMPLE_SECONDS), 44100, 2, bitrate=192)
     for sample in card_names.NAME_SAMPLES:
         out[sample.filename] = name_audio
-    for sample in card_tags.TAG_SAMPLES:
+    for sample in card_tags.TAG_SAMPLES + card_glyphs.GLYPH_SAMPLES:
         out[sample.filename] = sample.tag + name_audio
     return out
 
@@ -140,6 +143,13 @@ def main():
         with open(os.path.join(args.output_dir, sample.filename), "wb") as handle:
             handle.write(data[sample.filename])
         print("%d. %-24s %8d 字节  唱盘页 %r  Queue %r / %r  来源 %s 读取 %s 次  %s" % (
+              index, sample.filename, len(data[sample.filename]), sample.dial, sample.queue_title,
+              sample.queue_artist, sample.source, sample.reads, sample.note))
+    print("\n曲目元数据字形样本（--set glyphs；音频同上、只改标签；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）：")
+    for index, sample in enumerate(card_glyphs.GLYPH_SAMPLES, 1):
+        with open(os.path.join(args.output_dir, sample.filename), "wb") as handle:
+            handle.write(data[sample.filename])
+        print("%d. %-26s %8d 字节  唱盘页 %r  Queue %r / %r  来源 %s 读取 %s 次  %s" % (
               index, sample.filename, len(data[sample.filename]), sample.dial, sample.queue_title,
               sample.queue_artist, sample.source, sample.reads, sample.note))
     print("\n子集（均按上面的相对顺序复制）：")
