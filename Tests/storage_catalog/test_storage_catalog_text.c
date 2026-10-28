@@ -4,6 +4,7 @@
  * @note  假文件由字节数组构造，GBK 查表链接真实 cc936.c；id3_reader 只经此接缝被测。
  */
 
+#include "APP/tasks/playback/playback_task_config.h"
 #include "APP/tasks/storage/catalog/storage_catalog_text.h"
 
 #include "ff.h"
@@ -11,6 +12,11 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+
+/* 标签读取超预算阈值须等于 T_data/2（#135 I 节）。Storage 的 config 不 include Playback 的 config（STY-3），
+ * 两者只在这里同时可见，由编译期断言核对。 */
+_Static_assert(STORAGE_CATALOG_TRACK_BUDGET_US == ((PLAYBACK_MACHINE_DATA_TIMEOUT_MS * 1000U) / 2U),
+               "STORAGE_CATALOG_TRACK_BUDGET_US must equal PLAYBACK_MACHINE_DATA_TIMEOUT_MS * 1000 / 2");
 
 #define FAKE_FILE_MAX 65536U
 #define FAKE_READ_LOG_MAX 16U
@@ -837,6 +843,43 @@ static void test_frame_missing(void)
     expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
 }
 
+/** @brief 首块按 min(文件长, 4096) 读入，标签之后的音频字节哪怕形似 TIT2/TPE1 帧也不解析（#135 B：不越过标签总长）。 */
+static void test_first_block_does_not_parse_past_tag_end(void)
+{
+    StorageCatalog_TextTypeDef text;
+    const uint8_t album[] = {3, 'A'};
+    const uint8_t fake_title[] = {3, 'X'};
+    const uint8_t fake_artist[] = {3, 'Y'};
+    const uint8_t versions[] = {2U, 3U, 4U};
+    const char *const title_ids[] = {"TT2", "TIT2", "TIT2"};
+    const char *const artist_ids[] = {"TP1", "TPE1", "TPE1"};
+
+    for (uint32_t i = 0U; i < sizeof(versions); i++)
+    {
+        file_reset();
+        tag_begin(versions[i], 0U);
+        frame(versions[i], (versions[i] == 2U) ? "TAL" : "TALB", 0U, album, sizeof(album));
+        tag_end(0U);
+        /* 标签恰在此处结束；其后的“音频”里放着格式完全合法的标题与歌手帧。 */
+        frame(versions[i], title_ids[i], 0U, fake_title, sizeof(fake_title));
+        frame(versions[i], artist_ids[i], 0U, fake_artist, sizeof(fake_artist));
+        audio(64U);
+        run(&text);
+        expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
+        assert(text.Reads == 1U);
+    }
+
+    /* 标签级去同步（v2.3，单块模式）：还原只限标签总长内，其后的字节同样不解析。 */
+    file_reset();
+    tag_begin(3U, 0x80U);
+    frame(3U, "TALB", 0U, album, sizeof(album));
+    tag_end(0U);
+    frame(3U, "TIT2", 0U, fake_title, sizeof(fake_title));
+    audio(64U);
+    run(&text);
+    expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
+}
+
 /** @brief 标签头不可读（版本不支持、大小字段非法、v2.2 压缩）按解码失败。 */
 static void test_unreadable_tag_header(void)
 {
@@ -1233,6 +1276,7 @@ int main(void)
     RUN_TEST(test_frame_order_and_duplicates);
     RUN_TEST(test_no_id3v2);
     RUN_TEST(test_frame_missing);
+    RUN_TEST(test_first_block_does_not_parse_past_tag_end);
     RUN_TEST(test_unreadable_tag_header);
     RUN_TEST(test_title_and_artist_independent);
     RUN_TEST(test_first_block_read);
