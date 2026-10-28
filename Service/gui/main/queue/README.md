@@ -31,12 +31,18 @@ Long mode 和右侧符号 Opa。不改 Border Width，以免文字漂移。点�
 ## 私有 Interface
 
 - `service_gui_main_queue_prepare()`：仅由 `main/gui_service_main.c` 在界面创建后、
-  Background 准备前调用。只打开 `QueueTab` 滚动。
+  Background 准备前调用。打开 `QueueTab` 滚动并注册按边沿拉回的滚动事件，不预先造行。
 - `service_gui_main_queue_scroll_lead()`：仅由 `Service_GUI_QueueScrollLead()` 转发。
   返回顶部已滚出的整行数。
 - `service_gui_main_queue_apply()`：仅由 `Service_GUI_QueueApply()` 转发。按 `titles[i]` / `artists[i]` 填曲名与歌手（`artists` 为 NULL 时歌手全空）；按 `Length`
   补造或 Hidden 已有行；`window_index` 变化时转 head，并从当前 `scroll_y` 扣整行高度，
-  不把列表吸回整页。`current_index` 决定哪一行是当前曲。
+  不把列表吸回整页。`current_index` 决定哪一行是当前曲。同时记下本窗两侧之外是否还有曲目
+  （起点非 0；本窗满上限行），供滚动事件按边沿拉回。
+- `QueueTab` 的 `LV_EVENT_SCROLL`（prepare 时注册）：本窗边沿之外还有曲目时，把越过该边沿的
+  滚动拉回边沿，不露空白，换窗后从扣好的 `scroll_y` 带着惯性接着滑（#157）；列表真正的首尾照常
+  弹性回弹。LVGL 8.3 的弹性只有一个开关，上下沿不能分开设，所以按边沿在事件里拉回。
+  窗口槽不带曲目总数，满上限行的窗口按“下沿之外可能还有”处理：曲库恰为上限行、或末尾所在窗口
+  恰好满上限时，快速滑到末尾的那一下停在末行不回弹，等不满上限的末窗 READY 后才回弹。
 
 ## 运行时路径
 

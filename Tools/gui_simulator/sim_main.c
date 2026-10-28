@@ -112,19 +112,28 @@ static void sim_handle_key(char key)
 }
 
 /**
- * @brief 处理脚本的名称槽开关，转给假 Storage。
+ * @brief 处理脚本的名称槽与窗口槽开关，转给假 Storage。
  * @param[in] control 开关种类。
- * @param[in] value   --name-fail 为播放列表位置，--name-delay 为额外等待圈数。
+ * @param[in] value   --name-fail 为播放列表位置，--name-delay / --window-delay 为额外等待圈数。
  */
-static void sim_handle_name(sim_script_name_control_t control, unsigned value)
+static void sim_handle_slot(sim_script_slot_control_t control, unsigned value)
 {
-    if (control == SIM_SCRIPT_NAME_FAIL)
+    switch (control)
     {
-        storage_sim_toggle_name_fail((uint16_t)value);
-    }
-    else
-    {
-        storage_sim_set_name_delay((uint32_t)value);
+        case SIM_SCRIPT_NAME_FAIL:
+            storage_sim_toggle_name_fail((uint16_t)value);
+            break;
+
+        case SIM_SCRIPT_NAME_DELAY:
+            storage_sim_set_name_delay((uint32_t)value);
+            break;
+
+        case SIM_SCRIPT_WINDOW_DELAY:
+            storage_sim_set_window_delay((uint32_t)value);
+            break;
+
+        default:
+            break;
     }
 }
 
@@ -187,7 +196,7 @@ int main(int argc, char *argv[])
 {
     Service_StatusTypeDef status;
     sim_script_options_t options;
-    const sim_script_handlers_t handlers = {sim_handle_key, sim_handle_name};
+    const sim_script_handlers_t handlers = {sim_handle_key, sim_handle_slot};
     uint32_t start_ms;
 
     setvbuf(stdout, NULL, _IONBF, 0);

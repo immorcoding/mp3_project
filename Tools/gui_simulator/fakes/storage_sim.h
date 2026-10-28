@@ -24,6 +24,7 @@ void storage_sim_rescan(void);
 void storage_sim_toggle_empty(void);
 void storage_sim_toggle_name_fail(uint16_t index);
 void storage_sim_set_name_delay(uint32_t loops);
+void storage_sim_set_window_delay(uint32_t loops);
 uint32_t storage_sim_generation_get(void);
 uint16_t storage_sim_track_count(void);
 
