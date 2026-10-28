@@ -405,41 +405,41 @@ SECTIONS
   /*
    * 可选 FONT 载荷（lv_font_conv bin 原样字节）；唯一所有者 Resource Service。
    * NOLOAD，由 Service_Resource_Init() 在正式 SDRAM 初始化后、任务启动前复制并校验目标 CRC，
-   * 失败时不发布给消费者。容量 = 实测 606,504 B 加约 1.7 KiB 余量，32 B 对齐，Clean 取整不出本区。
+   * 失败时不发布给消费者。容量 = 实测 623,520 B 加 50,272 B 余量（Pack v4 起比 v3 扩 64 KiB，为今后小幅扩充字集留余量），32 B 对齐，Clean 取整不出本区。
    * 放在既有 SDRAM 段之后，不移动它们的地址。
    */
   .sdram_font_resource (NOLOAD) :
   {
     . = ALIGN(32);
     __external_resource_font_start__ = .;
-    . += 0x94800;
+    . += 0xA4800;
     __external_resource_font_end__ = .;
     . = ALIGN(32);
   } >SDRAM
 
-  ASSERT((__external_resource_font_end__ - __external_resource_font_start__) == 0x94800,
+  ASSERT((__external_resource_font_end__ - __external_resource_font_start__) == 0xA4800,
         "External resource font size mismatch")
-  ASSERT((__external_resource_font_end__ - __external_resource_font_start__) >= 606504,
+  ASSERT((__external_resource_font_end__ - __external_resource_font_start__) >= 623520,
         "External resource font region smaller than the committed font bin")
 
   /*
    * GUI 字体解码区（字形描述、cmap、字距与重排位图）；唯一所有者 Service/gui 字体子模块。
    * NOLOAD，由 GUI Task 在 Service_GUI_Init() 中、曲名 Label 创建前写入；只经 CPU 读写，
-   * 不作 DMA 源或目标。容量 = 当前字体所需 618,952 B（Cortex-M7 32 位指针口径）加约 3.6 KiB 余量；
-   * 主机 64 位口径为 619,640 B，模拟器用同样大小也放得下。
+   * 不作 DMA 源或目标。容量 = 当前字体所需 636,240 B（Cortex-M7 32 位指针口径，估算）加 51,888 B 余量（比 Pack v3 扩 64 KiB）；
+   * 主机 64 位口径为 636,944 B，模拟器用同样大小也放得下。
    */
   .sdram_gui_font (NOLOAD) :
   {
     . = ALIGN(32);
     __gui_font_decode_start__ = .;
-    . += 0x98000;
+    . += 0xA8000;
     __gui_font_decode_end__ = .;
     . = ALIGN(32);
   } >SDRAM
 
-  ASSERT((__gui_font_decode_end__ - __gui_font_decode_start__) == 0x98000,
+  ASSERT((__gui_font_decode_end__ - __gui_font_decode_start__) == 0xA8000,
         "GUI font decode region size mismatch")
-  ASSERT((__gui_font_decode_end__ - __gui_font_decode_start__) >= 618952,
+  ASSERT((__gui_font_decode_end__ - __gui_font_decode_start__) >= 636240,
         "GUI font decode region smaller than the committed font needs")
 
   /* User_heap_stack section, used to check that there is enough RAM left */

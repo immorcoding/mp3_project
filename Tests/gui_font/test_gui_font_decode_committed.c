@@ -121,6 +121,11 @@ static void test_committed_font_decodes_to_reference_tables(void)
         0xE4U, 0xE0U, 0x00U, 0xC2U, 0x00U, 0xA4U, 0xE0U, 0x00U, 0xC2U, 0x00U, 0xA4U, 0xE0U, 0x00U, 0xC2U,
         0x00U, 0xA4U, 0xEEU, 0xEEU, 0xFEU, 0xEEU, 0xF4U, 0xA0U, 0x00U, 0xC2U, 0x00U, 0x73U, 0x00U, 0x00U,
         0xC2U, 0x00U, 0x00U, 0x00U, 0x00U, 0xC2U, 0x00U, 0x00U, 0x00U, 0x00U, 0xC2U, 0x00U, 0x00U};
+    /* '®'、'é'、'–'、'™' 的位图前 exact 字节。 */
+    static const uint8_t bitmap_registered[] = {0x04U, 0x88U, 0x10U, 0x38U, 0x96U, 0x90U, 0x82U, 0x69U, 0x44U, 0x82U, 0xA9U, 0x44U};
+    static const uint8_t bitmap_eacute[] = {0x00U, 0x00U, 0x92U, 0x00U, 0x00U, 0x7BU, 0x00U, 0x00U, 0x0AU, 0x00U, 0x00U, 0x00U};
+    static const uint8_t bitmap_endash[] = {0x5CU, 0xCCU, 0xCAU};
+    static const uint8_t bitmap_trademark[] = {0x00U, 0x00U, 0x00U, 0x00U, 0xADU, 0xB5U, 0xD4U, 0x2FU, 0x09U, 0x20U, 0xA9U, 0x8CU};
     static const uint8_t bitmap_comma[] = {0x09U, 0x70U, 0xAEU, 0x02U, 0xB2U, 0xB2U, 0x00U, 0x00U};
     Service_GUI_FontDecodeInfoTypeDef info;
     lv_font_t font;
@@ -130,16 +135,16 @@ static void test_committed_font_decodes_to_reference_tables(void)
     uint32_t lookup_crc = 0U;
 
     assert(service_gui_font_decode_measure(test_bin, length, &info) == SERVICE_GUI_FONT_DECODE_OK);
-    assert(info.GlyphCount == 7541U); /* 7540 个字符加索引 0 的 notdef。 */
-    assert(info.CmapCount == 55U);
-    assert(info.BitmapBytes == 517698U);
-    assert(info.KernPairCount == 4488U);
+    assert(info.GlyphCount == 7620U); /* 7619 个字符加索引 0 的 notdef。 */
+    assert(info.CmapCount == 56U);
+    assert(info.BitmapBytes == 520360U);
+    assert(info.KernPairCount == 7252U);
     {
-        /* 规模下限由各表的原始字节数相加：描述头、55 个 cmap 条目、列表 17336 B（见 README 的口径；FORMAT0 空位不入列表）、
-         * 7541 个字形描述、位图、kern（4488 对 * 4 B 的编号加 4488 B 的值）；每一块按 8 B 取整，余量不超过 9 块 * 7 B。 */
-        uint32_t lower = (uint32_t)(sizeof(lv_font_fmt_txt_dsc_t) + (55U * sizeof(lv_font_fmt_txt_cmap_t)) + 17336U +
-                                    (7541U * sizeof(lv_font_fmt_txt_glyph_dsc_t)) + 517698U +
-                                    sizeof(lv_font_fmt_txt_kern_pair_t) + (4488U * 4U) + 4488U);
+        /* 规模下限由各表的原始字节数相加：描述头、56 个 cmap 条目、列表 17494 B（见 README 的口径；FORMAT0 空位不入列表）、
+         * 7620 个字形描述、位图、kern（7252 对 * 4 B 的编号加 7252 B 的值）；每一块按 8 B 取整，余量不超过 9 块 * 7 B。 */
+        uint32_t lower = (uint32_t)(sizeof(lv_font_fmt_txt_dsc_t) + (56U * sizeof(lv_font_fmt_txt_cmap_t)) + 17494U +
+                                    (7620U * sizeof(lv_font_fmt_txt_glyph_dsc_t)) + 520360U +
+                                    sizeof(lv_font_fmt_txt_kern_pair_t) + (7252U * 4U) + 7252U);
 
         assert(info.RegionSize >= lower);
         assert(info.RegionSize <= (lower + 63U));
@@ -160,13 +165,13 @@ static void test_committed_font_decodes_to_reference_tables(void)
     assert(dsc->bpp == 4U);
     assert(dsc->kern_scale == 16U);
     assert(dsc->kern_classes == 0U);
-    assert(dsc->cmap_num == 55U);
+    assert(dsc->cmap_num == 56U);
 
     /* 整表：字形表与重排后的位图总量与独立脚本逐字节一致。 */
-    assert(test_glyph_table_crc(dsc, info.GlyphCount) == 0xE4EBCAA1U);
-    assert(gft_crc32(dsc->glyph_bitmap, info.BitmapBytes) == 0x6EF52936U);
+    assert(test_glyph_table_crc(dsc, info.GlyphCount) == 0x0D69557BU);
+    assert(gft_crc32(dsc->glyph_bitmap, info.BitmapBytes) == 0xD315CDB7U);
 
-    /* 整个基本平面的码点表：能查到字形的码点恰为生成脚本的字集（GB2312 区位字符加 ASCII，共 7540 个），FORMAT0 空位落空；
+    /* 整个基本平面的码点表：能查到字形的码点恰为生成脚本的字集（GB2312 区位字符加 ASCII，共 7619 个），FORMAT0 空位落空；
      * 期望 CRC 来自独立脚本（按 bin 逐子表建表并与字集逐一核对）；查找用 LVGL 的写法（含 rcp == range_length）。 */
     for (uint32_t letter = 0U; letter < 0x10000U; letter++)
     {
@@ -175,18 +180,46 @@ static void test_committed_font_decodes_to_reference_tables(void)
         gft_put_u16(packed, (uint16_t)gft_glyph_id(&font, letter));
         lookup_crc = gft_crc32_update(lookup_crc, packed, sizeof(packed));
     }
-    assert(lookup_crc == 0x0D974AB2U);
+    assert(lookup_crc == 0x95C092FBU);
 
     /* 抽样：ASCII、希腊字母、假名、汉字、全角符号。 */
     assert(gft_glyph_id(&font, 0x20U) == 1U);
     test_expect_glyph(&font, 0x41U, 34U, 117U, 8U, 9U, 0, 0, 796U, bitmap_a, sizeof(bitmap_a));
     test_expect_glyph(&font, 0x56U, 55U, 110U, 7U, 9U, 0, 0, 1482U, bitmap_a, 0U);
-    test_expect_glyph(&font, 0x3A9U, 154U, 146U, 9U, 9U, 0, 0, 4401U, bitmap_a, 0U);
-    test_expect_glyph(&font, 0x3042U, 464U, 192U, 10U, 12U, 1, -1, 17860U, bitmap_a, 0U);
-    test_expect_glyph(&font, 0x4E2DU, 712U, 192U, 10U, 11U, 1, -1, 32032U, bitmap_zhong, sizeof(bitmap_zhong));
-    test_expect_glyph(&font, 0x6674U, 3059U, 192U, 11U, 11U, 1, -1, 197103U, bitmap_a, 0U);
-    test_expect_glyph(&font, 0xFF0CU, 7454U, 192U, 3U, 5U, 1, -2, 514694U, bitmap_comma, sizeof(bitmap_comma));
-    test_expect_glyph(&font, 0xFFE5U, 7540U, 192U, 8U, 9U, 2, 0, 517658U, bitmap_a, 0U);
+    test_expect_glyph(&font, 0x3A9U, 231U, 146U, 9U, 9U, 0, 0, 7034U, bitmap_a, 0U);
+    test_expect_glyph(&font, 0x3042U, 543U, 192U, 10U, 12U, 1, -1, 20522U, bitmap_a, 0U);
+    test_expect_glyph(&font, 0x4E2DU, 791U, 192U, 10U, 11U, 1, -1, 34694U, bitmap_zhong, sizeof(bitmap_zhong));
+    test_expect_glyph(&font, 0x6674U, 3138U, 192U, 11U, 11U, 1, -1, 199765U, bitmap_a, 0U);
+    test_expect_glyph(&font, 0xFF0CU, 7533U, 192U, 3U, 5U, 1, -2, 517356U, bitmap_comma, sizeof(bitmap_comma));
+    test_expect_glyph(&font, 0xFFE5U, 7619U, 192U, 8U, 9U, 2, 0, 520320U, bitmap_a, 0U);
+
+    /* 西文扩展字符的字形头与位图（独立脚本对同一份 bin 的解析）。 */
+    test_expect_glyph(&font, 0xAEU, 110U, 91U, 6U, 6U, 0, 4, 2809U, bitmap_registered, sizeof(bitmap_registered));
+    test_expect_glyph(&font, 0xE9U, 169U, 106U, 7U, 11U, 0, 0, 4952U, bitmap_eacute, sizeof(bitmap_eacute));
+    test_expect_glyph(&font, 0x2013U, 322U, 103U, 6U, 1U, 0, 3, 10070U, bitmap_endash, sizeof(bitmap_endash));
+    test_expect_glyph(&font, 0x2122U, 336U, 137U, 8U, 6U, 0, 4, 10398U, bitmap_trademark, sizeof(bitmap_trademark));
+    /* 西文扩展字符：Latin-1 补充区 U+00A0–U+00FF 全部 96 个码点与 U+2013、U+2122 都能查到字形；
+     * latin1_glyph_ids 是独立脚本逐子表解析同一份 bin 得到的字形编号，下标为 码点 - 0xA0。 */
+    static const uint16_t latin1_glyph_ids[96] = {
+        96U, 97U, 98U, 99U, 100U, 101U, 102U, 103U, 104U, 105U, 106U, 107U,
+        108U, 109U, 110U, 111U, 112U, 113U, 114U, 115U, 116U, 117U, 118U, 119U,
+        120U, 121U, 122U, 123U, 124U, 125U, 126U, 127U, 128U, 129U, 130U, 131U,
+        132U, 133U, 134U, 135U, 136U, 137U, 138U, 139U, 140U, 141U, 142U, 143U,
+        144U, 145U, 146U, 147U, 148U, 149U, 150U, 151U, 152U, 153U, 154U, 155U,
+        156U, 157U, 158U, 159U, 160U, 161U, 162U, 163U, 164U, 165U, 166U, 167U,
+        168U, 169U, 170U, 171U, 172U, 173U, 174U, 175U, 176U, 177U, 178U, 179U,
+        180U, 181U, 182U, 183U, 184U, 185U, 186U, 187U, 188U, 189U, 190U, 191U};
+    for (uint32_t letter = 0xA0U; letter <= 0xFFU; letter++)
+    {
+        assert(gft_glyph_id(&font, letter) == latin1_glyph_ids[letter - 0xA0U]);
+    }
+    assert(gft_glyph_id(&font, 0x2013U) == 322U);
+    assert(gft_glyph_id(&font, 0x2122U) == 336U);
+    /* 字集外的相邻码点落空：C1 控制字符末位、Latin Extended-A 首位、U+2013 与 U+2122 的前一个码点。 */
+    assert(gft_glyph_id(&font, 0x9FU) == 0U);
+    assert(gft_glyph_id(&font, 0x100U) == 0U);
+    assert(gft_glyph_id(&font, 0x2012U) == 0U);
+    assert(gft_glyph_id(&font, 0x2121U) == 0U);
 
     /* 不在字集中的码点：DEL 紧随 ASCII 范围，U+FFE6 紧随最后一个范围，U+9F9C 是字集外的汉字；全部得到 0 而非邻近字形。 */
     assert(gft_glyph_id(&font, 0x7FU) == 0U);

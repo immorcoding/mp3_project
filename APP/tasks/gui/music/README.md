@@ -7,7 +7,8 @@
 - `gui_music_init()`：复位窗口客户与快照归约，把播放键画成 PLAY、进度条为 0、唱盘归零。时间 Label 的初始 `0:00/--:--` 由 Service 在 Init 时写入。
 - `gui_music_step(input)`：先发命令，再读一次快照归约，再跑窗口协议，最后只对与上一圈不同的显示部分调用 `Service_GUI_*`（见“运行时路径”）。
 - `gui_music_queue_window_*()`：listbuffer 窗口 request / APPLY / CLEAR 时机；APPLY 时记下已显示窗口的曲库代次。
-- `gui_music_queue_rows()`：把 READY 窗口槽每行的 {曲目显示名 `Title`, 歌手 `Artist`} 按 `Length`（不超过容量）整理成两个平行指针数组，APPLY 时原样交给 `Service_GUI_QueueApply()`；歌手取不到的行是空串，不替换成 `--`（GUI-25）。窗口行只有显示文本，本分区不解析路径（GUI-9）。主机测试见 `Tests/gui_task`。
+- `gui_music_queue_rows()`：把 READY 窗口槽每行的 {曲目显示名 `Title`, 歌手 `Artist`} 按 `Length`（不超过容量）整理成两个平行指针数组，APPLY 时交给 `Service_GUI_QueueApply()`；歌手为空串的行交出界面文案 `Unknown Artist`（GUI-25，定义在 `gui_music_text.h`，0.8.2 唱盘页歌手行复用），不是 `--`，窗口槽本身不改。窗口行只有显示文本，本分区不解析路径（GUI-9）。主机测试见 `Tests/gui_task`。
+- `gui_music_text.h`：只含宏，集中定义取不到曲目元数据时的界面占位文案（目前是 `GUI_MUSIC_TEXT_UNKNOWN_ARTIST`，GUI-25），Storage 与窗口行内容不变，占位只在 GUI 侧替换；被 `gui_music_queue_rows.c` 包含，0.8.2 唱盘页歌手行复用。
 - `gui_music_transport_*()`：纯 C 快照归约（不含 LVGL，只包含 `playback_contract.h`），见下节。
 - `gui_music_title_*()`：纯 C 曲名客户（不含 LVGL，不包含 Storage 头），与 Queue 窗口客户并列，见“曲名”。
 

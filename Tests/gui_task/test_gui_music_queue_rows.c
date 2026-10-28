@@ -52,9 +52,10 @@ static void test_titles_and_artists_are_parallel(void)
 }
 
 /**
- * @brief 歌手取不到的行交出空串而不是 NULL，也不是 `--`；同窗其他行不受影响。
+ * @brief 歌手为空串的行交出界面文案 `Unknown Artist`，不是空串、NULL 或 `--`（GUI-25）；
+ *        同窗有歌手的行与曲名不受影响。
  */
-static void test_missing_artist_is_empty_string(void)
+static void test_missing_artist_shows_unknown_artist(void)
 {
     static Storage_ListBufferTypeDef window;
     const char *titles[STORAGE_LISTBUFFER_MAX_ENTRIES];
@@ -71,11 +72,30 @@ static void test_missing_artist_is_empty_string(void)
 
     assert(length == 3U);
     assert(artists[0] != NULL);
-    assert(strcmp(artists[0], "") == 0);
+    assert(strcmp(artists[0], "Unknown Artist") == 0);
     assert(strcmp(artists[1], "Ludovico Einaudi") == 0);
     assert(artists[2] != NULL);
-    assert(strcmp(artists[2], "") == 0);
+    assert(strcmp(artists[2], "Unknown Artist") == 0);
+    assert(strcmp(titles[0], "Clair de Lune") == 0);
     assert(strcmp(titles[2], "a.b") == 0);
+}
+
+/**
+ * @brief 占位只在 GUI 侧：窗口槽里的歌手仍是空串，不被写成 `Unknown Artist`。
+ */
+static void test_unknown_artist_does_not_touch_window(void)
+{
+    static Storage_ListBufferTypeDef window;
+    const char *titles[STORAGE_LISTBUFFER_MAX_ENTRIES];
+    const char *artists[STORAGE_LISTBUFFER_MAX_ENTRIES];
+
+    (void)memset(&window, 0, sizeof(window));
+    put_row(&window, 0U, "Kiss the Rain (Live)", "");
+    window.Length = 1U;
+
+    assert(gui_music_queue_rows(&window, titles, artists) == 1U);
+    assert(strcmp(artists[0], "Unknown Artist") == 0);
+    assert(window.Rows[0].Artist[0] == '\0');
 }
 
 /**
@@ -122,7 +142,8 @@ static void test_empty_window_has_no_rows(void)
 int main(void)
 {
     test_titles_and_artists_are_parallel();
-    test_missing_artist_is_empty_string();
+    test_missing_artist_shows_unknown_artist();
+    test_unknown_artist_does_not_touch_window();
     test_length_is_clamped_to_capacity();
     test_empty_window_has_no_rows();
     (void)printf("gui_music_queue_rows tests passed\n");

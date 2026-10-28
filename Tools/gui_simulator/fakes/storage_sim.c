@@ -65,19 +65,23 @@ static const char *const storage_sim_titles[] = {
 typedef struct
 {
     uint16_t Index;      /* 播放列表位置。 */
-    const char *Title;   /* 可用 TIT2，ASCII。 */
-    const char *Artist;  /* 可用 TPE1，ASCII；NULL 表示歌手取不到。 */
+    const char *Title;   /* 可用 TIT2（UTF-8）。 */
+    const char *Artist;  /* 可用 TPE1（UTF-8）；NULL 表示歌手取不到。 */
 } StorageSim_TagTypeDef;
 
 /*
  * 有可用 TIT2 的曲目；其余曲目视为无标签，回退文件主名、歌手为空（同生产的标签侧回退）。
  * 第 6 首（位置 5）有标题与歌手，标题与文件主名不同，唱盘页可据此区分来源；第 8 首（位置 7）
  * 有标题、无歌手。Queue 第一窗由此混排三类行态（GUI-25）：标题 + 歌手、标题无歌手、
- * 回退文件主名（歌手空）。全部 ASCII。
+ * 回退文件主名（歌手空）。第 10 首（位置 9）的标题带 Latin-1 补充区字符与 U+2013、U+2122
+ * （`®`、`é`、`–`、`™`，#148），唱盘页与 Queue 用资源包字体显示，歌手宽于 Queue 一行。第 9 首（位置 8）是中文标题 +
+ * 中文歌手（#149），放在唱盘页场景不经过的位置，只进 Queue 场景；其余标签为 ASCII。
  */
 static const StorageSim_TagTypeDef storage_sim_tags[] = {
     {7U, "Kiss the Rain (Live)", NULL},
     {5U, "Experience (Einaudi Live)", "Ludovico Einaudi"},
+    {8U, "晴天（2003 年演唱会现场版）", "周杰伦"},
+    {9U, "Beyoncé® – Halo™", "Beyoncé & F1® The Movie Orchestra – Live™ Édition"}, /* 歌手宽于一行：截断加省略号。 */
 };
 
 #define STORAGE_SIM_TAG_COUNT \

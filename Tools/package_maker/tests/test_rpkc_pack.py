@@ -355,12 +355,31 @@ class FontResourceTests(unittest.TestCase):
 
         entry = struct.unpack_from("<IHHQIIIIII", package, 0x40)
         metadata = struct.unpack_from("<8I", package, entry[7])
-        # 95 个 ASCII + 682 个符号 + 6763 个汉字 + 索引 0 的 notdef。
-        self.assertEqual(metadata[4], 95 + 682 + 6763 + 1)
+        # 独立解析 bin 得到：7619 个字符（并集去重后）+ 索引 0 的 notdef；生成脚本的字集规则给出同一个数。
+        self.assertEqual(metadata[4], 7620)
+        self.assertEqual(metadata[4], len(generate_font.charset_codepoints()) + 1)
         self.assertEqual(metadata[5], 12)
         self.assertEqual(metadata[6], 13)
         self.assertEqual(metadata[7], 0xFFFFFFFD)
+        self.assertEqual(manifest["resources"][0]["metadata"]["bitmap_bytes"], 520360)
         self.assertLess(manifest["resources"][0]["metadata"]["bitmap_bytes"], MEBIBYTE)
+
+    def test_charset_rule_adds_latin1_and_two_punctuation_marks_with_deduplication(self) -> None:
+        symbols, hanzi = generate_font.gb2312_characters()
+        codepoints = generate_font.charset_codepoints()
+        expected = (
+            set(range(0x20, 0x7F))
+            | set(range(0xA0, 0x100))
+            | {0x2013, 0x2122}
+            | {ord(character) for character in symbols + hanzi}
+        )
+
+        self.assertEqual(codepoints, sorted(expected))
+        self.assertEqual(len(codepoints), len(set(codepoints)))
+        # 去重后的字数：GB2312 已含 19 个 Latin-1 字符，Latin-1 加两个标点净增 79 个。
+        self.assertEqual(len(codepoints), 95 + 682 + 6763 + 79)
+        for absent in (0x7F, 0x9F, 0x100, 0x2012, 0x2121):
+            self.assertNotIn(absent, codepoints)
 
 
 class ExtractProjectResourcesTests(unittest.TestCase):
@@ -432,11 +451,11 @@ class ExtractProjectResourcesTests(unittest.TestCase):
                 )
             )
 
-            # 字体 bin 606504 B 位于 0x77000，向上对齐到 0x1000 后总长 0x10C000。
-            self.assertEqual(len(package), 0x10C000)
+            # 字体 bin 623520 B 位于 0x77000，向上对齐到 0x1000 后总长 0x110000。
+            self.assertEqual(len(package), 0x110000)
             self.assertEqual(package[:4], b"RPKC")
             self.assertEqual(struct.unpack_from("<H", package, 0x14)[0], 5)
-            self.assertEqual(manifest["package_version"], 3)
+            self.assertEqual(manifest["package_version"], 4)
 
             first_entry = struct.unpack_from("<IHHQIIIIII", package, 0x40)
             second_entry = struct.unpack_from("<IHHQIIIIII", package, 0x68)
@@ -463,9 +482,9 @@ class ExtractProjectResourcesTests(unittest.TestCase):
 
             self.assertEqual(fifth_entry[0], 5)
             self.assertEqual(fifth_entry[1], 2)
-            self.assertEqual(fifth_entry[3], 1)
+            self.assertEqual(fifth_entry[3], 2)
             self.assertEqual(fifth_entry[4], 0x77000)
-            self.assertEqual(fifth_entry[5], 606504)
+            self.assertEqual(fifth_entry[5], 623520)
             self.assertEqual(fifth_entry[7], 0x76300)
             self.assertEqual(fifth_entry[8], 32)
             font_bin = FONT_BIN_PATH.read_bytes()
@@ -488,7 +507,7 @@ class ExtractProjectResourcesTests(unittest.TestCase):
             )
             self.assertEqual(
                 [resource["version"] for resource in manifest["resources"]],
-                [1, 1, 1, 1, 1],
+                [1, 1, 1, 1, 2],
             )
 
     def test_project_package_is_deterministic_and_fits_the_resource_area(self) -> None:
@@ -507,7 +526,7 @@ class ExtractProjectResourcesTests(unittest.TestCase):
                 packages.append((output_directory / "resource_pack.bin").read_bytes())
 
         self.assertEqual(packages[0], packages[1])
-        # 资源区起点 0x00401000，上限 0x003FE000；v3 实际 PackSize 0x10C000 远小于上限。
+        # 资源区起点 0x00401000，上限 0x003FE000；v4 实际 PackSize 0x110000 远小于上限。
         self.assertLessEqual(len(packages[0]), 0x003FE000)
 
 

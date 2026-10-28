@@ -29,7 +29,7 @@
 /** @brief 与 STM32H743xG_flash.ld 中的 vinyl 区大小一致。 */
 #define SIM_RESOURCE_VINYL_SIZE  0xF300
 /** @brief 与 STM32H743xG_flash.ld 中的 FONT 区大小一致。 */
-#define SIM_RESOURCE_FONT_SIZE   0x94800
+#define SIM_RESOURCE_FONT_SIZE   0xA4800
 
 __asm__(
     ".data\n"
@@ -47,13 +47,13 @@ __asm__(
     ".balign 32\n"
     ".globl __external_resource_font_start__\n"
     "__external_resource_font_start__:\n"
-    ".space 0x94800\n"
+    ".space 0xA4800\n"
     ".globl __external_resource_font_end__\n"
     "__external_resource_font_end__:\n"
     ".balign 32\n"
     ".globl __gui_font_decode_start__\n"
     "__gui_font_decode_start__:\n"
-    ".space 0x98000\n"
+    ".space 0xA8000\n"
     ".globl __gui_font_decode_end__\n"
     "__gui_font_decode_end__:\n"
     ".text\n");

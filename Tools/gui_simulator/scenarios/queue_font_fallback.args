@@ -1,0 +1,7 @@
+# Queue 字体不可用回退（GUI-24、#149）：--font-unavailable 下 Queue 曲名与歌手两个 Label 回退 Montserrat 12，
+# 行高随字体行高重算。同 queue_track_text 的一屏：英文正常显示，中文标题与歌手、`é ® – ™` 画占位框。
+--font-unavailable
+--drag 6000:120,290:120,80:250
+--tap 7500:125,28
+--drag 8000:120,290:120,80:400
+--shot 8600:queue_fallback_rows

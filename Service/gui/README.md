@@ -40,7 +40,7 @@
 
 两块完整 RGB565 绘制缓冲由本 Module 静态持有，并通过 `.sdram_framebuffer` 放入外部 SDRAM。缓冲首地址按 `PLATFORM_DCACHE_LINE_SIZE` 对齐；SPI DMA 发起前的 D-Cache Clean 仍由下层 LCD Adapter 负责。
 
-曲名字体的解码区 `.sdram_gui_font`（0x98000 B）归 `font/` 独占，`Service_GUI_Init()` 在创建 Screen 前写入；只经 CPU 读写，不作 DMA 源或目标。启动顺序、MPU、Cache 与容量的 HWD-2 审查见 [font/README.md](font/README.md)。
+曲名字体的解码区 `.sdram_gui_font`（0xA8000 B）归 `font/` 独占，`Service_GUI_Init()` 在创建 Screen 前写入；只经 CPU 读写，不作 DMA 源或目标。启动顺序、MPU、Cache 与容量的 HWD-2 审查见 [font/README.md](font/README.md)。
 
 ```text
 GUI Task

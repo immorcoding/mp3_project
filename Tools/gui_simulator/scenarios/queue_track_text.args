@@ -1,0 +1,10 @@
+# Queue 曲名与歌手用资源包 Noto 12 px（GUI-24、#149，行排布按 #147 方案 B：行高 = 两行字体行高 + 2 px 间距 + 上下各 2 px + 边框）。
+# 滚到位置 5–9，一屏同时有：`Experience (Einaudi Live)` + `Ludovico Einaudi`（标题 + 歌手）、`Kiss the Rain (Live)`（无歌手，歌手位显示 `Unknown Artist`，GUI-25）、
+# 中文标题 `晴天（2003 年演唱会现场版）` + 中文歌手 `周杰伦`（位置 8）、`Beyoncé® – Halo™` + 宽于一行的西文歌手（位置 9，截断加省略号）。
+# 开机为 Solid 外观，先拍一帧，再按 T 切 Default 拍同一屏。
+--drag 6000:120,290:120,80:250
+--tap 7500:125,28
+--drag 8000:120,290:120,80:400
+--shot 8600:queue_rows_solid
+--key 8700:t
+--shot 9000:queue_rows_default
