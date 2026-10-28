@@ -122,6 +122,8 @@
             Name = 'storage_catalog'
             PathPatterns = @(
                 '^APP/tasks/storage/catalog/storage_catalog_(?:name|text)\.[ch]$'
+                '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
+                '^Service/filesystem/filesystem_types\.h$'
                 '^Components/id3_reader/'
                 '^Service/filesystem/filesystem_text\.[ch]$'
                 # GBK 查表测试链接真实 cc936.c，并复制 FATFS/Target/ffconf.h。

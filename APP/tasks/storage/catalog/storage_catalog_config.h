@@ -15,6 +15,10 @@
 /* storage_catalog.c */
 #define STORAGE_CATALOG_DIR_STACK_MAX    128U    /* 待扫子目录栈深度；同时只开一个目录句柄。 */
 
+/* storage_catalog_text.h */
+#define STORAGE_CATALOG_TEXT_BLOCK_BYTES 4096U  /* 曲目标签首块与每次后续读取的块大小，初值，由板测修正；也是调用者工作缓冲的最小容量。 */
+#define STORAGE_CATALOG_TEXT_MAX_READS   4U     /* 单个文件含首块的最多读取次数，初值，由板测修正。 */
+
 /* storage_listbuffer.h */
 #define STORAGE_LISTBUFFER_MAX_ENTRIES   12U    /* 窗口槽位数上限；GUI 按 Length 构造行，不超过此值。 */
 #define STORAGE_LISTBUFFER_PATH_BYTES    (SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U)  /* 单行路径拷贝容量，含结尾 '\0'。 */

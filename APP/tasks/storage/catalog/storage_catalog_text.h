@@ -11,10 +11,8 @@
 #include <stdint.h>
 
 #include "Components/id3_reader/id3_reader.h"
+#include "storage_catalog_config.h"
 #include "storage_catalog_name.h"
-
-#define STORAGE_CATALOG_TEXT_BLOCK_BYTES 4096U /* 首块与每次后续读取的块大小，初值，由板测修正；也是调用者工作缓冲的最小容量。 */
-#define STORAGE_CATALOG_TEXT_MAX_READS   4U    /* 单个文件含首块的最多读取次数，初值，由板测修正。 */
 
 /** @brief 标签读取结果分类，以标题为准。 */
 typedef enum

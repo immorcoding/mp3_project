@@ -184,6 +184,10 @@ $cc936Impact = Get-HarnessImpact -ChangedPath @('Middlewares/Third_Party/FatFs/s
 Assert-HarnessSequence -Expected @('flash_ftl', 'storage_catalog') -Actual $cc936Impact.HostModules `
     -Message 'CP936 表变化必须同时选择 Flash 与 Storage 曲库主机测试（后者链接真实 cc936.c 做 GBK 查表）'
 
+$catalogConfigImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_catalog_config.h')
+Assert-HarnessSequence -Expected @('storage_catalog') -Actual $catalogConfigImpact.HostModules `
+    -Message '曲库配置头（含曲目标签读取常量）变化必须选择 Storage 曲库主机测试'
+
 $monitorWarnImpact =Get-HarnessImpact -ChangedPath @('APP/tasks/monitor/monitor_warn.c')
 Assert-HarnessSequence -Expected @('monitor_warn') -Actual $monitorWarnImpact.HostModules `
     -Message 'Monitor 变化选择 monitor_warn 主机测试'

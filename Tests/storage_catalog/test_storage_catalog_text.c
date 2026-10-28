@@ -939,6 +939,16 @@ static void test_first_block_read(void)
     run(&text);
     assert(text.Reads == 1U);
     assert(g_file.read_bytes[0] == g_file.length);
+
+    /* 文件就是一个标签、标签尾紧贴文件尾（无音频、无填充）：一次读完仍能取到。 */
+    file_reset();
+    tag_begin(3U, 0U);
+    frame(3U, "TIT2", 0U, title, sizeof(title));
+    tag_end(0U);
+    run(&text);
+    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "T", "");
+    assert(text.Reads == 1U);
+    assert(g_file.read_bytes[0] == g_file.length);
 }
 
 /** @brief APIC 前置且跨首块：seek 到 TIT2 帧头再读一块，不读 APIC 负载，不越过标签总长。 */

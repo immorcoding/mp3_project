@@ -238,6 +238,16 @@ static bool id3_frame_kind(uint8_t version, const uint8_t *id, Id3Reader_KindTyp
 }
 
 /**
+ * @brief 返回帧头字节数。
+ * @param[in] version 标签主版本。
+ * @return v2.2 为 6，v2.3/v2.4 为 10。
+ */
+static uint32_t id3_frame_header_bytes(uint8_t version)
+{
+    return (version == 2U) ? ID3_FRAME_HEADER_V22_BYTES : ID3_FRAME_HEADER_V23_BYTES;
+}
+
+/**
  * @brief 跳过负载开头的若干字节。
  * @param[in,out] payload 负载起点。
  * @param[in,out] length 负载字节数。
@@ -265,7 +275,7 @@ static bool id3_skip(uint8_t **payload, uint32_t *length, uint32_t skip)
  */
 static void id3_prepare_frame(uint8_t version, uint8_t *header, uint32_t size, Id3Reader_FrameTypeDef *frame)
 {
-    uint32_t header_bytes = (version == 2U) ? ID3_FRAME_HEADER_V22_BYTES : ID3_FRAME_HEADER_V23_BYTES;
+    uint32_t header_bytes = id3_frame_header_bytes(version);
     uint8_t *payload = header + header_bytes;
     uint32_t length = size;
     bool ok = true;
@@ -342,7 +352,7 @@ Id3Reader_StatusTypeDef Id3Reader_NextFrame(Id3Reader_TypeDef *reader,
                                             Id3Reader_FrameTypeDef *frame,
                                             uint32_t *next_offset)
 {
-    uint32_t header_bytes = (reader->Version == 2U) ? ID3_FRAME_HEADER_V22_BYTES : ID3_FRAME_HEADER_V23_BYTES;
+    uint32_t header_bytes = id3_frame_header_bytes(reader->Version);
     uint32_t id_bytes = (reader->Version == 2U) ? 3U : 4U;
     uint64_t block_end = (uint64_t)block_offset + block_length;
 

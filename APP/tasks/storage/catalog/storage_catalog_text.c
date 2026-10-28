@@ -10,19 +10,19 @@
 /** @brief 单个目标帧的取值状态。 */
 typedef enum
 {
-    TEXT_UNSEEN = 0U, /**< 尚未遇到该帧。 */
-    TEXT_OK,          /**< 取到可显示文本。 */
-    TEXT_EMPTY,       /**< 帧存在但清理后为空。 */
-    TEXT_INVALID      /**< 帧存在但解码失败。 */
+    CATALOG_TEXT_UNSEEN = 0U, /**< 尚未遇到该帧。 */
+    CATALOG_TEXT_OK,          /**< 取到可显示文本。 */
+    CATALOG_TEXT_EMPTY,       /**< 帧存在但清理后为空。 */
+    CATALOG_TEXT_INVALID      /**< 帧存在但解码失败。 */
 } text_state_t;
 
 /** @brief 遍历在未取到标题时的终止原因。 */
 typedef enum
 {
-    STOP_DONE = 0U, /**< 标题与歌手都已有结论。 */
-    STOP_END,       /**< 帧序列结束。 */
-    STOP_LIMIT,     /**< 读取次数或单块范围用尽。 */
-    STOP_ERROR      /**< 读回调报错。 */
+    CATALOG_STOP_DONE = 0U, /**< 标题与歌手都已有结论。 */
+    CATALOG_STOP_END,       /**< 帧序列结束。 */
+    CATALOG_STOP_LIMIT,     /**< 读取次数或单块范围用尽。 */
+    CATALOG_STOP_ERROR      /**< 读回调报错。 */
 } stop_reason_t;
 
 /**
@@ -59,19 +59,19 @@ static void track_take_frame(const StorageCatalog_TextRequestTypeDef *request,
 {
     Id3Reader_TextStatusTypeDef status;
 
-    if (*state != TEXT_UNSEEN)
+    if (*state != CATALOG_TEXT_UNSEEN)
     {
         return;
     }
     if (!frame->Readable)
     {
         out[0] = '\0';
-        *state = TEXT_INVALID;
+        *state = CATALOG_TEXT_INVALID;
         return;
     }
     status = Id3Reader_DecodeField(frame->Encoding, frame->Text, frame->TextLength, request->GbkLookup,
                                    request->GbkContext, out, STORAGE_CATALOG_NAME_BYTES);
-    *state = (status == ID3_READER_TEXT_OK) ? TEXT_OK : ((status == ID3_READER_TEXT_EMPTY) ? TEXT_EMPTY : TEXT_INVALID);
+    *state = (status == ID3_READER_TEXT_OK) ? CATALOG_TEXT_OK : ((status == ID3_READER_TEXT_EMPTY) ? CATALOG_TEXT_EMPTY : CATALOG_TEXT_INVALID);
 }
 
 /**
@@ -84,20 +84,20 @@ static StorageCatalog_TextResultTypeDef track_classify(text_state_t title, stop_
 {
     switch (title)
     {
-    case TEXT_OK:
+    case CATALOG_TEXT_OK:
         return STORAGE_CATALOG_TEXT_TAGGED;
-    case TEXT_INVALID:
+    case CATALOG_TEXT_INVALID:
         return STORAGE_CATALOG_TEXT_DECODE_FAILED;
-    case TEXT_EMPTY:
+    case CATALOG_TEXT_EMPTY:
         return STORAGE_CATALOG_TEXT_FRAME_MISSING;
     default:
         break;
     }
-    if (stop == STOP_LIMIT)
+    if (stop == CATALOG_STOP_LIMIT)
     {
         return STORAGE_CATALOG_TEXT_READ_LIMIT;
     }
-    return (stop == STOP_ERROR) ? STORAGE_CATALOG_TEXT_READ_ERROR : STORAGE_CATALOG_TEXT_FRAME_MISSING;
+    return (stop == CATALOG_STOP_ERROR) ? STORAGE_CATALOG_TEXT_READ_ERROR : STORAGE_CATALOG_TEXT_FRAME_MISSING;
 }
 
 /**
@@ -115,9 +115,9 @@ bool storage_catalog_track_text(const StorageCatalog_TextRequestTypeDef *request
                                 StorageCatalog_TextTypeDef *text)
 {
     char title[STORAGE_CATALOG_NAME_BYTES];
-    text_state_t title_state = TEXT_UNSEEN;
-    text_state_t artist_state = TEXT_UNSEEN;
-    stop_reason_t stop = STOP_END;
+    text_state_t title_state = CATALOG_TEXT_UNSEEN;
+    text_state_t artist_state = CATALOG_TEXT_UNSEEN;
+    stop_reason_t stop = CATALOG_STOP_END;
     Id3Reader_TypeDef reader;
     Id3Reader_FrameTypeDef frame;
     uint32_t block_offset = 0U;
@@ -176,21 +176,21 @@ bool storage_catalog_track_text(const StorageCatalog_TextRequestTypeDef *request
             {
                 track_take_frame(request, &frame, &artist_state, text->Artist);
             }
-            if ((title_state != TEXT_UNSEEN) && (artist_state != TEXT_UNSEEN))
+            if ((title_state != CATALOG_TEXT_UNSEEN) && (artist_state != CATALOG_TEXT_UNSEEN))
             {
-                stop = STOP_DONE;
+                stop = CATALOG_STOP_DONE;
                 break;
             }
             continue;
         }
         if (status == ID3_READER_END)
         {
-            stop = STOP_END;
+            stop = CATALOG_STOP_END;
             break;
         }
         if (reader.SingleBlock || (text->Reads >= STORAGE_CATALOG_TEXT_MAX_READS))
         {
-            stop = STOP_LIMIT;
+            stop = CATALOG_STOP_LIMIT;
             break;
         }
         want = reader.TagEnd - next_offset;
@@ -200,18 +200,18 @@ bool storage_catalog_track_text(const StorageCatalog_TextRequestTypeDef *request
         }
         if (!track_read(request, text, next_offset, want, &block_length))
         {
-            stop = STOP_ERROR;
+            stop = CATALOG_STOP_ERROR;
             break;
         }
         block_offset = next_offset;
     }
 
-    if (artist_state != TEXT_OK)
+    if (artist_state != CATALOG_TEXT_OK)
     {
         text->Artist[0] = '\0';
     }
     text->Result = track_classify(title_state, stop);
-    if (title_state == TEXT_OK)
+    if (title_state == CATALOG_TEXT_OK)
     {
         memcpy(text->Title, title, sizeof(text->Title));
     }
