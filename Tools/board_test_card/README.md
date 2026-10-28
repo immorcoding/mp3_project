@@ -61,3 +61,22 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 - 样本 5：只有 TALB 与全空白的 TIT2，无 TPE1，清理后为空按“帧缺失”回退。样本 6：文件开头即 MP3 帧，无 ID3 头。
 - 缺 BOM、多值、超长、非法编码、控制字符不做成样本，只在主机测试中用字节块覆盖。
 - 字节数以 `lameenc` 1.9.0 为准；同参数两次生成逐字节一致。合同由 `python Tools/board_test_card/test_card_tags.py` 检查（不需要 `lameenc`）。
+
+### 曲目元数据字形样本（`--set glyphs`）
+
+给 [#145](https://github.com/immorcoding/mp3_project/issues/145) 板级验收 F2、F3 用（#150），0.8.2（[#146](https://github.com/immorcoding/mp3_project/issues/146)）的 V3、V4 复用。音频与 `--set names`、`--set tags` 相同（44.1 kHz 192 kbps 30 s，约 720 KB），只在文件头加不同的 ID3v2 标签；复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set glyphs`）。不含在 `all` 内：换一张空卡（或格式化后）单独复制，不与 `--set tags` 混在同一张卡；按下表顺序逐个复制。标签表在 [card_glyphs.py](card_glyphs.py)。
+
+字段规则以 [#135](https://github.com/immorcoding/mp3_project/issues/135) E 节为准：多值按 NUL 拆分、去首尾空白（ASCII 空白与 U+3000）、丢弃空项，以 ` / ` 连写，不按 `/` 拆分；超过容量（252 B 含 `\0`，即 251 B）按 UTF-8 字符边界截断，不加省略号。
+
+| 顺序 | 文件名 | 字节 | 唱盘页曲名 | Queue 曲名 / 歌手 | 名称槽 INFO：来源，读取次数 | 验收项 |
+|---:|---|---:|---|---|---|---|
+| 1 | `glyph-1-cjk.mp3` | 721046 | `晴天 夜曲 测试标题` | 同左 / `周杰伦` | 标题，1 | F2 |
+| 2 | `glyph-2-latin-ext.mp3` | 721131 | `Beyoncé – F1® Theme ™ ’Tis “Live” …` | 同左 / `Déjà Vu ® – “Zoé” ’ ™ …` | 标题，1 | F3 |
+| 3 | `glyph-3-multi-artist.mp3` | 721082 | `Multi Artist Sample` | 同左 / `Artist One / Artist Two / AC/DC / Artist Three` | 标题，1 | #146 V3 |
+| 4 | `glyph-4-long-artist.mp3` | 721362 | `Long Artist Sample` | 同左 / 249 B 的 `Long Artist Name Long Artist Name … Long Artist`（`Long Artist Name ` 重复到第 249 字节，末词截在 `Artist`） | 标题，1 | #146 V4 |
+
+- 样本 1：v2.4，编码字节 3（UTF-8）；汉字都在 GB2312 内。Queue 中文标题与歌手均应正确显示，无占位框。
+- 样本 2：v2.3，编码字节 1（UTF-16 + BOM）；标题与歌手都含 `® é – ™ ’ “ ” …`（U+00AE、U+00E9、U+2013、U+2122、U+2019、U+201C、U+201D、U+2026），唱盘页与 Queue 同字体同基线。
+- 样本 3：v2.4，TPE1 六项以 NUL 分隔：`Artist One`、全空白项、` Artist Two `（首尾空白）、空项、`AC/DC`、`U+3000 Artist Three U+3000`；清理后四项，其中 `AC/DC` 不被拆分。
+- 样本 4：v2.4，TPE1 共 333 B（上限 251 B）：前 249 B 为 ASCII，其后是 3 B 汉字，截断点落在第一个汉字内部，所以按字符边界只留 249 B，不加省略号、不留半个字符。249 个字符远宽于 Queue 与唱盘页的可见宽度，Queue 歌手行用 `LV_LABEL_LONG_DOT`。唱盘页只显示曲名，歌手不上唱盘页。
+- 字节数以 `lameenc` 1.9.0 为准；同参数两次生成逐字节一致。合同由 `python Tools/board_test_card/test_card_glyphs.py` 检查（标签版本、编码字节、关键码点、截断边界、不进 `all`；不需要 `lameenc`）。该测试不在 `verify.ps1` FULL 内，需手动运行。
