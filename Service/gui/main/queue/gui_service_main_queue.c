@@ -54,6 +54,12 @@ static uint16_t service_gui_main_queue_applied_index;
 /** @brief 上一窗实际可见条数，供点击把窗内槽位换成播放列表下标。 */
 static uint16_t service_gui_main_queue_applied_length;
 
+/** @brief 本窗上沿之外还有曲目（窗口起点非 0），滚动不得越过本窗首行。 */
+static bool service_gui_main_queue_more_before;
+
+/** @brief 本窗下沿之外可能还有曲目（本窗满上限行），滚动不得越过本窗末行。 */
+static bool service_gui_main_queue_more_after;
+
 static void service_gui_main_queue_on_panel_clicked(lv_event_t *e);
 
 /**
@@ -534,26 +540,52 @@ static void service_gui_main_queue_adjust_scroll(int32_t index_delta)
 }
 
 /**
- * @brief 只有从列表起点开始的窗口才允许弹性滚动（#157）。
- * @param[in] window_index 本窗在播放列表上的起点。
- * @note 非首窗的上沿之外还有曲目，只是不在本窗：弹性会把手指拉过本窗首行、露出空白，
- *       直到上一窗 READY 才补回。关掉弹性后滚动停在本窗首行，换窗后从扣好的 scroll_y 接着滑。
- *       LVGL 8.3 的弹性不分上下沿，因此非首窗在列表末尾也不回弹。
+ * @brief 本窗边沿之外还有曲目时，把越过该边沿的滚动拉回边沿（#157）。
+ * @param[in] e QueueTab 的 LVGL 滚动事件。
+ * @note 列表真正的首尾照常弹性回弹；窗口边沿之外还有曲目时，弹性会把手指拉过本窗首行或末行、
+ *       在下一窗 READY 前露出空白，所以拉回边沿，换窗后从扣好的 scroll_y 接着滑，惯性不丢。
+ *       LVGL 8.3 的弹性只有一个开关、上下沿不能分开设，因此按边沿在这里拉回。
+ *       拉回会再触发一次 SCROLL，那时已在边沿内，不再动作。
  */
-static void service_gui_main_queue_set_elastic(uint16_t window_index)
+static void service_gui_main_queue_on_scroll(lv_event_t *e)
 {
-    if (window_index == 0U)
+    lv_obj_t *tab;
+    lv_coord_t top;
+    lv_coord_t bottom;
+
+    if (lv_event_get_code(e) != LV_EVENT_SCROLL)
     {
-        lv_obj_add_flag(service_gui_main_queue_music->queue_tab, LV_OBJ_FLAG_SCROLL_ELASTIC);
+        return;
     }
-    else
+
+    tab = lv_event_get_target(e);
+    top = lv_obj_get_scroll_top(tab);
+    bottom = lv_obj_get_scroll_bottom(tab);
+    if (service_gui_main_queue_more_before && (top < 0))
     {
-        lv_obj_clear_flag(service_gui_main_queue_music->queue_tab, LV_OBJ_FLAG_SCROLL_ELASTIC);
+        lv_obj_scroll_by(tab, 0, top, LV_ANIM_OFF);
+    }
+    else if (service_gui_main_queue_more_after && (bottom < 0))
+    {
+        lv_obj_scroll_by(tab, 0, (lv_coord_t)(-bottom), LV_ANIM_OFF);
     }
 }
 
 /**
- * @brief 打开 QueueTab 竖向滚动，不预先造行。
+ * @brief 记下本窗两侧之外是否还有曲目，供滚动事件按边沿拉回。
+ * @param[in] window_index 本窗在播放列表上的起点。
+ * @param[in] length 本窗实际条数。
+ * @note 窗口不满上限说明已到列表末尾；满上限时按可能还有处理。GUI Task 在末尾附近 request 的窗口
+ *       起点会让可见首行之上只留回滑行，末窗因此不满，滚到列表末尾时下沿照常回弹。
+ */
+static void service_gui_main_queue_note_edges(uint16_t window_index, uint16_t length)
+{
+    service_gui_main_queue_more_before = (length > 0U) && (window_index > 0U);
+    service_gui_main_queue_more_after = (length >= SERVICE_GUI_MAIN_QUEUE_MAX_ROWS);
+}
+
+/**
+ * @brief 打开 QueueTab 竖向滚动并注册按边沿拉回的滚动事件，不预先造行。
  * @retval SERVICE_OK 已就绪。
  * @retval SERVICE_NOT_READY QueueTab 尚未创建。
  * @note 必须在界面创建之后、Boot 占用 Canvas 之前由 Main 编排入口调用。
@@ -569,6 +601,11 @@ Service_StatusTypeDef service_gui_main_queue_prepare(void)
     }
 
     lv_obj_add_flag(service_gui_main_queue_music->queue_tab, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(
+        service_gui_main_queue_music->queue_tab,
+        service_gui_main_queue_on_scroll,
+        LV_EVENT_SCROLL,
+        NULL);
     return SERVICE_OK;
 }
 
@@ -623,7 +660,7 @@ Service_StatusTypeDef service_gui_main_queue_apply(
 
         service_gui_main_queue_applied_index = 0U;
         service_gui_main_queue_applied_length = 0U;
-        service_gui_main_queue_set_elastic(0U);
+        service_gui_main_queue_note_edges(0U, 0U);
         service_gui_input_drop_queue_select();
         lv_obj_scroll_to_y(service_gui_main_queue_music->queue_tab, 0, LV_ANIM_OFF);
         (void)current_index;
@@ -669,7 +706,7 @@ Service_StatusTypeDef service_gui_main_queue_apply(
             true);
     }
 
-    service_gui_main_queue_set_elastic(window_index);
+    service_gui_main_queue_note_edges(window_index, length);
     service_gui_main_queue_adjust_scroll(delta);
     service_gui_main_queue_applied_index = window_index;
     service_gui_main_queue_applied_length = length;
