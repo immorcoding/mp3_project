@@ -24,6 +24,7 @@
 - 2026-10-07 · cite · GUI-14 · 旋转沿用 vinyl 合成后的同一 Image 与 SDRAM 缓冲，不新增资源；角度 0 与原基线一致。
 - 2026-10-19 · cite · GUI-19 · 优先级“常驻文本 > 跳过提示 > 时间”只在 `Service/gui/main/transport` 内；跳过提示为单次 `lv_timer`（2000 ms，累加时 `lv_timer_reset`），闪烁为以时间 Label 为 var 的 `lv_anim`，重复调用先删旧动画；模拟器日志 `music_stop_reasons` 连按两次播放后动画数只比静止时多一条。
 - 2026-10-26 · cite · GUI-21 · “以请求时的身份采信应答”在冷启动有一个按 #104 定下的例外：同一位置代次 0 → G 时，已显示名字或在途应答的代次等于 G 视为同一首，不清空、不重请求；其余身份变化一律清空并重请求。实现在 `gui_music_title_poll()` 内，调用方不变（#120）。
+- 2026-10-28 · cite · GUI-24 · Queue 两个 Label 与唱盘页曲名取同一个 `service_gui_font_track_text()`；`--font-unavailable` 下三者都回退 Montserrat 12，Queue 行高随回退字体的行高变矮（`queue_font_fallback`）。函数在 0.7.0 叫 `service_gui_font_title()`，现改名 `service_gui_font_track_text()`（曲目元数据字体，GUI-24）。
 
 ### Rejected
 
