@@ -19,7 +19,7 @@ $ErrorActionPreference = 'Stop'
 # 在调用方当前 worktree 内执行，须无未提交改动；结束时回到调用前的 HEAD（分离）。
 # 本地集成分支与远端不一致时拒绝执行；冲突时中止合并、不推送；推送被拒（如 pre-push 失败）时
 # 把本地集成分支复位到远端。fetch/push 遇网络瞬断（见 $TransientPattern）时原地重试，pre-push Hook
-# 失败等非网络原因不重试；报错只带输出末尾 $ErrorTailLines 行。成功退出码 0，失败抛错；只输出结果行，不输出 HARNESS_STATUS。
+# 失败等非网络原因不重试；报错只带最后一个 HARNESS_STATUS= 行与输出末尾 $ErrorTailLines 行。成功退出码 0，失败抛错；只输出结果行，不输出 HARNESS_STATUS。
 
 function Invoke-MergeGit {
     param([Parameter(Mandatory)][string[]]$Arguments, [switch]$AllowFailure)
@@ -40,13 +40,42 @@ function Invoke-MergeGit {
 }
 
 $TransientPattern = '(?i)curl\s*35|schannel|RPC failed|unexpected disconnect|remote end hung up|Could not resolve host|Connection reset|Connection timed out|early EOF'
-$ErrorTailLines = 8
+$ErrorTailLines = 12
+$StatusLinePattern = '^\s*HARNESS_STATUS='
 
+function Get-OutputLine {
+    param([string[]]$Output)
+    return @($Output | ForEach-Object { $_ -split "`r?`n" } | Where-Object { $_ -ne '' })
+}
+
+# 报错只带输出的最后一个 HARNESS_STATUS= 行（若有）加末尾 $ErrorTailLines 行。
 function Get-OutputTail {
     param([string[]]$Output)
-    $lines = @($Output | ForEach-Object { $_ -split "`r?`n" } | Where-Object { $_ -ne '' })
+    $lines = @(Get-OutputLine -Output $Output)
     if ($lines.Count -le $ErrorTailLines) { return ($lines -join "`n") }
-    return "…（前 $($lines.Count - $ErrorTailLines) 行略）`n" + (($lines | Select-Object -Last $ErrorTailLines) -join "`n")
+    $tail = @($lines | Select-Object -Last $ErrorTailLines)
+    $head = @()
+    $statusIndex = -1
+    for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+        if ($lines[$i] -match $StatusLinePattern) { $statusIndex = $i; break }
+    }
+    if (($statusIndex -ge 0) -and ($statusIndex -lt ($lines.Count - $ErrorTailLines))) {
+        $head = @($lines[$statusIndex])
+    }
+    return "…（中间 $($lines.Count - $ErrorTailLines - $head.Count) 行略）`n" + ((@($head) + $tail) -join "`n")
+}
+
+# 瞬断只看最后一个 HARNESS_STATUS= 行之后的输出（Hook 已跑完，后面才是 git/网络层的输出）；
+# 没有该行时看全部。Hook 日志里的 schannel、timed out 之类因此不会触发重跑 pre-push。
+function Test-TransientOutput {
+    param([string[]]$Output)
+    $lines = @(Get-OutputLine -Output $Output)
+    $start = 0
+    for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+        if ($lines[$i] -match $StatusLinePattern) { $start = $i + 1; break }
+    }
+    if ($start -ge $lines.Count) { return $false }
+    return (($lines[$start..($lines.Count - 1)] -join "`n") -match $TransientPattern)
 }
 
 # 失败且输出匹配瞬断特征时间隔重试，最多 $RetryCount 次；返回最后一次结果并附 Attempts。
@@ -57,7 +86,7 @@ function Invoke-MergeGitWithRetry {
     while ($true) {
         $attempt++
         $result = Invoke-MergeGit -Arguments $Arguments -AllowFailure
-        $transient = ($result.ExitCode -ne 0) -and (($result.Output -join "`n") -match $TransientPattern)
+        $transient = ($result.ExitCode -ne 0) -and (Test-TransientOutput -Output $result.Output)
         if (($result.ExitCode -eq 0) -or -not $transient -or ($attempt -gt $RetryCount)) {
             return [pscustomobject]@{ ExitCode = $result.ExitCode; Output = $result.Output; Attempts = $attempt; Transient = $transient }
         }

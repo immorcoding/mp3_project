@@ -148,6 +148,17 @@ $blocked = @(
     'gh issue close 3 --comment "done `z`"'
     'cd repo && gh pr create --body "a" --title "b `c`"'
     'gh.exe issue comment 7 --body "a `b`"'
+    # 经 gh-retry.ps1 调用同样拦截，含外层 powershell -Command "…" 里转义的内层引号。
+    '& ./scripts/gh-retry.ps1 issue comment 7 --body "run `make`"'
+    'powershell -NoProfile -Command "& ./scripts/gh-retry.ps1 issue comment 7 --body \"run `make`\""'
+    # 引号内含 ; | && 的正文不能把命令切碎而漏检。
+    'gh issue comment 7 --body "a; b | c && d `e`"'
+    # gh api 的字段形式：-f/-F/--field/--raw-field 的 body=、title=。
+    'gh api repos/x/y/issues/1/comments -f body="run `make`"'
+    'gh api repos/x/y/issues -F title="a `b`" -f body=ok'
+    'gh api x --field body="`z`"'
+    'gh api x --raw-field "body=run `make`"'
+    'gh api x -f "title=`q`"'
     ('gh issue create --title t --body "' + "`n" + 'line `one`' + "`n" + '"')
     ('gh issue create --title t --body "$(cat <<''EOF''' + "`n" + 'ok' + "`n" + 'EOF' + "`n" + ')" --title "x `y`"')
 )
@@ -185,6 +196,17 @@ $allowed = @(
     'gh issue comment 7 --body "no backticks here"'
     'gh issue list --label "bug" --json number'
     'git commit -m "docs: 说明 `x`"'
+    # 反引号在别的命令段里不归 gh 规则管：只检查含 gh 的那一段。
+    'gh pr view 7 && git tag -t "`x`"'
+    'gh issue list --json number; echo "`date`"'
+    'gh pr view 7 | git commit -t "`x`"'
+    'gh issue view 7 || echo "failed `gh`"'
+    'gh issue comment 7 --body "a; b | c && d"'
+    # gh api 的字段：文件、单引号、无反引号都放行。
+    'gh api repos/x/y/issues/1/comments -f body=@note.md'
+    'gh api x -f body=''run `make`'''
+    'gh api x -f "body=plain text"'
+    'gh api x -F title="plain" -f body="no ticks"'
     ('gh issue comment 7 --body-file - <<''EOF''' + "`n" + 'run `make` now' + "`n" + 'EOF')
     ('gh issue create --title t --body "$(cat <<''EOF''' + "`n" + 'see `code` and `more`' + "`n" + 'EOF' + "`n" + ')"')
 )
@@ -196,10 +218,13 @@ foreach ($command in $allowed) {
 }
 
 # 反引号拦截的提示要正面给出写法。
-foreach ($needle in @('--body-file', "<<'EOF'")) {
-    $reason = Get-AgentHookShellViolation -Command 'gh issue comment 7 --body "run `make`"'
-    if ($reason -notlike "*$needle*") {
-        throw "gh 反引号拦截提示应给出 $needle 写法，实际：$reason"
+foreach ($command in @('gh issue comment 7 --body "run `make`"', 'gh api x -f body="`z`"')) {
+    $reason = Get-AgentHookShellViolation -Command $command
+    if ($reason -notlike '*--body-file <临时文件>*') {
+        throw "gh 反引号拦截提示应推荐 --body-file <临时文件>，实际：$reason"
+    }
+    if ($reason -like '*--body-file -*') {
+        throw "提示不应再推荐 --body-file -（PowerShell 5.1 绑定单独的 - 会失败），实际：$reason"
     }
 }
 

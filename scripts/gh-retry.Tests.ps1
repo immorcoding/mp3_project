@@ -7,6 +7,7 @@ $env:GH_RETRY_DELAY_SECONDS = '0'
 
 # 替身按脚本化的结果序列依次返回；记录每次收到的参数。
 function gh {
+    $global:GhInputs += , (@($input) -join "`n")
     $global:GhCalls += , @($args)
     $step = $global:GhSteps[[Math]::Min($global:GhCalls.Count, $global:GhSteps.Count) - 1]
     if ($step.Text) { Write-Output $step.Text }
@@ -14,11 +15,17 @@ function gh {
 }
 
 function Invoke-GhRetryCase {
-    param([Parameter(Mandatory)][object[]]$Steps, [string[]]$GhArguments = @('issue', 'comment', '7', '--body', 'x'))
+    param([Parameter(Mandatory)][object[]]$Steps, [string[]]$GhArguments = @('issue', 'comment', '7', '--body', 'x'), [string[]]$Stdin)
     $global:GhCalls = @()
+    $global:GhInputs = @()
     $global:GhSteps = $Steps
-    $output = @(& $script:GhRetry @GhArguments 2>$null)
-    return [pscustomobject]@{ Code = $LASTEXITCODE; Output = ($output -join "`n"); Calls = $global:GhCalls }
+    if ($PSBoundParameters.ContainsKey('Stdin')) {
+        $output = @($Stdin | & $script:GhRetry @GhArguments 2>$null)
+    }
+    else {
+        $output = @(& $script:GhRetry @GhArguments 2>$null)
+    }
+    return [pscustomobject]@{ Code = $LASTEXITCODE; Output = ($output -join "`n"); Calls = $global:GhCalls; Inputs = $global:GhInputs }
 }
 
 $blip = @{ Code = 1; Text = 'error connecting to api.github.com: Post "https://api.github.com/graphql": EOF' }
@@ -48,6 +55,16 @@ foreach ($text in @('HTTP 404: Not Found', 'GraphQL: Could not resolve to an Iss
     $r = Invoke-GhRetryCase -Steps @(@{ Code = 1; Text = $text })
     if (($r.Code -ne 1) -or ($r.Calls.Count -ne 1) -or ($r.Output -ne $text)) { throw "非瞬断错误应原样返回且不重试：$text -> $($r | ConvertTo-Json -Compress)" }
 }
+
+# 6. 管道输入：首次调用前缓冲，每次尝试（含重试）都把同一份正文喂给 gh；无管道输入时 gh 收到空输入。
+$body = @('第一行 `code`', 'line two')
+$r = Invoke-GhRetryCase -Steps @($blip, $blip, $ok) -GhArguments @('issue', 'comment', '7', '--body-file', '-') -Stdin $body
+if (($r.Code -ne 0) -or ($r.Calls.Count -ne 3)) { throw "带 stdin 的瞬断重试应第 3 次成功：$($r | ConvertTo-Json -Compress)" }
+foreach ($index in 0..2) {
+    if ($r.Inputs[$index] -ne ($body -join "`n")) { throw "第 $($index + 1) 次尝试应收到同一份正文，实际：$($r.Inputs[$index])" }
+}
+$r = Invoke-GhRetryCase -Steps @($ok)
+if ($r.Inputs[0] -ne '') { throw "无管道输入时 gh 不应收到正文：$($r.Inputs[0])" }
 
 Remove-Item -LiteralPath Function:\gh
 Write-Output 'gh 重试包装脚本测试通过。'

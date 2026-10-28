@@ -10,7 +10,7 @@
 - **评论**：`gh issue comment <number> --body "..."`
 - **标签**：`gh issue edit <number> --add-label "..."` / `--remove-label "..."`；标签表见 [triage-labels.md](triage-labels.md)。
 - **关闭**：`gh issue close <number> --comment "..."`
-- **写操作经 `scripts/gh-retry.ps1`**：创建、评论、改标签、关闭、`gh api` 写入等一律 `./scripts/gh-retry.ps1 <gh 的完整参数>`，网络瞬断（EOF、connection reset、HTTP 5xx）时自动重试 3 次，其余错误原样返回。正文含反引号时用 `--body-file <文件>` 或单引号 heredoc（`--body-file - <<'EOF'`），不要放进双引号参数（Agent Hook 会拦截）。
+- **写操作经 `scripts/gh-retry.ps1`**：创建、评论、改标签、关闭、`gh api` 写入等一律带 gh 的完整参数调用它，网络瞬断（EOF、connection reset、HTTP 5xx）时自动重试 3 次，其余错误原样返回。PowerShell 里写 `& ./scripts/gh-retry.ps1 issue comment <n> --body-file <临时文件>`；bash 里写 `powershell -NoProfile -Command "& ./scripts/gh-retry.ps1 issue comment <n> --body-file <临时文件>"`。正文先写进临时文件再用 `--body-file <临时文件>` 传入，不要放进含反引号的双引号参数（Agent Hook 会拦截），也不要用 `--body-file -`（PowerShell 5.1 绑定单独的 `-` 会失败）。只用于写操作，`gh pr checks`、`--watch` 等流式只读命令直接调 `gh`。
 
 ## 固件专有约定
 

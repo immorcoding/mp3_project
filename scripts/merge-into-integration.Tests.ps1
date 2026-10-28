@@ -75,7 +75,9 @@ function Set-PrePushHook {
         [Parameter(Mandatory)][string]$Counter,
         [Parameter(Mandatory)][int]$FailUntil,
         [Parameter(Mandatory)][string]$Message,
-        [int]$NoiseLines = 0
+        [int]$NoiseLines = 0,
+        # 在噪声与 Message 之前先输出的行（如 Hook 日志、HARNESS_STATUS=）。
+        [string[]]$Before = @()
     )
     $counterPath = $Counter.Replace('\', '/')
     $lines = @(
@@ -85,6 +87,7 @@ function Set-PrePushHook {
         'n=$((n+1))'
         'echo $n > "$COUNT"'
         "if [ `"`$n`" -le $FailUntil ]; then"
+        @($Before | ForEach-Object { "  echo '$_' >&2" })
         "  i=1; while [ `$i -le $NoiseLines ]; do echo `"noise line `$i`" >&2; i=`$((i+1)); done"
         "  echo '$Message' >&2"
         '  exit 1'
@@ -170,7 +173,8 @@ try {
     # 6. Hook 失败（非网络原因）：只推送一次，立即复位，报错只带输出末尾约 8 行且不重复。
     $fixture = New-MergeFixture -Parent (Join-Path $temp 'hookfail')
     $counter = Join-Path $fixture.Hooks 'count.txt'
-    Set-PrePushHook -Hooks $fixture.Hooks -Counter $counter -FailUntil 99 -Message 'verify FAILED: gui scene mismatch' -NoiseLines 30
+    Set-PrePushHook -Hooks $fixture.Hooks -Counter $counter -FailUntil 99 -Message 'verify FAILED: gui scene mismatch' -NoiseLines 30 `
+        -Before @('HARNESS_STATUS=FAIL_EARLY')
     $failure = Invoke-MergeScript -Root $fixture.Root -Parameters @{
         Branch = 'feature'; Integration = 'integration/x'; Summary = 'add feature'; RetryDelaySeconds = 0
     }
@@ -182,7 +186,8 @@ try {
     if ($localTip -ne $remoteTip) { throw 'Hook 失败后本地集成分支应复位到远端' }
     $markerCount = ([regex]::Matches($failure, 'verify FAILED')).Count
     if ($markerCount -ne 1) { throw "Hook 输出应只出现一次，实际 $markerCount 次：$failure" }
-    if ($failure -match 'noise line 1\b') { throw "报错应只带输出末尾，不应含最早的噪声行：$failure" }
+    if ($failure -match 'noise line (1|10|15)\b') { throw "报错应只带输出末尾，不应含较早的噪声行：$failure" }
+    if (([regex]::Matches($failure, 'HARNESS_STATUS=FAIL_EARLY')).Count -ne 1) { throw "报错应带最后一个 HARNESS_STATUS= 行，且只出现一次：$failure" }
     if ($failure -notmatch 'noise line 30\b') { throw "报错应含输出末尾行：$failure" }
 
     # 7. 重试耗尽：推送 1+3 次后复位并报错。
@@ -221,6 +226,30 @@ try {
     }
     if ($null -ne $failure) { throw "fetch 瞬断后重试成功的用例抛错：$failure" }
     if ($global:FetchFailuresLeft -ne 0) { throw 'fetch 替身应被调用过两次' }
+
+    # 9. Hook 日志里含瞬断字样但 Hook 本身失败（HARNESS_STATUS= 之前）：不重试。
+    $fixture = New-MergeFixture -Parent (Join-Path $temp 'hooklogblip')
+    $counter = Join-Path $fixture.Hooks 'count.txt'
+    Set-PrePushHook -Hooks $fixture.Hooks -Counter $counter -FailUntil 99 -Message 'HARNESS_STATUS=FAIL' `
+        -Before @('probe: Connection timed out', 'schannel: handshake log line')
+    $failure = Invoke-MergeScript -Root $fixture.Root -Parameters @{
+        Branch = 'feature'; Integration = 'integration/x'; Summary = 'add feature'; RetryDelaySeconds = 0
+    }
+    if (($null -eq $failure) -or ($failure -notmatch '推送被拒')) { throw "Hook 日志含瞬断字样但 Hook 失败，应以「推送被拒」失败：$failure" }
+    $attempts = [int](Get-Content -LiteralPath $counter -Raw)
+    if ($attempts -ne 1) { throw "Hook 日志里的瞬断字样不应触发重试，实际推送 $attempts 次" }
+
+    # 10. Hook 通过（HARNESS_STATUS= 已出现）之后 TLS 失败：仍识别为瞬断并重试。
+    $fixture = New-MergeFixture -Parent (Join-Path $temp 'afterhook')
+    $counter = Join-Path $fixture.Hooks 'count.txt'
+    Set-PrePushHook -Hooks $fixture.Hooks -Counter $counter -FailUntil 1 -Before @('HARNESS_STATUS=PASS_HOST_ONLY') `
+        -Message 'fatal: unable to access: schannel: failed to receive handshake (curl 35)'
+    $failure = Invoke-MergeScript -Root $fixture.Root -Parameters @{
+        Branch = 'feature'; Integration = 'integration/x'; Summary = 'add feature'; RetryDelaySeconds = 0
+    }
+    if ($null -ne $failure) { throw "Hook 通过后 TLS 失败应重试成功：$failure" }
+    $attempts = [int](Get-Content -LiteralPath $counter -Raw)
+    if ($attempts -ne 2) { throw "Hook 通过后 TLS 失败应第 2 次成功，实际推送 $attempts 次" }
 
     Write-Output '集成分支合并脚本测试通过。'
 }

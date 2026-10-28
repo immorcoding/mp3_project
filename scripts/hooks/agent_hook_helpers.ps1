@@ -187,6 +187,55 @@ function Get-AgentHookEditDecision {
     return @{ Decision = 'allow'; Reason = '' }
 }
 
+# gh 文本参数（--body/--title/--comment/--notes/-b/-t）与 api 字段（-f/-F/--field/--raw-field 的 body=、title=）
+# 用双引号包裹且内含反引号。\\?" 容许外层 `-Command "…"` 里转义的内层引号；--body-file 与单引号参数不匹配。
+$script:AgentHookGhTextFlagPattern = '(?<![\w-])(?:--(?:body|title|comment|notes)|-[bt])(?:\s+|=)\\?"(?:[^"\\`]|\\[^`])*`'
+$script:AgentHookGhApiFieldPattern = '(?<![\w-])(?:-[fF]|--field|--raw-field)(?:\s+|=)' +
+    '(?:\\?"(?:body|title)=(?:[^"\\`]|\\[^`])*`|(?:body|title)=\\?"(?:[^"\\`]|\\[^`])*`)'
+
+# 按引号外的 && || ; | & 与换行把命令切成段；单、双引号内的分隔符不切。
+function Split-AgentHookCommandSegment {
+    param(
+        [AllowEmptyString()][string]$Command
+    )
+
+    $segments = New-Object System.Collections.Generic.List[string]
+    $current = New-Object System.Text.StringBuilder
+    $quote = [char]0
+    for ($i = 0; $i -lt $Command.Length; $i++) {
+        $c = $Command[$i]
+        if ($quote -ne [char]0) {
+            [void]$current.Append($c)
+            if (($quote -eq '"') -and ($c -eq '\') -and ($i + 1 -lt $Command.Length)) {
+                $i++
+                [void]$current.Append($Command[$i])
+            }
+            elseif ($c -eq $quote) {
+                $quote = [char]0
+            }
+            continue
+        }
+        if (($c -eq '"') -or ($c -eq "'")) {
+            $quote = $c
+            [void]$current.Append($c)
+        }
+        elseif (($c -eq '\') -and ($i + 1 -lt $Command.Length)) {
+            [void]$current.Append($c)
+            $i++
+            [void]$current.Append($Command[$i])
+        }
+        elseif ($c -in @(';', '|', '&', "`n", "`r")) {
+            [void]$segments.Add($current.ToString())
+            [void]$current.Clear()
+        }
+        else {
+            [void]$current.Append($c)
+        }
+    }
+    [void]$segments.Add($current.ToString())
+    return $segments.ToArray()
+}
+
 # 返回违规原因；命令合规时返回 $null。
 function Get-AgentHookShellViolation {
     param(
@@ -207,9 +256,12 @@ function Get-AgentHookShellViolation {
     $withoutHeredoc = [regex]::Replace($Command,
         '(?s)<<-?[ \t]*(?<q>[''"]?)(?<tag>\w+)\k<q>(?<rest>[^\r\n]*)\r?\n.*?\r?\n[ \t]*\k<tag>[ \t]*(?=\r?\n|$|\))',
         '<<${tag}${rest}')
-    $ghTextFlag = '(?<![\w-])(?:--(?:body|title|comment|notes)|-[bt])(?:\s+|=)"(?:[^"\\`]|\\[^`])*`'
-    if ($withoutHeredoc -match '(?i)(^|[\s;&|(])gh(\.exe)?\s' -and $withoutHeredoc -match $ghTextFlag) {
-        return 'gh 的 --body/--title/-b 等双引号参数里不能含反引号（bash 当命令替换、PowerShell 当转义）；改用 --body-file <文件>，或单引号 heredoc：--body-file - <<''EOF''。'
+    # 按引号外的 && || ; | & 换行切段，只检查含 gh 的那一段，别的命令段（如 git tag -t "`x`"）不受影响。
+    foreach ($ghSegment in (Split-AgentHookCommandSegment -Command $withoutHeredoc)) {
+        if (($ghSegment -match '(?i)(^|[\s/\\(])gh(\.exe|-retry\.ps1)?(\s|$)') -and
+            (($ghSegment -match $script:AgentHookGhTextFlagPattern) -or ($ghSegment -match $script:AgentHookGhApiFieldPattern))) {
+            return 'gh 的 --body/--title/-b 或 api 的 -f body=/title= 等双引号参数里不能含反引号（bash 当命令替换、PowerShell 当转义）；把正文写进临时文件（Write 工具，或 bash 里 cat > 文件 <<''EOF'' 单引号 heredoc），再用 --body-file <临时文件>。'
+        }
     }
 
     # 其余规则先去掉引号内的内容（提交信息等），再按 ; & | 换行 切分命令段。
