@@ -4,3 +4,4 @@ mx.scratch
 .scratch/
 .claude/worktrees/
 .claude/settings.local.json
+__pycache__/
