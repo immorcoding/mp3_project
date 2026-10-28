@@ -17,7 +17,7 @@ cmake --build build/gui_simulator
 改动：
 - `Service/gui/main/queue/gui_service_main_queue.c`：方案表 `service_gui_main_queue_proto_layouts[]`；方案 1–3 的曲名与歌手都取 `service_gui_font_title()`；打印 `[proto]` 几何。
 - `Tools/gui_simulator/sim_script.c`：`--queue-layout N`。
-- `Tools/gui_simulator/fakes/storage_sim.c`：位置 0–2 补假标签，首屏四类行。
+- `Tools/gui_simulator/fakes/storage_sim.c`：位置 0–2 补假标签，首屏四类行；只在 `--queue-layout 1..3` 生效，`0`（现状）保持原曲库，现有场景基线不变（“现状”截图因此是原曲库，仅作对照）。
 
 ## 首屏四类行
 

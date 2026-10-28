@@ -98,6 +98,8 @@ static bool storage_sim_name_fail[STORAGE_SIM_TITLE_COUNT]; /* 为真的位置�
 static uint32_t storage_sim_name_delay;                     /* 名称槽应答额外等待的圈数。 */
 static uint32_t storage_sim_name_waited;                    /* 当前 PENDING 已等待的圈数。 */
 
+extern int service_gui_main_queue_proto_layout; /* PROTOTYPE（#147）。 */
+
 /**
  * @brief 同生产曲目文本：有假 TIT2 取标题与歌手，否则回退文件主名、歌手为空。
  * @param[in] index 播放列表位置，须在固定曲库范围内。
@@ -121,6 +123,11 @@ static bool storage_sim_track_text(uint16_t index, char *title, char *artist)
 
     for (i = 0U; i < STORAGE_SIM_TAG_COUNT; i++)
     {
+        /* PROTOTYPE（#147）：位置 0–2 的假标签只在 --queue-layout 1..3 下生效，现状场景基线不变。 */
+        if ((storage_sim_tags[i].Index < 3U) && (service_gui_main_queue_proto_layout == 0))
+        {
+            continue;
+        }
         if (storage_sim_tags[i].Index == index)
         {
             (void)snprintf(title, STORAGE_CATALOG_NAME_BYTES, "%s", storage_sim_tags[i].Title);
