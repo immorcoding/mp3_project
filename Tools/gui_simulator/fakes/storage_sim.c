@@ -8,7 +8,7 @@
   *          `storage_listbuffer_*`、`storage_namebuffer_*` 与
   *          `storage_task_sd_is_ready/mounted()`。曲库是 16 首固定曲目：原 10 首英文
   *          曲目（与旧演示分区一致）、5 个中文与文件名规则样本、一首需要滚动的超长英文名；
-  *          `E` 键可把曲库换成空库。窗口行给出曲库相对路径；名称槽应答曲目显示名与歌手：
+  *          `E` 键可把曲库换成空库。窗口行与名称槽都按生产给出 {曲目显示名, 歌手}：
   *          storage_sim_tags 里的曲目给出假 TIT2/TPE1（替代生产读标签），其余经真实的
   *          storage_catalog_display_name() 回退文件主名、歌手为空。没有 Storage Task：
   *          sim_main.c 每圈先调 storage_sim_step()，上一圈 request 的窗口与名字在本圈填成 READY。
@@ -33,9 +33,9 @@
 #include "APP/tasks/storage/catalog/storage_namebuffer.h"
 
 /*
- * 固定曲库的曲库相对路径；窗口行原样给出（同生产 Queue 显示完整相对路径），曲目显示名经
- * 真实的 storage_catalog_display_name() 提取。原 10 首英文曲目没有目录与扩展名，提取结果与
- * 原文相同，保持既有场景的 Queue 行不变；第 10–14 首是中文与文件名规则样本，位于超长英文名之前，
+ * 固定曲库的曲库相对路径；窗口行与名称槽的曲目显示名在无假标签时都由它经真实的
+ * storage_catalog_display_name() 提取。原 10 首英文曲目没有目录与扩展名，提取结果与
+ * 原文相同；第 10–14 首是中文与文件名规则样本，位于超长英文名之前，
  * 使开播后“上一首”仍绕到超长英文名，再按上一首依次得到中文短名、中英混排、中文长名、缺字与点号名。
  * 共 16 首，超过一窗 12 条，Queue 滚动到末尾时按窗口协议换窗。
  */
@@ -70,10 +70,13 @@ typedef struct
 } StorageSim_TagTypeDef;
 
 /*
- * 有可用 TIT2 的曲目；其余曲目视为无标签，名称槽回退文件主名、歌手为空（同生产的标签侧回退）。
- * 第 6 首（位置 5）的标题与文件主名不同，唱盘页可据此区分来源；它不出现在既有曲名场景里。
+ * 有可用 TIT2 的曲目；其余曲目视为无标签，回退文件主名、歌手为空（同生产的标签侧回退）。
+ * 第 6 首（位置 5）有标题与歌手，标题与文件主名不同，唱盘页可据此区分来源；第 8 首（位置 7）
+ * 有标题、无歌手。Queue 第一窗由此混排三类行态（GUI-23）：标题 + 歌手、标题无歌手、
+ * 回退文件主名（歌手空）。全部 ASCII。
  */
 static const StorageSim_TagTypeDef storage_sim_tags[] = {
+    {7U, "Kiss the Rain (Live)", NULL},
     {5U, "Experience (Einaudi Live)", "Ludovico Einaudi"},
 };
 
@@ -89,6 +92,43 @@ static uint32_t storage_sim_generation;
 static bool storage_sim_name_fail[STORAGE_SIM_TITLE_COUNT]; /* 为真的位置名字取不到。 */
 static uint32_t storage_sim_name_delay;                     /* 名称槽应答额外等待的圈数。 */
 static uint32_t storage_sim_name_waited;                    /* 当前 PENDING 已等待的圈数。 */
+
+/**
+ * @brief 同生产曲目文本：有假 TIT2 取标题与歌手，否则回退文件主名、歌手为空。
+ * @param[in] index 播放列表位置，须在固定曲库范围内。
+ * @param[out] title 曲目显示名，容量 STORAGE_CATALOG_NAME_BYTES。
+ * @param[out] artist 歌手，容量 STORAGE_CATALOG_NAME_BYTES；取不到为空串。
+ * @return false 表示文件主名提取失败（生产的防御分支），此时两列为空串。
+ */
+static bool storage_sim_track_text(uint16_t index, char *title, char *artist)
+{
+    uint16_t i;
+
+    artist[0] = '\0';
+    if (!storage_catalog_display_name(storage_sim_titles[index],
+                                      (uint32_t)strlen(storage_sim_titles[index]),
+                                      title,
+                                      STORAGE_CATALOG_NAME_BYTES))
+    {
+        title[0] = '\0';
+        return false;
+    }
+
+    for (i = 0U; i < STORAGE_SIM_TAG_COUNT; i++)
+    {
+        if (storage_sim_tags[i].Index == index)
+        {
+            (void)snprintf(title, STORAGE_CATALOG_NAME_BYTES, "%s", storage_sim_tags[i].Title);
+            if (storage_sim_tags[i].Artist != NULL)
+            {
+                (void)snprintf(artist, STORAGE_CATALOG_NAME_BYTES, "%s", storage_sim_tags[i].Artist);
+            }
+            break;
+        }
+    }
+
+    return true;
+}
 
 /**
  * @brief 复位为已挂载、第 1 代、固定曲库非空，窗口槽与名称槽 IDLE。
@@ -273,9 +313,10 @@ Storage_StatusTypeDef storage_listbuffer_request(uint16_t index_offset,
 }
 
 /**
- * @brief 同生产：PENDING 时按当前代次从固定曲目填整窗并打 READY。
+ * @brief 同生产：PENDING 时按当前代次从固定曲目填整窗 {曲目显示名, 歌手} 并打 READY。
  * @return 总是 STORAGE_OK（槽位不是 PENDING 时无事可做）。
- * @note  请求代次非 0 且与当前代次不符时填空窗。
+ * @note  请求代次非 0 且与当前代次不符时填空窗。不做逐行延迟：生产窗口填满前保持 PENDING，
+ *        GUI 只见整窗，一次填完与逐圈一行在 GUI 侧不可区分；逐圈排程进板级验收。
  */
 Storage_StatusTypeDef storage_listbuffer_load(void)
 {
@@ -296,16 +337,15 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
         return STORAGE_OK;
     }
 
-    (void)memset(storage_listbuffer.Buffer, 0, sizeof(storage_listbuffer.Buffer));
     for (i = 0U;
          (i < storage_listbuffer.Length) &&
          ((uint32_t)storage_listbuffer.Index + i < storage_sim_track_count());
          i++)
     {
-        (void)snprintf(storage_listbuffer.Buffer[i],
-                       STORAGE_LISTBUFFER_PATH_BYTES,
-                       "%s",
-                       storage_sim_titles[storage_listbuffer.Index + i]);
+        /* 同生产：文件主名也提取不出时该行两列为空串，不中断整窗。 */
+        (void)storage_sim_track_text((uint16_t)(storage_listbuffer.Index + i),
+                                     storage_listbuffer.Rows[i].Title,
+                                     storage_listbuffer.Rows[i].Artist);
         filled++;
     }
 
@@ -393,8 +433,6 @@ static void storage_sim_name_fail_report(void)
  */
 void storage_namebuffer_load(bool sd_ready)
 {
-    uint16_t i;
-
     if (storage_namebuffer.Status != STORAGE_NAMEBUFFER_PENDING)
     {
         return;
@@ -421,31 +459,13 @@ void storage_namebuffer_load(bool sd_ready)
 
     /* --name-fail 与文件主名提取失败都是生产的防御分支：应答代次 0 空名并打印同形 WARN。 */
     if (storage_sim_name_fail[storage_namebuffer.Index] ||
-        !storage_catalog_display_name(storage_sim_titles[storage_namebuffer.Index],
-                                      (uint32_t)strlen(storage_sim_titles[storage_namebuffer.Index]),
-                                      storage_namebuffer.Title,
-                                      sizeof(storage_namebuffer.Title)))
+        !storage_sim_track_text(storage_namebuffer.Index,
+                                storage_namebuffer.Title,
+                                storage_namebuffer.Artist))
     {
         storage_sim_name_fail_report();
         storage_sim_name_complete_empty();
         return;
-    }
-
-    /* 同生产：有可用 TIT2 时取标题与歌手，否则保留文件主名、歌手为空。 */
-    storage_namebuffer.Artist[0] = '\0';
-    for (i = 0U; i < STORAGE_SIM_TAG_COUNT; i++)
-    {
-        if (storage_sim_tags[i].Index == storage_namebuffer.Index)
-        {
-            (void)snprintf(storage_namebuffer.Title, sizeof(storage_namebuffer.Title),
-                           "%s", storage_sim_tags[i].Title);
-            if (storage_sim_tags[i].Artist != NULL)
-            {
-                (void)snprintf(storage_namebuffer.Artist, sizeof(storage_namebuffer.Artist),
-                               "%s", storage_sim_tags[i].Artist);
-            }
-            break;
-        }
     }
 
     storage_namebuffer.Generation = storage_sim_generation;

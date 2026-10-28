@@ -82,6 +82,7 @@ $logHeaderGuiImpact = Get-HarnessImpact -ChangedPath @('Service/log/log_service.
 Assert-HarnessEqual -Expected $true -Actual $logHeaderGuiImpact.RequiresGuiScenarios -Message '假日志实现的 Service Log 头变化必须跑场景回归'
 $listbufferHeaderImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_listbuffer.h')
 Assert-HarnessEqual -Expected $true -Actual $listbufferHeaderImpact.RequiresGuiScenarios -Message '假 Storage 实现的窗口槽头变化必须跑场景回归'
+Assert-HarnessEqual -Expected $true -Actual (@($listbufferHeaderImpact.HostModules) -contains 'gui_task') -Message '窗口槽头变化必须选中 gui_task（Queue 行测试按该头构造窗口）'
 $namebufferHeaderImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_namebuffer.h')
 Assert-HarnessEqual -Expected $true -Actual $namebufferHeaderImpact.RequiresGuiScenarios -Message '假 Storage 实现的名称槽头变化必须跑场景回归'
 $namebufferSourceImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_namebuffer.c')
@@ -185,8 +186,8 @@ Assert-HarnessSequence -Expected @('flash_ftl', 'storage_catalog') -Actual $cc93
     -Message 'CP936 表变化必须同时选择 Flash 与 Storage 曲库主机测试（后者链接真实 cc936.c 做 GBK 查表）'
 
 $catalogConfigImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_catalog_config.h')
-Assert-HarnessSequence -Expected @('storage_catalog') -Actual $catalogConfigImpact.HostModules `
-    -Message '曲库配置头（含曲目标签读取常量）变化必须选择 Storage 曲库主机测试'
+Assert-HarnessSequence -Expected @('gui_task', 'storage_catalog') -Actual $catalogConfigImpact.HostModules `
+    -Message '曲库配置头（含曲目标签读取常量与窗口条数）变化必须选择 Storage 曲库与 GUI Task 主机测试'
 
 $monitorWarnImpact =Get-HarnessImpact -ChangedPath @('APP/tasks/monitor/monitor_warn.c')
 Assert-HarnessSequence -Expected @('monitor_warn') -Actual $monitorWarnImpact.HostModules `

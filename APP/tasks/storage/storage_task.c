@@ -116,7 +116,7 @@ static Storage_AudioMediaTypeDef storage_task_audio_media(void)
  * @param[in] debounce_start 消抖起点。
  * @param[in] reclaim_start 回收起点。
  * @return 传给通知等待的超时。
- * @note   音频流还有工作（待处理请求，或流已打开且有空闲块可读）时不阻塞。有打开的音频流时
+ * @note   音频流还有工作（待处理请求，或流已打开且有空闲块可读）、或就绪时 Queue 窗口仍在逐行填写时不阻塞。有打开的音频流时
  *         不提供回收机会，因此回收剩余不参与计时，只靠事件 FLAG 或消抖截止唤醒。
  */
 static TickType_t storage_task_next_wait_ticks(TickType_t now,
@@ -126,6 +126,13 @@ static TickType_t storage_task_next_wait_ticks(TickType_t now,
     TickType_t wait_ticks;
 
     if (storage_audio_stream_has_work(storage_task_audio_media()))
+    {
+        return 0U;
+    }
+
+    /* 窗口逐圈读一行标签（STOR-16）：填到一半时下一圈接着读，不阻塞等事件。 */
+    if ((storage_task_sd_state == STORAGE_TASK_SD_READY) &&
+        (storage_listbuffer.Status == STORAGE_LISTBUFFER_PENDING))
     {
         return 0U;
     }
@@ -180,8 +187,9 @@ static uint32_t storage_task_wait_event(TickType_t ticks)
 }
 
 /**
- * @brief  仅 SD 就绪时若有 PENDING 则填 Queue 窗口。
- * @note   仅 Storage Task 普通上下文可调用。消抖中与未就绪都不填窗。
+ * @brief  仅 SD 就绪时若有 PENDING 则为 Queue 窗口读一行曲目标签，整窗填完才 READY。
+ * @note   仅 Storage Task 普通上下文可调用，每圈一次。消抖中与未就绪都不填窗：消抖中已填的行
+ *         保留、恢复就绪后按代次续填或以空窗收尾；未就绪由 complete_unavailable() 收掉。
  */
 static void storage_task_load_listbuffer_if_allowed(void)
 {
@@ -305,7 +313,7 @@ void storage_task(void *handle)
             storage_task_apply_sd_state();
         }
 
-        /* 每圈顺序：请求信箱 → 列表窗口 → 曲目显示名 → 最多读一块 → 回收。 */
+        /* 每圈顺序：请求信箱 → 列表窗口（至多一行标签）→ 曲目显示名 → 最多读一块 → 回收。 */
         storage_audio_stream_process_request(storage_task_audio_media());
         storage_task_load_listbuffer_if_allowed();
         storage_namebuffer_load(storage_task_sd_state == STORAGE_TASK_SD_READY);

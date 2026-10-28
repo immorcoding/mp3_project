@@ -16,6 +16,7 @@ Service_StatusTypeDef service_gui_main_queue_prepare(void);
 uint16_t service_gui_main_queue_scroll_lead(void);
 Service_StatusTypeDef service_gui_main_queue_apply(
     const char **titles,
+    const char **artists,
     uint16_t length,
     uint16_t window_index,
     uint16_t current_index);
