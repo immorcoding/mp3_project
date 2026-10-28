@@ -76,7 +76,7 @@ typedef struct
  * 回退文件主名（歌手空）。全部 ASCII。
  */
 static const StorageSim_TagTypeDef storage_sim_tags[] = {
-    /* PROTOTYPE #152：唱盘页歌手行的假标签（位置 1 不加，作“无歌手”）。 */
+    /* PROTOTYPE #152：唱盘页歌手行的假标签，只在 --artist-layout 非 0 时生效（位置 1 不加，作“无歌手”）。 */
     {0U, "Clair de Lune", "Claude Debussy"},
     {2U, "晴天", "周杰伦"},
     {3U, "Nuvole Bianche", "Ludovico Einaudi / Yiruma"},
@@ -87,6 +87,10 @@ static const StorageSim_TagTypeDef storage_sim_tags[] = {
 
 #define STORAGE_SIM_TAG_COUNT \
     ((uint16_t)(sizeof(storage_sim_tags) / sizeof(storage_sim_tags[0])))
+
+/* PROTOTYPE #152：表头 4 条只在 storage_sim_proto_tags 为真时生效，默认场景与基线不变。 */
+#define STORAGE_SIM_PROTO_TAG_COUNT (4U)
+bool storage_sim_proto_tags;
 
 Storage_ListBufferTypeDef storage_listbuffer;
 Storage_NameBufferTypeDef storage_namebuffer;
@@ -119,7 +123,7 @@ static bool storage_sim_track_text(uint16_t index, char *title, char *artist)
         return false;
     }
 
-    for (i = 0U; i < STORAGE_SIM_TAG_COUNT; i++)
+    for (i = storage_sim_proto_tags ? 0U : STORAGE_SIM_PROTO_TAG_COUNT; i < STORAGE_SIM_TAG_COUNT; i++)
     {
         if (storage_sim_tags[i].Index == index)
         {

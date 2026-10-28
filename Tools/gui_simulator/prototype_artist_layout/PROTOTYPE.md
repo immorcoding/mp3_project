@@ -6,7 +6,7 @@
 
 - 没有改 `Service_GUI_TitleApply`。原型在每圈 `gui_music_step()` 之后查看曲名 Label 的文本：文本变了，就用名称槽替身最后一次应答里的 `Artist` 写歌手 Label。曲名为空白或 `--` 时，歌手写空串。这样近似于“曲名和歌手在同一次 Apply 里写入”。
 - 歌手 Label 和曲名用同一个字体：`service_gui_font_title()`，即资源包 Noto 12 px（line_height 16），Label 高 18。两者都居中，都不响应点击。滚动速度同曲名，24 px/s。
-- 假标签放在 `fakes/storage_sim.c` 的 `storage_sim_tags`：
+- 假标签放在 `fakes/storage_sim.c` 的 `storage_sim_tags` 表头 4 条，只在 `--artist-layout` 非 0 时生效。默认运行不受影响，现有场景基线不变：
 
 | 位置 | 曲名 | 歌手 | 状态 |
 |---|---|---|---|
@@ -56,7 +56,7 @@ Y 是相对 Playing 标签页内容区的坐标，括号里是 LCD 绝对坐标�
 
 ## 截图
 
-- 对照图：`sheet_A.png`、`sheet_B.png`、`sheet_C.png`，以及现状 `sheet_current.png`。每张两行，上面是 Default，下面是 Solid；列依次是有歌手、无歌手、中文、多歌手、超长、超长 +2 s、曲名 `--`。
+- 对照图：`sheet_A.png`、`sheet_B.png`、`sheet_C.png`，以及现状 `sheet_current.png`（`--artist-layout 0`，不加假标签，所以第 2、3、4 首的曲名与 A/B/C 不同）。每张两行，上面是 Default，下面是 Solid；列依次是有歌手、无歌手、中文、多歌手、超长、超长 +2 s、曲名 `--`。
 - 单张截图（2 倍放大）：`A/`、`B/`、`C/` 下的 `<状态>_<default|solid>.png`。
 
 ## 观察（仅供参考，由用户选定）

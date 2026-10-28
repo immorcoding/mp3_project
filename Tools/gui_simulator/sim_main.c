@@ -40,6 +40,8 @@
 #include "sim_script.h"
 #include "prototype_artist_layout.h" /* PROTOTYPE #152 */
 
+extern bool storage_sim_proto_tags; /* PROTOTYPE #152：fakes/storage_sim.c */
+
 /** @brief 与产品 GUI_NOTIFY_LCD_TRANSFER 对应的通知槽。 */
 #define SIM_GUI_NOTIFY_LCD_TRANSFER  0U
 
@@ -209,6 +211,7 @@ int main(int argc, char *argv[])
         argv[proto_j++] = argv[proto_i];
     }
     argc = proto_j;
+    storage_sim_proto_tags = (proto_layout != 0);
 
     if (!sim_script_parse(argc, argv, &options))
     {
