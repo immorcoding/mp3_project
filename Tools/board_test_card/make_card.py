@@ -4,7 +4,7 @@
 用法（需要 ``pip install lameenc``，与 Tests/playback_service/fixtures 相同）：
 
     python Tools/board_test_card/make_card.py <输出目录>
-    python Tools/board_test_card/make_card.py <输出目录> --copy-to I:/Music --set all
+    python Tools/board_test_card/make_card.py <输出目录> --copy-to I:/Music --set all   # 只打印该子集的样本表与复制顺序；不带 --set 则列出全部
 
 复用 ``generate_fixtures.py`` 的合成与编码函数。音频是确定性的整数 Hz 正弦和弦，
 每个和弦恰好 1 s、起止采样为 0，循环拼接成整曲，所以曲内没有人为咔哒声，
@@ -116,51 +116,86 @@ def copy_in_order(src_dir, dst_dir, names):
         print("已复制", name)
 
 
+def _digest(data, name):
+    return hashlib.sha256(data[name]).hexdigest()[:12]
+
+
+def _file_lines(data, names, title):
+    notes = dict(FILES)
+    lines = [title]
+    for index, name in enumerate(names, 1):
+        lines.append("%d. %-24s %9d 字节  sha256:%s  %s" % (index, name, len(data[name]), _digest(data, name), notes[name]))
+    return lines
+
+
+def _names_lines(data):
+    lines = ["\n曲目显示名样本（--set names；内容相同、只改文件名；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）："]
+    for index, sample in enumerate(card_names.NAME_SAMPLES, 1):
+        lines.append("%d. %s  期望显示名 %r  %s%s" % (index, sample.filename, sample.display,
+                     "[需滚动] " if sample.scroll else "", sample.note))
+    return lines
+
+
+def _tag_lines(data, heading, samples, width):
+    lines = [heading]
+    for index, sample in enumerate(samples, 1):
+        lines.append(("%d. %-" + str(width) + "s %8d 字节  唱盘页 %r  Queue %r / %r  来源 %s 读取 %s 次  %s") % (
+                     index, sample.filename, len(data[sample.filename]), sample.dial, sample.queue_title,
+                     sample.queue_artist, sample.source, sample.reads, sample.note))
+    return lines
+
+
+_TAGS_HEADING = "\nID3 标签样本（--set tags；音频同上、只改标签；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）："
+_GLYPHS_HEADING = "\n曲目元数据字形样本（--set glyphs；音频同上、只改标签；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）："
+_NOTICE = [
+    "\n注意：FAT 目录顺序取决于创建顺序，复制到卡上必须按此顺序逐个复制，不要整夹拖拽；",
+    "测“首个文件是坏文件”时 bad-zero.mp3 必须最先复制到空卡（或先格式化）。",
+]
+
+
+def render_report(data, set_key=None):
+    """返回要打印的行。set_key 为 None 时列出全部样本表与子集清单；指定子集时只列该子集的样本表与复制顺序。"""
+    if set_key is None:
+        lines = _file_lines(data, [name for name, _ in FILES], "测试卡（复制顺序 = FAT 创建顺序 = 入库顺序）：")
+        lines += _names_lines(data)
+        lines += _tag_lines(data, _TAGS_HEADING, card_tags.TAG_SAMPLES, 24)
+        lines += _tag_lines(data, _GLYPHS_HEADING, card_glyphs.GLYPH_SAMPLES, 26)
+        lines.append("\n子集（均按上面的相对顺序复制）：")
+        for key, names in SETS.items():
+            lines.append("  --set %-16s %s" % (key, ", ".join(names)))
+        return lines + _NOTICE
+
+    names = SETS[set_key]
+    if set_key == "names":
+        lines = _names_lines(data)
+    elif set_key == "tags":
+        lines = _tag_lines(data, _TAGS_HEADING, card_tags.TAG_SAMPLES, 24)
+    elif set_key == "glyphs":
+        lines = _tag_lines(data, _GLYPHS_HEADING, card_glyphs.GLYPH_SAMPLES, 26)
+    else:
+        lines = _file_lines(data, names, "测试卡 --set %s（复制顺序 = FAT 创建顺序 = 入库顺序）：" % set_key)
+    lines.append("\n--set %s 复制顺序：%s" % (set_key, " -> ".join(names)))
+    return lines + _NOTICE
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("output_dir")
     parser.add_argument("--copy-to", help="生成后按顺序复制到此目录（SD 卡挂载点；应为空目录）")
-    parser.add_argument("--set", choices=sorted(SETS), default="all", help="--copy-to 复制的子集，默认 all")
+    parser.add_argument("--set", choices=sorted(SETS), default=None,
+                        help="--copy-to 复制的子集，默认 all；指定时只打印该子集的样本表与复制顺序，不指定时列出全部")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
     data = make_all()
-    notes = dict(FILES)
-    print("测试卡（复制顺序 = FAT 创建顺序 = 入库顺序）：")
-    for index, (name, _) in enumerate(FILES, 1):
+    for name in data:
         with open(os.path.join(args.output_dir, name), "wb") as handle:
             handle.write(data[name])
-        digest = hashlib.sha256(data[name]).hexdigest()[:12]
-        print("%d. %-24s %9d 字节  sha256:%s  %s" % (index, name, len(data[name]), digest, notes[name]))
-    print("\n曲目显示名样本（--set names；内容相同、只改文件名；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）：")
-    for index, sample in enumerate(card_names.NAME_SAMPLES, 1):
-        with open(os.path.join(args.output_dir, sample.filename), "wb") as handle:
-            handle.write(data[sample.filename])
-        print("%d. %s  期望显示名 %r  %s%s" % (index, sample.filename, sample.display,
-              "[需滚动] " if sample.scroll else "", sample.note))
-    print("\nID3 标签样本（--set tags；音频同上、只改标签；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）：")
-    for index, sample in enumerate(card_tags.TAG_SAMPLES, 1):
-        with open(os.path.join(args.output_dir, sample.filename), "wb") as handle:
-            handle.write(data[sample.filename])
-        print("%d. %-24s %8d 字节  唱盘页 %r  Queue %r / %r  来源 %s 读取 %s 次  %s" % (
-              index, sample.filename, len(data[sample.filename]), sample.dial, sample.queue_title,
-              sample.queue_artist, sample.source, sample.reads, sample.note))
-    print("\n曲目元数据字形样本（--set glyphs；音频同上、只改标签；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）：")
-    for index, sample in enumerate(card_glyphs.GLYPH_SAMPLES, 1):
-        with open(os.path.join(args.output_dir, sample.filename), "wb") as handle:
-            handle.write(data[sample.filename])
-        print("%d. %-26s %8d 字节  唱盘页 %r  Queue %r / %r  来源 %s 读取 %s 次  %s" % (
-              index, sample.filename, len(data[sample.filename]), sample.dial, sample.queue_title,
-              sample.queue_artist, sample.source, sample.reads, sample.note))
-    print("\n子集（均按上面的相对顺序复制）：")
-    for key, names in SETS.items():
-        print("  --set %-16s %s" % (key, ", ".join(names)))
-    print("\n注意：FAT 目录顺序取决于创建顺序，复制到卡上必须按此顺序逐个复制，不要整夹拖拽；")
-    print("测“首个文件是坏文件”时 bad-zero.mp3 必须最先复制到空卡（或先格式化）。")
+    print("\n".join(render_report(data, args.set)))
 
     if args.copy_to:
         os.makedirs(args.copy_to, exist_ok=True)
-        copy_in_order(args.output_dir, args.copy_to, SETS[args.set])
+        copy_in_order(args.output_dir, args.copy_to, SETS[args.set or "all"])
 
 
 if __name__ == "__main__":

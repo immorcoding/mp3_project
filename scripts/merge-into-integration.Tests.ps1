@@ -68,6 +68,32 @@ function New-MergeFixture {
     return [pscustomobject]@{ Root = $root; Hooks = $hooks }
 }
 
+# 写一个按计数失败的 pre-push Hook：前 FailUntil 次输出 Message（及 NoiseLines 行噪声）并失败，之后放行。
+function Set-PrePushHook {
+    param(
+        [Parameter(Mandatory)][string]$Hooks,
+        [Parameter(Mandatory)][string]$Counter,
+        [Parameter(Mandatory)][int]$FailUntil,
+        [Parameter(Mandatory)][string]$Message,
+        [int]$NoiseLines = 0
+    )
+    $counterPath = $Counter.Replace('\', '/')
+    $lines = @(
+        '#!/bin/sh'
+        "COUNT='$counterPath'"
+        'n=$(cat "$COUNT" 2>/dev/null || echo 0)'
+        'n=$((n+1))'
+        'echo $n > "$COUNT"'
+        "if [ `"`$n`" -le $FailUntil ]; then"
+        "  i=1; while [ `$i -le $NoiseLines ]; do echo `"noise line `$i`" >&2; i=`$((i+1)); done"
+        "  echo '$Message' >&2"
+        '  exit 1'
+        'fi'
+        'exit 0'
+    )
+    [IO.File]::WriteAllText((Join-Path $Hooks 'pre-push'), (($lines -join "`n") + "`n"))
+}
+
 function Invoke-MergeScript {
     param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][hashtable]$Parameters)
     Push-Location -LiteralPath $Root
@@ -126,6 +152,75 @@ try {
     Invoke-FixtureGit -Root $fixture.Root -Arguments @('branch', '-f', 'integration/x', 'feature') | Out-Null
     $failure = Invoke-MergeScript -Root $fixture.Root -Parameters @{ Branch = 'feature'; Integration = 'integration/x'; Summary = 'x' }
     if (($null -eq $failure) -or ($failure -notmatch '不一致')) { throw "本地与远端不一致时应拒绝：$failure" }
+
+    # 5. 推送遇网络瞬断：原地重试直到成功；远端前进，本地不复位。
+    $fixture = New-MergeFixture -Parent (Join-Path $temp 'transient')
+    $counter = Join-Path $fixture.Hooks 'count.txt'
+    Set-PrePushHook -Hooks $fixture.Hooks -Counter $counter -FailUntil 2 -Message 'fatal: unable to access: schannel: failed to receive handshake (curl 35)'
+    $failure = Invoke-MergeScript -Root $fixture.Root -Parameters @{
+        Branch = 'feature'; Integration = 'integration/x'; Summary = 'add feature'; RetryDelaySeconds = 0
+    }
+    if ($null -ne $failure) { throw "瞬断后重试成功的用例抛错：$failure" }
+    $attempts = [int](Get-Content -LiteralPath $counter -Raw)
+    if ($attempts -ne 3) { throw "前两次瞬断应在第 3 次推送成功，实际推送 $attempts 次" }
+    Invoke-FixtureGit -Root $fixture.Root -Arguments @('fetch', '-q', 'origin') | Out-Null
+    $subject = @(Invoke-FixtureGit -Root $fixture.Root -Arguments @('log', '-1', '--format=%s', 'origin/integration/x'))[0]
+    if ($subject -ne 'chore(merge): add feature') { throw "重试成功后远端应含合并提交：$subject" }
+
+    # 6. Hook 失败（非网络原因）：只推送一次，立即复位，报错只带输出末尾约 8 行且不重复。
+    $fixture = New-MergeFixture -Parent (Join-Path $temp 'hookfail')
+    $counter = Join-Path $fixture.Hooks 'count.txt'
+    Set-PrePushHook -Hooks $fixture.Hooks -Counter $counter -FailUntil 99 -Message 'verify FAILED: gui scene mismatch' -NoiseLines 30
+    $failure = Invoke-MergeScript -Root $fixture.Root -Parameters @{
+        Branch = 'feature'; Integration = 'integration/x'; Summary = 'add feature'; RetryDelaySeconds = 0
+    }
+    if (($null -eq $failure) -or ($failure -notmatch '推送被拒')) { throw "Hook 失败应以「推送被拒」失败：$failure" }
+    $attempts = [int](Get-Content -LiteralPath $counter -Raw)
+    if ($attempts -ne 1) { throw "Hook 失败不应重试，实际推送 $attempts 次" }
+    $localTip = @(Invoke-FixtureGit -Root $fixture.Root -Arguments @('rev-parse', 'refs/heads/integration/x'))[0]
+    $remoteTip = @(Invoke-FixtureGit -Root $fixture.Root -Arguments @('rev-parse', 'origin/integration/x'))[0]
+    if ($localTip -ne $remoteTip) { throw 'Hook 失败后本地集成分支应复位到远端' }
+    $markerCount = ([regex]::Matches($failure, 'verify FAILED')).Count
+    if ($markerCount -ne 1) { throw "Hook 输出应只出现一次，实际 $markerCount 次：$failure" }
+    if ($failure -match 'noise line 1\b') { throw "报错应只带输出末尾，不应含最早的噪声行：$failure" }
+    if ($failure -notmatch 'noise line 30\b') { throw "报错应含输出末尾行：$failure" }
+
+    # 7. 重试耗尽：推送 1+3 次后复位并报错。
+    $fixture = New-MergeFixture -Parent (Join-Path $temp 'exhausted')
+    $counter = Join-Path $fixture.Hooks 'count.txt'
+    Set-PrePushHook -Hooks $fixture.Hooks -Counter $counter -FailUntil 99 -Message 'fatal: the remote end hung up unexpectedly'
+    $failure = Invoke-MergeScript -Root $fixture.Root -Parameters @{
+        Branch = 'feature'; Integration = 'integration/x'; Summary = 'add feature'; RetryDelaySeconds = 0
+    }
+    if (($null -eq $failure) -or ($failure -notmatch '重试')) { throw "重试耗尽应报错并提到重试：$failure" }
+    $attempts = [int](Get-Content -LiteralPath $counter -Raw)
+    if ($attempts -ne 4) { throw "应推送 1 次加重试 3 次共 4 次，实际 $attempts 次" }
+    $localTip = @(Invoke-FixtureGit -Root $fixture.Root -Arguments @('rev-parse', 'refs/heads/integration/x'))[0]
+    $remoteTip = @(Invoke-FixtureGit -Root $fixture.Root -Arguments @('rev-parse', 'origin/integration/x'))[0]
+    if ($localTip -ne $remoteTip) { throw '重试耗尽后本地集成分支应复位到远端' }
+
+    # 8. 首次 fetch 遇瞬断：重试后继续合并（以同名函数替身让前两次 fetch 失败）。
+    $fixture = New-MergeFixture -Parent (Join-Path $temp 'fetchblip')
+    $global:FetchFailuresLeft = 2
+    function git {
+        if (($args -contains 'fetch') -and ($global:FetchFailuresLeft -gt 0)) {
+            $global:FetchFailuresLeft--
+            Write-Output 'fatal: unable to access ''https://github.com/x/y.git/'': Could not resolve host: github.com'
+            $global:LASTEXITCODE = 128
+            return
+        }
+        & git.exe @args
+    }
+    try {
+        $failure = Invoke-MergeScript -Root $fixture.Root -Parameters @{
+            Branch = 'feature'; Integration = 'integration/x'; Summary = 'add feature'; RetryDelaySeconds = 0
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath Function:\git
+    }
+    if ($null -ne $failure) { throw "fetch 瞬断后重试成功的用例抛错：$failure" }
+    if ($global:FetchFailuresLeft -ne 0) { throw 'fetch 替身应被调用过两次' }
 
     Write-Output '集成分支合并脚本测试通过。'
 }

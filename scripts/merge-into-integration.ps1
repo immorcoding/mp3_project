@@ -5,7 +5,10 @@ param(
     [Parameter(Mandatory)][string]$Summary,
     [int]$Ticket = 0,
     [string]$CoAuthor,
-    [string]$Remote = 'origin'
+    [string]$Remote = 'origin',
+    # 网络瞬断时 fetch/push 的重试次数（不含首次）与间隔。
+    [int]$RetryCount = 3,
+    [double]$RetryDelaySeconds = 2
 )
 
 Set-StrictMode -Version Latest
@@ -15,7 +18,8 @@ $ErrorActionPreference = 'Stop'
 # `chore(merge): #<票号> <摘要>`（无票号时省略 `#<票号> `），commit-msg Hook 接受此形式。
 # 在调用方当前 worktree 内执行，须无未提交改动；结束时回到调用前的 HEAD（分离）。
 # 本地集成分支与远端不一致时拒绝执行；冲突时中止合并、不推送；推送被拒（如 pre-push 失败）时
-# 把本地集成分支复位到远端。成功退出码 0，失败抛错；只输出结果行，不输出 HARNESS_STATUS。
+# 把本地集成分支复位到远端。fetch/push 遇网络瞬断（见 $TransientPattern）时原地重试，pre-push Hook
+# 失败等非网络原因不重试；报错只带输出末尾 $ErrorTailLines 行。成功退出码 0，失败抛错；只输出结果行，不输出 HARNESS_STATUS。
 
 function Invoke-MergeGit {
     param([Parameter(Mandatory)][string[]]$Arguments, [switch]$AllowFailure)
@@ -35,13 +39,43 @@ function Invoke-MergeGit {
     return [pscustomobject]@{ ExitCode = $exitCode; Output = $output }
 }
 
+$TransientPattern = '(?i)curl\s*35|schannel|RPC failed|unexpected disconnect|remote end hung up|Could not resolve host|Connection reset|Connection timed out|early EOF'
+$ErrorTailLines = 8
+
+function Get-OutputTail {
+    param([string[]]$Output)
+    $lines = @($Output | ForEach-Object { $_ -split "`r?`n" } | Where-Object { $_ -ne '' })
+    if ($lines.Count -le $ErrorTailLines) { return ($lines -join "`n") }
+    return "…（前 $($lines.Count - $ErrorTailLines) 行略）`n" + (($lines | Select-Object -Last $ErrorTailLines) -join "`n")
+}
+
+# 失败且输出匹配瞬断特征时间隔重试，最多 $RetryCount 次；返回最后一次结果并附 Attempts。
+function Invoke-MergeGitWithRetry {
+    param([Parameter(Mandatory)][string[]]$Arguments)
+
+    $attempt = 0
+    while ($true) {
+        $attempt++
+        $result = Invoke-MergeGit -Arguments $Arguments -AllowFailure
+        $transient = ($result.ExitCode -ne 0) -and (($result.Output -join "`n") -match $TransientPattern)
+        if (($result.ExitCode -eq 0) -or -not $transient -or ($attempt -gt $RetryCount)) {
+            return [pscustomobject]@{ ExitCode = $result.ExitCode; Output = $result.Output; Attempts = $attempt; Transient = $transient }
+        }
+        Write-Warning "git $($Arguments[0]) 遇网络瞬断，$RetryDelaySeconds 秒后重试（$attempt/$RetryCount）。"
+        if ($RetryDelaySeconds -gt 0) { Start-Sleep -Seconds $RetryDelaySeconds }
+    }
+}
+
 $dirty = (Invoke-MergeGit -Arguments @('status', '--porcelain', '--untracked-files=no')).Output
 if ($dirty.Count -gt 0) {
     throw '当前 worktree 有未提交改动；先提交或清理后再合并。'
 }
 $startHead = (Invoke-MergeGit -Arguments @('rev-parse', 'HEAD')).Output[0]
 
-Invoke-MergeGit -Arguments @('fetch', '-q', $Remote) | Out-Null
+$fetch = Invoke-MergeGitWithRetry -Arguments @('fetch', '-q', $Remote)
+if ($fetch.ExitCode -ne 0) {
+    throw "git fetch 失败（$($fetch.ExitCode)，共尝试 $($fetch.Attempts) 次）：`n$(Get-OutputTail -Output $fetch.Output)"
+}
 $remoteRef = "$Remote/$Integration"
 $remoteSha = (Invoke-MergeGit -Arguments @('rev-parse', '--verify', '-q', "$remoteRef^{commit}")).Output[0]
 $local = Invoke-MergeGit -Arguments @('rev-parse', '--verify', '-q', "refs/heads/$Integration^{commit}") -AllowFailure
@@ -64,10 +98,14 @@ try {
         throw "合并冲突，已中止，未推送：$Branch → $Integration。`n$($merge.Output -join "`n")"
     }
 
-    $push = Invoke-MergeGit -Arguments @('push', $Remote, $Integration) -AllowFailure
+    $push = Invoke-MergeGitWithRetry -Arguments @('push', $Remote, $Integration)
     if ($push.ExitCode -ne 0) {
         Invoke-MergeGit -Arguments @('reset', '-q', '--hard', $remoteRef) -AllowFailure | Out-Null
-        throw "推送被拒，本地 $Integration 已复位到 $remoteRef。`n$($push.Output -join "`n")"
+        $tail = Get-OutputTail -Output $push.Output
+        if ($push.Transient) {
+            throw "推送失败（网络瞬断，已重试 $($push.Attempts - 1) 次仍失败），本地 $Integration 已复位到 $remoteRef。`n$tail"
+        }
+        throw "推送被拒，本地 $Integration 已复位到 $remoteRef。`n$tail"
     }
 
     $tip = (Invoke-MergeGit -Arguments @('rev-parse', '--short', 'HEAD')).Output[0]

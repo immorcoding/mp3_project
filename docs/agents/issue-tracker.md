@@ -10,6 +10,7 @@
 - **评论**：`gh issue comment <number> --body "..."`
 - **标签**：`gh issue edit <number> --add-label "..."` / `--remove-label "..."`；标签表见 [triage-labels.md](triage-labels.md)。
 - **关闭**：`gh issue close <number> --comment "..."`
+- **写操作经 `scripts/gh-retry.ps1`**：创建、评论、改标签、关闭、`gh api` 写入等一律 `./scripts/gh-retry.ps1 <gh 的完整参数>`，网络瞬断（EOF、connection reset、HTTP 5xx）时自动重试 3 次，其余错误原样返回。正文含反引号时用 `--body-file <文件>` 或单引号 heredoc（`--body-file - <<'EOF'`），不要放进双引号参数（Agent Hook 会拦截）。
 
 ## 固件专有约定
 

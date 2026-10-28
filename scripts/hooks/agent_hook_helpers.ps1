@@ -202,6 +202,16 @@ function Get-AgentHookShellViolation {
         return '禁止跳过 Git Hook（--no-verify）：FAST/CHANGED 是唯一自动闸门（GIT-4）。'
     }
 
+    # gh 的 --body/--title/-b 等用双引号包裹且内含反引号：bash 当命令替换、PowerShell 当转义，正文会被吃掉。
+    # 先摘掉 heredoc 正文（引号化的 heredoc 里反引号是字面量）；--body-file、单引号参数不受影响。
+    $withoutHeredoc = [regex]::Replace($Command,
+        '(?s)<<-?[ \t]*(?<q>[''"]?)(?<tag>\w+)\k<q>(?<rest>[^\r\n]*)\r?\n.*?\r?\n[ \t]*\k<tag>[ \t]*(?=\r?\n|$|\))',
+        '<<${tag}${rest}')
+    $ghTextFlag = '(?<![\w-])(?:--(?:body|title|comment|notes)|-[bt])(?:\s+|=)"(?:[^"\\`]|\\[^`])*`'
+    if ($withoutHeredoc -match '(?i)(^|[\s;&|(])gh(\.exe)?\s' -and $withoutHeredoc -match $ghTextFlag) {
+        return 'gh 的 --body/--title/-b 等双引号参数里不能含反引号（bash 当命令替换、PowerShell 当转义）；改用 --body-file <文件>，或单引号 heredoc：--body-file - <<''EOF''。'
+    }
+
     # 其余规则先去掉引号内的内容（提交信息等），再按 ; & | 换行 切分命令段。
     $unquoted = $Command -replace '"(?:[^"\\]|\\.)*"', '""' -replace "'[^']*'", "''"
     foreach ($segment in ($unquoted -split '[;&|\r\n]+')) {

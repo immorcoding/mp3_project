@@ -8,6 +8,8 @@ python Tools/board_test_card/make_card.py <输出目录>
 python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --set all
 ```
 
+不带 `--set` 时列出全部样本表和子集清单，复制默认用 `all`；带 `--set X` 时只打印该子集的样本表和复制顺序（不再打印其他子集的表与清单），生成的文件仍是全套。报告格式由 `python Tools/board_test_card/test_make_card_report.py` 检查（不需要 `lameenc`）。
+
 | 复制顺序 | 文件 | 字节 | 用途 |
 |---:|---|---:|---|
 | 1 | `bad-zero.mp3` | 200000 | 全零坏文件，先复制才能测“首个文件是坏文件” |

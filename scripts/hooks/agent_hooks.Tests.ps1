@@ -140,6 +140,16 @@ $blocked = @(
     'git config --unset core.hooksPath'
     'git config --global core.hooksPath /tmp/none'
     'git -c core.hooksPath=/tmp/none commit -m x'
+    # gh 双引号参数里的反引号：bash 当命令替换、PowerShell 当转义，正文会被吃掉。
+    'gh issue comment 7 --body "run `make` now"'
+    'gh pr create --title "fix `x`" --body "y"'
+    'gh issue create -b "see `a`"'
+    'gh issue create --title="`x`"'
+    'gh issue close 3 --comment "done `z`"'
+    'cd repo && gh pr create --body "a" --title "b `c`"'
+    'gh.exe issue comment 7 --body "a `b`"'
+    ('gh issue create --title t --body "' + "`n" + 'line `one`' + "`n" + '"')
+    ('gh issue create --title t --body "$(cat <<''EOF''' + "`n" + 'ok' + "`n" + 'EOF' + "`n" + ')" --title "x `y`"')
 )
 foreach ($command in $blocked) {
     if ($null -eq (Get-AgentHookShellViolation -Command $command)) {
@@ -168,11 +178,28 @@ $allowed = @(
     'git config get core.hooksPath'
     'git config --list --show-origin'
     'echo $env:ALLOW_GENERATED_UPDATE'
+    'gh issue comment 7 --body-file note.md'
+    'gh issue comment 7 --body-file - < note.md'
+    'gh issue comment 7 --body ''run `make` now'''
+    'gh issue create --title ''fix `x`'' --body-file body.md'
+    'gh issue comment 7 --body "no backticks here"'
+    'gh issue list --label "bug" --json number'
+    'git commit -m "docs: 说明 `x`"'
+    ('gh issue comment 7 --body-file - <<''EOF''' + "`n" + 'run `make` now' + "`n" + 'EOF')
+    ('gh issue create --title t --body "$(cat <<''EOF''' + "`n" + 'see `code` and `more`' + "`n" + 'EOF' + "`n" + ')"')
 )
 foreach ($command in $allowed) {
     $violation = Get-AgentHookShellViolation -Command $command
     if ($null -ne $violation) {
         throw "不应拦截命令：$command（$violation）"
+    }
+}
+
+# 反引号拦截的提示要正面给出写法。
+foreach ($needle in @('--body-file', "<<'EOF'")) {
+    $reason = Get-AgentHookShellViolation -Command 'gh issue comment 7 --body "run `make`"'
+    if ($reason -notlike "*$needle*") {
+        throw "gh 反引号拦截提示应给出 $needle 写法，实际：$reason"
     }
 }
 
