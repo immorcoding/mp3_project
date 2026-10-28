@@ -54,13 +54,13 @@ CubeProgrammer 会缓存已经装载的算法。替换 `.stldr` 后必须重启 
 | 文件 | `../../build/external-resources/resource_pack.bin` |
 | 映射起始地址 | `0x90401000` |
 | 芯片物理偏移 | `0x00401000` |
-| 文件长度 | `0x10C000`，即 1097728 B |
-| 映射结束地址（含） | `0x9050CFFF` |
-| 映射结束地址（不含） | `0x9050D000` |
+| 文件长度 | `0x110000`，即 1114112 B |
+| 映射结束地址（含） | `0x90510FFF` |
+| 映射结束地址（不含） | `0x90511000` |
 | 文件头魔数 | `52 50 4B 43`，即 `RPKC`（RPKC1） |
-| PackageVersion | `0x90401028` 起 8 B 小端，应读出 `3` |
+| PackageVersion | `0x90401028` 起 8 B 小端，应读出 `4` |
 
-以上为资源包 v3（`package_version` 3，新增 ResourceID 5 的中文字体 FONT 条目），与打包器输出的 `resource_pack_manifest.json` 一致。物理区间 `0x00401000`–`0x0050CFFF` 不超过资源区上限（长度上限 `0x003FE000`），也低于默认 24 MiB FTL 分区的起点 `0x007FF000`；换用其他 FTL 容量或资源变大时，按实际 PackSize 重新核对（RES-7）。烧录完成后，从 `0x90401000` 回读应得到以下资源摘要：
+以上为资源包 v4（`package_version` 4；v3 新增 ResourceID 5 的中文字体 FONT 条目，v4 起该条目版本为 2，字集补 Latin-1 与两个标点），与打包器输出的 `resource_pack_manifest.json` 一致。物理区间 `0x00401000`–`0x00510FFF` 不超过资源区上限（长度上限 `0x003FE000`），也低于默认 24 MiB FTL 分区的起点 `0x007FF000`；换用其他 FTL 容量或资源变大时，按实际 PackSize 重新核对（RES-7）。烧录完成后，从 `0x90401000` 回读应得到以下资源摘要：
 
 | 资源 | 长度 | CRC32 |
 | --- | ---: | --- |
@@ -68,9 +68,9 @@ CubeProgrammer 会缓存已经装载的算法。替换 `.stldr` 后必须重启 
 | `cp936_oem2uni` | 87172 B | `0x60F7F8F0` |
 | 默认壁纸 | 230400 B | `0xBBB21D5D` |
 | 唱盘图（144 px） | 62208 B | `0x213F345F` |
-| 中文字体（`noto_sans_cjk_sc_12_4bpp`，ID 5） | 606504 B | `0xD6E9B0F4` |
+| 中文字体（`noto_sans_cjk_sc_12_4bpp`，ID 5） | 623520 B | `0x847F08C2` |
 
-CubeProgrammer 的 32 位数据显示为小端整数，因此文件开头可能显示成 `434B5052`；内存中的实际字节仍为 `52 50 4B 43`。v2 已于 2026-09-11 经本 Loader 写入板上；v3 尚未写入，写入后以置顶 issue「板上状态」记录的 NOR 版本为准。ID 1–4 的长度与 CRC32 在 v3 中与 v2 相同，只有 ID 5 与包长度、PackageVersion 变化。
+CubeProgrammer 的 32 位数据显示为小端整数，因此文件开头可能显示成 `434B5052`；内存中的实际字节仍为 `52 50 4B 43`。v2 已于 2026-09-11 经本 Loader 写入板上；v3、v4 尚未写入，写入后以置顶 issue「板上状态」记录的 NOR 版本为准。ID 1–4 的长度与 CRC32 在 v3、v4 中与 v2 相同，只有 ID 5 与包长度、PackageVersion 变化。
 
 ### 读取失败排查
 
