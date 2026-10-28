@@ -22,8 +22,34 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "Service/gui/view/gui_service_view.h"
+#include "Service/gui/font/gui_service_font.h"
+
+/*
+ * PROTOTYPE（#147，throwaway 分支 prototype/queue-row-layout，不合入）：
+ * Queue 行排布方案表。0 = 现状（Montserrat 12/10，panel 17%），1..3 = 方案 A..C
+ * （曲名与歌手都取 service_gui_font_title()）。模拟器 --queue-layout N 写入。
+ */
+typedef struct
+{
+    lv_coord_t height;      /* panel 高度；0 表示保持现状 lv_pct(17)。 */
+    lv_coord_t pad_ver;     /* panel 上下内边距。 */
+    lv_coord_t gap;         /* 曲名与歌手两行之间的间距（info 的 pad_row）。 */
+    lv_opa_t artist_opa;    /* 歌手 text Opa。 */
+    bool status_top;        /* true：右侧符号与曲名行对齐；false：与整行垂直居中。 */
+} Service_GUI_MainQueueProtoLayoutTypeDef;
+
+static const Service_GUI_MainQueueProtoLayoutTypeDef service_gui_main_queue_proto_layouts[] = {
+    /* LVGL 8.3 的内容区按四边各减 border_width（4），即使只画左边条；高度 = 两行 16 + 间距 + 2×pad + 8。 */
+    {0, 1, 0, 180, false},   /* 0 现状 */
+    {42, 1, 0, 180, false},  /* A 紧凑 */
+    {46, 2, 2, 180, false},  /* B 均衡 */
+    {50, 3, 4, 255, true},   /* C 宽松 */
+};
+
+int service_gui_main_queue_proto_layout = 0;
 
 /**
  * @brief 已生成到 QueueTab 的一行对象。
@@ -70,6 +96,9 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_t *name;
     lv_obj_t *creator;
     lv_obj_t *status;
+    const Service_GUI_MainQueueProtoLayoutTypeDef *L =
+        &service_gui_main_queue_proto_layouts[service_gui_main_queue_proto_layout];
+    bool proto = (service_gui_main_queue_proto_layout != 0);
 
     panel = lv_obj_create(service_gui_main_queue_music->queue_tab);
     if (panel == NULL)
@@ -78,10 +107,12 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     }
 
     lv_obj_set_width(panel, lv_pct(100));
-    lv_obj_set_height(panel, lv_pct(17));
+    lv_obj_set_height(panel, proto ? L->height : lv_pct(17));
     lv_obj_set_align(panel, LV_ALIGN_CENTER);
     lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          L->status_top ? LV_FLEX_ALIGN_START : LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(panel, 8, LV_PART_MAIN | LV_STATE_DEFAULT);
     service_gui_theme_style_add(panel, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -92,8 +123,8 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_style_border_side(panel, LV_BORDER_SIDE_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_left(panel, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_right(panel, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_top(panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_bottom(panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_top(panel, L->pad_ver, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_bottom(panel, L->pad_ver, LV_PART_MAIN | LV_STATE_DEFAULT);
     service_gui_theme_style_add(panel, SERVICE_GUI_THEME_BG, SERVICE_GUI_THEME_WASH, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(panel, 80, LV_PART_MAIN | LV_STATE_PRESSED);
     service_gui_theme_style_add(panel, SERVICE_GUI_THEME_OUTLINE, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_PRESSED);
@@ -114,6 +145,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_align(info, LV_ALIGN_CENTER);
     lv_obj_set_flex_flow(info, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(info, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_row(info, L->gap, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(info, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
     name = lv_label_create(info);
@@ -132,7 +164,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_clear_flag(name, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     service_gui_theme_style_add(name, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_ACCENT, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(name, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(name, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(name, proto ? service_gui_font_title() : &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_set_width(creator, lv_pct(100));
     lv_obj_set_height(creator, LV_SIZE_CONTENT);
@@ -140,11 +172,18 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_label_set_long_mode(creator, LV_LABEL_LONG_DOT);
     lv_obj_clear_flag(creator, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     service_gui_theme_style_add(creator, SERVICE_GUI_THEME_TEXT, SERVICE_GUI_THEME_INK, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(creator, 180, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(creator, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(creator, L->artist_opa, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(creator, proto ? service_gui_font_title() : &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_set_width(status, LV_SIZE_CONTENT);
-    lv_obj_set_height(status, LV_SIZE_CONTENT);
+    if (proto && L->status_top)
+    {
+        lv_obj_set_height(status, lv_font_get_line_height(service_gui_font_title()));
+    }
+    else
+    {
+        lv_obj_set_height(status, LV_SIZE_CONTENT);
+    }
     lv_obj_set_align(status, LV_ALIGN_CENTER);
     lv_label_set_text(status, LV_SYMBOL_AUDIO);
     lv_obj_clear_flag(status, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
@@ -359,6 +398,30 @@ static void service_gui_main_queue_set_row_hidden(
     else
     {
         lv_obj_clear_flag(row->panel, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+/**
+ * @brief PROTOTYPE（#147）：首次 Apply 后打印一次第一行的几何，供 PROTOTYPE.md。
+ */
+static void service_gui_main_queue_proto_print(void)
+{
+    {   /* PROTOTYPE（#147）：打印几何，供 PROTOTYPE.md。 */
+        static bool printed;
+        if (!printed && (service_gui_main_queue_rows[0].panel != NULL) &&
+            (true))
+        {
+            printed = true;
+            lv_obj_update_layout(service_gui_main_queue_rows[0].panel);
+            printf("[proto] layout=%d tab_content_h=%d row_h=%d name_y=%d creator_y=%d status_y=%d status_h=%d\n",
+                   service_gui_main_queue_proto_layout,
+                   (int)lv_obj_get_content_height(service_gui_main_queue_music->queue_tab),
+                   (int)lv_obj_get_height(service_gui_main_queue_rows[0].panel),
+                   (int)(lv_obj_get_y(service_gui_main_queue_rows[0].name) + lv_obj_get_y(lv_obj_get_parent(service_gui_main_queue_rows[0].name))),
+                   (int)(lv_obj_get_y(service_gui_main_queue_rows[0].creator) + lv_obj_get_y(lv_obj_get_parent(service_gui_main_queue_rows[0].creator))),
+                   (int)lv_obj_get_y(service_gui_main_queue_rows[0].status),
+                   (int)lv_obj_get_height(service_gui_main_queue_rows[0].status));
+        }
     }
 }
 
@@ -643,5 +706,6 @@ Service_StatusTypeDef service_gui_main_queue_apply(
     service_gui_main_queue_adjust_scroll(delta);
     service_gui_main_queue_applied_index = window_index;
     service_gui_main_queue_applied_length = length;
+    service_gui_main_queue_proto_print();
     return SERVICE_OK;
 }

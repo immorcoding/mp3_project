@@ -76,6 +76,11 @@ typedef struct
  * 回退文件主名（歌手空）。全部 ASCII。
  */
 static const StorageSim_TagTypeDef storage_sim_tags[] = {
+    /* PROTOTYPE（#147）：首屏四类行。位置 0 中文标题 + 中文歌手；位置 1 西文长名（扩展字符）+ 歌手；
+     * 位置 2 标题无歌手；位置 3 无标签回退文件主名 `Nuvole Bianche`。 */
+    {0U, "晴天（2003 年演唱会现场版）", "周杰伦"},
+    {1U, "Café del Mar – Sunset Sessions™ Vol. 2 (Remastered Édition)", "Beyoncé & F1® Orchestra"},
+    {2U, "Gymnopédie No.1 – Satie", NULL},
     {7U, "Kiss the Rain (Live)", NULL},
     {5U, "Experience (Einaudi Live)", "Ludovico Einaudi"},
 };

@@ -8,6 +8,7 @@
 #include "sim_script.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "lvgl.h"
@@ -108,6 +109,19 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
         }
         value = argv[i + 1];
 
+        if (strcmp(argv[i], "--queue-layout") == 0)
+        {
+            /* PROTOTYPE（#147）：Queue 行排布方案 0..3。 */
+            extern int service_gui_main_queue_proto_layout;
+            service_gui_main_queue_proto_layout = atoi(value);
+            if ((service_gui_main_queue_proto_layout < 0) || (service_gui_main_queue_proto_layout > 3))
+            {
+                fprintf(stderr, "bad --queue-layout %s\n", value);
+                return false;
+            }
+            i++;
+            continue;
+        }
         if (strcmp(argv[i], "--out-dir") == 0)
         {
             sim_out_dir = value;
