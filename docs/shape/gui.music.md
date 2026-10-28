@@ -26,6 +26,10 @@
 - 2026-10-19 · cite · GUI-19 · 优先级“常驻文本 > 跳过提示 > 时间”只在 `Service/gui/main/transport` 内；跳过提示为单次 `lv_timer`（2000 ms，累加时 `lv_timer_reset`），闪烁为以时间 Label 为 var 的 `lv_anim`，重复调用先删旧动画；模拟器日志 `music_stop_reasons` 连按两次播放后动画数只比静止时多一条。
 - 2026-10-26 · cite · GUI-26 · “以请求时的身份采信应答”在冷启动有一个按 #104 定下的例外：同一位置代次 0 → G 时，已显示名字或在途应答的代次等于 G 视为同一首，不清空、不重请求；其余身份变化一律清空并重请求。实现在 `gui_music_title_poll()` 内，调用方不变（#120）。
 - 2026-10-28 · cite · GUI-24 · Queue 两个 Label 与唱盘页曲名取同一个 `service_gui_font_track_text()`；`--font-unavailable` 下三者都回退 Montserrat 12，Queue 行高随回退字体的行高变矮（`queue_font_fallback`）。函数在 0.7.0 叫 `service_gui_font_title()`，现改名 `service_gui_font_track_text()`（曲目元数据字体，GUI-24）。
+- 2026-10-28 · cite · GUI-27 · 上一条 friction（字形范围手填）已解决：`service_gui_view_music_solve_layout()` 按字体行高、基线扫描参考字形（曲名、歌手 `Hdg`，时间为数字与 `:/-`）推出字形首行与高度。Noto 12 推出第 3 行起 13 行、Montserrat 10 第 1 行起 9 行，与原常量相同，Noto 下全部场景基线不变；回退 Montserrat 12 推出第 2 行起 13 行，曲名、歌手盒子下移 1 px，字形上沿回到设计位置。参考字符里 `d` 比 `H` 高 1 行，只用 `Hg` 会得到第 4 行起 12 行。
+- 2026-10-28 · cite · GUI-27 · 像素常量配置放在 `Service/gui/gui_service_config.h` 的 `SERVICE_GUI_MUSIC_LAYOUT_*` 一组（与 `SERVICE_GUI_MUSIC_TITLE_WIDTH` 同一份 config，STY-3），`service_gui_view_music_solve_layout()` 由它们与运行时读到的 Playing 内容区高度推出 S、D 与各元素 Y；模拟器实测盒子坐标与 #152 结论表逐项相同。
+- 2026-10-28 · friction · GUI-27 · “按字体完整字形高度计量”在实现里是两组手填常量（Noto 12：Label 内第 3 行起 13 行；Montserrat 10：第 1 行起 9 行），不随字体自动推出。资源包字体不可用时曲名与歌手回退 Montserrat 12，Label 高随行高变化，但字形上沿仍按 Noto 的 3 计算，字形与设计间距有像素级偏差（`music_title_font_fallback` 截图可见，未逐项实测）。以后换字体或字号须同步这两组常量；是否改为运行时从字形描述推出待定。
+- 2026-10-28 · cite · GUI-26 · 歌手的 `Unknown Artist` 与空串由 APP 音乐分区 `gui_music_title_text()` 决定（与 Queue 同一个 `GUI_MUSIC_TEXT_UNKNOWN_ARTIST`），Service 只画；曲名为空白或 `--` 时歌手为空串。
 
 ### Rejected
 
