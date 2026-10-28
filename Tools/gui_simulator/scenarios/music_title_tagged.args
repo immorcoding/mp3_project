@@ -1,0 +1,12 @@
+# 曲名来源（GUI-21、STOR-15、#139）：曲目显示名有可用 TIT2 取标题，否则回退文件主名；唱盘页不显示歌手。
+# 开播后按四次下一首到第 5 首 `Comptine d'un autre ete`（无标签，回退文件主名）；再按一次到第 6 首，
+# 文件主名是 `Experience`，假 Storage 给出 TIT2 `Experience (Einaudi Live)`，曲名区显示标题。
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--tap 7300:180,260
+--tap 7600:180,260
+--tap 7900:180,260
+--tap 8200:180,260
+--shot 8600:fallback_file_name
+--tap 8700:180,260
+--shot 9100:tagged_title

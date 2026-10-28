@@ -14,14 +14,15 @@
 
 #define STORAGE_NAMEBUFFER_IDLE    0U  /* 可接受下一次 request。 */
 #define STORAGE_NAMEBUFFER_PENDING 1U  /* GUI 已提交，等待 Storage load。 */
-#define STORAGE_NAMEBUFFER_READY   2U  /* 名字已填好或已作废为空名，待 GUI 读完后写回 IDLE。 */
+#define STORAGE_NAMEBUFFER_READY   2U  /* 应答已填好或已作废为空名，待 GUI 读完后写回 IDLE。 */
 
 typedef struct
 {
     volatile uint32_t Status;     /* IDLE → PENDING → READY；GUI 读完必须写回 IDLE。 */
     uint32_t Generation;          /* request 时为请求代次（0 = 当前）；READY 后为实际应答代次，0 表示取不到。 */
     uint16_t Index;               /* 请求的播放列表位置。 */
-    char Buffer[STORAGE_CATALOG_NAME_BYTES]; /* READY 且代次非 0 时为可直接显示的 UTF-8 文件主名；否则空串。 */
+    char Title[STORAGE_CATALOG_NAME_BYTES];  /* READY 且代次非 0 时为曲目显示名（可用标题，否则文件主名），可直接显示的 UTF-8；否则空串。 */
+    char Artist[STORAGE_CATALOG_NAME_BYTES]; /* READY 且代次非 0 时为歌手（取不到为空串）；否则空串。 */
 } Storage_NameBufferTypeDef;
 
 extern Storage_NameBufferTypeDef storage_namebuffer;
