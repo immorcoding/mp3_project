@@ -76,6 +76,11 @@ typedef struct
  * 回退文件主名（歌手空）。全部 ASCII。
  */
 static const StorageSim_TagTypeDef storage_sim_tags[] = {
+    /* PROTOTYPE #152：唱盘页歌手行的假标签（位置 1 不加，作“无歌手”）。 */
+    {0U, "Clair de Lune", "Claude Debussy"},
+    {2U, "晴天", "周杰伦"},
+    {3U, "Nuvole Bianche", "Ludovico Einaudi / Yiruma"},
+    {4U, "Comptine d'un autre ete", "Yann Tiersen / The Royal Philharmonic Orchestra / London Symphony Chorus"},
     {7U, "Kiss the Rain (Live)", NULL},
     {5U, "Experience (Einaudi Live)", "Ludovico Einaudi"},
 };

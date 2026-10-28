@@ -97,6 +97,7 @@ add_custom_command(
 
 add_executable(gui_simulator
     sim_main.c
+    prototype_artist_layout.c
     "${SIM_FONT_BIN_C}"
     fakes/cycle_counter_sim.c
     sim_clock.c

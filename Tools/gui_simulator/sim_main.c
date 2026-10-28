@@ -22,6 +22,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <SDL.h>
 
@@ -36,6 +38,7 @@
 #include "sim_clock.h"
 #include "sim_display.h"
 #include "sim_script.h"
+#include "prototype_artist_layout.h" /* PROTOTYPE #152 */
 
 /** @brief 与产品 GUI_NOTIFY_LCD_TRANSFER 对应的通知槽。 */
 #define SIM_GUI_NOTIFY_LCD_TRANSFER  0U
@@ -189,8 +192,23 @@ int main(int argc, char *argv[])
     sim_script_options_t options;
     const sim_script_handlers_t handlers = {sim_handle_key, sim_handle_name};
     uint32_t start_ms;
+    int proto_layout = 0;
+    int proto_i;
+    int proto_j;
 
     setvbuf(stdout, NULL, _IONBF, 0);
+
+    /* PROTOTYPE #152：先取走 --artist-layout N，其余参数照旧解析。 */
+    for (proto_i = 1, proto_j = 1; proto_i < argc; proto_i++)
+    {
+        if ((strcmp(argv[proto_i], "--artist-layout") == 0) && (proto_i + 1 < argc))
+        {
+            proto_layout = atoi(argv[++proto_i]);
+            continue;
+        }
+        argv[proto_j++] = argv[proto_i];
+    }
+    argc = proto_j;
 
     if (!sim_script_parse(argc, argv, &options))
     {
@@ -220,6 +238,7 @@ int main(int argc, char *argv[])
     storage_sim_init();
     playback_sim_init();
     gui_music_init();
+    proto_artist_layout_init(proto_layout);
     printf("[sim] running. T: toggle theme, C: card remove/mount, G: rescan, "
            "S: suspend/resume playback, B: next open bad, R: stop with next reason, "
            "A: anim count, L: back to Lock, Esc: quit\n");
@@ -241,6 +260,7 @@ int main(int argc, char *argv[])
         storage_sim_step();
         playback_sim_step(sim_clock_now());
         gui_music_step(&input);
+        proto_artist_layout_step();
 
         Service_GUI_Process();
 
