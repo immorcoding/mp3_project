@@ -74,12 +74,14 @@ typedef struct
  * 第 6 首（位置 5）有标题与歌手，标题与文件主名不同，唱盘页可据此区分来源；第 8 首（位置 7）
  * 有标题、无歌手。Queue 第一窗由此混排三类行态（GUI-23）：标题 + 歌手、标题无歌手、
  * 回退文件主名（歌手空）。第 10 首（位置 9）的标题带 Latin-1 补充区字符与 U+2013、U+2122
- * （`®`、`é`、`–`、`™`，#148），唱盘页用资源包字体显示；其余标签为 ASCII。
+ * （`®`、`é`、`–`、`™`，#148），唱盘页与 Queue 用资源包字体显示，歌手宽于 Queue 一行。第 9 首（位置 8）是中文标题 +
+ * 中文歌手（#149），放在唱盘页场景不经过的位置，只进 Queue 场景；其余标签为 ASCII。
  */
 static const StorageSim_TagTypeDef storage_sim_tags[] = {
     {7U, "Kiss the Rain (Live)", NULL},
     {5U, "Experience (Einaudi Live)", "Ludovico Einaudi"},
-    {9U, "Beyoncé® – Halo™", "Beyoncé"},
+    {8U, "晴天（2003 年演唱会现场版）", "周杰伦"},
+    {9U, "Beyoncé® – Halo™", "Beyoncé & F1® The Movie Orchestra – Live™ Édition"}, /* 歌手宽于一行：截断加省略号。 */
 };
 
 #define STORAGE_SIM_TAG_COUNT \

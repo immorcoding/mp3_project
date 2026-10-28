@@ -4,20 +4,28 @@
 行距 2 px）；本 Module 的行工厂按 `Service_GUI_QueueApply()` 的 `Length` 在其中构造行。
 窗口滑动时在已有 panel 上转 head 改字，不按整表无限 `create`。
 
-本 Module 不包含 `storage_listbuffer.h`，也不向 APP 公开 Interface。曲名由 GUI Task
-把窗口 `Buffer` 原样传入；当前仍是路径。标题/歌手等 `load` 调解析器后，窗口载荷改成
-曲名与歌手，见 `docs/shape/storage.md#catalog` 第 5 节。`Length` 为 0 则没有可见行。
+本 Module 不包含 `storage_listbuffer.h`，也不向 APP 公开 Interface。曲名与歌手由 GUI Task
+把窗口行的 {曲目显示名, 歌手} 原样传入（GUI-23），见 `docs/shape/storage.md#catalog`。
+`Length` 为 0 则没有可见行。
 
 行结构：Wash 薄底、圆角 8 的 Panel（左侧 4 px Accent 边条，按下时提高底 Opa 并加 1 px Ink
-Outline）→ 80% 宽文字组（曲名 montserrat_12、歌手 montserrat_10 Ink 半透明）+ 右侧
-`LV_SYMBOL_AUDIO` 符号（montserrat_14）。颜色按角色引用 `theme/` 共享 style。
+Outline）→ 80% 宽文字组（曲名、歌手 Ink Opa 180）+ 右侧 `LV_SYMBOL_AUDIO` 符号（montserrat_14，
+整行垂直居中）。颜色按角色引用 `theme/` 共享 style。
+
+曲名与歌手显示曲目元数据，都取 GUI 字体子模块 `service_gui_font_title()` 的字体（GUI-24）：
+资源包 Noto Sans CJK SC 12 px，不可用时 Montserrat 12，缺字画占位框。曲名循环滚动（非当前行
+省略号），歌手高度锁成一行、截断加省略号。行排布按 #147 方案 B：行高 = 2 × 字体行高 + 两行
+间距 2 px + 上下内边距各 2 px + 上下边框各 4 px（LVGL 8.3 内容区按四边减边框宽，虽然只画左边条），
+Noto 下为 46 px，曲名 Y 6、歌手 Y 24（从 Panel 上沿量起），一屏约 5 行；Montserrat 回退时随其行高变矮。
+取值在 `gui_service_main_queue_config.h`。整行滚动步长取首行实际高度加 `QueueTab` 行距，不写死像素（GUI-16）。
+
+歌手为空（NULL 或空串）时显示什么只由 `service_gui_main_queue_artist_text()` 决定，当前为空串（GUI-23）。
 
 当前/非当前只改 Border Opa、曲名颜色角色（Accent ↔ Ink，经 `service_gui_theme_style_replace()`）、
 Long mode 和右侧符号 Opa。不改 Border Width，以免文字漂移。点按 `CLICKED` 立刻只刷新这些样式，
 并把窗内槽位换成播放列表下标后 `post` 为 `MUSIC_QUEUE_SELECT`；空窗丢掉未取走的 Queue 选曲。
 非当前行的右侧符号用透明度隐藏并占位，不 HIDDEN。Queue 行不放封面。
 正在播放行由 GUI Task 传入的 `current_index` 判定；无当前曲为 `SERVICE_GUI_QUEUE_NO_CURRENT`。
-歌手 Label 写空串，直到窗口载荷带上解析器给出的歌手。
 
 ## 私有 Interface
 
@@ -45,6 +53,6 @@ view/ 创建空 QueueTab
 
 ## 配置与依赖
 
-`gui_service_main_queue_config.h` 保存行数上限，属于本 Module 私有配置；
-其他 Module 不得包含。Implementation 依赖 LVGL、`view/` 句柄与 `theme/` 共享 style，不依赖 Platform、
+`gui_service_main_queue_config.h` 保存行数上限与行排布取值，属于本 Module 私有配置；
+其他 Module 不得包含。Implementation 依赖 LVGL、`view/` 句柄、`theme/` 共享 style 与 `font/` 曲目文本字体，不依赖 Platform、
 Canvas、FreeRTOS 或 APP。
