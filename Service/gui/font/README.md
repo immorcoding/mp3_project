@@ -7,7 +7,7 @@
 ## 曲名字体子模块
 
 - `service_gui_font_init()`：只在 GUI Task 的 `Service_GUI_Init()` 中、创建 Screen 之前调用一次。经 `Service_Resource_GetFont()` 查询可选 FONT 载荷；可用时先 Measure、核对解码区容量，再 Build 到解码区，本模块持有得到的 `lv_font_t`。成功记一条 INFO `Title font ready: glyphs=N, bytes=B, decode=T us.`；载荷不可用或解码失败记一条 WARN `Title font fallback: <原因>.`（原因为 `resource unavailable` 或解码器的状态短语）。不返回错误，GUI 照常启动。
-- `service_gui_font_title()`：显示曲目元数据的 Label 的字体。解码成功为 Noto Sans CJK SC 12 px，否则 `lv_font_montserrat_12`。使用者：`view/` 创建唱盘页曲名 Label 时取它的字体与行高；`main/queue/` 构造 Queue 行时曲名与歌手两个 Label 取它的字体，并按其行高算行高（#149）。界面文案 Label 一律不用它（GUI-24）。名称沿用 0.7.0，字体用途以 GUI-24 为准。
+- `service_gui_font_track_text()`：显示曲目元数据的 Label 的字体。解码成功为 Noto Sans CJK SC 12 px，否则 `lv_font_montserrat_12`。使用者：`view/` 创建唱盘页曲名 Label 时取它的字体与行高；`main/queue/` 构造 Queue 行时曲名与歌手两个 Label 取它的字体，并按其行高算行高（#149）。界面文案 Label 一律不用它（GUI-24）。
 
 缺字由已启用的 `LV_USE_FONT_PLACEHOLDER` 画占位框，不记日志。日志经 `Service_Log_Post()` 投递（GUI Task 在调度器启动后运行，DIAG-1）；解码耗时用 DWT 周期计数器只读测量（计数器由 `app_init()` 在 Resource 加载前启动，本模块不复位）。
 
@@ -21,7 +21,7 @@
 - 启动顺序：两区都是 NOLOAD，内容在各自所有者写入前无效；FONT 区在消费者任务启动前填好，解码区在第一次渲染前填好。破坏性 SDRAM 诊断只在业务占用前运行，与两区不重叠使用。
 - MPU：两区都在 `0xC0000000` 32 MiB 区域内（可缓存、写回、不可执行），只放数据，不需要新区域。
 - Cache：FONT 区由 Resource Service 复制后 Clean（RES-6），本模块经 Cache 只读，不需要 Invalidate（同一 CPU 写读）。解码区只经 CPU 读写，LVGL 软件渲染逐字形读取位图，不作 DMA2D 或 SPI DMA 的源，所以不做 Cache 维护。两区按 32 B 对齐，大小是 32 的倍数，Clean 取整不越出自身归属。
-- 容量：FONT 区 0xA4800 = 673,792 B，入库字体 bin 623,520 B（余量 50,272 B）；解码区 0xA8000 = 688,128 B，当前字体在 Cortex-M7 上需要 636,240 B（32 位指针估算，余量约 51.9 KB；主机 64 位 636,944 B，实测）。两区在 Pack v4 起各比 v3 扩 64 KiB（0x94800 与 0x98000），为今后小幅扩充字集留余量。链接脚本断言两区大小；运行期仍按区大小核对（Resource 核对目标容量，本模块核对 Measure 结果），超出时走可选资源 WARN 或字体回退。
+- 容量：FONT 区 0xA4800 = 673,792 B，入库字体 bin 623,520 B（余量 50,272 B）；解码区 0xA8000 = 688,128 B，当前字体在 Cortex-M7 上需要 636,240 B（32 位指针估算，余量 51,888 B；主机 64 位 636,944 B，实测）。两区在 Pack v4 起各比 v3 扩 64 KiB（0x94800 与 0x98000），为今后小幅扩充字集留余量。链接脚本断言两区大小；运行期仍按区大小核对（Resource 核对目标容量，本模块核对 Measure 结果），超出时走可选资源 WARN 或字体回退。
 
 ## 解码器私有 Interface
 

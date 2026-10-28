@@ -77,7 +77,7 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     const lv_font_t *text_font;
     lv_coord_t line_h;
 
-    text_font = service_gui_font_title();
+    text_font = service_gui_font_track_text();
     line_h = lv_font_get_line_height(text_font);
 
     panel = lv_obj_create(service_gui_main_queue_music->queue_tab);
@@ -139,8 +139,10 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
         return SERVICE_ERROR;
     }
 
+    /* 曲名与歌手的高度都锁成一行：LVGL 8 的 DOT 看高度溢出，SIZE_CONTENT 会让长文本换行而不加省略号；
+     * SCROLL_CIRCULAR 靠宽度上限横向滚，也不需要 SIZE_CONTENT。字体创建时定死，当前/非当前切换不改它。 */
     lv_obj_set_width(name, lv_pct(100));
-    lv_obj_set_height(name, LV_SIZE_CONTENT);
+    lv_obj_set_height(name, line_h);
     lv_obj_set_align(name, LV_ALIGN_CENTER);
     lv_label_set_long_mode(name, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_obj_clear_flag(name, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
@@ -148,7 +150,6 @@ static Service_StatusTypeDef service_gui_main_queue_create_row(
     lv_obj_set_style_text_opa(name, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(name, text_font, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    /* 高度锁成一行：LVGL 8 的 DOT 看高度溢出，SIZE_CONTENT 会让长歌手换行而不加省略号。 */
     lv_obj_set_width(creator, lv_pct(100));
     lv_obj_set_height(creator, line_h);
     lv_obj_set_align(creator, LV_ALIGN_CENTER);
@@ -241,22 +242,15 @@ static void service_gui_main_queue_set_current_border_visible(
  * @brief 套用当前/非当前样式，不改曲名与歌手文字。
  * @param[in,out] row 已构造的行。
  * @param[in] is_current 是否为窗口内正在播放的那一行。
- * @note 只改 Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width。
- *       曲名高度一律锁成一行：LVGL 8 的 DOT 看高度溢出；SCROLL_CIRCULAR 靠宽度
- *       上限横向滚，不需要 SIZE_CONTENT。点按切当前行时只走本函数，避免整窗改字。
+ * @note 只改 Border Opa、符号 Opa、曲名色和 Long mode；不改 Border Width，也不改
+ *       曲名与歌手的尺寸（行高在 create_row 锁定）。点按切当前行时只走本函数，避免整窗改字。
  */
 static void service_gui_main_queue_apply_row_style(
     Service_GUI_MainQueueRowTypeDef *row,
     bool is_current)
 {
-    const lv_font_t *name_font;
-
     service_gui_main_queue_set_current_border_visible(row->panel, is_current);
     service_gui_main_queue_set_status_visible(row->status, is_current);
-
-    lv_obj_set_width(row->name, lv_pct(100));
-    name_font = lv_obj_get_style_text_font(row->name, LV_PART_MAIN);
-    lv_obj_set_height(row->name, lv_font_get_line_height(name_font));
 
     if (is_current)
     {

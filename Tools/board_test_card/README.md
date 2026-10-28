@@ -79,4 +79,4 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 - 样本 2：v2.3，编码字节 1（UTF-16 + BOM）；标题与歌手都含 `® é – ™ ’ “ ” …`（U+00AE、U+00E9、U+2013、U+2122、U+2019、U+201C、U+201D、U+2026），唱盘页与 Queue 同字体同基线。
 - 样本 3：v2.4，TPE1 六项以 NUL 分隔：`Artist One`、全空白项、` Artist Two `（首尾空白）、空项、`AC/DC`、`U+3000 Artist Three U+3000`；清理后四项，其中 `AC/DC` 不被拆分。
 - 样本 4：v2.4，TPE1 共 333 B（上限 251 B）：前 249 B 为 ASCII，其后是 3 B 汉字，截断点落在第一个汉字内部，所以按字符边界只留 249 B，不加省略号、不留半个字符。249 个字符远宽于 Queue 与唱盘页的可见宽度，Queue 歌手行用 `LV_LABEL_LONG_DOT`。唱盘页只显示曲名，歌手不上唱盘页。
-- 字节数以 `lameenc` 1.9.0 为准；同参数两次生成逐字节一致。合同由 `python Tools/board_test_card/test_card_glyphs.py` 检查（标签版本、编码字节、关键码点、截断边界、不进 `all`；不需要 `lameenc`）。该测试不在 `verify.ps1` FULL 内，需手动运行。
+- 字节数以 `lameenc` 1.9.0 为准；同参数两次生成逐字节一致。合同由 `python Tools/board_test_card/test_card_glyphs.py` 检查（标签版本、编码字节、关键码点、截断边界、不进 `all`；这些不需要 `lameenc`）。另有整文件确定性用例：同一参数两次生成，`--set glyphs` 的每个文件逐字节相同；它要编码音频，约 30 s，未装 `lameenc` 时跳过。该测试不在 `verify.ps1` FULL 内，需手动运行。

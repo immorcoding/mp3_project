@@ -12,7 +12,7 @@
 Outline）→ 80% 宽文字组（曲名、歌手 Ink Opa 180）+ 右侧 `LV_SYMBOL_AUDIO` 符号（montserrat_14，
 整行垂直居中）。颜色按角色引用 `theme/` 共享 style。
 
-曲名与歌手显示曲目元数据，都取 GUI 字体子模块 `service_gui_font_title()` 的字体（GUI-24）：
+曲名与歌手显示曲目元数据，都取 GUI 字体子模块 `service_gui_font_track_text()` 的字体（GUI-24）：
 资源包 Noto Sans CJK SC 12 px，不可用时 Montserrat 12，缺字画占位框。曲名循环滚动（非当前行
 省略号），歌手高度锁成一行、截断加省略号。行排布按 #147 方案 B：行高 = 2 × 字体行高 + 两行
 间距 2 px + 上下内边距各 2 px + 上下边框各 4 px（LVGL 8.3 内容区按四边减边框宽，虽然只画左边条），

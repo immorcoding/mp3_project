@@ -405,7 +405,7 @@ SECTIONS
   /*
    * 可选 FONT 载荷（lv_font_conv bin 原样字节）；唯一所有者 Resource Service。
    * NOLOAD，由 Service_Resource_Init() 在正式 SDRAM 初始化后、任务启动前复制并校验目标 CRC，
-   * 失败时不发布给消费者。容量 = 实测 623,520 B 加约 49.1 KiB 余量（Pack v4 起比 v3 扩 64 KiB，为今后小幅扩充字集留余量），32 B 对齐，Clean 取整不出本区。
+   * 失败时不发布给消费者。容量 = 实测 623,520 B 加 50,272 B 余量（Pack v4 起比 v3 扩 64 KiB，为今后小幅扩充字集留余量），32 B 对齐，Clean 取整不出本区。
    * 放在既有 SDRAM 段之后，不移动它们的地址。
    */
   .sdram_font_resource (NOLOAD) :
@@ -425,7 +425,7 @@ SECTIONS
   /*
    * GUI 字体解码区（字形描述、cmap、字距与重排位图）；唯一所有者 Service/gui 字体子模块。
    * NOLOAD，由 GUI Task 在 Service_GUI_Init() 中、曲名 Label 创建前写入；只经 CPU 读写，
-   * 不作 DMA 源或目标。容量 = 当前字体所需 636,240 B（Cortex-M7 32 位指针口径，估算）加约 50.5 KiB 余量（比 Pack v3 扩 64 KiB）；
+   * 不作 DMA 源或目标。容量 = 当前字体所需 636,240 B（Cortex-M7 32 位指针口径，估算）加 51,888 B 余量（比 Pack v3 扩 64 KiB）；
    * 主机 64 位口径为 636,944 B，模拟器用同样大小也放得下。
    */
   .sdram_gui_font (NOLOAD) :

@@ -16,7 +16,7 @@
 | 1 / 2 | CP936 Unicode↔OEM 表 | BINARY | 是 | `__external_resource_uni2oem_*` / `__external_resource_oem2uni_*` |
 | 3 | 默认壁纸 | IMAGE | 是 | `__external_resource_wallpaper_*` |
 | 4 | 唱盘底图 | IMAGE | 是 | `__external_resource_vinyl_*` |
-| 5 | 曲名 CJK 字体（`lv_font_conv` bin） | FONT | 否 | `__external_resource_font_*`（`.sdram_font_resource`，0xA4800 B） |
+| 5 | 曲目元数据 CJK 字体（`lv_font_conv` bin） | FONT | 否 | `__external_resource_font_*`（`.sdram_font_resource`，0xA4800 B） |
 
 可选项排在最后加载。FONT 的业务约束是 `ResourcePack_DecodeFontMetadata()` 通过（格式、编码、bin 分段与 Metadata 一致、位图小于 1 MiB）且标称像素高度为 12。
 
