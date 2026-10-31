@@ -1,0 +1,407 @@
+<title>跳转呈现原型</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: 左侧一块 240×320 的 Now Playing 屏，右侧方案开关与状态；窄屏上下堆叠。 */
+:root{
+  --bg:#f3f4f2; --panel:#ffffff; --ink:#1d2321; --muted:#66706c; --line:#d9ddda;
+  --accent:#1f7a68; --accent-soft:#d8eee8; --warn:#b5541c;
+  --lcd:#101413; --lcd-ink:#e8ecea; --lcd-dim:#7d8783; --lcd-bar:#33403c;
+  --f-ui:"IBM Plex Sans","Noto Sans SC",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141817; --panel:#1c2120; --ink:#e3e8e6; --muted:#97a19d; --line:#2e3634;
+  --accent:#4cc3a8; --accent-soft:#1d3a33; --warn:#e08a55; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141817; --panel:#1c2120; --ink:#e3e8e6; --muted:#97a19d; --line:#2e3634;
+  --accent:#4cc3a8; --accent-soft:#1d3a33; --warn:#e08a55; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font-size:1.45rem;margin:0;text-wrap:balance}
+.intro{color:var(--muted);max-width:72ch;margin:0}
+.intro b{color:var(--ink)}
+.main{display:grid;grid-template-columns:280px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:760px){.main{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.card h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+/* 屏 */
+.lcd{width:240px;height:320px;background:var(--lcd);border-radius:4px;margin:0 auto;position:relative;color:var(--lcd-ink);font-family:var(--f-mono);user-select:none;touch-action:none}
+.lcd canvas{position:absolute;left:40px;top:22px}
+.lcd .title{position:absolute;left:24px;right:24px;top:192px;text-align:center;font-size:12px}
+.lcd .artist{position:absolute;left:24px;right:24px;top:208px;text-align:center;font-size:11px;color:var(--lcd-dim)}
+.slider{position:absolute;left:24px;width:192px;top:236px;height:22px;cursor:pointer}
+.slider .rail{position:absolute;left:0;right:0;top:9px;height:4px;border-radius:2px;background:var(--lcd-bar)}
+.slider .fill{position:absolute;left:0;top:9px;height:4px;border-radius:2px;background:var(--lcd-ink)}
+.slider .knob{position:absolute;top:4px;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:var(--lcd-ink)}
+.slider.pressed .knob{transform:scale(1.25)}
+.lcd .time{position:absolute;left:24px;right:24px;top:262px;text-align:center;font-size:11px;font-variant-numeric:tabular-nums}
+.lcd .time.preview{color:#7fe0c9}
+.lcd .keys{position:absolute;left:24px;right:24px;top:284px;display:flex;justify-content:space-between}
+.lcd .keys button{background:none;border:1px solid var(--lcd-bar);color:var(--lcd-ink);border-radius:50%;width:30px;height:30px;font-size:12px;cursor:pointer}
+.below{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+button.b{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:4px;padding:5px 10px;cursor:pointer}
+button.b:hover{border-color:var(--accent)}
+button.b:focus-visible,.seg label:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+.opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:560px){.opts{grid-template-columns:minmax(0,1fr)}}
+.opt h3{font-size:.9rem;margin:0 0 6px}
+.seg{display:flex;flex-direction:column;gap:4px}
+.seg label{display:flex;gap:8px;align-items:flex-start;font-size:.86rem;padding:5px 8px;border-radius:4px;border:1px solid transparent;cursor:pointer}
+.seg label:has(input:checked){background:var(--accent-soft);border-color:var(--accent)}
+.seg input{margin-top:4px;accent-color:var(--accent)}
+.seg small{display:block;color:var(--muted)}
+.params{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;font-size:.85rem}
+@media (max-width:560px){.params{grid-template-columns:minmax(0,1fr)}}
+.params label{display:flex;flex-direction:column;gap:2px}
+.params select{font:inherit;padding:3px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px}
+dl.state{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:2px 12px;margin:0;font-size:.82rem}
+dl.state dt{color:var(--muted)}
+dl.state dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+dd.changed{color:var(--accent);font-weight:600}
+.log{font-family:var(--f-mono);font-size:.76rem;max-height:180px;overflow:auto;margin:0;padding:0;list-style:none;color:var(--muted)}
+.log li:first-child{color:var(--ink)}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.tabs button{font:inherit;font-size:.84rem;border:none;background:none;color:var(--muted);padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.steps{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.steps button{text-align:left}
+.steps button.done{opacity:.55}
+.steps button.next{border-color:var(--accent);background:var(--accent-soft)}
+.watch{font-size:.86rem;color:var(--muted);margin:6px 0 0}
+.watch b{color:var(--ink)}
+@media (prefers-reduced-motion:reduce){.slider.pressed .knob{transform:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>跳转呈现原型（第 165 号票，用完即弃）</h1>
+    <p class="intro">要定的问题：<b>拖进度条时、以及松手后到播放快照追上之前，Now Playing 该显示什么</b>。左边的屏可以直接拖，右边四组开关可以随意组合。后端是假的，跳转延迟、落点偏差、命令队列满都能调。已定的规则（第 164 号票）照旧生效：跳转不改变播放/暂停状态；总时长未知时不发命令；跳转目标绑定当时显示的曲目，曲目已变就丢弃。</p>
+  </header>
+
+  <div class="main">
+    <div class="card">
+      <h2>Now Playing（240 × 320）</h2>
+      <div class="lcd" id="lcd">
+        <canvas id="vinyl" width="160" height="160"></canvas>
+        <div class="title" id="title">--</div>
+        <div class="artist" id="artist"></div>
+        <div class="slider" id="slider"><div class="rail"></div><div class="fill" id="fill"></div><div class="knob" id="knob"></div></div>
+        <div class="time" id="time">0:00/--:--</div>
+        <div class="keys"><button id="kPrev" aria-label="上一首">⏮</button><button id="kToggle" aria-label="播放或暂停">⏯</button><button id="kNext" aria-label="下一首">⏭</button></div>
+      </div>
+      <div class="below">
+        <div class="row">
+          <button class="b" id="bReselect">在 Queue 重选本曲</button>
+          <button class="b" id="bStop">拔卡（停止）</button>
+          <button class="b" id="bReset">从头再来</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:20px;min-width:0">
+      <div class="card">
+        <h2>方案</h2>
+        <div class="opts">
+          <div class="opt"><h3>1 · 拖动中的时间 Label</h3><div class="seg" id="o-label">
+            <label><input type="radio" name="label" value="none" id="label-none" checked><span>不变（现状）<small>只有进度条跟手，时间仍走播放位置</small></span></label>
+            <label><input type="radio" name="label" value="plain" id="label-plain"><span>预览目标时间<small>显示 “目标/总时长”，样式不变</small></span></label>
+            <label><input type="radio" name="label" value="accent" id="label-accent"><span>预览目标时间，换色<small>同上，用强调色标明这是预览</small></span></label>
+          </div></div>
+          <div class="opt"><h3>2 · 松手后到快照追上之前</h3><div class="seg" id="o-release">
+            <label><input type="radio" name="release" value="snap" id="release-snap" checked><span>立刻回到快照位置<small>先退回旧位置，跳转完成后再跳到落点（会闪）</small></span></label>
+            <label><input type="radio" name="release" value="hold" id="release-hold"><span>停在目标处等回显<small>进度与时间都显示目标；快照回显追上本次命令序号后改按快照显示（GUI-17 把位置也冻结）</small></span></label>
+          </div></div>
+          <div class="opt"><h3>3 · 总时长未知（含停止态）时按住进度条</h3><div class="seg" id="o-unknown">
+            <label><input type="radio" name="unknown" value="bounce" id="unknown-bounce" checked><span>跟手，松手弹回 0<small>不发命令；不置灰（GUI-19）</small></span></label>
+            <label><input type="radio" name="unknown" value="still" id="unknown-still"><span>不跟手<small>按下拖动都没反应；不置灰</small></span></label>
+          </div></div>
+          <div class="opt"><h3>4 · 唱盘角度</h3><div class="seg" id="o-vinyl">
+            <label><input type="radio" name="vinyl" value="new" id="vinyl-new" checked><span>跳转不归零（第 164 号票已定）<small>只在换曲、重选本曲、停止时归零</small></span></label>
+            <label><input type="radio" name="vinyl" value="old" id="vinyl-old"><span>旧 GUI-20 对照<small>播放位置变小就归零，往回拖会归零</small></span></label>
+          </div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>假后端参数</h2>
+        <div class="params">
+          <label>跳转耗时（重开流 + 重同步）<select id="pLatency"><option value="60">60 ms（快）</option><option value="400" selected>400 ms</option><option value="1200">1.2 s（慢卡）</option></select></label>
+          <label>落点偏差<select id="pErr"><option value="0" selected>0（CBR，≤1 帧）</option><option value="-2500">早 2.5 s（估算时长）</option><option value="3000">晚 3 s</option></select></label>
+          <label>命令队列<select id="pFull"><option value="0" selected>正常</option><option value="1">已满（丢弃）</option></select></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>引导场景</h2>
+        <div class="tabs" id="tabs" role="tablist"></div>
+        <div id="scenario"></div>
+      </div>
+
+      <div class="card" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px">
+        <div style="min-width:0"><h2>GUI 看到的状态</h2><dl class="state" id="state"></dl></div>
+        <div style="min-width:0"><h2>事件</h2><ul class="log" id="log"></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== 可移植的 GUI 呈现逻辑（纯函数，无 DOM）=====
+ * state 只由快照与用户输入推出；对应 Service/gui/main/transport 的归约器。 */
+const SeekView = (() => {
+  const init = (opts) => ({ opts, snap: null, prevSnap: null, frozen: null, sentSeq: 0,
+    drag: null, pendingSeek: null, vinylEpoch: 0, outgoing: null, note: '' });
+
+  const base = (s) => (s.snap && s.snap.echo < s.sentSeq && s.frozen) ? s.frozen : s.snap;
+  const durKnown = (b) => !!b && b.state !== 'STOPPED' && b.dur > 0;
+
+  function reduce(s, a) {
+    s = { ...s, outgoing: null, note: '' };
+    switch (a.type) {
+      case 'OPTS': return { ...s, opts: a.opts };
+      case 'SNAPSHOT': {
+        const prevBase = base(s), prevSnap = s.snap;
+        s.prevSnap = prevSnap; s.snap = a.snap;
+        if (a.snap.echo >= s.sentSeq) s.frozen = a.snap;
+        if (s.pendingSeek && a.snap.echo >= s.pendingSeek.seq) { s.pendingSeek = null; s.note = '回显已追上跳转'; }
+        const b = base(s);
+        if (prevBase) {
+          let reset = b.track !== prevBase.track || (b.state === 'STOPPED' && prevBase.state !== 'STOPPED');
+          if (s.opts.vinyl === 'new') reset = reset || b.playGen !== prevBase.playGen;
+          else reset = reset || (prevSnap && a.snap.pos < prevSnap.pos);
+          if (reset) s.vinylEpoch++;
+        }
+        return s;
+      }
+      case 'PRESS': case 'MOVE': {
+        const b = base(s);
+        if (!durKnown(b) && s.opts.unknown === 'still') return s;
+        if (a.type === 'MOVE' && !s.drag) return s;
+        return { ...s, drag: { ratio: a.ratio } };
+      }
+      case 'RELEASE': {
+        if (!s.drag) return s;
+        const b = base(s), ratio = s.drag.ratio;
+        s.drag = null;
+        if (!durKnown(b)) { s.note = '总时长未知，不发命令'; return s; }
+        s.outgoing = { type: 'SEEK', track: b.track, ms: Math.round(ratio * b.dur), seq: s.sentSeq + 1 };
+        return s;
+      }
+      case 'KEY': s.outgoing = { type: a.key, seq: s.sentSeq + 1 }; return s;
+      case 'SENT': {
+        if (!a.ok) { s.note = '命令队列满，丢弃本次输入'; return s; }
+        s.sentSeq = a.cmd.seq;
+        if (a.cmd.type === 'SEEK') s.pendingSeek = { seq: a.cmd.seq, ms: a.cmd.ms, track: a.cmd.track };
+        return s;
+      }
+    }
+    return s;
+  }
+
+  function view(s) {
+    const b = base(s);
+    if (!b) return { ratio: 0, time: '0:00/--:--', preview: false, spinning: false, track: null };
+    const known = durKnown(b);
+    let pos = s.snap.pos;
+    const holding = s.opts.release === 'hold' && s.pendingSeek && s.pendingSeek.track === b.track;
+    if (holding) pos = s.pendingSeek.ms;
+    let ratio = s.drag ? s.drag.ratio : (known ? Math.min(1, pos / b.dur) : 0);
+    let time, preview = false;
+    if (b.state === 'STOPPED' && b.reason) time = b.reason;
+    else if (s.drag && known && s.opts.label !== 'none') { time = fmt(s.drag.ratio * b.dur) + '/' + fmt(b.dur); preview = s.opts.label === 'accent'; }
+    else time = fmt(known ? pos : 0) + '/' + (known ? fmt(b.dur) : '--:--');
+    return { ratio, time, preview, spinning: b.state === 'PLAYING', track: b.track, holding };
+  }
+  const fmt = (ms) => { const t = Math.floor(ms / 1000); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  return { init, reduce, view, base, fmt };
+})();
+
+/* ===== 假后端（只为驱动原型，不进代码库）===== */
+const TRACKS = [
+  { name: '夜航', artist: '示例歌手 A', dur: 225000, durAfter: 0 },
+  { name: '无时长信息的曲目', artist: '示例歌手 B', dur: 190000, durAfter: 2500 },
+  { name: '短曲', artist: '示例歌手 C', dur: 14000, durAfter: 0 },
+  { name: '下一首', artist: '示例歌手 D', dur: 200000, durAfter: 0 },
+];
+function makeBackend(p) {
+  return { p, cur: 0, state: 'PLAYING', pos: 0, sinceOpen: 99999, queue: [], echo: 0, playGen: 1, busy: null, reason: null };
+}
+function beOpen(be, i) { be.cur = (i + TRACKS.length) % TRACKS.length; be.pos = 0; be.sinceOpen = 0; be.playGen++; }
+function beEnqueue(be, cmd) { if (be.p.full) return false; be.queue.push(cmd); return true; }
+function beTick(be, dt) {
+  const t = TRACKS[be.cur];
+  be.sinceOpen += dt;
+  if (be.busy) {
+    be.busy.left -= dt;
+    if (be.busy.left <= 0) { beApply(be, be.busy.cmd); be.busy = null; }
+  } else if (be.queue.length) {
+    let cmd = be.queue.shift();
+    while (cmd.type === 'SEEK' && be.queue[0] && be.queue[0].type === 'SEEK') cmd = be.queue.shift(); // 最新者胜
+    be.busy = { cmd, left: cmd.type === 'SEEK' ? be.p.latency : 30 };
+  }
+  if (be.state === 'PLAYING' && !be.busy) {
+    be.pos += dt;
+    if (be.pos >= t.dur) beOpen(be, be.cur + 1);
+  }
+}
+function beApply(be, cmd) {
+  const t = TRACKS[be.cur];
+  if (cmd.type === 'SEEK') {
+    if (cmd.track === be.cur && be.state !== 'STOPPED') {
+      be.pos = Math.max(0, Math.min(t.dur, cmd.ms + be.p.err));
+      if (be.pos >= t.dur && be.state === 'PLAYING') beOpen(be, be.cur + 1);
+    }
+  } else if (cmd.type === 'TOGGLE') {
+    if (be.state === 'STOPPED') { be.state = 'PLAYING'; be.reason = null; beOpen(be, be.cur); }
+    else be.state = be.state === 'PLAYING' ? 'PAUSED' : 'PLAYING';
+  } else if (cmd.type === 'NEXT') beOpen(be, be.cur + 1);
+  else if (cmd.type === 'PREV') beOpen(be, be.cur - 1);
+  else if (cmd.type === 'SELECT') beOpen(be, be.cur);
+  be.echo = Math.max(be.echo, cmd.seq);
+}
+function beSnap(be) {
+  const t = TRACKS[be.cur];
+  const stopped = be.state === 'STOPPED';
+  return { track: be.cur, state: be.state, pos: stopped ? 0 : Math.floor(be.pos),
+    dur: stopped || be.sinceOpen < t.durAfter ? 0 : t.dur, echo: be.echo, playGen: be.playGen, reason: be.reason };
+}
+
+/* ===== 页面外壳 ===== */
+const $ = (id) => document.getElementById(id);
+const readOpts = () => ({ label: q('label'), release: q('release'), unknown: q('unknown'), vinyl: q('vinyl') });
+const q = (n) => document.querySelector(`input[name="${n}"]:checked`).value;
+const readParams = () => ({ latency: +$('pLatency').value, err: +$('pErr').value, full: $('pFull').value === '1' });
+let be, gs, angle = 0, epochSeen = 0, logLines = [], prevShown = {};
+
+function log(t) { const ms = performance.now() / 1000; logLines.unshift(ms.toFixed(1).padStart(6) + 's  ' + t); logLines = logLines.slice(0, 40); $('log').innerHTML = logLines.map(l => `<li>${l}</li>`).join(''); }
+function dispatch(a) {
+  gs = SeekView.reduce(gs, a);
+  if (gs.note) log(gs.note);
+  if (gs.outgoing) {
+    const cmd = gs.outgoing, ok = beEnqueue(be, cmd);
+    log(`${ok ? '发送' : '丢弃'} ${cmd.type}${cmd.type === 'SEEK' ? ' → ' + SeekView.fmt(cmd.ms) : ''} #${cmd.seq}`);
+    gs = SeekView.reduce(gs, { type: 'SENT', ok, cmd });
+    if (gs.note) log(gs.note);
+  }
+}
+function reset(cfg = {}) {
+  be = makeBackend(readParams());
+  Object.assign(be, cfg.be || {});
+  if (cfg.be && cfg.be.cur !== undefined) be.sinceOpen = cfg.be.sinceOpen ?? 99999;
+  gs = SeekView.init(readOpts());
+  gs = SeekView.reduce(gs, { type: 'SNAPSHOT', snap: beSnap(be) });
+  angle = 0; epochSeen = gs.vinylEpoch; logLines = []; log('开始');
+}
+
+const vctx = $('vinyl').getContext('2d');
+function drawVinyl() {
+  const c = vctx, r = 78; c.clearRect(0, 0, 160, 160);
+  c.save(); c.translate(80, 80); c.rotate(angle * Math.PI / 180);
+  c.fillStyle = '#1b201f'; c.beginPath(); c.arc(0, 0, r, 0, 7); c.fill();
+  c.strokeStyle = '#2a312f'; for (let k = 30; k < r; k += 6) { c.beginPath(); c.arc(0, 0, k, 0, 7); c.stroke(); }
+  c.fillStyle = '#c9893a'; c.beginPath(); c.arc(0, 0, 24, 0, 7); c.fill();
+  c.fillStyle = '#f2e6d0'; c.fillRect(-2, -r + 4, 4, r - 30);
+  c.fillStyle = '#101413'; c.beginPath(); c.arc(0, 0, 3, 0, 7); c.fill();
+  c.restore();
+}
+function render() {
+  const v = SeekView.view(gs);
+  const t = v.track === null ? null : TRACKS[v.track];
+  $('title').textContent = t ? t.name : '--';
+  $('artist').textContent = t ? t.artist : '';
+  $('fill').style.width = (v.ratio * 100) + '%';
+  $('knob').style.left = (v.ratio * 100) + '%';
+  $('time').textContent = v.time; $('time').classList.toggle('preview', v.preview);
+  $('slider').classList.toggle('pressed', !!gs.drag);
+  drawVinyl();
+  const b = SeekView.base(gs), s = gs.snap;
+  const rows = {
+    '显示的曲目 / 状态': `${t ? t.name : '--'} / ${b ? ({ PLAYING: '播放', PAUSED: '暂停', STOPPED: '停止' })[b.state] : '--'}`,
+    '快照播放位置': s ? SeekView.fmt(s.pos) + (s.dur ? ' / ' + SeekView.fmt(s.dur) : ' / 未知') : '--',
+    '已发命令序号 / 回显': `#${gs.sentSeq} / #${s ? s.echo : 0}`,
+    '曲目与状态冻结': s && s.echo < gs.sentSeq ? '是（等回显）' : '否',
+    '待回显的跳转': gs.pendingSeek ? `#${gs.pendingSeek.seq} → ${SeekView.fmt(gs.pendingSeek.ms)}` : '无',
+    '拖动中': gs.drag ? Math.round(gs.drag.ratio * 100) + '%' : '否',
+    '后端': be.busy ? (be.busy.cmd.type === 'SEEK' ? '正在跳转…' : '处理命令…') : '空闲',
+    '唱盘归零次数': String(gs.vinylEpoch),
+  };
+  $('state').innerHTML = Object.entries(rows).map(([k, val]) =>
+    `<dt>${k}</dt><dd class="${prevShown[k] !== undefined && prevShown[k] !== val && k !== '快照播放位置' ? 'changed' : ''}">${val}</dd>`).join('');
+  prevShown = rows;
+}
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(100, now - last); last = now;
+  beTick(be, dt);
+  dispatch({ type: 'SNAPSHOT', snap: beSnap(be) });
+  if (gs.vinylEpoch !== epochSeen) { angle = 0; epochSeen = gs.vinylEpoch; log('唱盘角度归零'); }
+  else if (SeekView.view(gs).spinning) angle = (angle + dt * 0.12) % 360;
+  render(); requestAnimationFrame(frame);
+}
+
+/* 输入 */
+const ratioAt = (e) => { const r = $('slider').getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); };
+$('slider').addEventListener('pointerdown', (e) => { $('slider').setPointerCapture(e.pointerId); dispatch({ type: 'PRESS', ratio: ratioAt(e) }); });
+$('slider').addEventListener('pointermove', (e) => { if (e.buttons) dispatch({ type: 'MOVE', ratio: ratioAt(e) }); });
+$('slider').addEventListener('pointerup', () => dispatch({ type: 'RELEASE' }));
+$('kPrev').onclick = () => dispatch({ type: 'KEY', key: 'PREV' });
+$('kToggle').onclick = () => dispatch({ type: 'KEY', key: 'TOGGLE' });
+$('kNext').onclick = () => dispatch({ type: 'KEY', key: 'NEXT' });
+$('bReselect').onclick = () => dispatch({ type: 'KEY', key: 'SELECT' });
+$('bStop').onclick = () => { be.state = 'STOPPED'; be.reason = 'Card removed'; be.pos = 0; log('拔卡：后端停止'); };
+$('bReset').onclick = () => reset();
+document.querySelectorAll('.seg input').forEach(i => i.onchange = () => dispatch({ type: 'OPTS', opts: readOpts() }));
+['pLatency', 'pErr', 'pFull'].forEach(id => $(id).onchange = () => { be.p = readParams(); });
+
+/* 引导场景 */
+const drag = (r) => ({ label: `按住进度条拖到 ${Math.round(r * 100)}%（先别松手）`, run: () => { dispatch({ type: 'PRESS', ratio: r }); } });
+const release = { label: '松手', run: () => dispatch({ type: 'RELEASE' }) };
+const SCEN = [
+  { name: '往后拖', desc: '播放中，从 0:40 拖到 70%，后端 400 ms。看两个时刻：<b>拖动时</b>时间 Label 显示什么；<b>松手后约 0.4 s</b> 进度条去了哪里。',
+    be: { pos: 40000 }, p: { latency: '400' },
+    steps: [drag(0.7), release] },
+  { name: '慢卡往回拖', desc: '播放中在 2:30，往回拖到 20%，后端 1.2 s。对比“立刻回到快照”时进度条先回 2:30 再跳到 0:45 的闪动；把唱盘切到“旧 GUI-20 对照”，看往回跳时唱盘是否归零。',
+    be: { pos: 150000 }, p: { latency: '1200' },
+    steps: [drag(0.2), release] },
+  { name: '暂停中跳转', desc: '先暂停，再拖到 50% 松手。跳转后仍保持暂停（第 164 号票），唱盘不转；进度与时间应停在落点。之后按播放，从落点继续。',
+    be: { pos: 60000, state: 'PAUSED' }, p: { latency: '400' },
+    steps: [drag(0.5), release, { label: '按 ⏯ 恢复播放', run: () => dispatch({ type: 'KEY', key: 'TOGGLE' }) }] },
+  { name: '总时长未知', desc: '刚切到一首没有时长信息的曲子，前 2.5 s 显示 --:--，进度条停在 0。这时按住拖动，对比“跟手后弹回 0”和“不跟手”。时长出现之后再拖一次。',
+    be: { cur: 1, sinceOpen: 0, pos: 0 }, p: { latency: '400' },
+    steps: [drag(0.6), release, { label: '等时长出现后：拖到 60%', run: () => dispatch({ type: 'PRESS', ratio: 0.6 }) }, release] },
+  { name: '拖动中曲子放完', desc: '短曲只剩几秒。按住进度条不放，等它自动换到下一首，再松手。目标属于旧曲，后端会丢弃；看松手后进度条和时间去了哪里。',
+    be: { cur: 2, pos: 9000 }, p: { latency: '400' },
+    steps: [drag(0.5), { label: '等约 5 秒，看到曲名变成“下一首”后点这里', run: () => {} }, release] },
+  { name: '队列满', desc: '命令队列已满时松手：输入被丢弃并记日志，进度条回到快照位置（第 164 号票第 6 条）。',
+    be: { pos: 40000 }, p: { full: '1' },
+    steps: [drag(0.8), release, { label: '恢复正常队列', run: () => { $('pFull').value = '0'; be.p = readParams(); } }] },
+  { name: '落点有偏差', desc: '时长是估算值，落点比目标早 2.5 s。选“停在目标处等回显”时，回显追上后进度条会往回跳一点；看这一下是否能接受。',
+    be: { pos: 30000 }, p: { err: '-2500', latency: '400' },
+    steps: [drag(0.6), release] },
+  { name: '连续松手', desc: '慢卡下快速连拖两次：先 30% 松手，马上 80% 松手。后端最新者胜，只跳一次到 80%；看中间进度条是否来回跳。',
+    be: { pos: 20000 }, p: { latency: '1200' },
+    steps: [drag(0.3), release, drag(0.8), release] },
+];
+let active = 0, stepIdx = 0;
+function showScenario(i) {
+  active = i; stepIdx = 0;
+  const sc = SCEN[i];
+  $('pLatency').value = sc.p.latency || '400'; $('pErr').value = sc.p.err || '0'; $('pFull').value = sc.p.full || '0';
+  reset({ be: sc.be });
+  $('tabs').innerHTML = SCEN.map((s, k) => `<button role="tab" id="tab-${k}" aria-selected="${k === i}">${s.name}</button>`).join('');
+  SCEN.forEach((s, k) => $('tab-' + k).onclick = () => showScenario(k));
+  drawSteps();
+}
+function drawSteps() {
+  const sc = SCEN[active];
+  $('scenario').innerHTML = `<p class="watch">${sc.desc}</p><div class="steps">` +
+    sc.steps.map((st, k) => `<button class="b ${k < stepIdx ? 'done' : k === stepIdx ? 'next' : ''}" id="step-${k}">${k + 1}. ${st.label}</button>`).join('') +
+    `<button class="b" id="step-restart">重来这个场景</button></div>`;
+  sc.steps.forEach((st, k) => $('step-' + k).onclick = () => { st.run(); stepIdx = k + 1; drawSteps(); });
+  $('step-restart').onclick = () => showScenario(active);
+}
+showScenario(0);
+requestAnimationFrame(frame);
+</script>
