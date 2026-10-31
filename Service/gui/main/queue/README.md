@@ -5,7 +5,7 @@
 窗口滑动时在已有 panel 上转 head 改字，不按整表无限 `create`。
 
 本 Module 不包含 `storage_listbuffer.h`，也不向 APP 公开 Interface。曲名与歌手由 GUI Task
-把窗口行的 {曲目显示名, 歌手} 原样传入（GUI-25），见 `docs/shape/storage.md#catalog`。
+把窗口行的 {曲目显示名, 歌手} 原样传入（GUI-25），见 `docs/shape/storage.catalog.md`。
 `Length` 为 0 则没有可见行。
 
 行结构：Wash 薄底、圆角 8 的 Panel（左侧 4 px Accent 边条，按下时提高底 Opa 并加 1 px Ink

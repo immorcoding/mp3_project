@@ -27,3 +27,5 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 - [0018-playback-advance-ownership.md](0018-playback-advance-ownership.md)：播放推进归 APP 后台任务，播放模块不持游标、自行经 Service/filesystem 打开文件；GUI 只经队列与播放交互；已由 ADR-0020 取代。
 - [0019-freertos-static-task-stack.md](0019-freertos-static-task-stack.md)：播放任务静态分配，解码栈放 DTCM；堆大小不变。
 - [0020-playback-state-machine-ownership.md](0020-playback-state-machine-ownership.md)：播放状态机归 APP 播放任务（推进、开启交接、流身份、命令与状态两条通道，2026-10-09 修订），游标只由它写；播放模块只做解码与输出管线；FIL 归 Storage Task；对外只公开停止/播放/暂停三态。
+- [0021-seek-by-reopen-with-audio-offset.md](0021-seek-by-reopen-with-audio-offset.md)：跳转用带音频区间偏移的重开流，不在已打开的 FIL 内 seek；Storage 只钳偏移、不认识格式；毫秒到字节映射与落点归 Service/playback。
+- [0022-fatfs-open-by-locator-patch.md](0022-fatfs-open-by-locator-patch.md)：给 FatFs `ff.c` 加一个按目录项位置打开的函数（ARC-2 唯一例外）；文件定位符归 Filesystem Service；patch 文件、FAST 检查与重打脚本守护，Vendor 改动由用户提交。

@@ -2,7 +2,7 @@
 
 Claude Code 与 Codex 双轨共用的章程、Skill、审阅 Agent、Hook 与分层验证。
 
-Next id: HAR-15
+Next id: HAR-16
 
 ## Pillars
 
@@ -49,6 +49,7 @@ Next id: HAR-15
 - **HAR-11** · provisional · 验证路径只在 verification.psd1 维护，变更同时更新路由自测。_Why:_ 重复路径表会制造第二份事实源，路由变更需要独立证据。
 
 - **HAR-13** · provisional · 最终验证证据记录提交 SHA、工作树状态、命令、退出码和完整输出；交付时把证据归档到 PR 附件或制品位置，不以系统临时目录作为唯一留存。 _Why:_ 摘要不能独立证明实际验收快照，临时文件也会被清理。 _Source:_ [spec #15](https://github.com/immorcoding/mp3_project/issues/15)
+- **HAR-15** · exploring · Vendor 补丁以仓库根 `patches/<上游>/` 下的 patch 文件维护；CubeMX 重新导出或上游更新后，先跑 `scripts/apply-vendor-patches.ps1`（可重复执行：已应用跳过、能干净应用则应用、冲突则停下报位置）再跑 FAST；FAST 以 `git apply --reverse --check` 确认每个补丁完整生效，否则报“<上游> 补丁未应用”（如“FatFs 补丁未应用”）并给出重打命令；补丁落到 Vendor 目录由用户设 `ALLOW_GENERATED_UPDATE` 后提交（HAR-4）。 _Why:_ 重新导出会静默覆盖补丁，等到链接失败才发现时看不出原因；提交前检查能直接给出原因与重打命令。_Source:_ [ADR-0022](../adr/0022-fatfs-open-by-locator-patch.md)、[打开文件提速](https://github.com/immorcoding/mp3_project/issues/167)
 
 ### Signals
 

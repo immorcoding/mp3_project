@@ -5,7 +5,7 @@
 ## 公开 Interface
 
 - `audio`、`axp2101`、`ft6x36`、`led`、`log`、`sd`、`soft_i2c`、`st7789`、`w25qxx` 各自的公开类型、状态和函数；
-- `w25qxx` 已实现 W25Q256 识别、同步/异步原始访问与写擦状态机；`flash_ftl` 已实现逻辑组映射、异地提交、扫描恢复与 GC。两者的 Interface 所有权和集成状态见 [../docs/shape/sources/storage-media.md](../docs/shape/sources/storage-media.md) 与 [../docs/shape/storage.md#durability](../docs/shape/storage.md#durability)。
+- `w25qxx` 已实现 W25Q256 识别、同步/异步原始访问与写擦状态机；`flash_ftl` 已实现逻辑组映射、异地提交、扫描恢复与 GC。两者的 Interface 所有权和集成状态见 [../docs/shape/sources/storage-media.md](../docs/shape/sources/storage-media.md) 与 [../docs/shape/storage.durability.md](../docs/shape/storage.durability.md)。
 - `resource_pack` 实现 RPKC1 Core、BINARY 与 IMAGE Metadata 的只读解析和校验，不认识具体存储介质。
 - `id3_reader` 实现 ID3v2.2/2.3/2.4 的帧定位、文本解码（Latin-1、GBK、UTF-16、UTF-8）与 TIT2/TPE1 字段清理，不认识存储介质；读文件的循环与 GBK 查表由调用者注入，只经 `Tests/storage_catalog` 被测。
 - 每个 Module 自己定义的 `*_OpsTypeDef` 或回调类型。
