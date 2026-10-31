@@ -77,7 +77,7 @@ dd.changed{color:var(--accent);font-weight:600}
 <div class="wrap">
   <header>
     <h1>跳转呈现原型（第 165 号票，用完即弃）</h1>
-    <p class="intro">要定的问题：<b>拖进度条时、以及松手后到播放快照追上之前，Now Playing 该显示什么</b>。左边的屏可以直接拖，右边四组开关可以随意组合。后端是假的，跳转延迟、落点偏差、命令队列满都能调。已定的规则（第 164 号票）照旧生效：跳转不改变播放/暂停状态；总时长未知时不发命令；跳转目标绑定按下进度条时显示的曲目，曲目已变就丢弃。打开时默认选中的是 2026-10-30 定下的组合（标“已选”），其他选项留作对照。</p>
+    <p class="intro">要定的问题：<b>拖进度条时、以及松手后到播放快照追上之前，Now Playing 该显示什么</b>。左边的屏可以直接拖，右边四组开关可以随意组合。后端是假的，跳转延迟、落点偏差、命令队列满都能调。已定的规则（第 164 号票）照旧生效：跳转不改变播放/暂停状态；总时长未知时不发命令；跳转目标绑定按下进度条时显示的曲目；拖动中显示的曲目一变，拖动即取消。打开时默认选中的是 2026-10-30 定下的组合（标“已选”），其他选项留作对照。</p>
   </header>
 
   <div class="main">
@@ -167,6 +167,8 @@ const SeekView = (() => {
         if (a.snap.echo >= s.sentSeq) s.frozen = a.snap;
         if (s.pendingSeek && a.snap.echo >= s.pendingSeek.seq) { s.pendingSeek = null; s.note = '回显已追上跳转'; }
         const b = base(s);
+        // 显示的曲目身份一变，就取消在途拖动：不发命令，进度条回到快照。
+        if (s.drag && b.track !== s.drag.track) { s.drag = null; s.note = '曲目已变，取消拖动'; }
         if (prevBase) {
           let reset = b.track !== prevBase.track || (b.state === 'STOPPED' && prevBase.state !== 'STOPPED');
           if (s.opts.vinyl === 'new') reset = reset || b.playGen !== prevBase.playGen;
@@ -374,9 +376,9 @@ const SCEN = [
   { name: '总时长未知', desc: '刚切到一首没有时长信息的曲子，前 2.5 s 显示 --:--，进度条停在 0。这时按住拖动，对比“跟手后弹回 0”和“不跟手”。时长出现之后再拖一次。',
     be: { cur: 1, sinceOpen: 0, pos: 0 }, p: { latency: '400' },
     steps: [drag(0.6), release, { label: '等时长出现后：拖到 60%', run: () => dispatch({ type: 'PRESS', ratio: 0.6 }) }, release] },
-  { name: '拖动中曲子放完', desc: '短曲只剩几秒。按住进度条不放，等它自动换到下一首，再松手。目标在按下时绑定旧曲，换曲后时间预览仍是旧曲的目标；松手发出的跳转被后端丢弃，回显追上后进度条按新曲的快照显示，不会跳进新曲。',
+  { name: '拖动中曲子放完', desc: '短曲只剩几秒。按住进度条不放，等它自动换到下一首，再松手。显示的曲目一变，拖动就被取消：进度条立刻按新曲的快照显示，时间不再预览，之后松手什么也不发。要跳新曲得重新按下。',
     be: { cur: 2, pos: 9000 }, p: { latency: '400' },
-    steps: [drag(0.5), { label: '等约 5 秒，看到曲名变成“下一首”后点这里', run: () => {} }, release] },
+    steps: [drag(0.5), { label: '等约 5 秒，看到曲名变成“下一首”后点这里', run: () => {} }, { label: '松手（拖动已取消，不发命令）', run: () => dispatch({ type: 'RELEASE' }) }] },
   { name: '队列满', desc: '命令队列已满时松手：输入被丢弃并记日志，进度条回到快照位置（第 164 号票第 6 条）。',
     be: { pos: 40000 }, p: { full: '1' },
     steps: [drag(0.8), release, { label: '恢复正常队列', run: () => { $('pFull').value = '0'; be.p = readParams(); } }] },
