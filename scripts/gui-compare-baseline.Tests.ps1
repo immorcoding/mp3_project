@@ -48,7 +48,9 @@ Write-Output ('[shot] f1 ' + ($color.GetHashCode() -band 0x7fffffff).ToString('x
 function New-Fixture {
     $root = Join-Path $temp 'repo'
     New-Item -ItemType Directory -Force -Path (Join-Path $root 'Tools/gui_simulator/scenarios') | Out-Null
-    Copy-Item -LiteralPath $compareScript -Destination (Join-Path $root 'Tools/gui_simulator')
+    foreach ($script in 'compare-baseline.ps1', 'run-scenarios.ps1', 'scenario_common.ps1') {
+        Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $compareScript) $script) -Destination (Join-Path $root 'Tools/gui_simulator')
+    }
     Set-Content -LiteralPath (Join-Path $root 'Tools/gui_simulator/scenarios/s1.args') -Value '--shot 100:f1' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root 'Tools/gui_simulator/fake_color.txt') -Value 'Red' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root '.gitignore') -Value "build/`n" -Encoding ascii
@@ -104,6 +106,32 @@ try {
     catch { $failed = $true }
     Assert-That $failed '构建失败应抛错'
     Assert-That (@(Invoke-Git $root @('worktree', 'list')).Count -eq $worktreesBefore) '失败后临时 worktree 未移除'
+
+    # 4. 不给 -BuildDir 时，当前工作树也构建到会话临时目录，不写仓库共享的 build\gui_simulator（不与 FULL 共用）。
+    $recordFile = Join-Path $temp 'build-dirs.txt'
+    $recording = {
+        param([string]$SourceRoot, [string]$BuildDir)
+        Add-Content -LiteralPath $recordFile -Value $BuildDir -Encoding ascii
+        return (& $builder $SourceRoot $BuildDir)
+    }.GetNewClosure()
+    $null = & (Join-Path $root 'Tools/gui_simulator/compare-baseline.ps1') -BaselineRef $head -WorkRoot $work -OutDir $out `
+        -SimulatorBuilder $recording 6>&1 | Out-String
+    $sharedBuild = Join-Path $root 'build\gui_simulator'
+    $recorded = @(Get-Content -LiteralPath $recordFile)
+    Assert-That ($recorded.Count -eq 2) "应构建基线与当前各一次：$($recorded -join ';')"
+    foreach ($dir in $recorded) {
+        Assert-That (-not $dir.StartsWith($sharedBuild, [StringComparison]::OrdinalIgnoreCase)) "不得构建到共享目录：$dir"
+    }
+    Assert-That (-not (Test-Path -LiteralPath $sharedBuild)) '对比不得创建共享构建目录 build\gui_simulator'
+    Assert-That (-not (Test-Path -LiteralPath (Join-Path $work 'cur'))) '默认的当前构建目录用后应清理'
+
+    # 5. run-scenarios：-BaselineRef 与 -Update 互斥（对比模式只读，不得改写 expected）。
+    $conflict = $null
+    try {
+        & (Join-Path $root 'Tools/gui_simulator/run-scenarios.ps1') -BaselineRef $head -Update 6>&1 | Out-Null
+    }
+    catch { $conflict = $_.Exception.Message }
+    Assert-That (($null -ne $conflict) -and ($conflict -match 'BaselineRef.*Update|Update.*BaselineRef')) "-BaselineRef 与 -Update 同时给出必须报错：$conflict"
 
     Write-Output 'GUI 基线对比模式测试通过。'
 }
