@@ -2,14 +2,18 @@
 param(
     [string]$HostCompiler,
 
-    [ValidateSet('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'playback_service', 'playback_task', 'monitor_warn')]
-    [string[]]$Module = @('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'playback_service', 'playback_task', 'monitor_warn')
+    [ValidateSet('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'playback_service', 'playback_task', 'monitor_warn', 'board_test_card')]
+    [string[]]$Module = @('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'playback_service', 'playback_task', 'monitor_warn', 'board_test_card'),
+
+    # 跳过慢用例（规则里声明 HasSlowTests 的模块，目前是样本卡的整文件确定性用例）：CHANGED 用，FULL 不带此开关、全跑。
+    [switch]$SkipSlow
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 . (Join-Path -Path $PSScriptRoot -ChildPath 'build_helpers.ps1')
+. (Join-Path -Path $PSScriptRoot -ChildPath 'harness_helpers.ps1')
 
 function Get-HostCompiler {
     [CmdletBinding()]
@@ -93,16 +97,91 @@ function Confirm-HostGccCompiler {
     }
 }
 
+function Invoke-PythonHostModule {
+    <#
+    .SYNOPSIS
+        运行规则里 Kind = 'Python' 的主机模块：规则 TestDirectory 目录下的全部 test_*.py（unittest）。
+    .DESCRIPTION
+        依赖 lameenc 的用例缺包时由用例自身 skip；这里先探测一次并在输出写明，-v 把每条 skip 原因也打出来。
+        -SkipSlow 设置 MP3_SKIP_SLOW_TESTS=1，慢用例据此 skip（FULL 不带，全跑）。
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepositoryRoot,
+        [Parameter(Mandatory)][string]$ModuleName,
+        [Parameter(Mandatory)][string]$TestDirectory,
+        [switch]$SkipSlow
+    )
+
+    $python = Find-ExternalCommand -Name 'python'
+    if ([string]::IsNullOrWhiteSpace([string]$python)) {
+        throw "主机模块 '$ModuleName' 需要 python（运行 $TestDirectory 下的 unittest）；未在 PATH 中找到。"
+    }
+    $python = [string]@($python)[0]
+
+    $moduleDirectory = Join-Path -Path $RepositoryRoot -ChildPath $TestDirectory
+    $saved = @{}
+    foreach ($name in 'PYTHONDONTWRITEBYTECODE', 'PYTHONUTF8', 'MP3_SKIP_SLOW_TESTS') {
+        $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+    }
+    try {
+        # 不在源码树里留 __pycache__；中文输出按 UTF-8。
+        $env:PYTHONDONTWRITEBYTECODE = '1'
+        $env:PYTHONUTF8 = '1'
+        if ($SkipSlow) { $env:MP3_SKIP_SLOW_TESTS = '1' } else { Remove-Item -Path Env:MP3_SKIP_SLOW_TESTS -ErrorAction SilentlyContinue }
+
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & $python -c 'import lameenc' 2>&1 | Out-Null
+            $haveLameenc = ($LASTEXITCODE -eq 0)
+        }
+        finally { $ErrorActionPreference = $previous }
+        if (-not $haveLameenc) {
+            Write-NativeUtf8Line -Text "${ModuleName}：未安装 lameenc（pip install lameenc），整文件编码用例将被跳过，只跑不依赖它的合同用例。"
+        }
+        if ($SkipSlow) {
+            Write-NativeUtf8Line -Text "${ModuleName}：-SkipSlow，慢用例被跳过（FULL 全跑）。"
+        }
+
+        # -I：隔离模式，不读 PYTHONPATH 与当前目录；discover 自己把起始目录放进 sys.path。
+        Invoke-ExternalCommand -CommandPath $python -Arguments @(
+            '-I', '-m', 'unittest', 'discover', '-v', '-s', $moduleDirectory, '-p', 'test_*.py')
+    }
+    finally {
+        foreach ($name in $saved.Keys) {
+            [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process')
+        }
+    }
+}
+
 Complete-Utf8EntryScript -Action {
     $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
-    $hostCompilerPath = Get-HostCompiler -RequestedCompiler $HostCompiler
-    Confirm-HostGccCompiler -CompilerPath $hostCompilerPath
+    $rules = Get-HarnessRules
+    $pythonRules = @{}
+    foreach ($pythonRule in @(Get-HarnessPythonModuleRule -Rules $rules)) {
+        $pythonRules[[string]$pythonRule.Name] = $pythonRule
+    }
+    $pythonModules = @($pythonRules.Keys)
+    $cmakeModules = @($Module | Where-Object { $pythonModules -notcontains $_ })
 
-    $cmake = Get-ExternalCommand -Name 'cmake'
-    [void](Get-ExternalCommand -Name 'ninja')
-    $ctest = Get-ExternalCommand -Name 'ctest'
+    # 只选 Python 模块时不需要 GCC/cmake/ninja，也不因缺它们而失败。
+    if ($cmakeModules.Count -gt 0) {
+        $hostCompilerPath = Get-HostCompiler -RequestedCompiler $HostCompiler
+        Confirm-HostGccCompiler -CompilerPath $hostCompilerPath
+
+        $cmake = Get-ExternalCommand -Name 'cmake'
+        [void](Get-ExternalCommand -Name 'ninja')
+        $ctest = Get-ExternalCommand -Name 'ctest'
+    }
 
     foreach ($moduleName in $Module) {
+        if ($pythonModules -contains $moduleName) {
+            Invoke-PythonHostModule -RepositoryRoot $repositoryRoot -ModuleName $moduleName `
+                -TestDirectory (Get-HarnessPythonTestDirectory -ModuleRule $pythonRules[$moduleName]) -SkipSlow:$SkipSlow
+            continue
+        }
+
         $moduleSourceDirectory = Join-Path -Path $repositoryRoot -ChildPath (Join-Path -Path 'Tests' -ChildPath $moduleName)
         $moduleBuildDirectory = Join-Path -Path $repositoryRoot -ChildPath (Join-Path -Path 'build/host' -ChildPath $moduleName)
 

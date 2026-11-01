@@ -20,7 +20,19 @@ import sys
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Tests", "playback_service", "fixtures"))
-import generate_fixtures as gf  # noqa: E402
+try:
+    import generate_fixtures as gf  # noqa: E402
+except ModuleNotFoundError as error:
+    if error.name != "lameenc":
+        raise
+
+    class _MissingLameenc:
+        """未装 lameenc 时仍可导入本模块（样本表、报告渲染、合同测试）；真正合成或编码时才报错。"""
+
+        def __getattr__(self, name):
+            raise SystemExit("缺少 lameenc：请先 pip install lameenc（生成样本需要 MP3 编码器）")
+
+    gf = _MissingLameenc()
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import card_names  # noqa: E402
 import card_tags  # noqa: E402

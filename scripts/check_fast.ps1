@@ -42,6 +42,8 @@ function Invoke-FastWorkingTreeCheck {
         'gh-retry.Tests.ps1'
         'check-ps1-encoding.Tests.ps1'
         'apply-vendor-patches.Tests.ps1'
+        'gui-compare-baseline.Tests.ps1'
+        'short_root.Tests.ps1'
     )
     # 自测成功时静默（夹具仓库、证据目录等噪声不进入工具结果），失败时输出完整细节。
     foreach ($selfTest in $selfTests) {

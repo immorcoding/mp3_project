@@ -40,6 +40,12 @@ function Invoke-ChangedValidationInTree {
     }
     else {
         $hostParameters = @{ Module = $Impact.HostModules }
+        # 声明了慢用例（规则 HasSlowTests）的模块，其慢用例只在 FULL 跑；旧提交的 test-host.ps1 没有该开关，
+        # 只在选中这类模块时才传（旧规则没有该属性则不传）。
+        $slowModules = @(Get-HarnessSlowTestModuleName -Rules (Get-HarnessRules))
+        if (@($Impact.HostModules | Where-Object { $slowModules -contains $_ }).Count -gt 0) {
+            $hostParameters.SkipSlow = $true
+        }
         if (-not [string]::IsNullOrWhiteSpace($RequestedHostCompiler)) {
             $hostParameters.HostCompiler = $RequestedHostCompiler
         }

@@ -5,6 +5,7 @@
 """
 
 import os
+import subprocess
 import sys
 import unittest
 
@@ -69,6 +70,27 @@ class RenderReport(unittest.TestCase):
     def test_notice_kept(self):
         for key in (None, "first-bad", "glyphs"):
             self.assertIn("不要整夹拖拽", report(key), str(key))
+
+
+class WithoutLameenc(unittest.TestCase):
+    """未装 lameenc 时 make_card 仍可导入（样本表、报告、合同测试可用），只在真正编码时报错。"""
+
+    def run_without_lameenc(self, body):
+        code = "import sys; sys.modules['lameenc'] = None; sys.path.insert(0, %r); %s" % (
+            os.path.dirname(os.path.abspath(__file__)), body)
+        return subprocess.run([sys.executable, "-I", "-X", "utf8", "-c", code], capture_output=True, text=True, encoding="utf-8",
+                              env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+
+    def test_import_and_tables_work(self):
+        result = self.run_without_lameenc(
+            "import make_card; print(len(make_card.SETS['all']))")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "8")
+
+    def test_encoding_reports_missing_package(self):
+        result = self.run_without_lameenc("import make_card; make_card.gf.encode(b'', 44100, 2, bitrate=128)")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("pip install lameenc", result.stderr)
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ import make_card  # noqa: E402
 
 LIBRARY_PREFIX = "Music/"
 PATH_MAX_BYTES = 255
-FAT_FORBIDDEN = set('\/:*?"<>|') | {chr(c) for c in range(32)}
+FAT_FORBIDDEN = set('\\/:*?"<>|') | {chr(c) for c in range(32)}
 
 
 class BigDirNames(unittest.TestCase):
