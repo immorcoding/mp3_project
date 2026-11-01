@@ -14,6 +14,7 @@
         'playback_service'
         'playback_task'
         'monitor_warn'
+        'board_test_card'
     )
 
     # 每条规则描述一个主机测试工程真正编译或覆盖的生产路径。
@@ -197,6 +198,17 @@
             PathPatterns = @(
                 '^APP/tasks/monitor/'
                 '^Tests/monitor_warn/'
+            )
+        }
+        @{
+            # Python unittest 模块（不是 CMake 工程）：test-host.ps1 按 Kind 走 Tools/board_test_card 下的 test_*.py，
+            # check-test-paths.ps1 不对它做 gcc 依赖检查。依赖 lameenc 的用例缺包时跳过；慢用例（-SkipSlow）只在 FULL 跑。
+            Name = 'board_test_card'
+            Kind = 'Python'
+            PathPatterns = @(
+                '^Tools/board_test_card/'
+                # test_card_seek.py 逐字节核对提交进仓库的 Xing 精度夹具。
+                '^Tests/playback_service/fixtures/xing/'
             )
         }
     )

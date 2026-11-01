@@ -116,6 +116,16 @@ try {
         Get-UncoveredHostModulePath -Rules $missingRule -Dependency @{ alpha = @(); gamma = @() }
     }
 
+    # Python 模块（Kind = 'Python'）没有 CMake 工程与 gcc 依赖：既不要求 Dependency 条目，也不参与扫描。
+    $pythonRules = @{
+        AllHostModules = @('alpha', 'py')
+        HostModuleRules = @($rules.HostModuleRules[0], @{ Name = 'py'; Kind = 'Python'; PathPatterns = @('^Tools/py/') })
+    }
+    $pythonUncovered = @(Get-UncoveredHostModulePath -Rules $pythonRules -Dependency @{ alpha = @('Lib/a/x.c') })
+    Assert-Equal -Expected '0' -Actual $pythonUncovered.Count -Message 'Python 模块没有依赖条目时不得报未覆盖或抛错'
+    Assert-Equal -Expected 'alpha' -Actual ((Get-HarnessCMakeModuleName -Rules $pythonRules) -join ',') `
+        -Message '只有 CMake 主机模块参与依赖扫描'
+
     # --- 端到端：临时仓库 + 真实 CMake 配置与 gcc -MM ---------------------------
     New-Item -ItemType Directory -Path (Join-Path $repoRoot 'Tests/demo'), (Join-Path $repoRoot 'Lib/core'),
         (Join-Path $repoRoot 'Lib/extra') -Force | Out-Null
@@ -152,6 +162,12 @@ target_include_directories(demo_tests PRIVATE ../.. "${CMAKE_CURRENT_BINARY_DIR}
     }
     $summary = Invoke-TestPathsCheck -RepositoryRoot $repoRoot -Rules $complete
     Assert-Equal -Expected '1' -Actual $summary.ModuleCount -Message '全部覆盖时应通过并统计模块数'
+    $withPython = @{
+        AllHostModules = @('demo', 'py')
+        HostModuleRules = @($complete.HostModuleRules[0], @{ Name = 'py'; Kind = 'Python'; PathPatterns = @('^Tools/py/') })
+    }
+    $summary = Invoke-TestPathsCheck -RepositoryRoot $repoRoot -Rules $withPython
+    Assert-Equal -Expected '1' -Actual $summary.ModuleCount -Message '混有 Python 模块时仍只扫描 CMake 模块且通过'
     # test_demo.c、core.c、core.h、extra.h 与 CMake 生成的 generated.h（构建目录，不计）
     Assert-Equal -Expected '4' -Actual $summary.DependencyCount -Message '依赖应含源文件与传递头文件，且不含构建目录生成物'
 }

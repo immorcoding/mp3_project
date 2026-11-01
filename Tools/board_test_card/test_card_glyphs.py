@@ -11,6 +11,9 @@ try:
 except ImportError:
     HAVE_LAMEENC = False
 
+# CHANGED（pre-push）设 MP3_SKIP_SLOW_TESTS=1 跳过慢用例；FULL 不设，全跑。
+SKIP_SLOW = os.environ.get("MP3_SKIP_SLOW_TESTS") == "1"
+
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import card_glyphs as cg  # noqa: E402
@@ -127,6 +130,7 @@ class CardGlyphs(unittest.TestCase):
         self.assertFalse(set(make_card.SETS["glyphs"]) & set(make_card.SETS["all"]))
 
 
+@unittest.skipIf(SKIP_SLOW, "慢用例（约 45 s），MP3_SKIP_SLOW_TESTS=1 时跳过，FULL 全跑")
 @unittest.skipUnless(HAVE_LAMEENC, "整文件确定性需要 lameenc（pip install lameenc）；缺包时跳过")
 class CardGlyphsFiles(unittest.TestCase):
     def test_glyphs_set_files_are_byte_identical_across_two_generations(self):

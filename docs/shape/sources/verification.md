@@ -23,6 +23,10 @@
 | `NEEDS_HARDWARE_VALIDATION` | 软件检查通过，本次路径仍需板级证据 |
 | `FAIL` | 检查、构建或测试失败，阻止提交/推送 |
 
+**长路径工作树。** `verify.ps1`（FULL；`capture-verification.ps1 -Mode FULL` 经它运行）先看仓库根长度：超过 56 个字符时自动 `subst` 到 E–Z 中的空闲盘符，在盘符路径下运行 FULL，结束（含失败）卸载；证据目录与 `metadata.json` 仍按真实路径写，`stderr.log` 记一行“路径过长……已 subst X: -> 真实路径”。盘符由根路径哈希决定，同一工作树每次相同（CMake 缓存记着源目录的绝对路径，换盘符会使它失效）；被占用则顺延，E–Z 全占用时报错。路径正常时行为不变。进程被强杀可能残留映射：`subst` 查看，`subst X: /D` 卸载。机制在 [short_root.ps1](../../../scripts/short_root.ps1)，自测 `short_root.Tests.ps1`（FAST）。不再需要手动 `subst`。
+
+**样本卡 Python 测试。** `Tools/board_test_card/test_*.py` 登记为主机模块 `board_test_card`（`verification.psd1`，`Kind = 'Python'`，由 `test-host.ps1` 用 `python -m unittest` 运行，需要 `python`）：FULL 全跑；改 `Tools/board_test_card/` 或 Xing 精度夹具时 CHANGED 选中，带 `-SkipSlow` 跳过整文件确定性的慢用例（`MP3_SKIP_SLOW_TESTS=1`）。依赖 `lameenc` 的用例缺包时 skip，输出写明，不算失败。详见 [样本卡 README](../../../Tools/board_test_card/README.md#测试)。
+
 Hook 成功时只打印汇总与 `HARNESS_STATUS`，失败时输出完整细节（`Invoke-HarnessQuietStep` 缓冲子进程输出）。以 `2>&1` 合并 stderr 调用与重定向到文件等价，由 `capture-verification.MergedStderr.Tests.ps1`（FAST）覆盖，无需 `cmd /c` 变通；构建入口经 `Invoke-ExternalCommand` 调用原生命令，只以退出码判定成败，同一行为由 `build_helpers.Tests.ps1`（FAST）覆盖。
 
 Hook 实现分别见 [guard](../../../scripts/hooks/guard.ps1)、[check-edited](../../../scripts/hooks/check-edited.ps1)、[session-brief](../../../scripts/hooks/session-brief.ps1)。生成/分层/writer 边界直接查对应检查器，外部下载器证据范围见 [loader](../../../Tools/external_loader/README.md)。
