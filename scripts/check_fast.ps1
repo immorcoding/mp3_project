@@ -41,6 +41,7 @@ function Invoke-FastWorkingTreeCheck {
         'merge-into-integration.Tests.ps1'
         'gh-retry.Tests.ps1'
         'check-ps1-encoding.Tests.ps1'
+        'apply-vendor-patches.Tests.ps1'
     )
     # 自测成功时静默（夹具仓库、证据目录等噪声不进入工具结果），失败时输出完整细节。
     foreach ($selfTest in $selfTests) {
@@ -58,6 +59,11 @@ function Invoke-FastWorkingTreeCheck {
 
     # 主机测试 PathPatterns 与各模块真实编译依赖的漂移检查；只读仓库文件，索引快照里同样适用，故不受快照分支限制。
     Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'check-test-paths.ps1')
+
+    # Vendor 补丁（HAR-15）：CubeMX 重新导出或上游更新会静默覆盖补丁，这里确认每个补丁完整生效；
+    # 未生效时报“<上游> 补丁未应用”并给出重打命令。只读 Vendor 文件，索引快照里同样适用。
+    Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'apply-vendor-patches.ps1') `
+        -Parameters @{ Check = $true }
 
     # Doxygen 检查要读 Git 差异；索引快照目录不是仓库，暂存内容已由 Invoke-FastIndexCheck 在真实仓库检查过。
     if ($env:MP3_HARNESS_INDEX_SNAPSHOT -ne '1') {
@@ -153,7 +159,7 @@ Complete-Utf8EntryScript -Action {
 
         if (-not $SuppressStatus) {
             Write-HarnessStatus -Status PASS `
-                -Summary "FAST 通过：已验证 Harness 自测、文档与 shape、PowerShell 编码、改动函数的 Doxygen（STY-2）、分层 include、主机测试路径覆盖与生成目录写保护（$Snapshot）。"
+                -Summary "FAST 通过：已验证 Harness 自测、文档与 shape、PowerShell 编码、改动函数的 Doxygen（STY-2）、分层 include、主机测试路径覆盖、Vendor 补丁生效与生成目录写保护（$Snapshot）。"
         }
     }
     catch {

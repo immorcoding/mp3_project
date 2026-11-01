@@ -182,8 +182,8 @@ Assert-HarnessSequence -Expected @('storage_catalog') -Actual $id3ReaderImpact.H
     -Message 'id3_reader Component 变化必须选择 Storage 曲库主机测试（它只经曲目文本函数被测）'
 
 $cc936Impact = Get-HarnessImpact -ChangedPath @('Middlewares/Third_Party/FatFs/src/option/cc936.c')
-Assert-HarnessSequence -Expected @('flash_ftl', 'storage_catalog') -Actual $cc936Impact.HostModules `
-    -Message 'CP936 表变化必须同时选择 Flash 与 Storage 曲库主机测试（后者链接真实 cc936.c 做 GBK 查表）'
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'storage_catalog') -Actual $cc936Impact.HostModules `
+    -Message 'CP936 表变化必须同时选择文件定位符、Flash 与 Storage 曲库主机测试（后者链接真实 cc936.c 做 GBK 查表）'
 
 $catalogConfigImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_catalog_config.h')
 Assert-HarnessSequence -Expected @('gui_task', 'storage_catalog') -Actual $catalogConfigImpact.HostModules `
@@ -213,11 +213,11 @@ Assert-HarnessSequence -Expected @('playback_service', 'playback_task') -Actual 
 
 # 主机测试编译的跨层聚合头与配置头：由 check-test-paths.ps1 按真实依赖发现，路由必须与之一致。
 $serviceHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Service/service.h')
-Assert-HarnessSequence -Expected @('flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'playback_service', 'playback_task') `
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'playback_service', 'playback_task') `
     -Actual $serviceHeaderHostImpact.HostModules -Message 'Service 聚合头变化必须选择所有编译它的主机测试'
 
 $platformHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Platform/platform.h')
-Assert-HarnessSequence -Expected @('flash_ftl', 'gui_task', 'gui_theme', 'playback_service') `
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'gui_task', 'gui_theme', 'playback_service') `
     -Actual $platformHeaderHostImpact.HostModules -Message 'Platform 聚合头变化必须选择所有编译它的主机测试'
 
 $platformLcdHostImpact = Get-HarnessImpact -ChangedPath @('Platform/lcd/platform_lcd.h')
@@ -229,19 +229,29 @@ Assert-HarnessSequence -Expected @('playback_service') -Actual $platformAudioHos
     -Message 'Platform 音频头变化必须选择播放模块主机测试'
 
 $platformFlashHostImpact = Get-HarnessImpact -ChangedPath @('Platform/flash/platform_flash.h', 'Platform/sd/platform_sd.h')
-Assert-HarnessSequence -Expected @('flash_ftl') -Actual $platformFlashHostImpact.HostModules `
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $platformFlashHostImpact.HostModules `
     -Message 'Platform Flash/SD 头变化必须选择 FTL 主机测试'
 
 $dcacheConfigHostImpact = Get-HarnessImpact -ChangedPath @('Adapters/cortex/cache/cortex_m7_dcache_adapter_config.h')
-Assert-HarnessSequence -Expected @('flash_ftl', 'gui_task', 'gui_theme', 'playback_service') `
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'gui_task', 'gui_theme', 'playback_service') `
     -Actual $dcacheConfigHostImpact.HostModules -Message 'DCache 配置头变化必须选择所有编译它的主机测试'
 
 $logHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Service/log/log_service.h', 'Service/log/log_service_config.h', 'APP/app_config.h')
-Assert-HarnessSequence -Expected @('flash_ftl') -Actual $logHeaderHostImpact.HostModules `
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $logHeaderHostImpact.HostModules `
     -Message 'Service Log 头与 APP 配置头变化必须选择 FTL 主机测试'
 
+$fatfsPatchImpact = Get-HarnessImpact -ChangedPath @('patches/fatfs/0001-open-by-dirent.patch')
+Assert-HarnessSequence -Expected @('filesystem_locator') -Actual $fatfsPatchImpact.HostModules `
+    -Message 'FatFs 补丁文件变化只选择应用它的文件定位符主机测试'
+Assert-HarnessEqual -Expected 0 -Actual $fatfsPatchImpact.UnknownPaths.Count `
+    -Message 'patches/fatfs 由文件定位符模块的路径规则覆盖，不应落入未知生产路径'
+
+$filesystemHostImpact = Get-HarnessImpact -ChangedPath @('Service/filesystem/filesystem_file_locator.c', 'Middlewares/Third_Party/FatFs/src/ff.c')
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $filesystemHostImpact.HostModules `
+    -Message 'Filesystem Service 与 FatFs 变化必须同时选择文件定位符与 FTL 主机测试'
+
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
     -Message 'Harness 变化必须回退全部主机测试'
 Assert-HarnessEqual -Expected $true -Actual $harnessImpact.RequiresAllHostTests -Message 'Harness 变化应标记全部测试'
 
@@ -254,7 +264,7 @@ Assert-HarnessEqual -Expected $false -Actual $doxygenCheckImpact.RequiresHardwar
     -Message 'Doxygen 检查脚本不要求上板'
 
 $unknownImpact = Get-HarnessImpact -ChangedPath @('Service/unmapped/player.c')
-Assert-HarnessSequence -Expected @('external_loader', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $unknownImpact.HostModules `
+Assert-HarnessSequence -Expected @('external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $unknownImpact.HostModules `
     -Message '未知生产路径不得以零测试通过'
 Assert-HarnessSequence -Expected @('Service/unmapped/player.c') -Actual $unknownImpact.UnknownPaths `
     -Message '应保留触发保守回退的路径证据'
