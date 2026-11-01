@@ -6,7 +6,9 @@
 
 该程序还含一条编译期断言：`STORAGE_CATALOG_TRACK_BUDGET_US` 等于 `PLAYBACK_MACHINE_DATA_TIMEOUT_MS` × 1000 / 2（Storage 与 Playback 的 config 互不 include，只在此处同时可见）；`playback_task_config.h` 变化因此也选中本模块。
 
-保真边界：PASS 只证明提取规则本身。曲库扫描（`storage_catalog.c`）、名称单槽握手与 Storage 任务外壳不做主机测试，进板级验收；扩展名大小写与扫描代码的一致性靠人工对照，不由测试自动保证。曲目文本函数的 PASS 只证明规则链与读取计划（偏移、次数、不越过标签）；不证明 FatFs 实际读取、`f_open` 失败判定、SD 耗时与单行时延预算，也不证明板上 CP936 表已就绪或 `Service_Filesystem_GbkToUnicode` 的接线，这些进板级验收（#135 I1–I13）。测试里的 GBK 回调直接调 `ff_convert`，与生产薄函数同源但不是它。
+第三个测试程序 `storage_catalog_open_tests`（`test_storage_catalog_open.c`，STOR-17、ARC-19、DIAG-4、DIAG-5，#179）链接真实 `storage_catalog.c`、`storage_sheet.c`、`storage_track_open.c`、`storage_track_text.c`、`storage_track_diag.c` 与曲目文本纯函数，只把 Filesystem Service 公开函数（目录扫描、`OpenFile`、`OpenFileByLocator`、读/seek/关闭）、Log Service 与周期计数器 Adapter 换成测试文件里的假实现（合成曲库，定位符由文件 id 派生；假 DWT 为 1 MHz，周期即微秒）。覆盖：曲库上限 12000 的编译期与运行期核对（12500 条目扫描后恰收录 12000 条、末条定位符完好、超出截断仍成功并记一次 `Music Catalog Full.`）、池大小与每首可用路径空间、新阈值常量（单行打开 30 ms、整窗 0.5 s）及与 T_data/2 防御阈值的次序；扫描时每条（含子文件夹内）随附正确的定位符，定位符只在同一曲库代次内可取；按曲库下标读曲目文本走定位符而不走路径，打开耗时单独给出；核对不符（介质已变）与扫描时没取到定位符（全零）都退回按路径打开同一首、两次尝试都计入打开耗时、记一行 `Locator miss pos=N` WARN（位置取播放列表位置而非曲库下标，每次各记一行）；其他失败（槽用尽）不退回路径、不记 miss、回退文件主名；下标越界返回空；名称槽 INFO 带 `open=` 且 `us=` 不含打开；窗口汇总行在单行打开恰 30 ms、整窗恰 0.5 s 时静默，单行打开 30001 µs、整窗 500004 µs、WARN 级原因、T_data/2 单行防御阈值任一出现时触发，汇总行放得进 Service Log 的 128 B；`Stream pos=N off=<B> open=<us> lseek=<us>` 行格式。每个用例末检查没有泄漏的打开句柄。
+
+保真边界：PASS 只证明提取规则本身。名称单槽握手、Queue 窗口逐圈填写与 Storage 任务外壳不做主机测试，进板级验收；曲库扫描只证明“随条目写入定位符”与上限截断，不证明真实目录扫描耗时；真实按定位符打开由 `Tests/filesystem_locator` 证明，这里的假 `OpenFileByLocator` 只复现三态约定，不证明它与 FatFs 的核对一致；开流路径（`storage_audio_stream.c`）改用同一打开入口，但该文件含信箱与 FatFs 盖章，不做主机测试，`Stream` 行只钉格式，其耗时取值与 `open`/`lseek` 的口径由板级验收（O3、O4）取证；扩展名大小写与扫描代码的一致性靠人工对照，不由测试自动保证。曲目文本函数的 PASS 只证明规则链与读取计划（偏移、次数、不越过标签）；不证明 FatFs 实际读取、`f_open` 失败判定、SD 耗时与单行时延预算，也不证明板上 CP936 表已就绪或 `Service_Filesystem_GbkToUnicode` 的接线，这些进板级验收（#135 I1–I13）。测试里的 GBK 回调直接调 `ff_convert`，与生产薄函数同源但不是它。
 
 从仓库根目录运行：
 
