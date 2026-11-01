@@ -569,6 +569,7 @@ static bool player_fail_next_map;
 static bool player_fail_next_reopen;
 static uint32_t player_force_map_offset;
 static Service_Playback_SeekMapTypeDef player_map_kind;
+static bool player_reopened;           /* 当前流由 ReopenStream 开出（BeginStream 清除）：零帧读尽时按真实模块的 NO_AUDIO 回报流尾。 */
 
 /**
  * @brief 把假播放模块恢复为默认配置与空状态。
@@ -612,6 +613,7 @@ static void fake_player_reset(void)
     player_fail_next_reopen = false;
     player_force_map_offset = 0U;
     player_map_kind = SERVICE_PLAYBACK_SEEK_MAP_LIN;
+    player_reopened = false;
 }
 
 /**
@@ -645,6 +647,7 @@ static Service_StatusTypeDef fake_begin_stream(uint32_t audio_bytes)
     player_decoded_ms = 0U;
     player_frames_since_begin = 0U;
     player_facts_known = false;
+    player_reopened = false;
     player_begin_count++;
     player_last_audio_bytes = audio_bytes;
     return SERVICE_OK;
@@ -767,6 +770,12 @@ static Service_StatusTypeDef fake_pump(Service_Playback_PumpReportTypeDef *repor
     player_event_underruns = 0U;
     if (player_input_finished && (player_window_fill == 0U) && !player_paused && player_tail_released)
     {
+        report->StreamEnded = true;
+    }
+    else if (player_input_finished && player_reopened && (player_window_fill == 0U) && (player_frames_since_begin == 0U))
+    {
+        /* 重开后读尽仍一帧都没解出（钳位后的流尾）：真实模块里没有可放的音频，EndedPending 立即成立，
+         * 暂停中也回报流尾放完，之后每次 Pump 重复给出（状态类事实）。 */
         report->StreamEnded = true;
     }
     return SERVICE_OK;
@@ -897,6 +906,7 @@ static Service_StatusTypeDef fake_reopen_stream(uint32_t landing_ms)
     player_decoded_ms = landing_ms;
     player_frames_since_begin = 0U;
     player_last_landing = landing_ms;
+    player_reopened = true;
     player_reopen_count++;
     return SERVICE_OK;
 }

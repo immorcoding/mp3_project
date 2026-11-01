@@ -648,6 +648,57 @@ static void test_reopen_failure_stops_with_audio_fault(void)
 }
 
 /**
+ * @brief 暂停中越尾且钳位后一帧都解不出（高码率常见）：流尾放完也不前进，保持 PAUSED、位置为落点；
+ *        恢复后按播完前进，TrackStartCount 照常加 1。
+ */
+static void test_zero_frame_tail_while_paused_holds_until_resumed(void)
+{
+    start_playing();
+    world_send(PLAYBACK_COMMAND_TOGGLE);
+    world_send_seek(GEN, 0U, 180000U);
+    world_open_ok(GEN, TRACKS);
+    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);   /* 区间末端没有字节可读。 */
+    for (uint32_t i = 0U; i < 5U; i++)
+    {
+        world_wake();
+    }
+
+    assert(world_snapshot().State == PLAYBACK_STATE_PAUSED);
+    assert(world_snapshot().Index == 0U);
+    assert(world_snapshot().PositionMs == 179121U);
+    assert(world_snapshot().TrackStartCount == 1U);
+    assert(world_snapshot().StopCount == 0U);
+    assert(count_seek_logs() == 1U);   /* 跳转已执行，暂停中没有预填可等，保持时记一次。 */
+
+    const uint32_t requests = fake_storage_request_count();
+
+    world_send(PLAYBACK_COMMAND_TOGGLE);
+    world_wake();
+    assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
+    assert(world_snapshot().Index == 1U);
+    assert(world_snapshot().TrackStartCount == 2U);
+    assert(fake_storage_request_count() == requests + 1U);
+    assert(strcmp(last_log(), "Auto idx=1") == 0);
+}
+
+/**
+ * @brief PLAYING 下越尾且零帧：直接按播完前进（不变）。
+ */
+static void test_zero_frame_tail_while_playing_advances_immediately(void)
+{
+    start_playing();
+    world_send_seek(GEN, 0U, 180000U);
+    world_open_ok(GEN, TRACKS);
+    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    world_wake();
+    world_wake();
+
+    assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
+    assert(world_snapshot().Index == 1U);
+    assert(world_snapshot().TrackStartCount == 2U);
+}
+
+/**
  * @brief 运行全部跳转测试。
  * @return 成功时返回 0。
  */
@@ -666,6 +717,8 @@ int main(void)
     test_seek_while_paused_keeps_paused_and_logs_when_prefill_completes();
     test_seek_past_the_end_plays_out_and_advances();
     test_seek_past_the_end_while_paused_stops_at_the_end_until_resumed();
+    test_zero_frame_tail_while_paused_holds_until_resumed();
+    test_zero_frame_tail_while_playing_advances_immediately();
     test_track_start_count_counts_track_starts_but_not_seeks();
     test_next_after_seek_voids_the_pending_seek();
     test_next_after_reopen_but_before_output_voids_the_seek_log();

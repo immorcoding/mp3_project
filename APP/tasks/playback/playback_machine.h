@@ -140,6 +140,7 @@ typedef struct
     Service_Playback_SeekPointTypeDef SeekPoint;/**< 本次跳转的映射结果（偏移、落点、方式、是否钳位）。 */
     uint32_t SeekTargetMs;                     /**< 本次跳转的目标毫秒。 */
     uint32_t SeekStartCycles;                  /**< 处理 SEEK 命令时的周期计数器读数，供 lat。 */
+    bool SeekHoldEnd;                          /**< 当前流由跳转重开且尚未起播过：暂停中回报流尾放完（含钳位后零帧）时不前进，等恢复。 */
 } Playback_MachineTypeDef;
 
 void playback_machine_init(Playback_MachineTypeDef *machine, const Playback_MachineOpsTypeDef *ops);

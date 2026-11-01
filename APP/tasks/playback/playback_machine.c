@@ -139,6 +139,7 @@ static void cancel_seek(Playback_MachineTypeDef *machine)
 {
     machine->SeekActive = false;
     machine->SeekAwaitReopen = false;
+    machine->SeekHoldEnd = false;
 }
 
 /**
@@ -696,6 +697,7 @@ static void begin_player_stream(Playback_MachineTypeDef *machine)
             return;
         }
         machine->SeekAwaitReopen = false;
+        machine->SeekHoldEnd = true;
     }
     else if (machine->Ops->Player.BeginStream(machine->Record.AudioBytes) != SERVICE_OK)
     {
@@ -918,6 +920,7 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
     }
     if (report->OutputStarted)
     {
+        machine->SeekHoldEnd = false;
         machine->OutputRunning = true;
         machine->OutputSinceMs = machine->NowMs;
         machine->ConsecutiveSkips = 0U;
@@ -945,7 +948,8 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
     }
     if (machine->SeekActive && !machine->SeekAwaitReopen &&
         (report->OutputStarted ||
-         ((machine->Snapshot.State == PLAYBACK_STATE_PAUSED) && !report->NeedInput && !report->StreamEnded)))
+         ((machine->Snapshot.State == PLAYBACK_STATE_PAUSED) && !report->NeedInput &&
+          (!report->StreamEnded || machine->SeekHoldEnd))))
     {
         /* PLAYING：输出重新起播；PAUSED：预填完成（补半区不再要输入，且没有读尽到无音频可放）。 */
         log_seek_done(machine);
@@ -957,7 +961,13 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
     }
     publish_if_changed(machine);
 
-    if (report->StreamEnded)
+    if (report->StreamEnded && (machine->Snapshot.State == PLAYBACK_STATE_PAUSED) && machine->SeekHoldEnd)
+    {
+        /* 暂停中跳转到末尾：钳位后只剩不足一帧，播放模块没有可放的音频就报流尾放完（状态类事实，每次重复）。
+         * 停在末尾保持 PAUSED、位置为落点；恢复后同一事实再次到来，按播完前进。 */
+        machine->OutputRunning = false;
+    }
+    else if (report->StreamEnded)
     {
         machine->OutputRunning = false;
         advance_after_stream_end(machine);
