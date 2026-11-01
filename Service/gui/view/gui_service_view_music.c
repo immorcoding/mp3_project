@@ -360,6 +360,8 @@ static lv_obj_t *service_gui_view_music_create_slider(lv_obj_t *tab, const Servi
 {
     lv_obj_t *slider = lv_slider_create(tab);
 
+    /* 千分比量程：手势事件以此为 param（SERVICE_GUI_SEEK_SCALE），比百分比细于一个像素。 */
+    lv_slider_set_range(slider, 0, (int32_t)SERVICE_GUI_SEEK_SCALE);
     lv_slider_set_value(slider, 0, LV_ANIM_OFF);
     lv_obj_set_size(slider, SERVICE_GUI_MUSIC_LAYOUT_COLUMN_WIDTH, layout->slider_height);
     service_gui_view_music_place(slider, layout->column_x, layout->slider_top);

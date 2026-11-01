@@ -503,9 +503,9 @@ static void test_handled_command_seq_echoes_last_command_including_ignored(void)
 {
     world_reset();
     Playback_CommandTypeDef commands[3] = {
-        { PLAYBACK_COMMAND_NEXT, 5U, 0U, 0U },     /* 无游标，忽略。 */
-        { PLAYBACK_COMMAND_PREV, 6U, 0U, 0U },     /* 无游标，忽略。 */
-        { PLAYBACK_COMMAND_TOGGLE, 7U, 0U, 0U }
+        { PLAYBACK_COMMAND_NEXT, 5U, 0U, 0U, 0U },     /* 无游标，忽略。 */
+        { PLAYBACK_COMMAND_PREV, 6U, 0U, 0U, 0U },     /* 无游标，忽略。 */
+        { PLAYBACK_COMMAND_TOGGLE, 7U, 0U, 0U, 0U }
     };
 
     world_step_commands(commands, 3U);
@@ -524,9 +524,9 @@ static void test_burst_of_next_steps_cursor_once_per_command(void)
     world_start_playing(GENERATION, TRACKS);
     uint32_t requests = fake_storage_request_count();
     Playback_CommandTypeDef commands[3] = {
-        { PLAYBACK_COMMAND_NEXT, 10U, 0U, 0U },
-        { PLAYBACK_COMMAND_NEXT, 11U, 0U, 0U },
-        { PLAYBACK_COMMAND_NEXT, 12U, 0U, 0U }
+        { PLAYBACK_COMMAND_NEXT, 10U, 0U, 0U, 0U },
+        { PLAYBACK_COMMAND_NEXT, 11U, 0U, 0U, 0U },
+        { PLAYBACK_COMMAND_NEXT, 12U, 0U, 0U, 0U }
     };
 
     world_step_commands(commands, 3U);

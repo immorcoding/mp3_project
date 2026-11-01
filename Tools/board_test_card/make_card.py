@@ -27,6 +27,7 @@ import card_tags  # noqa: E402
 import card_glyphs  # noqa: E402
 import card_seek  # noqa: E402
 import card_xing  # noqa: E402
+import card_bigdir  # noqa: E402
 
 # 整数 Hz 和弦：1 s 周期，包络 3 Hz 也是整周期，首尾采样都为 0。
 PROGRESSION = [
@@ -79,6 +80,11 @@ SETS = {
     # 主机精度夹具（#174）：不上板、不复制进卡；输出目录直接指向 Tests/playback_service/fixtures/xing。
     "host-fixtures": [name for name, _, _, _ in HOST_FIXTURES],
 }
+SET_CHOICES = sorted(SETS) + ["bigdir"]  # bigdir（#180）有 12000 个文件，不进 SETS 的逐文件表，也不进 all
+
+BIGDIR_PROBE_KBPS = 128
+BIGDIR_PROBE_SECONDS = 192  # ≥ 3 分钟
+BIGDIR_SMALL_SECONDS = 1
 
 
 def tile_pcm(rate, channels, seconds):
@@ -152,6 +158,23 @@ def make_host_fixtures():
     return out
 
 
+def make_bigdir_audio():
+    """返回 (小 MP3, 探针曲) 的字节：44.1 kHz 立体声 CBR 128 kbps，约 1 s 与 192 s。"""
+    small = gf.encode(tile_pcm(44100, 2, BIGDIR_SMALL_SECONDS), 44100, 2, bitrate=BIGDIR_PROBE_KBPS)
+    probe = gf.encode(tile_pcm(44100, 2, BIGDIR_PROBE_SECONDS), 44100, 2, bitrate=BIGDIR_PROBE_KBPS)
+    return small, probe
+
+
+def write_bigdir(output_dir):
+    small, probe = make_bigdir_audio()
+
+    def sink(name, payload):
+        with open(os.path.join(output_dir, name), "wb") as handle:
+            handle.write(payload)
+
+    card_bigdir.write_set(sink, small, probe)
+
+
 def copy_in_order(src_dir, dst_dir, names):
     for name in names:
         shutil.copyfile(os.path.join(src_dir, name), os.path.join(dst_dir, name))
@@ -199,6 +222,9 @@ _NOTICE = [
 
 def render_report(data, set_key=None):
     """返回要打印的行。set_key 为 None 时列出全部样本表与子集清单；指定子集时只列该子集的样本表与复制顺序。"""
+    if set_key == "bigdir":
+        return card_bigdir.report_lines() + _NOTICE
+
     if set_key is None:
         lines = _file_lines(data, [name for name, _ in FILES], "测试卡（复制顺序 = FAT 创建顺序 = 入库顺序）：")
         lines += _names_lines(data)
@@ -209,6 +235,8 @@ def render_report(data, set_key=None):
         lines.append("\n子集（均按上面的相对顺序复制）：")
         for key, names in SETS.items():
             lines.append("  --set %-16s %s" % (key, ", ".join(names)))
+        lines.append("  --set %-16s %d 首同文件夹，探针曲在第 %s 首（换空卡复制，详见 README）" % (
+                     "bigdir", card_bigdir.COUNT, "、".join(str(i) for i in card_bigdir.PROBE_INDEXES)))
         return lines + _NOTICE
 
     names = SETS[set_key]
@@ -234,21 +262,27 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("output_dir")
     parser.add_argument("--copy-to", help="生成后按顺序复制到此目录（SD 卡挂载点；应为空目录）")
-    parser.add_argument("--set", choices=sorted(SETS), default=None,
+    parser.add_argument("--set", choices=SET_CHOICES, default=None,
                         help="--copy-to 复制的子集，默认 all；指定时只打印该子集的样本表与复制顺序，不指定时列出全部")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
-    # seek / host-fixtures 只生成各自的文件；其余沿用全套（含 names/tags/glyphs）。
-    data = {"seek": make_seek, "host-fixtures": make_host_fixtures}.get(args.set, make_all)()
-    for name in data:
-        with open(os.path.join(args.output_dir, name), "wb") as handle:
-            handle.write(data[name])
+    if args.set == "bigdir":
+        write_bigdir(args.output_dir)
+        data = {}
+        names = card_bigdir.file_names()
+    else:
+        # seek / host-fixtures 只生成各自的文件；其余沿用全套（含 names/tags/glyphs）。
+        data = {"seek": make_seek, "host-fixtures": make_host_fixtures}.get(args.set, make_all)()
+        for name in data:
+            with open(os.path.join(args.output_dir, name), "wb") as handle:
+                handle.write(data[name])
+        names = SETS[args.set or "all"]
     print("\n".join(render_report(data, args.set)))
 
     if args.copy_to:
         os.makedirs(args.copy_to, exist_ok=True)
-        copy_in_order(args.output_dir, args.copy_to, SETS[args.set or "all"])
+        copy_in_order(args.output_dir, args.copy_to, names)
 
 
 if __name__ == "__main__":

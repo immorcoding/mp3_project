@@ -1,0 +1,11 @@
+# 跳转不让唱盘归零（GUI-20）：播放约 2.5 s 后拖到最左端（跳到 0）与往后跳，唱盘角度都不归零、继续转；
+# 之后按下一首（TrackStartCount 增加）才归零
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--shot 9400:before_seek
+--drag 9500:120,212:10,212:200
+--shot 9900:after_seek_zero
+--drag 10500:40,212:150,212:200
+--shot 10900:after_seek_forward
+--tap 11500:198,260
+--shot 11800:after_next

@@ -1,0 +1,10 @@
+# 拖动中换曲取消拖动（GUI-10）：先跳到接近曲末，再按住进度条不放；本曲放完前进到下一首时拖动立即取消，
+# 进度条与时间按新曲快照显示；之后松手不发命令（stdout 无第二条 [playback] seek）
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--drag 8000:40,212:224,212:300
+--shot 8600:near_end
+--drag 9000:60,212:100,212:5000
+--shot 9500:dragging_old_track
+--shot 13000:cancelled_new_track
+--shot 14500:after_release

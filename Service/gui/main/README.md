@@ -16,7 +16,7 @@ main/
 ├─ gui_service_main.c / .h      仅编排初始化顺序与外观更新的私有入口
 ├─ pager/                       Page 槽位、吸附、循环重排、分页指示器动画
 ├─ queue/                       按 QueueApply 的 Length 构造 Queue 可见行并滑窗复用
-├─ transport/                   Now Playing 三键、进度条假 seek 与 PLAY/PAUSE 符号
+├─ transport/                   Now Playing 三键、进度条手势与 PLAY/PAUSE 符号
 ├─ title/                       Now Playing 曲名与歌手 Label：同次写两列，曲名选静止居中或循环滚动
 ├─ vinyl/                       把 Canvas 假唱盘第一帧绑到唱盘 Image，并按 playing 旋转
 └─ background/                  壁纸模糊、局部裁剪；Solid 薄层

@@ -25,15 +25,17 @@ typedef enum
     PLAYBACK_COMMAND_TOGGLE = 0U,
     PLAYBACK_COMMAND_NEXT,
     PLAYBACK_COMMAND_PREV,
-    PLAYBACK_COMMAND_SELECT
+    PLAYBACK_COMMAND_SELECT,
+    PLAYBACK_COMMAND_SEEK    /* 跳转：Generation/Index 为 GUI 按下时显示的曲目，TargetMs 为目标毫秒。 */
 } Playback_CommandKindTypeDef;
 
 typedef struct
 {
     Playback_CommandKindTypeDef Kind;
     uint32_t Seq;          /* GUI 分配的递增命令序号，只给发送成功的命令编号。 */
-    uint32_t Generation;   /* 仅 SELECT：GUI 所见列表窗口的曲库代次。 */
-    uint16_t Index;        /* 仅 SELECT：播放列表位置。 */
+    uint32_t Generation;   /* SELECT 与 SEEK：曲目身份的曲库代次（SELECT 为 GUI 所见列表窗口，SEEK 为 GUI 按下时显示的曲目）。 */
+    uint16_t Index;        /* SELECT 与 SEEK：曲目身份的播放列表位置。 */
+    uint32_t TargetMs;     /* 仅 SEEK：目标毫秒（松手比例 × 按下时显示的总时长）。 */
 } Playback_CommandTypeDef;
 
 typedef enum
@@ -69,7 +71,8 @@ typedef struct
     uint32_t DurationMs;                    /* 0 = 未知。 */
     uint32_t SkippedBadCount;               /* 开机以来已跳过坏文件数，单调。 */
     uint32_t StopCount;                     /* 开机以来进入停止的次数，单调。 */
-    uint32_t HandledCommandSeq;             /* 已处理（含忽略）的最后一条命令序号。 */
+    uint32_t HandledCommandSeq;             /* 已处理（含忽略、合并）的最后一条命令序号。 */
+    uint32_t TrackStartCount;               /* 开机以来从曲首开始播放一首曲目的次数，单调；SELECT（含同曲重选）、NEXT/PREV、停止态开播、播完前进、跳过坏文件后开下一首各加 1，跳转（含跳到 0）不加。 */
 } Playback_SnapshotTypeDef;
 
 Playback_StatusTypeDef playback_command_send(const Playback_CommandTypeDef *command);

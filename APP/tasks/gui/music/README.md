@@ -17,10 +17,23 @@
 `gui_music_transport` 不持 playing、游标与假进度；输入快照、最后发出的命令序号与已显示窗口代次，输出 `GUI_MusicTransportDecisionTypeDef`（#72 C1–C8、B5、B6）：
 
 - `gui_music_transport_send()`：给命令编号并调 `playback_command_send()`，只有返回 `PLAYBACK_OK` 才记为最后发出（序号失败不占用）。
-- `gui_music_transport_reduce()`：回显序号按有符号差判“未追上”；未追上时曲目身份、三态、停止原因与总时长冻结在最后一份已追上的快照，只有位置与两个计数照用。输出采信的三态、Queue 高亮（未追上时 `highlight_apply` 为假）、进度百分比（64 位计算并钳位）、位置与总时长、常驻停止短语（NULL 表示显示时间）、跳过增量、是否闪烁、唱盘转/归零。
+- `gui_music_transport_seek_press/drag/release/cancel()`：进度条手势（千分比，满量程 `GUI_MUSIC_TRANSPORT_SEEK_SCALE` = 1000，与 `SERVICE_GUI_SEEK_SCALE` 同单位），见下节“跳转”。
+- `gui_music_transport_reduce()`：回显序号按有符号差判“未追上”；未追上时曲目身份、三态、停止原因与总时长冻结在最后一份已追上的快照，只有位置与两个计数照用。输出采信的三态、Queue 高亮（未追上时 `highlight_apply` 为假）、进度百分比（64 位计算并钳位）、位置与总时长、常驻停止短语（NULL 表示显示时间）、跳过增量、是否闪烁、唱盘转/归零，以及进度条可否响应（`seek_enabled`）、是否在拖（`seek_dragging`）与一次性的取消拖动事件（`seek_cancel`）。
 - `gui_music_transport_withdraw_highlight()`：按最后一份已追上的快照与给定窗口代次套 C3 后三条。队列满撤回点行即时高亮（B6）与 APPLY 新窗口时都用它。
 - 停止短语表是模块内静态表（合同枚举属 APP，Service 不得包含合同头）。
 - `gui_music_queue_window_displayed_generation()`：APPLY 时 `mark_applied()` 记下的窗口代次，即归约的 `window_generation` 输入，也是 SELECT 携带的代次；未显示或被 CLEAR 后为 0。
+
+## 跳转
+
+拖动进度条的呈现归 `gui_music_transport`（GUI-10、GUI-17、#165）；状态只由快照与手势推出，不预测后端：
+
+- **可否响应**：上一次归约采信的快照有当前曲、不在停止态且总时长非 0 时 `seek_enabled` 为真；`gui_music.c` 在它变化时调 `Service_GUI_SeekEnable()`。为假时 Service 吞掉按压，进度条不跟手、不置灰。
+- **按下**（`seek_press`）：只在可响应时开始拖动，绑定上一次归约显示的曲目身份与总时长；总时长未知时什么也不做。
+- **拖动中**：决定的时间与进度是预览值——`position_ms` = 比例 × 按下时的总时长，`duration_ms` = 按下时的总时长，样式与平时相同（`TimeApply` 照常写）。
+- **换曲取消**：拖动中采信的曲目身份变化或变得不可跳转（停止、总时长归 0），本圈 `seek_cancel` 为真，`gui_music.c` 调 `Service_GUI_SeekCancel()` 并无条件重写进度条；之后的松手不发命令。触摸丢失（`seek_cancel()`）同样结束拖动、不发命令。
+- **松手**（`seek_release`）：发 `SEEK{按下时的 Generation/Index, TargetMs = 比例 × 按下时的总时长}`，每次都发、不节流。发送成功记为在途跳转；队列满返回 `QUEUE_FULL`，`gui_music.c` 记 WARN，进度条回到快照（GUI-17）。
+- **在途保持**：在途跳转的序号未被 `HandledCommandSeq` 追上、且采信的曲目仍是目标所属曲目时，位置与进度显示目标；连续松手只保持最后一次的目标。回显追上后按快照（落点）显示。
+- 松手或触摸丢失的那一圈 `gui_music.c` 无条件 `ProgressApply`：Service 的进度条停在手指处，要改成目标或快照。
 
 ## 曲名
 
@@ -51,16 +64,18 @@ ConsumeInput
        -> PREVIOUS / PLAY_PAUSE / NEXT：发 PREV / TOGGLE / NEXT（连按 N 次发 N 条，不合并）
        -> QUEUE_SELECT：发 SELECT{已显示窗口代次, 位置}；Service 已即时高亮本行
             -> 队列满：丢弃、记日志，按最后一份已追上的快照重套本窗，撤回即时高亮（B6）
-       -> SEEK：不发命令，本圈按快照重写一次进度条（回位，B3）
+       -> SEEK_PRESS / SEEK_DRAG：交给跳转归约（按下绑定曲目与总时长、拖动更新比例）
+       -> SEEK_RELEASE：发 SEEK{按下时的曲目, 比例 × 按下时的总时长}；队列满记日志；本圈无条件重写进度条
+       -> SEEK_CANCEL：结束拖动、不发命令；本圈无条件重写进度条
        -> playback_snapshot_read -> gui_music_transport_reduce
        -> 窗口 REQUEST / APPLY（按已追上快照套高亮）/ CLEAR（只清空 Queue，C10）
        -> 曲名与歌手：按已追上身份 REQUEST / ACCEPT（TitleApply 名字与歌手）/ DISCARD；空白或 `--` 变化时 TitleApply（歌手为空）
        -> 回显已追上、窗口仍显示且 IDLE：高亮变化或点行后重套 QueueApply（不自动滚动）
-       -> 与上一圈比较：TransportApply(三态 == PLAYING) / ProgressApply / TimeApply
+       -> 与上一圈比较：TransportApply(三态 == PLAYING) / SeekEnable(可否响应) / 取消拖动时 SeekCancel / ProgressApply / TimeApply
        -> 三态变化或归零事件：VinylApply(playing, reset_angle)
        -> 常驻短语变化：StatusApply(短语或 NULL)；跳过增量 > 0：SkipNoticeApply(k)；停止次数增加：StatusFlash()
 ~~~
 
-- 唱盘（C8）：显示的三态为 PLAYING 时转，否则停在原角度；曲目身份变化或位置变小时归零。归零是一次性事件，出现的那一圈必须调用，不与上一圈比较。曲库代次从 0（开启尚未确认）变为非 0 也算身份变化，开播后约在开启应答时多归零一次，此时位置接近 0。
+- 唱盘（GUI-20）：显示的三态为 PLAYING 时转，否则停在原角度；采信的曲目身份变化、快照 `TrackStartCount` 变化（含同曲重选）或进入停止时归零，跳转（含跳到 0）不归零，暂停中跳转保持静止。归零是一次性事件，出现的那一圈必须调用，不与上一圈比较。曲库代次从 0（开启尚未确认）变为非 0 也算身份变化，开播后约在开启应答时多归零一次，此时位置接近 0。
 - 状态行（C6、C7、GUI-19）：常驻短语与上一圈不同时调用 `Service_GUI_StatusApply()`（短语来自模块内静态表，按指针比较；NULL 回到时间）；跳过增量与闪烁是一次性事件，出现的那一圈调用 `Service_GUI_SkipNoticeApply(k)`、`Service_GUI_StatusFlash()`，不与上一圈比较。同一圈先调 `StatusApply` 再调 `SkipNoticeApply`，所以整轮坏文件进入 ALL_BAD 那一圈新增的跳过被常驻短语挡掉。显示优先级、2 s 提示计时与闪烁动画都在 Service 内，本分区不使用 LVGL。
 - 三键与进度条从不置灰（C9）。

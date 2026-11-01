@@ -58,3 +58,14 @@ target_compile_features(gui_music_queue_rows_tests PRIVATE c_std_11)
 target_compile_options(gui_music_queue_rows_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 
 add_test(NAME gui_music_queue_rows_columns COMMAND gui_music_queue_rows_tests)
+
+add_executable(gui_music_seek_tests
+    test_gui_music_seek.c
+    ../../APP/tasks/gui/music/gui_music_transport.c
+)
+
+target_include_directories(gui_music_seek_tests PRIVATE ../..)
+target_compile_features(gui_music_seek_tests PRIVATE c_std_11)
+target_compile_options(gui_music_seek_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+
+add_test(NAME gui_music_seek_reducer COMMAND gui_music_seek_tests)

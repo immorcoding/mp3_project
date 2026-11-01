@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    gui_service_input.c
   * @brief   GUI 点击命令单槽：Process 写入，下一圈 Consume 取走。
-  *          QUEUE_SELECT 与 SEEK 都走 param。
+  *          QUEUE_SELECT 与进度条手势（SEEK_PRESS/DRAG/RELEASE）走 param。
   ******************************************************************************
   */
 
@@ -17,7 +17,9 @@ static uint16_t service_gui_input_param;
 /**
  * @brief 记下一次待取走的输入命令；尚未取走则覆盖。
  * @param[in] command 点击对应的命令，不得为 NONE。
- * @param[in] param QUEUE_SELECT 为播放列表下标；SEEK 为 0..100 百分比。
+ * @param[in] param QUEUE_SELECT 为播放列表下标；SEEK_PRESS/DRAG/RELEASE 为千分比。
+ * @note  唯一的合并：尚未取走的 SEEK_PRESS 遇到 SEEK_DRAG 时保留按下、比例取拖动的值。
+ *        LVGL 同一次读触摸先发 PRESSED 再发 PRESSING，不合并按下就会被拖动覆盖。
  */
 void service_gui_input_post(
     Service_GUI_InputCommandTypeDef command,
@@ -25,6 +27,14 @@ void service_gui_input_post(
 {
     if (command == SERVICE_GUI_INPUT_NONE)
     {
+        return;
+    }
+
+    if (service_gui_input_pending &&
+        (service_gui_input_command == SERVICE_GUI_INPUT_MUSIC_SEEK_PRESS) &&
+        (command == SERVICE_GUI_INPUT_MUSIC_SEEK_DRAG))
+    {
+        service_gui_input_param = param;
         return;
     }
 

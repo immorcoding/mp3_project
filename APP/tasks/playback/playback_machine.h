@@ -25,6 +25,7 @@ typedef struct
     uint32_t StreamSeq;    /**< 播放任务分配的单调流序号；0 = 无流。 */
     uint32_t Generation;   /**< 曲库代次；0 表示“当前”。 */
     uint16_t Position;     /**< 播放列表位置。 */
+    uint32_t AudioOffset;  /**< 相对音频区间起点的字节数；切歌与普通开流为 0，跳转为映射给出的偏移。 */
 } Playback_MachineRequestTypeDef;
 
 /** @brief 开启结果。与 Storage_AudioOpenResultTypeDef 一一对应。 */
@@ -82,6 +83,8 @@ typedef struct
 typedef struct
 {
     Service_StatusTypeDef (*BeginStream)(uint32_t audio_bytes);
+    Service_StatusTypeDef (*MapSeek)(uint32_t target_ms, Service_Playback_SeekPointTypeDef *point);
+    Service_StatusTypeDef (*ReopenStream)(uint32_t landing_ms);
     Service_StatusTypeDef (*Feed)(const uint8_t *data, uint32_t length, uint32_t *accepted);
     Service_StatusTypeDef (*FinishInput)(void);
     Service_StatusTypeDef (*Pump)(Service_Playback_PumpReportTypeDef *report);
@@ -97,6 +100,9 @@ typedef struct
     Playback_MachinePlayerOpsTypeDef Player;                          /**< 播放模块。 */
     void (*PublishSnapshot)(const Playback_SnapshotTypeDef *snapshot);/**< 覆盖写状态信箱；只在快照变化时调用。 */
     void (*LogInfo)(const char *text);                                /**< INFO 日志（可为空）；只在命令与曲目边界调用，不进每帧路径；文本由实现复制。 */
+    void (*LogDebug)(const char *text);                               /**< DEBUG 日志（可为空）；只记被静默忽略的命令；文本由实现复制。 */
+    uint32_t (*ReadCycles)(void);                                     /**< 周期计数器读数（DWT，可为空；为空时跳转时延记 0）；只用差值，回绕安全。 */
+    uint32_t (*CyclesToUs)(uint32_t cycles);                          /**< 把周期数换算成微秒（可为空；为空时跳转时延记 0）。 */
 } Playback_MachineOpsTypeDef;
 
 /**
@@ -129,6 +135,12 @@ typedef struct
     uint32_t DataWaitSinceMs;                  /**< T_data 的起算时刻。 */
     bool OutputRunning;                        /**< Platform 输出正在运行（T_out 只在此时计时，B8）。 */
     uint32_t OutputSinceMs;                    /**< T_out 的起算时刻：Start 返回或最近一次半区释放。 */
+    bool SeekActive;                           /**< 一次已执行的跳转尚未记 INFO（等输出重新起播或预填完成）；切歌、停止或新跳转使其作废。 */
+    bool SeekAwaitReopen;                      /**< 跳转的新流尚未开启 OK 重开：此前不接受任何 DecodedMs 回报（旧流的位置会把落点顶回去）。 */
+    Service_Playback_SeekPointTypeDef SeekPoint;/**< 本次跳转的映射结果（偏移、落点、方式、是否钳位）。 */
+    uint32_t SeekTargetMs;                     /**< 本次跳转的目标毫秒。 */
+    uint32_t SeekStartCycles;                  /**< 处理 SEEK 命令时的周期计数器读数，供 lat。 */
+    bool SeekHoldEnd;                          /**< 当前流由跳转重开且尚未起播过：暂停中回报流尾放完（含钳位后零帧）时不前进，等恢复。 */
 } Playback_MachineTypeDef;
 
 void playback_machine_init(Playback_MachineTypeDef *machine, const Playback_MachineOpsTypeDef *ops);

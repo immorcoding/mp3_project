@@ -44,9 +44,31 @@ void gui_music_transport_init(GUI_MusicTransportTypeDef *transport)
 }
 
 /**
+ * @brief 给一条完整命令编号并发送，只有发送成功才记为最后发出（B5）。
+ * @param[in,out] transport 本分区持有的归约状态，调用方已确认非 NULL。
+ * @param[in,out] command 待发送的命令；本函数填 Seq。
+ * @return 播放合同返回值。
+ */
+static Playback_StatusTypeDef gui_music_transport_send_command(
+    GUI_MusicTransportTypeDef *transport,
+    Playback_CommandTypeDef *command)
+{
+    Playback_StatusTypeDef status;
+
+    command->Seq = transport->last_sent_seq + 1U;
+    status = playback_command_send(command);
+    if (status == PLAYBACK_OK)
+    {
+        transport->last_sent_seq = command->Seq;
+    }
+
+    return status;
+}
+
+/**
  * @brief 给命令编号并发送，只有发送成功才记为最后发出（B5）。
  * @param[in,out] transport 本分区持有的归约状态。
- * @param[in] kind 命令种类。
+ * @param[in] kind 命令种类（SEEK 走 gui_music_transport_seek_release）。
  * @param[in] generation 仅 SELECT：已显示窗口的曲库代次。
  * @param[in] index 仅 SELECT：播放列表位置。
  * @return 播放合同返回值；NULL 状态按队列满处理且不发送。
@@ -58,24 +80,17 @@ Playback_StatusTypeDef gui_music_transport_send(
     uint16_t index)
 {
     Playback_CommandTypeDef command;
-    Playback_StatusTypeDef status;
 
     if (transport == NULL)
     {
         return PLAYBACK_QUEUE_FULL;
     }
 
+    (void)memset(&command, 0, sizeof(command));
     command.Kind = kind;
-    command.Seq = transport->last_sent_seq + 1U;
     command.Generation = generation;
     command.Index = index;
-    status = playback_command_send(&command);
-    if (status == PLAYBACK_OK)
-    {
-        transport->last_sent_seq = command.Seq;
-    }
-
-    return status;
+    return gui_music_transport_send_command(transport, &command);
 }
 
 /**
@@ -120,6 +135,57 @@ static bool gui_music_transport_same_identity(
 
     return !has_track ||
            ((snapshot->Generation == generation) && (snapshot->Index == index));
+}
+
+/**
+ * @brief 判断一份快照的曲目身份是否等于记下的身份结构。
+ * @param[in] snapshot 当前采信的快照。
+ * @param[in] identity 记下的身份。
+ * @return 同 gui_music_transport_same_identity。
+ */
+static bool gui_music_transport_is_identity(
+    const Playback_SnapshotTypeDef *snapshot,
+    const GUI_MusicTransportIdentityTypeDef *identity)
+{
+    return gui_music_transport_same_identity(
+        snapshot,
+        identity->has_track,
+        identity->generation,
+        identity->index);
+}
+
+/**
+ * @brief 判断采信的快照能否跳转：有当前曲、不在停止态且总时长已知（GUI-10）。
+ * @param[in] adopted 采信的快照。
+ * @return 为真时进度条响应按压。
+ */
+static bool gui_music_transport_seekable(const Playback_SnapshotTypeDef *adopted)
+{
+    return adopted->HasTrack &&
+           (adopted->State != PLAYBACK_STATE_STOPPED) &&
+           (adopted->DurationMs != 0U);
+}
+
+/**
+ * @brief 把手势比例夹到 0..GUI_MUSIC_TRANSPORT_SEEK_SCALE。
+ * @param[in] permille 手势比例。
+ * @return 夹过的比例。
+ */
+static uint16_t gui_music_transport_clamp_permille(uint16_t permille)
+{
+    return (permille > GUI_MUSIC_TRANSPORT_SEEK_SCALE) ?
+           (uint16_t)GUI_MUSIC_TRANSPORT_SEEK_SCALE : permille;
+}
+
+/**
+ * @brief 比例 × 总时长，按 64 位计算后向下取整。
+ * @param[in] permille 比例 0..GUI_MUSIC_TRANSPORT_SEEK_SCALE。
+ * @param[in] duration_ms 总时长。
+ * @return 目标毫秒。
+ */
+static uint32_t gui_music_transport_target_ms(uint16_t permille, uint32_t duration_ms)
+{
+    return (uint32_t)(((uint64_t)permille * duration_ms) / GUI_MUSIC_TRANSPORT_SEEK_SCALE);
 }
 
 /**
@@ -243,7 +309,23 @@ void gui_music_transport_reduce(
     transport->skipped_baseline = snapshot->SkippedBadCount;
     transport->stop_baseline = snapshot->StopCount;
 
-    /* 唱盘（C8）：切歌、同曲重选、停止归零都表现为身份变化或位置变小。 */
+    /* 在途跳转（GUI-17）：回显追上它的序号即结束保持。 */
+    if (transport->pending.active &&
+        ((int32_t)(snapshot->HandledCommandSeq - transport->pending.seq) >= 0))
+    {
+        transport->pending.active = false;
+    }
+
+    /* 拖动（GUI-10）：显示的曲目身份变化或总时长变为未知即取消，不发命令。 */
+    if (transport->drag.active &&
+        (!gui_music_transport_is_identity(&adopted, &transport->drag.identity) ||
+         !gui_music_transport_seekable(&adopted)))
+    {
+        transport->drag.active = false;
+        decision->seek_cancel = true;
+    }
+
+    /* 唱盘（GUI-20）：曲目身份变化、TrackStartCount 变化或进入停止时归零；跳转不归零。 */
     decision->vinyl_playing = (adopted.State == PLAYBACK_STATE_PLAYING);
     if (transport->has_previous)
     {
@@ -253,12 +335,17 @@ void gui_music_transport_reduce(
                 transport->previous_has_track,
                 transport->previous_generation,
                 transport->previous_index) ||
-            (adopted.PositionMs < transport->previous_position_ms);
+            (adopted.TrackStartCount != transport->previous_track_start_count) ||
+            ((adopted.State == PLAYBACK_STATE_STOPPED) &&
+             (transport->previous_state != PLAYBACK_STATE_STOPPED));
     }
     transport->previous_has_track = adopted.HasTrack;
     transport->previous_generation = adopted.Generation;
     transport->previous_index = adopted.Index;
-    transport->previous_position_ms = adopted.PositionMs;
+    transport->previous_state = adopted.State;
+    transport->previous_track_start_count = adopted.TrackStartCount;
+    transport->previous_duration_ms = adopted.DurationMs;
+    transport->previous_seek_enabled = gui_music_transport_seekable(&adopted);
     transport->has_previous = true;
 
     decision->highlight_apply = caught_up;
@@ -268,11 +355,124 @@ void gui_music_transport_reduce(
     decision->generation = adopted.HasTrack ? adopted.Generation : 0U;
     decision->index = adopted.HasTrack ? adopted.Index : 0U;
     decision->status_phrase = gui_music_transport_phrase_step(transport, &adopted);
+    decision->seek_enabled = transport->previous_seek_enabled;
+
+    if (transport->drag.active)
+    {
+        /* 拖动中预览“目标/按下时的总时长”，进度跟手（GUI-10）。 */
+        decision->seek_dragging = true;
+        decision->position_ms = gui_music_transport_target_ms(
+            transport->drag.permille,
+            transport->drag.duration_ms);
+        decision->duration_ms = transport->drag.duration_ms;
+        decision->progress_percent = (uint8_t)(transport->drag.permille /
+                                               (GUI_MUSIC_TRANSPORT_SEEK_SCALE / 100U));
+        return;
+    }
+
     decision->position_ms = adopted.PositionMs;
+    if (transport->pending.active &&
+        transport->previous_seek_enabled &&
+        gui_music_transport_is_identity(&adopted, &transport->pending.identity))
+    {
+        /* 跳转在途、显示的曲目仍是目标所属曲目：位置显示目标（GUI-17）。 */
+        decision->position_ms = transport->pending.target_ms;
+    }
     decision->duration_ms = adopted.DurationMs;
     decision->progress_percent = gui_music_transport_progress_percent(
-        adopted.PositionMs,
+        decision->position_ms,
         adopted.DurationMs);
+}
+
+/**
+ * @brief 进度条按下：总时长已知时开始拖动，绑定此刻显示的曲目身份与总时长（GUI-10）。
+ * @param[in,out] transport 本分区持有的归约状态；NULL 忽略。
+ * @param[in] permille 按下处的比例 0..GUI_MUSIC_TRANSPORT_SEEK_SCALE，超出夹到满量程。
+ * @note  “显示的”是上一次归约的结果；总时长未知（含停止态）时什么也不做。
+ */
+void gui_music_transport_seek_press(GUI_MusicTransportTypeDef *transport, uint16_t permille)
+{
+    if ((transport == NULL) || !transport->has_previous || !transport->previous_seek_enabled)
+    {
+        return;
+    }
+
+    transport->drag.active = true;
+    transport->drag.identity.has_track = transport->previous_has_track;
+    transport->drag.identity.generation = transport->previous_generation;
+    transport->drag.identity.index = transport->previous_index;
+    transport->drag.duration_ms = transport->previous_duration_ms;
+    transport->drag.permille = gui_music_transport_clamp_permille(permille);
+}
+
+/**
+ * @brief 进度条拖动：更新在途拖动的比例；没有在途拖动时忽略。
+ * @param[in,out] transport 本分区持有的归约状态；NULL 忽略。
+ * @param[in] permille 当前比例，超出夹到满量程。
+ */
+void gui_music_transport_seek_drag(GUI_MusicTransportTypeDef *transport, uint16_t permille)
+{
+    if ((transport == NULL) || !transport->drag.active)
+    {
+        return;
+    }
+
+    transport->drag.permille = gui_music_transport_clamp_permille(permille);
+}
+
+/**
+ * @brief 进度条松手：有在途拖动时发 SEEK{按下时的曲目身份, 比例 × 按下时的总时长}。
+ * @param[in,out] transport 本分区持有的归约状态。
+ * @param[in] permille 松手处的比例，超出夹到满量程。
+ * @return 是否发出；发送成功后位置保持目标直到回显追上（GUI-17），队列满丢弃本次输入。
+ * @note  每次松手都发、不节流；连续松手只保持最后一次的目标。
+ */
+GUI_MusicTransportSeekResultTypeDef gui_music_transport_seek_release(
+    GUI_MusicTransportTypeDef *transport,
+    uint16_t permille)
+{
+    Playback_CommandTypeDef command;
+    uint32_t target_ms;
+
+    if ((transport == NULL) || !transport->drag.active)
+    {
+        return GUI_MUSIC_TRANSPORT_SEEK_NOT_SENT;
+    }
+
+    transport->drag.active = false;
+    target_ms = gui_music_transport_target_ms(
+        gui_music_transport_clamp_permille(permille),
+        transport->drag.duration_ms);
+
+    (void)memset(&command, 0, sizeof(command));
+    command.Kind = PLAYBACK_COMMAND_SEEK;
+    command.Generation = transport->drag.identity.generation;
+    command.Index = transport->drag.identity.index;
+    command.TargetMs = target_ms;
+    if (gui_music_transport_send_command(transport, &command) != PLAYBACK_OK)
+    {
+        return GUI_MUSIC_TRANSPORT_SEEK_QUEUE_FULL;
+    }
+
+    transport->pending.active = true;
+    transport->pending.seq = command.Seq;
+    transport->pending.target_ms = target_ms;
+    transport->pending.identity = transport->drag.identity;
+    return GUI_MUSIC_TRANSPORT_SEEK_SENT;
+}
+
+/**
+ * @brief 进度条触摸丢失：结束在途拖动，不发命令。
+ * @param[in,out] transport 本分区持有的归约状态；NULL 忽略。
+ */
+void gui_music_transport_seek_cancel(GUI_MusicTransportTypeDef *transport)
+{
+    if (transport == NULL)
+    {
+        return;
+    }
+
+    transport->drag.active = false;
 }
 
 /**
