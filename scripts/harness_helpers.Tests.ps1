@@ -177,6 +177,10 @@ $catalogTextImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog
 Assert-HarnessSequence -Expected @('storage_catalog') -Actual $catalogTextImpact.HostModules `
     -Message '曲目文本纯函数变化必须选择 Storage 曲库主机测试'
 
+$catalogOpenImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_track_open.c', 'APP/tasks/storage/catalog/storage_catalog.c', 'APP/tasks/storage/catalog/storage_track_diag.c')
+Assert-HarnessSequence -Expected @('storage_catalog') -Actual $catalogOpenImpact.HostModules `
+    -Message '曲库扫描、按定位符打开与打开诊断变化必须选择 Storage 曲库主机测试'
+
 $id3ReaderImpact = Get-HarnessImpact -ChangedPath @('Components/id3_reader/id3_reader.c')
 Assert-HarnessSequence -Expected @('storage_catalog') -Actual $id3ReaderImpact.HostModules `
     -Message 'id3_reader Component 变化必须选择 Storage 曲库主机测试（它只经曲目文本函数被测）'
@@ -213,7 +217,7 @@ Assert-HarnessSequence -Expected @('playback_service', 'playback_task') -Actual 
 
 # 主机测试编译的跨层聚合头与配置头：由 check-test-paths.ps1 按真实依赖发现，路由必须与之一致。
 $serviceHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Service/service.h')
-Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'playback_service', 'playback_task') `
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'playback_service', 'playback_task', 'storage_catalog') `
     -Actual $serviceHeaderHostImpact.HostModules -Message 'Service 聚合头变化必须选择所有编译它的主机测试'
 
 $platformHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Platform/platform.h')
@@ -237,7 +241,7 @@ Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'gui_task'
     -Actual $dcacheConfigHostImpact.HostModules -Message 'DCache 配置头变化必须选择所有编译它的主机测试'
 
 $logHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Service/log/log_service.h', 'Service/log/log_service_config.h', 'APP/app_config.h')
-Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $logHeaderHostImpact.HostModules `
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'storage_catalog') -Actual $logHeaderHostImpact.HostModules `
     -Message 'Service Log 头与 APP 配置头变化必须选择 FTL 主机测试'
 
 $fatfsPatchImpact = Get-HarnessImpact -ChangedPath @('patches/fatfs/0001-open-by-dirent.patch')

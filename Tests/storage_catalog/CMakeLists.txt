@@ -41,3 +41,23 @@ set_source_files_properties(../../Middlewares/Third_Party/FatFs/src/option/cc936
     PROPERTIES COMPILE_OPTIONS "-w")
 
 add_test(NAME storage_catalog_text COMMAND storage_catalog_text_tests)
+
+# 曲库按文件定位符打开：真实曲库扫描、按下标读曲目文本与诊断出口；
+# Filesystem Service、Log Service 与 DWT Adapter 在测试文件里用假实现替换。
+add_executable(storage_catalog_open_tests
+    test_storage_catalog_open.c
+    ../../APP/tasks/storage/catalog/storage_catalog.c
+    ../../APP/tasks/storage/catalog/storage_sheet.c
+    ../../APP/tasks/storage/catalog/storage_track_open.c
+    ../../APP/tasks/storage/catalog/storage_track_text.c
+    ../../APP/tasks/storage/catalog/storage_track_diag.c
+    ../../APP/tasks/storage/catalog/storage_catalog_text.c
+    ../../APP/tasks/storage/catalog/storage_catalog_name.c
+    ../../Components/id3_reader/id3_reader.c
+)
+
+target_include_directories(storage_catalog_open_tests PRIVATE ../..)
+target_compile_features(storage_catalog_open_tests PRIVATE c_std_11)
+target_compile_options(storage_catalog_open_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+
+add_test(NAME storage_catalog_open COMMAND storage_catalog_open_tests)

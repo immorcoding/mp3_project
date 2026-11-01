@@ -11,6 +11,8 @@
 
 #include "APP/tasks/storage/catalog/storage_catalog.h"
 #include "APP/tasks/storage/catalog/storage_sheet.h"
+#include "APP/tasks/storage/catalog/storage_track_diag.h"
+#include "APP/tasks/storage/catalog/storage_track_open.h"
 #include "APP/tasks/storage/storage_task_config.h"
 
 #include <string.h>
@@ -263,12 +265,14 @@ static Storage_AudioOpenResultTypeDef storage_audio_read_exact(uint32_t offset,
  * @param[in] audio_offset 相对音频区间起点的字节数；越过区间时钳在区间末端。
  * @param[out] audio_bytes 音频区间长度（整段，不随偏移变化）。
  * @param[out] remaining 从落点到区间末端尚未读出的字节数；偏移被钳到末端时为 0。
+ * @param[out] lseek_us 最后一次定位（到区间起点加偏移）的耗时，单位 µs；失败时无意义。
  * @return 开启结果；OK 时 FIL 已打开并定位。
  * @note  失败时 FIL 已关闭。
  */
 static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t audio_offset,
                                                                uint32_t *audio_bytes,
-                                                               uint32_t *remaining)
+                                                               uint32_t *remaining,
+                                                               uint32_t *lseek_us)
 {
     Service_StatusTypeDef status;
     Storage_AudioRangeTypeDef range;
@@ -307,8 +311,11 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t audio_of
             }
             else
             {
+                const uint32_t seek_start = storage_track_diag_begin();
+
                 position = storage_audio_range_seek_position(&range, audio_offset);
                 status = Service_Filesystem_SeekFile(storage_audio_file, (uint64_t)position);
+                *lseek_us = storage_track_diag_elapsed_us(seek_start);
                 if (status == SERVICE_OK)
                 {
                     *audio_bytes = range.End - range.Start;
@@ -334,7 +341,8 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t audio_of
  * @param[in] request 非“无流”的请求。
  * @param[in] media 介质状态（非消抖）。
  * @return 开启结果；OK 时 FIL 已打开，storage_audio_record 的参数已填。
- * @note  请求的 AudioOffset 钳到音频区间内后定位（0 为区间起点）；钳到末端时流记录同时带 ENDED。代次 0 表示“当前”。位置超出列表按 STALE。无法区分“文件不存在”与“打开时 I/O 错误”，
+ * @note  先按曲库里的文件定位符打开，核对不符退回按路径打开（STOR-17）；打开成功后记一行 `Stream` INFO。
+ *        请求的 AudioOffset 钳到音频区间内后定位（0 为区间起点）；钳到末端时流记录同时带 ENDED。代次 0 表示“当前”。位置超出列表按 STALE。无法区分“文件不存在”与“打开时 I/O 错误”，
  *        打开失败一律 BAD_FILE（C3 的“打不开”）。BAD_FILE 时仍填写 Generation 与 TrackCount（位置已通过 STALE 校验），供播放任务跳过坏文件；其余失败二者为 0。
  */
 static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequestTypeDef *request,
@@ -345,6 +353,8 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
     uint16_t catalog_index;
     uint32_t audio_bytes = 0U;
     uint32_t remaining = 0U;
+    uint32_t open_us = 0U;
+    uint32_t lseek_us = 0U;
     Service_StatusTypeDef status;
     Storage_AudioOpenResultTypeDef result;
 
@@ -380,19 +390,18 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
     storage_audio_record.Generation = sheet_generation;
     storage_audio_record.TrackCount = track_count;
 
-    status = Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_SD,
-                                         storage_audio_path,
-                                         SERVICE_FILESYSTEM_FILE_MODE_READ,
-                                         &storage_audio_file);
+    status = storage_track_open(request->Position, catalog_index, storage_audio_path, &storage_audio_file, &open_us);
     if (status != SERVICE_OK)
     {
         return storage_audio_map_open_status(status, true);
     }
     storage_audio_file_open = true;
 
-    result = storage_audio_probe_file(request->AudioOffset, &audio_bytes, &remaining);
+    result = storage_audio_probe_file(request->AudioOffset, &audio_bytes, &remaining, &lseek_us);
     if (result == STORAGE_AUDIO_OPEN_OK)
     {
+        /* 曲目或跳转边界上记一行（DIAG-5）；off= 取请求里的 AudioOffset，不是钳位后的落点。 */
+        storage_track_diag_stream_done(request->Position, request->AudioOffset, open_us, lseek_us);
         storage_audio_remaining = remaining;
         storage_audio_record.AudioBytes = audio_bytes;
         if (remaining == 0U)
