@@ -358,9 +358,9 @@ static void test_every_track_has_a_working_locator(void)
 }
 
 /**
- * @brief 按定位符打开的读扇区次数与文件位置无关；按路径打开则随位置线性增长。
+ * @brief 按定位符打开的读扇区数有上界（至多目录簇数加 2，随目标所在目录簇序号增长而非随目录项数线性增长），远小于按路径打开。
  */
-static void test_locator_open_reads_do_not_depend_on_position(void)
+static void test_locator_open_reads_are_bounded_and_far_below_path_open(void)
 {
     Service_Filesystem_FileHandleTypeDef file = {0};
     char path[NAME_BYTES + 8U];
@@ -651,7 +651,7 @@ int main(void)
     scan_music_folder();
     test_first_and_last_open_by_locator_match_path_open();
     test_every_track_has_a_working_locator();
-    test_locator_open_reads_do_not_depend_on_position();
+    test_locator_open_reads_are_bounded_and_far_below_path_open();
     test_tampered_locators_are_rejected();
     test_directory_entry_locator_is_rejected();
     test_deleted_file_locator_is_rejected();
