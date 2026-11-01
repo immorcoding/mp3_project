@@ -970,6 +970,12 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
     else if (report->StreamEnded)
     {
         machine->OutputRunning = false;
+        if (machine->SeekActive && !machine->SeekAwaitReopen)
+        {
+            /* PLAYING 下越尾且钳位后零帧：没有起播也没有预填可等，前进会作废跳转，所以前进之前补记这一行。 */
+            log_seek_done(machine);
+            machine->SeekActive = false;
+        }
         advance_after_stream_end(machine);
     }
 }
