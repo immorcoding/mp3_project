@@ -82,3 +82,19 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 - 样本 3：v2.4，TPE1 六项以 NUL 分隔：`Artist One`、全空白项、` Artist Two `（首尾空白）、空项、`AC/DC`、`U+3000 Artist Three U+3000`；清理后四项，其中 `AC/DC` 不被拆分。
 - 样本 4：v2.4，TPE1 共 333 B（上限 251 B）：前 249 B 为 ASCII，其后是 3 B 汉字，截断点落在第一个汉字内部，所以按字符边界只留 249 B，不加省略号、不留半个字符。249 个字符远宽于 Queue 与唱盘页的可见宽度，Queue 歌手行与唱盘页歌手行（GUI-26）都用 `LV_LABEL_LONG_DOT` 截断加省略号。
 - 字节数以 `lameenc` 1.9.0 为准；同参数两次生成逐字节一致。合同由 `python Tools/board_test_card/test_card_glyphs.py` 检查（标签版本、编码字节、关键码点、截断边界、不进 `all`；这些不需要 `lameenc`）。另有整文件确定性用例：同一参数两次生成，`--set glyphs` 的每个文件逐字节相同；它要编码音频，约 30 s，未装 `lameenc` 时跳过。该测试不在 `verify.ps1` FULL 内，需手动运行。
+
+### 大目录卡（`--set bigdir`）
+
+给 [#172](https://github.com/immorcoding/mp3_project/issues/172) 的“打开耗时”组（清单 1 O1–O8）用（#180）：12000 首同在 `Music/` 一个文件夹，比较 5 个探针位置的打开耗时。逻辑在 [card_bigdir.py](card_bigdir.py)；不含在 `all` 内，且不同于其他子集，它只生成这一套文件（不再同时生成全套样本）。**换一张空卡（或格式化后）单独复制，只需 1 张**。
+
+```powershell
+python Tools/board_test_card/make_card.py <输出目录> --set bigdir
+python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --set bigdir
+```
+
+- 文件名恒为 50 个 ASCII 字符（约 5 个 FAT 目录项：4 个长名项 + 1 个短名项），形如 `00001-bigdir-open-time-card-long-file-name-pad.mp3`；前缀是 5 位零填充序号，目录顺序（创建顺序）与曲库顺序一致。`Music/` 整串路径约 56 B，远低于 255 B。
+- 探针曲：第 **1、3000、6000、9000、12000** 首，44.1 kHz 立体声 CBR 128 kbps、192 s（约 3.0 MB，≥ 3 分钟）；其余 11995 首是同参数约 1 s 的小 MP3（约 16 KB）。
+- 容量：输出目录与 SD 卡各约 260 MB 有效数据；FAT32 簇取整后建议卡上至少留 1 GiB 空闲，输出目录所在盘同样留 ≥ 1 GiB。
+- 复制 12000 个文件较慢，请用 `--copy-to`（按文件名升序逐个复制）；手动复制必须保证创建顺序等于文件名升序，不要整夹拖拽。
+- 合同（文件数、名字长度与前缀顺序、探针位置、不进 `all`）由 `python Tools/board_test_card/test_card_bigdir.py` 检查：只看文件名清单与注入的 sink，不写盘；探针时长一条需要 `lameenc`，未装时跳过。该测试不在 `verify.ps1` FULL 内，需手动运行。
+- 探针曲只用 `lameenc` 现有 CBR 输出，不带 Xing/Info 头，也不依赖 `--set seek`。
