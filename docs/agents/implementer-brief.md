@@ -15,5 +15,5 @@
 
 ## 编排者
 
-- 并行派出带 worktree 的 subagent 时分条消息错开创建（同一条消息里多个会争用 `.git/worktrees`），或先建好 worktree 再用 `path` 交给它。
+- 并行派出带 worktree 的 subagent 时分条消息错开创建（同一条消息里多个会争用 `.git/worktrees`），或先建好 worktree 再把绝对路径交给它：subagent 用绝对路径 `cd` 进去工作（`EnterWorktree` 会以“not an isolated worktree”拒绝预建的 worktree）。
 - 合并或解决冲突的 subagent 交回后，用 `git log` 与 `git diff <合并前>..<合并后>` 核对结果再继续，不以它的报告为准。
