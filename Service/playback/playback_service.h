@@ -65,8 +65,26 @@ typedef struct
     bool     StopFailed;          /**< Platform 锁存了 STOP_FAILED；此后模块不再写 PCM 半区，重启前不能出声。 */
 } Service_Playback_PumpReportTypeDef;
 
+/** @brief 毫秒到字节的映射方式。 */
+typedef enum
+{
+    SERVICE_PLAYBACK_SEEK_MAP_LIN = 0U, /**< 按音频有效区间字节数线性映射（无 TOC、VBRI、或 TOC 不可用）。 */
+    SERVICE_PLAYBACK_SEEK_MAP_TOC       /**< 按 Xing/Info 的 TOC 映射（100 项、每项 1/256，项间线性插值）。 */
+} Service_Playback_SeekMapTypeDef;
+
+/** @brief Service_Playback_MapSeek() 的结果。 */
+typedef struct
+{
+    uint32_t AudioOffset;                /**< 钳位后的字节偏移，相对音频区间起点（BeginStream 的 audio_bytes 所指区间）。 */
+    uint32_t LandingMs;                  /**< 落点：AudioOffset 按同一映射反算出的毫秒；Service_Playback_ReopenStream() 的入参。 */
+    Service_Playback_SeekMapTypeDef Map; /**< 本次使用的映射方式。 */
+    bool     Clamped;                    /**< 偏移被钳到 AudioBytes − W_min（目标越尾或落在最后 W_min 字节内）。 */
+} Service_Playback_SeekPointTypeDef;
+
 Service_StatusTypeDef Service_Playback_Init(void);
 Service_StatusTypeDef Service_Playback_BeginStream(uint32_t audio_bytes);
+Service_StatusTypeDef Service_Playback_MapSeek(uint32_t target_ms, Service_Playback_SeekPointTypeDef *point);
+Service_StatusTypeDef Service_Playback_ReopenStream(uint32_t landing_ms);
 Service_StatusTypeDef Service_Playback_Feed(const uint8_t *data, uint32_t length, uint32_t *accepted);
 Service_StatusTypeDef Service_Playback_FinishInput(void);
 Service_StatusTypeDef Service_Playback_Advance(Service_Playback_AdvanceReportTypeDef *report);

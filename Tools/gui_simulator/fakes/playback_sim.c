@@ -23,6 +23,13 @@
   *          - 指定停止（R 键）：按 K1 枚举顺序取下一个非 NONE 原因立即进入停止（停止态
   *            也再进入一次，停止次数 +1），副作用同 K4；AUDIO_FAULT 锁存后停止态的
   *            TOGGLE、SELECT 只让停止次数 +1（K3、B10），重启模拟器才解除。
+  *          - 跳转（SEEK，#172 K）：先核对曲目身份（停止态、无当前曲、身份不符或总时长未知
+  *            一律忽略），然后 PositionMs = min(TargetMs, DurationMs)，TrackStartCount 不变；
+  *            播放中落在末尾则下一圈按播完前进，暂停中停在末尾。FIFO 里连续的 SEEK 只执行
+  *            最后一条（最新者胜），被跳过的同样回显。`--seek-echo-delay` 让队首的 SEEK
+  *            多等若干毫秒再处理（期间后面的命令也等着），用于拍“松手后停在目标”。
+  *          - TrackStartCount：每次从曲首开启一首（SELECT、播放/暂停中 NEXT/PREV、停止态开播、
+  *            播完前进、跳过坏文件后开下一首）加 1。
   *          不解码、不读块，没有 T_data/T_out 计时，其余停止原因只能用 R 键注入。
   ******************************************************************************
   */
@@ -61,6 +68,8 @@ typedef struct
     bool skip_forward;                                               /**< 跳过坏文件的方向：最近一次移动是否向后。 */
     bool audio_fault_latched;                                        /**< 已因 AUDIO_FAULT 锁存，重启才解除。 */
     Playback_StopReasonTypeDef last_forced_reason;                   /**< R 键上一次注入的停止原因；NONE = 尚未注入。 */
+    uint32_t seek_echo_delay_ms;                                     /**< 队首 SEEK 处理前额外等待的虚拟时长（--seek-echo-delay）。 */
+    uint32_t seek_waited_ms;                                         /**< 队首 SEEK 已等待的虚拟时长。 */
 } PlaybackSim_StateTypeDef;
 
 static PlaybackSim_StateTypeDef playback_sim;
@@ -118,6 +127,7 @@ static void playback_sim_open(uint32_t generation, uint16_t index)
     snapshot->PositionMs = 0U;
     snapshot->DurationMs = 0U;
     snapshot->StopReason = PLAYBACK_STOP_REASON_NONE;
+    snapshot->TrackStartCount++;
     playback_sim.opening = true;
     playback_sim.open_elapsed_ms = 0U;
 }
@@ -300,6 +310,21 @@ static void playback_sim_handle(const Playback_CommandTypeDef *command)
             snapshot->State = PLAYBACK_STATE_PLAYING;
             break;
 
+        case PLAYBACK_COMMAND_SEEK:
+            /* 忽略：停止态、无当前曲、曲目身份不符、开启中或总时长未知（#172 C）。越尾不算忽略。 */
+            if ((snapshot->State == PLAYBACK_STATE_STOPPED) || !snapshot->HasTrack ||
+                (command->Generation != snapshot->Generation) || (command->Index != snapshot->Index) ||
+                playback_sim.opening || (snapshot->DurationMs == 0U))
+            {
+                printf("[playback] seek seq %u ignored\n", (unsigned)command->Seq);
+                break;
+            }
+            snapshot->PositionMs = (command->TargetMs < snapshot->DurationMs) ?
+                                   command->TargetMs : snapshot->DurationMs;
+            printf("[playback] seek idx=%u land=%u\n",
+                   (unsigned)snapshot->Index, (unsigned)snapshot->PositionMs);
+            break;
+
         default:
             break;
     }
@@ -358,17 +383,37 @@ void playback_sim_step(uint32_t now_ms)
 {
     Playback_CommandTypeDef command;
 
+    const uint32_t elapsed_ms = playback_sim.has_clock ? (now_ms - playback_sim.last_ms) : 0U;
+
     while (!playback_sim.suspended && (playback_sim.fifo_count > 0U))
     {
         command = playback_sim.fifo[playback_sim.fifo_head];
+        if ((command.Kind == PLAYBACK_COMMAND_SEEK) && (playback_sim.seek_echo_delay_ms > 0U))
+        {
+            /* 回显延迟：队首 SEEK 等够才处理，后面的命令随之等待。 */
+            playback_sim.seek_waited_ms += elapsed_ms;
+            if (playback_sim.seek_waited_ms < playback_sim.seek_echo_delay_ms)
+            {
+                break;
+            }
+        }
+        playback_sim.seek_waited_ms = 0U;
         playback_sim.fifo_head = (uint16_t)((playback_sim.fifo_head + 1U) % PLAYBACK_COMMAND_QUEUE_DEPTH);
         playback_sim.fifo_count--;
+
+        /* 最新者胜：后面紧跟的仍是 SEEK 时只回显本条，不执行。 */
+        if ((command.Kind == PLAYBACK_COMMAND_SEEK) && (playback_sim.fifo_count > 0U) &&
+            (playback_sim.fifo[playback_sim.fifo_head].Kind == PLAYBACK_COMMAND_SEEK))
+        {
+            playback_sim.snapshot.HandledCommandSeq = command.Seq;
+            continue;
+        }
         playback_sim_handle(&command);
     }
 
     if (playback_sim.has_clock)
     {
-        playback_sim_advance(now_ms - playback_sim.last_ms);
+        playback_sim_advance(elapsed_ms);
     }
     playback_sim.last_ms = now_ms;
     playback_sim.has_clock = true;
@@ -424,6 +469,17 @@ void playback_sim_stop_next_reason(void)
              (Playback_StopReasonTypeDef)(reason + 1);
     playback_sim.last_forced_reason = reason;
     playback_sim_enter_stopped(reason);
+}
+
+/**
+ * @brief --seek-echo-delay：之后队首的 SEEK 先等 delay_ms 虚拟时长再处理；0 恢复为下一圈处理。
+ * @param[in] delay_ms 额外等待的毫秒数。
+ */
+void playback_sim_set_seek_echo_delay(uint32_t delay_ms)
+{
+    playback_sim.seek_echo_delay_ms = delay_ms;
+    playback_sim.seek_waited_ms = 0U;
+    printf("[playback] seek echo delay %u ms\n", (unsigned)delay_ms);
 }
 
 /**

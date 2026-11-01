@@ -2,6 +2,7 @@
     AllHostModules = @(
         'external_loader'
         'flash_ftl'
+        'filesystem_locator'
         'gui_task'
         'gui_theme'
         'gui_canvas'
@@ -41,6 +42,26 @@
                 '^Service/log/log_service(?:_config)?\.h$'
                 '^APP/app_config\.h$'
                 '^Tests/flash_ftl/'
+            )
+        }
+        @{
+            Name = 'filesystem_locator'
+            PathPatterns = @(
+                '^Service/filesystem/'
+                '^Middlewares/Third_Party/FatFs/'
+                # 测试把 patches/fatfs 的补丁应用到 ff.c 副本后编译，并复制 ffconf.h 与 fatfs.h。
+                '^patches/fatfs/'
+                '^FATFS/'
+                # 沿用 flash_ftl 的 FreeRTOS 头替身，以及主机测试编译的 Platform/Service/APP 头（由 check-test-paths.ps1 发现）。
+                '^Tests/flash_ftl/stubs/'
+                '^Platform/platform\.h$'
+                '^Platform/flash/platform_flash\.h$'
+                '^Platform/sd/platform_sd\.h$'
+                '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+                '^Service/service\.h$'
+                '^Service/log/log_service(?:_config)?\.h$'
+                '^APP/app_config\.h$'
+                '^Tests/filesystem_locator/'
             )
         }
         @{
@@ -128,8 +149,16 @@
         @{
             Name = 'storage_catalog'
             PathPatterns = @(
-                '^APP/tasks/storage/catalog/storage_catalog_(?:name|text)\.[ch]$'
+                '^APP/tasks/storage/catalog/storage_catalog(?:_name|_text)?\.[ch]$'
+                '^APP/tasks/storage/catalog/storage_sheet\.[ch]$'
+                '^APP/tasks/storage/catalog/storage_track_(?:open|text|diag)\.[ch]$'
                 '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
+                # 按定位符打开的测试以假实现替换 Filesystem / Log Service 与周期计数器 Adapter，只依赖它们的公开头。
+                '^Service/filesystem/filesystem_(?:file|directory)\.h$'
+                '^Service/log/log_service(?:_config)?\.h$'
+                '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
+                '^Service/service\.h$'
+                '^APP/tasks/storage/storage_task(?:_config)?\.h$'
                 # 超预算阈值与 T_data/2 的编译期断言在 test_storage_catalog_text.c。
                 '^APP/tasks/playback/playback_task_config\.h$'
                 '^Service/filesystem/filesystem_types\.h$'

@@ -21,9 +21,6 @@
 /** @brief Storage Task 句柄；bind 复位槽位之后才发布，GUI 见到非 NULL 才可 request。 */
 static TaskHandle_t volatile storage_namebuffer_task;
 
-/** @brief load 时暂存 Catalog 路径；只由 Storage Task 使用，放静态区以免占任务栈。 */
-static char storage_namebuffer_path[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
-
 Storage_NameBufferTypeDef storage_namebuffer;
 
 /**
@@ -84,10 +81,11 @@ Storage_StatusTypeDef storage_namebuffer_request(uint16_t index, uint32_t genera
 }
 
 /**
- * @brief Storage Task 在 PENDING 时按 位置 → Sheet → Catalog 路径 读曲目标签，填曲目显示名与歌手并打 READY。
+ * @brief Storage Task 在 PENDING 时按 位置 → Sheet → Catalog 下标 读曲目标签，填曲目显示名与歌手并打 READY。
  * @param[in] sd_ready SD 是否处于就绪态；消抖中与未就绪均为假。
  * @note 仅 Storage Task 主循环调用；槽位不是 PENDING 时无事可做。一次 load 只读一个文件，在当圈完成
- *       （storage_track_text_read()，最坏 f_open + 取长度 + 至多 STORAGE_CATALOG_TEXT_MAX_READS 次读取）。
+ *       （storage_track_text_read()，最坏 按定位符打开（核对不符退回路径打开）+ 取长度 + 至多
+ *       STORAGE_CATALOG_TEXT_MAX_READS 次读取）；INFO 的 `open=` 是打开耗时（DIAG-4）。
  * @note 标签侧失败（打开失败、读取错误、超读取上限、无 ID3v2、帧缺失、解码失败）不是槽失败：
  *       照常带实际代次 READY，曲目显示名回退文件主名、歌手为空串（STOR-15）。
  * @note SD 未就绪、Sheet 无效或与 Catalog 不一致、请求代次非 0 且与当前不符，都是重扫与
@@ -132,14 +130,11 @@ void storage_namebuffer_load(bool sd_ready)
     else
     {
         catalog_index = storage_sheet_catalog_index(index);
-        if ((catalog_index != UINT16_MAX) &&
-            (storage_catalog_copy_path(catalog_index,
-                                       storage_namebuffer_path,
-                                       sizeof(storage_namebuffer_path)) == STORAGE_OK))
+        if (catalog_index != UINT16_MAX)
         {
             const uint32_t start_cycles = storage_track_diag_begin();
 
-            track = storage_track_text_read(storage_namebuffer_path);
+            track = storage_track_text_read(index, catalog_index);
             storage_track_diag_name_done(index, start_cycles, track);
         }
     }

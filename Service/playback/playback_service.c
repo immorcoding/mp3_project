@@ -29,6 +29,10 @@ typedef struct
     bool     FirstFrameDecoded;    /**< 已解出本流首帧，采样率已定。 */
     uint32_t AudioBytes;           /**< 开启 OK 带回的音频区间字节数，用于估算总时长。 */
     uint32_t UnsyncedBytes;        /**< 自上一个好帧起连续解不出帧的字节数（R 的计数）。 */
+    uint32_t ConsumedBytes;        /**< 自 BeginStream 起窗口已推进掉的字节数（含帧前跳过的字节）；重开后不再使用。 */
+    bool     HasToc;               /**< 流头带完整 TOC；重开后保留。 */
+    uint8_t  Toc[PLAYBACK_SERVICE_TOC_ENTRIES]; /**< Xing/Info 的 TOC（第 i 项为 i% 时间处的偏移，单位 1/256）。 */
+    uint32_t AudioStart;           /**< 音频有效区间的起点：Xing/Info/VBRI 元数据帧之后的字节偏移，无元数据帧时为 0。 */
     uint64_t DecodedSamples;       /**< 已解出的每声道采样数。 */
     bool     HeaderHasFrames;      /**< 流头带音频总帧数。 */
     uint32_t HeaderTotalFrames;    /**< 流头给出的音频总帧数。 */
@@ -102,7 +106,7 @@ static uint32_t samples_to_ms(uint64_t samples, uint32_t sample_rate_hz)
         return 0U;
     }
 
-    ms = (samples * 1000ULL) / sample_rate_hz;
+    ms = (samples * PLAYBACK_SERVICE_MS_PER_SECOND) / sample_rate_hz;
     return (ms > UINT32_MAX) ? UINT32_MAX : (uint32_t)ms;
 }
 
@@ -156,6 +160,7 @@ static void resolve_total_duration(uint32_t bitrate_kbps)
 static void window_consume(uint32_t count)
 {
     s_window_fill -= count;
+    s_stream.ConsumedBytes += count;
     if (s_window_fill > 0U)
     {
         memmove(s_window, s_window + count, s_window_fill);
@@ -259,6 +264,220 @@ Service_StatusTypeDef Service_Playback_BeginStream(uint32_t audio_bytes)
 
     memset(&s_stream, 0, sizeof(s_stream));
     s_stream.AudioBytes = audio_bytes;
+    s_window_fill = 0U;
+    s_frame_pending = false;
+    reset_output();
+    playback_service_decoder_reset();
+    s_stream_active = true;
+    return SERVICE_OK;
+}
+
+/**
+ * @brief 线性映射：目标毫秒 → 音频有效区间内的字节偏移。
+ * @param[in] target_ms 目标毫秒，不超过总时长。
+ * @param[in] span      音频有效区间字节数（AudioBytes − AudioStart），非 0。
+ * @return 相对音频有效区间起点的偏移，0..span。
+ */
+static uint32_t seek_forward_lin(uint32_t target_ms, uint32_t span)
+{
+    return (uint32_t)(((uint64_t)target_ms * span) / s_stream.Info.TotalDurationMs);
+}
+
+/**
+ * @brief 线性映射的反算：音频有效区间内的字节偏移 → 毫秒。
+ * @param[in] offset 相对音频有效区间起点的偏移，不超过 span。
+ * @param[in] span   音频有效区间字节数，非 0。
+ * @return 毫秒，不超过总时长。
+ */
+static uint32_t seek_inverse_lin(uint32_t offset, uint32_t span)
+{
+    return (uint32_t)(((uint64_t)offset * s_stream.Info.TotalDurationMs) / span);
+}
+
+/**
+ * @brief TOC 的单调性检查：非递减且不超过 255；全零或乱序的 TOC 视为不可用，退回线性。
+ * @return TOC 可用为真。
+ */
+static bool toc_usable(void)
+{
+    uint32_t i;
+
+    if (!s_stream.HasToc)
+    {
+        return false;
+    }
+    for (i = 1U; i < PLAYBACK_SERVICE_TOC_ENTRIES; i++)
+    {
+        if (s_stream.Toc[i] < s_stream.Toc[i - 1U])
+        {
+            return false;
+        }
+    }
+    return s_stream.Toc[PLAYBACK_SERVICE_TOC_ENTRIES - 1U] > 0U;
+}
+
+/**
+ * @brief TOC 映射：目标毫秒 → 音频有效区间内的字节偏移。
+ * @param[in] target_ms 目标毫秒，不超过总时长。
+ * @param[in] span      音频有效区间字节数，非 0。
+ * @return 相对音频有效区间起点的偏移，0..span。
+ * @note  目标落在第 i 个百分点与第 i+1 个之间时，在 TOC[i] 与 TOC[i+1] 间线性插值；第 100 项取 256。
+ */
+static uint32_t seek_forward_toc(uint32_t target_ms, uint32_t span)
+{
+    const uint64_t total = s_stream.Info.TotalDurationMs;
+    const uint64_t scaled = (uint64_t)target_ms * PLAYBACK_SERVICE_TOC_ENTRIES; /* 以 total 为分母的“百分点数”。 */
+    uint32_t i = (uint32_t)(scaled / total);
+    uint64_t rem = scaled % total;
+    uint64_t lo;
+    uint64_t hi;
+    uint64_t pos256; /* 以 total 为分母的 1/256 刻度数。 */
+    uint64_t q;      /* 1/65536 有效区间。 */
+
+    if (i >= PLAYBACK_SERVICE_TOC_ENTRIES)
+    {
+        i = PLAYBACK_SERVICE_TOC_ENTRIES - 1U;
+        rem = total;
+    }
+    lo = s_stream.Toc[i];
+    hi = (i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) ? s_stream.Toc[i + 1U] : PLAYBACK_SERVICE_TOC_END;
+    pos256 = (lo * total) + ((hi - lo) * rem);
+    q = (pos256 * PLAYBACK_SERVICE_TOC_UNIT) / total;
+    return (uint32_t)((q * span) / PLAYBACK_SERVICE_TOC_Q);
+}
+
+/**
+ * @brief TOC 映射的反算：音频有效区间内的字节偏移 → 毫秒。
+ * @param[in] offset 相对音频有效区间起点的偏移，不超过 span。
+ * @param[in] span   音频有效区间字节数，非 0。
+ * @return 毫秒，不超过总时长。
+ * @note  取 TOC 值不超过该位置的最大一项 i，在 [i, i+1] 的刻度间线性反插值；平台段（相邻项相等）取其末端。
+ */
+static uint32_t seek_inverse_toc(uint32_t offset, uint32_t span)
+{
+    const uint64_t x = ((uint64_t)offset * PLAYBACK_SERVICE_TOC_Q) / span; /* 1/65536 有效区间 */
+    uint32_t i = 0U;
+    uint64_t lo;
+    uint64_t hi;
+    uint64_t numerator;
+    uint64_t denominator;
+
+    while ((i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) && (((uint64_t)s_stream.Toc[i + 1U] * PLAYBACK_SERVICE_TOC_UNIT) <= x))
+    {
+        i++;
+    }
+    lo = (uint64_t)s_stream.Toc[i] * PLAYBACK_SERVICE_TOC_UNIT;
+    hi = (i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) ? ((uint64_t)s_stream.Toc[i + 1U] * PLAYBACK_SERVICE_TOC_UNIT) : (PLAYBACK_SERVICE_TOC_END * PLAYBACK_SERVICE_TOC_UNIT);
+    if (x <= lo)
+    {
+        return (uint32_t)(((uint64_t)s_stream.Info.TotalDurationMs * i) / PLAYBACK_SERVICE_TOC_ENTRIES);
+    }
+    denominator = hi - lo;
+    numerator = ((uint64_t)i * denominator) + ((x > hi ? hi : x) - lo);
+    return (uint32_t)(((uint64_t)s_stream.Info.TotalDurationMs * numerator) / (denominator * PLAYBACK_SERVICE_TOC_ENTRIES));
+}
+
+/**
+ * @brief 把目标毫秒映射成音频区间内的字节偏移与落点（跳转的 Service 半边，#166 第 8–11 条）。
+ * @param[in]  target_ms 目标毫秒；超过总时长按总时长算。
+ * @param[out] point     钳位后的字节偏移（相对音频区间起点）、落点毫秒、映射方式与是否钳位。
+ * @return SERVICE_OK；参数为空返回 SERVICE_INVALID_PARAM；模块未 Init、本流首帧尚未解出（流级事实未知）、
+ *         总时长未知或音频区间字节数未知返回 SERVICE_NOT_READY。
+ * @note   纯计算，不碰输入窗口、解码器与输出，也不要求流仍在活动：BeginStream() 之后解出首帧起，
+ *         直到下一次 BeginStream()，流级事实（总时长、首帧采样率、TOC、AudioBytes）一直有效，
+ *         所以 AbandonStream() 之后、ReopenStream() 之前仍可映射。
+ *         口径：音频有效区间 = 元数据帧（Xing/Info/VBRI）之后到音频区间末尾；无元数据帧时就是整个音频区间。
+ *         线性映射在有效区间内按总时长等比；带 TOC 的映射把 TOC 的 1/256 刻度也铺在有效区间上。
+ *         这样自写头（字节数与 TOC 只计音频帧）与真实 LAME/ffmpeg 头（字节数含头帧）的差别不影响映射，
+ *         头帧本身也永远不会落在偏移之后。偏移最多钳到 AudioBytes − W_min；钳位后不保证能解出一帧
+ *         （320 kbps 下常常零帧），解不出也按放完处理：重开的流读尽后回报流尾放完，不判坏文件
+ *         （核实见 Tests/playback_service 的 seek 测试与本模块 README）。落点 = 钳位后偏移按同一映射反算。
+ */
+Service_StatusTypeDef Service_Playback_MapSeek(uint32_t target_ms, Service_Playback_SeekPointTypeDef *point)
+{
+    uint32_t span;
+    uint32_t max_offset;
+    uint32_t offset;
+    uint32_t target;
+    bool use_toc;
+
+    if (point == NULL)
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+    memset(point, 0, sizeof(*point));
+
+    if (!s_initialized || !s_stream.FirstFrameDecoded || (s_stream.Info.TotalDurationMs == 0U) ||
+        (s_stream.AudioBytes <= s_stream.AudioStart))
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    span = s_stream.AudioBytes - s_stream.AudioStart;
+    target = (target_ms < s_stream.Info.TotalDurationMs) ? target_ms : s_stream.Info.TotalDurationMs;
+    max_offset = (s_stream.AudioBytes > PLAYBACK_SERVICE_WINDOW_MIN_BYTES) ?
+                     (s_stream.AudioBytes - PLAYBACK_SERVICE_WINDOW_MIN_BYTES) : 0U;
+
+    use_toc = toc_usable();
+    point->Map = use_toc ? SERVICE_PLAYBACK_SEEK_MAP_TOC : SERVICE_PLAYBACK_SEEK_MAP_LIN;
+    offset = s_stream.AudioStart + (use_toc ? seek_forward_toc(target, span) : seek_forward_lin(target, span));
+    if (offset > max_offset)
+    {
+        offset = max_offset;
+        point->Clamped = true;
+    }
+    point->AudioOffset = offset;
+    if (offset <= s_stream.AudioStart)
+    {
+        point->LandingMs = 0U;
+    }
+    else
+    {
+        point->LandingMs = use_toc ? seek_inverse_toc(offset - s_stream.AudioStart, span) :
+                                     seek_inverse_lin(offset - s_stream.AudioStart, span);
+    }
+    return SERVICE_OK;
+}
+
+/**
+ * @brief 从落点重开：清空解码器、输入窗口与计数，保留流级事实，已解码时间从落点起算（跳转的 Service 半边）。
+ * @param[in] landing_ms Service_Playback_MapSeek() 给出的落点；超过总时长按总时长算。
+ * @return SERVICE_OK；模块未 Init、本流的首帧信息尚未解出（没有可保留的流级事实）或 STOP_FAILED 已锁存返回
+ *         SERVICE_NOT_READY；上一条流的输出仍在运行且 Stop 失败返回 SERVICE_ERROR。
+ * @note   与 BeginStream() 的区别：BeginStream() 把一切归零并重新探测流头；本函数保留总时长、首帧采样率与声道数、
+ *         TOC、音频有效区间起点、AudioBytes 与“已探测过流头”标志，所以重开后的第一个解出的帧不会被当作
+ *         Xing/VBRI 头检查，也不会再回报 FirstFrame，采样率不同的帧照旧丢弃。
+ *         清零的是：解码器（位储备、重叠相加状态）、线性输入窗口、同步预算 R 的计数、输入已读尽标志、
+ *         帧输出缓冲与输出管线（等同切歌）；已解码采样数设为落点对应的采样数（向上取整，使 DecodedMs 不小于落点），
+ *         此后只增不减。调用后调用者从 AudioOffset 起重新交入字节。
+ *         上一条流若仍在输出会先 Stop（与 BeginStream() 一致）。可在 AbandonStream() 之后调用，
+ *         也可直接调用；两种情形下 s_stream 里的流级事实都来自最近一次 BeginStream() 之后解出的首帧，
+ *         调用者负责只在同一首曲目上重开。重开后一帧都解不出（例如钳位后的流尾）不算坏文件：
+ *         首帧已确认，读尽后按流尾放完处理（见 README）。
+ */
+Service_StatusTypeDef Service_Playback_ReopenStream(uint32_t landing_ms)
+{
+    uint32_t landing = landing_ms;
+
+    if (!s_initialized || s_out.Faulted || !s_stream.FirstFrameDecoded)
+    {
+        return SERVICE_NOT_READY;
+    }
+    if (stop_output() != SERVICE_OK)
+    {
+        return SERVICE_ERROR;
+    }
+
+    if ((s_stream.Info.TotalDurationMs > 0U) && (landing > s_stream.Info.TotalDurationMs))
+    {
+        landing = s_stream.Info.TotalDurationMs;
+    }
+
+    s_stream.InputEnded = false;
+    s_stream.SyncExhausted = false;
+    s_stream.UnsyncedBytes = 0U;
+    s_stream.ConsumedBytes = 0U;
+    s_stream.DecodedSamples = (((uint64_t)landing * s_stream.Info.SampleRateHz) + (PLAYBACK_SERVICE_MS_PER_SECOND - 1ULL)) / PLAYBACK_SERVICE_MS_PER_SECOND;
     s_window_fill = 0U;
     s_frame_pending = false;
     reset_output();
@@ -382,7 +601,13 @@ static void decode_step(Service_Playback_AdvanceReportTypeDef *report)
             s_stream.HeaderHasFrames = header.HasTotalFrames;
             s_stream.HeaderTotalFrames = header.TotalFrames;
             s_stream.HeaderSamplesPerFrame = header.SamplesPerFrame;
+            s_stream.HasToc = header.HasToc;
+            if (header.HasToc)
+            {
+                memcpy(s_stream.Toc, header.Toc, sizeof(s_stream.Toc));
+            }
             window_consume(consumed);
+            s_stream.AudioStart = s_stream.ConsumedBytes;
             s_stream.UnsyncedBytes = 0U;
             report->Result = SERVICE_PLAYBACK_ADVANCE_SKIPPED;
             report->DecodedMs = decoded_ms();

@@ -44,11 +44,26 @@ typedef struct
     bool IsReadOnly;     /**< 只读属性。 */
 } Service_Filesystem_FileInfoTypeDef;
 
+/**
+ * @brief 按文件定位符打开的结果；三态使“核对不符，退回路径打开”与真正的失败可区分。
+ */
+typedef enum
+{
+    SERVICE_FILESYSTEM_LOCATOR_OPENED = 0, /**< 已打开，句柄有效。 */
+    SERVICE_FILESYSTEM_LOCATOR_MISMATCH,   /**< 定位符与介质不符（无定位符、条目已删除、是目录、起始簇或长度不同、位置越界）；未占用文件槽，调用者应退回按路径打开。 */
+    SERVICE_FILESYSTEM_LOCATOR_FAILED      /**< 其他失败（卷未就绪、槽用尽、介质错误等）；原因见 status 输出，退回路径打开通常无益。 */
+} Service_Filesystem_LocatorOpenResultTypeDef;
+
 Service_StatusTypeDef Service_Filesystem_OpenFile(
     Service_Filesystem_VolumeTypeDef volume,
     const char *path,
     Service_Filesystem_FileModeTypeDef mode,
     Service_Filesystem_FileHandleTypeDef *file);
+Service_Filesystem_LocatorOpenResultTypeDef Service_Filesystem_OpenFileByLocator(
+    Service_Filesystem_VolumeTypeDef volume,
+    const Service_Filesystem_FileLocatorTypeDef *locator,
+    Service_Filesystem_FileHandleTypeDef *file,
+    Service_StatusTypeDef *status);
 Service_StatusTypeDef Service_Filesystem_ReadFile(
     Service_Filesystem_FileHandleTypeDef file,
     void *buffer,

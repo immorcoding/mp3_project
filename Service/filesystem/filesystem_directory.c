@@ -5,11 +5,176 @@
 
 #include "Service/filesystem/filesystem_directory.h"
 
+#include "Middlewares/Third_Party/FatFs/src/diskio.h"
 #include "Service/filesystem/filesystem_handle.h"
+#include "Service/filesystem/filesystem_locator.h"
 #include "Service/filesystem/filesystem_path.h"
 #include "Service/filesystem/filesystem_status.h"
 
 #include <string.h>
+
+/* 以下是 FAT 磁盘格式事实（FAT 规范与 ff.c 内部的 DIR_*、MAX_DIR，FatFs 不公开这些宏），集中在此，不随配置变化。 */
+/** @brief FAT 目录项大小（字节）。 */
+#define FILESYSTEM_DIRECTORY_ENTRY_BYTES 32U
+/** @brief FatFs 对 FAT 目录的大小上限（字节），与 ff.c 的 MAX_DIR 一致。 */
+#define FILESYSTEM_DIRECTORY_FAT_MAX_BYTES 0x200000UL
+/** @brief 目录项内字段偏移，与 FAT 规范和 ff.c 的 DIR_* 一致。 */
+#define FILESYSTEM_DIRECTORY_ENTRY_NAME 0U
+#define FILESYSTEM_DIRECTORY_ENTRY_ATTR 11U
+#define FILESYSTEM_DIRECTORY_ENTRY_CLUSTER_HIGH 20U
+#define FILESYSTEM_DIRECTORY_ENTRY_CLUSTER_LOW 26U
+#define FILESYSTEM_DIRECTORY_ENTRY_SIZE 28U
+/** @brief 已删除目录项的首字节标记。 */
+#define FILESYSTEM_DIRECTORY_ENTRY_DELETED 0xE5U
+/** @brief 目录项属性的有效位掩码与长名项属性值。 */
+#define FILESYSTEM_DIRECTORY_ATTR_MASK 0x3FU
+#define FILESYSTEM_DIRECTORY_ATTR_LONG_NAME 0x0FU
+
+_Static_assert(_MAX_SS == _MIN_SS, "locator capture assumes one fixed sector size");
+
+/** @brief 取回目录项所在扇区用的缓冲；只在唯一 Storage Task 使用，避免占任务栈。 */
+static BYTE filesystem_directory_sector_buffer[_MAX_SS];
+
+/**
+ * @brief 小端读 16 位。
+ * @param[in] bytes 至少 2 字节。
+ * @return 值。
+ */
+static uint32_t filesystem_directory_load16(const BYTE *bytes)
+{
+    return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8U);
+}
+
+/**
+ * @brief 小端读 32 位。
+ * @param[in] bytes 至少 4 字节。
+ * @return 值。
+ */
+static uint32_t filesystem_directory_load32(const BYTE *bytes)
+{
+    return filesystem_directory_load16(bytes) | (filesystem_directory_load16(bytes + 2U) << 16U);
+}
+
+/**
+ * @brief 在刚读出一个目录项之后，推算它的主（短名）目录项位置：字节偏移、所在簇与扇区。
+ * @param[in] dir 刚由 `f_readdir` 读出条目的目录对象；`f_readdir` 已把游标移到下一项。
+ * @param[in] before_clust 本次 `f_readdir` 之前的游标所在簇。
+ * @param[in] before_dptr 本次 `f_readdir` 之前的游标偏移。
+ * @param[out] offset 主目录项在文件夹内的字节偏移。
+ * @param[out] sector 主目录项所在的绝对扇区。
+ * @return true 位置可确定；false 为极少数无法确定的位置（如目录已满的最后两项）。
+ * @note 目录读到末尾时 `dir_next` 报告结束且不推进游标（sect 为 0），主目录项就是游标处；
+ *       否则游标在其后一项。一次读取最多跨一个簇边界（簇不小于 4 KiB 时），故主目录项的簇只能是
+ *       读取前的簇或读取后的簇，按簇序号比较即可区分。
+ */
+static bool filesystem_directory_entry_position(const DIR *dir,
+                                                DWORD before_clust,
+                                                DWORD before_dptr,
+                                                DWORD *offset,
+                                                DWORD *sector)
+{
+    const FATFS *fs = dir->obj.fs;
+    DWORD cluster_bytes = (DWORD)fs->csize * _MAX_SS;
+    DWORD cluster;
+    DWORD entry_offset;
+
+    if (dir->sect == 0U)
+    {
+        entry_offset = dir->dptr;
+        cluster = dir->clust;
+    }
+    else
+    {
+        if ((dir->dptr < FILESYSTEM_DIRECTORY_ENTRY_BYTES) ||
+            (dir->dptr >= (FILESYSTEM_DIRECTORY_FAT_MAX_BYTES - FILESYSTEM_DIRECTORY_ENTRY_BYTES)))
+        {
+            return false;
+        }
+        entry_offset = dir->dptr - FILESYSTEM_DIRECTORY_ENTRY_BYTES;
+        cluster = dir->clust;
+        if ((dir->clust != 0U) && ((entry_offset / cluster_bytes) != (dir->dptr / cluster_bytes)))
+        {
+            cluster = before_clust;
+            if ((entry_offset / cluster_bytes) != (before_dptr / cluster_bytes))
+            {
+                return false;
+            }
+        }
+    }
+
+    if (cluster == 0U)
+    {
+        *sector = fs->dirbase + (entry_offset / _MAX_SS);
+    }
+    else
+    {
+        if ((cluster < 2U) || (cluster >= fs->n_fatent))
+        {
+            return false;
+        }
+        *sector = fs->database + ((DWORD)fs->csize * (cluster - 2U)) +
+                  ((entry_offset % cluster_bytes) / _MAX_SS);
+    }
+    *offset = entry_offset;
+    return true;
+}
+
+/**
+ * @brief 为刚读出的目录项取文件定位符。
+ * @param[in] dir 刚由 `f_readdir` 读出条目的目录对象。
+ * @param[in] before_clust 本次 `f_readdir` 之前的游标所在簇。
+ * @param[in] before_dptr 本次 `f_readdir` 之前的游标偏移。
+ * @param[in] info `f_readdir` 给出的条目信息，用来与目录项原始字节互相核对。
+ * @return 定位符；位置无法确定、读扇区失败或原始字节与 `info` 不一致时为全零（无定位符），
+ *         调用者按路径打开即可，不影响目录读取本身的结果。
+ * @note FAT12/16/32 均可，exFAT 不支持（未启用）。目录项扇区通常仍在 FatFs 窗口里直接取；
+ *       只在 `dir_next` 因跨簇把窗口换成 FAT 扇区时才多读一次该扇区。
+ */
+static Service_Filesystem_FileLocatorTypeDef filesystem_directory_capture_locator(
+    const DIR *dir, DWORD before_clust, DWORD before_dptr, const FILINFO *info)
+{
+    const FATFS *fs = dir->obj.fs;
+    Service_Filesystem_FileLocatorTypeDef none = {{0U, 0U, 0U, 0U}};
+    const BYTE *entry;
+    DWORD offset;
+    DWORD sector;
+    uint32_t start_cluster;
+
+    if ((fs == NULL) || (fs->fs_type < FS_FAT12) || (fs->fs_type > FS_FAT32) ||
+        !filesystem_directory_entry_position(dir, before_clust, before_dptr, &offset, &sector))
+    {
+        return none;
+    }
+
+    if (fs->winsect == sector)
+    {
+        entry = &fs->win[offset % _MAX_SS];
+    }
+    else
+    {
+        if (disk_read(fs->drv, filesystem_directory_sector_buffer, sector, 1U) != RES_OK)
+        {
+            return none;
+        }
+        entry = &filesystem_directory_sector_buffer[offset % _MAX_SS];
+    }
+
+    if ((entry[FILESYSTEM_DIRECTORY_ENTRY_NAME] == 0U) ||
+        (entry[FILESYSTEM_DIRECTORY_ENTRY_NAME] == FILESYSTEM_DIRECTORY_ENTRY_DELETED) ||
+        (entry[FILESYSTEM_DIRECTORY_ENTRY_ATTR] == FILESYSTEM_DIRECTORY_ATTR_LONG_NAME) ||
+        ((entry[FILESYSTEM_DIRECTORY_ENTRY_ATTR] & FILESYSTEM_DIRECTORY_ATTR_MASK) != (info->fattrib & FILESYSTEM_DIRECTORY_ATTR_MASK)) ||
+        (filesystem_directory_load32(&entry[FILESYSTEM_DIRECTORY_ENTRY_SIZE]) != (uint32_t)info->fsize))
+    {
+        return none;
+    }
+
+    start_cluster = filesystem_directory_load16(&entry[FILESYSTEM_DIRECTORY_ENTRY_CLUSTER_LOW]);
+    if (fs->fs_type == FS_FAT32)
+    {
+        start_cluster |= filesystem_directory_load16(&entry[FILESYSTEM_DIRECTORY_ENTRY_CLUSTER_HIGH]) << 16U;
+    }
+    return filesystem_locator_make(dir->obj.sclust, offset, start_cluster, (uint32_t)info->fsize);
+}
 
 /**
  * @brief 打开所选卷上的目录；空路径表示该卷根目录。
@@ -63,6 +228,7 @@ Service_StatusTypeDef Service_Filesystem_OpenDirectory(
  * @param[out] entry 接收 UTF-8 名称与属性；读到结尾时 Name 为空且仍返回 OK。
  * @return OK 为本次读取无错误。
  * @note 仅 Storage Task 调用。跳过 FatFs 返回的空项之外的转换失败视为 ERROR。
+ *       条目同时带文件定位符（见 `Service_Filesystem_OpenFileByLocator`）；取不到时 `Locator` 为全零。
  */
 Service_StatusTypeDef Service_Filesystem_ReadDirectory(
     Service_Filesystem_DirectoryHandleTypeDef directory,
@@ -83,6 +249,8 @@ Service_StatusTypeDef Service_Filesystem_ReadDirectory(
         return status;
     }
 
+    DWORD before_clust = object->clust;
+    DWORD before_dptr = object->dptr;
     FRESULT result = f_readdir(object, &info);
     if (result != FR_OK)
     {
@@ -96,6 +264,7 @@ Service_StatusTypeDef Service_Filesystem_ReadDirectory(
     {
         return SERVICE_ERROR;
     }
+    entry->Locator = filesystem_directory_capture_locator(object, before_clust, before_dptr, &info);
 
     entry->Size = (uint64_t)info.fsize;
     entry->Date = info.fdate;

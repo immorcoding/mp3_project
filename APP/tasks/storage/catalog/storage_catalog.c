@@ -46,6 +46,10 @@ static StorageCatalog_MusicTypeDef MusicCatalogPool
 static StorageCatalog_MusicItemsTypeDef MusicCatalogIndex[STORAGE_CATALOG_MUSIC_MAX_NUM]
     __attribute__((section(".storage_catalog"), aligned(32)));
 
+/** @brief 与 MusicCatalogIndex 同下标的文件定位符（16 B/条）；扫描时随条目写入，只在同一曲库代次内有效。 */
+static Service_Filesystem_FileLocatorTypeDef MusicCatalogLocator[STORAGE_CATALOG_MUSIC_MAX_NUM]
+    __attribute__((section(".storage_catalog"), aligned(32)));
+
 static char storage_catalog_dir_stack[STORAGE_CATALOG_DIR_STACK_MAX]
                                      [SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U]
     __attribute__((section(".storage_catalog"), aligned(32)));
@@ -87,10 +91,13 @@ static bool storage_catalog_music_file_strcheck(const char *filename)
 }
 
 /**
- * @brief 把一条已拼好的 UTF-8 相对路径写入字符串池。
+ * @brief 把一条已拼好的 UTF-8 相对路径及其文件定位符写入曲库。
+ * @param[in] path UTF-8 相对路径。
+ * @param[in] locator 目录扫描时随条目给出的文件定位符，全零表示没有。
  * @return true 已收录；false 条数满或池满。
  */
-static bool storage_catalog_music_append(const char *path)
+static bool storage_catalog_music_append(const char *path,
+                                         const Service_Filesystem_FileLocatorTypeDef *locator)
 {
     uint32_t length;
     uint32_t needed;
@@ -116,6 +123,7 @@ static bool storage_catalog_music_append(const char *path)
     (void)memcpy(&MusicCatalogPool.Path[MusicCatalogPool.Tail], path, needed);
     MusicCatalogIndex[music_catalog_index].Offset = MusicCatalogPool.Tail;
     MusicCatalogIndex[music_catalog_index].Length = length;
+    MusicCatalogLocator[music_catalog_index] = *locator;
     MusicCatalogPool.Tail += needed;
     music_catalog_index++;
     MusicCatalogPool.IndexNum = music_catalog_index;
@@ -137,7 +145,8 @@ static bool storage_catalog_music_join_path(char *destination,
 }
 
 /**
- * @brief 用路径栈遍历 `Music/`，同时只开一个目录句柄。
+ * @brief 用路径栈遍历 `Music/`，同时只开一个目录句柄；每个 `.mp3` 条目连同它的文件定位符写入曲库。
+ * @return STORAGE_OK 扫描完成（含没有 `Music/`、子目录打不开、表满截断）；STORAGE_ERROR 目录读取或关闭失败。
  */
 static Storage_StatusTypeDef storage_catalog_music_dfs(void)
 {
@@ -225,7 +234,7 @@ static Storage_StatusTypeDef storage_catalog_music_dfs(void)
                 continue;
             }
 
-            if (!storage_catalog_music_append(child))
+            if (!storage_catalog_music_append(child, &entry.Locator))
             {
                 result = STORAGE_OK;
                 stack_top = 0U;
@@ -360,4 +369,24 @@ Storage_StatusTypeDef storage_catalog_copy_path(uint16_t catalog_index,
                  &MusicCatalogPool.Path[MusicCatalogIndex[catalog_index].Offset],
                  length + 1U);
     return STORAGE_OK;
+}
+
+/**
+ * @brief 把指定 Catalog 下标的文件定位符拷给调用方。
+ * @param[in] catalog_index Catalog 下标。
+ * @param[out] out 接收定位符，不得为空。
+ * @return true 下标在当前曲库内（定位符可能全零，按它打开会核对不符并退回路径）；
+ *         false 下标越界或曲库已作废。
+ * @note  定位符只在同一曲库代次内有效；调用者须像取路径一样，先核对 Sheet 与 Catalog 代次一致。
+ */
+bool storage_catalog_copy_locator(uint16_t catalog_index,
+                                  Service_Filesystem_FileLocatorTypeDef *out)
+{
+    if ((out == NULL) || (catalog_index >= MusicCatalogPool.IndexNum))
+    {
+        return false;
+    }
+
+    *out = MusicCatalogLocator[catalog_index];
+    return true;
 }

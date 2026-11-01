@@ -2,11 +2,11 @@
 
 播放任务持有唯一的播放状态机：它是播放游标的唯一写者，向 Storage 写“想要的流”，把 Storage 交来的音频块交给 `Service_Playback_*` 解码与输出，并发布给 GUI 的播放快照。所有权按 [ADR-0020](../../../docs/adr/0020-playback-state-machine-ownership.md)，来源是 [#71](https://github.com/immorcoding/mp3_project/issues/71) 的 K1–K5、B1–B17。
 
-本目录包含**公开合同**、**纯 C 状态机**（[#78](https://github.com/immorcoding/mp3_project/issues/78)、[#79](https://github.com/immorcoding/mp3_project/issues/79)）和**任务外壳**（`playback_task.c/.h`，[#80](https://github.com/immorcoding/mp3_project/issues/80)）。外壳把命令 FIFO、状态信箱、Storage 音频流、`Service_Playback_*` 与 Platform 音频事件接到状态机上；状态机负责命令、流交接、切歌、暂停、播完，以及坏文件跳过、T_data/T_out 超时、播放模块与 Platform 故障、AUDIO_FAULT 锁存和 B6 停止原因表。
+本目录包含**公开合同**、**纯 C 状态机**（[#78](https://github.com/immorcoding/mp3_project/issues/78)、[#79](https://github.com/immorcoding/mp3_project/issues/79)）和**任务外壳**（`playback_task.c/.h`，[#80](https://github.com/immorcoding/mp3_project/issues/80)）。外壳把命令 FIFO、状态信箱、Storage 音频流、`Service_Playback_*` 与 Platform 音频事件接到状态机上；状态机负责命令（含跳转 SEEK）、流交接、切歌、暂停、播完，以及坏文件跳过、T_data/T_out 超时、播放模块与 Platform 故障、AUDIO_FAULT 锁存和 B6 停止原因表。
 
 ## 公开 Interface
 
-- `playback_contract.h`：GUI 音乐分区与模拟器脚本化后端共用的唯一合同，只含类型（`Playback_CommandTypeDef`、`Playback_SnapshotTypeDef` 等）与 `playback_command_send()`、`playback_snapshot_read()` 两个声明，字段与 #71 K1 逐字一致，不暴露 FreeRTOS 句柄。GUI 里只有音乐分区（`APP/tasks/gui/music`）可以包含它，`Service/gui` 不得包含。真实后端与模拟器的假后端实现同一个头，在链接时互换。
+- `playback_contract.h`：GUI 音乐分区与模拟器脚本化后端共用的唯一合同，只含类型（`Playback_CommandTypeDef`、`Playback_SnapshotTypeDef` 等）与 `playback_command_send()`、`playback_snapshot_read()` 两个声明，字段以 #71 K1 为基础，0.9.0 加入跳转（[#172](https://github.com/immorcoding/mp3_project/issues/172) C 节、[#176](https://github.com/immorcoding/mp3_project/issues/176)）：命令种类末尾新增 `PLAYBACK_COMMAND_SEEK`，`Generation`/`Index` 由“仅 SELECT”改为“SELECT 与 SEEK”的曲目身份，命令新增 `TargetMs`（毫秒，仅 SEEK），快照新增 `TrackStartCount`，不暴露 FreeRTOS 句柄。GUI 里只有音乐分区（`APP/tasks/gui/music`）可以包含它，`Service/gui` 不得包含。真实后端与模拟器的假后端实现同一个头，在链接时互换。
 - `playback_task.h`：任务入口 `playback_task()` 与私有通知槽 `Playback_NotifyIndexTypeDef`（`PLAYBACK_NOTIFY_EVENT`）；由 `app_tasks.c` 以 `xTaskCreateStatic` 创建，不是跨模块 Interface。`playback_command_send()` 与 `playback_snapshot_read()` 的实现在 `playback_task.c`。
 - `playback_task_config.h`：事件 FLAG、命令 FIFO 深度与等待节拍等固定配置。
 - `playback_machine.h`：状态机的 Ops 与两个入口，只服务播放任务外壳，不是跨模块 Interface。
@@ -22,8 +22,8 @@
 - **每次唤醒**：有界等待事件槽（无事件时最长 `PLAYBACK_TASK_WAKE_PERIOD_MS` = 100 ms，让 T_data、T_out 这类只靠时刻到期的判定在没有 FLAG 时也能评估）→ 把命令 FIFO 取空（≤ 深度 8 条，不按唤醒次数计数）→ 以 `xTaskGetTickCount()` 换算的单调毫秒时刻（B9，要求 tick 为 1 kHz）调用 `playback_machine_step()`。
 - **命令 FIFO**（K2）：深度 `PLAYBACK_COMMAND_QUEUE_DEPTH` = 8 的静态 FreeRTOS 队列；`playback_command_send()` 零超时入队，满、参数为空或任务尚未启动返回 `PLAYBACK_QUEUE_FULL`，成功后置命令 FLAG。任务上下文调用，不得在 ISR 调用。
 - **状态信箱**（K2、B17）：长度 1 的静态覆盖队列；状态机每次快照变化经 `PublishSnapshot` 整份 `xQueueOverwrite`，`playback_snapshot_read()` 用 `xQueuePeek` 窥视，不取走；首次发布前读到全零快照。不唤醒 GUI。
-- **Storage 映射**：状态机自带 `Playback_Machine{Request,Record,Block}TypeDef` 与结果、终止枚举（因为 `storage_audio_stream.h` 引入 FreeRTOS，状态机不能包含它，#78），外壳逐字段映射到 `storage_audio_stream_request()`、`storage_audio_stream_get_record()`、`storage_audio_block_peek_ready()/take_ready()` 与 `storage_audio_stream_return_block()`，并用 `_Static_assert` 固定两边结构体大小、字段宽度与偏移、枚举值的一一对应；任何一边改字段或枚举，编译期报错。不改 Storage 的公开头。
-- **播放模块映射**：`Playback_MachinePlayerOpsTypeDef` 直接填 `Service_Playback_*` 函数指针。
+- **Storage 映射**：请求信箱含 `AudioOffset`（切歌与普通开流为 0），外壳逐字段映射并由 `_Static_assert` 固定偏移。状态机自带 `Playback_Machine{Request,Record,Block}TypeDef` 与结果、终止枚举（因为 `storage_audio_stream.h` 引入 FreeRTOS，状态机不能包含它，#78），外壳逐字段映射到 `storage_audio_stream_request()`、`storage_audio_stream_get_record()`、`storage_audio_block_peek_ready()/take_ready()` 与 `storage_audio_stream_return_block()`，并用 `_Static_assert` 固定两边结构体大小、字段宽度与偏移、枚举值的一一对应；任何一边改字段或枚举，编译期报错。不改 Storage 的公开头。
+- **播放模块映射**：`Playback_MachinePlayerOpsTypeDef` 直接填 `Service_Playback_*` 函数指针（含 `MapSeek` 与 `ReopenStream`）。
 - **B2**：外壳不碰 FatFs/LVGL，不同步等待 Storage（只写请求信箱、读流记录信箱、取放块队列，全部零超时），不阻塞发送，没有运行期 malloc。命令 FIFO 与状态信箱是静态队列，在 DTCM `.bss`，不占内核堆（#71 F 节原计两个堆对象，实现改为静态，堆余量更大）。
 - **不做主机测试**：外壳依赖 FreeRTOS、Storage 与 Platform，进板级验收；状态机逻辑由 `Tests/playback_task/` 覆盖。
 
@@ -31,13 +31,29 @@
 
 顺序按 B1：读流记录（只认当前流序号，旧序号的丢弃，B3）→ 按开启结果与终止事实反应（B6）→ 归还手中的旧序号块与就绪队列队首连续的旧序号块（≤ 32，B15）→ 逐条处理命令（K3，序号回显含被忽略的命令）→ 把手中块的剩余字节交给播放模块 → 推进输出管线（`Service_Playback_Pump()`），输入不够就继续交字节，没有进展即结束本次唤醒去等块；最后判定 T_out 与 T_data 是否到期。
 
-- **命令表**：TOGGLE 按自身状态决定方向；NEXT/PREV 在播放中环形步进并切歌、在暂停中换曲保持暂停、在停止态只移动游标，无游标（或曲目数未知）时忽略；SELECT 在三态下都切到该曲播放，选中当前曲也换新流序号。
+- **命令表**：TOGGLE 按自身状态决定方向；SEEK 见下节“跳转”；NEXT/PREV 在播放中环形步进并切歌、在暂停中换曲保持暂停、在停止态只移动游标，无游标（或曲目数未知）时忽略；SELECT 在三态下都切到该曲播放，选中当前曲也换新流序号。
 - **游标**：就是快照里的 `{HasTrack, Generation, Index}`，加上最近一次开启 OK 带回的曲目数 N。停止态无游标时按播放打开 `{代次 0, 位置 0}`；开启 OK 把代次换成应答代次并更新 N。NEXT/PREV 用游标的代次；SELECT 用命令携带的代次，代次未变时沿用已知 N，代次变化则 N 未知直到下一个开启 OK。N 未知时 NEXT/PREV 被忽略，因为无法环形步进。
 - **切歌清理顺序**（B11）：游标前进，分配新流序号并写请求信箱；播放模块放弃旧流（Platform Stop）；归还手中旧块；队列里的旧序号块取出即归还；新流 OK 后重新开流、首帧、预填、Start。自动前进走同一路径。
 - **暂停**：暂停 = 播放模块暂停输出，流保持。暂停中换曲在开启 OK 后 `BeginStream` 再立即暂停输出，使推进只解首帧并预填，不出声（B12）；开启应答到达之前就被暂停的流同样处理。
 - **播完**（B13、B14）：流记录 ENDED 且手中无块、队列无本流的块时告知播放模块输入读尽（只一次）；播放模块回报流尾放完后游标前进（末曲回首曲），不出现停止态。短文件按同一条流记录依次处理。
 - **块的持有**（B15）：同一时刻最多持一块，字节全部拷进窗口后立即归还；块比窗口大时手中保持，余量下一轮继续交。
-- **快照发布**（B17）：每解出一帧更新 `PositionMs`，其他字段一变化即整份发布；没有变化不发布。总时长在接受切歌命令的同一刻变为未知，首帧给出后才填。位置只在切歌或重新开播时回 0。
+- **快照发布**（B17）：每解出一帧更新 `PositionMs`，其他字段一变化即整份发布；没有变化不发布。总时长在接受切歌命令的同一刻变为未知，首帧给出后才填。位置在切歌或重新开播时回 0，跳转时设为落点（可变小），其余时候只增不减。
+- **`TrackStartCount`**：开机以来从曲首开始播放一首曲目的次数，单调。每次经切歌路径开新流时加 1：SELECT（含同曲重选）、NEXT/PREV（播放与暂停态）、停止态 TOGGLE 开播、播完前进、跳过坏文件后开下一首（连跳时每开一首加 1）；停止态下的 NEXT/PREV 只移动游标、不开流，所以不加。跳转（含 `TargetMs = 0`）不加。GUI 据此判断唱盘是否归零，不再看位置变小。
+
+## 跳转（SEEK，[#176](https://github.com/immorcoding/mp3_project/issues/176)）
+
+决定来源：[#166](https://github.com/immorcoding/mp3_project/issues/166)、[#164](https://github.com/immorcoding/mp3_project/issues/164)、[ADR-0021](../../../docs/adr/0021-seek-by-reopen-with-audio-offset.md)、DIAG-5。跳转 = 带音频区间偏移重开一条新流，不在原文件内 seek；毫秒到字节的映射在 `Service_Playback_MapSeek()`（见 [Service/playback](../../../Service/playback/README.md)），状态机不认识 MP3，也不硬编码钳位，只用映射返回的 `{AudioOffset, LandingMs, Map, Clamped}`。
+
+- **静默忽略**：无当前曲或处于 STOPPED；`(Generation, Index)` 与当前曲不符；快照总时长为 0（切歌后首帧之前、开流等待中）；映射失败（播放模块没有流级事实）。只记一条 DEBUG（`LogDebug`），不改三态、不计停止、不写请求，**照常推进 `HandledCommandSeq`**。越尾不算忽略。
+- **最新者胜**：同一次唤醒取出的命令里，连续的多条 SEEK 只执行最后一条，被合并的不执行、不记日志，但序号照常推进；中间隔着别的命令（如 SEEK、TOGGLE、SEEK）不合并。跨唤醒的新跳转覆盖旧跳转：开新 StreamSeq，旧流的应答与块按流序号被丢弃，旧跳转的 Seek INFO 作废。
+- **执行**（同一步，顺序按切歌的 B11）：① 以新流序号与 `AudioOffset` 写请求信箱；② 放弃播放模块的旧流（Stop 失败按 AUDIO_FAULT 停止，与切歌一致）；③ 归还手中旧块，就绪队列里的旧块取出即归还；④ **同一步**把 `PositionMs` 设为落点（允许变小），随后由命令处理推进 `HandledCommandSeq`，所以 GUI 看到回显时快照已是落点。不改三态、不计 `StopCount`、不清 `DurationMs`、不加 `TrackStartCount`。
+- **开启 OK 之后**：用 `Service_Playback_ReopenStream(LandingMs)` 代替 `BeginStream`，保留总时长与采样率，所以不再有 `FirstFrame`（也就没有第二条 `Open` INFO）；暂停中紧接着 `PauseOutput`，走 B12 预填，不出声。重开失败按 AUDIO_FAULT 停止（与 `BeginStream` 被拒一致）。
+- **拒收旧流的位置**（`SeekAwaitReopen`）：从执行跳转到新流重开之间，快照不接受任何 `DecodedMs` 回报，否则位置会被旧值顶回去。此间 `StreamBegun` 为假，状态机根本不调用 `Pump`，这个标志是对同一约束的显式防线。重开之后 `DecodedMs` 从落点起算（不小于落点），位置照旧只取较大值。
+- **作废**：切歌类命令（NEXT/PREV/SELECT/停止态 TOGGLE）、播完前进、跳过坏文件、进入停止态都使未完成的跳转作废，不再重开、不记 Seek INFO。
+- **T_data 与 T_out 与切歌一致**：新流开启应答从写请求起算 T_data；放弃旧流时停 T_out，下一次 `OutputStarted` 重新计时；不新增计时器，不改超时值。
+- **越尾**：映射把偏移钳在 `AudioBytes − W_min`，之后照常读完、播完、前进；暂停中则停在末尾，恢复后放完再前进（`Pump` 在暂停态不回报流尾放完）。钳位值的大小由 Service 决定，状态机不依赖它。高码率文件（如 320 kbps）钳位后可能一帧也解不出（见 Service/playback README 的 #166 第 11 条核实），播放模块此时没有可放的音频，暂停中也会回报流尾放完。状态机用 `SeekHoldEnd`（跳转重开的流、尚未起播过）处理：暂停中收到流尾放完不前进，保持 PAUSED、位置为落点（此时记 Seek INFO，因为没有预填可等）；按 TOGGLE 恢复后同一事实再次到来，按播完前进，`TrackStartCount` 照常加 1。PLAYING 下零帧直接按播完前进，前进之前补记同一格式的 Seek INFO（含 `clamp` 与 `lat`，与暂停中零帧一致；前进会作废跳转，不补记就丢这一行）。`OutputStarted`、切歌与停止清除该标志，所以此后的暂停在流尾行为不受影响。
+- **落点之后丢帧**：重开后位储备不足的帧被丢弃（实测最多约 4 帧，低码率 VBR 约 104 ms），状态机仍以映射落点为快照位置，不另行修正。
+- **Seek INFO**（DIAG-5，播放任务记，不含文件名）：`Seek idx=N tgt=<ms> land=<ms> off=<B> map=toc|lin[ clamp] lat=<us>`。PLAYING 在输出重新起播（`OutputStarted`）时记；PAUSED 在预填完成时记（补半区不再要输入，且流未读尽到无音频可放）；两者先到者先记，只记一次。`lat` 是处理 SEEK 命令到记日志的周期差，用 `ReadCycles`（DWT）与 `CyclesToUs` 换算，外壳接 `CortexM7CycleCounter_*`；Ops 为空时记 0。忽略记 DEBUG，被合并与作废的不记。时延初值：PLAYING 下 `lat` ≤ 100 ms，PAUSED 下只记录，超出由板测修正。
 
 ## 停止原因、坏文件与故障（#79）
 
@@ -68,11 +84,13 @@
 - 存储窗口：写请求信箱、窥视流记录、窥视/取走就绪块、归还块。类型与 `storage_audio_stream.h` 的请求、记录、结果枚举一一对应，外壳做 1:1 映射并以静态断言固定。
 - 播放模块：`BeginStream`、`Feed`、`FinishInput`、`Pump`、`PauseOutput`、`ResumeOutput`、`AbandonStream`，签名即 `Service_Playback_*`，外壳直接填函数指针。
 - 状态信箱：`PublishSnapshot` 覆盖写。
-- INFO 日志：`LogInfo(text)` 可为空；外壳接到 `Service_Log_Post(INFO, "PLAYBACK", text)`（非阻塞，队列满丢弃）。
+- INFO / DEBUG 日志：`LogInfo(text)`、`LogDebug(text)` 可为空；外壳接到 `Service_Log_Post(INFO / DEBUG, "PLAYBACK", text)`（非阻塞，队列满丢弃）。单条 INFO 文本缓冲 `PLAYBACK_MACHINE_LOG_TEXT_SIZE` 为 96 B（Seek 行最长约 88 B，小于 Service_Log 单块正文 128 B）。
+- 周期计数器：`ReadCycles()`、`CyclesToUs(cycles)` 可为空；外壳接到 `CortexM7CycleCounter_Read()` 与按核心频率的换算，只供 Seek INFO 的 `lat`。
+- 播放模块的跳转入口：`MapSeek`、`ReopenStream`，外壳直接填 `Service_Playback_MapSeek` 与 `Service_Playback_ReopenStream`。
 
 ## INFO 日志事件
 
-状态机只在命令与曲目边界记 INFO，频率随命令与曲目数有界；`Platform/audio`（ISR 回调路径）与 `Service/playback`（每帧路径）不记 INFO。只记曲库序号 `idx`，不记文件名（曲名属于曲名数据路径）。文案固定，主机测试 `playback_task_log` 按顺序断言：
+状态机只在命令与曲目边界记 INFO（被静默忽略的 SEEK 只记 DEBUG），频率随命令与曲目数有界；`Platform/audio`（ISR 回调路径）与 `Service/playback`（每帧路径）不记 INFO。只记曲库序号 `idx`，不记文件名（曲名属于曲名数据路径）。文案固定，主机测试 `playback_task_log` 按顺序断言：
 
 | 文案 | 时机 |
 |---|---|
@@ -82,6 +100,7 @@
 | `Next idx=N` / `Prev idx=N` | 用户切歌，N 为新序号 |
 | `Skip bad idx=N` | 跳过坏文件（含 Start 被拒、同步预算耗尽），N 为被跳过的曲目 |
 | `Finished idx=N` / `Auto idx=M` | 播完，随后自动前进到 M |
+| `Seek idx=N tgt=T land=L off=B map=toc\|lin[ clamp] lat=U` | 跳转执行成功后：PLAYING 在输出重新起播时，PAUSED 在预填完成时（见“跳转”） |
 | `Stop reason=NAME` | 进入停止态，NAME 为快照 `StopReason` 的枚举名（去掉 `PLAYBACK_STOP_REASON_` 前缀） |
 
 一次「播放 → 切歌 → 暂停 → 停止」因此可按日志顺序重建，停止原因与快照一致。
@@ -93,4 +112,4 @@
 
 ## 主机测试
 
-`Tests/playback_task/`：假存储窗口与假播放模块，覆盖 K3 全部格子、K5 的快照字段、流身份与块交接、切歌清理顺序、暂停、EOF 与短文件、游标环形步进与代次绑定，以及 B5 坏文件有界跳过、B6 每一行停止原因、B7/B8 超时、B10 与 K3 的 AUDIO_FAULT 锁存。
+`Tests/playback_task/`：假存储窗口与假播放模块（含线性假 `MapSeek`/`ReopenStream` 与假周期计数器），覆盖跳转（`playback_task_seek`：执行与落点、三种忽略、最新者胜、带偏移重开、暂停中预填、越尾、`TrackStartCount`、作废、计时、Seek INFO）、K3 全部格子、K5 的快照字段、流身份与块交接、切歌清理顺序、暂停、EOF 与短文件、游标环形步进与代次绑定，以及 B5 坏文件有界跳过、B6 每一行停止原因、B7/B8 超时、B10 与 K3 的 AUDIO_FAULT 锁存。

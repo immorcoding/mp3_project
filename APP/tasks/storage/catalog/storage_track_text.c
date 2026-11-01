@@ -5,6 +5,9 @@
 
 #include "storage_track_text.h"
 
+#include "storage_catalog.h"
+#include "storage_track_open.h"
+
 #include <stdint.h>
 #include <string.h>
 
@@ -13,6 +16,9 @@
 
 /** @brief 标签读取工作缓冲；只由 Storage Task 使用，放静态区以免占任务栈。 */
 static uint8_t storage_track_text_block[STORAGE_CATALOG_TEXT_BLOCK_BYTES];
+
+/** @brief 当前曲目的曲库相对路径；仅用于文件主名回退与退回路径打开，不进结果。 */
+static char storage_track_text_path[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
 
 /** @brief 最近一次读取的结果；下一次读取前有效。 */
 static StorageTrackText_ResultTypeDef storage_track_text_result;
@@ -75,32 +81,34 @@ static const StorageTrackText_ResultTypeDef *storage_track_text_fallback(Storage
 
 /**
  * @brief 读一首曲目的显示名与歌手。
- * @param[in] path 曲库 UTF-8 相对路径（SD 卷）。
- * @return 本 Module 持有的结果，下一次调用前有效；NULL 表示文件主名提取失败（STOR-15 的防御分支）。
- * @note  只由 Storage Task 调用。打开失败按“打开失败”回退文件主名；取文件长度失败按“读取错误”回退；
+ * @param[in] position 播放列表位置，只用于核对不符时的日志。
+ * @param[in] catalog_index 曲目的 Catalog 下标；调用者须已核对 Sheet 与 Catalog 代次一致。
+ * @return 本 Module 持有的结果，下一次调用前有效；NULL 表示文件主名提取失败（STOR-15 的防御分支），
+ *         或下标已不在曲库内（拷不出路径）。
+ * @note  只由 Storage Task 调用。先按曲库里的文件定位符打开，核对不符退回按路径打开（STOR-17、ARC-19）；
+ *        打开失败按“打开失败”回退文件主名；取文件长度失败按“读取错误”回退；
  *        其余标签侧结果由 storage_catalog_track_text() 判定。标签读取 FIL 用完即关，与音频流 FIL 合计
  *        不超过 FatFs `_FS_LOCK`（2）。一次调用最坏为 f_open + 取长度 + STORAGE_CATALOG_TEXT_MAX_READS 次读取 + f_close。
  */
-const StorageTrackText_ResultTypeDef *storage_track_text_read(const char *path)
+const StorageTrackText_ResultTypeDef *storage_track_text_read(uint16_t position, uint16_t catalog_index)
 {
     StorageTrackText_ResultTypeDef *result = &storage_track_text_result;
     StorageCatalog_TextRequestTypeDef request;
     Service_Filesystem_FileHandleTypeDef file = {0};
     uint64_t size64 = 0U;
+    const char *path = storage_track_text_path;
     uint32_t path_bytes;
     bool extracted;
 
-    if (path == NULL)
+    if (storage_catalog_copy_path(catalog_index, storage_track_text_path, sizeof(storage_track_text_path)) != STORAGE_OK)
     {
         return NULL;
     }
     path_bytes = (uint32_t)strlen(path);
     result->OpenFailed = false;
+    result->OpenUs = 0U;
 
-    if (Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_SD,
-                                    path,
-                                    SERVICE_FILESYSTEM_FILE_MODE_READ,
-                                    &file) != SERVICE_OK)
+    if (storage_track_open(position, catalog_index, path, &file, &result->OpenUs) != SERVICE_OK)
     {
         result->OpenFailed = true;
         return storage_track_text_fallback(result, path, path_bytes, STORAGE_CATALOG_TEXT_NO_ID3V2);

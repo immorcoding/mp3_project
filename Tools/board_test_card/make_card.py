@@ -25,6 +25,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import card_names  # noqa: E402
 import card_tags  # noqa: E402
 import card_glyphs  # noqa: E402
+import card_seek  # noqa: E402
+import card_xing  # noqa: E402
+import card_bigdir  # noqa: E402
 
 # 整数 Hz 和弦：1 s 周期，包络 3 Hz 也是整周期，首尾采样都为 0。
 PROGRESSION = [
@@ -49,6 +52,16 @@ FILES = [
     ("bad-empty.mp3", "0 字节：坏文件"),
 ]
 SECTION_SECONDS = 210
+# 主机精度夹具（#174）：MPEG-1 L3、44.1 kHz 立体声、20 s 和弦；(文件名, 头类型, 比特率 kbps 或 None=VBR, 说明)。
+HOST_FIXTURE_SECONDS = 20
+HOST_FIXTURE_KBPS = 64
+HOST_FIXTURE_VBR_QUALITY = 2  # lameenc vbr_quality=2：同内容约 160 KB（≈64 kbps 均值）
+HOST_FIXTURES = [
+    ("cbr_nohdr.mp3", None, HOST_FIXTURE_KBPS, "CBR 64 kbps，无头"),
+    ("cbr_info.mp3", "Info", HOST_FIXTURE_KBPS, "CBR 64 kbps，Info 头（帧数+字节数，无 TOC）"),
+    ("vbr_toc.mp3", "Xing", None, "VBR，Xing 头带 100 项 TOC"),
+    ("vbr_nohdr.mp3", None, None, "VBR，无头"),
+]
 NAME_SAMPLE_SECONDS = 30  # 文件名样本的可播内容：44.1 kHz 192 kbps 30 s，与 card-04 同音频
 
 # 命名子集；顺序沿用 FILES 的相对顺序。
@@ -62,7 +75,16 @@ SETS = {
     "tags": [sample.filename for sample in card_tags.TAG_SAMPLES],
     # 曲目元数据字形样本（#150）：中文、西文扩展字符、多值与超长歌手，音频同 names；不属于 all，换空卡单独复制进 Music/。
     "glyphs": [sample.filename for sample in card_glyphs.GLYPH_SAMPLES],
+    # 跳转样本（#174）：44.1 kHz、3:30 的刻度音，四种头部；不属于 all，换空卡单独复制进 Music/。
+    "seek": [sample.filename for sample in card_seek.SEEK_SAMPLES],
+    # 主机精度夹具（#174）：不上板、不复制进卡；输出目录直接指向 Tests/playback_service/fixtures/xing。
+    "host-fixtures": [name for name, _, _, _ in HOST_FIXTURES],
 }
+SET_CHOICES = sorted(SETS) + ["bigdir"]  # bigdir（#180）有 12000 个文件，不进 SETS 的逐文件表，也不进 all
+
+BIGDIR_PROBE_KBPS = 128
+BIGDIR_PROBE_SECONDS = 192  # ≥ 3 分钟
+BIGDIR_SMALL_SECONDS = 1
 
 
 def tile_pcm(rate, channels, seconds):
@@ -110,6 +132,49 @@ def make_all():
     return out
 
 
+def make_seek():
+    """--set seek：{文件名: 字节}（确定性，只含这四首）。"""
+    pcm = card_seek.tick_pcm()
+    cbr = gf.encode(pcm, card_seek.RATE, card_seek.CHANNELS, bitrate=320)
+    vbr = gf.encode(pcm, card_seek.RATE, card_seek.CHANNELS, vbr_quality=HOST_FIXTURE_VBR_QUALITY)
+    out = {}
+    for sample in card_seek.SEEK_SAMPLES:
+        audio = cbr if sample.bitrate else vbr
+        out[sample.filename] = card_xing.add_header(audio, sample.header, sample.with_toc) if sample.header else audio
+    return out
+
+
+def make_host_fixtures():
+    """--set host-fixtures：{文件名: 字节}（确定性，只含这四个）。CBR 两个与 VBR 两个各共用同一段音频码流。"""
+    pcm = tile_pcm(44100, 2, HOST_FIXTURE_SECONDS)
+    audio = {
+        HOST_FIXTURE_KBPS: gf.encode(pcm, 44100, 2, bitrate=HOST_FIXTURE_KBPS),
+        None: gf.encode(pcm, 44100, 2, vbr_quality=HOST_FIXTURE_VBR_QUALITY),
+    }
+    out = {}
+    for name, header, kbps, _ in HOST_FIXTURES:
+        stream = audio[kbps]
+        out[name] = card_xing.add_header(stream, header, header == "Xing") if header else stream
+    return out
+
+
+def make_bigdir_audio():
+    """返回 (小 MP3, 探针曲) 的字节：44.1 kHz 立体声 CBR 128 kbps，约 1 s 与 192 s。"""
+    small = gf.encode(tile_pcm(44100, 2, BIGDIR_SMALL_SECONDS), 44100, 2, bitrate=BIGDIR_PROBE_KBPS)
+    probe = gf.encode(tile_pcm(44100, 2, BIGDIR_PROBE_SECONDS), 44100, 2, bitrate=BIGDIR_PROBE_KBPS)
+    return small, probe
+
+
+def write_bigdir(output_dir):
+    small, probe = make_bigdir_audio()
+
+    def sink(name, payload):
+        with open(os.path.join(output_dir, name), "wb") as handle:
+            handle.write(payload)
+
+    card_bigdir.write_set(sink, small, probe)
+
+
 def copy_in_order(src_dir, dst_dir, names):
     for name in names:
         shutil.copyfile(os.path.join(src_dir, name), os.path.join(dst_dir, name))
@@ -147,6 +212,8 @@ def _tag_lines(data, heading, samples, width):
 
 _TAGS_HEADING = "\nID3 标签样本（--set tags；音频同上、只改标签；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）："
 _GLYPHS_HEADING = "\n曲目元数据字形样本（--set glyphs；音频同上、只改标签；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）："
+_SEEK_HEADING = "\n跳转样本（--set seek；44.1 kHz、3:30 刻度音；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）："
+_HOST_HEADING = "\n主机精度夹具（--set host-fixtures；不上板；输出目录指向 Tests/playback_service/fixtures/xing）："
 _NOTICE = [
     "\n注意：FAT 目录顺序取决于创建顺序，复制到卡上必须按此顺序逐个复制，不要整夹拖拽；",
     "测“首个文件是坏文件”时 bad-zero.mp3 必须最先复制到空卡（或先格式化）。",
@@ -155,18 +222,31 @@ _NOTICE = [
 
 def render_report(data, set_key=None):
     """返回要打印的行。set_key 为 None 时列出全部样本表与子集清单；指定子集时只列该子集的样本表与复制顺序。"""
+    if set_key == "bigdir":
+        return card_bigdir.report_lines() + _NOTICE
+
     if set_key is None:
         lines = _file_lines(data, [name for name, _ in FILES], "测试卡（复制顺序 = FAT 创建顺序 = 入库顺序）：")
         lines += _names_lines(data)
         lines += _tag_lines(data, _TAGS_HEADING, card_tags.TAG_SAMPLES, 24)
         lines += _tag_lines(data, _GLYPHS_HEADING, card_glyphs.GLYPH_SAMPLES, 26)
+        lines += render_report(data, "seek")[:len(card_seek.SEEK_SAMPLES) + 1]
+        lines += render_report(data, "host-fixtures")[:len(HOST_FIXTURES) + 1]
         lines.append("\n子集（均按上面的相对顺序复制）：")
         for key, names in SETS.items():
             lines.append("  --set %-16s %s" % (key, ", ".join(names)))
+        lines.append("  --set %-16s %d 首同文件夹，探针曲在第 %s 首（换空卡复制，详见 README）" % (
+                     "bigdir", card_bigdir.COUNT, "、".join(str(i) for i in card_bigdir.PROBE_INDEXES)))
         return lines + _NOTICE
 
     names = SETS[set_key]
-    if set_key == "names":
+    if set_key == "seek":
+        lines = [_SEEK_HEADING] + ["%d. %-26s %9d 字节  %s" % (i, sample.filename, len(data[sample.filename]), sample.note)
+                                   for i, sample in enumerate(card_seek.SEEK_SAMPLES, 1)]
+    elif set_key == "host-fixtures":
+        lines = [_HOST_HEADING] + ["%d. %-16s %7d 字节  %s" % (i, name, len(data[name]), note)
+                                   for i, (name, _, _, note) in enumerate(HOST_FIXTURES, 1)]
+    elif set_key == "names":
         lines = _names_lines(data)
     elif set_key == "tags":
         lines = _tag_lines(data, _TAGS_HEADING, card_tags.TAG_SAMPLES, 24)
@@ -182,20 +262,27 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("output_dir")
     parser.add_argument("--copy-to", help="生成后按顺序复制到此目录（SD 卡挂载点；应为空目录）")
-    parser.add_argument("--set", choices=sorted(SETS), default=None,
+    parser.add_argument("--set", choices=SET_CHOICES, default=None,
                         help="--copy-to 复制的子集，默认 all；指定时只打印该子集的样本表与复制顺序，不指定时列出全部")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
-    data = make_all()
-    for name in data:
-        with open(os.path.join(args.output_dir, name), "wb") as handle:
-            handle.write(data[name])
+    if args.set == "bigdir":
+        write_bigdir(args.output_dir)
+        data = {}
+        names = card_bigdir.file_names()
+    else:
+        # seek / host-fixtures 只生成各自的文件；其余沿用全套（含 names/tags/glyphs）。
+        data = {"seek": make_seek, "host-fixtures": make_host_fixtures}.get(args.set, make_all)()
+        for name in data:
+            with open(os.path.join(args.output_dir, name), "wb") as handle:
+                handle.write(data[name])
+        names = SETS[args.set or "all"]
     print("\n".join(render_report(data, args.set)))
 
     if args.copy_to:
         os.makedirs(args.copy_to, exist_ok=True)
-        copy_in_order(args.output_dir, args.copy_to, SETS[args.set or "all"])
+        copy_in_order(args.output_dir, args.copy_to, names)
 
 
 if __name__ == "__main__":

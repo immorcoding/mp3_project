@@ -15,6 +15,7 @@
 #include "APP/tasks/playback/playback_machine.h"
 #include "APP/tasks/storage/stream/storage_audio_block.h"
 #include "APP/tasks/storage/stream/storage_audio_stream.h"
+#include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/queue.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
@@ -45,6 +46,7 @@ _Static_assert(sizeof(Playback_MachineRequestTypeDef) == sizeof(Storage_AudioReq
 PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, Storage_AudioRequestTypeDef, StreamSeq);
 PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, Storage_AudioRequestTypeDef, Generation);
 PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, Storage_AudioRequestTypeDef, Position);
+PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, Storage_AudioRequestTypeDef, AudioOffset);
 
 _Static_assert(sizeof(Playback_MachineRecordTypeDef) == sizeof(Storage_AudioRecordTypeDef),
                "Playback_MachineRecordTypeDef must mirror Storage_AudioRecordTypeDef");
@@ -174,6 +176,7 @@ static bool playback_task_write_request(const Playback_MachineRequestTypeDef *re
     storage_request.StreamSeq = request->StreamSeq;
     storage_request.Generation = request->Generation;
     storage_request.Position = request->Position;
+    storage_request.AudioOffset = request->AudioOffset;
     return storage_audio_stream_request(&storage_request);
 }
 
@@ -265,6 +268,36 @@ static void playback_task_log_info(const char *text)
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, playback_task_log_tag, text);
 }
 
+/**
+ * @brief 状态机的 DEBUG 日志出口：非阻塞投递到 Log Task，失败（队列满）丢弃。
+ * @param[in] text 日志文本，由 Service_Log 复制。
+ */
+static void playback_task_log_debug(const char *text)
+{
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_DEBUG, playback_task_log_tag, text);
+}
+
+/**
+ * @brief 周期计数器读数（DWT），供跳转时延；只用差值。
+ * @return 当前周期数。
+ */
+static uint32_t playback_task_read_cycles(void)
+{
+    return CortexM7CycleCounter_Read();
+}
+
+/**
+ * @brief 把周期数换算成微秒。
+ * @param[in] cycles 周期数，不超过一个计数器回绕周期。
+ * @return 微秒；核心频率未知时为 0。
+ */
+static uint32_t playback_task_cycles_to_us(uint32_t cycles)
+{
+    const uint32_t frequency_hz = CortexM7CycleCounter_GetFrequencyHz();
+
+    return (frequency_hz == 0U) ? 0U : (uint32_t)(((uint64_t)cycles * 1000000ULL) / frequency_hz);
+}
+
 /** @brief 状态机的全部外部依赖：存储窗口经本文件适配，播放模块直接填 Service_Playback_* 函数指针。 */
 static const Playback_MachineOpsTypeDef playback_task_ops = {
     .Storage = {
@@ -276,6 +309,8 @@ static const Playback_MachineOpsTypeDef playback_task_ops = {
     },
     .Player = {
         .BeginStream = Service_Playback_BeginStream,
+        .MapSeek = Service_Playback_MapSeek,
+        .ReopenStream = Service_Playback_ReopenStream,
         .Feed = Service_Playback_Feed,
         .FinishInput = Service_Playback_FinishInput,
         .Pump = Service_Playback_Pump,
@@ -285,6 +320,9 @@ static const Playback_MachineOpsTypeDef playback_task_ops = {
     },
     .PublishSnapshot = playback_task_publish_snapshot,
     .LogInfo = playback_task_log_info,
+    .LogDebug = playback_task_log_debug,
+    .ReadCycles = playback_task_read_cycles,
+    .CyclesToUs = playback_task_cycles_to_us,
 };
 
 /**

@@ -8,7 +8,7 @@ python Tools/board_test_card/make_card.py <输出目录>
 python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --set all
 ```
 
-不带 `--set` 时列出全部样本表和子集清单，复制默认用 `all`；带 `--set X` 时只打印该子集的样本表和复制顺序（不再打印其他子集的表与清单），生成的文件仍是全套。报告格式由 `python Tools/board_test_card/test_make_card_report.py` 检查（不需要 `lameenc`）。
+不带 `--set` 时列出全部样本表和子集清单，复制默认用 `all`；带 `--set X` 时只打印该子集的样本表和复制顺序（不再打印其他子集的表与清单），生成的文件仍是全套；例外是 `--set seek` 与 `--set host-fixtures`，它们只生成各自的文件。报告格式由 `python Tools/board_test_card/test_make_card_report.py` 检查（不需要 `lameenc`）。
 
 | 复制顺序 | 文件 | 字节 | 用途 |
 |---:|---|---:|---|
@@ -82,3 +82,35 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 - 样本 3：v2.4，TPE1 六项以 NUL 分隔：`Artist One`、全空白项、` Artist Two `（首尾空白）、空项、`AC/DC`、`U+3000 Artist Three U+3000`；清理后四项，其中 `AC/DC` 不被拆分。
 - 样本 4：v2.4，TPE1 共 333 B（上限 251 B）：前 249 B 为 ASCII，其后是 3 B 汉字，截断点落在第一个汉字内部，所以按字符边界只留 249 B，不加省略号、不留半个字符。249 个字符远宽于 Queue 与唱盘页的可见宽度，Queue 歌手行与唱盘页歌手行（GUI-26）都用 `LV_LABEL_LONG_DOT` 截断加省略号。
 - 字节数以 `lameenc` 1.9.0 为准；同参数两次生成逐字节一致。合同由 `python Tools/board_test_card/test_card_glyphs.py` 检查（标签版本、编码字节、关键码点、截断边界、不进 `all`；这些不需要 `lameenc`）。另有整文件确定性用例：同一参数两次生成，`--set glyphs` 的每个文件逐字节相同；它要编码音频，约 30 s，未装 `lameenc` 时跳过。该测试不在 `verify.ps1` FULL 内，需手动运行。
+
+### 跳转样本（`--set seek`）
+
+给 [#172](https://github.com/immorcoding/mp3_project/issues/172) 的跳转板级验收 S1–S4 用（#174）。四首都是 44.1 kHz 立体声、3:30（210 s）的刻度音：全零静音底，每 10 s 一声 1 kHz 短哔（100 ms，峰值 12000），整分钟（60、120、180 s）在 0.25 s 后再来一声，共 23 声，最后一声在 200 s。头由 [card_xing.py](card_xing.py) 自写（`Info`/`Xing` 的帧数、字节数、TOC 口径见[夹具 README](../../Tests/playback_service/fixtures/README.md#xing跳转精度夹具174)），刻度表在 [card_seek.py](card_seek.py)。复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set seek`）。不含在 `all` 内：换一张空卡单独复制，按下表顺序逐个复制。
+
+| 顺序 | 文件名 | 字节 | 头 | 编码 | 期望现象（映射、听感） |
+|---:|---|---:|---|---|---|
+| 1 | `seek-1-cbr320-nohdr.mp3` | 8402024 | 无 | CBR 320 | `Seek` INFO `map=lin`；跳到刻度前约 2 s，屏幕走到刻度时听到哔声，偏差 ±0.5 s 内 |
+| 2 | `seek-2-cbr320-info.mp3` | 8402441 | `Info`，flags 0x03，无 TOC | CBR 320 | `map=lin`；同上 |
+| 3 | `seek-3-vbr-toc.mp3` | 850838 | `Xing`，flags 0x07，100 项 TOC | VBR（`vbr_quality=2`） | `map=toc`；同上 |
+| 4 | `seek-4-vbr-nohdr.mp3` | 850421 | 无 | 同上 VBR | `map=lin`；静音处比特率低，线性映射偏差较大，只记录 |
+
+- VBR 两首共用同一段音频码流（静音段比特率低，哔声处高），所以字节数远小于 CBR；3 号 = 头帧 417 B + 4 号全部字节。
+- 字节数以 `lameenc` 1.9.0 为准；同参数两次生成逐字节一致。合同由 `python Tools/board_test_card/test_card_xing.py`（头字段、TOC 手算字面量、帧数与独立遍历一致，不需要 `lameenc`）与 `python Tools/board_test_card/test_card_seek.py`（哔声位置、头部类型、不进 `all`、提交夹具规格）检查；这些测试不在 `verify.ps1` FULL 内，需手动运行，其中整文件用例要编码 3:30 音频，约数秒至数十秒，未装 `lameenc` 时跳过。
+- 另有主机精度夹具 `--set host-fixtures`（20 s、约 160 KB，不上板、不复制进卡），输出目录指向 `Tests/playback_service/fixtures/xing`，规格与生成命令见[夹具 README](../../Tests/playback_service/fixtures/README.md#xing跳转精度夹具174)。
+- ffmpeg 的 CBR+Info 对照样本只写生成方法（见同一夹具 README），不提交，不进测试。
+
+### 大目录卡（`--set bigdir`）
+
+给 [#172](https://github.com/immorcoding/mp3_project/issues/172) 的“打开耗时”组（清单 1 O1–O8）用（#180）：12000 首同在 `Music/` 一个文件夹，比较 5 个探针位置的打开耗时。逻辑在 [card_bigdir.py](card_bigdir.py)；不含在 `all` 内，且不同于其他子集，它只生成这一套文件（不再同时生成全套样本）。**换一张空卡（或格式化后）单独复制，只需 1 张**。
+
+```powershell
+python Tools/board_test_card/make_card.py <输出目录> --set bigdir
+python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --set bigdir
+```
+
+- 文件名恒为 50 个 ASCII 字符（约 5 个 FAT 目录项：4 个长名项 + 1 个短名项），形如 `00001-bigdir-open-time-card-long-file-name-pad.mp3`；前缀是 5 位零填充序号，目录顺序（创建顺序）与曲库顺序一致。`Music/` 整串路径约 56 B，远低于 255 B。
+- 探针曲：第 **1、3000、6000、9000、12000** 首，44.1 kHz 立体声 CBR 128 kbps、192 s（约 3.0 MB，≥ 3 分钟）；其余 11995 首是同参数约 1 s 的小 MP3（约 16 KB）。
+- 容量：输出目录与 SD 卡各约 260 MB 有效数据；FAT32 簇取整后建议卡上至少留 1 GiB 空闲，输出目录所在盘同样留 ≥ 1 GiB。
+- 复制 12000 个文件较慢，请用 `--copy-to`（按文件名升序逐个复制）；手动复制必须保证创建顺序等于文件名升序，不要整夹拖拽。
+- 合同（文件数、名字长度与前缀顺序、探针位置、不进 `all`）由 `python Tools/board_test_card/test_card_bigdir.py` 检查：只看文件名清单与注入的 sink，不写盘；探针时长一条需要 `lameenc`，未装时跳过。该测试不在 `verify.ps1` FULL 内，需手动运行。
+- 探针曲只用 `lameenc` 现有 CBR 输出，不带 Xing/Info 头，也不依赖 `--set seek`。
