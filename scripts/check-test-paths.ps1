@@ -262,6 +262,21 @@ function Get-HostModuleDependency {
     return $sorted
 }
 
+# 参与 gcc 依赖扫描的模块：有 Tests/<模块>/ CMake 工程的主机模块。规则 Kind = 'Python' 的模块（unittest）没有编译依赖，不在其内。
+function Get-HarnessCMakeModuleName {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][hashtable]$Rules)
+
+    $pythonModules = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($moduleRule in $Rules.HostModuleRules) {
+        if ($moduleRule.ContainsKey('Kind') -and ([string]$moduleRule.Kind -eq 'Python')) {
+            [void]$pythonModules.Add([string]$moduleRule.Name)
+        }
+    }
+
+    return @($Rules.AllHostModules | ForEach-Object { [string]$_ } | Where-Object { -not $pythonModules.Contains($_) })
+}
+
 # 纯判定：返回“模块 <- 路径”形式的未覆盖项。自身 Tests/<模块>/ 树豁免。
 function Get-UncoveredHostModulePath {
     [CmdletBinding()]
@@ -276,9 +291,14 @@ function Get-UncoveredHostModulePath {
     }
 
     $uncovered = New-Object System.Collections.Generic.List[string]
+    $cmakeModules = @(Get-HarnessCMakeModuleName -Rules $Rules)
     foreach ($name in @($Rules.AllHostModules | Sort-Object)) {
         if (-not $ruleByName.ContainsKey([string]$name)) {
             throw "AllHostModules 中的模块 '$name' 在 HostModuleRules 里没有规则。"
+        }
+
+        if ($cmakeModules -notcontains [string]$name) {
+            continue
         }
 
         $ownTree = '^Tests/' + [regex]::Escape([string]$name) + '/'
@@ -308,7 +328,7 @@ function Invoke-TestPathsCheck {
         [hashtable]$Rules = (Get-HarnessRules)
     )
 
-    $modules = @($Rules.AllHostModules | ForEach-Object { [string]$_ })
+    $modules = @(Get-HarnessCMakeModuleName -Rules $Rules)
     $buildRoot = Join-Path -Path ([System.IO.Path]::GetTempPath()) `
         -ChildPath ('mp3-testpaths-' + [Guid]::NewGuid().ToString('N'))
     try {

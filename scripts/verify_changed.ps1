@@ -40,6 +40,10 @@ function Invoke-ChangedValidationInTree {
     }
     else {
         $hostParameters = @{ Module = $Impact.HostModules }
+        # 样本卡 Python 测试里的慢用例只在 FULL 跑；旧提交的 test-host.ps1 没有该开关，只在选中该模块时才传。
+        if ($Impact.HostModules -contains 'board_test_card') {
+            $hostParameters.SkipSlow = $true
+        }
         if (-not [string]::IsNullOrWhiteSpace($RequestedHostCompiler)) {
             $hostParameters.HostCompiler = $RequestedHostCompiler
         }
