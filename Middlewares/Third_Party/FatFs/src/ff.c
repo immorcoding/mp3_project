@@ -3505,6 +3505,98 @@ FRESULT f_open (
 
 
 /*-----------------------------------------------------------------------*/
+/* Open a File by the Position of its Directory Entry (local patch)      */
+/*-----------------------------------------------------------------------*/
+/* Added for the media player, see docs/adr/0022-fatfs-open-by-locator-patch.md
+/  and patches/fatfs/. Opens an existing file for reading without searching the
+/  directory by name: the caller records, while scanning the directory, where the
+/  SFN entry sits (start cluster of the containing directory and byte offset in it)
+/  plus the start cluster and size the entry had. The entry is read at that
+/  position and verified (a file, not deleted, not a sub-directory, same start
+/  cluster and size) and the file object is then filled and locked exactly as
+/  at the end of f_open(). Cost does not depend on the position in the directory.
+/  FR_NO_FILE means the record does not match the media; the caller falls back to
+/  f_open(). Read-only and non-exFAT volumes only. */
+
+FRESULT f_open_dirent (
+	FIL* fp,			/* Pointer to the blank file object */
+	const TCHAR* path,	/* Drive prefix of the volume, "0:" or "0:/..." (the rest is ignored) */
+	DWORD dclst,		/* Start cluster of the containing directory (0:root) */
+	DWORD dofs,			/* Byte offset of the SFN entry in the directory */
+	DWORD sclust,		/* Start cluster the entry must have */
+	DWORD fsize			/* File size the entry must have */
+)
+{
+	FRESULT res;
+	DIR dj;
+	FATFS *fs;
+	BYTE c;
+
+
+	if (!fp) return FR_INVALID_OBJECT;
+
+	res = find_volume(&path, &fs, 0);
+#if _FS_EXFAT
+	if (res == FR_OK && fs->fs_type == FS_EXFAT) res = FR_NOT_ENABLED;
+#endif
+	if (res == FR_OK) {
+		dj.obj.fs = fs;
+		dj.obj.sclust = dclst;
+		dj.obj.stat = 0;
+		res = dir_sdi(&dj, dofs);		/* Follow the directory chain to the entry */
+		if (res == FR_INT_ERR) res = FR_NO_FILE;	/* Position is outside the directory */
+		if (res == FR_OK) res = move_window(fs, dj.sect);
+		if (res == FR_OK) {
+			c = dj.dir[DIR_Name];
+			if (c == 0 || c == DDEM ||		/* End of table or deleted */
+				(dj.dir[DIR_Attr] & (AM_DIR | AM_VOL)) ||	/* Sub-directory, volume label or LFN entry */
+				ld_clust(fs, dj.dir) != sclust ||
+				ld_dword(dj.dir + DIR_FileSize) != fsize) {
+				res = FR_NO_FILE;
+			}
+		}
+#if _FS_LOCK != 0
+		if (res == FR_OK) res = chk_lock(&dj, 0);
+#endif
+		if (res == FR_OK) {
+#if !_FS_READONLY
+			fp->dir_sect = fs->winsect;		/* Pointer to the directory entry */
+			fp->dir_ptr = dj.dir;
+#endif
+#if _FS_LOCK != 0
+			fp->obj.lockid = inc_lock(&dj, 0);
+			if (!fp->obj.lockid) res = FR_INT_ERR;
+#endif
+		}
+		if (res == FR_OK) {
+			fp->obj.sclust = sclust;		/* Get object allocation info */
+			fp->obj.objsize = fsize;
+#if _USE_FASTSEEK
+			fp->cltbl = 0;			/* Disable fast seek mode */
+#endif
+			fp->obj.fs = fs;		/* Validate the file object */
+			fp->obj.id = fs->id;
+			fp->flag = FA_READ;		/* Set file access mode */
+			fp->err = 0;			/* Clear error flag */
+			fp->sect = 0;			/* Invalidate current data sector */
+			fp->fptr = 0;			/* Set file pointer top of the file */
+#if !_FS_READONLY
+#if !_FS_TINY
+			mem_set(fp->buf, 0, _MAX_SS);	/* Clear sector buffer */
+#endif
+#endif
+		}
+	}
+
+	if (res != FR_OK) fp->obj.fs = 0;	/* Invalidate file object on error */
+
+	LEAVE_FF(fs, res);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
 /* Read File                                                             */
 /*-----------------------------------------------------------------------*/
 
