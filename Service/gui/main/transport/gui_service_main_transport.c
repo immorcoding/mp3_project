@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    gui_service_main_transport.c
-  * @brief   Now Playing 三键、进度条与时间 Label：记下命令，并按 playing、百分比与时间刷新。
+  * @brief   Now Playing 三键、进度条与时间 Label：记下命令与进度条手势，并按 playing、百分比与时间刷新。
   *
   * @details
   *          时间 Label 兼作状态行（GUI-19，#72 D1–D5）：本 Module 记下时间文本、常驻
@@ -43,8 +43,17 @@ static uint32_t service_gui_main_transport_skip_count;
 /** @brief 跳过提示的单次计时器；没有提示时为 NULL。到期回调里由 LVGL 删除。 */
 static lv_timer_t *service_gui_main_transport_skip_timer;
 
+/** @brief 进度条是否响应按压（Service_GUI_SeekEnable）；Init 后为假。 */
+static bool service_gui_main_transport_seek_enabled;
+
+/**
+ * @brief 本次按压已被吞掉（不响应或已取消）：到手指抬起前不再 post 任何手势事件。
+ * @note  抬起时 LVGL 只发 PRESS_LOST（wait_until_release），收到后清除。
+ */
+static bool service_gui_main_transport_seek_swallowed;
+
 static void service_gui_main_transport_on_clicked(lv_event_t *e);
-static void service_gui_main_transport_on_slider_released(lv_event_t *e);
+static void service_gui_main_transport_on_slider(lv_event_t *e);
 static void service_gui_main_transport_render(void);
 
 /**
@@ -76,39 +85,106 @@ static void service_gui_main_transport_on_clicked(lv_event_t *e)
 }
 
 /**
- * @brief 进度条松手只 post 百分比，不改 playing。
- * @param[in] e LVGL 松开事件。
+ * @brief 读进度条当前值并夹到 0..SERVICE_GUI_SEEK_SCALE。
+ * @return 千分比。
  */
-static void service_gui_main_transport_on_slider_released(lv_event_t *e)
+static uint16_t service_gui_main_transport_slider_permille(void)
 {
-    int32_t value;
-    uint16_t percent;
+    const int32_t value = lv_slider_get_value(service_gui_main_transport_music->slider);
 
-    if (lv_event_get_code(e) != LV_EVENT_RELEASED)
+    if (value < 0)
     {
-        return;
+        return 0U;
     }
+
+    if (value > (int32_t)SERVICE_GUI_SEEK_SCALE)
+    {
+        return (uint16_t)SERVICE_GUI_SEEK_SCALE;
+    }
+
+    return (uint16_t)value;
+}
+
+/**
+ * @brief 吞掉当前这次按压：LVGL 到手指抬起前不再处理它，进度条离开 PRESSED。
+ * @note  在 PRESSED 回调里调用时，LVGL 在发 PRESSING（改值）与滚动处理之前就返回，
+ *        进度条不跟手、父对象也不滚动；之后 ProgressApply 不再被“拖动中”挡住。
+ *        对象状态在同一调用里清除，不会画出按下外观。
+ */
+static void service_gui_main_transport_swallow_press(void)
+{
+    lv_indev_t *indev = NULL;
+
+    while ((indev = lv_indev_get_next(indev)) != NULL)
+    {
+        if (lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER)
+        {
+            lv_indev_wait_release(indev);
+        }
+    }
+
+    lv_obj_clear_state(service_gui_main_transport_music->slider, LV_STATE_PRESSED);
+    service_gui_main_transport_seek_swallowed = true;
+}
+
+/**
+ * @brief 进度条手势只 post 事件（按下、拖动、松手、触摸丢失），不改 playing、不发命令。
+ * @param[in] e LVGL 事件：PRESSED / PRESSING / RELEASED / PRESS_LOST。
+ * @note  不响应时在按下当圈吞掉这次按压；被吞掉或已取消的按压抬起时只收到 PRESS_LOST，
+ *        不 post。PRESSED 时值尚未按触点更新，随后同一次读触摸的 PRESSING 在输入槽里
+ *        与按下合并成最新值。
+ */
+static void service_gui_main_transport_on_slider(lv_event_t *e)
+{
+    const lv_event_code_t code = lv_event_get_code(e);
 
     if (lv_event_get_current_target(e) != service_gui_main_transport_music->slider)
     {
         return;
     }
 
-    value = lv_slider_get_value(service_gui_main_transport_music->slider);
-    if (value < 0)
+    if (code == LV_EVENT_PRESSED)
     {
-        percent = 0U;
-    }
-    else if (value > 100)
-    {
-        percent = 100U;
-    }
-    else
-    {
-        percent = (uint16_t)value;
+        service_gui_main_transport_seek_swallowed = false;
+        if (!service_gui_main_transport_seek_enabled)
+        {
+            service_gui_main_transport_swallow_press();
+            return;
+        }
+
+        service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_PRESS,
+                               service_gui_main_transport_slider_permille());
+        return;
     }
 
-    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK, percent);
+    if (service_gui_main_transport_seek_swallowed)
+    {
+        if ((code == LV_EVENT_RELEASED) || (code == LV_EVENT_PRESS_LOST))
+        {
+            service_gui_main_transport_seek_swallowed = false;
+        }
+        return;
+    }
+
+    switch (code)
+    {
+        case LV_EVENT_PRESSING:
+            service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_DRAG,
+                                   service_gui_main_transport_slider_permille());
+            break;
+
+        case LV_EVENT_RELEASED:
+            service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_RELEASE,
+                                   service_gui_main_transport_slider_permille());
+            break;
+
+        case LV_EVENT_PRESS_LOST:
+            service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_CANCEL, 0U);
+            break;
+
+        default:
+            break;
+    }
 }
 
 /**
@@ -241,7 +317,8 @@ static void service_gui_main_transport_flash_exec(void *var, int32_t value)
 }
 
 /**
- * @brief 绑定 Now Playing 三键点击与进度条松手，并写入初始时间 `0:00/--:--`；事件只在本 Module 绑定。
+ * @brief 绑定 Now Playing 三键点击与进度条手势，并写入初始时间 `0:00/--:--`；事件只在本 Module 绑定。
+ * @note  进度条初始不响应按压，等调用方按播放快照 Service_GUI_SeekEnable(true)。
  * @retval SERVICE_OK 已绑定。
  * @retval SERVICE_NOT_READY 三键、播放图标、进度条或时间 Label 尚未创建。
  */
@@ -263,6 +340,8 @@ Service_StatusTypeDef service_gui_main_transport_prepare(void)
     service_gui_main_transport_status_active = false;
     service_gui_main_transport_skip_count = 0U;
     service_gui_main_transport_skip_timer = NULL;
+    service_gui_main_transport_seek_enabled = false;
+    service_gui_main_transport_seek_swallowed = false;
     (void)service_gui_main_transport_apply_time(0U, 0U);
 
     lv_obj_add_event_cb(
@@ -282,8 +361,23 @@ Service_StatusTypeDef service_gui_main_transport_prepare(void)
         NULL);
     lv_obj_add_event_cb(
         service_gui_main_transport_music->slider,
-        service_gui_main_transport_on_slider_released,
+        service_gui_main_transport_on_slider,
+        LV_EVENT_PRESSED,
+        NULL);
+    lv_obj_add_event_cb(
+        service_gui_main_transport_music->slider,
+        service_gui_main_transport_on_slider,
+        LV_EVENT_PRESSING,
+        NULL);
+    lv_obj_add_event_cb(
+        service_gui_main_transport_music->slider,
+        service_gui_main_transport_on_slider,
         LV_EVENT_RELEASED,
+        NULL);
+    lv_obj_add_event_cb(
+        service_gui_main_transport_music->slider,
+        service_gui_main_transport_on_slider,
+        LV_EVENT_PRESS_LOST,
         NULL);
 
     return SERVICE_OK;
@@ -337,7 +431,54 @@ Service_StatusTypeDef service_gui_main_transport_apply_progress(uint8_t percent)
         percent = 100U;
     }
 
-    lv_slider_set_value(service_gui_main_transport_music->slider, (int32_t)percent, LV_ANIM_OFF);
+    lv_slider_set_value(service_gui_main_transport_music->slider,
+                        (int32_t)percent * (int32_t)(SERVICE_GUI_SEEK_SCALE / 100U),
+                        LV_ANIM_OFF);
+    return SERVICE_OK;
+}
+
+/**
+ * @brief 设置进度条是否响应按压；关闭时若正在拖动，先结束这次拖动。
+ * @param[in] enabled 为假时按下不跟手、不 post 事件，外观不变。
+ * @retval SERVICE_OK 已设置。
+ * @retval SERVICE_NOT_READY 进度条对象尚未创建。
+ */
+Service_StatusTypeDef service_gui_main_transport_seek_enable(bool enabled)
+{
+    if ((service_gui_main_transport_music == NULL) ||
+        (service_gui_main_transport_music->slider == NULL))
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    service_gui_main_transport_seek_enabled = enabled;
+    if (!enabled)
+    {
+        return service_gui_main_transport_seek_cancel();
+    }
+
+    return SERVICE_OK;
+}
+
+/**
+ * @brief 结束正在进行的拖动：吞掉这次按压的其余部分，不 post 松手或取消。
+ * @retval SERVICE_OK 已结束，或没有在拖。
+ * @retval SERVICE_NOT_READY 进度条对象尚未创建。
+ */
+Service_StatusTypeDef service_gui_main_transport_seek_cancel(void)
+{
+    if ((service_gui_main_transport_music == NULL) ||
+        (service_gui_main_transport_music->slider == NULL))
+    {
+        return SERVICE_NOT_READY;
+    }
+
+    if (!service_gui_main_transport_seek_swallowed &&
+        lv_obj_has_state(service_gui_main_transport_music->slider, LV_STATE_PRESSED))
+    {
+        service_gui_main_transport_swallow_press();
+    }
+
     return SERVICE_OK;
 }
 
@@ -357,7 +498,7 @@ static bool service_gui_main_transport_label_ready(void)
  * @param[in] duration_ms 总时长；0 表示未知，显示 `--:--`。
  * @retval SERVICE_OK 已记下（并按优先级写入或暂不显示）。
  * @retval SERVICE_NOT_READY 时间 Label 尚未创建。
- * @note  不按墙钟走表，只显示调用方给出的快照时间。拖动进度条时照常写入真实时间。
+ * @note  不按墙钟走表，只显示调用方给出的时间（拖动中调用方给“目标/按下时的总时长”）。
  *        有常驻文本或跳过提示时只记下，等它们结束后再显示。
  */
 Service_StatusTypeDef service_gui_main_transport_apply_time(uint32_t position_ms, uint32_t duration_ms)

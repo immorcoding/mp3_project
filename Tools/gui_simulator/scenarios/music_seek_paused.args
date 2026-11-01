@@ -1,0 +1,10 @@
+# 暂停中跳转保持暂停（#164）：拖到约一半松手，仍显示 PLAY 键、唱盘静止、时间停在落点；按播放后从落点继续走
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--tap 9000:120,260
+--shot 9300:paused
+--drag 9500:40,212:120,212:300
+--shot 10000:paused_after_seek
+--shot 11000:paused_after_seek_hold
+--tap 11200:120,260
+--shot 12500:resumed_from_landing

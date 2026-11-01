@@ -797,9 +797,9 @@ static void test_vinyl_resets_when_track_identity_changes(void)
 }
 
 /**
- * @brief 位置变小（同曲重选、停止归零）时角度归零。
+ * @brief 同曲重选（TrackStartCount 增加）与进入停止时角度归零（GUI-20）。
  */
-static void test_vinyl_resets_when_position_goes_backwards(void)
+static void test_vinyl_resets_on_track_start_and_on_entering_stop(void)
 {
     GUI_MusicTransportTypeDef transport;
     GUI_MusicTransportDecisionTypeDef decision;
@@ -807,16 +807,44 @@ static void test_vinyl_resets_when_position_goes_backwards(void)
 
     gui_music_transport_init(&transport);
     snapshot.PositionMs = 60000U;
+    snapshot.TrackStartCount = 4U;
     (void)reduce(&transport, &snapshot, 5U);
 
-    snapshot.PositionMs = 200U; /* 同曲重选：同一身份，位置回到开头。 */
+    snapshot.PositionMs = 200U; /* 同曲重选：同一身份，开播计数 +1。 */
+    snapshot.TrackStartCount = 5U;
     decision = reduce(&transport, &snapshot, 5U);
     assert(decision.vinyl_reset_angle == true);
 
+    decision = reduce(&transport, &snapshot, 5U);
+    assert(decision.vinyl_reset_angle == false);
+
     snapshot = make_stopped(PLAYBACK_STOP_REASON_READ_ERROR, 1U, true, 1U);
+    snapshot.TrackStartCount = 5U;
     decision = reduce(&transport, &snapshot, 5U);
     assert(decision.vinyl_reset_angle == true);
     assert(decision.vinyl_playing == false);
+
+    decision = reduce(&transport, &snapshot, 5U);
+    assert(decision.vinyl_reset_angle == false);
+}
+
+/**
+ * @brief 位置变小但开播计数不变（跳转回退，含跳到 0）时角度不归零（GUI-20）。
+ */
+static void test_vinyl_keeps_angle_when_position_goes_backwards_without_track_start(void)
+{
+    GUI_MusicTransportTypeDef transport;
+    GUI_MusicTransportDecisionTypeDef decision;
+    Playback_SnapshotTypeDef snapshot = make_snapshot(PLAYBACK_STATE_PLAYING, true, 5U, 1U);
+
+    gui_music_transport_init(&transport);
+    snapshot.PositionMs = 60000U;
+    snapshot.TrackStartCount = 4U;
+    (void)reduce(&transport, &snapshot, 5U);
+
+    snapshot.PositionMs = 0U;
+    decision = reduce(&transport, &snapshot, 5U);
+    assert(decision.vinyl_reset_angle == false);
 }
 
 /**
@@ -1004,7 +1032,8 @@ int main(void)
     test_vinyl_spins_only_while_playing();
     test_vinyl_keeps_angle_on_first_snapshot_and_forward_progress();
     test_vinyl_resets_when_track_identity_changes();
-    test_vinyl_resets_when_position_goes_backwards();
+    test_vinyl_resets_on_track_start_and_on_entering_stop();
+    test_vinyl_keeps_angle_when_position_goes_backwards_without_track_start();
     test_vinyl_does_not_reset_on_identity_while_frozen();
     test_play_from_boot_confirms_generation_after_opening();
     test_new_window_highlight_uses_last_caught_up_snapshot();

@@ -68,6 +68,7 @@ static const struct
     {"--name-fail", SIM_SCRIPT_NAME_FAIL},
     {"--name-delay", SIM_SCRIPT_NAME_DELAY},
     {"--window-delay", SIM_SCRIPT_WINDOW_DELAY},
+    {"--seek-echo-delay", SIM_SCRIPT_SEEK_ECHO_DELAY},
 };
 
 /**
