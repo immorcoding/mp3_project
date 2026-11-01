@@ -17,6 +17,8 @@ SET_MARKERS = {
     "names": "曲目显示名样本",
     "tags": "ID3 标签样本",
     "glyphs": "曲目元数据字形样本",
+    "seek": "跳转样本",
+    "host-fixtures": "主机精度夹具",
 }
 
 
