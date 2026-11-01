@@ -287,6 +287,57 @@ static void short_file_without_tags_is_whole_range(void)
 }
 
 /**
+ * @brief 偏移 0 落在音频区间起点（普通开流与切歌）。
+ */
+static void seek_offset_zero_is_the_range_start(void)
+{
+    Storage_AudioRangeTypeDef r = {1000U, 5000U};
+
+    assert(storage_audio_range_seek_position(&r, 0U) == 1000U);
+}
+
+/**
+ * @brief 区间内的偏移相对区间起点计，包括最后一个字节。
+ */
+static void seek_offset_inside_the_range_is_relative_to_the_start(void)
+{
+    Storage_AudioRangeTypeDef r = {1000U, 5000U};
+
+    assert(storage_audio_range_seek_position(&r, 1U) == 1001U);
+    assert(storage_audio_range_seek_position(&r, 2048U) == 3048U);
+    assert(storage_audio_range_seek_position(&r, 3999U) == 4999U);
+}
+
+/**
+ * @brief 越过区间的偏移钳在区间末端（剩余 0 字节），不会读进尾部标签，也不因 32 位回绕落回区间内。
+ */
+static void seek_offset_beyond_the_range_is_clamped_to_the_end(void)
+{
+    Storage_AudioRangeTypeDef r = {1000U, 5000U};
+
+    assert(storage_audio_range_seek_position(&r, 4000U) == 5000U);
+    assert(storage_audio_range_seek_position(&r, 4001U) == 5000U);
+    assert(storage_audio_range_seek_position(&r, 0xFFFFFFFFU) == 5000U);
+
+    Storage_AudioRangeTypeDef high = {0xFFFFF000U, 0xFFFFFFF0U};
+    assert(storage_audio_range_seek_position(&high, 0xFFFFFFFFU) == 0xFFFFFFF0U);
+}
+
+/**
+ * @brief 空区间与空指针：停在起点，不前进、不崩溃。
+ */
+static void seek_offset_in_an_empty_range_stays_at_the_start(void)
+{
+    Storage_AudioRangeTypeDef empty = {3000U, 3000U};
+    Storage_AudioRangeTypeDef inverted = {3000U, 2000U};
+
+    assert(storage_audio_range_seek_position(&empty, 0U) == 3000U);
+    assert(storage_audio_range_seek_position(&empty, 77U) == 3000U);
+    assert(storage_audio_range_seek_position(&inverted, 77U) == 3000U);
+    assert(storage_audio_range_seek_position(NULL, 77U) == 0U);
+}
+
+/**
  * @brief 测试入口。
  * @return 0 表示全部通过；断言失败会直接终止进程。
  */
@@ -310,6 +361,10 @@ int main(void)
     id3v2_overlapping_trailer_is_bad();
     empty_file_is_bad();
     short_file_without_tags_is_whole_range();
+    seek_offset_zero_is_the_range_start();
+    seek_offset_inside_the_range_is_relative_to_the_start();
+    seek_offset_beyond_the_range_is_clamped_to_the_end();
+    seek_offset_in_an_empty_range_stays_at_the_start();
     puts("storage_audio_range tests passed");
     return 0;
 }

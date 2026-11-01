@@ -29,7 +29,8 @@ static bool snapshot_equal(const Playback_SnapshotTypeDef *a, const Playback_Sna
            (a->DurationMs == b->DurationMs) &&
            (a->SkippedBadCount == b->SkippedBadCount) &&
            (a->StopCount == b->StopCount) &&
-           (a->HandledCommandSeq == b->HandledCommandSeq);
+           (a->HandledCommandSeq == b->HandledCommandSeq) &&
+           (a->TrackStartCount == b->TrackStartCount);
 }
 
 /**
@@ -118,6 +119,59 @@ static void log_event(const Playback_MachineTypeDef *machine, const char *event,
 }
 
 /**
+ * @brief 记一条 DEBUG 日志（被静默忽略的命令）。
+ * @param[in] machine 状态机。
+ * @param[in] text 日志文本，静态字符串。
+ */
+static void log_debug(const Playback_MachineTypeDef *machine, const char *text)
+{
+    if (machine->Ops->LogDebug != NULL)
+    {
+        machine->Ops->LogDebug(text);
+    }
+}
+
+/**
+ * @brief 作废尚未完成的跳转：不再重开、不再记 Seek INFO，位置不再拒收（切歌与停止都走这里）。
+ * @param[in,out] machine 状态机。
+ */
+static void cancel_seek(Playback_MachineTypeDef *machine)
+{
+    machine->SeekActive = false;
+    machine->SeekAwaitReopen = false;
+}
+
+/**
+ * @brief 记 Seek INFO：执行成功后的结果，格式见 playback README；lat 为处理 SEEK 命令到现在的周期差，经 CyclesToUs 换算。
+ * @param[in] machine 状态机。
+ * @note  只含曲库序号与数值，不含文件名。
+ */
+static void log_seek_done(const Playback_MachineTypeDef *machine)
+{
+    char text[PLAYBACK_MACHINE_LOG_TEXT_SIZE];
+    unsigned long latency_us = 0UL;
+
+    if (machine->Ops->LogInfo == NULL)
+    {
+        return;
+    }
+    if ((machine->Ops->ReadCycles != NULL) && (machine->Ops->CyclesToUs != NULL))
+    {
+        latency_us = (unsigned long)machine->Ops->CyclesToUs(machine->Ops->ReadCycles() - machine->SeekStartCycles);
+    }
+
+    (void)snprintf(text, sizeof(text), "Seek idx=%u tgt=%lu land=%lu off=%lu map=%s%s lat=%lu",
+                   (unsigned)machine->Snapshot.Index,
+                   (unsigned long)machine->SeekTargetMs,
+                   (unsigned long)machine->SeekPoint.LandingMs,
+                   (unsigned long)machine->SeekPoint.AudioOffset,
+                   (machine->SeekPoint.Map == SERVICE_PLAYBACK_SEEK_MAP_TOC) ? "toc" : "lin",
+                   machine->SeekPoint.Clamped ? " clamp" : "",
+                   latency_us);
+    machine->Ops->LogInfo(text);
+}
+
+/**
  * @brief 把手中的块放回空闲队列（B15）。
  * @param[in,out] machine 状态机。
  */
@@ -186,9 +240,10 @@ static void reset_stream_tracking(Playback_MachineTypeDef *machine)
 /**
  * @brief 按游标打开一条新流：分配新序号并写请求信箱；重选同一首也是新序号（B3）。
  * @param[in,out] machine 状态机。
+ * @param[in] audio_offset 相对音频区间起点的字节数：切歌与普通开流为 0，跳转为映射给出的偏移。
  * @note  不碰播放模块；旧流的清理由调用者在写请求之后做（B11）。
  */
-static void open_stream_for_cursor(Playback_MachineTypeDef *machine)
+static void open_stream_for_cursor(Playback_MachineTypeDef *machine, uint32_t audio_offset)
 {
     Playback_MachineRequestTypeDef request;
 
@@ -201,6 +256,7 @@ static void open_stream_for_cursor(Playback_MachineTypeDef *machine)
     request.StreamSeq = machine->StreamSeq;
     request.Generation = machine->Snapshot.Generation;
     request.Position = machine->Snapshot.Index;
+    request.AudioOffset = audio_offset;
     (void)machine->Ops->Storage.WriteRequest(&request);
 }
 
@@ -215,6 +271,8 @@ static void close_stream(Playback_MachineTypeDef *machine)
     request.StreamSeq = 0U;
     request.Generation = 0U;
     request.Position = 0U;
+    request.AudioOffset = 0U;
+    cancel_seek(machine);
     machine->StreamSeq = 0U;
     machine->StreamBegun = false;
     machine->InputFinished = false;
@@ -230,7 +288,7 @@ static void enter_stopped(Playback_MachineTypeDef *machine, Playback_StopReasonT
  * @param[in,out] machine 状态机。
  * @note  ① 分配新序号并写请求信箱；② 放弃播放模块的流（Platform Stop，返回即交还半区）；
  *        ③ 归还手中旧块；④ 就绪队列中的旧序号块由 discard_stale_blocks() 取出即归还。
- *        位置回 0、总时长变为未知，在接受命令的同一刻生效（K4）。
+ *        位置回 0、总时长变为未知，在接受命令的同一刻生效（K4）；每次切歌使 TrackStartCount 加 1（跳转不走这里）。
  *        ② 里 Stop 失败时，已写的新流请求被“无流”覆盖，停止为 AUDIO_FAULT（B10）。
  */
 static void switch_to_cursor_track(Playback_MachineTypeDef *machine)
@@ -238,7 +296,9 @@ static void switch_to_cursor_track(Playback_MachineTypeDef *machine)
     bool had_player_stream = machine->StreamBegun;
     bool stop_ok = true;
 
-    open_stream_for_cursor(machine);
+    cancel_seek(machine);
+    machine->Snapshot.TrackStartCount++;
+    open_stream_for_cursor(machine, 0U);
     if (had_player_stream)
     {
         stop_ok = abandon_player_stream(machine);
@@ -499,6 +559,63 @@ static void handle_select(Playback_MachineTypeDef *machine, const Playback_Comma
 }
 
 /**
+ * @brief 处理 SEEK：核对曲目身份与总时长，映射出落点，走切歌的清理路径带偏移重开流（#166）。
+ * @param[in,out] machine 状态机。
+ * @param[in] command SEEK 命令：Generation/Index 是 GUI 按下时显示的曲目，TargetMs 是目标毫秒。
+ * @note  三种静默忽略（无当前曲或已停止、曲目不符、总时长 0）与映射失败只记 DEBUG，不改三态、不计停止。
+ *        执行时：新流序号与偏移写进请求信箱，放弃播放模块的旧流（Stop 失败按 AUDIO_FAULT 停止，与切歌一致），
+ *        归还手中旧块，并在同一步把 PositionMs 设为落点（允许变小）；回显序号由调用者随后推进，所以 GUI 看到回显时
+ *        快照已是落点。不改三态、不清 DurationMs、不加 TrackStartCount。已有未完成的跳转被这条覆盖（旧流序号作废）。
+ *        新流开启 OK 前 SeekAwaitReopen 为真，拒收一切 DecodedMs；Seek INFO 等输出重新起播或预填完成。
+ */
+static void handle_seek(Playback_MachineTypeDef *machine, const Playback_CommandTypeDef *command)
+{
+    Service_Playback_SeekPointTypeDef point;
+    bool had_player_stream;
+    bool stop_ok = true;
+
+    if (!machine->Snapshot.HasTrack || (machine->Snapshot.State == PLAYBACK_STATE_STOPPED))
+    {
+        log_debug(machine, "Seek ignored: no current track");
+        return;
+    }
+    if ((machine->Snapshot.Generation != command->Generation) || (machine->Snapshot.Index != command->Index))
+    {
+        log_debug(machine, "Seek ignored: track mismatch");
+        return;
+    }
+    if (machine->Snapshot.DurationMs == 0U)
+    {
+        log_debug(machine, "Seek ignored: duration unknown");
+        return;
+    }
+    if (machine->Ops->Player.MapSeek(command->TargetMs, &point) != SERVICE_OK)
+    {
+        log_debug(machine, "Seek ignored: not mappable");
+        return;
+    }
+
+    machine->SeekStartCycles = (machine->Ops->ReadCycles != NULL) ? machine->Ops->ReadCycles() : 0U;
+    had_player_stream = machine->StreamBegun;
+    open_stream_for_cursor(machine, point.AudioOffset);
+    if (had_player_stream)
+    {
+        stop_ok = abandon_player_stream(machine);
+    }
+    return_held_block(machine);
+
+    machine->SeekActive = true;
+    machine->SeekAwaitReopen = true;
+    machine->SeekPoint = point;
+    machine->SeekTargetMs = command->TargetMs;
+    machine->Snapshot.PositionMs = point.LandingMs;
+    if (!stop_ok)
+    {
+        enter_stopped(machine, PLAYBACK_STOP_REASON_AUDIO_FAULT, true);
+    }
+}
+
+/**
  * @brief 处理一条命令，并回显命令序号（含忽略的命令）。
  * @param[in,out] machine 状态机。
  * @param[in] command 命令。
@@ -521,6 +638,10 @@ static void handle_command(Playback_MachineTypeDef *machine, const Playback_Comm
 
     case PLAYBACK_COMMAND_SELECT:
         handle_select(machine, command);
+        break;
+
+    case PLAYBACK_COMMAND_SEEK:
+        handle_seek(machine, command);
         break;
 
     default:
@@ -558,14 +679,25 @@ static void refresh_record(Playback_MachineTypeDef *machine)
 /**
  * @brief 开启 OK：按应答重新初始化游标代次与曲目数 N，让播放模块开始新流（B4）。
  * @param[in,out] machine 状态机。
- * @note  暂停中换曲（或开启期间被暂停）时，BeginStream 之后立即暂停输出：推进只解首帧并预填，不出声（B12）。
+ * @note  跳转的新流用 ReopenStream（落点来自映射）代替 BeginStream，其余相同；
+ *        暂停中换曲或跳转（或开启期间被暂停）时，开流之后立即暂停输出：推进只解首帧并预填，不出声（B12）。
  *        BeginStream 被拒（STOP_FAILED 已锁存，或上一条流 Stop 失败）或暂停时 Stop 失败，都按 AUDIO_FAULT 停止（B10）。
  */
 static void begin_player_stream(Playback_MachineTypeDef *machine)
 {
     machine->Snapshot.Generation = machine->Record.Generation;
     machine->TrackCount = machine->Record.TrackCount;
-    if (machine->Ops->Player.BeginStream(machine->Record.AudioBytes) != SERVICE_OK)
+    if (machine->SeekAwaitReopen)
+    {
+        /* 跳转的新流：从落点重开，保留流级事实（总时长、采样率、TOC），不重新探测流头。 */
+        if (machine->Ops->Player.ReopenStream(machine->SeekPoint.LandingMs) != SERVICE_OK)
+        {
+            enter_stopped(machine, PLAYBACK_STOP_REASON_AUDIO_FAULT, true);
+            return;
+        }
+        machine->SeekAwaitReopen = false;
+    }
+    else if (machine->Ops->Player.BeginStream(machine->Record.AudioBytes) != SERVICE_OK)
     {
         enter_stopped(machine, PLAYBACK_STOP_REASON_AUDIO_FAULT, true);
         return;
@@ -811,7 +943,15 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
         log_event_value(machine, "Open", true, "rate", (unsigned long)report->StreamInfo.SampleRateHz);
         machine->Snapshot.DurationMs = report->StreamInfo.TotalDurationMs;
     }
-    if (report->DecodedMs > machine->Snapshot.PositionMs)
+    if (machine->SeekActive && !machine->SeekAwaitReopen &&
+        (report->OutputStarted ||
+         ((machine->Snapshot.State == PLAYBACK_STATE_PAUSED) && !report->NeedInput && !report->StreamEnded)))
+    {
+        /* PLAYING：输出重新起播；PAUSED：预填完成（补半区不再要输入，且没有读尽到无音频可放）。 */
+        log_seek_done(machine);
+        machine->SeekActive = false;
+    }
+    if (!machine->SeekAwaitReopen && (report->DecodedMs > machine->Snapshot.PositionMs))
     {
         machine->Snapshot.PositionMs = report->DecodedMs;
     }
@@ -966,6 +1106,14 @@ void playback_machine_step(Playback_MachineTypeDef *machine,
 
     for (uint32_t i = 0U; i < command_count; i++)
     {
+        if ((commands[i].Kind == PLAYBACK_COMMAND_SEEK) && ((i + 1U) < command_count) &&
+            (commands[i + 1U].Kind == PLAYBACK_COMMAND_SEEK))
+        {
+            /* 最新者胜：同批连续的 SEEK 只执行最后一条；被合并的不执行、不记日志，但回显序号照常推进。 */
+            machine->Snapshot.HandledCommandSeq = commands[i].Seq;
+            publish_if_changed(machine);
+            continue;
+        }
         handle_command(machine, &commands[i]);
         refresh_record(machine);
         discard_stale_blocks(machine);

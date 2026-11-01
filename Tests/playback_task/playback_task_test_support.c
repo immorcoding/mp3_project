@@ -19,6 +19,9 @@
 
 static char log_texts[FAKE_LOG_CAPACITY][FAKE_LOG_TEXT_MAX];
 static uint32_t log_length;
+static char debug_texts[FAKE_LOG_CAPACITY][FAKE_LOG_TEXT_MAX];
+static uint32_t debug_length;
+static uint32_t fake_cycle_counter;
 
 /**
  * @brief 记录一条 INFO 日志文本（LogInfo 的替身）。
@@ -53,11 +56,72 @@ const char *fake_log_text(uint32_t index)
 }
 
 /**
- * @brief 清空日志记录。
+ * @brief 清空日志记录（INFO 与 DEBUG）。
  */
 void fake_log_clear(void)
 {
     log_length = 0U;
+    debug_length = 0U;
+}
+
+/**
+ * @brief 记录一条 DEBUG 日志文本（LogDebug 的替身）。
+ * @param[in] text 文本。
+ */
+static void fake_log_debug(const char *text)
+{
+    assert(debug_length < FAKE_LOG_CAPACITY);
+    assert(strlen(text) < FAKE_LOG_TEXT_MAX);
+    strcpy(debug_texts[debug_length], text);
+    debug_length++;
+}
+
+/**
+ * @brief 已记录的 DEBUG 日志条数。
+ * @return 条数。
+ */
+uint32_t fake_debug_count(void)
+{
+    return debug_length;
+}
+
+/**
+ * @brief 第 index 条 DEBUG 日志文本。
+ * @param[in] index 位置。
+ * @return 文本。
+ */
+const char *fake_debug_text(uint32_t index)
+{
+    assert(index < debug_length);
+    return debug_texts[index];
+}
+
+/**
+ * @brief ReadCycles 替身：返回假周期计数器。
+ * @return 当前读数。
+ */
+static uint32_t fake_read_cycles(void)
+{
+    return fake_cycle_counter;
+}
+
+/**
+ * @brief CyclesToUs 替身：100 个周期折合 1 微秒。
+ * @param[in] cycles 周期数。
+ * @return 微秒。
+ */
+static uint32_t fake_cycles_to_us(uint32_t cycles)
+{
+    return cycles / 100U;
+}
+
+/**
+ * @brief 让假周期计数器前进。
+ * @param[in] cycles 前进的周期数。
+ */
+void fake_cycles_advance(uint32_t cycles)
+{
+    fake_cycle_counter += cycles;
 }
 
 /* ---------------------------------------------------------------------------
@@ -497,6 +561,14 @@ static bool player_fail_next_resume;
 static bool player_fail_next_pump;
 static bool player_refuse_next_begin;
 static bool player_faulted;
+static bool player_facts_known;        /* 首帧已解出：流级事实可用，直到下一次 BeginStream。 */
+static uint32_t player_map_count;
+static uint32_t player_reopen_count;
+static uint32_t player_last_landing;
+static bool player_fail_next_map;
+static bool player_fail_next_reopen;
+static uint32_t player_force_map_offset;
+static Service_Playback_SeekMapTypeDef player_map_kind;
 
 /**
  * @brief 把假播放模块恢复为默认配置与空状态。
@@ -532,6 +604,14 @@ static void fake_player_reset(void)
     player_fail_next_pump = false;
     player_refuse_next_begin = false;
     player_faulted = false;
+    player_facts_known = false;
+    player_map_count = 0U;
+    player_reopen_count = 0U;
+    player_last_landing = 0U;
+    player_fail_next_map = false;
+    player_fail_next_reopen = false;
+    player_force_map_offset = 0U;
+    player_map_kind = SERVICE_PLAYBACK_SEEK_MAP_LIN;
 }
 
 /**
@@ -564,6 +644,7 @@ static Service_StatusTypeDef fake_begin_stream(uint32_t audio_bytes)
     player_window_fill = 0U;
     player_decoded_ms = 0U;
     player_frames_since_begin = 0U;
+    player_facts_known = false;
     player_begin_count++;
     player_last_audio_bytes = audio_bytes;
     return SERVICE_OK;
@@ -650,6 +731,7 @@ static Service_StatusTypeDef fake_pump(Service_Playback_PumpReportTypeDef *repor
             if (!player_first_frame_done)
             {
                 player_first_frame_done = true;
+                player_facts_known = true;
                 report->FirstFrame = true;
             }
         }
@@ -747,6 +829,137 @@ static Service_StatusTypeDef fake_abandon_stream(void)
         return SERVICE_ERROR;
     }
     return SERVICE_OK;
+}
+
+/**
+ * @brief MapSeek 替身：线性映射，最多钳到 AudioBytes - 2 * BytesPerFrame，落点按同一映射反算。
+ * @param[in] target_ms 目标毫秒。
+ * @param[out] point 映射结果。
+ * @return SERVICE_OK；没有流级事实（首帧之前）或被强制失败返回 SERVICE_NOT_READY。
+ */
+static Service_StatusTypeDef fake_map_seek(uint32_t target_ms, Service_Playback_SeekPointTypeDef *point)
+{
+    const uint64_t duration = player_config.DurationMs;
+    const uint64_t bytes = player_last_audio_bytes;
+    const uint32_t w_min = 2U * player_config.BytesPerFrame;
+    uint64_t offset;
+
+    call_log_add(CALL_MAP_SEEK);
+    player_map_count++;
+    memset(point, 0, sizeof(*point));
+    if (player_fail_next_map || !player_facts_known || (duration == 0U) || (bytes <= w_min))
+    {
+        player_fail_next_map = false;
+        return SERVICE_NOT_READY;
+    }
+
+    offset = ((uint64_t)((target_ms < duration) ? target_ms : duration) * bytes) / duration;
+    if (player_force_map_offset != 0U)
+    {
+        offset = player_force_map_offset;
+        player_force_map_offset = 0U;
+    }
+    if (offset > (bytes - w_min))
+    {
+        offset = bytes - w_min;
+        point->Clamped = true;
+    }
+    point->Map = player_map_kind;
+    point->AudioOffset = (uint32_t)offset;
+    point->LandingMs = (uint32_t)((offset * duration) / bytes);
+    return SERVICE_OK;
+}
+
+/**
+ * @brief ReopenStream 替身：保留流级事实（首帧已确认），清空窗口与计数，已解码时间从落点起算。
+ * @param[in] landing_ms 落点。
+ * @return SERVICE_OK；没有流级事实或被强制失败返回 SERVICE_NOT_READY；下一次 Stop 被设为失败时返回 SERVICE_ERROR 并锁存。
+ */
+static Service_StatusTypeDef fake_reopen_stream(uint32_t landing_ms)
+{
+    call_log_add(CALL_REOPEN_STREAM);
+    if (player_faulted || player_fail_next_reopen || !player_facts_known)
+    {
+        player_fail_next_reopen = false;
+        return SERVICE_NOT_READY;
+    }
+    if (player_fail_next_stop)
+    {
+        player_fail_next_stop = false;
+        player_faulted = true;
+        return SERVICE_ERROR;
+    }
+    player_active = true;
+    player_paused = false;
+    player_input_finished = false;
+    player_tail_released = false;
+    player_window_fill = 0U;
+    player_decoded_ms = landing_ms;
+    player_frames_since_begin = 0U;
+    player_last_landing = landing_ms;
+    player_reopen_count++;
+    return SERVICE_OK;
+}
+
+/**
+ * @brief MapSeek 被调用的次数。
+ * @return 次数。
+ */
+uint32_t fake_player_map_count(void)
+{
+    return player_map_count;
+}
+
+/**
+ * @brief ReopenStream 成功的次数。
+ * @return 次数。
+ */
+uint32_t fake_player_reopen_count(void)
+{
+    return player_reopen_count;
+}
+
+/**
+ * @brief 最近一次 ReopenStream 的落点。
+ * @return 毫秒。
+ */
+uint32_t fake_player_last_reopen_landing_ms(void)
+{
+    return player_last_landing;
+}
+
+/**
+ * @brief 让下一次 MapSeek 失败。
+ */
+void fake_player_fail_next_map(void)
+{
+    player_fail_next_map = true;
+}
+
+/**
+ * @brief 让下一次 ReopenStream 失败。
+ */
+void fake_player_fail_next_reopen(void)
+{
+    player_fail_next_reopen = true;
+}
+
+/**
+ * @brief 让下一次 MapSeek 在钳位前使用指定偏移。
+ * @param[in] offset 偏移，0 表示不强制。
+ */
+void fake_player_force_next_map_offset(uint32_t offset)
+{
+    player_force_map_offset = offset;
+}
+
+/**
+ * @brief 设置 MapSeek 回报的映射方式。
+ * @param[in] map 映射方式。
+ */
+void fake_player_set_map_kind(Service_Playback_SeekMapTypeDef map)
+{
+    player_map_kind = map;
 }
 
 /**
@@ -925,6 +1138,7 @@ void world_reset(void)
 {
     call_log_reset();
     fake_log_clear();
+    fake_cycle_counter = 0U;
     fake_storage_reset();
     fake_player_reset();
     world_now_ms = 1000U;
@@ -936,6 +1150,8 @@ void world_reset(void)
     world_ops.Storage.TakeReadyBlock = fake_take_ready_block;
     world_ops.Storage.ReturnBlock = fake_return_block;
     world_ops.Player.BeginStream = fake_begin_stream;
+    world_ops.Player.MapSeek = fake_map_seek;
+    world_ops.Player.ReopenStream = fake_reopen_stream;
     world_ops.Player.Feed = fake_feed;
     world_ops.Player.FinishInput = fake_finish_input;
     world_ops.Player.Pump = fake_pump;
@@ -944,6 +1160,9 @@ void world_reset(void)
     world_ops.Player.AbandonStream = fake_abandon_stream;
     world_ops.PublishSnapshot = fake_publish;
     world_ops.LogInfo = fake_log_info;
+    world_ops.LogDebug = fake_log_debug;
+    world_ops.ReadCycles = fake_read_cycles;
+    world_ops.CyclesToUs = fake_cycles_to_us;
     playback_machine_init(&world_machine_instance, &world_ops);
 }
 
@@ -997,6 +1216,52 @@ void world_send_select(uint32_t generation, uint16_t index)
     command.Seq = world_command_seq;
     command.Generation = generation;
     command.Index = index;
+    world_step_commands(&command, 1U);
+}
+
+/**
+ * @brief 构造一条无参数命令（序号自增，不唤醒）。
+ * @param[in] kind 命令种类。
+ * @return 命令。
+ */
+Playback_CommandTypeDef world_make_command(Playback_CommandKindTypeDef kind)
+{
+    Playback_CommandTypeDef command;
+
+    memset(&command, 0, sizeof(command));
+    command.Kind = kind;
+    world_command_seq++;
+    command.Seq = world_command_seq;
+    return command;
+}
+
+/**
+ * @brief 构造一条 SEEK 命令（序号自增，不唤醒）。
+ * @param[in] generation 曲目身份的代次。
+ * @param[in] index 曲目身份的位置。
+ * @param[in] target_ms 目标毫秒。
+ * @return 命令。
+ */
+Playback_CommandTypeDef world_make_seek(uint32_t generation, uint16_t index, uint32_t target_ms)
+{
+    Playback_CommandTypeDef command = world_make_command(PLAYBACK_COMMAND_SEEK);
+
+    command.Generation = generation;
+    command.Index = index;
+    command.TargetMs = target_ms;
+    return command;
+}
+
+/**
+ * @brief 发一条 SEEK（序号自增）并唤醒一次。
+ * @param[in] generation 曲目身份的代次。
+ * @param[in] index 曲目身份的位置。
+ * @param[in] target_ms 目标毫秒。
+ */
+void world_send_seek(uint32_t generation, uint16_t index, uint32_t target_ms)
+{
+    Playback_CommandTypeDef command = world_make_seek(generation, index, target_ms);
+
     world_step_commands(&command, 1U);
 }
 

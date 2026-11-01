@@ -169,3 +169,28 @@ bool storage_audio_range_locate(const uint8_t *head,
     range->End = end;
     return true;
 }
+
+/**
+ * @brief 把相对音频区间起点的偏移钳到区间内，换算成文件内的绝对读位置（跳转重开流，#166 第 7 条）。
+ * @param[in] range 音频区间 [Start, End)；空指针返回 0。
+ * @param[in] audio_offset 相对 Start 的字节数；0 是普通开流与切歌。
+ * @return Start + min(audio_offset, End - Start)：区间内的偏移原样换算，越过区间的钳在 End（此后剩余 0 字节），
+ *         空区间（End 不大于 Start）恒为 Start。先比较再相加，所以任意 32 位偏移都不会回绕。
+ * @note  纯计算；本函数不认识音频格式，偏移的含义由 Service/playback 的映射决定。
+ */
+uint32_t storage_audio_range_seek_position(const Storage_AudioRangeTypeDef *range, uint32_t audio_offset)
+{
+    uint32_t length;
+
+    if (range == NULL)
+    {
+        return 0U;
+    }
+    if (range->End <= range->Start)
+    {
+        return range->Start;
+    }
+
+    length = range->End - range->Start;
+    return range->Start + ((audio_offset < length) ? audio_offset : length);
+}

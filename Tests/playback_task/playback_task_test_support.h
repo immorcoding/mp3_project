@@ -27,6 +27,8 @@ typedef enum
     CALL_PAUSE,
     CALL_RESUME,
     CALL_ABANDON,
+    CALL_MAP_SEEK,
+    CALL_REOPEN_STREAM,
     CALL_PUBLISH
 } CallKindTypeDef;
 
@@ -40,10 +42,17 @@ uint32_t call_log_index_of(CallKindTypeDef kind, uint32_t nth);
 
 /* INFO 日志记录（LogInfo 的接收端）：按调用顺序保存文本，不带等级与标签（外壳固定为 INFO + PLAYBACK）。 */
 #define FAKE_LOG_CAPACITY 64U
-#define FAKE_LOG_TEXT_MAX 64U
+#define FAKE_LOG_TEXT_MAX 96U
 uint32_t fake_log_count(void);
 const char *fake_log_text(uint32_t index);
 void fake_log_clear(void);
+
+/* DEBUG 日志记录（LogDebug 的接收端）：被静默忽略的命令。 */
+uint32_t fake_debug_count(void);
+const char *fake_debug_text(uint32_t index);
+
+/* 假周期计数器（ReadCycles / CyclesToUs 的替身）：100 个周期折合 1 µs。 */
+void fake_cycles_advance(uint32_t cycles);
 
 /* 快照记录（PublishSnapshot 的接收端）。 */
 uint32_t published_count(void);
@@ -120,12 +129,32 @@ void fake_player_fail_next_pump(void);
 /** @brief 假播放模块是否已锁存 STOP_FAILED。 */
 bool fake_player_faulted(void);
 
+/* 跳转：假 MapSeek 在首帧解出后按 BeginStream 的音频字节数与首帧给出的总时长做线性映射，最多钳到 AudioBytes - 2 * BytesPerFrame（W_min）；
+ * 落点按同一映射反算。可在 AbandonStream 之后调用，直到下一次 BeginStream 才失效，与真实模块一致。 */
+uint32_t fake_player_map_count(void);
+uint32_t fake_player_reopen_count(void);
+uint32_t fake_player_last_reopen_landing_ms(void);
+/** @brief 强制下一次 MapSeek 返回 SERVICE_NOT_READY（模块没有可映射的流级事实）。 */
+void fake_player_fail_next_map(void);
+/** @brief 强制下一次 ReopenStream 返回 SERVICE_NOT_READY。 */
+void fake_player_fail_next_reopen(void);
+/** @brief 下一次 MapSeek 钳位前强制把偏移改成 offset（用于不依赖线性比例的越尾场景）；0 = 不强制。 */
+void fake_player_force_next_map_offset(uint32_t offset);
+/** @brief 之后的 MapSeek 回报的映射方式（默认 LIN；每次 world_reset 恢复默认）。 */
+void fake_player_set_map_kind(Service_Playback_SeekMapTypeDef map);
+
 /* 场景助手：状态机实例与步进。 */
 void world_reset(void);
 Playback_MachineTypeDef *world_machine(void);
 /** @brief 单条命令加一次唤醒，时刻按调用递增 10 ms。 */
 void world_send(Playback_CommandKindTypeDef kind);
 void world_send_select(uint32_t generation, uint16_t index);
+/** @brief 发一条 SEEK（序号自增）并唤醒一次。 */
+void world_send_seek(uint32_t generation, uint16_t index, uint32_t target_ms);
+/** @brief 构造一条 SEEK 命令（序号自增、不唤醒），用于多条放进同一次唤醒。 */
+Playback_CommandTypeDef world_make_seek(uint32_t generation, uint16_t index, uint32_t target_ms);
+/** @brief 构造一条无参数命令（序号自增、不唤醒）。 */
+Playback_CommandTypeDef world_make_command(Playback_CommandKindTypeDef kind);
 /** @brief 多条命令放进同一次唤醒。 */
 void world_step_commands(const Playback_CommandTypeDef *commands, uint32_t count);
 /** @brief 没有命令的一次唤醒。 */

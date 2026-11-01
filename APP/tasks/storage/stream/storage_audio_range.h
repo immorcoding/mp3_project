@@ -27,4 +27,6 @@ bool storage_audio_range_locate(const uint8_t *head,
                               uint32_t file_size,
                               Storage_AudioRangeTypeDef *range);
 
+uint32_t storage_audio_range_seek_position(const Storage_AudioRangeTypeDef *range, uint32_t audio_offset);
+
 #endif /* STORAGE_AUDIO_RANGE_H */
