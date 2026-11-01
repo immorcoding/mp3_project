@@ -16,6 +16,8 @@
 Service_StatusTypeDef service_gui_main_transport_prepare(void);
 Service_StatusTypeDef service_gui_main_transport_apply(bool playing);
 Service_StatusTypeDef service_gui_main_transport_apply_progress(uint8_t percent);
+Service_StatusTypeDef service_gui_main_transport_seek_enable(bool enabled);
+Service_StatusTypeDef service_gui_main_transport_seek_cancel(void);
 Service_StatusTypeDef service_gui_main_transport_apply_time(uint32_t position_ms, uint32_t duration_ms);
 Service_StatusTypeDef service_gui_main_transport_apply_status(const char *text);
 Service_StatusTypeDef service_gui_main_transport_apply_skip_notice(uint32_t added);

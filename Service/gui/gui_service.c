@@ -325,7 +325,7 @@ uint16_t Service_GUI_QueueScrollLead(void)
  * @retval SERVICE_OK 已写入 input。
  * @retval SERVICE_INVALID_PARAM input 为空。
  * @note 只能由同一 GUI Task 调用。不包含 storage_listbuffer.h。
- *       `MUSIC_QUEUE_SELECT` 时 param 为播放列表下标；`MUSIC_SEEK` 时为 0..100。
+ *       `MUSIC_QUEUE_SELECT` 时 param 为播放列表下标；进度条手势 `MUSIC_SEEK_PRESS/DRAG/RELEASE` 时为 0..SERVICE_GUI_SEEK_SCALE 千分比。
  *       空闲不是 NOT_READY。
  */
 Service_StatusTypeDef Service_GUI_ConsumeInput(Service_GUI_InputTypeDef *input)
@@ -350,11 +350,36 @@ Service_StatusTypeDef Service_GUI_TransportApply(bool playing)
  * @param[in] percent 0..100 的播放进度；大于 100 时夹到 100。
  * @retval SERVICE_OK 已写入，或拖动中已跳过。
  * @retval SERVICE_NOT_READY 进度条对象尚未创建。
- * @note 只能由同一 GUI Task 调用。不解码、不真正 seek。
+ * @note 只能由同一 GUI Task 调用。不解码、不发跳转命令。
  */
 Service_StatusTypeDef Service_GUI_ProgressApply(uint8_t percent)
 {
     return service_gui_main_transport_apply_progress(percent);
+}
+
+/**
+ * @brief 设置 Now Playing 进度条是否响应按压（GUI-10：总时长未知时不响应）。
+ * @param[in] enabled 为假时按下进度条不跟手、不 post 手势事件，外观不变（不置灰）；
+ *            若此刻正在拖动，按 Service_GUI_SeekCancel() 结束这次拖动。
+ * @retval SERVICE_OK 已设置。
+ * @retval SERVICE_NOT_READY 进度条对象尚未创建。
+ * @note 只能由同一 GUI Task 调用。Init 后为假，由调用方按播放快照打开。
+ */
+Service_StatusTypeDef Service_GUI_SeekEnable(bool enabled)
+{
+    return service_gui_main_transport_seek_enable(enabled);
+}
+
+/**
+ * @brief 结束 Now Playing 进度条正在进行的拖动，不 post 松手或取消（GUI-10：换曲取消拖动）。
+ * @retval SERVICE_OK 已结束，或没有在拖。
+ * @retval SERVICE_NOT_READY 进度条对象尚未创建。
+ * @note 只能由同一 GUI Task 调用。手指不抬起前这次按压的其余部分被忽略；
+ *       之后的 Service_GUI_ProgressApply() 立即生效。
+ */
+Service_StatusTypeDef Service_GUI_SeekCancel(void)
+{
+    return service_gui_main_transport_seek_cancel();
 }
 
 /**

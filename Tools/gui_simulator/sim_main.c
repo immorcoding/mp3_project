@@ -112,9 +112,10 @@ static void sim_handle_key(char key)
 }
 
 /**
- * @brief 处理脚本的名称槽与窗口槽开关，转给假 Storage。
+ * @brief 处理脚本的替身开关：名称槽与窗口槽转给假 Storage，跳转回显延迟转给假播放后端。
  * @param[in] control 开关种类。
- * @param[in] value   --name-fail 为播放列表位置，--name-delay / --window-delay 为额外等待圈数。
+ * @param[in] value   --name-fail 为播放列表位置，--name-delay / --window-delay 为额外等待圈数，
+ *                    --seek-echo-delay 为毫秒数。
  */
 static void sim_handle_slot(sim_script_slot_control_t control, unsigned value)
 {
@@ -130,6 +131,10 @@ static void sim_handle_slot(sim_script_slot_control_t control, unsigned value)
 
         case SIM_SCRIPT_WINDOW_DELAY:
             storage_sim_set_window_delay((uint32_t)value);
+            break;
+
+        case SIM_SCRIPT_SEEK_ECHO_DELAY:
+            playback_sim_set_seek_echo_delay((uint32_t)value);
             break;
 
         default:

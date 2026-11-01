@@ -149,11 +149,12 @@ static bool gui_music_send_select(uint32_t generation, uint16_t index)
 }
 
 /**
- * @brief 处理本分区输入：三键与点行发命令，进度条松手只要求回位（B1–B4）。
+ * @brief 处理本分区输入：三键与点行发命令，进度条手势交给跳转归约（GUI-10）。
  * @param[in] input 本圈命令；NULL 视为 NONE。
- * @return 为真表示进度条刚松手，本圈须按快照重写一次进度条（B3）。
+ * @return 为真表示进度条刚松手或触摸丢失：Service 的进度条停在手指处，本圈须按
+ *         决定无条件重写一次（在途跳转显示目标，否则回到快照）。
  */
-static bool gui_music_dispatch_input_seek_released(const Service_GUI_InputTypeDef *input)
+static bool gui_music_dispatch_input_seek_settled(const Service_GUI_InputTypeDef *input)
 {
     Service_GUI_InputCommandTypeDef command;
     uint32_t window_generation;
@@ -196,8 +197,26 @@ static bool gui_music_dispatch_input_seek_released(const Service_GUI_InputTypeDe
             (void)gui_music_send_plain(PLAYBACK_COMMAND_TOGGLE);
             break;
 
-        case SERVICE_GUI_INPUT_MUSIC_SEEK:
-            /* 不支持真定位：松手不发命令，只按当前快照回位。 */
+        case SERVICE_GUI_INPUT_MUSIC_SEEK_PRESS:
+            gui_music_transport_seek_press(&gui_music_transport, input->param);
+            break;
+
+        case SERVICE_GUI_INPUT_MUSIC_SEEK_DRAG:
+            gui_music_transport_seek_drag(&gui_music_transport, input->param);
+            break;
+
+        case SERVICE_GUI_INPUT_MUSIC_SEEK_RELEASE:
+            if (gui_music_transport_seek_release(&gui_music_transport, input->param) ==
+                GUI_MUSIC_TRANSPORT_SEEK_QUEUE_FULL)
+            {
+                /* 队列满：丢弃本次输入、记日志，进度条回到快照（GUI-17）。 */
+                (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN, gui_music_log_tag,
+                                       "Playback command queue full, input dropped.");
+            }
+            return true;
+
+        case SERVICE_GUI_INPUT_MUSIC_SEEK_CANCEL:
+            gui_music_transport_seek_cancel(&gui_music_transport);
             return true;
 
         case SERVICE_GUI_INPUT_NONE:
@@ -336,11 +355,11 @@ static void gui_music_title_step(const GUI_MusicTransportDecisionTypeDef *decisi
 /**
  * @brief 把一次显示决定写到界面：只对与上次不同的部分调用 Service_GUI_*。
  * @param[in] decision 本圈归约结果。
- * @param[in] seek_released 进度条刚松手，须无条件重写进度条（B3）。
- * @note  一次性事件（唱盘归零、跳过增量、闪烁）只在产生它的这一圈出现，必须在
+ * @param[in] seek_settled 进度条刚松手或触摸丢失，须无条件重写进度条。
+ * @note  一次性事件（唱盘归零、取消拖动、跳过增量、闪烁）只在产生它的这一圈出现，必须在
  *        本圈消费，不能与上次比较后丢弃。状态行的优先级与计时由 Service 持有。
  */
-static void gui_music_show(const GUI_MusicTransportDecisionTypeDef *decision, bool seek_released)
+static void gui_music_show(const GUI_MusicTransportDecisionTypeDef *decision, bool seek_settled)
 {
     const bool first = !gui_music_shown.has_decision;
 
@@ -349,7 +368,21 @@ static void gui_music_show(const GUI_MusicTransportDecisionTypeDef *decision, bo
         (void)Service_GUI_TransportApply(decision->state == PLAYBACK_STATE_PLAYING);
     }
 
-    if (first || seek_released ||
+    /*
+     * 进度条可否响应（GUI-10）：关闭时 Service 顺带结束在拖的按压。换曲取消拖动是
+     * 一次性事件，须在 ProgressApply 之前结束 Service 的拖动，否则进度条仍被手指占着。
+     */
+    if (first || (decision->seek_enabled != gui_music_shown.decision.seek_enabled))
+    {
+        (void)Service_GUI_SeekEnable(decision->seek_enabled);
+    }
+
+    if (decision->seek_cancel)
+    {
+        (void)Service_GUI_SeekCancel();
+    }
+
+    if (first || seek_settled || decision->seek_cancel ||
         (decision->progress_percent != gui_music_shown.decision.progress_percent))
     {
         (void)Service_GUI_ProgressApply(decision->progress_percent);
@@ -362,7 +395,7 @@ static void gui_music_show(const GUI_MusicTransportDecisionTypeDef *decision, bo
         (void)Service_GUI_TimeApply(decision->position_ms, decision->duration_ms);
     }
 
-    /* 唱盘（C8）：三态变化时起转/停转；归零是一次性事件，出现即调用。 */
+    /* 唱盘（GUI-20）：三态变化时起转/停转；归零是一次性事件，出现即调用。 */
     if (first || decision->vinyl_reset_angle ||
         (decision->vinyl_playing != gui_music_shown.decision.vinyl_playing))
     {
@@ -439,9 +472,9 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
     Playback_SnapshotTypeDef snapshot;
     GUI_MusicTransportDecisionTypeDef decision;
     GUI_MusicQueueWindowActionTypeDef action;
-    bool seek_released;
+    bool seek_settled;
 
-    seek_released = gui_music_dispatch_input_seek_released(input);
+    seek_settled = gui_music_dispatch_input_seek_settled(input);
 
     playback_snapshot_read(&snapshot);
     gui_music_transport_reduce(
@@ -463,5 +496,5 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
         (void)gui_music_apply_window(decision.highlight_index);
     }
 
-    gui_music_show(&decision, seek_released);
+    gui_music_show(&decision, seek_settled);
 }

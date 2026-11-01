@@ -1,0 +1,10 @@
+# 松手后停在目标直到回显（GUI-17）：--seek-echo-delay 让假后端 1.5 s 后才处理 SEEK；期间位置与时间停在目标、
+# 不先退回旧位置，也不随后端位置走；回显追上后按快照（落点）显示并继续走
+--seek-echo-delay 0:1500
+--drag 6000:120,290:120,80:250
+--tap 7000:120,260
+--drag 9000:40,212:170,212:300
+--shot 9500:held_early
+--shot 10500:held_late
+--shot 11500:echoed
+--shot 12500:echoed_running

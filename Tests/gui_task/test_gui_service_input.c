@@ -66,35 +66,55 @@ static void test_later_post_overwrites_pending(void)
 }
 
 /**
- * @brief 取走一次进度条假 seek 后槽位变空。
+ * @brief 取走一次进度条松手后槽位变空，param 为千分比。
  */
-static void test_consume_takes_seek_percent_once(void)
+static void test_consume_takes_seek_release_once(void)
 {
     Service_GUI_InputTypeDef input;
 
-    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK, 37U);
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_RELEASE, 375U);
     input.command = SERVICE_GUI_INPUT_NONE;
     input.param = 0U;
     assert(service_gui_input_consume(&input) == SERVICE_OK);
-    assert(input.command == SERVICE_GUI_INPUT_MUSIC_SEEK);
-    assert(input.param == 37U);
+    assert(input.command == SERVICE_GUI_INPUT_MUSIC_SEEK_RELEASE);
+    assert(input.param == 375U);
 
     assert(service_gui_input_consume(&input) == SERVICE_OK);
     assert(input.command == SERVICE_GUI_INPUT_NONE);
 }
 
 /**
- * @brief 只丢掉 Queue 选曲，不误清进度条假 seek。
+ * @brief 按下尚未取走时又来拖动：保留按下，比例取拖动的最新值（同一次读触摸先 PRESSED 再 PRESSING）。
+ */
+static void test_drag_after_pending_press_keeps_press_with_latest_value(void)
+{
+    Service_GUI_InputTypeDef input;
+
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_PRESS, 100U);
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_DRAG, 420U);
+    assert(service_gui_input_consume(&input) == SERVICE_OK);
+    assert(input.command == SERVICE_GUI_INPUT_MUSIC_SEEK_PRESS);
+    assert(input.param == 420U);
+
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_DRAG, 500U);
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_DRAG, 510U);
+    assert(service_gui_input_consume(&input) == SERVICE_OK);
+    assert(input.command == SERVICE_GUI_INPUT_MUSIC_SEEK_DRAG);
+    assert(input.param == 510U);
+}
+
+/**
+ * @brief 只丢掉 Queue 选曲，不误清进度条松手。
  */
 static void test_drop_queue_select_keeps_seek(void)
 {
     Service_GUI_InputTypeDef input;
 
-    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK, 12U);
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_RELEASE, 120U);
     service_gui_input_drop_queue_select();
     assert(service_gui_input_consume(&input) == SERVICE_OK);
-    assert(input.command == SERVICE_GUI_INPUT_MUSIC_SEEK);
-    assert(input.param == 12U);
+    assert(input.command == SERVICE_GUI_INPUT_MUSIC_SEEK_RELEASE);
+    assert(input.param == 120U);
 }
 
 /**
@@ -125,7 +145,8 @@ int main(void)
     test_consume_rejects_null();
     test_consume_takes_queue_select_once();
     test_later_post_overwrites_pending();
-    test_consume_takes_seek_percent_once();
+    test_consume_takes_seek_release_once();
+    test_drag_after_pending_press_keeps_press_with_latest_value();
     test_drop_queue_select_keeps_seek();
     test_drop_queue_select_keeps_other_commands();
 
