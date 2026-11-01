@@ -2,7 +2,7 @@
 
 按改动目录读取接口、领域规则和技术正文。分层目录按层通配：先读层 README，再读目标模块 README；目录更深处的 README 解释局部实现。
 
-Routed: `Components/*/`, `Platform/*/`, `Service/*/`, `APP/tasks/*/`, `Tools/*/`, `Adapters/*/`, `Resources/fonts/`, `Tests/`, `scripts/`
+Routed: `Components/*/`, `Platform/*/`, `Service/*/`, `APP/tasks/*/`, `Tools/*/`, `Adapters/*/`, `Resources/fonts/`, `Tests/`, `scripts/`, `patches/`
 
 - `Components/*/`: 可复用设备协议与算法，每模块一目录。Entry: [层说明](../../Components/README.md) → 目标模块 README。Areas: [Architecture](architecture.md) · [Code style](code-style.md)；另按模块：[Hardware](hardware.md)（axp2101、ft6x36、soft_i2c）· [Storage](storage.md)（flash_ftl、id3_reader、sd、w25qxx）· [Diagnostics](diagnostics.md)（log）· [Resources](resources.md)（resource_pack）· [GUI](gui.md)（st7789）
 - `Platform/*/`: 本板资源装配与产品硬件能力。Entry: [层说明](../../Platform/README.md) → 目标模块 README。Areas: [Architecture](architecture.md) · [Code style](code-style.md)；另按模块：[Hardware](hardware.md)（power、sdram、temp、touch）· [Storage](storage.md)（flash、sd）· [Diagnostics](diagnostics.md)（log）· [GUI](gui.md)（lcd）
@@ -16,3 +16,4 @@ Routed: `Components/*/`, `Platform/*/`, `Service/*/`, `APP/tasks/*/`, `Tools/*/`
 - `Tools/board_test_card/`: 板级验收样本 MP3 生成。Entry: [说明](../../Tools/board_test_card/README.md)。Areas: [Workflow](workflow.md)
 - `Tests/`: 独立 host 行为测试。Entry: [入口](../../Tests/AGENTS.md)。Areas: [Architecture](architecture.md) · [Harness](harness.md)
 - `scripts/`: 构建、验证与 Hook。Entry: [入口](../../scripts/AGENTS.md)。Areas: [Architecture](architecture.md) · [Harness](harness.md)
+- `patches/`: 上游 Vendor 补丁（patch 文件维护，重新导出后重打，见 HAR-15、ADR-0022）。Entry: [说明](../../patches/fatfs/README.md)。Areas: [Architecture](architecture.md) · [Harness](harness.md) · [Storage](storage.md)

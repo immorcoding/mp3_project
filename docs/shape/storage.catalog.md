@@ -13,6 +13,10 @@
 - **STOR-16** · exploring · 曲目标签只在名称槽与 Queue 窗口槽 `load` 时按需读 TIT2/TPE1，曲库扫描与建表不读；单个文件先读首块 4 KiB，按帧头 seek 跳读、不读 APIC 等负载，含首块最多 4 次读取且不越过标签总长（初值为配置常量，由板测修正）；窗口槽每圈最多读一行，读完前保持 `PENDING`，GUI 只见整窗；0.8.0 不缓存，每次 `load` 重读；卷消抖中暂停逐行填写（STOR-8），恢复就绪后续填，卷卸载才以无效空窗收尾；窗口行只含曲目显示名与歌手，不含路径。_Why:_ 扫描时读标签会拖长插卡后不可播放的时间；单行读取上界须小于 Storage 单圈余量 T_data/2，逐圈分摊才不饿死音频流。_Source:_ [读标签的时机与范围](https://github.com/immorcoding/mp3_project/issues/132)、[0.8.0 spec](https://github.com/immorcoding/mp3_project/issues/135)
 - **STOR-17** · exploring · 曲库上限 12000 首，保证可同在一个文件夹（平均每首 ≤ 约 5.4 个 FAT 目录项）；曲库每条随附文件定位符（ARC-19），名称槽、Queue 窗口行、开启音频流与跳转重开流都按定位符打开，核对不符退回按路径打开并记 WARN（DIAG-5）；单次打开 ≤ 约 30 ms、音乐队列一窗 12 行 ≤ 约 0.5 s，与文件在文件夹内的位置无关（初值，由板测修正）；T_data/2 仍是单行读取的防御阈值。_Why:_ 打开耗时直接是唱盘页曲名、Queue 滚动、开流与跳转的用户可感延迟；常见 16 / 32 GB FAT32 卡装不满 12000 首，更大的卡出厂为 exFAT、固件不挂载。_Source:_ [打开文件提速](https://github.com/immorcoding/mp3_project/issues/167)、[0.9.0 spec](https://github.com/immorcoding/mp3_project/issues/172)
 
+### Signals
+
+- 2026-11-01 · friction · STOR-17 · 核对不符的 `MISMATCH` 才退回按路径打开；`FAILED`（槽用尽、卷未就绪、介质错误）不退回（#178 决定）。STOR-17 现写“核对不符退回按路径打开”，可补一句“其他失败不退回”。
+
 ### Rejected
 
 - 名称槽只回文件主名、主名不截断即全部应答：0.8.0 起应答优先取曲目标签中的标题并带歌手，由 STOR-15 替代。（was STOR-14）

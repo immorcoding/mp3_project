@@ -59,6 +59,8 @@ Next id: HAR-16
 - 2026-10-19 · cite · HAR-11 · 主机模块 `PathPatterns` 手写会随 include 漂移；`scripts/check-test-paths.ps1`（FAST）对每个模块只配置 `Tests/<模块>/`、读 `compile_commands.json` 并以 `gcc -MM` 取依赖，要求每个仓库内依赖被该模块某个 PathPatterns 命中，首次运行补齐 22 处缺口并加路由断言；约 4.7 s。
 - 2026-10-19 · friction · HAR-5 · `check-test-paths.ps1` 发现的缺口集中在跨层聚合头与配置头（`Service/service.h`、`Platform/platform.h`、`APP/app_config.h`、`Service/log/log_service*.h` 等），一改就选中 4~6 个模块，CHANGED 变慢但正确；盲区：仅在别的宏定义下才包含的头、`file(READ)` 改写输入、链接脚本、测试数据与 `CMakeLists.txt` 不经 `#include`，过宽的模式不检查。
 - 2026-10-19 · cite · HAR-5 · 新主机模块 `monitor_warn`（`APP/tasks/monitor/monitor_warn.c`）的保真边界：PASS 只证明未登记任务告警的去重/容量/截断逻辑；`monitor_task.c` 外壳（任务名到栈深的登记表、`Service_Log_Post` 的 WARN）无主机测试，靠固件构建与板上 MONITOR 日志；漏登记是运行期 WARN，不是编译期保证。
+- 2026-10-31 · friction · HAR-15 · 补丁文件必须以 LF 存放，否则 `git apply` 在 `core.autocrlf=true` 的 Windows 工作树上无法与 CRLF 文件比对；已在 `.gitattributes` 加 `patches/**/*.patch text eol=lf`，可补进 HAR-15。
+- 2026-10-31 · friction · HAR-15 · 在仓库子目录（如 `build/host/<模块>/`）里对副本 `git apply` 会把补丁路径当作仓库根相对路径而 Skipped；主机测试用 `GIT_CEILING_DIRECTORIES` 绕开，且副本已含补丁（用户提交 Vendor 改动之后）时先 `--reverse --check` 跳过。
 
 ## collaboration
 

@@ -25,6 +25,7 @@
 - 2026-10-28 · friction · GUI-4 · 模拟器上电外观是 Solid（`SERVICE_GUI_THEME_STARTUP`），按 T 后才是 Default。`music_artist` 原先把按 T 后的帧命名为 `*_solid`，审阅据此误判缺了哪些外观；本分支已改名为 `*_default`。`music_title_cjk_short`（注释写“按 T 切到 Solid”、帧名 `cjk_short_solid`）同样命名反了，未改。
 - 2026-10-28 · cite · GUI-4 · #154 有 31 个既有场景 132 帧变化（另新增 `music_artist` 9 帧）。核对办法：`git archive cae66d0` 到临时目录渲染改动前截图，逐帧左右拼图比对：唱盘页帧的播放状态、时间、进度、停止短语、唱盘角度与改动前一致，差异只有版面（唱盘 144 → 122、曲名下移并加歌手行、进度条与三键位置）；Queue 帧只有位置 6 的歌手行（新增多歌手假标签）。三键与进度条的位置变了，场景里的点按坐标随之改为新中心（上一首 60 → 42、下一首 180 → 198、拖进度条 y 224 → 212）。
 - 2026-10-28 · cite · GUI-4 · #157：`queue_long_scroll` 两帧哈希变化，逐帧看图，版式与文字不变，只有当前行长名循环滚动相位随末次 Apply 时刻变化；新增 `queue_back_scroll`（6 帧）、`queue_forward_fling`（4 帧）逐帧看过，行连续、顶部与底部无空白，`back_tail_bounce` 与 `back_top_bounce` 分别在末尾与首行露出回弹空隙；换回旧实现时 `back_mid_second` 变红，换回“只在首窗开弹性”时 `back_tail_bounce` 变红。
+- 2026-10-31 · cite · GUI-4 · #177 有 3 个既有场景 8 帧变化（另新增 6 个场景 23 帧）。核对办法：同一 worktree `git stash` 后渲染旧截图，逐帧左右拼图加差异掩膜比对：`music_seek` 与 `music_transport` 的差异只在进度条与时间 Label（总时长未知时不再跟手；拖动中时间预览目标；松手后停在目标而不是回位）；`music_bad_file/all_bad_hold` 只有唱盘角度（进入停止归零，GUI-20）。
 
 ### Rejected
 

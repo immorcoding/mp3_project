@@ -25,3 +25,8 @@ Next id: DIAG-6
 ### References
 
 - [Service Log](../../Service/log/README.md)：消息池所有权与任务接缝；[Log Component](../../Components/log/README.md)：核心队列；[USB Adapter](../../Adapters/stm32_hal/log_usb_cdc/README.md)：就绪和异步输出。
+
+### Signals
+
+- 2026-11-01 · friction · DIAG-4 · 名称槽 INFO 的 `us=` 现为标签读取耗时（整行耗时减去 `open=`），窗口汇总行的 `max=`、`us=`、`top=` 仍含打开；汇总行新增 `omax=<本窗最长单次打开>`，其中一个触发条件仍是单行读取（含打开）> T_data/2 的防御阈值。建议 DIAG-4 的文字写明“`us=` 不含打开、`max/us/top` 含打开、新增 `omax=`”。汇总行 12 行窗口、十位数极端取值会超出 Service Log 单条 128 B 并丢尾部计数（现实取值约 120 字符）。
+- 2026-11-01 · friction · DIAG-5 · Storage `Stream` INFO 只在开启成功后记（`off=` 为请求的 `AudioOffset`，未钳位；`lseek=` 是最后一次定位到区间起点加偏移的耗时）；开启失败不记，失败时只有停止原因可查。需要失败也留痕时另开票（#179）。

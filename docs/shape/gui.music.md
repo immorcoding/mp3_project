@@ -31,6 +31,8 @@
 - 2026-10-28 · friction · GUI-27 · “按字体完整字形高度计量”在实现里是两组手填常量（Noto 12：Label 内第 3 行起 13 行；Montserrat 10：第 1 行起 9 行），不随字体自动推出。资源包字体不可用时曲名与歌手回退 Montserrat 12，Label 高随行高变化，但字形上沿仍按 Noto 的 3 计算，字形与设计间距有像素级偏差（`music_title_font_fallback` 截图可见，未逐项实测）。以后换字体或字号须同步这两组常量；是否改为运行时从字形描述推出待定。
 - 2026-10-28 · cite · GUI-26 · 歌手的 `Unknown Artist` 与空串由 APP 音乐分区 `gui_music_title_text()` 决定（与 Queue 同一个 `GUI_MUSIC_TEXT_UNKNOWN_ARTIST`），Service 只画；曲名为空白或 `--` 时歌手为空串。
 - 2026-10-28 · friction · GUI-16 · #157：非首窗只留一行回滑行，弹性把手指拉过窗口首行，快速回滑时在上一窗 READY 前露出整行空白；改为留 3 行，并在窗口边沿之外还有曲目时按边沿拉回。先试过“只在首窗开弹性”，用户否决：列表首尾回弹不一致（首行回弹、末尾不回弹）。
+- 2026-10-31 · cite · GUI-10 · “总时长未知时不响应、不置灰”由 Service 在进度条 `PRESSED` 回调里吞掉这次按压实现（`lv_indev_wait_release` 并清掉 `PRESSED` 状态）：LVGL 在发 `PRESSING`（改值）与滚动处理前返回，进度条不跟手、分页也不滚；不用清 `CLICKABLE`，否则按压落到父对象、横滑会翻页。换曲取消拖动走同一机制（`Service_GUI_SeekCancel`）。可否响应由 APP 归约按“有当前曲、非停止、总时长非 0”算出，经 `Service_GUI_SeekEnable` 下发（#177 用户确认的接口）。
+- 2026-10-31 · cite · GUI-20 · 唱盘归零改为：采信的曲目身份变化、`TrackStartCount` 变化或进入停止；不再看位置变小。`music_bad_file/all_bad_hold` 因此变化：整轮坏文件进入 ALL_BAD 停止时唱盘归零（旧实现位置一直为 0，不归零）。
 
 ### Rejected
 
