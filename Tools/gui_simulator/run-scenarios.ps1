@@ -19,6 +19,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'scenario_common.ps1')
+
+# 对比模式只读；-Update 会改写 scenarios/*.expected，两者同时给出时不能默默忽略其一。
+if ($BaselineRef -and $Update) {
+    throw '-BaselineRef（只读对比）与 -Update（改写 expected 基线）不能同时使用；请分开运行。'
+}
+
 if ($BaselineRef) {
     $compareArguments = @{ BaselineRef = $BaselineRef }
     if ($Scenario) { $compareArguments.Scenario = $Scenario }
@@ -35,20 +42,8 @@ if (-not $BuildDir) {
     $BuildDir = Join-Path $repoRoot 'build\gui_simulator'
 }
 
-$configureArguments = @('-S', $simRoot, '-B', $BuildDir, '-G', 'Ninja', '-DCMAKE_C_COMPILER=gcc')
-if ($SdlSourceDir) {
-    $configureArguments += "-DFETCHCONTENT_SOURCE_DIR_SDL2_MINGW=$SdlSourceDir"
-}
-else {
-    # 不让早先缓存的覆盖值钉住旧 SDL；按 CMakeLists 的 URL 与 SHA256 正常下载/校验。
-    $configureArguments += '-UFETCHCONTENT_SOURCE_DIR_SDL2_MINGW'
-}
-& cmake @configureArguments | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "模拟器 CMake 配置失败" }
-& cmake --build $BuildDir | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "模拟器构建失败" }
-
-$exe = Join-Path $BuildDir 'gui_simulator.exe'
+# 未给 -SdlSourceDir 时不让早先缓存的覆盖值钉住旧 SDL；细节见 Build-GuiSimulator。
+$exe = Build-GuiSimulator -SimulatorDir $simRoot -BuildDir $BuildDir -SdlSourceDir $SdlSourceDir -Label '当前工作树'
 $scenarioFiles = Get-ChildItem -Path (Join-Path $simRoot 'scenarios') -Filter '*.args' | Sort-Object Name
 if ($Scenario) {
     $scenarioFiles = $scenarioFiles | Where-Object { $Scenario -contains $_.BaseName }
@@ -60,21 +55,12 @@ foreach ($file in $scenarioFiles) {
     $shotDir = Join-Path $BuildDir "shots\$name"
     New-Item -ItemType Directory -Force -Path $shotDir | Out-Null
 
-    $arguments = @('--hidden', '--out-dir', $shotDir)
-    foreach ($line in Get-Content -Path $file.FullName -Encoding UTF8) {
-        $trimmed = $line.Trim()
-        if ($trimmed -eq '' -or $trimmed.StartsWith('#')) { continue }
-        $arguments += ($trimmed -split '\s+')
-    }
+    $arguments = @(Get-ScenarioArguments -ArgsFile $file.FullName -ShotDir $shotDir)
 
     $output = & $exe @arguments
     if ($LASTEXITCODE -ne 0) { throw "场景 $name 运行失败（退出码 $LASTEXITCODE）" }
 
-    $actual = [ordered]@{}
-    foreach ($row in $output) {
-        if ($row -match '^\[shot\] (\S+) ([0-9a-f]{8})') { $actual[$Matches[1]] = $Matches[2] }
-        elseif ($row -match '^\[anims\] (\S+) (\d+)') { $actual["anims.$($Matches[1])"] = $Matches[2] }
-    }
+    $actual = ConvertFrom-SimulatorOutput -Output $output
 
     $expectedPath = Join-Path $simRoot "scenarios\$name.expected"
     if ($Update) {

@@ -271,6 +271,35 @@ $boardCardReadmeImpact = Get-HarnessImpact -ChangedPath @('Tools/board_test_card
 Assert-HarnessSequence -Expected @() -Actual $boardCardReadmeImpact.HostModules `
     -Message '样本卡 README 是纯文档，不选主机测试'
 
+# Python 模块的属性由规则声明，脚本不靠 Tools/<名> 约定或硬编码模块名（HAR-11）。
+$syntheticRules = @{
+    AllHostModules = @('cm', 'py_slow', 'py_fast')
+    HostModuleRules = @(
+        @{ Name = 'cm'; PathPatterns = @('^Lib/') }
+        @{ Name = 'py_slow'; Kind = 'Python'; TestDirectory = 'Tools/elsewhere/tests'; HasSlowTests = $true; PathPatterns = @('^Tools/elsewhere/') }
+        @{ Name = 'py_fast'; Kind = 'Python'; TestDirectory = 'Tools/fast'; PathPatterns = @('^Tools/fast/') }
+    )
+}
+Assert-HarnessSequence -Expected @('py_slow', 'py_fast') -Actual (Get-HarnessPythonModuleRule -Rules $syntheticRules | ForEach-Object { $_.Name }) `
+    -Message 'Kind = Python 的规则才是 Python 模块'
+Assert-HarnessSequence -Expected @('py_slow') -Actual (Get-HarnessSlowTestModuleName -Rules $syntheticRules) `
+    -Message '只有声明 HasSlowTests 的模块是慢测试模块'
+Assert-HarnessEqual -Expected 'Tools/elsewhere/tests' -Actual (Get-HarnessPythonTestDirectory -ModuleRule (Get-HarnessPythonModuleRule -Rules $syntheticRules | Select-Object -First 1)) `
+    -Message 'Python 模块的测试目录来自规则的 TestDirectory'
+$noPython = @{ AllHostModules = @('cm'); HostModuleRules = @(@{ Name = 'cm'; PathPatterns = @('^Lib/') }) }
+Assert-HarnessEqual -Expected 0 -Actual @(Get-HarnessPythonModuleRule -Rules $noPython).Count -Message '没有 Python 模块时返回空'
+Assert-HarnessEqual -Expected 0 -Actual @(Get-HarnessSlowTestModuleName -Rules $noPython).Count -Message '没有慢测试模块时返回空'
+$missingDirectory = @{ AllHostModules = @('py'); HostModuleRules = @(@{ Name = 'py'; Kind = 'Python'; PathPatterns = @('^Tools/py/') }) }
+$thrown = $null
+try { Get-HarnessPythonTestDirectory -ModuleRule $missingDirectory.HostModuleRules[0] | Out-Null } catch { $thrown = $_.Exception.Message }
+if (($null -eq $thrown) -or ($thrown -notmatch 'TestDirectory')) { throw "Python 模块缺 TestDirectory 必须报错，实际 '$thrown'" }
+$realRules = Get-HarnessRules
+$realCard = @(Get-HarnessPythonModuleRule -Rules $realRules | Where-Object { $_.Name -eq 'board_test_card' })
+Assert-HarnessEqual -Expected 1 -Actual $realCard.Count -Message '真实规则里 board_test_card 是 Python 模块'
+Assert-HarnessEqual -Expected 'Tools/board_test_card' -Actual (Get-HarnessPythonTestDirectory -ModuleRule $realCard[0]) -Message '真实规则声明样本卡测试目录'
+Assert-HarnessSequence -Expected @('board_test_card') -Actual (Get-HarnessSlowTestModuleName -Rules $realRules) `
+    -Message '真实规则声明样本卡有慢用例'
+
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
 Assert-HarnessSequence -Expected @('board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
     -Message 'Harness 变化必须回退全部主机测试'

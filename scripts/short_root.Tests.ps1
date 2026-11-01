@@ -94,10 +94,116 @@ try {
     if ($seenRoot -eq "${preferred}:\") { throw '首选盘符被占用时不应复用它' }
     if ($seenRoot -notmatch '^[E-Z]:\\$') { throw "顺延后动作应收到盘符根，实际 '$seenRoot'" }
     if ((Get-SubstLetters) -notcontains $preferred) { throw '不得卸掉别人已有的映射' }
+
+    # 3e. 选定到映射之间盘符被抢占（已占用列表过期）：真实 subst 失败，必须顺延到下一个盘符而不是抛错。
+    # 在 $ErrorActionPreference = 'Stop' 下 subst 的失败输出不得变成终止错误。
+    $realUsed = ${function:Get-HarnessUsedDriveLetter}
+    try {
+        function Get-HarnessUsedDriveLetter { return @() }
+        $raceLetter = (Get-HarnessShortRootCandidateLetter -Root $tree)[0]
+        $raceBlocked = $false
+        if ((Get-SubstLetters) -notcontains $raceLetter) {
+            & subst.exe "${raceLetter}:" $sandbox | Out-Null
+            if ($LASTEXITCODE -eq 0) { $raceBlocked = $true }
+        }
+        # 首选盘符若是真实盘符，subst 同样会失败，同样验证顺延。
+        $seenRoot = $null
+        Invoke-HarnessInShortRoot -RepositoryRoot $tree -MaxLength 1 -Action { param($root) $script:seenRoot = $root } | Out-Null
+        if ($seenRoot -eq "${raceLetter}:\") { throw '首选盘符 subst 失败时不应使用它' }
+        if ($seenRoot -notmatch '^[E-Z]:\\$') { throw "抢占后动作应收到顺延的盘符根，实际 '$seenRoot'" }
+        if ($raceBlocked) {
+            if ((Get-SubstLetters) -notcontains $raceLetter) { throw '不得卸掉别人已有的映射（抢占场景）' }
+            & subst.exe "${raceLetter}:" /D | Out-Null
+        }
+    }
+    finally {
+        Set-Item -Path Function:Get-HarnessUsedDriveLetter -Value $realUsed
+    }
+    Assert-ShortRootEqual -Expected ((Get-SubstLetters | Where-Object { $_ -ne $blockerLetter }) -join ',') `
+        -Actual (($lettersBefore) -join ',') -Message '抢占场景结束后不得残留自己的映射'
+
+    # 3f. 卸载失败只警告、不覆盖动作的原异常（也不让成功的动作变成失败）。
+    $realSubst = ${function:Invoke-HarnessSubst}
+    $realWrite = ${function:Write-NativeUtf8Line}
+    $script:warnings = New-Object System.Collections.Generic.List[string]
+    $script:mappedForFail = $null
+    try {
+        function Invoke-HarnessSubst {
+            param([string[]]$Arguments)
+            if ($Arguments -contains '/D') {
+                $script:mappedForFail = $Arguments[0]
+                return $false
+            }
+            return (& $realSubst -Arguments $Arguments)
+        }
+        function Write-NativeUtf8Line {
+            param([string]$Text, [string]$Stream = 'Output')
+            $script:warnings.Add("${Stream}:$Text")
+        }
+        Assert-ShortRootThrows -Pattern 'boom-original' -Message '卸载失败不得覆盖动作的原异常' -Action {
+            Invoke-HarnessInShortRoot -RepositoryRoot $tree -MaxLength 1 -Action { throw 'boom-original' }
+        }
+        $okResult = Invoke-HarnessInShortRoot -RepositoryRoot $tree -MaxLength 1 -Action { 'still-ok' }
+        Assert-ShortRootEqual -Expected 'still-ok' -Actual $okResult -Message '卸载失败不得让成功的动作失败'
+    }
+    finally {
+        Set-Item -Path Function:Invoke-HarnessSubst -Value $realSubst
+        Set-Item -Path Function:Write-NativeUtf8Line -Value $realWrite
+        # 假卸载没有真的卸掉，手动清理最后一个残留映射。
+        foreach ($l in @(Get-SubstLetters | Where-Object { $lettersBefore -notcontains $_ -and $_ -ne $blockerLetter })) {
+            & subst.exe "${l}:" /D | Out-Null
+        }
+    }
+    $warnLines = @($script:warnings | Where-Object { $_ -like 'Error:警告：卸载*' })
+    Assert-ShortRootEqual -Expected 2 -Actual $warnLines.Count -Message '每次卸载失败各警告一次（stderr）'
 }
 finally {
     if ($null -ne $blockerLetter) { & subst.exe "${blockerLetter}:" /D | Out-Null }
     Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# --- 4. verify.ps1 的接线（Invoke-HarnessFullInShortRoot）：替身 Runner，不跑真实 FULL ---
+$wireSandbox = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ('mp3-shortroot-wire-' + [Guid]::NewGuid().ToString('N'))
+try {
+    New-Item -ItemType Directory -Path (Join-Path $wireSandbox 'repo/scripts') -Force | Out-Null
+    $wireRepo = Join-Path $wireSandbox 'repo'
+    [System.IO.File]::WriteAllText((Join-Path $wireRepo 'scripts/verify_full.ps1'), 'marker-verify-full')
+    $wireBefore = (Get-SubstLetters) -join ','
+    $script:runnerCalls = New-Object System.Collections.Generic.List[object]
+    $recorder = {
+        param($ScriptPath, $Parameters)
+        $script:runnerCalls.Add([pscustomobject]@{
+                ScriptPath = $ScriptPath
+                Parameters = $Parameters
+                Content = [System.IO.File]::ReadAllText($ScriptPath)
+            })
+    }
+
+    # 4a. 超过阈值：经盘符根调用 verify_full.ps1，参数原样传递，映射上能读到真实文件，结束后无残留。
+    Invoke-HarnessFullInShortRoot -RepositoryRoot $wireRepo -MaxLength 1 -Parameters @{ HostCompiler = 'gcc-test' } -Runner $recorder
+    Assert-ShortRootEqual -Expected 1 -Actual $script:runnerCalls.Count -Message '应恰好调用一次 verify_full.ps1'
+    if ($script:runnerCalls[0].ScriptPath -notmatch '^[E-Z]:\\scripts[\\/]verify_full\.ps1$') {
+        throw "超阈值时应经盘符根调用，实际 '$($script:runnerCalls[0].ScriptPath)'"
+    }
+    Assert-ShortRootEqual -Expected 'marker-verify-full' -Actual $script:runnerCalls[0].Content -Message '映射盘上必须读到真实的 verify_full.ps1'
+    Assert-ShortRootEqual -Expected 'gcc-test' -Actual $script:runnerCalls[0].Parameters.HostCompiler -Message '参数必须原样传给 verify_full.ps1'
+    Assert-ShortRootEqual -Expected $wireBefore -Actual ((Get-SubstLetters) -join ',') -Message '运行结束后不得残留映射'
+
+    # 4b. Runner 失败：错误向上传播，映射同样卸掉。
+    Assert-ShortRootThrows -Pattern 'full-failed' -Message 'FULL 失败必须向上传播' -Action {
+        Invoke-HarnessFullInShortRoot -RepositoryRoot $wireRepo -MaxLength 1 -Runner { param($ScriptPath, $Parameters) throw 'full-failed' }
+    }
+    Assert-ShortRootEqual -Expected $wireBefore -Actual ((Get-SubstLetters) -join ',') -Message 'FULL 失败后也不得残留映射'
+
+    # 4c. 路径正常：直接在原根下调用，不映射。
+    $script:runnerCalls.Clear()
+    Invoke-HarnessFullInShortRoot -RepositoryRoot $wireRepo -MaxLength 1000 -Runner $recorder
+    Assert-ShortRootEqual -Expected (Join-Path $wireRepo 'scripts/verify_full.ps1') -Actual $script:runnerCalls[0].ScriptPath `
+        -Message '路径正常时应在原根下调用'
+    Assert-ShortRootEqual -Expected $wireBefore -Actual ((Get-SubstLetters) -join ',') -Message '路径正常时不得创建映射'
+}
+finally {
+    Remove-Item -LiteralPath $wireSandbox -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Write-Output '短路径映射自测通过。'

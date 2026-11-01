@@ -25,9 +25,5 @@ if (-not [string]::IsNullOrWhiteSpace($HostCompiler)) {
 # 工作树路径过长时（构建产物超过 MAX_PATH）自动 subst 到空闲盘符，在盘符路径下跑 FULL，结束（含失败）卸载；
 # 路径正常时原样运行。证据目录与 metadata 由 capture-verification.ps1 按真实路径写。
 $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
-Invoke-HarnessInShortRoot -RepositoryRoot $repositoryRoot -Action {
-    param($effectiveRoot)
-    Invoke-PowerShellScript -ScriptPath (Join-Path -Path $effectiveRoot -ChildPath 'scripts/verify_full.ps1') `
-        -Parameters $parameters
-}
+Invoke-HarnessFullInShortRoot -RepositoryRoot $repositoryRoot -Parameters $parameters
 exit $LASTEXITCODE

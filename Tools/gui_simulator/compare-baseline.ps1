@@ -8,7 +8,8 @@ param(
     [string]$OutDir,
     # 临时 worktree 与基线构建产物的父目录；默认在会话临时目录下新建，结束时清理。
     [string]$WorkRoot,
-    # 当前工作树的模拟器构建目录；默认 build\gui_simulator。
+    # 当前工作树的模拟器构建目录；默认在 WorkRoot 下（会话临时目录），用后清理，
+    # 不写仓库共享的 build\gui_simulator（那是 FULL 的构建树，对比不能改它）。
     [string]$BuildDir,
     [string]$SdlSourceDir,
     # 测试接缝：param($SourceRoot, $BuildDir) 构建 $SourceRoot 下的模拟器并返回可执行文件路径。
@@ -22,13 +23,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'scenario_common.ps1')
+
 $simRoot = $PSScriptRoot
 $repoRoot = (Resolve-Path (Join-Path $simRoot '..\..')).Path
 $jobTemp = if ($env:CLAUDE_JOB_DIR -and (Test-Path (Join-Path $env:CLAUDE_JOB_DIR 'tmp'))) { Join-Path $env:CLAUDE_JOB_DIR 'tmp' } else { [IO.Path]::GetTempPath() }
 $stamp = [Guid]::NewGuid().ToString('N').Substring(0, 6)
 if (-not $WorkRoot) { $WorkRoot = Join-Path $jobTemp "gb-$stamp" }
 if (-not $OutDir) { $OutDir = Join-Path $jobTemp "gui-compare-$stamp" }
-if (-not $BuildDir) { $BuildDir = Join-Path $repoRoot 'build\gui_simulator' }
+$defaultBuildDir = -not $BuildDir
+if ($defaultBuildDir) { $BuildDir = Join-Path $WorkRoot 'cur' }
 
 function Invoke-GitQuiet {
     param([string[]]$Arguments)
@@ -40,19 +44,15 @@ function Invoke-GitQuiet {
 
 if (-not $SimulatorBuilder) {
     if (-not $SdlSourceDir) {
-        $cached = Join-Path $BuildDir '_deps\sdl2_mingw-src'
+        # 只读复用 FULL 构建树里已下载的 SDL2，不往那里写任何东西。
+        $cached = Join-Path $repoRoot 'build\gui_simulator\_deps\sdl2_mingw-src'
         if (Test-Path $cached) { $SdlSourceDir = $cached }
     }
     $sdl = $SdlSourceDir
     $SimulatorBuilder = {
         param([string]$SourceRoot, [string]$Dir)
-        $configure = @('-S', (Join-Path $SourceRoot 'Tools\gui_simulator'), '-B', $Dir, '-G', 'Ninja', '-DCMAKE_C_COMPILER=gcc')
-        if ($sdl) { $configure += "-DFETCHCONTENT_SOURCE_DIR_SDL2_MINGW=$sdl" }
-        & cmake @configure | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "模拟器 CMake 配置失败：$SourceRoot" }
-        & cmake --build $Dir | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "模拟器构建失败：$SourceRoot" }
-        return (Join-Path $Dir 'gui_simulator.exe')
+        return (Build-GuiSimulator -SimulatorDir (Join-Path $SourceRoot 'Tools\gui_simulator') -BuildDir $Dir `
+                -SdlSourceDir $sdl -Label $SourceRoot)
     }.GetNewClosure()
 }
 
@@ -92,17 +92,6 @@ public static class GuiCompareMontage {
 '@
 }
 
-function Get-ScenarioArguments {
-    param([string]$ArgsFile, [string]$ShotDir)
-    $arguments = @('--hidden', '--out-dir', $ShotDir)
-    foreach ($line in Get-Content -Path $ArgsFile -Encoding UTF8) {
-        $trimmed = $line.Trim()
-        if ($trimmed -eq '' -or $trimmed.StartsWith('#')) { continue }
-        $arguments += ($trimmed -split '\s+')
-    }
-    return $arguments
-}
-
 # 返回 场景名 -> (键 -> 哈希/动画数)；截图写入 $ShotRoot\<场景>\。
 function Invoke-ScenarioSet {
     param([string]$Exe, [string]$SourceRoot, [string]$ShotRoot, [string[]]$Names)
@@ -116,12 +105,7 @@ function Invoke-ScenarioSet {
         $simArguments = @(Get-ScenarioArguments -ArgsFile $file -ShotDir $shotDir)
         $output = & $Exe @simArguments
         if ($LASTEXITCODE -ne 0) { throw "场景 $name 运行失败（退出码 $LASTEXITCODE）：$SourceRoot" }
-        $keys = [ordered]@{}
-        foreach ($row in $output) {
-            if ($row -match '^\[shot\] (\S+) ([0-9a-f]{8})') { $keys[$Matches[1]] = $Matches[2] }
-            elseif ($row -match '^\[anims\] (\S+) (\d+)') { $keys["anims.$($Matches[1])"] = $Matches[2] }
-        }
-        $result[$name] = $keys
+        $result[$name] = ConvertFrom-SimulatorOutput -Output $output
     }
     return $result
 }
@@ -208,6 +192,7 @@ finally {
     if (Test-Path $worktree) { Remove-Item -LiteralPath $worktree -Recurse -Force -ErrorAction SilentlyContinue }
     [void](Invoke-GitQuiet @('worktree', 'prune'))
     Remove-Item -LiteralPath (Join-Path $WorkRoot 'bb') -Recurse -Force -ErrorAction SilentlyContinue
+    if ($defaultBuildDir) { Remove-Item -LiteralPath $BuildDir -Recurse -Force -ErrorAction SilentlyContinue }
     if ((Test-Path $WorkRoot) -and -not (Get-ChildItem -LiteralPath $WorkRoot -Force)) {
         Remove-Item -LiteralPath $WorkRoot -Force -ErrorAction SilentlyContinue
     }
