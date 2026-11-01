@@ -6,9 +6,9 @@
 
 ### Rules
 
-- **GUI-1** · provisional · 全部 Screen 在 `Service/gui/view/` 手写，不用图形化工具导出代码；boot/、main/*、theme/ 只经 `Service_GUI_ViewTypeDef` 句柄访问对象。_Why:_ 生成器与运行时补丁使同一界面出现多份事实源。_Source:_ [ADR-0016](../adr/0016-hand-written-gui-view-and-shared-theme-styles.md)
+- **GUI-1** · provisional · 全部 Screen 在 `Service/gui/view/` 手写，不用图形化工具导出代码；boot/、main/*、theme/ 只经 `Service_GUI_ViewTypeDef` 句柄访问对象。_Why:_ 生成器与运行时补丁使同一界面出现多份事实源。_Source:_ [ADR-0016](../adr/0016-hand-written-gui-view-and-shared-theme-styles.md)、[基线对比模式](https://github.com/immorcoding/mp3_project/issues/184)
 - **GUI-3** · provisional · 新增或改动界面前先更新本 area 的受影响设计约束；未决设计先列 Open questions 或 Proposed，再修改手写界面。_Why:_ 设计意图须先于实现明确，避免事后补记与重复长文。_Source:_ [ADR-0016](../adr/0016-hand-written-gui-view-and-shared-theme-styles.md)、[spec #15](https://github.com/immorcoding/mp3_project/issues/15)
-- **GUI-4** · provisional · 模拟器帧哈希变化时先看截图、确认是有意的，才用 run-scenarios.ps1 -Update 重写基线，并在提交说明写明原因；改变「是否有动画常驻」的改动会移动其他动画的采样相位（LVGL 在动画链表为空时暂停动画定时器），判「基线不变」前先跑 run-scenarios.ps1 核对。_Why:_ 自动像素证据依赖基线不被随手覆盖；#106 判「基线不变」后仍有 12 场景 50 帧因相位移动而变。_Source:_ [ADR-0016](../adr/0016-hand-written-gui-view-and-shared-theme-styles.md)
+- **GUI-4** · provisional · 模拟器帧哈希变化时先用 `run-scenarios.ps1 -BaselineRef <改动前提交>` 渲染对比、逐张看变化帧的“基线 | 当前 | 差异掩膜”拼图，确认是有意的，才用 run-scenarios.ps1 -Update 重写基线，并在提交说明写明原因；改变「是否有动画常驻」的改动会移动其他动画的采样相位（LVGL 在动画链表为空时暂停动画定时器），判「基线不变」前先跑 run-scenarios.ps1 核对。_Why:_ 自动像素证据依赖基线不被随手覆盖；#106 判「基线不变」后仍有 12 场景 50 帧因相位移动而变。_Source:_ [ADR-0016](../adr/0016-hand-written-gui-view-and-shared-theme-styles.md)
 
 ### References
 
@@ -20,12 +20,8 @@
 - 2026-10-18 · cite · GUI-1 · 新增 `time_label` 时 view 只创建 Label 并发布句柄、不写文本；初始 `0:00/--:--` 由 `main/transport` 在 prepare 时用 `Service_GUI_TimeApply` 的同一格式化函数写入，避免两处各写一份时间文本。
 - 2026-10-26 · friction · GUI-4 · 模拟器约每 20 ms 刷新一帧，假 Storage 默认晚一圈（5 ms）应答，切歌空白与开播空白通常拍不到，帧哈希证明不了“有空白”或“没有空白”；#120 加 `--name-delay` 把应答拉长到超过一个刷新周期再拍。可考虑写明：短于一个刷新周期的瞬态先用替身延迟放大再截图。
 - 2026-10-26 · cite · GUI-4 · #121 曲名换字体后 20 个场景约 130 帧哈希变化；用 `--font-unavailable`（回退 Montserrat，与改动前同字体）重跑既有场景，17 个逐帧相同，余下 4 帧可由曲库扩到 16 首解释，于是看图只需看曲名区。
-- 2026-10-27 · cite · GUI-4 · #140 窗口行改为 {曲目显示名, 歌手} 后有 8 个既有场景 18 帧变化。核对办法：在 62f4ae1 的独立 worktree 渲染旧截图，逐帧左右拼图比对；全部差异只在第 5 行（标题 + 歌手）与第 7 行（标题无歌手）两行，其余行文字因原 10 首无目录与扩展名而不变。假标签放在第 7 首而不是第 2、3 首，是因为后者会进入唱盘页场景、连带改动曲名基线。
-- 2026-10-28 · cite · GUI-4 · #149 有 9 个既有场景 20 帧变化（另新增 3 个场景 5 帧）。核对办法：改动前在同一 worktree 跑全部场景并保存截图，先只加假标签（位置 8 中文标题 + 歌手、位置 9 加长歌手）确认只有 Queue 帧变化、唱盘页场景全部不变，再换字体，逐帧左右拼图比对：行内容、当前行高亮、点按命中的行都与改动前一致，差异只有字体、行高（41 → 46 px）与位置 8 的中文标签。
 - 2026-10-28 · friction · GUI-4 · 模拟器上电外观是 Solid（`SERVICE_GUI_THEME_STARTUP`），按 T 后才是 Default。`music_artist` 原先把按 T 后的帧命名为 `*_solid`，审阅据此误判缺了哪些外观；本分支已改名为 `*_default`。`music_title_cjk_short`（注释写“按 T 切到 Solid”、帧名 `cjk_short_solid`）同样命名反了，未改。
-- 2026-10-28 · cite · GUI-4 · #154 有 31 个既有场景 132 帧变化（另新增 `music_artist` 9 帧）。核对办法：`git archive cae66d0` 到临时目录渲染改动前截图，逐帧左右拼图比对：唱盘页帧的播放状态、时间、进度、停止短语、唱盘角度与改动前一致，差异只有版面（唱盘 144 → 122、曲名下移并加歌手行、进度条与三键位置）；Queue 帧只有位置 6 的歌手行（新增多歌手假标签）。三键与进度条的位置变了，场景里的点按坐标随之改为新中心（上一首 60 → 42、下一首 180 → 198、拖进度条 y 224 → 212）。
 - 2026-10-28 · cite · GUI-4 · #157：`queue_long_scroll` 两帧哈希变化，逐帧看图，版式与文字不变，只有当前行长名循环滚动相位随末次 Apply 时刻变化；新增 `queue_back_scroll`（6 帧）、`queue_forward_fling`（4 帧）逐帧看过，行连续、顶部与底部无空白，`back_tail_bounce` 与 `back_top_bounce` 分别在末尾与首行露出回弹空隙；换回旧实现时 `back_mid_second` 变红，换回“只在首窗开弹性”时 `back_tail_bounce` 变红。
-- 2026-10-31 · cite · GUI-4 · #177 有 3 个既有场景 8 帧变化（另新增 6 个场景 23 帧）。核对办法：同一 worktree `git stash` 后渲染旧截图，逐帧左右拼图加差异掩膜比对：`music_seek` 与 `music_transport` 的差异只在进度条与时间 Label（总时长未知时不再跟手；拖动中时间预览目标；松手后停在目标而不是回位）；`music_bad_file/all_bad_hold` 只有唱盘角度（进入停止归零，GUI-20）。
 
 ### Rejected
 

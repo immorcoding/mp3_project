@@ -61,6 +61,8 @@ Next id: HAR-16
 - 2026-10-19 · cite · HAR-5 · 新主机模块 `monitor_warn`（`APP/tasks/monitor/monitor_warn.c`）的保真边界：PASS 只证明未登记任务告警的去重/容量/截断逻辑；`monitor_task.c` 外壳（任务名到栈深的登记表、`Service_Log_Post` 的 WARN）无主机测试，靠固件构建与板上 MONITOR 日志；漏登记是运行期 WARN，不是编译期保证。
 - 2026-10-31 · friction · HAR-15 · 补丁文件必须以 LF 存放，否则 `git apply` 在 `core.autocrlf=true` 的 Windows 工作树上无法与 CRLF 文件比对；已在 `.gitattributes` 加 `patches/**/*.patch text eol=lf`，可补进 HAR-15。
 - 2026-10-31 · friction · HAR-15 · 在仓库子目录（如 `build/host/<模块>/`）里对副本 `git apply` 会把补丁路径当作仓库根相对路径而 Skipped；主机测试用 `GIT_CEILING_DIRECTORIES` 绕开，且副本已含补丁（用户提交 Vendor 改动之后）时先 `--reverse --check` 跳过。
+- 2026-11-01 · cite · HAR-5 · 仓库根超过 56 个字符时 FULL（`verify.ps1`）自动 `subst` 到空闲盘符运行、结束含失败卸载，证据目录与 metadata 仍写真实路径（#183，`scripts/short_root.ps1`）。
+- 2026-11-01 · cite · HAR-11 · `verification.psd1` 的主机模块可设 `Kind = 'Python'`（unittest 模块，如 `board_test_card`），测试目录 `TestDirectory`、慢用例 `HasSlowTests` 也在该文件登记；CHANGED 传 `-SkipSlow` 跳过慢用例，FULL 全跑（#183）。
 
 ## collaboration
 
