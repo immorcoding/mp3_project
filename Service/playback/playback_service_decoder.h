@@ -11,6 +11,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "Service/playback/playback_service_config.h"
+
 /**
  * @brief 一次解码调用回报的帧信息。
  * @note  解码库的类型（如 minimp3 的 mp3dec_frame_info_t）不出现在本头中，换库只改
@@ -34,6 +36,8 @@ typedef struct
     bool     HasTotalFrames;   /**< 流头带音频总帧数。 */
     uint32_t TotalFrames;      /**< 音频总帧数，不含元数据帧本身；HasTotalFrames 为真时有效。 */
     uint32_t SamplesPerFrame;  /**< 该帧头对应的每声道采样数（MPEG-1 为 1152，MPEG-2/2.5 为 576）。 */
+    bool     HasToc;           /**< Xing/Info 带完整 TOC（flag bit 2，100 B）；VBRI 一律为假。 */
+    uint8_t  Toc[PLAYBACK_SERVICE_TOC_ENTRIES]; /**< TOC：第 i 项是 i% 时间处的偏移，单位 1/256 音频字节；HasToc 为真时有效。 */
 } playback_service_decoder_stream_header_t;
 
 void playback_service_decoder_reset(void);
