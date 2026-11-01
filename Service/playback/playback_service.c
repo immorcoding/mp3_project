@@ -394,8 +394,9 @@ static uint32_t seek_inverse_toc(uint32_t offset, uint32_t span)
  *         口径：音频有效区间 = 元数据帧（Xing/Info/VBRI）之后到音频区间末尾；无元数据帧时就是整个音频区间。
  *         线性映射在有效区间内按总时长等比；带 TOC 的映射把 TOC 的 1/256 刻度也铺在有效区间上。
  *         这样自写头（字节数与 TOC 只计音频帧）与真实 LAME/ffmpeg 头（字节数含头帧）的差别不影响映射，
- *         头帧本身也永远不会落在偏移之后。偏移最多钳到 AudioBytes − W_min，保证至少能解出一帧
- *         （#166 第 11 条的核实见 Tests/playback_service 的 seek 测试）；落点 = 钳位后偏移按同一映射反算。
+ *         头帧本身也永远不会落在偏移之后。偏移最多钳到 AudioBytes − W_min；钳位后不保证能解出一帧
+ *         （320 kbps 下常常零帧），解不出也按放完处理：重开的流读尽后回报流尾放完，不判坏文件
+ *         （核实见 Tests/playback_service 的 seek 测试与本模块 README）。落点 = 钳位后偏移按同一映射反算。
  */
 Service_StatusTypeDef Service_Playback_MapSeek(uint32_t target_ms, Service_Playback_SeekPointTypeDef *point)
 {

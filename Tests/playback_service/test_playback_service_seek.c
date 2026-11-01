@@ -477,7 +477,7 @@ static void test_reopen_from_landing_resyncs_and_keeps_stream_facts(void)
             assert(run.TimeWentBackwards == 0U);
             assert(run.MaxDecodedMs >= point.LandingMs); /* 已解码时间从落点起算。 */
             assert(run.LastDecodedMs <= info.TotalDurationMs);
-            /* 剩余帧数以夹具扫描为准（头帧不计）；位储备不足最多丢弃头 2 帧（#161）。 */
+            /* 剩余帧数以夹具扫描为准（头帧不计）；位储备不足最多丢弃头 MAX_RESYNC_DROPPED_FRAMES 帧。 */
             remaining_frames = scan_frames_from(&blob, point.AudioOffset);
             assert((run.FrameResults + MAX_RESYNC_DROPPED_FRAMES) >= remaining_frames);
             assert(run.FrameResults <= remaining_frames);
