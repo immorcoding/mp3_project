@@ -25,7 +25,7 @@ python Tests/playback_service/fixtures/generate_fixtures.py
 
 ## `xing/`：跳转精度夹具（#174）
 
-给 [#175](https://github.com/immorcoding/mp3_project/issues/175) 的跳转精度测试用：逐帧扫描算出偏移处第一帧的真实时间，与映射反算的落点比较。四个文件同一规格：MPEG-1 L3、44.1 kHz 立体声、20 s（767 个音频帧）、约 160 KB，内容是样本卡同一段确定性和弦（`make_card.tile_pcm`），不含第三方录音。CBR 两个共用同一段音频码流，VBR 两个共用另一段；带头的文件 = 头帧（417 B）+ 无头文件的全部字节。
+给 [#175](https://github.com/immorcoding/mp3_project/issues/175) 的跳转精度测试（`test_playback_service_seek.c`）用：逐帧扫描算出偏移处第一帧的真实时间，与映射反算的落点比较。四个文件同一规格：MPEG-1 L3、44.1 kHz 立体声、20 s（767 个音频帧）、约 160 KB，内容是样本卡同一段确定性和弦（`make_card.tile_pcm`），不含第三方录音。CBR 两个共用同一段音频码流，VBR 两个共用另一段；带头的文件 = 头帧（417 B）+ 无头文件的全部字节。
 
 | 文件 | 字节 | 音频帧 | 头 | 说明 |
 |---|---:|---:|---|---|

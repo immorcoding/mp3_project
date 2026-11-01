@@ -21,8 +21,11 @@
 #define XING_OFFSET_MPEG2_STEREO    (21U)
 #define XING_OFFSET_MPEG2_MONO      (13U)
 #define XING_FLAG_FRAMES            (0x00000001UL)
+#define XING_FLAG_BYTES             (0x00000002UL)
+#define XING_FLAG_TOC               (0x00000004UL)
 #define XING_TAG_AND_FLAGS_BYTES    (8U)
 #define XING_FRAMES_FIELD_BYTES     (4U)
+#define XING_BYTES_FIELD_BYTES      (4U)
 
 /* VBRI 标签固定位于帧头后 32 字节处；版本 2、延迟 2、质量 2、字节数 4 之后是 4 字节帧数。 */
 #define VBRI_OFFSET                 (36U)
@@ -60,6 +63,8 @@ void playback_service_decoder_probe_stream_header(
     header->HasTotalFrames = false;
     header->TotalFrames = 0U;
     header->SamplesPerFrame = 1152U;
+    header->HasToc = false;
+    memset(header->Toc, 0, sizeof(header->Toc));
 
     if (frame_bytes < MP3_HEADER_BYTES)
     {
@@ -90,6 +95,19 @@ void playback_service_decoder_probe_stream_header(
         {
             header->HasTotalFrames = true;
             header->TotalFrames = read_be32(frame + xing_offset + XING_TAG_AND_FLAGS_BYTES);
+        }
+        if ((flags & XING_FLAG_TOC) != 0U)
+        {
+            /* 可选字段按 flags 位顺序排列：帧数、字节数、TOC；TOC 位置取决于前两项是否存在。 */
+            const uint32_t toc_offset = xing_offset + XING_TAG_AND_FLAGS_BYTES +
+                                        (((flags & XING_FLAG_FRAMES) != 0U) ? XING_FRAMES_FIELD_BYTES : 0U) +
+                                        (((flags & XING_FLAG_BYTES) != 0U) ? XING_BYTES_FIELD_BYTES : 0U);
+
+            if (frame_bytes >= (toc_offset + PLAYBACK_SERVICE_TOC_ENTRIES))
+            {
+                memcpy(header->Toc, frame + toc_offset, PLAYBACK_SERVICE_TOC_ENTRIES);
+                header->HasToc = true;
+            }
         }
         return;
     }
