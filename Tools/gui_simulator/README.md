@@ -55,6 +55,14 @@ cmake --build build/gui_simulator
 ./Tools/gui_simulator/run-scenarios.ps1 -SdlSourceDir <已解压的 SDL2 包>  # 复用已下载的 SDL2，不联网
 ```
 
+### 基线对比模式（GUI-4 看图）
+
+```powershell
+./Tools/gui_simulator/run-scenarios.ps1 -BaselineRef <提交号> [-Scenario queue] [-CompareOutDir <目录>] [-SdlSourceDir <SDL2 包>]
+```
+
+只读：在会话临时目录（`$CLAUDE_JOB_DIR/tmp`，无则系统临时目录）建临时 worktree 检出该提交，单独构建并以确定性虚拟时钟渲染其场景；当前工作树（含未提交改动）同样渲染；逐帧按帧哈希比较，列出变化帧（与动画数断言变化），并为每个变化帧输出 `<场景>/<帧>.png`：左基线、中当前、右差异掩膜（红色为不同像素）。无变化时报告“共 0 帧变化”。结束后移除临时 worktree；不改基线文件、不用 stash、不动当前工作树，对比本身不判失败（退出码 0），由人看图决定是否 `-Update`。路径要短（Windows MAX_PATH），默认已放在临时目录；SDL2 默认复用当前构建目录 `_deps/sdl2_mingw-src`，否则按 CMake 联网下载，可用 `-SdlSourceDir` 指定。只在 `Tools/gui_simulator/scenarios` 已存在的提交上可用。自测：`scripts/gui-compare-baseline.Tests.ps1`（假模拟器构建器，纳入 FAST）。
+
 截图保存在 `build/gui_simulator/shots/<场景>/`。哈希不一致时打开对应 BMP 与上一版比对；只有确认变化是有意的，才用 `-Update` 重写基线，并在提交说明里写明原因。PC 上 FPS/内存浮层已关闭，避免实现细节让基线漂移。
 
 LVGL 在动画链表为空时暂停动画定时器、新动画开始时恢复，恢复后的首拍不落在原有 `LV_DISP_DEF_REFR_PERIOD` 节拍上；因此「播放前是否还有别的动画在跑」会改变唱盘角度、状态行闪烁透明度与翻页回弹位置的采样相位。#106 停止解锁后的 Lock 呼吸后，正是这一相位变化使 12 个场景的 50 帧重录（布局、颜色、文字不变）。曲名超长时循环滚动是常驻动画，同样会移动其他动画的采样相位。
