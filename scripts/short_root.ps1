@@ -1,6 +1,9 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Write-NativeUtf8Line 与 Invoke-ExternalCommand 来自 build_helpers.ps1。
+. (Join-Path -Path $PSScriptRoot -ChildPath 'build_helpers.ps1')
+
 # 工作树路径过长时把仓库根 subst 到空闲盘符再运行（#183）。
 #
 # 背景：Windows 的 MAX_PATH 为 260。`.claude/worktrees/<较长名字>` 下，构建产物（如
@@ -53,6 +56,28 @@ function Get-HarnessShortRootCandidateLetter {
     return $ordered.ToArray()
 }
 
+function Invoke-HarnessSubst {
+    <#
+    .SYNOPSIS
+        运行 subst.exe，成功返回 $true，失败（非零退出码）返回 $false，不抛错。
+    .DESCRIPTION
+        经 Invoke-ExternalCommand：Windows PowerShell 5.1 在 'Stop' 下对合并 stderr 的原生命令会把 stderr 行
+        变成终止错误，而 subst 失败时正是写 stderr；成败只看退出码。
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string[]]$Arguments
+    )
+
+    try {
+        Invoke-ExternalCommand -CommandPath 'subst.exe' -Arguments $Arguments -CaptureOutput | Out-Null
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
 function Get-HarnessUsedDriveLetter {
     [CmdletBinding()]
     param()
@@ -61,7 +86,7 @@ function Get-HarnessUsedDriveLetter {
     foreach ($drive in [System.IO.DriveInfo]::GetDrives()) {
         [void]$used.Add($drive.Name.Substring(0, 1).ToUpperInvariant())
     }
-    foreach ($line in @(& subst.exe)) {
+    foreach ($line in @(Invoke-ExternalCommand -CommandPath 'subst.exe' -CaptureOutput)) {
         if ([string]$line -match '^([A-Za-z]):\\: =>') {
             [void]$used.Add($Matches[1].ToUpperInvariant())
         }
@@ -114,8 +139,7 @@ function Invoke-HarnessInShortRoot {
         }
 
         # 选定到映射之间别的进程可能抢走同一盘符；subst 失败就试下一个。
-        $output = @(& subst.exe "${letter}:" $target 2>&1)
-        if ($LASTEXITCODE -eq 0) {
+        if (Invoke-HarnessSubst -Arguments @("${letter}:", $target)) {
             $mapped = $letter
             break
         }
@@ -125,7 +149,7 @@ function Invoke-HarnessInShortRoot {
     }
 
     $shortRoot = "${mapped}:\"
-    [Console]::Error.WriteLine("路径过长（$($target.Length) > $MaxLength 个字符）：已 subst ${mapped}: -> $target，在 $shortRoot 下运行，结束后卸载。")
+    Write-NativeUtf8Line -Stream Error -Text "路径过长（$($target.Length) > $MaxLength 个字符）：已 subst ${mapped}: -> $target，在 $shortRoot 下运行，结束后卸载。"
     try {
         return (& $Action $shortRoot)
     }
@@ -134,9 +158,9 @@ function Invoke-HarnessInShortRoot {
         if ((Get-Location).Path -like "${mapped}:*") {
             Set-Location -LiteralPath $target
         }
-        & subst.exe "${mapped}:" /D 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            [Console]::Error.WriteLine("警告：卸载 ${mapped}: 失败，请手动执行 subst ${mapped}: /D。")
+        # 卸载失败只警告：finally 里抛错会盖掉动作的原异常。
+        if (-not (Invoke-HarnessSubst -Arguments @("${mapped}:", '/D'))) {
+            Write-NativeUtf8Line -Stream Error -Text "警告：卸载 ${mapped}: 失败，请手动执行 subst ${mapped}: /D。"
         }
     }
 }
