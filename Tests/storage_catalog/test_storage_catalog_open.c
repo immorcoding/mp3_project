@@ -81,6 +81,7 @@ typedef struct
 
 static log_line_t g_log[LOG_MAX];
 static uint32_t g_log_count;
+static uint32_t g_log_cost_us; /* 一次日志投递消耗的微秒（假 DWT 推进），用来证明日志不计入打开耗时 */
 
 /**
  * @brief 假日志投递：记录等级、标签与文本，并核对文本不超过 Service_Log 的单条容量。
@@ -99,6 +100,7 @@ Service_StatusTypeDef Service_Log_Post(Service_Log_LevelTypeDef level, const cha
         snprintf(g_log[g_log_count].text, sizeof(g_log[g_log_count].text), "%s", text);
         g_log_count++;
     }
+    g_cycles += g_log_cost_us;
     return SERVICE_OK;
 }
 
@@ -488,6 +490,7 @@ static void world_reset(void)
     g_locator_failed = false;
     g_locator_cost_us = 0U;
     g_path_cost_us = 0U;
+    g_log_cost_us = 0U;
     g_locator_calls = 0U;
     g_path_calls = 0U;
     g_last_opened_id = UINT32_MAX;
@@ -625,6 +628,7 @@ static void test_locator_mismatch_falls_back_to_path_open(void)
     g_stale_id = 5U;
     g_locator_cost_us = 1000U;
     g_path_cost_us = 2000U;
+    g_log_cost_us = 700U; /* Locator miss 的日志投递耗时不属于打开 */
 
     track = storage_track_text_read(7U, 5U);
 
@@ -634,7 +638,7 @@ static void test_locator_mismatch_falls_back_to_path_open(void)
     assert(g_locator_calls == 1U);
     assert(g_path_calls == 1U);
     assert(g_last_opened_id == 5U); /* 退回路径打开的仍是同一首 */
-    assert(track->OpenUs == 3000U); /* 两次尝试都计入打开耗时 */
+    assert(track->OpenUs == 3000U); /* 两次尝试都计入打开耗时，但不含 Locator miss 日志投递的 700 µs */
     assert(g_open_handles == 0U);
     assert(log_count_prefix("Locator miss") == 1U);
     line = log_last_prefix("Locator miss");
