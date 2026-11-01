@@ -28,7 +28,7 @@ main/
   可见行由 `Service_GUI_QueueApply()` 按 Length 填入，窗口滑动时转 head，
   并从当前 `scroll_y` 扣整行高度；不包含 `storage_listbuffer.h`。
   Queue 滚动不是 Pager，不要等 `SCROLL_END` 吸附。
-- `transport/` 不依赖 Canvas 或 Queue 行；绑三键与进度条松手，并换播放符号 / 写回百分比。
+- `transport/` 不依赖 Canvas 或 Queue 行；绑三键与进度条手势（四类事件：按下 `SEEK_PRESS`、拖动 `SEEK_DRAG`、松手 `SEEK_RELEASE`、取消 `SEEK_CANCEL`），并换播放符号 / 写回百分比；`SeekEnable`/`SeekCancel` 控制是否响应与结束拖动。
 - `title/` 不依赖 Canvas、Queue 或 Transport；只写曲名与歌手 Label 的文本和曲名的长文本模式，不认识名字 / 空白 / `--` / `Unknown Artist` 的语义。
 - `vinyl/` 依赖 `canvas/`；合成假唱盘后绑到唱盘 Image。`service_gui_main_vinyl_apply(playing, reset_angle)`
   由 `Service_GUI_VinylApply()` 转发：playing 起转/续转、paused 停在当前角度、reset_angle 归零；
