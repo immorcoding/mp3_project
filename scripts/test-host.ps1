@@ -5,7 +5,7 @@ param(
     [ValidateSet('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'playback_service', 'playback_task', 'monitor_warn', 'board_test_card')]
     [string[]]$Module = @('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'playback_service', 'playback_task', 'monitor_warn', 'board_test_card'),
 
-    # 跳过慢用例（目前只有样本卡的整文件确定性用例）：CHANGED 用，FULL 不带此开关、全跑。
+    # 跳过慢用例（规则里声明 HasSlowTests 的模块，目前是样本卡的整文件确定性用例）：CHANGED 用，FULL 不带此开关、全跑。
     [switch]$SkipSlow
 )
 
@@ -100,7 +100,7 @@ function Confirm-HostGccCompiler {
 function Invoke-PythonHostModule {
     <#
     .SYNOPSIS
-        运行规则里 Kind = 'Python' 的主机模块：Tools/<模块>/ 下的全部 test_*.py（unittest）。
+        运行规则里 Kind = 'Python' 的主机模块：规则 TestDirectory 目录下的全部 test_*.py（unittest）。
     .DESCRIPTION
         依赖 lameenc 的用例缺包时由用例自身 skip；这里先探测一次并在输出写明，-v 把每条 skip 原因也打出来。
         -SkipSlow 设置 MP3_SKIP_SLOW_TESTS=1，慢用例据此 skip（FULL 不带，全跑）。
@@ -109,16 +109,17 @@ function Invoke-PythonHostModule {
     param(
         [Parameter(Mandatory)][string]$RepositoryRoot,
         [Parameter(Mandatory)][string]$ModuleName,
+        [Parameter(Mandatory)][string]$TestDirectory,
         [switch]$SkipSlow
     )
 
     $python = Find-ExternalCommand -Name 'python'
     if ([string]::IsNullOrWhiteSpace([string]$python)) {
-        throw "主机模块 '$ModuleName' 需要 python（运行 Tools/$ModuleName 下的 unittest）；未在 PATH 中找到。"
+        throw "主机模块 '$ModuleName' 需要 python（运行 $TestDirectory 下的 unittest）；未在 PATH 中找到。"
     }
     $python = [string]@($python)[0]
 
-    $moduleDirectory = Join-Path -Path $RepositoryRoot -ChildPath (Join-Path -Path 'Tools' -ChildPath $ModuleName)
+    $moduleDirectory = Join-Path -Path $RepositoryRoot -ChildPath $TestDirectory
     $saved = @{}
     foreach ($name in 'PYTHONDONTWRITEBYTECODE', 'PYTHONUTF8', 'MP3_SKIP_SLOW_TESTS') {
         $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
@@ -157,8 +158,11 @@ function Invoke-PythonHostModule {
 Complete-Utf8EntryScript -Action {
     $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
     $rules = Get-HarnessRules
-    $pythonModules = @($rules.HostModuleRules | Where-Object { $_.ContainsKey('Kind') -and ($_.Kind -eq 'Python') } |
-            ForEach-Object { [string]$_.Name })
+    $pythonRules = @{}
+    foreach ($pythonRule in @(Get-HarnessPythonModuleRule -Rules $rules)) {
+        $pythonRules[[string]$pythonRule.Name] = $pythonRule
+    }
+    $pythonModules = @($pythonRules.Keys)
     $cmakeModules = @($Module | Where-Object { $pythonModules -notcontains $_ })
 
     # 只选 Python 模块时不需要 GCC/cmake/ninja，也不因缺它们而失败。
@@ -173,7 +177,8 @@ Complete-Utf8EntryScript -Action {
 
     foreach ($moduleName in $Module) {
         if ($pythonModules -contains $moduleName) {
-            Invoke-PythonHostModule -RepositoryRoot $repositoryRoot -ModuleName $moduleName -SkipSlow:$SkipSlow
+            Invoke-PythonHostModule -RepositoryRoot $repositoryRoot -ModuleName $moduleName `
+                -TestDirectory (Get-HarnessPythonTestDirectory -ModuleRule $pythonRules[$moduleName]) -SkipSlow:$SkipSlow
             continue
         }
 

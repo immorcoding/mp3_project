@@ -201,10 +201,13 @@
             )
         }
         @{
-            # Python unittest 模块（不是 CMake 工程）：test-host.ps1 按 Kind 走 Tools/board_test_card 下的 test_*.py，
-            # check-test-paths.ps1 不对它做 gcc 依赖检查。依赖 lameenc 的用例缺包时跳过；慢用例（-SkipSlow）只在 FULL 跑。
+            # Python unittest 模块（不是 CMake 工程）：test-host.ps1 按 Kind 跑 TestDirectory 下的 test_*.py，
+            # check-test-paths.ps1 不对它做 gcc 依赖检查。依赖 lameenc 的用例缺包时跳过；
+            # HasSlowTests 的模块在 CHANGED 带 -SkipSlow，慢用例只在 FULL 跑。
             Name = 'board_test_card'
             Kind = 'Python'
+            TestDirectory = 'Tools/board_test_card'
+            HasSlowTests = $true
             PathPatterns = @(
                 '^Tools/board_test_card/'
                 # test_card_seek.py 逐字节核对提交进仓库的 Xing 精度夹具。

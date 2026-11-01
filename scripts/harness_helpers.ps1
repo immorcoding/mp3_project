@@ -21,6 +21,60 @@ function Get-HarnessRules {
     return $rules
 }
 
+function Test-HarnessPythonModuleRule {
+    <#
+    .SYNOPSIS
+        规则条目是不是 Python unittest 模块（Kind = 'Python'，不是 Tests/<模块>/ 下的 CMake 工程）。
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$ModuleRule
+    )
+
+    return ($ModuleRule.ContainsKey('Kind') -and ([string]$ModuleRule.Kind -eq 'Python'))
+}
+
+function Get-HarnessPythonModuleRule {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Rules
+    )
+
+    return @($Rules.HostModuleRules | Where-Object { Test-HarnessPythonModuleRule -ModuleRule $_ })
+}
+
+function Get-HarnessPythonTestDirectory {
+    <#
+    .SYNOPSIS
+        Python 模块的测试目录（相对仓库根），来自规则条目的 TestDirectory，不靠 Tools/<模块名> 约定。
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$ModuleRule
+    )
+
+    if (-not $ModuleRule.ContainsKey('TestDirectory') -or [string]::IsNullOrWhiteSpace([string]$ModuleRule.TestDirectory)) {
+        throw "Python 主机模块 '$($ModuleRule.Name)' 在 verification.psd1 里缺少 TestDirectory。"
+    }
+
+    return [string]$ModuleRule.TestDirectory
+}
+
+function Get-HarnessSlowTestModuleName {
+    <#
+    .SYNOPSIS
+        声明了慢用例（HasSlowTests = $true）的模块名；CHANGED 对这些模块带 -SkipSlow，FULL 全跑。
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Rules
+    )
+
+    return @($Rules.HostModuleRules |
+            Where-Object { $_.ContainsKey('HasSlowTests') -and ($_.HasSlowTests -eq $true) } |
+            ForEach-Object { [string]$_.Name })
+}
+
 function Invoke-HarnessQuietStep {
     <#
     .SYNOPSIS

@@ -269,7 +269,7 @@ function Get-HarnessCMakeModuleName {
 
     $pythonModules = New-Object 'System.Collections.Generic.HashSet[string]'
     foreach ($moduleRule in $Rules.HostModuleRules) {
-        if ($moduleRule.ContainsKey('Kind') -and ([string]$moduleRule.Kind -eq 'Python')) {
+        if (Test-HarnessPythonModuleRule -ModuleRule $moduleRule) {
             [void]$pythonModules.Add([string]$moduleRule.Name)
         }
     }
