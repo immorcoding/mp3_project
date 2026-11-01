@@ -300,6 +300,10 @@ static void playback_sim_handle(const Playback_CommandTypeDef *command)
             snapshot->State = PLAYBACK_STATE_PLAYING;
             break;
 
+        case PLAYBACK_COMMAND_SEEK:
+            /* 跳转的假后端行为（核对曲目身份、位置设为落点、TrackStartCount）由 GUI 票实现（#177）；这里只推进回显。 */
+            break;
+
         default:
             break;
     }

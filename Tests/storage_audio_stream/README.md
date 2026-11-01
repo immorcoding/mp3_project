@@ -2,6 +2,8 @@
 
 本目录通过 `storage_audio_range.h` 验证越过标签纯函数：ID3v2（含扩展头、footer、synchsafe 长度）、尾部 ID3v1、APEv2（带/不带 header）、头尾组合，以及标签长度越界与音频区间为空（Storage 应报 `BAD_FILE`）。只编译 `storage_audio_range.c`，不链接 FreeRTOS、FatFs、HAL 或块池。
 
+另验证 `storage_audio_range_seek_position`（跳转重开流的 `AudioOffset` 钳位）：偏移 0 落在区间起点、区间内按起点相对换算、越过区间（含 32 位最大值）钳在区间末端、空区间停在起点。PASS 证明钳位算术；`f_lseek`、剩余字节与 ENDED 的衔接在主循环里，进板级验收。
+
 Storage 音频流主循环（FatFs、信箱比较、盖章、块池队列）不做主机测试，进板级验收；正确性靠播放任务按流序号过滤。
 
 从仓库根目录运行：

@@ -259,15 +259,20 @@ static Storage_AudioOpenResultTypeDef storage_audio_read_exact(uint32_t offset,
 }
 
 /**
- * @brief 读文件头尾字节、越过标签、seek 到音频起点。
- * @param[out] audio_bytes 音频区间长度。
+ * @brief 读文件头尾字节、越过标签、seek 到音频区间起点加偏移。
+ * @param[in] audio_offset 相对音频区间起点的字节数；越过区间时钳在区间末端。
+ * @param[out] audio_bytes 音频区间长度（整段，不随偏移变化）。
+ * @param[out] remaining 从落点到区间末端尚未读出的字节数；偏移被钳到末端时为 0。
  * @return 开启结果；OK 时 FIL 已打开并定位。
  * @note  失败时 FIL 已关闭。
  */
-static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t *audio_bytes)
+static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t audio_offset,
+                                                               uint32_t *audio_bytes,
+                                                               uint32_t *remaining)
 {
     Service_StatusTypeDef status;
     Storage_AudioRangeTypeDef range;
+    uint32_t position;
     uint64_t size64 = 0U;
     uint32_t size;
     uint32_t head_bytes;
@@ -302,10 +307,12 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t *audio_b
             }
             else
             {
-                status = Service_Filesystem_SeekFile(storage_audio_file, (uint64_t)range.Start);
+                position = storage_audio_range_seek_position(&range, audio_offset);
+                status = Service_Filesystem_SeekFile(storage_audio_file, (uint64_t)position);
                 if (status == SERVICE_OK)
                 {
                     *audio_bytes = range.End - range.Start;
+                    *remaining = range.End - position;
                 }
                 else
                 {
@@ -327,7 +334,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t *audio_b
  * @param[in] request 非“无流”的请求。
  * @param[in] media 介质状态（非消抖）。
  * @return 开启结果；OK 时 FIL 已打开，storage_audio_record 的参数已填。
- * @note  代次 0 表示“当前”。位置超出列表按 STALE。无法区分“文件不存在”与“打开时 I/O 错误”，
+ * @note  请求的 AudioOffset 钳到音频区间内后定位（0 为区间起点）；钳到末端时流记录同时带 ENDED。代次 0 表示“当前”。位置超出列表按 STALE。无法区分“文件不存在”与“打开时 I/O 错误”，
  *        打开失败一律 BAD_FILE（C3 的“打不开”）。BAD_FILE 时仍填写 Generation 与 TrackCount（位置已通过 STALE 校验），供播放任务跳过坏文件；其余失败二者为 0。
  */
 static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequestTypeDef *request,
@@ -337,6 +344,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
     uint16_t track_count;
     uint16_t catalog_index;
     uint32_t audio_bytes = 0U;
+    uint32_t remaining = 0U;
     Service_StatusTypeDef status;
     Storage_AudioOpenResultTypeDef result;
 
@@ -382,11 +390,17 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
     }
     storage_audio_file_open = true;
 
-    result = storage_audio_probe_file(&audio_bytes);
+    result = storage_audio_probe_file(request->AudioOffset, &audio_bytes, &remaining);
     if (result == STORAGE_AUDIO_OPEN_OK)
     {
-        storage_audio_remaining = audio_bytes;
+        storage_audio_remaining = remaining;
         storage_audio_record.AudioBytes = audio_bytes;
+        if (remaining == 0U)
+        {
+            /* 偏移被钳到区间末端：没有字节可读，直接读尽（不是读错误），不占块。 */
+            storage_audio_close_file();
+            storage_audio_record.End = STORAGE_AUDIO_END_ENDED;
+        }
     }
     return result;
 }

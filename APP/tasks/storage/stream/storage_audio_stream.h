@@ -22,6 +22,7 @@ typedef struct
     uint32_t StreamSeq;   /**< 播放任务分配的单调流序号；0 = 无流。 */
     uint32_t Generation;  /**< 播放列表代次；0 表示“当前”。 */
     uint16_t Position;    /**< 播放列表下标。 */
+    uint32_t AudioOffset; /**< 相对音频区间起点的字节数：切歌与普通开流为 0，跳转重开流为播放模块映射给出的偏移。Storage 只把它钳到区间内，不认识音频格式；应答的 AudioBytes 仍是整段区间长度。 */
 } Storage_AudioRequestTypeDef;
 
 /** @brief 开启结果。 */
