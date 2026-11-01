@@ -111,6 +111,29 @@ function Get-HarnessShortRootLetter {
     throw '没有空闲盘符（E-Z 均已占用），无法映射短路径；请用 `subst X: /D` 释放一个，或把工作树移到更短的路径。'
 }
 
+function Invoke-HarnessFullInShortRoot {
+    <#
+    .SYNOPSIS
+        verify.ps1 的接线：路径过长时经短盘符根运行 scripts/verify_full.ps1，否则在原根运行。
+    .DESCRIPTION
+        Runner 是测试接缝：param($ScriptPath, $Parameters)，默认用 Invoke-PowerShellScript 真正运行。
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepositoryRoot,
+        [hashtable]$Parameters = @{},
+        [int]$MaxLength = $script:HarnessMaxRootLength,
+        [scriptblock]$Runner = { param($ScriptPath, $Parameters) Invoke-PowerShellScript -ScriptPath $ScriptPath -Parameters $Parameters }
+    )
+
+    $fullParameters = $Parameters
+    $fullRunner = $Runner
+    Invoke-HarnessInShortRoot -RepositoryRoot $RepositoryRoot -MaxLength $MaxLength -Action {
+        param($effectiveRoot)
+        & $fullRunner (Join-Path -Path $effectiveRoot -ChildPath 'scripts/verify_full.ps1') $fullParameters
+    }
+}
+
 function Invoke-HarnessInShortRoot {
     <#
     .SYNOPSIS

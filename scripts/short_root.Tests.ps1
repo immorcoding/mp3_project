@@ -162,5 +162,49 @@ finally {
     Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# --- 4. verify.ps1 的接线（Invoke-HarnessFullInShortRoot）：替身 Runner，不跑真实 FULL ---
+$wireSandbox = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ('mp3-shortroot-wire-' + [Guid]::NewGuid().ToString('N'))
+try {
+    New-Item -ItemType Directory -Path (Join-Path $wireSandbox 'repo/scripts') -Force | Out-Null
+    $wireRepo = Join-Path $wireSandbox 'repo'
+    [System.IO.File]::WriteAllText((Join-Path $wireRepo 'scripts/verify_full.ps1'), 'marker-verify-full')
+    $wireBefore = (Get-SubstLetters) -join ','
+    $script:runnerCalls = New-Object System.Collections.Generic.List[object]
+    $recorder = {
+        param($ScriptPath, $Parameters)
+        $script:runnerCalls.Add([pscustomobject]@{
+                ScriptPath = $ScriptPath
+                Parameters = $Parameters
+                Content = [System.IO.File]::ReadAllText($ScriptPath)
+            })
+    }
+
+    # 4a. 超过阈值：经盘符根调用 verify_full.ps1，参数原样传递，映射上能读到真实文件，结束后无残留。
+    Invoke-HarnessFullInShortRoot -RepositoryRoot $wireRepo -MaxLength 1 -Parameters @{ HostCompiler = 'gcc-test' } -Runner $recorder
+    Assert-ShortRootEqual -Expected 1 -Actual $script:runnerCalls.Count -Message '应恰好调用一次 verify_full.ps1'
+    if ($script:runnerCalls[0].ScriptPath -notmatch '^[E-Z]:\\scripts[\\/]verify_full\.ps1$') {
+        throw "超阈值时应经盘符根调用，实际 '$($script:runnerCalls[0].ScriptPath)'"
+    }
+    Assert-ShortRootEqual -Expected 'marker-verify-full' -Actual $script:runnerCalls[0].Content -Message '映射盘上必须读到真实的 verify_full.ps1'
+    Assert-ShortRootEqual -Expected 'gcc-test' -Actual $script:runnerCalls[0].Parameters.HostCompiler -Message '参数必须原样传给 verify_full.ps1'
+    Assert-ShortRootEqual -Expected $wireBefore -Actual ((Get-SubstLetters) -join ',') -Message '运行结束后不得残留映射'
+
+    # 4b. Runner 失败：错误向上传播，映射同样卸掉。
+    Assert-ShortRootThrows -Pattern 'full-failed' -Message 'FULL 失败必须向上传播' -Action {
+        Invoke-HarnessFullInShortRoot -RepositoryRoot $wireRepo -MaxLength 1 -Runner { param($ScriptPath, $Parameters) throw 'full-failed' }
+    }
+    Assert-ShortRootEqual -Expected $wireBefore -Actual ((Get-SubstLetters) -join ',') -Message 'FULL 失败后也不得残留映射'
+
+    # 4c. 路径正常：直接在原根下调用，不映射。
+    $script:runnerCalls.Clear()
+    Invoke-HarnessFullInShortRoot -RepositoryRoot $wireRepo -MaxLength 1000 -Runner $recorder
+    Assert-ShortRootEqual -Expected (Join-Path $wireRepo 'scripts/verify_full.ps1') -Actual $script:runnerCalls[0].ScriptPath `
+        -Message '路径正常时应在原根下调用'
+    Assert-ShortRootEqual -Expected $wireBefore -Actual ((Get-SubstLetters) -join ',') -Message '路径正常时不得创建映射'
+}
+finally {
+    Remove-Item -LiteralPath $wireSandbox -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Output '短路径映射自测通过。'
 $global:LASTEXITCODE = 0
