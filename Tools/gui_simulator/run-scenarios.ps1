@@ -6,7 +6,11 @@ param(
     [switch]$Update,
     [string]$BuildDir,
     # 已解压的 SDL2 MinGW 开发包目录；给出时不再联网下载（CHANGED 推送快照复用主仓库缓存）。
-    [string]$SdlSourceDir
+    [string]$SdlSourceDir,
+    # 只读对比模式：在临时 worktree 渲染该提交的场景，与当前工作树逐帧对比（见 compare-baseline.ps1）。
+    [string]$BaselineRef,
+    # 对比模式的输出目录（变化帧清单与拼图）；默认在会话临时目录下新建。
+    [string]$CompareOutDir
 )
 
 # GUI 模拟器场景回归：以确定性虚拟时钟运行 scenarios/*.args，比较每张截图的帧哈希。
@@ -14,6 +18,16 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ($BaselineRef) {
+    $compareArguments = @{ BaselineRef = $BaselineRef }
+    if ($Scenario) { $compareArguments.Scenario = $Scenario }
+    if ($CompareOutDir) { $compareArguments.OutDir = $CompareOutDir }
+    if ($BuildDir) { $compareArguments.BuildDir = $BuildDir }
+    if ($SdlSourceDir) { $compareArguments.SdlSourceDir = $SdlSourceDir }
+    & (Join-Path $PSScriptRoot 'compare-baseline.ps1') @compareArguments
+    return
+}
 
 $simRoot = $PSScriptRoot
 $repoRoot = (Resolve-Path (Join-Path $simRoot '..\..')).Path
