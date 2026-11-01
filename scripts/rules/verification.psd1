@@ -2,6 +2,7 @@
     AllHostModules = @(
         'external_loader'
         'flash_ftl'
+        'filesystem_locator'
         'gui_task'
         'gui_theme'
         'gui_canvas'
@@ -41,6 +42,26 @@
                 '^Service/log/log_service(?:_config)?\.h$'
                 '^APP/app_config\.h$'
                 '^Tests/flash_ftl/'
+            )
+        }
+        @{
+            Name = 'filesystem_locator'
+            PathPatterns = @(
+                '^Service/filesystem/'
+                '^Middlewares/Third_Party/FatFs/'
+                # 测试把 patches/fatfs 的补丁应用到 ff.c 副本后编译，并复制 ffconf.h 与 fatfs.h。
+                '^patches/fatfs/'
+                '^FATFS/'
+                # 沿用 flash_ftl 的 FreeRTOS 头替身，以及主机测试编译的 Platform/Service/APP 头（由 check-test-paths.ps1 发现）。
+                '^Tests/flash_ftl/stubs/'
+                '^Platform/platform\.h$'
+                '^Platform/flash/platform_flash\.h$'
+                '^Platform/sd/platform_sd\.h$'
+                '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+                '^Service/service\.h$'
+                '^Service/log/log_service(?:_config)?\.h$'
+                '^APP/app_config\.h$'
+                '^Tests/filesystem_locator/'
             )
         }
         @{

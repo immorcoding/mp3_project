@@ -1,2 +1,5 @@
 # 字体 bin 是字节契约的一部分：禁止换行转换、文本 diff 与自动合并。
 Resources/fonts/*.bin binary
+
+# Vendor 补丁以 LF 存放：git apply 按补丁里的换行比对，autocrlf 转成 CRLF 会让补丁失效。
+patches/**/*.patch text eol=lf

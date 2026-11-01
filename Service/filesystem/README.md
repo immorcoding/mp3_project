@@ -8,8 +8,8 @@
 
 - `filesystem_types.h`：逻辑卷枚举与 UTF-8 路径/名称上限。文件头、目录头需要 Volume 或长度时只包含本头，互不包含。
 - `filesystem_service.h`：卷生命周期。SD 为 `InitSD(notify_index)/MountSD/UnmountSD`；Flash 为 `InitFlash(notify_index)`（注册执行器）、`MountFlash`（扫描 FTL 并挂载 FAT）、`UnmountFlash`、`FormatAndMountFlash`、`RecoverAndMountFlash`、`ReclaimFlash`。设备不提供 SD 格式化入口。`notify_index` 是拥有该任务的 APP 枚举给出的通知槽，Service 不认识 APP 类型。
-- `filesystem_file.h`：卷感知文件访问。`OpenFile/ReadFile/WriteFile/SeekFile/GetFilePosition/GetFileSize/SyncFile/CloseFile/RemoveFile/RenameFile/GetFileInfo`。调用必须给出 Volume；相对路径只在该卷内解释。
-- `filesystem_directory.h`：卷感知目录访问。`OpenDirectory/ReadDirectory/RewindDirectory/CloseDirectory/CreateDirectory/RemoveDirectory`。空路径表示所选卷的根目录；文件接口不得把空路径当作文件名。
+- `filesystem_file.h`：卷感知文件访问。`OpenFile/ReadFile/WriteFile/SeekFile/GetFilePosition/GetFileSize/SyncFile/CloseFile/RemoveFile/RenameFile/GetFileInfo`。调用必须给出 Volume；相对路径只在该卷内解释。另有 `OpenFileByLocator`（按文件定位符只读打开，见下节“文件定位符与 FatFs 补丁”）。
+- `filesystem_directory.h`：卷感知目录访问。`OpenDirectory/ReadDirectory/RewindDirectory/CloseDirectory/CreateDirectory/RemoveDirectory`。空路径表示所选卷的根目录；文件接口不得把空路径当作文件名。`ReadDirectory` 给出的目录项带文件定位符 `Locator`。
 - `filesystem_text.h`：文本编码查表。`GbkToUnicode(gbk_code)` 把 GBK 双字节码（首字节在高 8 位）转 Unicode 码点，0 表示无映射；内部调用 FatFs `ff_convert(code, 1)`，只读 CP936 表（Resource Service 在任务启动前就绪），不访问介质、不阻塞，可在任何任务上下文调用。由 Storage 的 `storage_track_text_read()` 作为 GBK 查表回调注入曲目文本函数，FatFs 类型不出本 Module（ARC-12）。
 - `filesystem_flash_access.h`：启动诊断的同步包装。`ReadFlashArray/ReadFlashDiagnostic/EraseFlashDiagnostic/ProgramFlashDiagnostic`。这是唯一允许包含 `platform_flash.h` 的公开头，以便使用 Platform 诊断区域枚举。
 
@@ -35,9 +35,19 @@ APP 只持有不透明 Token，`FIL`、`DIR`、TCHAR、FRESULT 和 FatFs 调用�
 
 `RemoveFile` 只删除文件，不删除目录；文件不存在按成功处理，目标仍打开时拒绝删除。无 TRIM 时，删除释放 FAT 簇并同步元数据，不把文件数据的 LBA 直接通知 FTL 作废。后续 LBA 重写完成后，旧物理版本才成为可 GC 的失效块。文件删除不是安全擦除。非空目录删除返回 `SERVICE_BUSY`。
 
+## 文件定位符与 FatFs 补丁
+
+FatFs 按路径打开每次从文件夹第 0 个目录项起逐项比较长文件名，耗时随文件在文件夹内的位置线性增长。为让 12000 首同在一个文件夹时打开仍然够快，`ReadDirectory` 随每个条目给出不透明的**文件定位符**（`Service_Filesystem_FileLocatorTypeDef`，16 B，类型在 `filesystem_types.h`），`OpenFileByLocator` 按它直接读出目录项并打开。依据 [ADR-0022](../../docs/adr/0022-fatfs-open-by-locator-patch.md)、ARC-19。
+
+- **内容与有效期**：文件夹起始簇、主（短名）目录项在文件夹内的字节偏移（定位），文件起始簇、文件长度（核对）。布局在私有头 `filesystem_locator.h`，调用者只能整体保存、拷贝、传回。全零表示“无定位符”（目录读到末尾时恰好落在扇区末尾且无法确定位置的个别条目、空文件）。只在同一曲库代次内有效，不跨卷、不跨换卡。
+- **取得**：`filesystem_directory.c` 在 `f_readdir` 之后从 `DIR` 推算主目录项位置，并直接读 FatFs 窗口里（必要时多读一次该扇区）的目录项字节，与 `FILINFO` 的属性和长度互相核对后才发出定位符；FatFs 窗口在跨簇时会被换成 FAT 扇区，此时多一次 `disk_read`。
+- **打开**：`OpenFileByLocator(volume, locator, file, status)` 返回三态而不是复用 `Service_StatusTypeDef`，让“核对不符，退回路径打开”与真正的失败可区分：`OPENED`；`MISMATCH`（无定位符、目录项已删除、是目录、起始簇或长度不同、位置越界）未占用文件槽，调用者退回 `OpenFile`；`FAILED`（卷未就绪、槽用尽、锁表满、被写方式持有等）原因见 `status`。只读。
+- **补丁**：核对与填 FIL 由 `ff.c` 的一个补丁函数 `f_open_dirent` 完成（`patches/fatfs/0001-open-by-dirent.patch`），像 `f_open` 结尾那样登记锁，`CloseFile` 照常释放。原型只在私有头 `filesystem_ff_patch.h`，不进 `ff.h`、不改 `ffconf.h`。补丁被 CubeMX 重新导出覆盖时固件链接失败（不会静默退回慢路径）；重打见 `patches/fatfs/README.md` 与 `scripts/apply-vendor-patches.ps1`。
+- **耗时**：与文件夹内的项数无关，只随目标所在的目录簇序号增长（沿簇链走到目标簇，每个目录簇至多一次 FAT 扇区读，32 KiB 簇的 12000 首同文件夹约 54 个簇），而按路径要读完该项之前的全部目录扇区（约 3500 个）。主机测试见 `Tests/filesystem_locator`。
+
 ## 私有实现与编译依赖
 
-`filesystem_path.c` 校验 UTF-8 相对路径并加盘符转 TCHAR。`filesystem_handle.c` 管理静态 `FIL`/`DIR` 槽与代次 Token。`filesystem_file.c` / `filesystem_directory.c` 实现公开文件与目录 API。`filesystem_status.c` 合并 FRESULT 映射与盘符路径。`sd/filesystem_sd_bsp.c` 强定义 BSP_SD_*，`sd/filesystem_sd_transfer.c/.h` 执行 SDMMC DMA。`flash/filesystem_flash_bsp.c` 强定义 BSP_USER_DISKIO_*，`flash/filesystem_flash_transfer.c/.h` 执行 Flash 请求并等待通知；诊断实现在 `flash/filesystem_flash_access.c`。
+`filesystem_path.c` 校验 UTF-8 相对路径并加盘符转 TCHAR。`filesystem_handle.c` 管理静态 `FIL`/`DIR` 槽与代次 Token。`filesystem_file.c` / `filesystem_directory.c` 实现公开文件与目录 API。`filesystem_status.c` 合并 FRESULT 映射与盘符路径。`filesystem_file_locator.c` 实现按定位符打开，`filesystem_locator.h` 是定位符布局，`filesystem_ff_patch.h` 声明 `ff.c` 补丁函数。`sd/filesystem_sd_bsp.c` 强定义 BSP_SD_*，`sd/filesystem_sd_transfer.c/.h` 执行 SDMMC DMA。`flash/filesystem_flash_bsp.c` 强定义 BSP_USER_DISKIO_*，`flash/filesystem_flash_transfer.c/.h` 执行 Flash 请求并等待通知；诊断实现在 `flash/filesystem_flash_access.c`。
 
 Service 包含 FatFs 卷对象/公开 API、中间件 BSP 契约、Platform SD/Flash 产品接口、原生 FreeRTOS 和 Log Service。FATFS 生成 Glue 只包含其契约，不包含 Service 头。FTL/W25Qxx/HAL 不作为 Service 的直接实现依赖。
 

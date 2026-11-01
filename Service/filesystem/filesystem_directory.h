@@ -31,6 +31,7 @@ typedef struct
     uint16_t Time;       /**< FAT 打包时间。 */
     bool IsDirectory;    /**< 该目录项是子目录。 */
     bool IsReadOnly;     /**< 只读属性。 */
+    Service_Filesystem_FileLocatorTypeDef Locator; /**< 该条目的文件定位符；个别位置无法取得时为全零（无定位符）。 */
 } Service_Filesystem_DirectoryEntryTypeDef;
 
 Service_StatusTypeDef Service_Filesystem_OpenDirectory(
