@@ -13,6 +13,14 @@
 #define PLAYBACK_SERVICE_WINDOW_MIN_BYTES    (2308U)   /* W_min：窗口字节数低于它且输入未结束时不解码；下限 2308 B（最大标准帧 1729 B 加下一帧头与对齐余量，#46）。 */
 #define PLAYBACK_SERVICE_SYNC_BUDGET_BYTES   (65536U)  /* R：自音频区间开头或上一个好帧起，连续这么多字节解不出帧即回报同步预算耗尽。 */
 
+/* playback_service.c 的 TOC 映射 */
+#define PLAYBACK_SERVICE_TOC_UNIT            (256ULL)   /* TOC 一项的满量程：每项以 1/256 音频字节为单位。 */
+#define PLAYBACK_SERVICE_TOC_END             (256U)     /* TOC 终点：第 100 项（100%）视为整个有效区间，即 256/256。 */
+#define PLAYBACK_SERVICE_TOC_Q               (65536ULL) /* 内部定点精度：TOC 刻度 × 256，即 1/65536 有效区间。 */
+
+/* playback_service.c 的毫秒换算 */
+#define PLAYBACK_SERVICE_MS_PER_SECOND       (1000ULL)  /* 1 秒的毫秒数，采样数与毫秒互换用。 */
+
 /* playback_service.c、playback_service_decoder.c */
 #define PLAYBACK_SERVICE_TOC_ENTRIES         (100U)    /* Xing/Info TOC 项数（每项 1 B，第 i 项是 i% 时间处的偏移，单位 1/256 音频字节）。 */
 

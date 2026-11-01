@@ -106,7 +106,7 @@ static uint32_t samples_to_ms(uint64_t samples, uint32_t sample_rate_hz)
         return 0U;
     }
 
-    ms = (samples * 1000ULL) / sample_rate_hz;
+    ms = (samples * PLAYBACK_SERVICE_MS_PER_SECOND) / sample_rate_hz;
     return (ms > UINT32_MAX) ? UINT32_MAX : (uint32_t)ms;
 }
 
@@ -294,11 +294,6 @@ static uint32_t seek_inverse_lin(uint32_t offset, uint32_t span)
     return (uint32_t)(((uint64_t)offset * s_stream.Info.TotalDurationMs) / span);
 }
 
-/** @brief TOC 终点：第 100 项（100%）视为整个有效区间，即 256/256。 */
-#define PLAYBACK_SERVICE_TOC_END      (256U)
-/** @brief 内部定点精度：TOC 刻度 × 256，即 1/65536 有效区间。 */
-#define PLAYBACK_SERVICE_TOC_Q        (65536ULL)
-
 /**
  * @brief TOC 的单调性检查：非递减且不超过 255；全零或乱序的 TOC 视为不可用，退回线性。
  * @return TOC 可用为真。
@@ -347,7 +342,7 @@ static uint32_t seek_forward_toc(uint32_t target_ms, uint32_t span)
     lo = s_stream.Toc[i];
     hi = (i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) ? s_stream.Toc[i + 1U] : PLAYBACK_SERVICE_TOC_END;
     pos256 = (lo * total) + ((hi - lo) * rem);
-    q = (pos256 * 256ULL) / total;
+    q = (pos256 * PLAYBACK_SERVICE_TOC_UNIT) / total;
     return (uint32_t)((q * span) / PLAYBACK_SERVICE_TOC_Q);
 }
 
@@ -367,12 +362,12 @@ static uint32_t seek_inverse_toc(uint32_t offset, uint32_t span)
     uint64_t numerator;
     uint64_t denominator;
 
-    while ((i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) && (((uint64_t)s_stream.Toc[i + 1U] * 256ULL) <= x))
+    while ((i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) && (((uint64_t)s_stream.Toc[i + 1U] * PLAYBACK_SERVICE_TOC_UNIT) <= x))
     {
         i++;
     }
-    lo = (uint64_t)s_stream.Toc[i] * 256ULL;
-    hi = (i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) ? ((uint64_t)s_stream.Toc[i + 1U] * 256ULL) : (PLAYBACK_SERVICE_TOC_END * 256ULL);
+    lo = (uint64_t)s_stream.Toc[i] * PLAYBACK_SERVICE_TOC_UNIT;
+    hi = (i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) ? ((uint64_t)s_stream.Toc[i + 1U] * PLAYBACK_SERVICE_TOC_UNIT) : (PLAYBACK_SERVICE_TOC_END * PLAYBACK_SERVICE_TOC_UNIT);
     if (x <= lo)
     {
         return (uint32_t)(((uint64_t)s_stream.Info.TotalDurationMs * i) / PLAYBACK_SERVICE_TOC_ENTRIES);
@@ -482,7 +477,7 @@ Service_StatusTypeDef Service_Playback_ReopenStream(uint32_t landing_ms)
     s_stream.SyncExhausted = false;
     s_stream.UnsyncedBytes = 0U;
     s_stream.ConsumedBytes = 0U;
-    s_stream.DecodedSamples = (((uint64_t)landing * s_stream.Info.SampleRateHz) + 999ULL) / 1000ULL;
+    s_stream.DecodedSamples = (((uint64_t)landing * s_stream.Info.SampleRateHz) + (PLAYBACK_SERVICE_MS_PER_SECOND - 1ULL)) / PLAYBACK_SERVICE_MS_PER_SECOND;
     s_window_fill = 0U;
     s_frame_pending = false;
     reset_output();
