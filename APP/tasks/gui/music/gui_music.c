@@ -449,6 +449,8 @@ void gui_music_init(void)
                    "music title PENDING must match namebuffer");
     _Static_assert(GUI_MUSIC_TITLE_READY == STORAGE_NAMEBUFFER_READY,
                    "music title READY must match namebuffer");
+    _Static_assert(GUI_MUSIC_TRANSPORT_SEEK_SCALE == SERVICE_GUI_SEEK_SCALE,
+                   "music transport seek scale must match Service_GUI seek event scale");
 
     gui_music_queue_window_client_init(&gui_music_queue_window_client);
     gui_music_transport_init(&gui_music_transport);

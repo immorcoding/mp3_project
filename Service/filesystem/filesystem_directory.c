@@ -13,6 +13,7 @@
 
 #include <string.h>
 
+/* 以下是 FAT 磁盘格式事实（FAT 规范与 ff.c 内部的 DIR_*、MAX_DIR，FatFs 不公开这些宏），集中在此，不随配置变化。 */
 /** @brief FAT 目录项大小（字节）。 */
 #define FILESYSTEM_DIRECTORY_ENTRY_BYTES 32U
 /** @brief FatFs 对 FAT 目录的大小上限（字节），与 ff.c 的 MAX_DIR 一致。 */

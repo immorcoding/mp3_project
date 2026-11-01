@@ -285,6 +285,28 @@ static void close_stream(Playback_MachineTypeDef *machine)
 static void enter_stopped(Playback_MachineTypeDef *machine, Playback_StopReasonTypeDef reason, bool keep_cursor);
 
 /**
+ * @brief 换到游标曲目的新流（从 audio_offset 起），并清掉旧流：B11 ①–③ 的共用序列，切歌与跳转都走它。
+ * @param[in,out] machine 状态机。
+ * @param[in] audio_offset 相对音频区间的起始偏移；切歌为 0，跳转为映射出的偏移。
+ * @return 放弃旧流时 Stop 成功（或没有旧流）为 true；Stop 失败（STOP_FAILED 锁存）为 false，调用者按 AUDIO_FAULT 停止（B10）。
+ * @note  ① 分配新序号并写请求信箱；② 放弃播放模块的流（Platform Stop，返回即交还半区）；③ 归还手中旧块。
+ *        Stop 失败时新流请求仍已写出，由调用者随后的 enter_stopped() 以“无流”覆盖。
+ */
+static bool restart_stream_at(Playback_MachineTypeDef *machine, uint32_t audio_offset)
+{
+    const bool had_player_stream = machine->StreamBegun;
+    bool stop_ok = true;
+
+    open_stream_for_cursor(machine, audio_offset);
+    if (had_player_stream)
+    {
+        stop_ok = abandon_player_stream(machine);
+    }
+    return_held_block(machine);
+    return stop_ok;
+}
+
+/**
  * @brief 切歌：按已更新的游标换到一条新流，顺序为 B11 ①–④。
  * @param[in,out] machine 状态机。
  * @note  ① 分配新序号并写请求信箱；② 放弃播放模块的流（Platform Stop，返回即交还半区）；
@@ -294,17 +316,11 @@ static void enter_stopped(Playback_MachineTypeDef *machine, Playback_StopReasonT
  */
 static void switch_to_cursor_track(Playback_MachineTypeDef *machine)
 {
-    bool had_player_stream = machine->StreamBegun;
-    bool stop_ok = true;
+    bool stop_ok;
 
     cancel_seek(machine);
     machine->Snapshot.TrackStartCount++;
-    open_stream_for_cursor(machine, 0U);
-    if (had_player_stream)
-    {
-        stop_ok = abandon_player_stream(machine);
-    }
-    return_held_block(machine);
+    stop_ok = restart_stream_at(machine, 0U);
     machine->Snapshot.PositionMs = 0U;
     machine->Snapshot.DurationMs = 0U;
     if (!stop_ok)
@@ -572,8 +588,7 @@ static void handle_select(Playback_MachineTypeDef *machine, const Playback_Comma
 static void handle_seek(Playback_MachineTypeDef *machine, const Playback_CommandTypeDef *command)
 {
     Service_Playback_SeekPointTypeDef point;
-    bool had_player_stream;
-    bool stop_ok = true;
+    bool stop_ok;
 
     if (!machine->Snapshot.HasTrack || (machine->Snapshot.State == PLAYBACK_STATE_STOPPED))
     {
@@ -597,13 +612,7 @@ static void handle_seek(Playback_MachineTypeDef *machine, const Playback_Command
     }
 
     machine->SeekStartCycles = (machine->Ops->ReadCycles != NULL) ? machine->Ops->ReadCycles() : 0U;
-    had_player_stream = machine->StreamBegun;
-    open_stream_for_cursor(machine, point.AudioOffset);
-    if (had_player_stream)
-    {
-        stop_ok = abandon_player_stream(machine);
-    }
-    return_held_block(machine);
+    stop_ok = restart_stream_at(machine, point.AudioOffset);
 
     machine->SeekActive = true;
     machine->SeekAwaitReopen = true;
@@ -970,6 +979,12 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
     else if (report->StreamEnded)
     {
         machine->OutputRunning = false;
+        if (machine->SeekActive && !machine->SeekAwaitReopen)
+        {
+            /* PLAYING 下越尾且钳位后零帧：没有起播也没有预填可等，前进会作废跳转，所以前进之前补记这一行。 */
+            log_seek_done(machine);
+            machine->SeekActive = false;
+        }
         advance_after_stream_end(machine);
     }
 }

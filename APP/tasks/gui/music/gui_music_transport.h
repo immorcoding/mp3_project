@@ -30,7 +30,7 @@ typedef enum
     GUI_MUSIC_TRANSPORT_PHRASE_DISMISSED  /**< 停止期间曲目身份变化，短语已清除，直到再次进入停止。 */
 } GUI_MusicTransportPhraseModeTypeDef;
 
-/** @brief 进度条手势比例的满量程（千分比）；与 Service_GUI 进度条事件的 param 同单位。 */
+/** @brief 进度条手势比例的满量程（千分比）；本头不依赖 Service/gui，所以保留别名，由 gui_music.c 的 `_Static_assert` 与 `SERVICE_GUI_SEEK_SCALE` 绑定。 */
 #define GUI_MUSIC_TRANSPORT_SEEK_SCALE  1000U
 
 /**

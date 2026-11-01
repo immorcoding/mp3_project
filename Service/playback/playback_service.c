@@ -106,7 +106,7 @@ static uint32_t samples_to_ms(uint64_t samples, uint32_t sample_rate_hz)
         return 0U;
     }
 
-    ms = (samples * 1000ULL) / sample_rate_hz;
+    ms = (samples * PLAYBACK_SERVICE_MS_PER_SECOND) / sample_rate_hz;
     return (ms > UINT32_MAX) ? UINT32_MAX : (uint32_t)ms;
 }
 
@@ -294,11 +294,6 @@ static uint32_t seek_inverse_lin(uint32_t offset, uint32_t span)
     return (uint32_t)(((uint64_t)offset * s_stream.Info.TotalDurationMs) / span);
 }
 
-/** @brief TOC 终点：第 100 项（100%）视为整个有效区间，即 256/256。 */
-#define PLAYBACK_SERVICE_TOC_END      (256U)
-/** @brief 内部定点精度：TOC 刻度 × 256，即 1/65536 有效区间。 */
-#define PLAYBACK_SERVICE_TOC_Q        (65536ULL)
-
 /**
  * @brief TOC 的单调性检查：非递减且不超过 255；全零或乱序的 TOC 视为不可用，退回线性。
  * @return TOC 可用为真。
@@ -347,7 +342,7 @@ static uint32_t seek_forward_toc(uint32_t target_ms, uint32_t span)
     lo = s_stream.Toc[i];
     hi = (i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) ? s_stream.Toc[i + 1U] : PLAYBACK_SERVICE_TOC_END;
     pos256 = (lo * total) + ((hi - lo) * rem);
-    q = (pos256 * 256ULL) / total;
+    q = (pos256 * PLAYBACK_SERVICE_TOC_UNIT) / total;
     return (uint32_t)((q * span) / PLAYBACK_SERVICE_TOC_Q);
 }
 
@@ -367,12 +362,12 @@ static uint32_t seek_inverse_toc(uint32_t offset, uint32_t span)
     uint64_t numerator;
     uint64_t denominator;
 
-    while ((i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) && (((uint64_t)s_stream.Toc[i + 1U] * 256ULL) <= x))
+    while ((i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) && (((uint64_t)s_stream.Toc[i + 1U] * PLAYBACK_SERVICE_TOC_UNIT) <= x))
     {
         i++;
     }
-    lo = (uint64_t)s_stream.Toc[i] * 256ULL;
-    hi = (i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) ? ((uint64_t)s_stream.Toc[i + 1U] * 256ULL) : (PLAYBACK_SERVICE_TOC_END * 256ULL);
+    lo = (uint64_t)s_stream.Toc[i] * PLAYBACK_SERVICE_TOC_UNIT;
+    hi = (i + 1U < PLAYBACK_SERVICE_TOC_ENTRIES) ? ((uint64_t)s_stream.Toc[i + 1U] * PLAYBACK_SERVICE_TOC_UNIT) : (PLAYBACK_SERVICE_TOC_END * PLAYBACK_SERVICE_TOC_UNIT);
     if (x <= lo)
     {
         return (uint32_t)(((uint64_t)s_stream.Info.TotalDurationMs * i) / PLAYBACK_SERVICE_TOC_ENTRIES);
@@ -394,8 +389,9 @@ static uint32_t seek_inverse_toc(uint32_t offset, uint32_t span)
  *         口径：音频有效区间 = 元数据帧（Xing/Info/VBRI）之后到音频区间末尾；无元数据帧时就是整个音频区间。
  *         线性映射在有效区间内按总时长等比；带 TOC 的映射把 TOC 的 1/256 刻度也铺在有效区间上。
  *         这样自写头（字节数与 TOC 只计音频帧）与真实 LAME/ffmpeg 头（字节数含头帧）的差别不影响映射，
- *         头帧本身也永远不会落在偏移之后。偏移最多钳到 AudioBytes − W_min，保证至少能解出一帧
- *         （#166 第 11 条的核实见 Tests/playback_service 的 seek 测试）；落点 = 钳位后偏移按同一映射反算。
+ *         头帧本身也永远不会落在偏移之后。偏移最多钳到 AudioBytes − W_min；钳位后不保证能解出一帧
+ *         （320 kbps 下常常零帧），解不出也按放完处理：重开的流读尽后回报流尾放完，不判坏文件
+ *         （核实见 Tests/playback_service 的 seek 测试与本模块 README）。落点 = 钳位后偏移按同一映射反算。
  */
 Service_StatusTypeDef Service_Playback_MapSeek(uint32_t target_ms, Service_Playback_SeekPointTypeDef *point)
 {
@@ -481,7 +477,7 @@ Service_StatusTypeDef Service_Playback_ReopenStream(uint32_t landing_ms)
     s_stream.SyncExhausted = false;
     s_stream.UnsyncedBytes = 0U;
     s_stream.ConsumedBytes = 0U;
-    s_stream.DecodedSamples = (((uint64_t)landing * s_stream.Info.SampleRateHz) + 999ULL) / 1000ULL;
+    s_stream.DecodedSamples = (((uint64_t)landing * s_stream.Info.SampleRateHz) + (PLAYBACK_SERVICE_MS_PER_SECOND - 1ULL)) / PLAYBACK_SERVICE_MS_PER_SECOND;
     s_window_fill = 0U;
     s_frame_pending = false;
     reset_output();

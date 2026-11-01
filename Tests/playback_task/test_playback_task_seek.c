@@ -57,6 +57,23 @@ static const char *last_log(void)
 }
 
 /**
+ * @brief 日志里最后一条以 "Seek " 开头的 INFO 的文本（Auto 等后续条目不影响）。
+ * @return 文本；没有时断言失败。
+ */
+static const char *last_seek_log(void)
+{
+    for (uint32_t i = fake_log_count(); i > 0U; i--)
+    {
+        if (strncmp(fake_log_text(i - 1U), "Seek ", 5U) == 0)
+        {
+            return fake_log_text(i - 1U);
+        }
+    }
+    assert(0 && "no Seek log");
+    return "";
+}
+
+/**
  * @brief 把跳转后的流跑到输出起播：Storage 应答开启 OK，放入首块，播放模块回报 OutputStarted。
  */
 static void complete_playing_seek(void)
@@ -682,7 +699,7 @@ static void test_zero_frame_tail_while_paused_holds_until_resumed(void)
 }
 
 /**
- * @brief PLAYING 下越尾且零帧：直接按播完前进（不变）。
+ * @brief PLAYING 下越尾且零帧：直接按播完前进，前进之前补记一条 Seek INFO（含 clamp 与 lat，与暂停中零帧一致）。
  */
 static void test_zero_frame_tail_while_playing_advances_immediately(void)
 {
@@ -696,6 +713,8 @@ static void test_zero_frame_tail_while_playing_advances_immediately(void)
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
     assert(world_snapshot().Index == 1U);
     assert(world_snapshot().TrackStartCount == 2U);
+    assert(count_seek_logs() == 1U);
+    assert(strcmp(last_seek_log(), "Seek idx=0 tgt=180000 land=179121 off=4076 map=lin clamp lat=0") == 0);
 }
 
 /**

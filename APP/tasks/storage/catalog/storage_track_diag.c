@@ -155,7 +155,7 @@ void storage_track_diag_name_done(uint16_t index, uint32_t start_cycles, const S
     StorageTrackDiag_ReasonTypeDef reason;
     uint32_t us;
     uint32_t read_us;
-    char text[112];
+    char text[STORAGE_CATALOG_DIAG_TAG_LINE_BYTES];
 
     if (track == NULL)
     {
@@ -241,7 +241,7 @@ void storage_track_diag_window_end(void)
     const StorageTrackDiag_WindowTypeDef *window = &storage_track_diag_window;
     bool warn;
     bool over_budget;
-    char text[128]; /* 与 Service_Log 单条文本容量相同；12 行窗口的最长一行约 117 字符，放得下。 */
+    char text[STORAGE_CATALOG_DIAG_WINDOW_LINE_BYTES];
 
     warn = (window->ByReason[STORAGE_TRACK_DIAG_DECODE] != 0U) ||
            (window->ByReason[STORAGE_TRACK_DIAG_LIMIT] != 0U) ||
@@ -281,7 +281,7 @@ void storage_track_diag_window_end(void)
  */
 void storage_track_diag_locator_miss(uint16_t position)
 {
-    char text[32];
+    char text[STORAGE_CATALOG_DIAG_LOCATOR_LINE_BYTES];
 
     storage_track_diag_counters.LocatorMisses++;
     (void)snprintf(text, sizeof(text), "Locator miss pos=%u", (unsigned)position);
@@ -298,7 +298,7 @@ void storage_track_diag_locator_miss(uint16_t position)
  */
 void storage_track_diag_stream_done(uint16_t position, uint32_t audio_offset, uint32_t open_us, uint32_t lseek_us)
 {
-    char text[64];
+    char text[STORAGE_CATALOG_DIAG_STREAM_LINE_BYTES];
 
     (void)snprintf(text, sizeof(text), "Stream pos=%u off=%lu open=%lu lseek=%lu",
                    (unsigned)position, (unsigned long)audio_offset,

@@ -26,6 +26,12 @@
 /* storage_track_diag.c：单行标签读取的预算阈值（#135 I 节：单行上界 < Storage 单圈余量 T_data/2，板测清单 B8） */
 #define STORAGE_CATALOG_TRACK_BUDGET_US  1000000U  /* 单行读取（含打开）耗时的防御阈值，单位为微秒；保留作为窗口汇总的第三个触发条件，须等于 PLAYBACK_MACHINE_DATA_TIMEOUT_MS（T_data）×1000/2，由 Tests/storage_catalog 的编译期断言核对。 */
 
+/* storage_track_diag.c：各类日志行的缓冲容量（含结尾 NUL；超出由 snprintf 截断） */
+#define STORAGE_CATALOG_DIAG_TAG_LINE_BYTES     112U  /* 名称槽 Tag 行（INFO 与 WARN）。 */
+#define STORAGE_CATALOG_DIAG_WINDOW_LINE_BYTES  128U  /* 窗口汇总行；与 Service_Log 单条文本容量相同，12 行窗口的最长一行约 117 字符，放得下。 */
+#define STORAGE_CATALOG_DIAG_LOCATOR_LINE_BYTES 32U   /* Locator miss 行。 */
+#define STORAGE_CATALOG_DIAG_STREAM_LINE_BYTES  64U   /* Stream 行。 */
+
 /* storage_listbuffer.h */
 #define STORAGE_LISTBUFFER_MAX_ENTRIES   12U    /* 窗口槽位数上限；GUI 按 Length 构造行，不超过此值。 */
 

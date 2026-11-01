@@ -51,7 +51,7 @@
 - **拒收旧流的位置**（`SeekAwaitReopen`）：从执行跳转到新流重开之间，快照不接受任何 `DecodedMs` 回报，否则位置会被旧值顶回去。此间 `StreamBegun` 为假，状态机根本不调用 `Pump`，这个标志是对同一约束的显式防线。重开之后 `DecodedMs` 从落点起算（不小于落点），位置照旧只取较大值。
 - **作废**：切歌类命令（NEXT/PREV/SELECT/停止态 TOGGLE）、播完前进、跳过坏文件、进入停止态都使未完成的跳转作废，不再重开、不记 Seek INFO。
 - **T_data 与 T_out 与切歌一致**：新流开启应答从写请求起算 T_data；放弃旧流时停 T_out，下一次 `OutputStarted` 重新计时；不新增计时器，不改超时值。
-- **越尾**：映射把偏移钳在 `AudioBytes − W_min`，之后照常读完、播完、前进；暂停中则停在末尾，恢复后放完再前进（`Pump` 在暂停态不回报流尾放完）。钳位值的大小由 Service 决定，状态机不依赖它。高码率文件（如 320 kbps）钳位后可能一帧也解不出（见 Service/playback README 的 #166 第 11 条核实），播放模块此时没有可放的音频，暂停中也会回报流尾放完。状态机用 `SeekHoldEnd`（跳转重开的流、尚未起播过）处理：暂停中收到流尾放完不前进，保持 PAUSED、位置为落点（此时记 Seek INFO，因为没有预填可等）；按 TOGGLE 恢复后同一事实再次到来，按播完前进，`TrackStartCount` 照常加 1。PLAYING 下零帧直接按播完前进，不变。`OutputStarted`、切歌与停止清除该标志，所以此后的暂停在流尾行为不受影响。
+- **越尾**：映射把偏移钳在 `AudioBytes − W_min`，之后照常读完、播完、前进；暂停中则停在末尾，恢复后放完再前进（`Pump` 在暂停态不回报流尾放完）。钳位值的大小由 Service 决定，状态机不依赖它。高码率文件（如 320 kbps）钳位后可能一帧也解不出（见 Service/playback README 的 #166 第 11 条核实），播放模块此时没有可放的音频，暂停中也会回报流尾放完。状态机用 `SeekHoldEnd`（跳转重开的流、尚未起播过）处理：暂停中收到流尾放完不前进，保持 PAUSED、位置为落点（此时记 Seek INFO，因为没有预填可等）；按 TOGGLE 恢复后同一事实再次到来，按播完前进，`TrackStartCount` 照常加 1。PLAYING 下零帧直接按播完前进，前进之前补记同一格式的 Seek INFO（含 `clamp` 与 `lat`，与暂停中零帧一致；前进会作废跳转，不补记就丢这一行）。`OutputStarted`、切歌与停止清除该标志，所以此后的暂停在流尾行为不受影响。
 - **落点之后丢帧**：重开后位储备不足的帧被丢弃（实测最多约 4 帧，低码率 VBR 约 104 ms），状态机仍以映射落点为快照位置，不另行修正。
 - **Seek INFO**（DIAG-5，播放任务记，不含文件名）：`Seek idx=N tgt=<ms> land=<ms> off=<B> map=toc|lin[ clamp] lat=<us>`。PLAYING 在输出重新起播（`OutputStarted`）时记；PAUSED 在预填完成时记（补半区不再要输入，且流未读尽到无音频可放）；两者先到者先记，只记一次。`lat` 是处理 SEEK 命令到记日志的周期差，用 `ReadCycles`（DWT）与 `CyclesToUs` 换算，外壳接 `CortexM7CycleCounter_*`；Ops 为空时记 0。忽略记 DEBUG，被合并与作废的不记。时延初值：PLAYING 下 `lat` ≤ 100 ms，PAUSED 下只记录，超出由板测修正。
 
