@@ -109,7 +109,12 @@
 /   950 - Traditional Chinese (DBCS)
 */
 
+/* spike/app-tasks（不合入）：试每卷一把锁时长文件名缓冲放到栈上，默认全局一把锁不变（#191）。 */
+#if defined(SPIKE_LOCK_PER_VOLUME) && (SPIKE_LOCK_PER_VOLUME != 0)
+#define _USE_LFN     2    /* 0 to 3 */
+#else
 #define _USE_LFN     1    /* 0 to 3 */
+#endif
 #define _MAX_LFN     255  /* Maximum LFN length to handle (12 to 255) */
 /* The _USE_LFN switches the support of long file name (LFN).
 /
@@ -227,7 +232,7 @@
 /  _NORTC_MDAY and _NORTC_YEAR have no effect.
 /  These options have no effect at read-only configuration (_FS_READONLY = 1). */
 
-#define _FS_LOCK    2     /* 0:Disable or >=1:Enable */
+#define _FS_LOCK    4     /* 0:Disable or >=1:Enable；spike/app-tasks 从 2 调到 4：音频流、大 TXT、读标签同开 3 个（#191）。 */
 /* The option _FS_LOCK switches file lock function to control duplicated file open
 /  and illegal operation to open objects. This option must be 0 when _FS_READONLY
 /  is 1.
