@@ -8,7 +8,7 @@
 
 断言只看公开可观察的行为：GUI 读到的快照（最近一次发布的内容）、请求信箱写入、块归还、对替身的调用序列。时间由测试传入，不依赖时间偶然性。
 
-十个 CTest：
+十一个 CTest：
 
 | CTest | 覆盖 |
 |---|---|
@@ -20,6 +20,7 @@
 | `playback_task_stop_reasons` | B6 停止各行：IO_ERROR/READ_ERROR 保留游标，NOT_READY/STALE/NO_TRACK/CARD_REMOVED 重置游标；都不计入连跳；无卡按播放后可重试；停止放弃流、归还块、写“无流”；旧流终止事实丢弃；停止次数每次 +1 |
 | `playback_task_timeouts` | B7 T_data：等应答从写请求起算、应答/块重新计时、到期那次唤醒收到块不误停、欠载后的补满、暂停中换曲计时、暂停且输出已满/排空/停止不计时、播完前进后重新起算、回绕；B8 T_out：Start 起算、释放重新计时、预填与暂停不计时、恢复后起算、与 T_data 互不替代 |
 | `playback_task_seek` | #176 跳转：播放中执行（落点同一步进快照并回显、新流序号与 `AudioOffset`、B11 顺序、不改三态/`StopCount`/`DurationMs`、重开而非 `BeginStream`）；Seek INFO 字段与 `lat`（假 DWT）、`map=toc|lin`、`clamp`；四种静默忽略（无曲、停止态、曲目不符、总时长 0、映射失败）只记 DEBUG 且推进序号；同批连续 SEEK 只执行最后一条而中间隔命令不合并；跨唤醒新跳转作废旧流的应答与块；旧流位置不顶回落点（含向回跳变小）；暂停中跳转保持 PAUSED、重开后暂停、预填完成时记 INFO；越尾播完前进与暂停中停在末尾（含钳位后零帧：暂停中不前进、恢复后前进，PLAYING 下零帧直接前进；假播放模块在重开后读尽零帧时按真实模块的 NO_AUDIO 回报流尾放完）；`TrackStartCount` 的加一与不加；NEXT/停止使跳转与 Seek INFO 作废；普通开流 `AudioOffset` 为 0；T_data/T_out 与切歌一致；Stop 失败与重开失败按 AUDIO_FAULT |
+| `playback_task_switch` | #191 spike：NEXT、PREV、SELECT 从被状态机处理到输出重新起播的时延经可选的 `ReportSwitch` 报告（假 DWT，不进 INFO 日志，不影响既有日志序列断言）、连按重新计时只报最后一首、跳转与暂停中换曲不报告、停止使计时作废；欠载次数在状态机里累加 |
 | `playback_task_faults` | TRANSFER_ERROR 与推进失败 → AUDIO_ERROR 可重试；STOP_FAILED → AUDIO_FAULT 锁存；锁存后 TOGGLE/SELECT 只让停止次数 +1、NEXT/PREV 只移动游标；切歌途中 Stop 失败时新流请求被“无流”覆盖；暂停、其他停止、T_out 到期时 Stop 失败升级为 AUDIO_FAULT；`BeginStream` 被拒 |
 
 `playback_task_log` 另用一个有序记录文本的 `LogInfo` 替身（`fake_log_*`），断言 INFO 事件的顺序与文案（#108）：播放、切歌、暂停、恢复、停止的完整序列、停止原因文案与快照一致、坏文件跳过、播完与自动前进、被忽略的命令与空闲唤醒不记日志。

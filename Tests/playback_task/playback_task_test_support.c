@@ -115,6 +115,49 @@ static uint32_t fake_cycles_to_us(uint32_t cycles)
     return cycles / 100U;
 }
 
+static uint32_t fake_switch_reports;
+static uint16_t fake_switch_index;
+static uint32_t fake_switch_latency_us;
+
+/**
+ * @brief ReportSwitch 替身：记录切歌到出声时延的报告次数、曲目位置与微秒数。
+ * @param[in] index 换到的曲目位置。
+ * @param[in] latency_us 时延，微秒。
+ */
+static void fake_report_switch(uint16_t index, uint32_t latency_us)
+{
+    fake_switch_reports++;
+    fake_switch_index = index;
+    fake_switch_latency_us = latency_us;
+}
+
+/**
+ * @brief 切歌时延报告的次数。
+ * @return 自上次 world_reset 以来 ReportSwitch 被调用的次数。
+ */
+uint32_t fake_switch_report_count(void)
+{
+    return fake_switch_reports;
+}
+
+/**
+ * @brief 最近一次切歌时延报告的曲目位置。
+ * @return 位置。
+ */
+uint16_t fake_switch_last_index(void)
+{
+    return fake_switch_index;
+}
+
+/**
+ * @brief 最近一次切歌时延报告的微秒数。
+ * @return 微秒。
+ */
+uint32_t fake_switch_last_latency_us(void)
+{
+    return fake_switch_latency_us;
+}
+
 /**
  * @brief 让假周期计数器前进。
  * @param[in] cycles 前进的周期数。
@@ -1149,6 +1192,9 @@ void world_reset(void)
     call_log_reset();
     fake_log_clear();
     fake_cycle_counter = 0U;
+    fake_switch_reports = 0U;
+    fake_switch_index = 0U;
+    fake_switch_latency_us = 0U;
     fake_storage_reset();
     fake_player_reset();
     world_now_ms = 1000U;
@@ -1173,6 +1219,7 @@ void world_reset(void)
     world_ops.LogDebug = fake_log_debug;
     world_ops.ReadCycles = fake_read_cycles;
     world_ops.CyclesToUs = fake_cycles_to_us;
+    world_ops.ReportSwitch = fake_report_switch;
     playback_machine_init(&world_machine_instance, &world_ops);
 }
 

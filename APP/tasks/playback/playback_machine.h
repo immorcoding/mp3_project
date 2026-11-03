@@ -103,6 +103,7 @@ typedef struct
     void (*LogDebug)(const char *text);                               /**< DEBUG 日志（可为空）；只记被静默忽略的命令；文本由实现复制。 */
     uint32_t (*ReadCycles)(void);                                     /**< 周期计数器读数（DWT，可为空；为空时跳转时延记 0）；只用差值，回绕安全。 */
     uint32_t (*CyclesToUs)(uint32_t cycles);                          /**< 把周期数换算成微秒（可为空；为空时跳转时延记 0）。 */
+    void (*ReportSwitch)(uint16_t index, uint32_t latency_us);        /**< 切歌到出声时延的边界日志（可为空；spike #191）：用户换曲命令被处理到输出重新起播。 */
 } Playback_MachineOpsTypeDef;
 
 /**
@@ -141,7 +142,12 @@ typedef struct
     uint32_t SeekTargetMs;                     /**< 本次跳转的目标毫秒。 */
     uint32_t SeekStartCycles;                  /**< 处理 SEEK 命令时的周期计数器读数，供 lat。 */
     bool SeekHoldEnd;                          /**< 当前流由跳转重开且尚未起播过：暂停中回报流尾放完（含钳位后零帧）时不前进，等恢复。 */
+    bool SwitchActive;                         /**< 一次用户换曲命令（NEXT、PREV、SELECT）已执行且输出尚未重新起播（spike #191）；停止使其作废。 */
+    uint32_t SwitchStartCycles;                /**< 处理该换曲命令时的周期计数器读数，供切歌到出声时延。 */
+    uint32_t UnderrunTotal;                    /**< 开机以来播放模块回报的欠载次数累计；Platform 的计数每次 Start 清零，这里在上层累加（spike #191）。 */
 } Playback_MachineTypeDef;
+
+uint32_t playback_machine_underrun_total(const Playback_MachineTypeDef *machine);
 
 void playback_machine_init(Playback_MachineTypeDef *machine, const Playback_MachineOpsTypeDef *ops);
 void playback_machine_step(Playback_MachineTypeDef *machine,

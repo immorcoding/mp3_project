@@ -54,6 +54,11 @@ const char *fake_debug_text(uint32_t index);
 /* 假周期计数器（ReadCycles / CyclesToUs 的替身）：100 个周期折合 1 µs。 */
 void fake_cycles_advance(uint32_t cycles);
 
+/* 切歌到出声时延的报告（ReportSwitch 的接收端，spike #191）：不进 INFO 日志，所以不影响既有日志序列断言。 */
+uint32_t fake_switch_report_count(void);
+uint16_t fake_switch_last_index(void);
+uint32_t fake_switch_last_latency_us(void);
+
 /* 快照记录（PublishSnapshot 的接收端）。 */
 uint32_t published_count(void);
 Playback_SnapshotTypeDef published_last(void);

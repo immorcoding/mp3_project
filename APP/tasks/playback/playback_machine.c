@@ -173,6 +173,28 @@ static void log_seek_done(const Playback_MachineTypeDef *machine)
 }
 
 /**
+ * @brief 输出重新起播时，若有一次用户换曲命令在等，报告切歌到出声的时延（spike #191）。
+ * @param[in,out] machine 状态机。
+ * @note  时延 = 命令被本状态机处理的周期计数器读数到现在的差，经 CyclesToUs 换算；
+ *        Ops 缺 ReportSwitch、ReadCycles 或 CyclesToUs 时什么也不报。只在换曲边界调用，不进每帧路径。
+ */
+static void report_switch_done(Playback_MachineTypeDef *machine)
+{
+    if (!machine->SwitchActive)
+    {
+        return;
+    }
+
+    machine->SwitchActive = false;
+    if ((machine->Ops->ReportSwitch != NULL) && (machine->Ops->ReadCycles != NULL) &&
+        (machine->Ops->CyclesToUs != NULL))
+    {
+        machine->Ops->ReportSwitch(machine->Snapshot.Index,
+                                   machine->Ops->CyclesToUs(machine->Ops->ReadCycles() - machine->SwitchStartCycles));
+    }
+}
+
+/**
  * @brief 把手中的块放回空闲队列（B15）。
  * @param[in,out] machine 状态机。
  */
@@ -375,6 +397,7 @@ static void enter_stopped(Playback_MachineTypeDef *machine, Playback_StopReasonT
 
     close_stream(machine);
     machine->OutputRunning = false;
+    machine->SwitchActive = false;
     if (had_player_stream && !abandon_player_stream(machine))
     {
         reason = PLAYBACK_STOP_REASON_AUDIO_FAULT;
@@ -632,6 +655,14 @@ static void handle_seek(Playback_MachineTypeDef *machine, const Playback_Command
  */
 static void handle_command(Playback_MachineTypeDef *machine, const Playback_CommandTypeDef *command)
 {
+    const bool is_switch_kind = (command->Kind == PLAYBACK_COMMAND_NEXT) ||
+                                (command->Kind == PLAYBACK_COMMAND_PREV) ||
+                                (command->Kind == PLAYBACK_COMMAND_SELECT);
+    const bool measure_switch = is_switch_kind && (machine->Ops->ReportSwitch != NULL) &&
+                                (machine->Ops->ReadCycles != NULL);
+    const uint32_t switch_start_cycles = measure_switch ? machine->Ops->ReadCycles() : 0U;
+    const uint32_t starts_before = machine->Snapshot.TrackStartCount;
+
     switch (command->Kind)
     {
     case PLAYBACK_COMMAND_TOGGLE:
@@ -656,6 +687,13 @@ static void handle_command(Playback_MachineTypeDef *machine, const Playback_Comm
 
     default:
         break;
+    }
+
+    if (measure_switch && (machine->Snapshot.TrackStartCount != starts_before) &&
+        (machine->Snapshot.State == PLAYBACK_STATE_PLAYING))
+    {
+        machine->SwitchActive = true;
+        machine->SwitchStartCycles = switch_start_cycles;
     }
 
     machine->Snapshot.HandledCommandSeq = command->Seq;
@@ -926,6 +964,7 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
     if (report->Underruns > 0U)
     {
         machine->OutputRunning = false;
+        machine->UnderrunTotal += report->Underruns;
     }
     if (report->OutputStarted)
     {
@@ -933,6 +972,7 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
         machine->OutputRunning = true;
         machine->OutputSinceMs = machine->NowMs;
         machine->ConsecutiveSkips = 0U;
+        report_switch_done(machine);
     }
     if (report->OutputProgress)
     {
@@ -1095,6 +1135,17 @@ static void check_timeouts(Playback_MachineTypeDef *machine)
     {
         enter_stopped(machine, PLAYBACK_STOP_REASON_NO_DATA, true);
     }
+}
+
+/**
+ * @brief 读开机以来播放模块回报的欠载次数累计（spike #191）。
+ * @param[in] machine 状态机实例。
+ * @return 累计次数；Platform 的计数每次 Start 清零，这里在上层累加。
+ * @note  写者只有播放任务；32 位对齐读取在 Cortex-M7 上不撕裂，其他任务可只读。
+ */
+uint32_t playback_machine_underrun_total(const Playback_MachineTypeDef *machine)
+{
+    return machine->UnderrunTotal;
 }
 
 /**

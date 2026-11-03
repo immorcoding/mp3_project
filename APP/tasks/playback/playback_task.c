@@ -9,6 +9,8 @@
 #include "APP/tasks/playback/playback_task.h"
 
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "APP/tasks/playback/playback_contract.h"
@@ -298,6 +300,19 @@ static uint32_t playback_task_cycles_to_us(uint32_t cycles)
     return (frequency_hz == 0U) ? 0U : (uint32_t)(((uint64_t)cycles * 1000000ULL) / frequency_hz);
 }
 
+/**
+ * @brief 切歌到出声时延的边界日志出口（spike #191）：非阻塞投递到 Log Task，失败（队列满）丢弃。
+ * @param[in] index 换到的曲目在播放列表中的位置。
+ * @param[in] latency_us 用户换曲命令被播放任务处理到输出重新起播的微秒数。
+ */
+static void playback_task_report_switch(uint16_t index, uint32_t latency_us)
+{
+    char text[40];
+
+    (void)snprintf(text, sizeof(text), "Switch idx=%u lat=%lu", (unsigned)index, (unsigned long)latency_us);
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, playback_task_log_tag, text);
+}
+
 /** @brief 状态机的全部外部依赖：存储窗口经本文件适配，播放模块直接填 Service_Playback_* 函数指针。 */
 static const Playback_MachineOpsTypeDef playback_task_ops = {
     .Storage = {
@@ -323,7 +338,17 @@ static const Playback_MachineOpsTypeDef playback_task_ops = {
     .LogDebug = playback_task_log_debug,
     .ReadCycles = playback_task_read_cycles,
     .CyclesToUs = playback_task_cycles_to_us,
+    .ReportSwitch = playback_task_report_switch,
 };
+
+/**
+ * @brief 读开机以来的欠载累计次数（spike #191）；任意任务可调用。
+ * @return 累计次数；播放任务尚未启动时为 0。
+ */
+uint32_t playback_task_get_underrun_total(void)
+{
+    return playback_machine_underrun_total(&playback_task_machine);
+}
 
 /**
  * @brief Storage 音频流的唤醒回调：把原因映射成本任务的 FLAG。
