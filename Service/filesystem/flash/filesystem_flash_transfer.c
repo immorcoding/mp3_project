@@ -199,7 +199,7 @@ static Service_StatusTypeDef filesystem_flash_open_status(Service_StatusTypeDef 
 /**
  * @brief 绑定并同步扫描 Flash 卷，已就绪时直接成功。
  * @return SERVICE_OK 表示卷就绪；NOT_READY 表示所有者或绑定条件不满足；其余为打开结果归一化后的状态。
- * @note 仅 Storage Task 调用；不自动格式化。按宏可输出格式版本、代次、块统计及扫描耗时；扫描等待可让出 CPU。
+ * @note 调用者持有 Flash 卷锁；不自动格式化。按宏可输出格式版本、代次、块统计及扫描耗时；扫描等待可让出 CPU。
  */
 Service_StatusTypeDef filesystem_flash_transfer_open(void)
 {

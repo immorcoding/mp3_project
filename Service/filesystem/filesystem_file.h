@@ -1,6 +1,6 @@
 /**
  * @file filesystem_file.h
- * @brief Storage Task 独占的卷感知文件 Interface。
+ * @brief 卷感知文件 Interface（spike #191：入口自带锁，任何持锁任务可调用，原先只给 Storage Task）。
  */
 
 #ifndef FILESYSTEM_FILE_H

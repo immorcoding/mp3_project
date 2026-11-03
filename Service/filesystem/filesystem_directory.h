@@ -1,6 +1,6 @@
 /**
  * @file filesystem_directory.h
- * @brief Storage Task 独占的卷感知目录 Interface。
+ * @brief 卷感知目录 Interface（spike #191：入口自带锁，任何持锁任务可调用，原先只给 Storage Task）。
  */
 
 #ifndef FILESYSTEM_DIRECTORY_H

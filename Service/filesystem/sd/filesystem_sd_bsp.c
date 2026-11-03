@@ -51,7 +51,7 @@ uint8_t BSP_SD_ITConfig(void)
   * @param[in] timeout_ms 每个内部 DMA 分块等待及后续卡同步的毫秒预算。
   * @retval MSD_OK 所有请求块均已到达 p_data。
   * @retval MSD_ERROR 请求未能以同步方式完成。
-  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
+  * @note  由持有 SD 卷锁的任务调用（spike #191）；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_ReadBlocks(uint32_t *p_data,
                           uint32_t read_address,
@@ -74,7 +74,7 @@ uint8_t BSP_SD_ReadBlocks(uint32_t *p_data,
   * @param[in] timeout_ms 每个内部 DMA 分块等待及后续卡同步的毫秒预算。
   * @retval MSD_OK 所有请求块均已提交到卡。
   * @retval MSD_ERROR 请求未能以同步方式完成。
-  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
+  * @note  由持有 SD 卷锁的任务调用（spike #191）；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_WriteBlocks(uint32_t *p_data,
                            uint32_t write_address,
@@ -96,7 +96,7 @@ uint8_t BSP_SD_WriteBlocks(uint32_t *p_data,
   * @param[in] block_count 非零逻辑扇区数。
   * @retval MSD_OK 所有请求块均已到达 p_data。
   * @retval MSD_ERROR 请求未能以同步方式完成。
-  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
+  * @note  由持有 SD 卷锁的任务调用（spike #191）；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *p_data,
                               uint32_t read_address,
@@ -115,7 +115,7 @@ uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *p_data,
   * @param[in] block_count 非零逻辑扇区数。
   * @retval MSD_OK 所有请求块均已提交到卡。
   * @retval MSD_ERROR 请求未能以同步方式完成。
-  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
+  * @note  由持有 SD 卷锁的任务调用（spike #191）；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_WriteBlocks_DMA(uint32_t *p_data,
                                uint32_t write_address,

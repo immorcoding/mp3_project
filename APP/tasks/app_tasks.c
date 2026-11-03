@@ -7,7 +7,8 @@
   *          Create Task 先建立 Log Service 的静态消息池与 FreeRTOS 队列，再创建
   *          消费日志的 Log Task、独占 SD 热插拔普通上下文的 Storage Task、
   *          持有播放状态机的 Playback Task（静态创建）、监控 Task 以及独占
-  *          LVGL 执行上下文的 GUI Task。所有任务创建成功后 Create Task 自删。
+  *          LVGL 执行上下文的 GUI Task；spike #191 另有静态创建的 Foreground Task。
+  *          所有任务创建成功后 Create Task 自删。
   ******************************************************************************
   */
 
