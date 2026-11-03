@@ -79,7 +79,7 @@ select{font:inherit;color:inherit;background:var(--panel);border:1px solid var(-
   <span class="tag">原型 · 可丢弃 · 不合入 main · 分支 prototype/app-worker</span>
   <h1>应用架构 C：应用任务持锁读 SD</h1>
   <p><b>要回答的问题：</b>按选项 C 分工之后，应用接入、界面、音频和拔卡分别表现如何？这些规则碰到棘手情形会不会漏？和现状写法、A（请求队列）比差在哪？</p>
-  <p class="muted small">这是逻辑模拟，不是板测。各写法跑同一批操作、同一组耗时参数，每 1 ms 模拟一次 FreeRTOS 抢占、时间片和互斥锁（放锁时高优先级等待者立刻抢占，持锁者继承等待者的优先级）。部分耗时是假设，见页面底部。Books、Settings 现在还不存在，“现状写法”指继续按名称槽的方式接入它们。C 和 A 用同一份应用代码，只有文件接口的内部实现不同。</p>
+  <p class="muted small">这是逻辑模拟，不是板测。各写法跑同一批操作、同一组耗时参数，每 1 ms 模拟一次 FreeRTOS 抢占、时间片和互斥锁（放锁时高优先级等待者立刻抢占，持锁者继承等待者的优先级）。部分耗时是假设，见页面底部。除场景 12 外，播放时 GUI 都按持续刷新算，属于偏悲观的情况。Books、Settings 现在还不存在，“现状写法”指继续按名称槽的方式接入它们。C 和 A 用同一份应用代码，只有文件接口的内部实现不同。</p>
 
   <details open>
     <summary>C 长什么样：谁持锁、谁能等</summary>
@@ -461,7 +461,7 @@ const Model = (() => {
   }
   /** GUI 一圈的收尾：有动画或有变化才画；没活时，目标架构睡觉，现在的写法空转。 */
   function* guiDraw(w) {
-    const animating = w.audio.state === 'playing' || w.audio.state === 'opening';
+    const animating = !w.staticUi && (w.audio.state === 'playing' || w.audio.state === 'opening');
     if (animating || w.ui.dirty) { w.ui.dirty = false; yield* frame(w); return; }
     const canSleep = (w.arch === 'c' || w.arch === 'a') && w.p.guiSleeps;
     if (canSleep) yield sleep(16);
@@ -833,7 +833,7 @@ const Model = (() => {
     const playing = init.playing !== false && !noCard;
     const w = {
       arch, p: params, t: 0, tasks: [], sched: [], current: null,
-      fg: init.fg || 'music',
+      fg: init.fg || 'music', staticUi: !!init.staticUi, armPage: false,
       opSeq: 0, ops: [], events: [], ruleNotes: [], frames: [], beats: [],
       card: { present: !noCard, state: noCard ? 'absent' : 'ready', flag: false, debounceUntil: 0, catalogReady: !noCard, armedRemove: false },
       audio: { state: playing ? 'playing' : 'stopped', open: playing, req: false, seq: 1, level: playing ? params.blockCount : 0, dataWait: 0, underrunning: false, endReason: '', reading: false, waitingBlock: 0 },
@@ -860,7 +860,7 @@ const Model = (() => {
     return w;
   }
   function resetMetrics(w) {
-    w.m = { viewStart: w.t, minLevel: w.audio.level, underruns: 0, audioMaxWait: 0, sdMaxUnit: 0, sdMaxLabel: '', peakOpen: 0, lockMaxWait: 0, lockMaxWho: '' };
+    w.m = { viewStart: w.t, minLevel: w.audio.level, underruns: 0, audioMaxWait: 0, sdMaxUnit: 0, sdMaxLabel: '', peakOpen: 0, lockMaxWait: 0, lockMaxWho: '', ticks: 0, idle: 0, sdBusy: 0, cpu: {} };
     w.segs = {}; w.levels = []; w.frames = w.frames.slice(-1); w.beats = w.beats.slice(-1);
     w.ops = w.ops.filter(o => o.end === null && !o.abandoned);
     w.events = []; w.ruleNotes = [];
@@ -881,7 +881,10 @@ const Model = (() => {
       if (value.op === 'io') {
         if (value.ms <= 0) { input = true; continue; }
         task.op = { ...value, remaining: value.ms, started: w.t, failed: false }; task.state = 'io';
-        if (value.audioRead) { w.audio.reading = true; w.audio.waitingBlock = 0; }
+        if (value.audioRead) {
+          w.audio.reading = true; w.audio.waitingBlock = 0;
+          if (w.armPage) { w.armPage = false; applyAction(w, { type: 'TURN_PAGE' }); }
+        }
         if (value.book && w.card.armedRemove) { w.card.armedRemove = false; applyRemove(w); }
         return;
       }
@@ -939,6 +942,10 @@ const Model = (() => {
       pick.op.remaining--; pick.lastRun = w.t; pick.tickOp = pick.op; ran = true;
       if (pick.op.remaining <= 0) { pick.state = 'ready'; pick.op = null; }
     }
+    w.m.ticks++;
+    if (!ran) w.m.idle++;
+    if (w.tasks.some(t => t.state === 'io' && t.op.sd)) w.m.sdBusy++;
+    w.tasks.forEach(t => { if (t.tickOp) w.m.cpu[t.lane] = (w.m.cpu[t.lane] || 0) + 1; });
     if (w.locks.sd.holder) record(w, 'SD 锁', w.t, 'lock', w.locks.sd.holder.lane);
     if (w.locks.flash.holder) record(w, 'Flash 锁', w.t, 'lock', w.locks.flash.holder.lane);
     w.tasks.forEach(t => {
@@ -1022,6 +1029,9 @@ const Model = (() => {
       case 'ARM_REMOVE':
         if (w.card.present) w.card.armedRemove = true;
         break;
+      case 'ARM_PAGE':
+        w.armPage = true;
+        break;
       case 'RULE':
         note(w, a.what, a.label);
         break;
@@ -1031,7 +1041,7 @@ const Model = (() => {
   function settled(w) {
     if (w.sched.length) return false;
     if (w.ops.some(o => o.end === null && !o.abandoned)) return false;
-    if (w.card.flag || w.audio.req || w.card.armedRemove) return false;
+    if (w.card.flag || w.audio.req || w.card.armedRemove || w.armPage) return false;
     if (needBlock(w)) return false;
     return true;
   }
@@ -1139,6 +1149,18 @@ const SCENARIOS = [
       { label: '持有界面数据锁时读文件', actions: [[20, { type: 'RULE', what: 'nested-lock', label: '持界面数据锁读文件' }]], watch: '文件锁必须是最内层的锁。否则 GUI 取界面数据时会连带等 SD，界面就又卡了。' },
       { label: 'Books 不在前台时翻页', actions: [[20, { type: 'TURN_PAGE' }]], watch: '只有 C 和 A 有“一个前台应用”的规则。现状写法里，后台页面也能发请求、占用 SD。' },
     ] },
+  { id: 'listen-read', tab: '12 边听歌边看书', init: { fg: 'books', staticUi: true },
+    desc: '音乐在后台播放，前台是 Books，每 3 秒翻一页，持续 60 秒。书页是静止的，这里假设唱盘不在屏幕上就不用刷新，所以 GUI 只在翻页时画。这是最常见的日常使用，能看到平时还剩多少余量。',
+    steps: [
+      { label: '听歌看书 60 秒，每 3 秒翻一页', minMs: 60000,
+        actions: Array.from({ length: 20 }, (_, i) => [20 + i * 3000, { type: 'TURN_PAGE' }]),
+        watch: '先看“CPU 占用”和“SD 忙碌”两行。音频每约 0.8 秒才读一块，翻页也只读一次，SD 大部分时间是空的。日常使用根本抢不起来，所以现状写法和 C 的翻页耗时、音频都一样。CPU 空闲差很多，但这来自 GUI 会不会睡，不是 C 本身带来的：现状写法单独改 GUI，也能拿到大部分空闲。' },
+      { label: '同样 60 秒，每翻一页都存阅读进度', minMs: 60000,
+        actions: Array.from({ length: 20 }, (_, i) => [[20 + i * 3000, { type: 'TURN_PAGE' }], [20 + i * 3000, { type: 'SAVE' }]]).flat(),
+        watch: '这一步相当于每小时写 1200 次 Flash。这里假设写一次 60 ms，不触发擦除，现状写法、C、A 的翻页都基本不受影响。只有对照组变慢，因为 GUI 要自己等 Flash。真正的问题是 Flash 寿命：实际设计应该攒着写，比如隔一段时间或离开书页时才存。写入碰上擦除的情况看场景 9。' },
+      { label: '放大：翻页正好碰上补音频块', crop: true, actions: [[20, { type: 'ARM_PAGE' }]],
+        watch: '这是最常见的“撞车”：音频正在读一块，用户此时翻页。看 C 的“SD 锁”一行，应用任务只多等了音频读完这一块。' },
+    ] },
 ];
 
 const FREE = [
@@ -1196,7 +1218,13 @@ function runStep(step) {
   }
   cmp.newView();
   cmp.schedule(step.actions);
-  cmp.runUntilSettled(150, step.maxMs || 9000);
+  cmp.runUntilSettled(step.minMs || 150, step.maxMs || (step.minMs || 0) + 9000);
+  if (step.crop) {
+    /* 只看操作发生的那一段：时间轴从第一个操作前 20 ms 开始。 */
+    const first = Math.min(...Object.values(cmp.worlds).flatMap(w => w.ops.map(o => o.start)));
+    cmp.viewStart = first - 20;
+    cmp.firstAction = first;
+  }
   watchText = step.watch; stepIdx++;
   render();
 }
@@ -1289,8 +1317,8 @@ function renderTimelines() {
       const y = topH + i * (laneH + gap);
       s += '<text x="0" y="' + (y + 15) + '" style="font-weight:600">' + lane + '</text>';
       s += '<rect x="' + labelW + '" y="' + y + '" width="' + plotW + '" height="' + laneH + '" style="fill:var(--bg)"/>';
-      (w.segs[lane] || []).forEach(seg => {
-        const sx = x(seg.start), sw = Math.max(x(seg.end) - sx, 0.6);
+      (w.segs[lane] || []).filter(seg => seg.end > start).forEach(seg => {
+        const sx = x(Math.max(seg.start, start)), sw = Math.max(x(seg.end) - sx, 0.6);
         const bad = lane === 'GUI';
         let fill, ink = '#fff';
         if (seg.kind === 'wait') { fill = bad ? 'url(#hatch-bad)' : 'url(#hatch)'; ink = 'var(--ink)'; }
@@ -1316,10 +1344,11 @@ function renderTimelines() {
     s += '<rect x="' + labelW + '" y="' + ay + '" width="' + plotW + '" height="' + audioH + '" style="fill:var(--bg)"/>';
     const lv = w.levels, cap = w.p.blockCount;
     if (lv.length) {
-      const stride = Math.max(1, Math.floor(lv.length / plotW));
+      const stride = Math.max(1, Math.floor((end - start) / plotW));
+      const skip = Math.max(0, start - w.m.viewStart);
       let pts = x(start) + ',' + (ay + audioH);
-      for (let i = 0; i < lv.length; i += stride) pts += ' ' + x(start + i).toFixed(1) + ',' + (ay + audioH - lv[i] / cap * audioH).toFixed(1);
-      pts += ' ' + x(start + lv.length - 1).toFixed(1) + ',' + (ay + audioH);
+      for (let i = skip; i < lv.length; i += stride) pts += ' ' + x(w.m.viewStart + i).toFixed(1) + ',' + (ay + audioH - lv[i] / cap * audioH).toFixed(1);
+      pts += ' ' + x(w.m.viewStart + lv.length - 1).toFixed(1) + ',' + (ay + audioH);
       s += '<polygon points="' + pts + '" style="fill:var(--accent-soft);stroke:var(--accent)"><title>音频缓冲（满 = ' + cap + ' 块）</title></polygon>';
     }
     const ops = w.ops.filter(op => op.start >= start);
@@ -1348,6 +1377,18 @@ function maxStall(w) {
 function opsCell(w) {
   const ops = w.ops.filter(o => o.start >= cmp.viewStart);
   if (!ops.length) return '<span class="muted">没有</span>';
+  /* 同一种操作做了很多次：只报次数、平均和最长。 */
+  const labels = [...new Set(ops.map(o => o.label))];
+  if (ops.length >= 6) {
+    return labels.map(label => {
+      const group = ops.filter(o => o.label === label);
+      const done = group.filter(o => o.end !== null && !o.failed).map(o => o.end - o.start);
+      if (!done.length) return '<div class="bad">' + esc(label) + ' × ' + group.length + '：没有完成</div>';
+      const avg = Math.round(done.reduce((a, b) => a + b, 0) / done.length);
+      const open = group.length - done.length;
+      return '<div>' + esc(label) + ' × ' + group.length + '：平均 <b>' + avg + ' ms</b>，最长 <b>' + Math.max(...done) + ' ms</b>' + (open ? '<span class="warn">（' + open + ' 次没完成）</span>' : '') + '</div>';
+    }).join('');
+  }
   return ops.map(o => {
     if (o.abandoned) return '<div class="muted">' + esc(o.label) + '：' + esc(o.note || '已放弃') + '</div>';
     if (o.end === null) return '<div class="bad">' + esc(o.label) + '：还没完成</div>';
@@ -1377,6 +1418,13 @@ function renderCompare() {
     const un = w.m.underruns ? '<span class="bad">断音 ' + w.m.underruns + ' 次</span>' : '断音 0 次';
     return '缓冲最低 ' + lv.toFixed(1) + ' 块（约 ' + sec + ' 秒）；' + un + '<div class="muted small">补块最长等待 ' + w.m.audioMaxWait + ' ms</div>';
   });
+  h += row('CPU 占用', w => {
+    const pct = v => (v / Math.max(w.m.ticks, 1) * 100).toFixed(1) + '%';
+    const idle = w.m.idle / Math.max(w.m.ticks, 1);
+    const parts = Object.entries(w.m.cpu).sort((x, y) => y[1] - x[1]).map(([lane, v]) => ({ Playback: '播放' }[lane] || lane) + ' ' + pct(v));
+    return '<span class="' + (idle < 0.05 ? 'warn' : '') + '">空闲 ' + pct(w.m.idle) + '</span><div class="muted small">' + esc(parts.join('，')) + '</div>';
+  });
+  h += row('SD 忙碌', w => (w.m.sdBusy / Math.max(w.m.ticks, 1) * 100).toFixed(1) + '%');
   h += row('SD 单次最长占用', w => {
     const v = w.m.sdMaxUnit;
     return '<span class="' + (v > 300 ? 'warn' : '') + '">' + v + ' ms</span>' + (w.m.sdMaxLabel ? '<div class="muted small">' + esc(w.m.sdMaxLabel) + '</div>' : '');
