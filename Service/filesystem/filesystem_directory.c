@@ -7,6 +7,7 @@
 
 #include "Middlewares/Third_Party/FatFs/src/diskio.h"
 #include "Service/filesystem/filesystem_handle.h"
+#include "Service/filesystem/filesystem_lock.h"
 #include "Service/filesystem/filesystem_locator.h"
 #include "Service/filesystem/filesystem_path.h"
 #include "Service/filesystem/filesystem_status.h"
@@ -32,8 +33,12 @@
 
 _Static_assert(_MAX_SS == _MIN_SS, "locator capture assumes one fixed sector size");
 
-/** @brief 取回目录项所在扇区用的缓冲；只在唯一 Storage Task 使用，避免占任务栈。 */
-static BYTE filesystem_directory_sector_buffer[_MAX_SS];
+/**
+ * @brief 取回目录项所在扇区用的缓冲，避免占任务栈。
+ * @note  按逻辑盘号各一份：两个卷的 ReadDirectory 在每卷一把锁时可能同时进行，共用一份会互相覆盖
+ *        （#188 第 6 项）。每份只在对应卷的卷锁内使用。
+ */
+static BYTE filesystem_directory_sector_buffer[_VOLUMES][_MAX_SS];
 
 /**
  * @brief 小端读 16 位。
@@ -141,6 +146,7 @@ static Service_Filesystem_FileLocatorTypeDef filesystem_directory_capture_locato
     uint32_t start_cluster;
 
     if ((fs == NULL) || (fs->fs_type < FS_FAT12) || (fs->fs_type > FS_FAT32) ||
+        (fs->drv >= _VOLUMES) ||
         !filesystem_directory_entry_position(dir, before_clust, before_dptr, &offset, &sector))
     {
         return none;
@@ -152,11 +158,13 @@ static Service_Filesystem_FileLocatorTypeDef filesystem_directory_capture_locato
     }
     else
     {
-        if (disk_read(fs->drv, filesystem_directory_sector_buffer, sector, 1U) != RES_OK)
+        BYTE *sector_buffer = filesystem_directory_sector_buffer[fs->drv];
+
+        if (disk_read(fs->drv, sector_buffer, sector, 1U) != RES_OK)
         {
             return none;
         }
-        entry = &filesystem_directory_sector_buffer[offset % _MAX_SS];
+        entry = &sector_buffer[offset % _MAX_SS];
     }
 
     if ((entry[FILESYSTEM_DIRECTORY_ENTRY_NAME] == 0U) ||
@@ -182,7 +190,7 @@ static Service_Filesystem_FileLocatorTypeDef filesystem_directory_capture_locato
  * @param[in] path UTF-8 相对路径，空字符串表示根目录。
  * @param[out] directory 仅成功时写入有效句柄。
  * @return OK 为打开成功；BUSY 为目录槽用尽。
- * @note 仅 Storage Task 调用。
+ * @note 入口拿卷锁；`f_opendir` 会登记 FatFs 锁表，每卷一把锁时在打开表锁内。
  */
 Service_StatusTypeDef Service_Filesystem_OpenDirectory(
     Service_Filesystem_VolumeTypeDef volume,
@@ -193,33 +201,38 @@ Service_StatusTypeDef Service_Filesystem_OpenDirectory(
     DIR *object;
     Service_Filesystem_DirectoryHandleTypeDef handle = {0};
     Service_StatusTypeDef status;
+    FRESULT result;
 
-    if (directory == NULL)
+    if ((directory == NULL) || !filesystem_handle_volume_is_valid(volume))
     {
         return SERVICE_INVALID_PARAM;
     }
 
+    filesystem_lock_acquire(volume, "OpenDirectory");
+
     status = filesystem_path_make_tchar(volume, path, true, native_path);
-    if (status != SERVICE_OK)
+    if (status == SERVICE_OK)
     {
-        return status;
+        status = filesystem_handle_acquire_directory(volume, &object, &handle);
+    }
+    if (status == SERVICE_OK)
+    {
+        filesystem_lock_table_acquire("OpenDirectory");
+        result = f_opendir(object, native_path);
+        filesystem_lock_table_release();
+        if (result != FR_OK)
+        {
+            filesystem_handle_release_directory(handle);
+            status = filesystem_make_service_status(result);
+        }
+        else
+        {
+            *directory = handle;
+        }
     }
 
-    status = filesystem_handle_acquire_directory(volume, &object, &handle);
-    if (status != SERVICE_OK)
-    {
-        return status;
-    }
-
-    FRESULT result = f_opendir(object, native_path);
-    if (result != FR_OK)
-    {
-        filesystem_handle_release_directory(handle);
-        return filesystem_make_service_status(result);
-    }
-
-    *directory = handle;
-    return SERVICE_OK;
+    filesystem_lock_release(volume);
+    return status;
 }
 
 /**
@@ -227,7 +240,7 @@ Service_StatusTypeDef Service_Filesystem_OpenDirectory(
  * @param[in] directory 当前有效句柄。
  * @param[out] entry 接收 UTF-8 名称与属性；读到结尾时 Name 为空且仍返回 OK。
  * @return OK 为本次读取无错误。
- * @note 仅 Storage Task 调用。跳过 FatFs 返回的空项之外的转换失败视为 ERROR。
+ * @note 入口拿 Token 所属卷的卷锁。跳过 FatFs 返回的空项之外的转换失败视为 ERROR。
  *       条目同时带文件定位符（见 `Service_Filesystem_OpenFileByLocator`）；取不到时 `Locator` 为全零。
  */
 Service_StatusTypeDef Service_Filesystem_ReadDirectory(
@@ -235,43 +248,53 @@ Service_StatusTypeDef Service_Filesystem_ReadDirectory(
     Service_Filesystem_DirectoryEntryTypeDef *entry)
 {
     DIR *object;
+    Service_Filesystem_VolumeTypeDef volume;
     FILINFO info;
     Service_StatusTypeDef status;
+    DWORD before_clust;
+    DWORD before_dptr;
+    FRESULT result;
 
     if (entry == NULL)
     {
         return SERVICE_INVALID_PARAM;
     }
     memset(entry, 0, sizeof(*entry));
-    status = filesystem_handle_lookup_directory(directory, &object);
+    status = filesystem_handle_lock_directory(directory, "ReadDirectory", &object, &volume);
     if (status != SERVICE_OK)
     {
         return status;
     }
 
-    DWORD before_clust = object->clust;
-    DWORD before_dptr = object->dptr;
-    FRESULT result = f_readdir(object, &info);
+    before_clust = object->clust;
+    before_dptr = object->dptr;
+    result = f_readdir(object, &info);
     if (result != FR_OK)
     {
-        return filesystem_make_service_status(result);
+        status = filesystem_make_service_status(result);
     }
-    if (info.fname[0] == 0)
+    else if (info.fname[0] == 0)
     {
-        return SERVICE_OK;
+        status = SERVICE_OK;
     }
-    if (!filesystem_path_tchar_name_to_utf8(info.fname, entry->Name))
+    else if (!filesystem_path_tchar_name_to_utf8(info.fname, entry->Name))
     {
-        return SERVICE_ERROR;
+        status = SERVICE_ERROR;
     }
-    entry->Locator = filesystem_directory_capture_locator(object, before_clust, before_dptr, &info);
+    else
+    {
+        entry->Locator = filesystem_directory_capture_locator(object, before_clust, before_dptr, &info);
 
-    entry->Size = (uint64_t)info.fsize;
-    entry->Date = info.fdate;
-    entry->Time = info.ftime;
-    entry->IsDirectory = ((info.fattrib & AM_DIR) != 0U);
-    entry->IsReadOnly = ((info.fattrib & AM_RDO) != 0U);
-    return SERVICE_OK;
+        entry->Size = (uint64_t)info.fsize;
+        entry->Date = info.fdate;
+        entry->Time = info.ftime;
+        entry->IsDirectory = ((info.fattrib & AM_DIR) != 0U);
+        entry->IsReadOnly = ((info.fattrib & AM_RDO) != 0U);
+        status = SERVICE_OK;
+    }
+
+    filesystem_lock_release(volume);
+    return status;
 }
 
 /**
@@ -283,14 +306,18 @@ Service_StatusTypeDef Service_Filesystem_RewindDirectory(
     Service_Filesystem_DirectoryHandleTypeDef directory)
 {
     DIR *object;
-    Service_StatusTypeDef status = filesystem_handle_lookup_directory(directory, &object);
+    Service_Filesystem_VolumeTypeDef volume;
+    Service_StatusTypeDef status =
+        filesystem_handle_lock_directory(directory, "RewindDirectory", &object, &volume);
 
     if (status != SERVICE_OK)
     {
         return status;
     }
 
-    return filesystem_make_service_status(f_readdir(object, NULL));
+    status = filesystem_make_service_status(f_readdir(object, NULL));
+    filesystem_lock_release(volume);
+    return status;
 }
 
 /**
@@ -302,18 +329,25 @@ Service_StatusTypeDef Service_Filesystem_CloseDirectory(
     Service_Filesystem_DirectoryHandleTypeDef directory)
 {
     DIR *object;
-    Service_StatusTypeDef status = filesystem_handle_lookup_directory(directory, &object);
+    Service_Filesystem_VolumeTypeDef volume;
+    Service_StatusTypeDef status =
+        filesystem_handle_lock_directory(directory, "CloseDirectory", &object, &volume);
+    FRESULT result;
 
     if (status != SERVICE_OK)
     {
         return status;
     }
 
-    status = filesystem_make_service_status(f_closedir(object));
+    filesystem_lock_table_acquire("CloseDirectory");
+    result = f_closedir(object);
+    filesystem_lock_table_release();
+    status = filesystem_make_service_status(result);
     if (status == SERVICE_OK)
     {
         filesystem_handle_release_directory(directory);
     }
+    filesystem_lock_release(volume);
     return status;
 }
 
@@ -327,20 +361,25 @@ Service_StatusTypeDef Service_Filesystem_CreateDirectory(Service_Filesystem_Volu
                                                          const char *path)
 {
     TCHAR native_path[FILESYSTEM_TCHAR_PATH_LENGTH];
-    Service_StatusTypeDef status = filesystem_handle_volume_ready(volume);
+    Service_StatusTypeDef status;
 
-    if (status != SERVICE_OK)
+    if (!filesystem_handle_volume_is_valid(volume))
     {
-        return status;
+        return SERVICE_INVALID_PARAM;
     }
 
-    status = filesystem_path_make_tchar(volume, path, false, native_path);
-    if (status != SERVICE_OK)
+    filesystem_lock_acquire(volume, "CreateDirectory");
+    status = filesystem_handle_volume_ready(volume);
+    if (status == SERVICE_OK)
     {
-        return status;
+        status = filesystem_path_make_tchar(volume, path, false, native_path);
     }
-
-    return filesystem_make_service_status(f_mkdir(native_path));
+    if (status == SERVICE_OK)
+    {
+        status = filesystem_make_service_status(f_mkdir(native_path));
+    }
+    filesystem_lock_release(volume);
+    return status;
 }
 
 /**
@@ -354,33 +393,39 @@ Service_StatusTypeDef Service_Filesystem_RemoveDirectory(Service_Filesystem_Volu
 {
     TCHAR native_path[FILESYSTEM_TCHAR_PATH_LENGTH];
     FILINFO info;
-    Service_StatusTypeDef status = filesystem_handle_volume_ready(volume);
+    Service_StatusTypeDef status;
+    FRESULT result;
 
-    if (status != SERVICE_OK)
-    {
-        return status;
-    }
-
-    status = filesystem_path_make_tchar(volume, path, false, native_path);
-    if (status != SERVICE_OK)
-    {
-        return status;
-    }
-
-    FRESULT result = f_stat(native_path, &info);
-    if (result != FR_OK)
-    {
-        return filesystem_make_service_status(result);
-    }
-    if ((info.fattrib & AM_DIR) == 0U)
+    if (!filesystem_handle_volume_is_valid(volume))
     {
         return SERVICE_INVALID_PARAM;
     }
 
-    result = f_unlink(native_path);
-    if (result == FR_DENIED)
+    filesystem_lock_acquire(volume, "RemoveDirectory");
+    status = filesystem_handle_volume_ready(volume);
+    if (status == SERVICE_OK)
     {
-        return SERVICE_BUSY;
+        status = filesystem_path_make_tchar(volume, path, false, native_path);
     }
-    return filesystem_make_service_status(result);
+    if (status == SERVICE_OK)
+    {
+        result = f_stat(native_path, &info);
+        if (result != FR_OK)
+        {
+            status = filesystem_make_service_status(result);
+        }
+        else if ((info.fattrib & AM_DIR) == 0U)
+        {
+            status = SERVICE_INVALID_PARAM;
+        }
+        else
+        {
+            filesystem_lock_table_acquire("RemoveDirectory");
+            result = f_unlink(native_path);
+            filesystem_lock_table_release();
+            status = (result == FR_DENIED) ? SERVICE_BUSY : filesystem_make_service_status(result);
+        }
+    }
+    filesystem_lock_release(volume);
+    return status;
 }

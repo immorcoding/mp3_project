@@ -62,14 +62,18 @@ add_executable(flash_file_benchmark_tests
     ../../Service/filesystem/filesystem_directory.c
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_lock.c
     ../../Service/filesystem/filesystem_status.c
+    stubs/filesystem_lock_host.c
     ../../APP/tasks/storage/benchmark/storage_flash_file_benchmark.c)
 target_include_directories(flash_file_benchmark_tests BEFORE PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/host_config" stubs ../..
     ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
+# 本测试自己提供 xTaskGetTickCount 与 Service_Log_Post，锁的主机替身不再重复定义。
 target_compile_definitions(flash_file_benchmark_tests PRIVATE FTL_TEST_FATFS
     FTL_TEST_FILE_BENCHMARK STORAGE_FLASH_BENCHMARK_ENABLE=1
-    STORAGE_FLASH_BENCHMARK_FILE_TOTAL_BYTES=16384)
+    STORAGE_FLASH_BENCHMARK_FILE_TOTAL_BYTES=16384
+    HOST_LOCK_STUB_NO_LOG_TICK)
 target_compile_options(flash_file_benchmark_tests PRIVATE -UNDEBUG)
 foreach(OP WriteFile ReadFile SyncFile CloseFile RemoveFile)
     target_link_options(flash_file_benchmark_tests PRIVATE "-Wl,--wrap=Service_Filesystem_${OP}")
@@ -88,7 +92,9 @@ add_executable(filesystem_service_tests
     ../../Service/filesystem/filesystem_directory.c
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_lock.c
     ../../Service/filesystem/filesystem_status.c
+    stubs/filesystem_lock_host.c
     ../../Middlewares/Third_Party/FatFs/src/ff.c
     ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
     ../../Middlewares/Third_Party/FatFs/src/diskio.c
@@ -100,3 +106,23 @@ target_compile_options(filesystem_service_tests PRIVATE -UNDEBUG)
 add_test(NAME filesystem_service_volume_aware COMMAND filesystem_service_tests)
 
 
+
+# Filesystem 私有锁（spike #191）：同一份测试源码编译两次，全局一把与每卷一把加表锁。
+# 互斥量替身在重复获取时中止进程，所以 filesystem_service_volume_aware 等经公开入口的用例
+# 同时验证了公开函数之间没有重复拿同一把锁。
+add_executable(filesystem_lock_global_tests
+    test_filesystem_lock.c
+    ../../Service/filesystem/filesystem_lock.c
+    stubs/filesystem_lock_host.c)
+target_include_directories(filesystem_lock_global_tests BEFORE PRIVATE stubs ../..)
+target_compile_options(filesystem_lock_global_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+add_test(NAME filesystem_lock_global COMMAND filesystem_lock_global_tests)
+
+add_executable(filesystem_lock_per_volume_tests
+    test_filesystem_lock.c
+    ../../Service/filesystem/filesystem_lock.c
+    stubs/filesystem_lock_host.c)
+target_include_directories(filesystem_lock_per_volume_tests BEFORE PRIVATE stubs ../..)
+target_compile_definitions(filesystem_lock_per_volume_tests PRIVATE SPIKE_LOCK_PER_VOLUME=1)
+target_compile_options(filesystem_lock_per_volume_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+add_test(NAME filesystem_lock_per_volume COMMAND filesystem_lock_per_volume_tests)

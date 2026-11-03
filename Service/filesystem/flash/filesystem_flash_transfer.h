@@ -1,6 +1,6 @@
 /**
  * @file filesystem_flash_transfer.h
- * @brief Filesystem 内部唯一 Flash 执行器，不作为跨 Module 接口。
+ * @brief Filesystem 内部 Flash 执行器，不作为跨 Module 接口；调用者必须持有 Flash 卷锁。
  */
 
 #ifndef FILESYSTEM_FLASH_TRANSFER_H
@@ -11,7 +11,8 @@
 #include "Platform/flash/platform_flash.h"
 #include "Service/service.h"
 bool filesystem_flash_transfer_init(uint32_t notify_index);
-bool filesystem_flash_transfer_is_owner(void);
+bool filesystem_flash_transfer_is_registered(void);
+void filesystem_flash_transfer_prepare(void);
 Service_StatusTypeDef filesystem_flash_transfer_finish(Platform_StatusTypeDef started,
                                                        uint32_t timeout_ms);
 Service_StatusTypeDef filesystem_flash_transfer_open(void);

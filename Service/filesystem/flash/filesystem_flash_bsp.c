@@ -10,8 +10,9 @@
 /**
  * @brief 检查 USER 逻辑盘是否就绪，不触发扫描或格式化。
  * @param lun 驱动内编号，当前后端仅使用 0；不是全局卷号。
- * @return 0 表示已就绪；STA_NOINIT 表示后端或调用上下文未就绪。
- * @note 强实现仅 Storage Task 调用；默认弱实现始终返回 STA_NOINIT。
+ * @return 0 表示已就绪；STA_NOINIT 表示后端未注册执行器或卷未就绪。
+ * @note 强实现由持有 Flash 卷锁的任务调用，不再比较调用任务身份（spike #191：否则非 owner 的
+ *       调用会被 FatFs 当成 STA_NOINIT 而清掉已挂载卷）；默认弱实现始终返回 STA_NOINIT。
  */
 DSTATUS BSP_USER_DISKIO_Init(BYTE lun)
 {
@@ -26,7 +27,7 @@ DSTATUS BSP_USER_DISKIO_Init(BYTE lun)
  */
 DSTATUS BSP_USER_DISKIO_GetStatus(BYTE lun)
 {
-    return lun == 0 && filesystem_flash_transfer_is_owner() &&
+    return lun == 0 && filesystem_flash_transfer_is_registered() &&
                    Platform_Flash_GetVolumeState() == PLATFORM_FLASH_VOLUME_READY
                ? 0
                : STA_NOINIT;

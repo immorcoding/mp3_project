@@ -51,21 +51,12 @@ bool filesystem_sd_transfer_init(uint32_t notify_index)
 }
 
 /**
- * @brief SD 传输层替身：恒已绑定。
+ * @brief SD 传输层替身：恒已注册。
  * @return 恒为 true。
  */
-bool filesystem_sd_transfer_is_bound(void)
+bool filesystem_sd_transfer_is_registered(void)
 {
     return true;
-}
-
-/**
- * @brief SD 传输层替身：固定通知槽。
- * @return 固定为 1。
- */
-uint32_t filesystem_sd_transfer_notify_index(void)
-{
-    return 1U;
 }
 
 /**
@@ -80,10 +71,10 @@ bool filesystem_flash_transfer_init(uint32_t notify_index)
 }
 
 /**
- * @brief Flash 传输层替身：当前任务恒为所有者。
+ * @brief Flash 传输层替身：执行器恒已注册。
  * @return 恒为 true。
  */
-bool filesystem_flash_transfer_is_owner(void)
+bool filesystem_flash_transfer_is_registered(void)
 {
     return true;
 }

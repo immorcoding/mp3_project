@@ -244,6 +244,12 @@ $dcacheConfigHostImpact = Get-HarnessImpact -ChangedPath @('Adapters/cortex/cach
 Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'gui_task', 'gui_theme', 'playback_service') `
     -Actual $dcacheConfigHostImpact.HostModules -Message 'DCache 配置头变化必须选择所有编译它的主机测试'
 
+$cycleCounterHostImpact = Get-HarnessImpact -ChangedPath @('Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h')
+Assert-HarnessEqual -Expected $true -Actual (@($cycleCounterHostImpact.HostModules) -contains 'flash_ftl') `
+    -Message '周期计数器头变化必须选中 FTL 主机测试（Filesystem 私有锁编译它的头，#191）'
+Assert-HarnessEqual -Expected $true -Actual (@($cycleCounterHostImpact.HostModules) -contains 'filesystem_locator') `
+    -Message '周期计数器头变化必须选中文件定位符主机测试（Filesystem 私有锁编译它的头，#191）'
+
 $logHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Service/log/log_service.h', 'Service/log/log_service_config.h', 'APP/app_config.h')
 Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'storage_catalog') -Actual $logHeaderHostImpact.HostModules `
     -Message 'Service Log 头与 APP 配置头变化必须选择 FTL 主机测试'

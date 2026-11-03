@@ -19,6 +19,7 @@
 #include "APP/tasks/storage/storage_task.h"
 #include "APP/tasks/gui/gui_task.h"
 
+#include "Service/filesystem/filesystem_spike.h"
 #include "Service/log/log_service.h"
 #include "generated/fw_version.h"
 #include "main.h"
@@ -52,6 +53,9 @@ static void create_task(void *handle)
     {
         Error_Handler();
     }
+
+    /* spike #191：Filesystem 的静态锁在任何任务用到文件接口之前先建好。 */
+    Service_Filesystem_SpikeInit();
 
     /* 固件版本只在启动时打印一次；队列已就绪，Log Task 创建后消费。
      * 这是刚初始化的空消息池里的第一条，不会被其他任务的早期 INFO 挤掉；此处失败只会是

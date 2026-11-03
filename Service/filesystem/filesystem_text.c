@@ -13,6 +13,8 @@
  * @return Unicode 码点；0 表示无映射。
  * @note  内部调用 FatFs `ff_convert(code, 1)`，只读 CP936 表；表由 Resource Service 在任务启动前就绪，
  *        运行期不修改，故可在任意任务上下文调用，不阻塞、不访问存储介质。
+ *        spike #191：这是 32 个公开函数里唯一不拿文件锁的一个——它不碰卷、槽表、`Files[]` 或任何可写状态，
+ *        拿锁只会让曲目标签的 GBK 回调白白等文件读取。
  */
 uint16_t Service_Filesystem_GbkToUnicode(uint16_t gbk_code)
 {

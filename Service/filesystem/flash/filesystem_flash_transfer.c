@@ -1,72 +1,99 @@
 /**
  * @file filesystem_flash_transfer.c
- * @brief StorageTask 上下文的 Flash 同步执行、通知等待和安全收尾。
+ * @brief Flash 同步执行、完成提示等待和安全收尾。
+ *
+ * @details
+ *          任何任务都可以调用，但同一时刻只有持有 Flash 卷锁（或全局锁）的那一个（spike #191 去掉了
+ *          “唯一 Storage Task”的身份绑定）。完成提示不绑定固定任务：ISR 写事件变量再给一个二值信号量，
+ *          等待方在启动操作前清空；提示只用来提前唤醒，结果只信 `Platform_Flash_ProcessOperation()`。
  */
 
 #include "Service/filesystem/flash/filesystem_flash_transfer.h"
 #include "Service/filesystem/flash/filesystem_flash_config.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
+#include "Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 #include "Service/log/log_service.h"
 #include <stdio.h>
 
-static TaskHandle_t filesystem_flash_owner;
 static bool filesystem_flash_registered;
-static uint32_t filesystem_flash_notify_index;
+/** @brief 最近一次完成提示的事件；ISR 写，仅作提示，不作为完成依据。 */
+static volatile uint32_t filesystem_flash_hint_event;
+static SemaphoreHandle_t filesystem_flash_hint_semaphore;
+static StaticSemaphore_t filesystem_flash_hint_storage;
 
 /**
  * @brief 发布轻量唤醒提示，不在 ISR 中推进 Flash 请求。
- * @param event Platform 已归一化的事件，只作为任务重查提示。
- * @param context 初始化时注册的唯一所有者任务句柄。
- * @note 通知可合并或延迟，真正完成由任务中的 Process 判定；不访问数据缓冲。
+ * @param event Platform 已归一化的事件，只作为重查提示。
+ * @param context 初始化时注册的上下文（事件变量地址），未使用。
+ * @note 提示可合并或延迟，真正完成由持锁任务中的 Process 判定；不访问数据缓冲。
  */
 static void filesystem_flash_irq(Platform_Flash_OperationEventTypeDef event, void *context)
 {
     BaseType_t higher_priority_task_woken = pdFALSE;
-    (void)xTaskNotifyIndexedFromISR((TaskHandle_t)context,
-                                    (UBaseType_t)filesystem_flash_notify_index,
-                                    (uint32_t)event,
-                                    eSetValueWithOverwrite,
-                                    &higher_priority_task_woken);
+
+    (void)context;
+    if (filesystem_flash_hint_semaphore == NULL)
+    {
+        return;
+    }
+
+    filesystem_flash_hint_event = (uint32_t)event;
+    (void)xSemaphoreGiveFromISR(filesystem_flash_hint_semaphore, &higher_priority_task_woken);
     portYIELD_FROM_ISR(higher_priority_task_woken);
 }
 
 /**
- * @brief 判断当前任务是否是已注册的 Flash 唯一执行者。
- * @return true 表示已注册且当前任务匹配；false 表示未初始化或调用者不匹配。
- * @note 仅普通任务上下文调用，不做锁仲裁，也不推进硬件。
+ * @brief 判断 Flash 执行器是否已完成首次注册。
+ * @return true 表示已注册；false 表示尚未 InitFlash。
+ * @note 不再比较调用任务：谁持有 Flash 卷锁谁就是执行者。
  */
-bool filesystem_flash_transfer_is_owner(void)
+bool filesystem_flash_transfer_is_registered(void)
 {
-    return filesystem_flash_registered && filesystem_flash_owner &&
-           xTaskGetCurrentTaskHandle() == filesystem_flash_owner;
+    return filesystem_flash_registered;
 }
 
 /**
- * @brief 将当前任务登记为 Flash 执行器并注册长期事件回调。
- * @param[in] notify_index 本任务通知数组中的 QSPI/MDMA 完成槽，由 APP 枚举注入。
- * @return true 表示首次注册成功或同一所有者重复初始化；false 表示无任务、索引越界、注册失败或所有者不匹配。
- * @note 由 Storage Task 初始化；注册成功后不临时转移回调、任务所有权和通知槽。
+ * @brief 建立完成提示信号量并注册长期事件回调。
+ * @param[in] notify_index 旧版的任务通知槽，已不再使用，保留参数只为不改调用方。
+ * @return true 表示首次注册成功或已注册；false 表示建立信号量或注册回调失败。
+ * @note 调用者已持有 Flash 卷锁。注册成功后不转移回调。
  */
 bool filesystem_flash_transfer_init(uint32_t notify_index)
 {
-    if (notify_index >= (uint32_t)configTASK_NOTIFICATION_ARRAY_ENTRIES)
-    {
-        return false;
-    }
+    (void)notify_index;
+
     if (filesystem_flash_registered)
     {
-        return filesystem_flash_transfer_is_owner();
+        return true;
     }
-    TaskHandle_t owner = xTaskGetCurrentTaskHandle();
-    if (!owner || Platform_Flash_SetOperationCallback(filesystem_flash_irq, owner) != PLATFORM_OK)
+    if (filesystem_flash_hint_semaphore == NULL)
+    {
+        filesystem_flash_hint_semaphore = xSemaphoreCreateBinaryStatic(&filesystem_flash_hint_storage);
+        if (filesystem_flash_hint_semaphore == NULL)
+        {
+            return false;
+        }
+    }
+    if (Platform_Flash_SetOperationCallback(filesystem_flash_irq,
+                                            (void *)&filesystem_flash_hint_event) != PLATFORM_OK)
     {
         return false;
     }
-    filesystem_flash_owner = owner;
-    filesystem_flash_notify_index = notify_index;
     filesystem_flash_registered = true;
     return true;
+}
+
+/**
+ * @brief 启动一笔 Flash 操作之前清空上一次残留的完成提示。
+ * @note 调用者已持有 Flash 卷锁。提示丢了也无妨：等待有时间片上限，结果只信 Process。
+ */
+void filesystem_flash_transfer_prepare(void)
+{
+    if (filesystem_flash_hint_semaphore != NULL)
+    {
+        (void)xSemaphoreTake(filesystem_flash_hint_semaphore, 0U);
+    }
 }
 
 /**
@@ -84,15 +111,15 @@ static TickType_t filesystem_flash_ticks(uint32_t ms)
  * @brief 将已受理的异步 Platform 请求推进为 Service 同步返回。
  * @param started 对应 Start 的立即结果；非 OK 时不推进硬件。
  * @param timeout_ms 触发 Abort 的预算，单位毫秒，不是强制返回的硬时限。
- * @return 成功、忙、错误或超时；仅允许初始化后的所有者任务调用。
- * @note 硬件阶段等待索引通知并周期重查，软件阶段按预算让出调度。
+ * @return 成功、忙、错误或超时；仅允许初始化后、持有 Flash 卷锁的任务调用。
+ * @note 硬件阶段等待完成提示并周期重查，软件阶段按预算让出调度。
  *       超时后仍持续 Process，直到控制器/DMA 不再访问缓冲；若无法静止则保持等待，
  *       防止返回后 DMA 继续访问调用者已复用的内存。
  */
 Service_StatusTypeDef filesystem_flash_transfer_finish(Platform_StatusTypeDef started,
                                                        uint32_t timeout_ms)
 {
-    if (!filesystem_flash_transfer_is_owner())
+    if (!filesystem_flash_transfer_is_registered())
     {
         return SERVICE_NOT_READY;
     }
@@ -118,13 +145,9 @@ Service_StatusTypeDef filesystem_flash_transfer_finish(Platform_StatusTypeDef st
         }
         if (Platform_Flash_OperationNeedsWait())
         {
-            uint32_t notification;
-            /* 通知只是提示，结果只相信 Process。延迟/旧通知不能当成当前请求完成。 */
-            (void)xTaskNotifyWaitIndexed((UBaseType_t)filesystem_flash_notify_index,
-                                         0,
-                                         UINT32_MAX,
-                                         &notification,
-                                         filesystem_flash_ticks(FILESYSTEM_FLASH_WAIT_SLICE_MS));
+            /* 提示只是提示，结果只相信 Process。延迟/旧提示不能当成当前请求完成。 */
+            (void)xSemaphoreTake(filesystem_flash_hint_semaphore,
+                                 filesystem_flash_ticks(FILESYSTEM_FLASH_WAIT_SLICE_MS));
             software_steps = 0;
         }
         else if (++software_steps >= FILESYSTEM_FLASH_SOFTWARE_YIELD_STEPS)
@@ -169,7 +192,7 @@ static Service_StatusTypeDef filesystem_flash_open_status(Service_StatusTypeDef 
  */
 Service_StatusTypeDef filesystem_flash_transfer_open(void)
 {
-    if (!filesystem_flash_transfer_is_owner())
+    if (!filesystem_flash_transfer_is_registered())
     {
         return SERVICE_NOT_READY;
     }
@@ -184,6 +207,7 @@ Service_StatusTypeDef filesystem_flash_transfer_open(void)
 #if FILESYSTEM_FLASH_DIAG_LOG_ENABLE
     TickType_t start_tick = xTaskGetTickCount();
 #endif
+    filesystem_flash_transfer_prepare();
     Service_StatusTypeDef result = filesystem_flash_open_status(filesystem_flash_transfer_finish(
         Platform_Flash_OpenVolumeStart(), FILESYSTEM_FLASH_OPEN_TIMEOUT_MS));
 #if FILESYSTEM_FLASH_DIAG_LOG_ENABLE
@@ -213,7 +237,7 @@ Service_StatusTypeDef filesystem_flash_transfer_open(void)
  */
 Service_StatusTypeDef filesystem_flash_transfer_format(void)
 {
-    if (!filesystem_flash_transfer_is_owner())
+    if (!filesystem_flash_transfer_is_registered())
     {
         return SERVICE_NOT_READY;
     }
@@ -221,6 +245,7 @@ Service_StatusTypeDef filesystem_flash_transfer_format(void)
     {
         return SERVICE_NOT_READY;
     }
+    filesystem_flash_transfer_prepare();
     return filesystem_flash_transfer_finish(Platform_Flash_FormatVolumeStart(),
                                             FILESYSTEM_FLASH_FORMAT_TIMEOUT_MS);
 }
@@ -235,10 +260,11 @@ Service_StatusTypeDef filesystem_flash_transfer_format(void)
  */
 Service_StatusTypeDef filesystem_flash_transfer_read(uint32_t lba, uint8_t *data, uint32_t count)
 {
-    if (!filesystem_flash_transfer_is_owner())
+    if (!filesystem_flash_transfer_is_registered())
     {
         return SERVICE_NOT_READY;
     }
+    filesystem_flash_transfer_prepare();
     return filesystem_flash_transfer_finish(Platform_Flash_ReadBlocksStart(lba, data, count),
                                             FILESYSTEM_FLASH_READ_TIMEOUT_MS);
 }
@@ -255,10 +281,11 @@ Service_StatusTypeDef filesystem_flash_transfer_write(uint32_t lba,
                                                       const uint8_t *data,
                                                       uint32_t count)
 {
-    if (!filesystem_flash_transfer_is_owner())
+    if (!filesystem_flash_transfer_is_registered())
     {
         return SERVICE_NOT_READY;
     }
+    filesystem_flash_transfer_prepare();
     return filesystem_flash_transfer_finish(Platform_Flash_WriteBlocksStart(lba, data, count),
                                             FILESYSTEM_FLASH_WRITE_TIMEOUT_MS);
 }
@@ -270,10 +297,11 @@ Service_StatusTypeDef filesystem_flash_transfer_write(uint32_t lba,
  */
 Service_StatusTypeDef filesystem_flash_transfer_sync(void)
 {
-    if (!filesystem_flash_transfer_is_owner())
+    if (!filesystem_flash_transfer_is_registered())
     {
         return SERVICE_NOT_READY;
     }
+    filesystem_flash_transfer_prepare();
     return filesystem_flash_transfer_finish(Platform_Flash_SyncVolumeStart(),
                                             FILESYSTEM_FLASH_WRITE_TIMEOUT_MS);
 }
@@ -285,11 +313,12 @@ Service_StatusTypeDef filesystem_flash_transfer_sync(void)
  */
 Service_StatusTypeDef filesystem_flash_transfer_reclaim(void)
 {
-    if (!filesystem_flash_transfer_is_owner() ||
+    if (!filesystem_flash_transfer_is_registered() ||
         Platform_Flash_GetVolumeState() != PLATFORM_FLASH_VOLUME_READY)
     {
         return SERVICE_NOT_READY;
     }
+    filesystem_flash_transfer_prepare();
     return filesystem_flash_transfer_finish(Platform_Flash_ReclaimVolumeStart(),
                                             FILESYSTEM_FLASH_RECLAIM_TIMEOUT_MS);
 }
@@ -301,7 +330,7 @@ Service_StatusTypeDef filesystem_flash_transfer_reclaim(void)
  */
 Service_StatusTypeDef filesystem_flash_transfer_recover(void)
 {
-    if (!filesystem_flash_transfer_is_owner())
+    if (!filesystem_flash_transfer_is_registered())
     {
         return SERVICE_NOT_READY;
     }
@@ -325,6 +354,7 @@ Service_StatusTypeDef filesystem_flash_transfer_recover(void)
         vTaskDelay(1);
     }
     /* 显式重扫，即使先前 RAM 映射曾处于 READY，也不能沿用。 */
+    filesystem_flash_transfer_prepare();
     return filesystem_flash_open_status(filesystem_flash_transfer_finish(
         Platform_Flash_OpenVolumeStart(), FILESYSTEM_FLASH_OPEN_TIMEOUT_MS));
 }

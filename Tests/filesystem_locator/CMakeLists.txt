@@ -17,6 +17,9 @@ file(READ "${REPO_ROOT}/FATFS/Target/ffconf.h" HOST_FFCONF)
 foreach(HEADER main.h stm32h7xx_hal.h bsp_driver_sd.h)
     string(REPLACE "#include \"${HEADER}\"" "" HOST_FFCONF "${HOST_FFCONF}")
 endforeach()
+# 锁表满的用例（按定位符打开与按路径打开共用锁表）需要一张小到能被填满的表：固定为 2，与产品的 _FS_LOCK 无关。
+# 产品把 _FS_LOCK 调到 4（#191）后文件槽也是 4 个，锁表和文件槽会同时用尽，测不出“锁表满”这一条。
+string(REGEX REPLACE "#define _FS_LOCK +[0-9]+" "#define _FS_LOCK 2" HOST_FFCONF "${HOST_FFCONF}")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/host_config")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/host_config/ffconf.h" "${HOST_FFCONF}")
 
@@ -68,7 +71,9 @@ add_executable(filesystem_locator_tests
     ../../Service/filesystem/filesystem_directory.c
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_lock.c
     ../../Service/filesystem/filesystem_status.c
+    ../flash_ftl/stubs/filesystem_lock_host.c
     "${PATCHED_FF}"
     "${FATFS_SRC}/ff_gen_drv.c"
     "${FATFS_SRC}/diskio.c"

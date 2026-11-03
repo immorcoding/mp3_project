@@ -1,9 +1,10 @@
 /**
  * @file filesystem_flash_access.c
- * @brief 启动诊断的同步包装；经唯一 Flash 执行器等待并安全收尾。
+ * @brief 启动诊断的同步包装；经 Flash 卷锁串行化，等待并安全收尾。
  */
 
 #include "Service/filesystem/filesystem_flash_access.h"
+#include "Service/filesystem/filesystem_lock.h"
 #include "Service/filesystem/flash/filesystem_flash_transfer.h"
 
 /**
@@ -12,21 +13,30 @@
  * @param data DMA 接收缓冲，满足 Platform 的可达性、对齐及 Cache line 独占条件。
  * @param data_length 读取字节数，不为零，完整范围位于芯片内。
  * @param timeout_ms 非零毫秒预算；到期触发安全收尾，不立即释放缓冲。
- * @return SERVICE_OK 表示读取和 Cache 收尾完成；NOT_READY 表示非所有者或超时预算为零；
+ * @return SERVICE_OK 表示读取和 Cache 收尾完成；NOT_READY 表示执行器未注册或超时预算为零；
  *         其余为启动、传输或收尾失败，输出不可视为有效。
- * @note 仅 Storage Task 启动诊断独占期调用；直到返回前缓冲保持有效。
+ * @note 入口拿 Flash 卷锁、返回前放；直到返回前缓冲保持有效。
  */
 Service_StatusTypeDef Service_Filesystem_ReadFlashArray(uint32_t address,
                                                        uint8_t *data,
                                                        uint32_t data_length,
                                                        uint32_t timeout_ms)
 {
-    if (!filesystem_flash_transfer_is_owner() || !timeout_ms)
+    Service_StatusTypeDef status = SERVICE_NOT_READY;
+
+    if (!timeout_ms)
     {
         return SERVICE_NOT_READY;
     }
-    return filesystem_flash_transfer_finish(
-        Platform_Flash_StartReadArray(address, data, data_length), timeout_ms);
+    filesystem_lock_acquire(SERVICE_FILESYSTEM_VOLUME_FLASH, "FlashArray");
+    if (filesystem_flash_transfer_is_registered())
+    {
+        filesystem_flash_transfer_prepare();
+        status = filesystem_flash_transfer_finish(
+            Platform_Flash_StartReadArray(address, data, data_length), timeout_ms);
+    }
+    filesystem_lock_release(SERVICE_FILESYSTEM_VOLUME_FLASH);
+    return status;
 }
 
 /**
@@ -36,7 +46,7 @@ Service_StatusTypeDef Service_Filesystem_ReadFlashArray(uint32_t address,
  * @param data_length 必须为一个自检扇区的字节数。
  * @param timeout_ms 非零毫秒预算，超时后仍等待安全收尾。
  * @return SERVICE_OK 表示已完成读取与 Cache 收尾；失败时数据不可用。
- * @note 仅 Storage Task 启动诊断独占期调用；返回前不能复用缓冲。
+ * @note 入口拿 Flash 卷锁、返回前放；返回前不能复用缓冲。
  */
 Service_StatusTypeDef Service_Filesystem_ReadFlashDiagnostic(
     Platform_Flash_DiagnosticRegionTypeDef region,
@@ -44,12 +54,21 @@ Service_StatusTypeDef Service_Filesystem_ReadFlashDiagnostic(
     uint32_t data_length,
     uint32_t timeout_ms)
 {
-    if (!filesystem_flash_transfer_is_owner() || !timeout_ms)
+    Service_StatusTypeDef status = SERVICE_NOT_READY;
+
+    if (!timeout_ms)
     {
         return SERVICE_NOT_READY;
     }
-    return filesystem_flash_transfer_finish(
-        Platform_Flash_StartDiagnosticRead(region, data, data_length), timeout_ms);
+    filesystem_lock_acquire(SERVICE_FILESYSTEM_VOLUME_FLASH, "FlashDiagRead");
+    if (filesystem_flash_transfer_is_registered())
+    {
+        filesystem_flash_transfer_prepare();
+        status = filesystem_flash_transfer_finish(
+            Platform_Flash_StartDiagnosticRead(region, data, data_length), timeout_ms);
+    }
+    filesystem_lock_release(SERVICE_FILESYSTEM_VOLUME_FLASH);
+    return status;
 }
 
 /**
@@ -57,17 +76,27 @@ Service_StatusTypeDef Service_Filesystem_ReadFlashDiagnostic(
  * @param region 首或尾自检区域，禁止用来操作 FTL 分区。
  * @param timeout_ms 非零毫秒预算，超时不代表 NOR 内部擦除已取消。
  * @return SERVICE_OK 表示擦除完成且 Platform 已成功收尾。
- * @warning 破坏目标自检区内容，仅 Storage Task 显式启动诊断调用。
+ * @warning 破坏目标自检区内容，仅显式启动诊断调用。
+ * @note 入口拿 Flash 卷锁、返回前放。
  */
 Service_StatusTypeDef Service_Filesystem_EraseFlashDiagnostic(
     Platform_Flash_DiagnosticRegionTypeDef region, uint32_t timeout_ms)
 {
-    if (!filesystem_flash_transfer_is_owner() || !timeout_ms)
+    Service_StatusTypeDef status = SERVICE_NOT_READY;
+
+    if (!timeout_ms)
     {
         return SERVICE_NOT_READY;
     }
-    return filesystem_flash_transfer_finish(Platform_Flash_StartDiagnosticErase(region),
-                                            timeout_ms);
+    filesystem_lock_acquire(SERVICE_FILESYSTEM_VOLUME_FLASH, "FlashDiagErase");
+    if (filesystem_flash_transfer_is_registered())
+    {
+        filesystem_flash_transfer_prepare();
+        status = filesystem_flash_transfer_finish(Platform_Flash_StartDiagnosticErase(region),
+                                                  timeout_ms);
+    }
+    filesystem_lock_release(SERVICE_FILESYSTEM_VOLUME_FLASH);
+    return status;
 }
 
 /**
@@ -78,7 +107,8 @@ Service_StatusTypeDef Service_Filesystem_EraseFlashDiagnostic(
  * @param data_length 1..256 B，不得跨越目标页。
  * @param timeout_ms 非零毫秒预算，到期后继续安全收尾。
  * @return SERVICE_OK 表示编程完成且 Platform 已成功收尾；失败不代表数据一定未写入。
- * @warning 仅 Storage Task 显式启动诊断调用，目标页须先擦除，不操作 FTL。
+ * @warning 仅显式启动诊断调用，目标页须先擦除，不操作 FTL。
+ * @note 入口拿 Flash 卷锁、返回前放。
  */
 Service_StatusTypeDef Service_Filesystem_ProgramFlashDiagnostic(
     Platform_Flash_DiagnosticRegionTypeDef region,
@@ -87,11 +117,20 @@ Service_StatusTypeDef Service_Filesystem_ProgramFlashDiagnostic(
     uint32_t data_length,
     uint32_t timeout_ms)
 {
-    if (!filesystem_flash_transfer_is_owner() || !timeout_ms)
+    Service_StatusTypeDef status = SERVICE_NOT_READY;
+
+    if (!timeout_ms)
     {
         return SERVICE_NOT_READY;
     }
-    return filesystem_flash_transfer_finish(
-        Platform_Flash_StartDiagnosticPageProgram(region, page_offset, data, data_length),
-        timeout_ms);
+    filesystem_lock_acquire(SERVICE_FILESYSTEM_VOLUME_FLASH, "FlashDiagProgram");
+    if (filesystem_flash_transfer_is_registered())
+    {
+        filesystem_flash_transfer_prepare();
+        status = filesystem_flash_transfer_finish(
+            Platform_Flash_StartDiagnosticPageProgram(region, page_offset, data, data_length),
+            timeout_ms);
+    }
+    filesystem_lock_release(SERVICE_FILESYSTEM_VOLUME_FLASH);
+    return status;
 }

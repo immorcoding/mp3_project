@@ -6,6 +6,7 @@
   * @details
   *          该头仅供 Service/filesystem 内部的 FatFs BSP Bridge 使用；它不属于
   *          跨 Module 的公开 Interface，也不向调用者泄漏任务通知或 Cache 细节。
+  *          调用者必须持有 SD 卷锁（见 filesystem_lock.h）。
   ******************************************************************************
   */
 
@@ -16,8 +17,7 @@
 #include <stdint.h>
 
 bool filesystem_sd_transfer_init(uint32_t notify_index);
-bool filesystem_sd_transfer_is_bound(void);
-uint32_t filesystem_sd_transfer_notify_index(void);
+bool filesystem_sd_transfer_is_registered(void);
 bool filesystem_sd_transfer_read_blocks(uint8_t *destination,
                                         uint32_t start_block,
                                         uint32_t block_count,

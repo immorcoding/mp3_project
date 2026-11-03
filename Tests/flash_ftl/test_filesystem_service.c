@@ -22,6 +22,7 @@ uint8_t retUSER;
 FATFS SDFatFS;
 FATFS USERFatFS;
 
+/* Flash 执行器是否已注册。名字沿用旧的 owner：#191 去掉了任务身份绑定。 */
 static bool owner = true;
 static bool flash_format_called;
 static bool flash_recover_called;
@@ -126,14 +127,13 @@ bool filesystem_sd_transfer_init(uint32_t notify_index)
     return true;
 }
 
-bool filesystem_sd_transfer_is_bound(void)
+/**
+ * @brief SD 传输层替身：恒已注册。
+ * @return 恒为 true。
+ */
+bool filesystem_sd_transfer_is_registered(void)
 {
     return true;
-}
-
-uint32_t filesystem_sd_transfer_notify_index(void)
-{
-    return 1U;
 }
 
 bool filesystem_flash_transfer_init(uint32_t notify_index)
@@ -142,7 +142,11 @@ bool filesystem_flash_transfer_init(uint32_t notify_index)
     return true;
 }
 
-bool filesystem_flash_transfer_is_owner(void)
+/**
+ * @brief Flash 传输层替身：执行器是否已注册，由 owner 变量控制。
+ * @return owner 的当前值。
+ */
+bool filesystem_flash_transfer_is_registered(void)
 {
     return owner;
 }

@@ -19,6 +19,7 @@ uint8_t retUSER;
 uint8_t retSD = 1U;
 FATFS USERFatFS;
 FATFS SDFatFS;
+/* Flash 执行器是否已注册。名字沿用旧的 owner：#191 去掉了任务身份绑定，nonowner 场景现在模拟“执行器未注册”。 */
 static bool owner = true;
 static const char *scenario;
 static unsigned removes, closes, writes;
@@ -30,14 +31,13 @@ bool filesystem_sd_transfer_init(uint32_t notify_index)
     return false;
 }
 
-bool filesystem_sd_transfer_is_bound(void)
+/**
+ * @brief SD 传输层替身：本测试不使用 SD 卷。
+ * @return 恒为 false。
+ */
+bool filesystem_sd_transfer_is_registered(void)
 {
     return false;
-}
-
-uint32_t filesystem_sd_transfer_notify_index(void)
-{
-    return 0U;
 }
 
 bool filesystem_flash_transfer_init(uint32_t notify_index)
@@ -46,7 +46,11 @@ bool filesystem_flash_transfer_init(uint32_t notify_index)
     return true;
 }
 
-bool filesystem_flash_transfer_is_owner(void)
+/**
+ * @brief Flash 传输层替身：执行器是否已注册，由 owner 变量控制（nonowner 场景模拟未注册）。
+ * @return owner 的当前值。
+ */
+bool filesystem_flash_transfer_is_registered(void)
 {
     return owner;
 }

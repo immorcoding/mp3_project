@@ -39,6 +39,8 @@
                 '^Platform/flash/platform_flash\.h$'
                 '^Platform/sd/platform_sd\.h$'
                 '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+                # Filesystem 私有锁（#191）读 DWT 周期计数器；主机测试用 stubs 里的替身实现，只编译它的头。
+                '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
                 '^Service/service\.h$'
                 '^Service/log/log_service(?:_config)?\.h$'
                 '^APP/app_config\.h$'
@@ -59,6 +61,7 @@
                 '^Platform/flash/platform_flash\.h$'
                 '^Platform/sd/platform_sd\.h$'
                 '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+                '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
                 '^Service/service\.h$'
                 '^Service/log/log_service(?:_config)?\.h$'
                 '^APP/app_config\.h$'

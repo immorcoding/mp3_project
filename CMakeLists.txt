@@ -34,6 +34,17 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 # 创建最终生成 ELF 固件的可执行目标
 add_executable(${CMAKE_PROJECT_NAME})
 
+# spike/app-tasks（#191，不合入）：Filesystem 锁粒度。默认全局一把；打开后 SD、Flash 各一把加一把短的
+# 打开表锁，并让 ffconf.h 把长文件名缓冲放到栈上（_USE_LFN 2）。必须在 add_subdirectory 之前定义，
+# 这样 FatFs 对象库、Service 和 APP 看到同一个值。切换后请用独立的构建目录。
+option(SPIKE_LOCK_PER_VOLUME "spike #191: 每卷一把文件锁（默认关，全局一把）" OFF)
+if(SPIKE_LOCK_PER_VOLUME)
+    add_compile_definitions(SPIKE_LOCK_PER_VOLUME=1)
+    message(STATUS "spike #191: Filesystem 每卷一把锁 + 打开表锁（_USE_LFN 2）")
+else()
+    message(STATUS "spike #191: Filesystem 全局一把锁（_USE_LFN 1）")
+endif()
+
 # 加入 STM32CubeMX 生成代码、FreeRTOS 内核和第三方图形库子目录（界面由 Service/gui/view 手写）
 add_subdirectory(cmake/stm32cubemx)
 add_subdirectory(Middlewares/Third_Party/FreeRTOS)
