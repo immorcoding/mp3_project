@@ -7,6 +7,7 @@ GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后�
 ## 公开 Interface
 
 - `gui_task(void *handle)`：仅由 `APP/tasks/app_tasks.c` 创建。
+- `gui_task_set_sleep_enabled()` / `gui_task_get_sleep_enabled()` / `gui_task_get_stats()` / `gui_task_stats_window_reset()`：spike（[#191](https://github.com/immorcoding/mp3_project/issues/191)）的运行时开关与观测计数。每圈 `Service_GUI_Process()` 返回睡眠毫秒数，GUI Task 在 DWT 测量段之外 `vTaskDelay`；开关为假时不睡，供基线对比。计数是圈数、实际睡眠毫秒数、flush 次数和窗口内最长一圈，由前台任务按 10 s 窗口做差值输出。
 - `gui_task_get_max_frame_cycles()`：只读查询，返回启动以来单圈 `Service_GUI_Process()`（含渲染）的最大核心周期数；GUI Task 是唯一写者，Monitor 在周期日志中换算输出（WF-12）。
 - `GUI_NotifyIndexTypeDef`：本任务私有通知槽。`GUI_NOTIFY_LCD_TRANSFER` 由 GUI Service 等待 LCD SPI DMA 完成；槽位编号只在本任务通知数组内有效，与 Storage Task 互不相关。
 

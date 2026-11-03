@@ -69,3 +69,14 @@ target_compile_features(gui_music_seek_tests PRIVATE c_std_11)
 target_compile_options(gui_music_seek_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 
 add_test(NAME gui_music_seek_reducer COMMAND gui_music_seek_tests)
+
+add_executable(gui_service_wait_tests
+    test_gui_service_wait.c
+    ../../Service/gui/gui_service_wait.c
+)
+
+target_include_directories(gui_service_wait_tests PRIVATE ../..)
+target_compile_features(gui_service_wait_tests PRIVATE c_std_11)
+target_compile_options(gui_service_wait_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+
+add_test(NAME gui_service_wait_sleep COMMAND gui_service_wait_tests)

@@ -14,6 +14,7 @@ void service_gui_input_post(
     Service_GUI_InputCommandTypeDef command,
     uint16_t param);
 void service_gui_input_drop_queue_select(void);
+bool service_gui_input_has_pending(void);
 Service_StatusTypeDef service_gui_input_consume(Service_GUI_InputTypeDef *input);
 
 #endif /* GUI_SERVICE_INPUT_H */

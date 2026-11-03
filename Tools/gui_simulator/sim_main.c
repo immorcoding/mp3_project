@@ -256,7 +256,8 @@ int main(int argc, char *argv[])
         playback_sim_step(sim_clock_now());
         gui_music_step(&input);
 
-        Service_GUI_Process();
+        /* 模拟器每圈固定 SIM_CLOCK_STEP_MS，忽略 Process 给出的睡眠时长（#190），基线不变（GUI-4）。 */
+        (void)Service_GUI_Process();
 
         if (!options.hidden)
         {

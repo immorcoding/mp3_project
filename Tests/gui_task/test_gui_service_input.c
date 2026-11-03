@@ -136,6 +136,24 @@ static void test_drop_queue_select_keeps_other_commands(void)
 }
 
 /**
+ * @brief has_pending 在 post 后为真，Consume 取走后为假（GUI 睡眠据此只取下限，#190）。
+ */
+static void test_has_pending_follows_post_and_consume(void)
+{
+    Service_GUI_InputTypeDef input;
+
+    assert(!service_gui_input_has_pending());
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_NEXT, 0U);
+    assert(service_gui_input_has_pending());
+    assert(service_gui_input_consume(&input) == SERVICE_OK);
+    assert(!service_gui_input_has_pending());
+
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_QUEUE_SELECT, 2U);
+    service_gui_input_drop_queue_select();
+    assert(!service_gui_input_has_pending());
+}
+
+/**
  * @brief 运行全部输入单槽测试。
  * @return 成功时返回 0。
  */
@@ -149,6 +167,7 @@ int main(void)
     test_drag_after_pending_press_keeps_press_with_latest_value();
     test_drop_queue_select_keeps_seek();
     test_drop_queue_select_keeps_other_commands();
+    test_has_pending_follows_post_and_consume();
 
     puts("gui_service_input_tests: all tests passed");
     return 0;

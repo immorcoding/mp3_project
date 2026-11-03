@@ -13,6 +13,7 @@
 
 #include "Service/gui/gui_service.h"
 #include "Service/gui/gui_service_input.h"
+#include "Service/gui/gui_service_wait.h"
 #include "Service/gui/boot/gui_service_boot.h"
 #include "Service/gui/font/gui_service_font.h"
 #include "Service/gui/gui_service_config.h"
@@ -54,6 +55,9 @@ static lv_indev_drv_t service_gui_touch_driver;
 static lv_disp_t *service_gui_display;
 static TickType_t service_gui_last_tick;
 static uint32_t service_gui_notify_index;
+
+/** @brief flush 回调累计调用次数；仅 GUI Task 写，其他任务只读（spike 观测）。 */
+static volatile uint32_t service_gui_flush_count;
 
 /** @brief Service_GUI_Init() 已完整成功；之前不接受运行时外观切换。 */
 static bool service_gui_ready;
@@ -129,6 +133,13 @@ static void service_gui_lcd_transfer_callback(
     portYIELD_FROM_ISR(higher_priority_task_woken);
 }
 
+/**
+  * @brief  LVGL 的 flush 回调：把绘制缓冲的一块矩形交给 Platform LCD 异步写入。
+  * @param[in,out] disp_drv 当前 LVGL 显示驱动；DMA 未启动时在此立即归还绘制缓冲。
+  * @param[in] area 本次要刷新的矩形。
+  * @param[in] color_p 矩形对应的 RGB565 像素。
+  * @note   在 GUI Task 的 lv_timer_handler() 内调用；顺带累计 flush 次数供 spike 观测。
+  */
 static void service_gui_flush_callback(
     lv_disp_drv_t *disp_drv,
     const lv_area_t *area,
@@ -136,6 +147,7 @@ static void service_gui_flush_callback(
 {
     Platform_StatusTypeDef lcd_status;
 
+    service_gui_flush_count++;
     lcd_status = Platform_LCD_StartWrite(
         (uint16_t)area->x1,
         (uint16_t)area->y1,
@@ -290,14 +302,21 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
 }
 
 /**
- * @brief  推进 GUI Task 的 LVGL Tick、输入、动画与刷新处理。
+ * @brief  推进 GUI Task 的 LVGL Tick、输入、动画与刷新处理，并给出本圈结束后应睡多久（#190）。
+ * @return 睡眠毫秒数，恒在 1 至 LV_DISP_DEF_REFR_PERIOD 之间：`lv_timer_handler()` 的返回值
+ *         扣掉本圈实际耗时，再夹上下限；输入槽里有待取走的命令时只取下限。睡眠本身由 GUI Task
+ *         在 DWT 测量段之外执行，本函数不睡。
  * @note   只能由完成 Service_GUI_Init() 的同一 GUI Task 周期调用。LCD DMA 传输
  *         期间，LVGL 通过本 Module 的 wait callback 阻塞等待最终 ISR 事件。
+ *         `lv_tick` 只在本函数开头推进，handler 运行期间时间不动，所以返回值接近一整个周期，
+ *         不能直接按它睡（spike：这里的耗时按 FreeRTOS tick 量，精度 1 ms）。
  */
-void Service_GUI_Process(void)
+uint32_t Service_GUI_Process(void)
 {
     const TickType_t current_tick = xTaskGetTickCount();
     const TickType_t elapsed_ticks = current_tick - service_gui_last_tick;
+    uint32_t handler_ms;
+    uint32_t round_ms;
 
     if (elapsed_ticks != 0U)
     {
@@ -306,7 +325,22 @@ void Service_GUI_Process(void)
         service_gui_last_tick = current_tick;
     }
 
-    (void)lv_timer_handler();
+    handler_ms = lv_timer_handler();
+    round_ms = (uint32_t)(xTaskGetTickCount() - current_tick) * (uint32_t)portTICK_PERIOD_MS;
+
+    return service_gui_wait_ms(handler_ms,
+                               round_ms,
+                               service_gui_input_has_pending(),
+                               (uint32_t)LV_DISP_DEF_REFR_PERIOD);
+}
+
+/**
+ * @brief  读取自启动以来 LVGL 向 Platform LCD 发起 flush 的次数（spike 观测用）。
+ * @return flush 回调被调用的累计次数；GUI Task 是唯一写者，32 位对齐读写不撕裂。
+ */
+uint32_t Service_GUI_GetFlushCount(void)
+{
+    return service_gui_flush_count;
 }
 
 /**

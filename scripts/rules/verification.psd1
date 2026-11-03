@@ -79,6 +79,7 @@
             PathPatterns = @(
                 '^APP/tasks/gui/'
                 '^Service/gui/gui_service_input'
+                '^Service/gui/gui_service_wait\.(c|h)$'
                 '^Service/gui/gui_service\.(c|h)$'
                 '^Service/gui/main/queue/'
                 '^Service/gui/main/transport/'
