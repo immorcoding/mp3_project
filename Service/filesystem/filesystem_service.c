@@ -17,6 +17,7 @@
 #include "Service/filesystem/filesystem_config.h"
 #include "Service/filesystem/filesystem_handle.h"
 #include "Service/filesystem/filesystem_lock.h"
+#include "Service/filesystem/filesystem_spike.h"
 #include "Service/filesystem/filesystem_status.h"
 
 #include <stdint.h>
@@ -28,6 +29,18 @@
 
 /** @brief 格式化期间使用的 Service 私有静态工作区；只在 Flash 卷锁内使用。 */
 static uint8_t filesystem_mkfs_work_buffer[FILESYSTEM_MKFS_WORK_BUFFER_SIZE];
+
+/**
+ * @brief 在任何任务使用 Filesystem 之前，静态创建全部锁和两个执行器的完成信号量（spike #191）。
+ * @note  Boot Task 在创建其他任务之前调用；全部是静态分配，不占内核堆，重复调用无害。
+ *        回调的注册仍在各自的 InitSD / InitFlash，所以这里创建的信号量在注册之前就已存在。
+ */
+void Service_Filesystem_SpikeInit(void)
+{
+    filesystem_lock_init();
+    (void)filesystem_sd_transfer_create();
+    (void)filesystem_flash_transfer_create();
+}
 
 /**
  * @brief 打开底层 Flash 逻辑卷并重建映射，不建立 FAT 文件系统。

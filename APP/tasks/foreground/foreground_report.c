@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "APP/tasks/foreground/spike_audio_read.h"
 #include "APP/tasks/foreground/spike_unplug.h"
 #include "APP/tasks/gui/gui_task.h"
 #include "APP/tasks/playback/playback_task.h"
@@ -367,8 +368,8 @@ static void foreground_report_load(const char *phase, ForegroundLoadKindTypeDef 
     switch (kind)
     {
         case FOREGROUND_LOAD_TXT:
-            foreground_report_stat_line("SDREAD", phase, "32K", &load->Txt32k);
-            foreground_logf("SDREAD %s 4K n=%lu avg=%luus max=%luus err=%lu last=%s nl=%lu pass=%lu", phase,
+            foreground_report_stat_line("SDREAD", phase, "fg32K", &load->Txt32k);
+            foreground_logf("SDREAD %s fg4K n=%lu avg=%luus max=%luus err=%lu last=%s nl=%lu pass=%lu", phase,
                             (unsigned long)load->Txt4k.Count, (unsigned long)foreground_stat_avg_us(&load->Txt4k),
                             (unsigned long)load->Txt4k.MaxUs, (unsigned long)load->TxtErrors,
                             foreground_status_name(load->TxtLastStatus), (unsigned long)load->TxtNewlines,
@@ -414,10 +415,13 @@ void foreground_report_window(const char *phase, ForegroundLoadKindTypeDef kind,
     const TickType_t now = xTaskGetTickCount();
     const uint32_t window_ms = (uint32_t)(now - foreground_report_previous_tick) * (uint32_t)portTICK_PERIOD_MS;
     const uint32_t guard = Service_Filesystem_SpikeForbiddenCalls();
+    ForegroundStatTypeDef audio_read;
 
     foreground_report_cpu(phase, window_ms);
     foreground_report_gui(phase, window_ms);
     foreground_report_locks();
+    spike_audio_read_get(&audio_read);
+    foreground_report_stat_line("SDREAD", phase, "audio32K", &audio_read);
     foreground_report_underruns(phase);
     foreground_report_load(phase, kind);
     if (final || (guard != 0U))

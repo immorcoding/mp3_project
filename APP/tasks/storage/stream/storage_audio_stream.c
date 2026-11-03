@@ -9,6 +9,7 @@
 
 #include "storage_audio_range.h"
 
+#include "APP/tasks/foreground/spike_audio_read.h"
 #include "APP/tasks/storage/catalog/storage_catalog.h"
 #include "APP/tasks/storage/catalog/storage_sheet.h"
 #include "APP/tasks/storage/catalog/storage_track_diag.h"
@@ -19,6 +20,7 @@
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/queue.h"
 #include "Service/filesystem/filesystem_file.h"
+#include "Service/filesystem/filesystem_spike.h"
 #include "Service/log/log_service.h"
 
 static const char storage_audio_log_tag[] = "Audio";
@@ -481,6 +483,10 @@ void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media)
     want = (storage_audio_remaining < STORAGE_AUDIO_BLOCK_BYTES) ? storage_audio_remaining
                                                                   : STORAGE_AUDIO_BLOCK_BYTES;
     status = Service_Filesystem_ReadFile(storage_audio_file, block->Data, want, &got);
+    if ((status == SERVICE_OK) && (got == STORAGE_AUDIO_BLOCK_BYTES))
+    {
+        spike_audio_read_note(Service_Filesystem_SpikeLastHoldUs()); /* spike #191：整块读的持锁耗时。 */
+    }
 
     if (storage_audio_request_pending())
     {

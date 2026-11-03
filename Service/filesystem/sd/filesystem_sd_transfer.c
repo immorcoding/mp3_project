@@ -136,6 +136,22 @@ static bool filesystem_sd_transfer_finish(
 }
 
 /**
+  * @brief  静态创建 SD DMA 完成信号量（幂等）。
+  * @retval true 信号量已存在。
+  * @retval false 创建失败。
+  * @note   Boot Task 在任何任务启动之前经 Service_Filesystem_SpikeInit() 调用；回调注册晚于它。
+  */
+bool filesystem_sd_transfer_create(void)
+{
+    if (filesystem_sd_completion_semaphore == NULL)
+    {
+        filesystem_sd_completion_semaphore = xSemaphoreCreateBinaryStatic(&filesystem_sd_completion_storage);
+    }
+
+    return filesystem_sd_completion_semaphore != NULL;
+}
+
+/**
   * @brief  建立 SD DMA 完成信号量并注册传输回调。
   * @param  notify_index 旧版的任务通知槽，已不再使用，保留参数只为不改调用方。
   * @retval true 信号量已建、回调已注册。
@@ -148,13 +164,9 @@ bool filesystem_sd_transfer_init(uint32_t notify_index)
 {
     (void)notify_index;
 
-    if (filesystem_sd_completion_semaphore == NULL)
+    if (!filesystem_sd_transfer_create())
     {
-        filesystem_sd_completion_semaphore = xSemaphoreCreateBinaryStatic(&filesystem_sd_completion_storage);
-        if (filesystem_sd_completion_semaphore == NULL)
-        {
-            return false;
-        }
+        return false;
     }
 
     if (Platform_SD_SetTransferCallback(filesystem_sd_transfer_irq_callback,

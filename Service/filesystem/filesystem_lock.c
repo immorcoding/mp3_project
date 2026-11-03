@@ -4,7 +4,7 @@
  *
  * @details
  *          锁用静态分配的 FreeRTOS 互斥量（带优先级继承），在 Boot Task 里经
- *          `Service_Filesystem_SpikeInit()` 先建好，任何任务用到时也会幂等补建。统计在短临界区内更新，
+ *          `Service_Filesystem_SpikeInit()`（在 filesystem_service.c）先建好，任何任务用到时也会幂等补建。统计在短临界区内更新，
  *          只记极值和计数，不记逐次日志（DIAG-3）。
  */
 
@@ -385,14 +385,6 @@ void filesystem_lock_table_release(void)
 #endif
 
 /**
- * @brief 在任何任务使用 Filesystem 之前建好静态锁（Boot Task 调用）。
- */
-void Service_Filesystem_SpikeInit(void)
-{
-    filesystem_lock_init();
-}
-
-/**
  * @brief 当前固件是否为每卷一把锁。
  * @return true 为每卷一把加表锁；false 为全局一把。
  */
@@ -465,9 +457,11 @@ void Service_Filesystem_SpikeWindowReset(void)
 }
 
 /**
- * @brief 调用者任务最近一次完成的公开调用的持锁时长。
- * @return 微秒；该任务还没有记录时为 0。每卷一把时是该次调用最后放的那把锁的持锁时长（卷锁）。
+ * @brief 调用者任务最近一次完成的公开调用的持锁时长，读取后清零。
+ * @return 微秒；该任务还没有记录、或上一次调用没有拿到锁（例如句柄无效）、或已被读过时为 0。
+ *         每卷一把时是该次调用最后放的那把锁的持锁时长（卷锁）。
  * @note  按任务记录，其他任务随后拿锁不会覆盖它，所以调用者可在调用返回后立即读取。
+ *        读取即清零，所以没拿到锁就返回的调用不会读到上一次调用的旧值。
  */
 uint32_t Service_Filesystem_SpikeLastHoldUs(void)
 {
@@ -481,6 +475,7 @@ uint32_t Service_Filesystem_SpikeLastHoldUs(void)
         if (filesystem_lock_last_holds[index].Task == self)
         {
             hold_us = filesystem_lock_last_holds[index].HoldUs;
+            filesystem_lock_last_holds[index].HoldUs = 0U;
             break;
         }
     }

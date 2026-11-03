@@ -128,6 +128,24 @@ bool filesystem_sd_transfer_init(uint32_t notify_index)
 }
 
 /**
+ * @brief SD 传输层替身：完成信号量创建恒成功。
+ * @return 恒为 true。
+ */
+bool filesystem_sd_transfer_create(void)
+{
+    return true;
+}
+
+/**
+ * @brief Flash 传输层替身：完成提示信号量创建恒成功。
+ * @return 恒为 true。
+ */
+bool filesystem_flash_transfer_create(void)
+{
+    return true;
+}
+
+/**
  * @brief SD 传输层替身：恒已注册。
  * @return 恒为 true。
  */

@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "APP/tasks/foreground/foreground_report.h"
+#include "APP/tasks/foreground/spike_audio_read.h"
 #include "APP/tasks/foreground/spike_unplug.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
@@ -148,6 +149,7 @@ void foreground_load_stats_reset(void)
 {
     memset(&foreground_load_stats_data, 0, sizeof(foreground_load_stats_data));
     ui_cell_stats_reset(&foreground_cell);
+    spike_audio_read_reset();
 }
 
 /**

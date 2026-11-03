@@ -39,7 +39,7 @@ static void test_acquire_release_records_hold_and_names(void)
     Service_Filesystem_SpikeLockStatsTypeDef window;
     Service_Filesystem_SpikeLockStatsTypeDef total;
 
-    Service_Filesystem_SpikeInit();
+    filesystem_lock_init();
     Service_Filesystem_SpikeWindowReset();
 
     filesystem_lock_acquire(SERVICE_FILESYSTEM_VOLUME_SD, "ReadFile");
@@ -79,8 +79,9 @@ static void test_longest_hold_keeps_its_operation(void)
     assert(window.AcquireCount == 2U);
     assert(window.HoldMaxUs >= 50U);
     assert(strcmp(window.HoldOperation, "ReadFile") == 0);
-    /* 任务最近一次持锁时长是后一次（较短）的，不是极值。 */
+    /* 任务最近一次持锁时长是后一次（较短）的，不是极值；读取即清零，没拿到锁的调用不会读到旧值。 */
     assert(Service_Filesystem_SpikeLastHoldUs() < window.HoldMaxUs);
+    assert(Service_Filesystem_SpikeLastHoldUs() == 0U);
 }
 
 /**

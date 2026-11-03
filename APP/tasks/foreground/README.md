@@ -62,8 +62,9 @@ cmake --build build/firmware-debug-pervol
 |---|---|---|
 | 各任务栈高水位 | `MONITOR` 标签的 `<任务名>: total=…, min free=…, peak=…` | 现有 Monitor 行，已含 `Foreground Task`；每 5 s 一轮 |
 | CPU 空闲比例 | `SPIKE CPU <阶段> win=…ms cnt/ms=… idle=… gui=… fg=… sto=… pb=… log=… mon=… tmr=… oth=…` | FreeRTOS 运行时统计的窗口差值，单位 %。**不是 LVGL 浮层的 CPU%**。`cnt/ms` 是运行时计数器每毫秒的计数，TIM5 预分频 4799、定时器时钟 240 MHz 时应为 50.0（由时钟树推出，未实测），32 位约 23.9 小时回绕 |
-| SD 读 32 KiB 耗时 | `SPIKE SDREAD <阶段> 32K n=… min=… avg=… max=…us` | 拿到 SD 锁之后到 `ReadFile` 返回，不含等锁；按阶段清零。P2 与 P1 的对比看 P2 行，P3 里没有 TXT 读 |
-| 随机页 4 KiB 读 | `SPIKE SDREAD <阶段> 4K n=… avg=… max=… err=… last=… nl=… pass=…` | 同上；`err` 是读失败次数，`nl` 是已统计的换行数，`pass` 是读到文件尾回绕的次数 |
+| SD 读 32 KiB 耗时（音频流） | `SPIKE SDREAD <阶段> audio32K n=… min=… avg=… max=…us` | Storage Task 读一整块音频（32 KiB）的持锁时长：拿到 SD 锁之后到 `ReadFile` 返回，不含等锁；每个阶段都有，按阶段清零，用来对比 P1（无负载）、P2（读 TXT）、P3（Flash 写）对音频读取的影响 |
+| SD 读 32 KiB 耗时（前台 TXT） | `SPIKE SDREAD <阶段> fg32K n=… min=… avg=… max=…us` | 前台任务自己读 TXT 的 32 KiB，同样口径，只在 P2、P5 有数（文件尾的短读不计） |
+| 随机页 4 KiB 读 | `SPIKE SDREAD <阶段> fg4K n=… avg=… max=… err=… last=… nl=… pass=…` | 同上；`err` 是读失败次数，`nl` 是已统计的换行数，`pass` 是读到文件尾回绕的次数 |
 | 单次持锁最长、等锁最长分别是谁 | `SPIKE LOCK <锁> <ph|all> hold=<us>us@<任务>/<操作> wait=<us>us@<任务>/<操作> n=<次数>` | `ph` 是本阶段，`all` 是自启动；锁名在全局一把时是 `GLOBAL`，每卷一把时是 `SD`、`FLASH`、`TABLE`（打开表锁）。持锁者是拿锁的任务和操作，等锁者是等的那个任务和操作 |
 | 等锁最长时是被谁挡住 | `SPIKE LOCKBLK <锁> ph longest_wait_blocked_by=<任务>/<操作>` | 尽力而为：取等锁开始那一刻的持锁者 |
 | 切歌到出声的时延 | `PLAYBACK` 标签的 `Switch idx=<位置> lat=<us>` | 命令被播放任务处理到输出重新起播，微秒；边界日志，每次换曲一行 |

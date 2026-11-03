@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include "Platform/flash/platform_flash.h"
 #include "Service/service.h"
+bool filesystem_flash_transfer_create(void);
 bool filesystem_flash_transfer_init(uint32_t notify_index);
 bool filesystem_flash_transfer_is_registered(void);
 void filesystem_flash_transfer_prepare(void);

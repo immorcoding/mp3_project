@@ -54,6 +54,21 @@ bool filesystem_flash_transfer_is_registered(void)
 }
 
 /**
+ * @brief 静态创建 Flash 完成提示信号量（幂等）。
+ * @return true 信号量已存在；false 创建失败。
+ * @note Boot Task 在任何任务启动之前经 Service_Filesystem_SpikeInit() 调用；回调注册晚于它。
+ */
+bool filesystem_flash_transfer_create(void)
+{
+    if (filesystem_flash_hint_semaphore == NULL)
+    {
+        filesystem_flash_hint_semaphore = xSemaphoreCreateBinaryStatic(&filesystem_flash_hint_storage);
+    }
+
+    return filesystem_flash_hint_semaphore != NULL;
+}
+
+/**
  * @brief 建立完成提示信号量并注册长期事件回调。
  * @param[in] notify_index 旧版的任务通知槽，已不再使用，保留参数只为不改调用方。
  * @return true 表示首次注册成功或已注册；false 表示建立信号量或注册回调失败。
@@ -67,13 +82,9 @@ bool filesystem_flash_transfer_init(uint32_t notify_index)
     {
         return true;
     }
-    if (filesystem_flash_hint_semaphore == NULL)
+    if (!filesystem_flash_transfer_create())
     {
-        filesystem_flash_hint_semaphore = xSemaphoreCreateBinaryStatic(&filesystem_flash_hint_storage);
-        if (filesystem_flash_hint_semaphore == NULL)
-        {
-            return false;
-        }
+        return false;
     }
     if (Platform_Flash_SetOperationCallback(filesystem_flash_irq,
                                             (void *)&filesystem_flash_hint_event) != PLATFORM_OK)

@@ -16,6 +16,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+bool filesystem_sd_transfer_create(void);
 bool filesystem_sd_transfer_init(uint32_t notify_index);
 bool filesystem_sd_transfer_is_registered(void);
 bool filesystem_sd_transfer_read_blocks(uint8_t *destination,
