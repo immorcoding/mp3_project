@@ -1,0 +1,1435 @@
+05:43:30.122 [32mI (237141) MONITOR: Monitor Task: total=1024 B, min free=448 B, peak=56.2%
+05:43:30.126 [0m[32mI (237146) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:43:30.131 [0m[32mI (237151) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:43:30.138 [0m[32mI (237156) MONITOR: Foreground Task: total=6144 B, min free=4180 B, peak=31.9%
+05:43:30.144 [0m[32mI (237161) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:43:30.149 [0m[32mI (266856) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:43:30.156 [0m[32mI (266862) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:43:30.160 [0m[32mI (266868) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:43:30.165 [0m[32mI (266874) MONITOR: Heap: free=16432 B, min free=15424 B
+05:43:30.170 [0m[32mI (266880) MONITOR: MCU temperature: 49.551 C.
+05:43:30.175 [0m[32mI (266885) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:43:30.180 [0m[32mI (266892) MONITOR: Monitor Task: total=1024 B, min free=448 B, peak=56.2%
+05:43:30.186 [0m[32mI (266896) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:43:30.190 [0m[32mI (266902) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:43:30.196 [0m[32mI (266907) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:43:30.209 [0m[32mI (266912) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:43:30.210 [0m[32mI (266917) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:43:30.214 [0m[32mI (266922) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:43:30.218 [0m[32mI (266927) MONITOR: Foreground Task: total=6144 B, min free=4180 B, peak=31.9%
+05:43:30.224 [0m[32mI (266932) MONITOR: Heap: free=16432 B, min free=15424 B
+05:43:30.229 [0m[32mI (266940) MONITOR: MCU temperature: 48.904 C.
+05:43:30.234 [0m[32mI (266945) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:43:30.239 [0m[32mI (266950) SPIKE: CPU P2 win=10008ms cnt/ms=50.0 idle=6.6 gui=60.3 fg=18.9 sto=0.0 pb=13.9 log=0.0 mon=0.0 tmr=0.0 oth=0.3
+05:43:30.244 [0m[32mI (266955) SPIKE: GUI P2 win=10008ms loops=436 flush=514 sleep_avg=1.0ms frame_max=35645us sleep=on
+05:43:30.252 [0m[32mI (266960) SPIKE: LOCK GLOBAL ph hold=7132us@Foreground_Task/ReadFile wait=3351us@Foreground_Task/ReadFile n=4010
+05:43:30.256 [0m[32mI (266965) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/ReadFile
+05:43:30.262 [0m[32mI (266970) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=3351us@Foreground_Task/ReadFile n=5876
+05:43:30.267 [0m[32mI (266975) SPIKE: SDREAD P2 audio32K n=24 min=3154us avg=3239us max=3370us
+05:43:30.276 [0m[32mI (266980) SPIKE: UNDER P2 total=0 win=0
+05:43:30.281 [0m[32mI (266988) SPIKE: SDREAD P2 fg32K n=2881 min=1830us avg=2450us max=7132us
+05:43:30.287 [0m[32mI (266993) SPIKE: SDREAD P2 fg4K n=361 avg=1049us max=4978us err=0 last=OK nl=263231 pass=11
+05:43:30.293 [0m[32mI (266998) MONITOR: Monitor Task: total=1024 B, min free=448 B, peak=56.2%
+05:43:30.300 [0m[32mI (267003) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:43:30.305 [0m[32mI (267012) MONITOR: Foreground Task: total=6144 B, min free=4180 B, peak=31.9%
+05:43:30.310 [0m[32mI (267018) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:43:30.456 [0m[32mI (267187) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:43:30.460 [0m[32mI (267192) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:43:30.469 [0m[32mI (267197) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:43:30.475 [0m[32mI (267205) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:43:30.479 [0m[32mI (267211) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:43:30.485 [0m[32mI (267216) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:43:30.493 [0m[32mI (267221) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:43:30.497 [0m[32mI (267229) MONITOR: Foreground Task: total=6144 B, min free=4180 B, peak=31.9%
+05:43:30.502 [0m[32mI (267234) MONITOR: Heap: free=16432 B, min free=15424 B
+05:43:30.507 [0m[32mI (267239) MONITOR: MCU temperature: 49.975 C.
+05:43:30.512 [0m[32mI (267244) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:43:35.457 [0m[32mI (272188) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:43:35.461 [0m[32mI (272193) MONITOR: Foreground Task: total=6144 B, min free=4180 B, peak=31.9%
+05:43:35.466 [0m[32mI (272198) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:43:35.475 [0m[32mI (272203) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:43:35.478 [0m[32mI (272211) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:43:35.486 [0m[32mI (272217) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:43:35.491 [0m[32mI (272223) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:43:35.499 [0m[32mI (272228) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:43:35.505 [0m[32mI (272236) MONITOR: Heap: free=16432 B, min free=15424 B
+05:43:35.511 [0m[32mI (272242) MONITOR: MCU temperature: 49.402 C.
+05:43:35.516 [0m[32mI (272247) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:43:35.740 [0m[32mI (272469) SPIKE: CPU P2 win=9999ms cnt/ms=50.0 idle=6.6 gui=60.5 fg=18.6 sto=0.0 pb=13.9 log=0.0 mon=0.0 tmr=0.0 oth=0.4
+05:43:35.744 [0m[32mI (272476) SPIKE: GUI P2 win=9999ms loops=436 flush=514 sleep_avg=1.0ms frame_max=32908us sleep=on
+05:43:35.754 [0m[32mI (272486) SPIKE: LOCK GLOBAL ph hold=7132us@Foreground_Task/ReadFile wait=3351us@Foreground_Task/ReadFile n=9950
+05:43:35.760 [0m[32mI (272491) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/ReadFile
+05:43:35.765 [0m[32mI (272496) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=3351us@Foreground_Task/ReadFile n=11816
+05:43:35.770 [0m[32mI (272501) SPIKE: SDREAD P2 audio32K n=61 min=3050us avg=3184us max=3403us
+05:43:35.774 [0m[32mI (272506) SPIKE: UNDER P2 total=0 win=0
+05:43:35.787 [0m[32mI (272516) SPIKE: SDREAD P2 fg32K n=7147 min=1830us avg=2450us max=7132us
+05:43:35.793 [0m[32mI (272524) SPIKE: SDREAD P2 fg4K n=896 avg=1042us max=4978us err=0 last=OK nl=652938 pass=27
+05:43:40.464 [0m[32mI (277196) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:43:40.470 [0m[32mI (277201) MONITOR: Foreground Task: total=6144 B, min free=4180 B, peak=31.9%
+05:43:40.475 [0m[32mI (277207) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:43:40.479 [0m[32mI (277212) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:43:40.485 [0m[32mI (277218) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:43:40.490 [0m[32mI (277222) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:43:40.495 [0m[32mI (277227) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:43:40.500 [0m[32mI (277232) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:43:40.505 [0m[32mI (277238) MONITOR: Heap: free=16432 B, min free=15424 B
+05:43:40.509 [0m[32mI (277243) MONITOR: MCU temperature: 48.480 C.
+05:43:40.516 [0m[32mI (277248) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:43:45.474 [0m[32mI (282206) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:43:45.478 [0m[32mI (282211) MONITOR: Foreground Task: total=6144 B, min free=4180 B, peak=31.9%
+05:43:45.487 [0m[32mI (282216) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:43:45.491 [0m[32mI (282224) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:43:45.499 [0m[32mI (282230) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:43:45.504 [0m[32mI (282236) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:43:45.511 [0m[32mI (282241) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:43:45.516 [0m[32mI (282249) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:43:45.522 [0m[32mI (282254) MONITOR: Heap: free=16432 B, min free=15424 B
+05:43:45.527 [0m[32mI (282260) MONITOR: MCU temperature: 49.452 C.
+05:43:45.535 [0m[32mI (282265) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:43:45.727 [0m[32mI (282457) SPIKE: CPU P2 win=9988ms cnt/ms=50.0 idle=6.6 gui=60.2 fg=18.9 sto=0.0 pb=13.9 log=0.0 mon=0.0 tmr=0.0 oth=0.4
+05:43:45.733 [0m[32mI (282465) SPIKE: GUI P2 win=9988ms loops=435 flush=512 sleep_avg=1.0ms frame_max=32340us sleep=on
+05:43:45.738 [0m[32mI (282470) SPIKE: LOCK GLOBAL ph hold=7132us@Foreground_Task/ReadFile wait=3351us@Foreground_Task/ReadFile n=11945
+05:43:45.743 [0m[32mI (282475) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/ReadFile
+05:43:45.748 [0m[32mI (282480) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=3351us@Foreground_Task/ReadFile n=13811
+05:43:45.752 [0m[32mI (282485) SPIKE: SDREAD P2 audio32K n=73 min=3035us avg=3168us max=3403us
+05:43:45.762 [0m[32mI (282495) SPIKE: UNDER P2 total=0 win=0
+05:43:45.767 [0m[32mI (282500) SPIKE: SDREAD P2 fg32K n=8578 min=1829us avg=2448us max=7132us
+05:43:45.776 [0m[32mI (282505) SPIKE: SDREAD P2 fg4K n=1076 avg=1070us max=5059us err=0 last=OK nl=783737 pass=33
+05:43:45.780 [0m[32mI (282513) SPIKE: GUARD P2 fs_calls_from_gui_or_playback=0
+05:43:45.786 [0m[32mI (282518) SPIKE: PHASE end P2 txt_read active=60005ms
+05:43:45.901 [0m[32mI (282633) SPIKE: PHASE start P3 flash_write_reclaim gui_sleep=on dur=60000ms 
+05:43:50.481 [0m[32mI (287213) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:43:50.486 [0m[32mI (287219) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:43:50.493 [0m[32mI (287224) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:43:50.498 [0m[32mI (287231) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:43:50.503 [0m[32mI (287236) MONITOR: Foreground Task: total=6144 B, min free=4116 B, peak=33.0%
+05:43:50.508 [0m[32mI (287241) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:43:50.513 [0m[32mI (287246) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:43:50.518 [0m[32mI (287251) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:43:50.523 [0m[32mI (287256) MONITOR: Heap: free=16432 B, min free=15424 B
+05:43:50.528 [0m[32mI (287261) MONITOR: MCU temperature: 49.402 C.
+05:43:50.534 [0m[32mI (287266) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:43:55.486 [0m[32mI (292219) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:43:55.490 [0m[32mI (292224) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:43:55.494 [0m[32mI (292229) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:43:55.501 [0m[32mI (292234) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:43:55.506 [0m[32mI (292239) MONITOR: Foreground Task: total=6144 B, min free=4116 B, peak=33.0%
+05:43:55.512 [0m[32mI (292245) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:43:55.514 [0m[32mI (292250) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:43:55.523 [0m[32mI (292255) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:43:55.530 [0m[32mI (292262) MONITOR: Heap: free=16432 B, min free=15424 B
+05:43:55.535 [0m[32mI (292268) MONITOR: MCU temperature: 50.398 C.
+05:43:55.539 [0m[32mI (292273) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:43:56.351 [0m[32mI (293085) SPIKE: CPU P3 win=10452ms cnt/ms=49.9 idle=4.6 gui=58.3 fg=22.9 sto=0.0 pb=13.9 log=0.0 mon=0.0 tmr=0.0 oth=0.3
+05:43:56.354 [0m[32mI (293090) SPIKE: GUI P3 win=10452ms loops=437 flush=518 sleep_avg=1.0ms frame_max=48307us sleep=on
+05:43:56.360 [0m[32mI (293095) SPIKE: LOCK GLOBAL ph hold=732024us@Foreground_Task/WriteFile wait=339165us@Storage_Task/ReadFile n=45
+05:43:56.367 [0m[32mI (293100) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Foreground_Task/WriteFile
+05:43:56.372 [0m[32mI (293105) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=339165us@Storage_Task/ReadFile n=13858
+05:43:56.381 [0m[32mI (293115) SPIKE: SDREAD P3 audio32K n=13 min=2753us avg=3283us max=5590us
+05:43:56.389 [0m[32mI (293120) SPIKE: UNDER P3 total=0 win=0
+05:43:56.394 [0m[32mI (293128) SPIKE: FLASHIO P3 write64K n=15 min=349262us avg=630276us max=732024us
+05:43:56.399 [0m[32mI (293133) SPIKE: FLASHIO P3 sync n=15 min=32297us avg=43490us max=49400us
+05:43:56.404 [0m[32mI (293138) SPIKE: FLASHIO P3 reclaim n=0 min=0us avg=0us max=0us
+05:43:56.413 [0m[32mI (293143) SPIKE: FLASHIO P3 files=0 err=0
+05:44:00.487 [0m[32mI (297221) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:44:00.493 [0m[32mI (297226) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:00.498 [0m[32mI (297232) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:00.505 [0m[32mI (297237) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:00.511 [0m[32mI (297244) MONITOR: Foreground Task: total=6144 B, min free=3992 B, peak=35.0%
+05:44:00.515 [0m[32mI (297250) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:00.521 [0m[32mI (297255) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:00.530 [0m[32mI (297260) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:00.535 [0m[32mI (297269) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:00.539 [0m[32mI (297274) MONITOR: MCU temperature: 49.277 C.
+05:44:00.545 [0m[32mI (297279) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:05.493 [0m[32mI (302228) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:44:05.498 [0m[32mI (302233) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:05.504 [0m[32mI (302238) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:05.512 [0m[32mI (302243) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:05.516 [0m[32mI (302251) MONITOR: Foreground Task: total=6144 B, min free=3992 B, peak=35.0%
+05:44:05.521 [0m[32mI (302255) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:05.524 [0m[32mI (302260) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:05.530 [0m[32mI (302265) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:05.536 [0m[32mI (302270) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:05.540 [0m[32mI (302275) MONITOR: MCU temperature: 49.003 C.
+05:44:05.544 [0m[32mI (302280) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:07.039 [0m[32mI (303773) SPIKE: CPU P3 win=10689ms cnt/ms=50.0 idle=4.8 gui=58.3 fg=22.8 sto=0.0 pb=13.9 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:44:07.044 [0m[32mI (303778) SPIKE: GUI P3 win=10689ms loops=448 flush=530 sleep_avg=1.0ms frame_max=44112us sleep=on
+05:44:07.053 [0m[32mI (303783) SPIKE: LOCK GLOBAL ph hold=738473us@Foreground_Task/WriteFile wait=339165us@Storage_Task/ReadFile n=108
+05:44:07.056 [0m[32mI (303791) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Foreground_Task/WriteFile
+05:44:07.066 [0m[32mI (303801) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=339165us@Storage_Task/ReadFile n=13921
+05:44:07.071 [0m[32mI (303806) SPIKE: SDREAD P3 audio32K n=26 min=2735us avg=3158us max=6114us
+05:44:07.076 [0m[32mI (303811) SPIKE: UNDER P3 total=0 win=0
+05:44:07.081 [0m[32mI (303816) SPIKE: FLASHIO P3 write64K n=30 min=330130us avg=626260us max=738473us
+05:44:07.086 [0m[32mI (303821) SPIKE: FLASHIO P3 sync n=30 min=24779us avg=44088us max=49400us
+05:44:07.099 [0m[32mI (303831) SPIKE: FLASHIO P3 reclaim n=16 min=15us avg=15us max=15us
+05:44:07.105 [0m[32mI (303839) SPIKE: FLASHIO P3 files=1 err=0
+05:44:10.503 [0m[32mI (307238) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:44:10.509 [0m[32mI (307243) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:10.518 [0m[32mI (307249) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:10.522 [0m[32mI (307257) MONITOR: Foreground Task: total=6144 B, min free=3992 B, peak=35.0%
+05:44:10.528 [0m[32mI (307262) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:10.533 [0m[32mI (307268) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:10.542 [0m[32mI (307273) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:10.547 [0m[32mI (307282) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:10.552 [0m[32mI (307287) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:10.558 [0m[32mI (307292) MONITOR: MCU temperature: 49.825 C.
+05:44:10.566 [0m[32mI (307298) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:15.509 [0m[32mI (312245) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:44:15.514 [0m[32mI (312250) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:15.523 [0m[32mI (312255) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:15.528 [0m[32mI (312264) MONITOR: Foreground Task: total=6144 B, min free=3992 B, peak=35.0%
+05:44:15.534 [0m[32mI (312269) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:15.538 [0m[32mI (312274) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:15.547 [0m[32mI (312279) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:15.551 [0m[32mI (312288) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:15.556 [0m[32mI (312292) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:15.560 [0m[32mI (312297) MONITOR: MCU temperature: 50.672 C.
+05:44:15.566 [0m[32mI (312302) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:18.114 [0m[32mI (314850) SPIKE: CPU P3 win=11077ms cnt/ms=50.0 idle=4.7 gui=59.2 fg=21.9 sto=0.0 pb=13.9 log=0.0 mon=0.0 tmr=0.0 oth=0.3
+05:44:18.119 [0m[32mI (314855) SPIKE: GUI P3 win=11077ms loops=471 flush=558 sleep_avg=1.0ms frame_max=48140us sleep=on
+05:44:18.127 [0m[32mI (314864) SPIKE: LOCK GLOBAL ph hold=738473us@Foreground_Task/WriteFile wait=339165us@Storage_Task/ReadFile n=171
+05:44:18.133 [0m[32mI (314869) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Foreground_Task/WriteFile
+05:44:18.138 [0m[32mI (314874) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=339165us@Storage_Task/ReadFile n=13984
+05:44:18.142 [0m[32mI (314879) SPIKE: SDREAD P3 audio32K n=39 min=2678us avg=3082us max=6114us
+05:44:18.148 [0m[32mI (314884) SPIKE: UNDER P3 total=0 win=0
+05:44:18.153 [0m[32mI (314889) SPIKE: FLASHIO P3 write64K n=45 min=330130us avg=634248us max=738473us
+05:44:18.164 [0m[32mI (314899) SPIKE: FLASHIO P3 sync n=45 min=24779us avg=43840us max=49400us
+05:44:18.171 [0m[32mI (314904) SPIKE: FLASHIO P3 reclaim n=32 min=13us avg=14us max=15us
+05:44:18.175 [0m[32mI (314911) SPIKE: FLASHIO P3 files=2 err=0
+05:44:20.518 [0m[32mI (317253) MONITOR: Foreground Task: total=6144 B, min free=3992 B, peak=35.0%
+05:44:20.522 [0m[32mI (317258) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:44:20.530 [0m[32mI (317263) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:20.535 [0m[32mI (317271) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:20.540 [0m[32mI (317276) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:20.545 [0m[32mI (317281) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:20.550 [0m[32mI (317286) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:20.559 [0m[32mI (317295) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:20.564 [0m[32mI (317300) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:20.569 [0m[32mI (317305) MONITOR: MCU temperature: 49.078 C.
+05:44:20.574 [0m[32mI (317310) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:25.524 [0m[32mI (322260) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:44:25.529 [0m[32mI (322265) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:25.537 [0m[32mI (322270) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:25.543 [0m[32mI (322278) MONITOR: Foreground Task: total=6144 B, min free=3992 B, peak=35.0%
+05:44:25.546 [0m[32mI (322284) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:25.553 [0m[32mI (322288) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:25.560 [0m[32mI (322295) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:25.564 [0m[32mI (322301) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:25.570 [0m[32mI (322306) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:25.575 [0m[32mI (322311) MONITOR: MCU temperature: 50.597 C.
+05:44:25.585 [0m[32mI (322316) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:28.506 [0m[32mI (325243) SPIKE: CPU P3 win=10391ms cnt/ms=50.0 idle=4.8 gui=57.6 fg=23.5 sto=0.0 pb=13.9 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:44:28.511 [0m[32mI (325248) SPIKE: GUI P3 win=10391ms loops=430 flush=509 sleep_avg=1.0ms frame_max=46579us sleep=on
+05:44:28.516 [0m[32mI (325253) SPIKE: LOCK GLOBAL ph hold=738473us@Foreground_Task/WriteFile wait=348720us@Storage_Task/ReadFile n=238
+05:44:28.521 [0m[32mI (325258) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Foreground_Task/WriteFile
+05:44:28.526 [0m[32mI (325263) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=348720us@Storage_Task/ReadFile n=14051
+05:44:28.531 [0m[32mI (325268) SPIKE: SDREAD P3 audio32K n=51 min=2643us avg=3055us max=6114us
+05:44:28.544 [0m[32mI (325278) SPIKE: UNDER P3 total=0 win=0
+05:44:28.549 [0m[32mI (325286) SPIKE: FLASHIO P3 write64K n=60 min=330130us avg=626151us max=738473us
+05:44:28.553 [0m[32mI (325290) SPIKE: FLASHIO P3 sync n=60 min=24779us avg=44171us max=49400us
+05:44:28.558 [0m[32mI (325295) SPIKE: FLASHIO P3 reclaim n=48 min=13us avg=14us max=15us
+05:44:28.562 [0m[32mI (325300) SPIKE: FLASHIO P3 files=3 err=0
+05:44:30.525 [0m[32mI (327262) MONITOR: Foreground Task: total=6144 B, min free=3992 B, peak=35.0%
+05:44:30.530 [0m[32mI (327266) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:44:30.535 [0m[32mI (327272) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:30.541 [0m[32mI (327277) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:30.546 [0m[32mI (327283) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:30.551 [0m[32mI (327288) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:30.557 [0m[32mI (327294) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:30.565 [0m[32mI (327299) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:30.570 [0m[32mI (327307) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:30.575 [0m[32mI (327312) MONITOR: MCU temperature: 51.095 C.
+05:44:30.581 [0m[32mI (327317) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:35.530 [0m[32mI (332268) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:44:35.536 [0m[32mI (332273) MONITOR: Foreground Task: total=6144 B, min free=3992 B, peak=35.0%
+05:44:35.541 [0m[32mI (332278) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:35.548 [0m[32mI (332283) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:35.553 [0m[32mI (332290) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:35.559 [0m[32mI (332296) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:35.564 [0m[32mI (332301) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:35.572 [0m[32mI (332307) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:35.576 [0m[32mI (332314) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:35.581 [0m[32mI (332319) MONITOR: MCU temperature: 52.341 C.
+05:44:35.586 [0m[32mI (332324) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:38.717 [0m[32mI (335454) SPIKE: CPU P3 win=10215ms cnt/ms=50.0 idle=4.1 gui=44.7 fg=37.1 sto=0.0 pb=13.9 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:44:38.725 [0m[32mI (335459) SPIKE: GUI P3 win=10215ms loops=326 flush=404 sleep_avg=1.0ms frame_max=53184us sleep=on
+05:44:38.735 [0m[32mI (335472) SPIKE: LOCK GLOBAL ph hold=738473us@Foreground_Task/WriteFile wait=350893us@Storage_Task/ReclaimFlash n=377
+05:44:38.739 [0m[32mI (335477) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Foreground_Task/WriteFile
+05:44:38.743 [0m[32mI (335482) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=14190
+05:44:38.749 [0m[32mI (335487) SPIKE: SDREAD P3 audio32K n=51 min=2643us avg=3055us max=6114us
+05:44:38.754 [0m[32mI (335492) SPIKE: UNDER P3 total=0 win=0
+05:44:38.765 [0m[32mI (335502) SPIKE: FLASHIO P3 write64K n=83 min=330130us avg=550573us max=738473us
+05:44:38.769 [0m[32mI (335507) SPIKE: FLASHIO P3 sync n=83 min=24779us avg=44472us max=49400us
+05:44:38.775 [0m[32mI (335512) SPIKE: FLASHIO P3 reclaim n=80 min=12us avg=14us max=15us
+05:44:38.777 [0m[32mI (335517) SPIKE: FLASHIO P3 files=5 err=0
+05:44:40.544 [0m[32mI (337280) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:44:40.549 [0m[32mI (337287) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:40.553 [0m[32mI (337291) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:40.559 [0m[32mI (337297) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:40.566 [0m[32mI (337302) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:44:40.572 [0m[32mI (337309) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:40.577 [0m[32mI (337314) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:40.581 [0m[32mI (337321) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:40.588 [0m[32mI (337325) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:40.593 [0m[32mI (337331) MONITOR: MCU temperature: 50.448 C.
+05:44:40.602 [0m[32mI (337337) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:45.547 [0m[32mI (342285) MONITOR: Monitor Task: total=1024 B, min free=412 B, peak=59.7%
+05:44:45.553 [0m[32mI (342291) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:45.559 [0m[32mI (342296) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:45.564 [0m[32mI (342303) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:45.570 [0m[32mI (342308) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:44:45.575 [0m[32mI (342313) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:45.585 [0m[32mI (342318) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:45.590 [0m[32mI (342329) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:45.594 [0m[32mI (342333) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:45.599 [0m[32mI (342338) MONITOR: MCU temperature: 50.871 C.
+05:44:45.608 [0m[32mI (342343) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:46.552 [0m[32mI (343290) SPIKE: CPU P3 win=7837ms cnt/ms=50.0 idle=3.9 gui=44.5 fg=37.5 sto=0.0 pb=13.9 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:44:46.561 [0m[32mI (343300) SPIKE: GUI P3 win=7837ms loops=250 flush=310 sleep_avg=1.0ms frame_max=55805us sleep=on
+05:44:46.567 [0m[32mI (343305) SPIKE: LOCK GLOBAL ph hold=738473us@Foreground_Task/WriteFile wait=350893us@Storage_Task/ReclaimFlash n=473
+05:44:46.571 [0m[32mI (343310) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Foreground_Task/WriteFile
+05:44:46.577 [0m[32mI (343315) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=14286
+05:44:46.580 [0m[32mI (343320) SPIKE: SDREAD P3 audio32K n=51 min=2643us avg=3055us max=6114us
+05:44:46.595 [0m[32mI (343330) SPIKE: UNDER P3 total=0 win=0
+05:44:46.600 [0m[32mI (343338) SPIKE: FLASHIO P3 write64K n=101 min=330130us avg=515069us max=738473us
+05:44:46.604 [0m[32mI (343343) SPIKE: FLASHIO P3 sync n=101 min=24779us avg=44511us max=49400us
+05:44:46.609 [0m[32mI (343348) SPIKE: FLASHIO P3 reclaim n=96 min=12us avg=14us max=15us
+05:44:46.614 [0m[32mI (343353) SPIKE: FLASHIO P3 files=6 err=0
+05:44:46.620 [0m[32mI (343358) SPIKE: GUARD P3 fs_calls_from_gui_or_playback=0
+05:44:46.686 [0m[32mI (343425) SPIKE: PHASE end P3 flash_write_reclaim active=60246ms
+05:44:46.691 [0m[32mI (343430) SPIKE: PHASE start P4 ui_cell_synthetic gui_sleep=on dur=30000ms 
+05:44:50.548 [0m[32mI (347288) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:44:50.553 [0m[32mI (347292) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:50.558 [0m[32mI (347297) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:44:50.565 [0m[32mI (347302) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:50.569 [0m[32mI (347310) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:50.575 [0m[32mI (347314) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:50.580 [0m[32mI (347319) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:50.585 [0m[32mI (347324) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:50.590 [0m[32mI (347329) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:50.595 [0m[32mI (347334) MONITOR: MCU temperature: 50.423 C.
+05:44:50.600 [0m[32mI (347339) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:54.157 [0m[32mI (350898) PLAYBACK: Finished idx=4
+05:44:54.171 [0m[32mI (350902) PLAYBACK: Auto idx=5
+05:44:54.178 [0m[32mI (350918) STORAGE: Stream pos=5 off=0 open=517 lseek=558
+05:44:54.183 [0m[32mI (350922) PLAYBACK: Open idx=5 rate=48000
+05:44:54.187 [0m[32mI (350927) STORAGE: Tag idx=5 src=title reads=1 open=294 us=533
+05:44:55.552 [0m[32mI (352291) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:44:55.556 [0m[32mI (352296) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:44:55.562 [0m[32mI (352301) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:44:55.570 [0m[32mI (352306) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:44:55.574 [0m[32mI (352313) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:44:55.577 [0m[32mI (352318) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:44:55.583 [0m[32mI (352323) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:44:55.589 [0m[32mI (352328) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:44:55.593 [0m[32mI (352333) MONITOR: Heap: free=16432 B, min free=15424 B
+05:44:55.598 [0m[32mI (352338) MONITOR: MCU temperature: 50.896 C.
+05:44:55.604 [0m[32mI (352343) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:44:56.701 [0m[32mI (353440) SPIKE: CPU P4 win=10009ms cnt/ms=50.0 idle=11.6 gui=73.6 fg=0.4 sto=0.2 pb=13.9 log=0.0 mon=0.0 tmr=0.0 oth=0.3
+05:44:56.704 [0m[32mI (353445) SPIKE: GUI P4 win=10009ms loops=530 flush=611 sleep_avg=1.1ms frame_max=33717us sleep=on
+05:44:56.711 [0m[32mI (353450) SPIKE: LOCK GLOBAL ph hold=6222us@Storage_Task/ReadFile wait=1us@Storage_Task/ReclaimFlash n=121
+05:44:56.715 [0m[32mI (353455) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=14411
+05:44:56.720 [0m[32mI (353460) SPIKE: SDREAD P4 audio32K n=35 min=2574us avg=3474us max=6222us
+05:44:56.725 [0m[32mI (353465) SPIKE: UNDER P4 total=0 win=0
+05:44:56.736 [0m[32mI (353475) SPIKE: CELL P4 write n=626 avg=72us max=3415us (synthetic 6KiB)
+05:44:56.741 [0m[32mI (353480) SPIKE: CELL P4 read n=524 avg=28us max=33us (synthetic 6KiB)
+05:44:56.748 [0m[32mI (353485) SPIKE: CELLGUI P4 try=524 fail=0 (synthetic, reference only)
+05:45:00.557 [0m[32mI (357297) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:00.562 [0m[32mI (357302) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:00.567 [0m[32mI (357307) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:00.575 [0m[32mI (357312) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:00.581 [0m[32mI (357320) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:00.585 [0m[32mI (357325) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:00.590 [0m[32mI (357330) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:00.595 [0m[32mI (357335) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:00.600 [0m[32mI (357340) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:00.605 [0m[32mI (357345) MONITOR: MCU temperature: 52.216 C.
+05:45:00.610 [0m[32mI (357350) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:05.568 [0m[32mI (362308) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:05.573 [0m[32mI (362313) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:05.578 [0m[32mI (362318) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:05.583 [0m[32mI (362323) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:05.588 [0m[32mI (362328) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:05.593 [0m[32mI (362333) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:05.598 [0m[32mI (362338) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:05.606 [0m[32mI (362343) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:05.610 [0m[32mI (362351) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:05.615 [0m[32mI (362356) MONITOR: MCU temperature: 50.373 C.
+05:45:05.621 [0m[32mI (362361) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:06.700 [0m[32mI (363440) SPIKE: CPU P4 win=10000ms cnt/ms=50.0 idle=11.9 gui=73.5 fg=0.4 sto=0.0 pb=14.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:45:06.704 [0m[32mI (363445) SPIKE: GUI P4 win=10000ms loops=532 flush=613 sleep_avg=1.1ms frame_max=26261us sleep=on
+05:45:06.712 [0m[32mI (363450) SPIKE: LOCK GLOBAL ph hold=6222us@Storage_Task/ReadFile wait=1us@Storage_Task/ReclaimFlash n=133
+05:45:06.717 [0m[32mI (363458) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=14423
+05:45:06.722 [0m[32mI (363462) SPIKE: SDREAD P4 audio32K n=47 min=2574us avg=3402us max=6222us
+05:45:06.726 [0m[32mI (363467) SPIKE: UNDER P4 total=0 win=0
+05:45:06.732 [0m[32mI (363472) SPIKE: CELL P4 write n=1251 avg=72us max=4034us (synthetic 6KiB)
+05:45:06.737 [0m[32mI (363477) SPIKE: CELL P4 read n=1049 avg=31us max=3397us (synthetic 6KiB)
+05:45:06.746 [0m[32mI (363487) SPIKE: CELLGUI P4 try=1049 fail=0 (synthetic, reference only)
+05:45:10.569 [0m[32mI (367310) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:10.575 [0m[32mI (367315) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:10.579 [0m[32mI (367320) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:10.587 [0m[32mI (367325) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:10.592 [0m[32mI (367333) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:10.596 [0m[32mI (367338) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:10.602 [0m[32mI (367343) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:10.606 [0m[32mI (367348) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:10.612 [0m[32mI (367353) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:10.617 [0m[32mI (367358) MONITOR: MCU temperature: 49.925 C.
+05:45:10.622 [0m[32mI (367363) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:15.577 [0m[32mI (372320) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:15.583 [0m[32mI (372325) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:15.589 [0m[32mI (372330) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:15.594 [0m[32mI (372335) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:15.598 [0m[32mI (372340) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:15.604 [0m[32mI (372345) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:15.607 [0m[32mI (372350) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:15.614 [0m[32mI (372355) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:15.619 [0m[32mI (372360) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:15.624 [0m[32mI (372365) MONITOR: MCU temperature: 51.320 C.
+05:45:15.628 [0m[32mI (372370) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:16.701 [0m[32mI (373439) SPIKE: CPU P4 win=10000ms cnt/ms=50.0 idle=11.8 gui=73.5 fg=0.4 sto=0.0 pb=14.0 log=0.0 mon=0.0 tmr=0.0 oth=0.3
+05:45:16.704 [0m[32mI (373447) SPIKE: GUI P4 win=10000ms loops=532 flush=614 sleep_avg=1.1ms frame_max=26640us sleep=on
+05:45:16.710 [0m[32mI (373451) SPIKE: LOCK GLOBAL ph hold=6222us@Storage_Task/ReadFile wait=1us@Storage_Task/ReclaimFlash n=145
+05:45:16.713 [0m[32mI (373456) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=14435
+05:45:16.720 [0m[32mI (373461) SPIKE: SDREAD P4 audio32K n=59 min=2574us avg=3357us max=6222us
+05:45:16.724 [0m[32mI (373466) SPIKE: UNDER P4 total=0 win=0
+05:45:16.728 [0m[32mI (373471) SPIKE: CELL P4 write n=1876 avg=71us max=4034us (synthetic 6KiB)
+05:45:16.740 [0m[32mI (373481) SPIKE: CELL P4 read n=1575 avg=30us max=3397us (synthetic 6KiB)
+05:45:16.743 [0m[32mI (373486) SPIKE: CELLGUI P4 try=1575 fail=0 (synthetic, reference only)
+05:45:16.750 [0m[32mI (373491) SPIKE: GUARD P4 fs_calls_from_gui_or_playback=0
+05:45:16.755 [0m[32mI (373496) SPIKE: PHASE end P4 ui_cell_synthetic active=30000ms
+05:45:16.773 [0m[32mI (373511) SPIKE: PHASE start P5 manual_unplug_switch_page gui_sleep=on dur=0ms size=8388608
+05:45:20.579 [0m[32mI (377323) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:20.586 [0m[32mI (377328) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:20.592 [0m[32mI (377333) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:20.598 [0m[32mI (377339) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:20.604 [0m[32mI (377346) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:20.609 [0m[32mI (377351) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:20.615 [0m[32mI (377356) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:20.619 [0m[32mI (377361) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:20.626 [0m[32mI (377366) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:20.631 [0m[32mI (377372) MONITOR: MCU temperature: 50.572 C.
+05:45:20.636 [0m[32mI (377378) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:25.592 [0m[32mI (382334) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:25.596 [0m[32mI (382339) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:25.601 [0m[32mI (382344) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:25.608 [0m[32mI (382349) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:25.613 [0m[32mI (382355) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:25.620 [0m[32mI (382361) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:25.625 [0m[32mI (382367) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:25.628 [0m[32mI (382372) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:25.635 [0m[32mI (382377) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:25.640 [0m[32mI (382382) MONITOR: MCU temperature: 51.768 C.
+05:45:25.645 [0m[32mI (382387) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:26.790 [0m[32mI (383532) SPIKE: CPU P5 win=10017ms cnt/ms=49.9 idle=9.2 gui=57.2 fg=19.3 sto=0.0 pb=14.0 log=0.0 mon=0.0 tmr=0.0 oth=0.3
+05:45:26.795 [0m[32mI (383537) SPIKE: GUI P5 win=10017ms loops=444 flush=492 sleep_avg=2.0ms frame_max=43589us sleep=on
+05:45:26.800 [0m[32mI (383542) SPIKE: LOCK GLOBAL ph hold=7115us@Foreground_Task/ReadFile wait=3921us@Foreground_Task/ReadFile n=2037
+05:45:26.804 [0m[32mI (383547) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/ReadFile
+05:45:26.810 [0m[32mI (383552) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=16475
+05:45:26.814 [0m[32mI (383557) SPIKE: SDREAD P5 audio32K n=12 min=2871us avg=3463us max=4797us
+05:45:26.825 [0m[32mI (383568) SPIKE: UNDER P5 total=0 win=0
+05:45:26.830 [0m[32mI (383572) SPIKE: SDREAD P5 fg32K n=1466 min=1830us avg=2432us max=7115us
+05:45:26.835 [0m[32mI (383577) SPIKE: SDREAD P5 fg4K n=183 avg=1091us max=4972us err=0 last=OK nl=134006 pass=5
+05:45:30.597 [0m[32mI (387340) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:30.603 [0m[32mI (387345) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:30.607 [0m[32mI (387350) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:30.612 [0m[32mI (387355) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:30.617 [0m[32mI (387360) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:30.622 [0m[32mI (387365) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:30.627 [0m[32mI (387370) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:30.632 [0m[32mI (387375) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:30.638 [0m[32mI (387380) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:30.642 [0m[32mI (387386) MONITOR: MCU temperature: 51.569 C.
+05:45:30.646 [0m[32mI (387390) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:35.600 [0m[32mI (392343) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:35.605 [0m[32mI (392348) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:35.611 [0m[32mI (392353) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:35.618 [0m[32mI (392359) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:35.623 [0m[32mI (392366) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:35.628 [0m[32mI (392371) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:35.633 [0m[32mI (392376) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:35.638 [0m[32mI (392381) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:35.644 [0m[32mI (392386) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:35.648 [0m[32mI (392392) MONITOR: MCU temperature: 51.046 C.
+05:45:35.652 [0m[32mI (392396) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:36.794 [0m[32mI (393536) SPIKE: CPU P5 win=10003ms cnt/ms=50.0 idle=52.8 gui=7.6 fg=25.2 sto=0.0 pb=14.0 log=0.0 mon=0.0 tmr=0.0 oth=0.4
+05:45:36.798 [0m[32mI (393541) SPIKE: GUI P5 win=10003ms loops=624 flush=66 sleep_avg=15.3ms frame_max=9158us sleep=on
+05:45:36.803 [0m[32mI (393547) SPIKE: LOCK GLOBAL ph hold=7115us@Foreground_Task/ReadFile wait=3925us@Foreground_Task/ReadFile n=4704
+05:45:36.808 [0m[32mI (393551) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/ReadFile
+05:45:36.818 [0m[32mI (393561) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=19142
+05:45:36.823 [0m[32mI (393566) SPIKE: SDREAD P5 audio32K n=25 min=2837us avg=3408us max=4797us
+05:45:36.827 [0m[32mI (393571) SPIKE: UNDER P5 total=0 win=0
+05:45:36.833 [0m[32mI (393576) SPIKE: SDREAD P5 fg32K n=3381 min=1827us avg=2259us max=7115us
+05:45:36.838 [0m[32mI (393581) SPIKE: SDREAD P5 fg4K n=424 avg=828us max=4972us err=0 last=OK nl=308929 pass=13
+05:45:40.606 [0m[32mI (397350) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:40.611 [0m[32mI (397355) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:40.617 [0m[32mI (397360) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:40.624 [0m[32mI (397365) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:40.630 [0m[32mI (397373) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:40.635 [0m[32mI (397379) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:40.640 [0m[32mI (397384) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:40.648 [0m[32mI (397389) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:40.652 [0m[32mI (397396) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:40.658 [0m[32mI (397401) MONITOR: MCU temperature: 51.693 C.
+05:45:40.663 [0m[32mI (397406) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:45.616 [0m[32mI (402360) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:45.622 [0m[32mI (402365) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:45.630 [0m[32mI (402370) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:45.636 [0m[32mI (402379) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:45.641 [0m[32mI (402385) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:45.645 [0m[32mI (402390) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:45.655 [0m[32mI (402396) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:45.659 [0m[32mI (402404) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:45.666 [0m[32mI (402409) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:45.671 [0m[32mI (402415) MONITOR: MCU temperature: 51.992 C.
+05:45:45.679 [0m[32mI (402420) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:45.875 [0m[32mI (402620) PLAYBACK: Next idx=6
+05:45:45.891 [0m[32mI (402624) STORAGE: Stream pos=6 off=0 open=362 lseek=547
+05:45:45.894 [0m[32mI (402640) STORAGE: Tag idx=6 src=title reads=1 open=294 us=586
+05:45:45.899 [0m[32mI (402644) PLAYBACK: Open idx=6 rate=44100
+05:45:45.905 [0m[32mI (402649) PLAYBACK: Switch idx=6 lat=24684
+05:45:46.085 [0m[32mI (402830) PLAYBACK: Next idx=7
+05:45:46.102 [0m[32mI (402834) STORAGE: Stream pos=7 off=0 open=362 lseek=557
+05:45:46.106 [0m[32mI (402851) STORAGE: Tag idx=7 src=title reads=1 open=293 us=576
+05:45:46.111 [0m[32mI (402855) PLAYBACK: Open idx=7 rate=44100
+05:45:46.116 [0m[32mI (402860) PLAYBACK: Switch idx=7 lat=25684
+05:45:46.255 [0m[32mI (402999) PLAYBACK: Next idx=8
+05:45:46.269 [0m[32mI (403004) STORAGE: Stream pos=8 off=0 open=291 lseek=565
+05:45:46.273 [0m[32mI (403019) STORAGE: Tag idx=8 src=title reads=1 open=293 us=577
+05:45:46.279 [0m[32mI (403023) PLAYBACK: Open idx=8 rate=48000
+05:45:46.284 [0m[32mI (403028) PLAYBACK: Switch idx=8 lat=24626
+05:45:46.428 [0m[32mI (403172) PLAYBACK: Next idx=9
+05:45:46.442 [0m[32mI (403177) STORAGE: Stream pos=9 off=0 open=293 lseek=568
+05:45:46.445 [0m[32mI (403191) STORAGE: Tag idx=9 src=title reads=1 open=297 us=571
+05:45:46.451 [0m[32mI (403195) PLAYBACK: Open idx=9 rate=48000
+05:45:46.456 [0m[32mI (403200) PLAYBACK: Switch idx=9 lat=23681
+05:45:46.600 [0m[32mI (403344) PLAYBACK: Next idx=10
+05:45:46.614 [0m[32mI (403349) STORAGE: Stream pos=10 off=0 open=291 lseek=586
+05:45:46.618 [0m[32mI (403363) STORAGE: Tag idx=10 src=title reads=1 open=294 us=544
+05:45:46.622 [0m[32mI (403367) PLAYBACK: Open idx=10 rate=48000
+05:45:46.627 [0m[32mI (403372) PLAYBACK: Switch idx=10 lat=23684
+05:45:46.803 [0m[32mI (403547) SPIKE: CPU P5 win=10013ms cnt/ms=49.9 idle=12.5 gui=53.3 fg=18.5 sto=0.9 pb=14.6 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:45:46.806 [0m[32mI (403552) SPIKE: GUI P5 win=10013ms loops=428 flush=467 sleep_avg=3.5ms frame_max=45331us sleep=on
+05:45:46.813 [0m[32mI (403557) SPIKE: LOCK GLOBAL ph hold=7115us@Foreground_Task/ReadFile wait=130076us@Foreground_Task/ReadFile n=6880
+05:45:46.818 [0m[32mI (403562) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:45:46.824 [0m[32mI (403567) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=21318
+05:45:46.835 [0m[32mI (403579) SPIKE: SDREAD P5 audio32K n=196 min=2574us avg=3329us max=6277us
+05:45:46.840 [0m[32mI (403584) SPIKE: UNDER P5 total=0 win=0
+05:45:46.845 [0m[32mI (403589) SPIKE: SDREAD P5 fg32K n=4783 min=1827us avg=2301us max=7115us
+05:45:46.851 [0m[32mI (403594) SPIKE: SDREAD P5 fg4K n=600 avg=895us max=5046us err=0 last=OK nl=437053 pass=18
+05:45:47.075 [0m[32mI (403820) PLAYBACK: Next idx=11
+05:45:47.089 [0m[32mI (403824) STORAGE: Stream pos=11 off=0 open=294 lseek=557
+05:45:47.094 [0m[32mI (403839) STORAGE: Tag idx=11 src=title reads=1 open=294 us=521
+05:45:47.098 [0m[32mI (403843) PLAYBACK: Open idx=11 rate=48000
+05:45:47.104 [0m[32mI (403848) PLAYBACK: Switch idx=11 lat=23684
+05:45:47.384 [0m[32mI (404128) PLAYBACK: Next idx=0
+05:45:47.395 [0m[32mI (404133) STORAGE: Stream pos=0 off=0 open=317 lseek=276
+05:45:47.397 [0m[32mI (404144) STORAGE: Tag idx=0 src=title reads=1 open=317 us=520
+05:45:47.403 [0m[32mI (404148) PLAYBACK: Switch idx=0 lat=20684
+05:45:47.409 [0m[32mI (404153) PLAYBACK: Open idx=0 rate=44100
+05:45:50.628 [0m[32mI (407371) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:50.633 [0m[32mI (407377) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:50.637 [0m[32mI (407382) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:50.642 [0m[32mI (407387) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:50.648 [0m[32mI (407392) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:50.652 [0m[32mI (407397) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:50.657 [0m[32mI (407402) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:50.660 [0m[32mI (407407) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:50.668 [0m[32mI (407412) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:50.673 [0m[32mI (407417) MONITOR: MCU temperature: 52.117 C.
+05:45:50.680 [0m[32mI (407423) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:55.630 [0m[32mI (412375) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:45:55.635 [0m[32mI (412380) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:45:55.642 [0m[32mI (412385) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:45:55.644 [0m[32mI (412392) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:45:55.652 [0m[32mI (412396) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:45:55.658 [0m[32mI (412402) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:45:55.665 [0m[32mI (412408) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:45:55.668 [0m[32mI (412414) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:45:55.673 [0m[32mI (412418) MONITOR: Heap: free=16432 B, min free=15424 B
+05:45:55.678 [0m[32mI (412423) MONITOR: MCU temperature: 51.668 C.
+05:45:55.684 [0m[32mI (412428) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:45:56.803 [0m[32mI (413547) SPIKE: CPU P5 win=10002ms cnt/ms=50.0 idle=14.4 gui=52.3 fg=19.9 sto=0.3 pb=12.8 log=0.0 mon=0.0 tmr=0.0 oth=0.3
+05:45:56.807 [0m[32mI (413552) SPIKE: GUI P5 win=10002ms loops=387 flush=412 sleep_avg=3.2ms frame_max=45322us sleep=on
+05:45:56.812 [0m[32mI (413557) SPIKE: LOCK GLOBAL ph hold=7115us@Foreground_Task/ReadFile wait=130076us@Foreground_Task/ReadFile n=9314
+05:45:56.822 [0m[32mI (413567) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:45:56.827 [0m[32mI (413572) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=23752
+05:45:56.832 [0m[32mI (413577) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:45:56.838 [0m[32mI (413582) SPIKE: UNDER P5 total=0 win=0
+05:45:56.842 [0m[32mI (413589) SPIKE: SDREAD P5 fg32K n=6292 min=1827us avg=2307us max=7115us
+05:45:56.856 [0m[32mI (413599) SPIKE: SDREAD P5 fg4K n=789 avg=899us max=5046us err=0 last=OK nl=574906 pass=24
+05:46:00.638 [0m[32mI (417382) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:00.642 [0m[32mI (417389) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:00.648 [0m[32mI (417394) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:00.653 [0m[32mI (417399) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:00.659 [0m[32mI (417404) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:00.663 [0m[32mI (417410) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:00.669 [0m[32mI (417414) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:00.674 [0m[32mI (417419) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:00.679 [0m[32mI (417424) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:00.683 [0m[32mI (417429) MONITOR: MCU temperature: 52.042 C.
+05:46:00.690 [0m[32mI (417434) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:05.639 [0m[32mI (422384) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:05.642 [0m[32mI (422389) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:05.648 [0m[32mI (422394) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:05.653 [0m[32mI (422399) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:05.659 [0m[32mI (422404) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:05.663 [0m[32mI (422410) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:05.669 [0m[32mI (422415) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:05.674 [0m[32mI (422420) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:05.678 [0m[32mI (422425) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:05.685 [0m[32mI (422430) MONITOR: MCU temperature: 52.092 C.
+05:46:05.690 [0m[32mI (422436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:06.835 [0m[32mI (423581) SPIKE: CPU P5 win=10036ms cnt/ms=50.0 idle=53.5 gui=15.7 fg=18.0 sto=0.0 pb=12.5 log=0.0 mon=0.0 tmr=0.0 oth=0.3
+05:46:06.846 [0m[32mI (423591) SPIKE: GUI P5 win=10036ms loops=556 flush=111 sleep_avg=13.7ms frame_max=40473us sleep=on
+05:46:06.851 [0m[32mI (423596) SPIKE: LOCK GLOBAL ph hold=7115us@Foreground_Task/ReadFile wait=130076us@Foreground_Task/ReadFile n=11386
+05:46:06.857 [0m[32mI (423601) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:46:06.861 [0m[32mI (423607) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=25824
+05:46:06.871 [0m[32mI (423617) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:46:06.876 [0m[32mI (423622) SPIKE: UNDER P5 total=0 win=0
+05:46:06.882 [0m[32mI (423627) SPIKE: SDREAD P5 fg32K n=7668 min=1827us avg=2274us max=7115us
+05:46:06.887 [0m[32mI (423633) SPIKE: SDREAD P5 fg4K n=962 avg=858us max=5046us err=1 last=ERROR nl=700545 pass=29
+05:46:09.969 [0m[32mI (426716) PLAYBACK: Stop reason=CARD_REMOVED
+05:46:09.974 [0m[32mI (426720) SD: Card inserted: 30436 MB, block size: 512.
+05:46:09.978 [0m[31mE (426725) SD: Filesystem mount failed.
+05:46:09.984 [0m[31mE (426730) SD: Mount failed.
+05:46:09.988 [0m[31mE (426735) STORAGE: SD process failed.
+05:46:09.993 [0m[32mI (426740) SPIKE: TXT reopened size=8388608
+05:46:10.638 [0m[32mI (427384) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:10.642 [0m[32mI (427389) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:10.648 [0m[32mI (427394) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:10.653 [0m[32mI (427399) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:10.659 [0m[32mI (427404) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:10.663 [0m[32mI (427410) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:10.668 [0m[32mI (427415) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:10.675 [0m[32mI (427420) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:10.678 [0m[32mI (427426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:10.683 [0m[32mI (427430) MONITOR: MCU temperature: 52.914 C.
+05:46:10.689 [0m[32mI (427435) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:15.637 [0m[32mI (432384) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:15.642 [0m[32mI (432389) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:15.648 [0m[32mI (432394) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:15.652 [0m[32mI (432399) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:15.658 [0m[32mI (432404) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:15.663 [0m[32mI (432409) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:15.667 [0m[32mI (432414) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:15.672 [0m[32mI (432419) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:15.677 [0m[32mI (432424) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:15.682 [0m[32mI (432429) MONITOR: MCU temperature: 51.444 C.
+05:46:15.687 [0m[32mI (432434) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:16.845 [0m[32mI (433593) SPIKE: CPU P5 win=10007ms cnt/ms=49.9 idle=67.2 gui=6.7 fg=20.3 sto=1.6 pb=3.9 log=0.0 mon=0.0 tmr=0.0 oth=0.3
+05:46:16.851 [0m[32mI (433598) SPIKE: GUI P5 win=10007ms loops=611 flush=67 sleep_avg=15.5ms frame_max=8848us sleep=on
+05:46:16.857 [0m[32mI (433603) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=13633
+05:46:16.861 [0m[32mI (433608) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:46:16.866 [0m[32mI (433613) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=28071
+05:46:16.871 [0m[32mI (433618) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:46:16.882 [0m[32mI (433628) SPIKE: UNDER P5 total=0 win=0
+05:46:16.886 [0m[32mI (433634) SPIKE: SDREAD P5 fg32K n=9214 min=1827us avg=2208us max=7115us
+05:46:16.891 [0m[32mI (433638) SPIKE: SDREAD P5 fg4K n=1156 avg=794us max=5046us err=1 last=ERROR nl=841775 pass=35
+05:46:20.636 [0m[32mI (437383) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:20.642 [0m[32mI (437388) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:20.645 [0m[32mI (437394) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:20.651 [0m[32mI (437398) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:20.655 [0m[32mI (437403) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:20.661 [0m[32mI (437408) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:20.666 [0m[32mI (437413) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:20.670 [0m[32mI (437418) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:20.676 [0m[32mI (437423) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:20.680 [0m[32mI (437428) MONITOR: MCU temperature: 51.344 C.
+05:46:20.685 [0m[32mI (437433) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:25.638 [0m[32mI (442386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:25.642 [0m[32mI (442391) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:25.649 [0m[32mI (442396) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:25.653 [0m[32mI (442402) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:25.657 [0m[32mI (442406) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:25.664 [0m[32mI (442411) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:25.668 [0m[32mI (442416) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:25.674 [0m[32mI (442421) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:25.678 [0m[32mI (442426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:25.681 [0m[32mI (442431) MONITOR: MCU temperature: 52.341 C.
+05:46:25.688 [0m[32mI (442436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:26.842 [0m[32mI (443590) SPIKE: CPU P5 win=10001ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:46:26.847 [0m[32mI (443595) SPIKE: GUI P5 win=10001ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4599us sleep=on
+05:46:26.858 [0m[32mI (443605) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=16834
+05:46:26.863 [0m[32mI (443610) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:46:26.868 [0m[32mI (443615) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=31272
+05:46:26.872 [0m[32mI (443620) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:46:26.877 [0m[32mI (443625) SPIKE: UNDER P5 total=0 win=0
+05:46:26.887 [0m[32mI (443635) SPIKE: SDREAD P5 fg32K n=11456 min=1827us avg=2144us max=7115us
+05:46:26.893 [0m[32mI (443640) SPIKE: SDREAD P5 fg4K n=1437 avg=734us max=5046us err=1 last=ERROR nl=1046676 pass=43
+05:46:30.635 [0m[32mI (447383) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:30.638 [0m[32mI (447388) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:30.644 [0m[32mI (447394) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:30.649 [0m[32mI (447398) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:30.654 [0m[32mI (447403) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:30.660 [0m[32mI (447408) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:30.664 [0m[32mI (447413) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:30.670 [0m[32mI (447418) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:30.675 [0m[32mI (447423) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:30.680 [0m[32mI (447428) MONITOR: MCU temperature: 52.042 C.
+05:46:30.685 [0m[32mI (447433) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:35.635 [0m[32mI (452383) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:35.639 [0m[32mI (452388) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:35.644 [0m[32mI (452393) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:35.650 [0m[32mI (452398) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:35.655 [0m[32mI (452403) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:35.660 [0m[32mI (452408) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:35.663 [0m[32mI (452413) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:35.669 [0m[32mI (452418) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:35.674 [0m[32mI (452423) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:35.678 [0m[32mI (452428) MONITOR: MCU temperature: 51.892 C.
+05:46:35.685 [0m[32mI (452434) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:36.842 [0m[32mI (453591) SPIKE: CPU P5 win=10000ms cnt/ms=50.0 idle=63.8 gui=6.4 fg=29.6 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:46:36.848 [0m[32mI (453596) SPIKE: GUI P5 win=10000ms loops=625 flush=65 sleep_avg=15.5ms frame_max=4599us sleep=on
+05:46:36.853 [0m[32mI (453602) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=20048
+05:46:36.864 [0m[32mI (453612) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:46:36.869 [0m[32mI (453618) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=34486
+05:46:36.871 [0m[32mI (453622) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:46:36.877 [0m[32mI (453627) SPIKE: UNDER P5 total=0 win=0
+05:46:36.883 [0m[32mI (453632) SPIKE: SDREAD P5 fg32K n=13706 min=1827us avg=2101us max=7115us
+05:46:36.893 [0m[32mI (453642) SPIKE: SDREAD P5 fg4K n=1719 avg=691us max=5046us err=1 last=ERROR nl=1252237 pass=52
+05:46:40.633 [0m[32mI (457383) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:40.637 [0m[32mI (457387) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:40.642 [0m[32mI (457392) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:40.648 [0m[32mI (457397) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:40.653 [0m[32mI (457402) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:40.658 [0m[32mI (457407) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:40.662 [0m[32mI (457412) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:40.668 [0m[32mI (457417) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:40.673 [0m[32mI (457422) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:40.677 [0m[32mI (457427) MONITOR: MCU temperature: 51.693 C.
+05:46:40.683 [0m[32mI (457432) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:45.636 [0m[32mI (462386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:45.640 [0m[32mI (462390) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:45.646 [0m[32mI (462395) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:45.650 [0m[32mI (462400) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:45.655 [0m[32mI (462405) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:45.660 [0m[32mI (462410) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:45.666 [0m[32mI (462415) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:45.670 [0m[32mI (462420) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:45.675 [0m[32mI (462425) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:45.681 [0m[32mI (462430) MONITOR: MCU temperature: 51.295 C.
+05:46:45.686 [0m[32mI (462435) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:46.844 [0m[32mI (463593) SPIKE: CPU P5 win=10001ms cnt/ms=50.0 idle=64.0 gui=6.4 fg=29.4 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:46:46.848 [0m[32mI (463598) SPIKE: GUI P5 win=10001ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4529us sleep=on
+05:46:46.854 [0m[32mI (463603) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=23246
+05:46:46.859 [0m[32mI (463608) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:46:46.869 [0m[32mI (463618) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=37684
+05:46:46.873 [0m[32mI (463623) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:46:46.878 [0m[32mI (463628) SPIKE: UNDER P5 total=0 win=0
+05:46:46.884 [0m[32mI (463634) SPIKE: SDREAD P5 fg32K n=15943 min=1827us avg=2069us max=7115us
+05:46:46.890 [0m[32mI (463639) SPIKE: SDREAD P5 fg4K n=2000 avg=661us max=5046us err=1 last=ERROR nl=1456566 pass=61
+05:46:50.634 [0m[32mI (467384) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:50.639 [0m[32mI (467389) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:50.643 [0m[32mI (467394) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:50.649 [0m[32mI (467399) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:50.655 [0m[32mI (467404) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:50.659 [0m[32mI (467410) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:50.662 [0m[32mI (467414) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:50.669 [0m[32mI (467419) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:50.674 [0m[32mI (467424) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:50.677 [0m[32mI (467429) MONITOR: MCU temperature: 53.038 C.
+05:46:50.684 [0m[32mI (467434) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:55.635 [0m[32mI (472386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:46:55.641 [0m[32mI (472391) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:46:55.647 [0m[32mI (472396) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:46:55.652 [0m[32mI (472402) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:46:55.656 [0m[32mI (472407) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:46:55.662 [0m[32mI (472412) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:46:55.666 [0m[32mI (472418) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:46:55.672 [0m[32mI (472422) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:46:55.676 [0m[32mI (472427) MONITOR: Heap: free=16432 B, min free=15424 B
+05:46:55.681 [0m[32mI (472432) MONITOR: MCU temperature: 52.117 C.
+05:46:55.686 [0m[32mI (472437) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:46:56.844 [0m[32mI (473594) SPIKE: CPU P5 win=9999ms cnt/ms=50.0 idle=64.0 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.1
+05:46:56.849 [0m[32mI (473599) SPIKE: GUI P5 win=9999ms loops=625 flush=65 sleep_avg=15.6ms frame_max=4677us sleep=on
+05:46:56.854 [0m[32mI (473604) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=26449
+05:46:56.859 [0m[32mI (473609) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:46:56.863 [0m[32mI (473614) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=40887
+05:46:56.873 [0m[32mI (473624) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:46:56.878 [0m[32mI (473629) SPIKE: UNDER P5 total=0 win=0
+05:46:56.883 [0m[32mI (473634) SPIKE: SDREAD P5 fg32K n=18185 min=1827us avg=2046us max=7115us
+05:46:56.889 [0m[32mI (473639) SPIKE: SDREAD P5 fg4K n=2281 avg=638us max=5046us err=1 last=ERROR nl=1661384 pass=70
+05:47:00.635 [0m[32mI (477386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:00.640 [0m[32mI (477391) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:00.644 [0m[32mI (477396) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:00.650 [0m[32mI (477401) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:00.655 [0m[32mI (477406) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:00.660 [0m[32mI (477411) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:00.665 [0m[32mI (477416) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:00.670 [0m[32mI (477421) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:00.675 [0m[32mI (477426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:00.678 [0m[32mI (477431) MONITOR: MCU temperature: 52.141 C.
+05:47:00.686 [0m[32mI (477436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:05.636 [0m[32mI (482388) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:05.641 [0m[32mI (482393) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:05.647 [0m[32mI (482398) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:05.651 [0m[32mI (482403) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:05.657 [0m[32mI (482408) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:05.662 [0m[32mI (482413) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:05.667 [0m[32mI (482418) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:05.672 [0m[32mI (482423) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:05.677 [0m[32mI (482428) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:05.682 [0m[32mI (482434) MONITOR: MCU temperature: 52.141 C.
+05:47:05.687 [0m[32mI (482439) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:06.843 [0m[32mI (483597) SPIKE: CPU P5 win=10003ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:47:06.850 [0m[32mI (483602) SPIKE: GUI P5 win=10003ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4532us sleep=on
+05:47:06.855 [0m[32mI (483607) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=29657
+05:47:06.862 [0m[32mI (483612) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:47:06.865 [0m[32mI (483618) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=44095
+05:47:06.871 [0m[32mI (483622) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:47:06.880 [0m[32mI (483632) SPIKE: UNDER P5 total=0 win=0
+05:47:06.886 [0m[32mI (483637) SPIKE: SDREAD P5 fg32K n=20431 min=1826us avg=2028us max=7115us
+05:47:06.891 [0m[32mI (483642) SPIKE: SDREAD P5 fg4K n=2563 avg=620us max=5046us err=1 last=ERROR nl=1866583 pass=78
+05:47:10.634 [0m[32mI (487386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:10.639 [0m[32mI (487391) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:10.643 [0m[32mI (487396) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:10.648 [0m[32mI (487401) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:10.653 [0m[32mI (487406) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:10.658 [0m[32mI (487411) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:10.664 [0m[32mI (487416) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:10.669 [0m[32mI (487421) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:10.674 [0m[32mI (487426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:10.679 [0m[32mI (487431) MONITOR: MCU temperature: 52.166 C.
+05:47:10.685 [0m[32mI (487436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:15.631 [0m[32mI (492386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:15.637 [0m[32mI (492390) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:15.640 [0m[32mI (492395) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:15.648 [0m[32mI (492400) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:15.652 [0m[32mI (492405) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:15.657 [0m[32mI (492410) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:15.662 [0m[32mI (492415) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:15.668 [0m[32mI (492420) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:15.672 [0m[32mI (492425) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:15.677 [0m[32mI (492430) MONITOR: MCU temperature: 52.440 C.
+05:47:15.683 [0m[32mI (492435) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:16.844 [0m[32mI (493596) SPIKE: CPU P5 win=10000ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:47:16.848 [0m[32mI (493602) SPIKE: GUI P5 win=10000ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4637us sleep=on
+05:47:16.854 [0m[32mI (493606) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=32864
+05:47:16.858 [0m[32mI (493611) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:47:16.863 [0m[32mI (493616) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=47302
+05:47:16.873 [0m[32mI (493626) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:47:16.877 [0m[32mI (493631) SPIKE: UNDER P5 total=0 win=0
+05:47:16.883 [0m[32mI (493636) SPIKE: SDREAD P5 fg32K n=22674 min=1826us avg=2013us max=7115us
+05:47:16.889 [0m[32mI (493641) SPIKE: SDREAD P5 fg4K n=2845 avg=605us max=5046us err=1 last=ERROR nl=2071558 pass=87
+05:47:20.633 [0m[32mI (497386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:20.638 [0m[32mI (497391) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:20.643 [0m[32mI (497396) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:20.648 [0m[32mI (497401) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:20.653 [0m[32mI (497406) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:20.659 [0m[32mI (497411) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:20.663 [0m[32mI (497416) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:20.669 [0m[32mI (497421) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:20.673 [0m[32mI (497426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:20.678 [0m[32mI (497431) MONITOR: MCU temperature: 51.320 C.
+05:47:20.684 [0m[32mI (497436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:25.634 [0m[32mI (502387) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:25.639 [0m[32mI (502392) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:25.643 [0m[32mI (502397) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:25.649 [0m[32mI (502402) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:25.653 [0m[32mI (502407) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:25.658 [0m[32mI (502412) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:25.664 [0m[32mI (502418) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:25.669 [0m[32mI (502422) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:25.673 [0m[32mI (502427) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:25.679 [0m[32mI (502432) MONITOR: MCU temperature: 53.337 C.
+05:47:25.683 [0m[32mI (502437) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:26.843 [0m[32mI (503596) SPIKE: CPU P5 win=10003ms cnt/ms=50.0 idle=64.0 gui=6.4 fg=29.4 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:47:26.848 [0m[32mI (503602) SPIKE: GUI P5 win=10003ms loops=626 flush=66 sleep_avg=15.5ms frame_max=4696us sleep=on
+05:47:26.858 [0m[32mI (503611) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=36064
+05:47:26.863 [0m[32mI (503616) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:47:26.868 [0m[32mI (503621) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=50502
+05:47:26.873 [0m[32mI (503626) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:47:26.877 [0m[32mI (503631) SPIKE: UNDER P5 total=0 win=0
+05:47:26.888 [0m[32mI (503641) SPIKE: SDREAD P5 fg32K n=24913 min=1826us avg=2001us max=7115us
+05:47:26.892 [0m[32mI (503646) SPIKE: SDREAD P5 fg4K n=3126 avg=595us max=5046us err=1 last=ERROR nl=2276071 pass=96
+05:47:30.634 [0m[32mI (507387) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:30.638 [0m[32mI (507392) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:30.643 [0m[32mI (507397) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:30.648 [0m[32mI (507402) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:30.653 [0m[32mI (507407) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:30.658 [0m[32mI (507412) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:30.663 [0m[32mI (507417) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:30.668 [0m[32mI (507422) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:30.673 [0m[32mI (507427) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:30.678 [0m[32mI (507432) MONITOR: MCU temperature: 51.120 C.
+05:47:30.682 [0m[32mI (507437) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:35.633 [0m[32mI (512387) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:35.637 [0m[32mI (512392) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:35.643 [0m[32mI (512397) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:35.647 [0m[32mI (512402) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:35.652 [0m[32mI (512407) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:35.659 [0m[32mI (512412) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:35.663 [0m[32mI (512418) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:35.667 [0m[32mI (512422) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:35.672 [0m[32mI (512427) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:35.676 [0m[32mI (512432) MONITOR: MCU temperature: 52.640 C.
+05:47:35.682 [0m[32mI (512437) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:36.846 [0m[32mI (513600) SPIKE: CPU P5 win=10001ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:47:36.851 [0m[32mI (513605) SPIKE: GUI P5 win=10001ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4529us sleep=on
+05:47:36.856 [0m[32mI (513610) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=39275
+05:47:36.861 [0m[32mI (513615) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:47:36.866 [0m[32mI (513620) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=53713
+05:47:36.876 [0m[32mI (513630) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:47:36.880 [0m[32mI (513635) SPIKE: UNDER P5 total=0 win=0
+05:47:36.885 [0m[32mI (513640) SPIKE: SDREAD P5 fg32K n=27160 min=1826us avg=1991us max=7115us
+05:47:36.891 [0m[32mI (513645) SPIKE: SDREAD P5 fg4K n=3408 avg=584us max=5046us err=1 last=ERROR nl=2481350 pass=105
+05:47:40.634 [0m[32mI (517388) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:40.640 [0m[32mI (517394) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:40.642 [0m[32mI (517399) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:40.650 [0m[32mI (517404) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:40.655 [0m[32mI (517410) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:40.659 [0m[32mI (517414) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:40.665 [0m[32mI (517419) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:40.669 [0m[32mI (517424) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:40.675 [0m[32mI (517429) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:40.679 [0m[32mI (517434) MONITOR: MCU temperature: 52.540 C.
+05:47:40.684 [0m[32mI (517439) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:45.632 [0m[32mI (522387) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:45.637 [0m[32mI (522392) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:45.641 [0m[32mI (522397) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:45.646 [0m[32mI (522402) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:45.652 [0m[32mI (522407) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:45.658 [0m[32mI (522412) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:45.661 [0m[32mI (522418) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:45.666 [0m[32mI (522422) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:45.671 [0m[32mI (522427) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:45.676 [0m[32mI (522432) MONITOR: MCU temperature: 52.864 C.
+05:47:45.682 [0m[32mI (522437) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:46.846 [0m[32mI (523600) SPIKE: CPU P5 win=10001ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:47:46.850 [0m[32mI (523605) SPIKE: GUI P5 win=10001ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4568us sleep=on
+05:47:46.856 [0m[32mI (523610) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=42476
+05:47:46.860 [0m[32mI (523615) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:47:46.870 [0m[32mI (523625) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=56914
+05:47:46.874 [0m[32mI (523630) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:47:46.879 [0m[32mI (523635) SPIKE: UNDER P5 total=0 win=0
+05:47:46.885 [0m[32mI (523640) SPIKE: SDREAD P5 fg32K n=29402 min=1826us avg=1982us max=7115us
+05:47:46.888 [0m[32mI (523645) SPIKE: SDREAD P5 fg4K n=3689 avg=577us max=5046us err=1 last=ERROR nl=2686152 pass=113
+05:47:50.629 [0m[32mI (527386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:50.634 [0m[32mI (527390) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:50.639 [0m[32mI (527395) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:50.644 [0m[32mI (527400) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:50.648 [0m[32mI (527405) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:50.654 [0m[32mI (527411) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:50.658 [0m[32mI (527415) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:50.665 [0m[32mI (527420) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:50.671 [0m[32mI (527426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:50.675 [0m[32mI (527431) MONITOR: MCU temperature: 53.412 C.
+05:47:50.682 [0m[32mI (527436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:55.630 [0m[32mI (532388) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:47:55.637 [0m[32mI (532393) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:47:55.642 [0m[32mI (532398) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:47:55.647 [0m[32mI (532403) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:47:55.652 [0m[32mI (532408) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:47:55.657 [0m[32mI (532413) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:47:55.662 [0m[32mI (532418) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:47:55.667 [0m[32mI (532423) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:47:55.672 [0m[32mI (532428) MONITOR: Heap: free=16432 B, min free=15424 B
+05:47:55.678 [0m[32mI (532434) MONITOR: MCU temperature: 51.917 C.
+05:47:55.681 [0m[32mI (532438) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:47:56.845 [0m[32mI (533602) SPIKE: CPU P5 win=10000ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:47:56.848 [0m[32mI (533606) SPIKE: GUI P5 win=10000ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4614us sleep=on
+05:47:56.855 [0m[32mI (533611) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=45688
+05:47:56.860 [0m[32mI (533616) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:47:56.865 [0m[32mI (533621) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=60126
+05:47:56.875 [0m[32mI (533631) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:47:56.878 [0m[32mI (533636) SPIKE: UNDER P5 total=0 win=0
+05:47:56.885 [0m[32mI (533641) SPIKE: SDREAD P5 fg32K n=31650 min=1826us avg=1975us max=7115us
+05:47:56.890 [0m[32mI (533646) SPIKE: SDREAD P5 fg4K n=3971 avg=569us max=5046us err=1 last=ERROR nl=2891606 pass=122
+05:48:00.630 [0m[32mI (537387) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:00.635 [0m[32mI (537392) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:00.640 [0m[32mI (537397) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:00.645 [0m[32mI (537402) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:00.648 [0m[32mI (537407) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:00.655 [0m[32mI (537412) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:00.660 [0m[32mI (537417) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:00.665 [0m[32mI (537422) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:00.669 [0m[32mI (537427) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:00.675 [0m[32mI (537432) MONITOR: MCU temperature: 53.163 C.
+05:48:00.679 [0m[32mI (537437) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:05.627 [0m[32mI (542386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:05.634 [0m[32mI (542391) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:05.640 [0m[32mI (542396) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:05.644 [0m[32mI (542402) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:05.648 [0m[32mI (542406) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:05.654 [0m[32mI (542411) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:05.659 [0m[32mI (542416) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:05.663 [0m[32mI (542421) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:05.669 [0m[32mI (542426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:05.673 [0m[32mI (542431) MONITOR: MCU temperature: 53.113 C.
+05:48:05.679 [0m[32mI (542436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:06.844 [0m[32mI (543602) SPIKE: CPU P5 win=10003ms cnt/ms=50.0 idle=64.0 gui=6.4 fg=29.4 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:48:06.848 [0m[32mI (543606) SPIKE: GUI P5 win=10003ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4563us sleep=on
+05:48:06.858 [0m[32mI (543616) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=48888
+05:48:06.864 [0m[32mI (543621) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:48:06.869 [0m[32mI (543626) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=63326
+05:48:06.873 [0m[32mI (543631) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:48:06.879 [0m[32mI (543636) SPIKE: UNDER P5 total=0 win=0
+05:48:06.887 [0m[32mI (543646) SPIKE: SDREAD P5 fg32K n=33889 min=1826us avg=1969us max=7115us
+05:48:06.894 [0m[32mI (543651) SPIKE: SDREAD P5 fg4K n=4252 avg=563us max=5046us err=1 last=ERROR nl=3096136 pass=131
+05:48:10.632 [0m[32mI (547389) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:10.636 [0m[32mI (547394) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:10.641 [0m[32mI (547399) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:10.647 [0m[32mI (547404) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:10.651 [0m[32mI (547410) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:10.657 [0m[32mI (547414) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:10.659 [0m[32mI (547419) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:10.667 [0m[32mI (547424) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:10.671 [0m[32mI (547429) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:10.676 [0m[32mI (547434) MONITOR: MCU temperature: 52.565 C.
+05:48:10.681 [0m[32mI (547439) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:15.632 [0m[32mI (552389) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:15.636 [0m[32mI (552394) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:15.641 [0m[32mI (552399) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:15.646 [0m[32mI (552404) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:15.651 [0m[32mI (552409) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:15.656 [0m[32mI (552414) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:15.659 [0m[32mI (552419) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:15.666 [0m[32mI (552424) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:15.671 [0m[32mI (552429) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:15.675 [0m[32mI (552434) MONITOR: MCU temperature: 53.711 C.
+05:48:15.681 [0m[32mI (552439) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:16.848 [0m[32mI (553606) SPIKE: CPU P5 win=10002ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:48:16.853 [0m[32mI (553611) SPIKE: GUI P5 win=10002ms loops=625 flush=65 sleep_avg=15.5ms frame_max=4535us sleep=on
+05:48:16.858 [0m[32mI (553616) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=52095
+05:48:16.863 [0m[32mI (553621) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:48:16.868 [0m[32mI (553626) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=66533
+05:48:16.878 [0m[32mI (553636) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:48:16.883 [0m[32mI (553641) SPIKE: UNDER P5 total=0 win=0
+05:48:16.888 [0m[32mI (553646) SPIKE: SDREAD P5 fg32K n=36132 min=1826us avg=1963us max=7115us
+05:48:16.893 [0m[32mI (553651) SPIKE: SDREAD P5 fg4K n=4534 avg=558us max=5046us err=1 last=ERROR nl=3301039 pass=140
+05:48:20.630 [0m[32mI (557388) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:20.634 [0m[32mI (557394) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:20.640 [0m[32mI (557398) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:20.644 [0m[32mI (557403) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:20.649 [0m[32mI (557408) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:20.655 [0m[32mI (557413) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:20.660 [0m[32mI (557418) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:20.664 [0m[32mI (557423) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:20.669 [0m[32mI (557428) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:20.673 [0m[32mI (557433) MONITOR: MCU temperature: 52.266 C.
+05:48:20.679 [0m[32mI (557438) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:25.628 [0m[32mI (562388) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:25.634 [0m[32mI (562393) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:25.638 [0m[32mI (562398) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:25.644 [0m[32mI (562403) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:25.647 [0m[32mI (562408) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:25.654 [0m[32mI (562413) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:25.657 [0m[32mI (562418) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:25.664 [0m[32mI (562423) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:25.670 [0m[32mI (562428) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:25.675 [0m[32mI (562434) MONITOR: MCU temperature: 52.988 C.
+05:48:25.680 [0m[32mI (562439) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:26.847 [0m[32mI (563608) SPIKE: CPU P5 win=10002ms cnt/ms=50.0 idle=64.0 gui=6.4 fg=29.4 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:48:26.854 [0m[32mI (563613) SPIKE: GUI P5 win=10002ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4667us sleep=on
+05:48:26.857 [0m[32mI (563618) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=55296
+05:48:26.864 [0m[32mI (563623) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:48:26.870 [0m[32mI (563628) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=69734
+05:48:26.877 [0m[32mI (563638) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:48:26.884 [0m[32mI (563643) SPIKE: UNDER P5 total=0 win=0
+05:48:26.889 [0m[32mI (563648) SPIKE: SDREAD P5 fg32K n=38373 min=1826us avg=1958us max=7115us
+05:48:26.893 [0m[32mI (563653) SPIKE: SDREAD P5 fg4K n=4815 avg=553us max=5046us err=1 last=ERROR nl=3505740 pass=148
+05:48:30.626 [0m[32mI (567386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:30.630 [0m[32mI (567390) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:30.635 [0m[32mI (567395) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:30.640 [0m[32mI (567400) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:30.644 [0m[32mI (567405) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:30.650 [0m[32mI (567410) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:30.655 [0m[32mI (567415) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:30.659 [0m[32mI (567420) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:30.665 [0m[32mI (567426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:30.671 [0m[32mI (567430) MONITOR: MCU temperature: 53.611 C.
+05:48:30.675 [0m[32mI (567435) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:35.626 [0m[32mI (572386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:35.630 [0m[32mI (572391) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:35.637 [0m[32mI (572396) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:35.642 [0m[32mI (572402) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:35.644 [0m[32mI (572407) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:35.653 [0m[32mI (572412) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:35.656 [0m[32mI (572418) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:35.663 [0m[32mI (572423) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:35.669 [0m[32mI (572428) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:35.673 [0m[32mI (572434) MONITOR: MCU temperature: 52.988 C.
+05:48:35.677 [0m[32mI (572438) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:36.846 [0m[32mI (573606) SPIKE: CPU P5 win=10001ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:48:36.851 [0m[32mI (573611) SPIKE: GUI P5 win=10001ms loops=625 flush=65 sleep_avg=15.5ms frame_max=4646us sleep=on
+05:48:36.860 [0m[32mI (573621) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=58507
+05:48:36.866 [0m[32mI (573626) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:48:36.871 [0m[32mI (573631) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=72945
+05:48:36.876 [0m[32mI (573636) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:48:36.886 [0m[32mI (573646) SPIKE: UNDER P5 total=0 win=0
+05:48:36.891 [0m[32mI (573651) SPIKE: SDREAD P5 fg32K n=40620 min=1826us avg=1954us max=7115us
+05:48:36.896 [0m[32mI (573656) SPIKE: SDREAD P5 fg4K n=5097 avg=550us max=5046us err=1 last=ERROR nl=3711099 pass=157
+05:48:40.628 [0m[32mI (577388) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:40.633 [0m[32mI (577394) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:40.638 [0m[32mI (577398) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:40.643 [0m[32mI (577403) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:40.648 [0m[32mI (577408) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:40.653 [0m[32mI (577413) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:40.658 [0m[32mI (577418) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:40.662 [0m[32mI (577423) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:40.667 [0m[32mI (577428) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:40.672 [0m[32mI (577433) MONITOR: MCU temperature: 52.515 C.
+05:48:40.677 [0m[32mI (577438) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:45.626 [0m[32mI (582387) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:45.629 [0m[32mI (582391) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:45.636 [0m[32mI (582396) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:45.640 [0m[32mI (582402) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:45.645 [0m[32mI (582406) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:45.650 [0m[32mI (582411) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:45.655 [0m[32mI (582416) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:45.660 [0m[32mI (582421) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:45.665 [0m[32mI (582426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:45.670 [0m[32mI (582431) MONITOR: MCU temperature: 53.088 C.
+05:48:45.674 [0m[32mI (582436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:46.847 [0m[32mI (583607) SPIKE: CPU P5 win=10001ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:48:46.852 [0m[32mI (583612) SPIKE: GUI P5 win=10001ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4617us sleep=on
+05:48:46.861 [0m[32mI (583622) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=61717
+05:48:46.866 [0m[32mI (583627) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:48:46.871 [0m[32mI (583632) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=76155
+05:48:46.876 [0m[32mI (583637) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:48:46.881 [0m[32mI (583642) SPIKE: UNDER P5 total=0 win=0
+05:48:46.891 [0m[32mI (583652) SPIKE: SDREAD P5 fg32K n=42866 min=1826us avg=1950us max=7115us
+05:48:46.895 [0m[32mI (583657) SPIKE: SDREAD P5 fg4K n=5379 avg=545us max=5046us err=1 last=ERROR nl=3916270 pass=166
+05:48:50.625 [0m[32mI (587387) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:50.630 [0m[32mI (587392) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:50.635 [0m[32mI (587397) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:50.641 [0m[32mI (587402) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:50.644 [0m[32mI (587407) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:50.651 [0m[32mI (587412) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:50.656 [0m[32mI (587417) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:50.661 [0m[32mI (587422) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:50.666 [0m[32mI (587427) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:50.671 [0m[32mI (587432) MONITOR: MCU temperature: 52.366 C.
+05:48:50.676 [0m[32mI (587437) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:55.628 [0m[32mI (592389) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:48:55.632 [0m[32mI (592394) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:48:55.638 [0m[32mI (592399) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:48:55.642 [0m[32mI (592404) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:48:55.647 [0m[32mI (592409) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:48:55.652 [0m[32mI (592414) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:48:55.657 [0m[32mI (592419) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:48:55.662 [0m[32mI (592424) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:48:55.666 [0m[32mI (592429) MONITOR: Heap: free=16432 B, min free=15424 B
+05:48:55.672 [0m[32mI (592434) MONITOR: MCU temperature: 53.711 C.
+05:48:55.677 [0m[32mI (592439) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:48:56.847 [0m[32mI (593609) SPIKE: CPU P5 win=9999ms cnt/ms=50.0 idle=64.0 gui=6.4 fg=29.4 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:48:56.853 [0m[32mI (593614) SPIKE: GUI P5 win=9999ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4529us sleep=on
+05:48:56.857 [0m[32mI (593619) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=64913
+05:48:56.862 [0m[32mI (593624) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:48:56.868 [0m[32mI (593629) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=79351
+05:48:56.877 [0m[32mI (593639) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:48:56.883 [0m[32mI (593644) SPIKE: UNDER P5 total=0 win=0
+05:48:56.887 [0m[32mI (593650) SPIKE: SDREAD P5 fg32K n=45104 min=1826us avg=1946us max=7115us
+05:48:56.892 [0m[32mI (593654) SPIKE: SDREAD P5 fg4K n=5659 avg=541us max=5046us err=1 last=ERROR nl=4120713 pass=175
+05:49:00.625 [0m[32mI (597387) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:00.628 [0m[32mI (597392) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:00.635 [0m[32mI (597397) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:00.639 [0m[32mI (597402) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:00.644 [0m[32mI (597407) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:00.650 [0m[32mI (597412) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:00.654 [0m[32mI (597417) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:00.659 [0m[32mI (597422) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:00.665 [0m[32mI (597427) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:00.669 [0m[32mI (597432) MONITOR: MCU temperature: 53.636 C.
+05:49:00.675 [0m[32mI (597437) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:05.625 [0m[32mI (602388) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:05.629 [0m[32mI (602393) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:05.635 [0m[32mI (602398) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:05.640 [0m[32mI (602403) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:05.645 [0m[32mI (602408) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:05.650 [0m[32mI (602413) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:05.656 [0m[32mI (602418) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:05.660 [0m[32mI (602423) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:05.664 [0m[32mI (602428) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:05.670 [0m[32mI (602434) MONITOR: MCU temperature: 52.739 C.
+05:49:05.674 [0m[32mI (602438) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:06.843 [0m[32mI (603606) SPIKE: CPU P5 win=10000ms cnt/ms=50.0 idle=64.0 gui=6.4 fg=29.4 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:49:06.846 [0m[32mI (603611) SPIKE: GUI P5 win=10000ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4529us sleep=on
+05:49:06.859 [0m[32mI (603621) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=68112
+05:49:06.862 [0m[32mI (603626) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:49:06.869 [0m[32mI (603631) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=82550
+05:49:06.873 [0m[32mI (603636) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:49:06.877 [0m[32mI (603641) SPIKE: UNDER P5 total=0 win=0
+05:49:06.889 [0m[32mI (603651) SPIKE: SDREAD P5 fg32K n=47344 min=1826us avg=1943us max=7115us
+05:49:06.893 [0m[32mI (603656) SPIKE: SDREAD P5 fg4K n=5940 avg=538us max=5046us err=1 last=ERROR nl=4325310 pass=183
+05:49:10.622 [0m[32mI (607386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:10.627 [0m[32mI (607390) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:10.632 [0m[32mI (607395) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:10.637 [0m[32mI (607400) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:10.641 [0m[32mI (607405) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:10.646 [0m[32mI (607410) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:10.652 [0m[32mI (607415) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:10.657 [0m[32mI (607420) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:10.662 [0m[32mI (607426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:10.667 [0m[32mI (607431) MONITOR: MCU temperature: 53.910 C.
+05:49:10.674 [0m[32mI (607436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:15.623 [0m[32mI (612387) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:15.628 [0m[32mI (612392) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:15.633 [0m[32mI (612397) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:15.638 [0m[32mI (612402) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:15.643 [0m[32mI (612407) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:15.649 [0m[32mI (612412) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:15.652 [0m[32mI (612418) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:15.659 [0m[32mI (612422) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:15.661 [0m[32mI (612427) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:15.668 [0m[32mI (612432) MONITOR: MCU temperature: 53.237 C.
+05:49:15.674 [0m[32mI (612437) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:16.846 [0m[32mI (613609) SPIKE: CPU P5 win=10003ms cnt/ms=50.0 idle=64.0 gui=6.4 fg=29.4 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:49:16.850 [0m[32mI (613614) SPIKE: GUI P5 win=10003ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4644us sleep=on
+05:49:16.860 [0m[32mI (613624) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=71317
+05:49:16.865 [0m[32mI (613629) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:49:16.871 [0m[32mI (613634) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=85755
+05:49:16.874 [0m[32mI (613639) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:49:16.880 [0m[32mI (613644) SPIKE: UNDER P5 total=0 win=0
+05:49:16.890 [0m[32mI (613654) SPIKE: SDREAD P5 fg32K n=49585 min=1826us avg=1940us max=7115us
+05:49:16.896 [0m[32mI (613659) SPIKE: SDREAD P5 fg4K n=6222 avg=536us max=5046us err=1 last=ERROR nl=4530124 pass=192
+05:49:20.625 [0m[32mI (617389) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:20.628 [0m[32mI (617394) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:20.635 [0m[32mI (617399) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:20.641 [0m[32mI (617404) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:20.645 [0m[32mI (617410) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:20.651 [0m[32mI (617415) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:20.656 [0m[32mI (617420) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:20.661 [0m[32mI (617426) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:20.664 [0m[32mI (617430) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:20.670 [0m[32mI (617435) MONITOR: MCU temperature: 53.462 C.
+05:49:20.673 [0m[32mI (617440) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:25.621 [0m[32mI (622386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:25.627 [0m[32mI (622391) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:25.632 [0m[32mI (622396) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:25.637 [0m[32mI (622402) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:25.641 [0m[32mI (622406) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:25.646 [0m[32mI (622411) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:25.651 [0m[32mI (622416) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:25.656 [0m[32mI (622421) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:25.661 [0m[32mI (622426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:25.664 [0m[32mI (622431) MONITOR: MCU temperature: 53.237 C.
+05:49:25.671 [0m[32mI (622436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:26.849 [0m[32mI (623613) SPIKE: CPU P5 win=10004ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:49:26.853 [0m[32mI (623618) SPIKE: GUI P5 win=10004ms loops=626 flush=66 sleep_avg=15.5ms frame_max=4533us sleep=on
+05:49:26.864 [0m[32mI (623628) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=74527
+05:49:26.868 [0m[32mI (623634) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:49:26.873 [0m[32mI (623638) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=88965
+05:49:26.878 [0m[32mI (623643) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:49:26.883 [0m[32mI (623648) SPIKE: UNDER P5 total=0 win=0
+05:49:26.891 [0m[32mI (623658) SPIKE: SDREAD P5 fg32K n=51831 min=1826us avg=1938us max=7115us
+05:49:26.898 [0m[32mI (623663) SPIKE: SDREAD P5 fg4K n=6504 avg=533us max=5046us err=1 last=ERROR nl=4735313 pass=201
+05:49:30.621 [0m[32mI (627386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:30.625 [0m[32mI (627391) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:30.630 [0m[32mI (627396) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:30.636 [0m[32mI (627401) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:30.641 [0m[32mI (627406) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:30.645 [0m[32mI (627411) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:30.651 [0m[32mI (627416) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:30.657 [0m[32mI (627421) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:30.662 [0m[32mI (627427) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:30.667 [0m[32mI (627432) MONITOR: MCU temperature: 53.188 C.
+05:49:30.673 [0m[32mI (627437) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:35.620 [0m[32mI (632386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:35.626 [0m[32mI (632391) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:35.631 [0m[32mI (632396) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:35.635 [0m[32mI (632402) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:35.640 [0m[32mI (632406) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:35.646 [0m[32mI (632411) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:35.651 [0m[32mI (632416) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:35.656 [0m[32mI (632421) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:35.661 [0m[32mI (632426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:35.665 [0m[32mI (632431) MONITOR: MCU temperature: 54.607 C.
+05:49:35.671 [0m[32mI (632436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:36.845 [0m[32mI (633613) SPIKE: CPU P5 win=10000ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:49:36.853 [0m[32mI (633618) SPIKE: GUI P5 win=10000ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4637us sleep=on
+05:49:36.863 [0m[32mI (633628) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=77739
+05:49:36.868 [0m[32mI (633634) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:49:36.873 [0m[32mI (633638) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=92177
+05:49:36.875 [0m[32mI (633643) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:49:36.882 [0m[32mI (633648) SPIKE: UNDER P5 total=0 win=0
+05:49:36.891 [0m[32mI (633658) SPIKE: SDREAD P5 fg32K n=54079 min=1826us avg=1935us max=7115us
+05:49:36.897 [0m[32mI (633663) SPIKE: SDREAD P5 fg4K n=6786 avg=531us max=5046us err=1 last=ERROR nl=4940641 pass=210
+05:49:40.619 [0m[32mI (637386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:40.623 [0m[32mI (637390) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:40.629 [0m[32mI (637395) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:40.634 [0m[32mI (637400) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:40.638 [0m[32mI (637405) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:40.644 [0m[32mI (637410) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:40.648 [0m[32mI (637415) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:40.655 [0m[32mI (637420) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:40.659 [0m[32mI (637426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:40.663 [0m[32mI (637430) MONITOR: MCU temperature: 53.337 C.
+05:49:40.669 [0m[32mI (637435) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:45.619 [0m[32mI (642386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:45.625 [0m[32mI (642391) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:45.631 [0m[32mI (642396) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:45.635 [0m[32mI (642402) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:45.640 [0m[32mI (642406) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:45.644 [0m[32mI (642411) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:45.650 [0m[32mI (642416) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:45.655 [0m[32mI (642421) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:45.659 [0m[32mI (642426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:45.664 [0m[32mI (642431) MONITOR: MCU temperature: 53.960 C.
+05:49:45.669 [0m[32mI (642436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:46.853 [0m[32mI (643619) SPIKE: CPU P5 win=10002ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:49:46.858 [0m[32mI (643624) SPIKE: GUI P5 win=10002ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4600us sleep=on
+05:49:46.863 [0m[32mI (643629) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=80944
+05:49:46.868 [0m[32mI (643634) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:49:46.873 [0m[32mI (643639) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=95382
+05:49:46.878 [0m[32mI (643644) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:49:46.888 [0m[32mI (643654) SPIKE: UNDER P5 total=0 win=0
+05:49:46.893 [0m[32mI (643659) SPIKE: SDREAD P5 fg32K n=56323 min=1826us avg=1933us max=7115us
+05:49:46.898 [0m[32mI (643664) SPIKE: SDREAD P5 fg4K n=7067 avg=528us max=5046us err=1 last=ERROR nl=5145624 pass=219
+05:49:50.618 [0m[32mI (647386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:50.623 [0m[32mI (647390) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:50.626 [0m[32mI (647395) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:50.633 [0m[32mI (647400) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:50.638 [0m[32mI (647405) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:50.643 [0m[32mI (647410) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:50.648 [0m[32mI (647415) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:50.654 [0m[32mI (647420) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:50.657 [0m[32mI (647426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:50.663 [0m[32mI (647430) MONITOR: MCU temperature: 53.586 C.
+05:49:50.668 [0m[32mI (647435) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:55.620 [0m[32mI (652387) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:49:55.625 [0m[32mI (652392) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:49:55.630 [0m[32mI (652397) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:49:55.635 [0m[32mI (652402) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:49:55.640 [0m[32mI (652407) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:49:55.645 [0m[32mI (652412) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:49:55.651 [0m[32mI (652418) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:49:55.656 [0m[32mI (652423) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:49:55.661 [0m[32mI (652428) MONITOR: Heap: free=16432 B, min free=15424 B
+05:49:55.664 [0m[32mI (652434) MONITOR: MCU temperature: 53.038 C.
+05:49:55.671 [0m[32mI (652438) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:49:56.854 [0m[32mI (653622) SPIKE: CPU P5 win=10003ms cnt/ms=50.0 idle=64.0 gui=6.4 fg=29.4 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:49:56.860 [0m[32mI (653627) SPIKE: GUI P5 win=10003ms loops=625 flush=65 sleep_avg=15.5ms frame_max=4644us sleep=on
+05:49:56.865 [0m[32mI (653632) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=84143
+05:49:56.869 [0m[32mI (653637) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:49:56.875 [0m[32mI (653642) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=98581
+05:49:56.884 [0m[32mI (653652) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:49:56.889 [0m[32mI (653657) SPIKE: UNDER P5 total=0 win=0
+05:49:56.894 [0m[32mI (653662) SPIKE: SDREAD P5 fg32K n=58563 min=1826us avg=1931us max=7115us
+05:49:56.900 [0m[32mI (653667) SPIKE: SDREAD P5 fg4K n=7348 avg=526us max=5046us err=1 last=ERROR nl=5350339 pass=227
+05:50:00.622 [0m[32mI (657389) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:50:00.624 [0m[32mI (657394) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:50:00.631 [0m[32mI (657399) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:50:00.636 [0m[32mI (657404) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:50:00.641 [0m[32mI (657410) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:50:00.645 [0m[32mI (657414) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:50:00.651 [0m[32mI (657419) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:50:00.656 [0m[32mI (657424) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:50:00.660 [0m[32mI (657429) MONITOR: Heap: free=16432 B, min free=15424 B
+05:50:00.666 [0m[32mI (657434) MONITOR: MCU temperature: 53.387 C.
+05:50:00.670 [0m[32mI (657439) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:50:05.620 [0m[32mI (662389) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:50:05.626 [0m[32mI (662394) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:50:05.631 [0m[32mI (662399) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:50:05.636 [0m[32mI (662404) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:50:05.641 [0m[32mI (662409) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:50:05.646 [0m[32mI (662414) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:50:05.651 [0m[32mI (662419) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:50:05.656 [0m[32mI (662424) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:50:05.661 [0m[32mI (662429) MONITOR: Heap: free=16432 B, min free=15424 B
+05:50:05.666 [0m[32mI (662434) MONITOR: MCU temperature: 53.561 C.
+05:50:05.671 [0m[32mI (662439) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:50:06.850 [0m[32mI (663618) SPIKE: CPU P5 win=10001ms cnt/ms=49.9 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:50:06.861 [0m[32mI (663628) SPIKE: GUI P5 win=10001ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4565us sleep=on
+05:50:06.865 [0m[32mI (663634) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=87354
+05:50:06.870 [0m[32mI (663638) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:50:06.875 [0m[32mI (663643) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=101792
+05:50:06.878 [0m[32mI (663648) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:50:06.889 [0m[32mI (663658) SPIKE: UNDER P5 total=0 win=0
+05:50:06.894 [0m[32mI (663663) SPIKE: SDREAD P5 fg32K n=60810 min=1826us avg=1929us max=7115us
+05:50:06.900 [0m[32mI (663668) SPIKE: SDREAD P5 fg4K n=7630 avg=524us max=5046us err=1 last=ERROR nl=5555629 pass=236
+05:50:10.618 [0m[32mI (667387) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:50:10.623 [0m[32mI (667392) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:50:10.628 [0m[32mI (667397) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:50:10.633 [0m[32mI (667402) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:50:10.638 [0m[32mI (667407) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:50:10.643 [0m[32mI (667412) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:50:10.648 [0m[32mI (667417) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:50:10.654 [0m[32mI (667422) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:50:10.658 [0m[32mI (667427) MONITOR: Heap: free=16432 B, min free=15424 B
+05:50:10.663 [0m[32mI (667432) MONITOR: MCU temperature: 53.611 C.
+05:50:10.668 [0m[32mI (667437) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:50:15.617 [0m[32mI (672386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:50:15.621 [0m[32mI (672391) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:50:15.626 [0m[32mI (672396) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:50:15.631 [0m[32mI (672402) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:50:15.637 [0m[32mI (672406) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:50:15.641 [0m[32mI (672411) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:50:15.646 [0m[32mI (672416) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:50:15.652 [0m[32mI (672421) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:50:15.657 [0m[32mI (672426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:50:15.660 [0m[32mI (672431) MONITOR: MCU temperature: 53.412 C.
+05:50:15.667 [0m[32mI (672436) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:50:16.857 [0m[32mI (673626) SPIKE: CPU P5 win=10003ms cnt/ms=50.0 idle=64.0 gui=6.4 fg=29.4 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:50:16.862 [0m[32mI (673631) SPIKE: GUI P5 win=10003ms loops=625 flush=65 sleep_avg=15.5ms frame_max=4639us sleep=on
+05:50:16.867 [0m[32mI (673636) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=90552
+05:50:16.872 [0m[32mI (673641) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:50:16.876 [0m[32mI (673646) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=104990
+05:50:16.887 [0m[32mI (673656) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:50:16.890 [0m[32mI (673661) SPIKE: UNDER P5 total=0 win=0
+05:50:16.897 [0m[32mI (673666) SPIKE: SDREAD P5 fg32K n=63047 min=1826us avg=1927us max=7115us
+05:50:16.902 [0m[32mI (673671) SPIKE: SDREAD P5 fg4K n=7911 avg=523us max=5046us err=1 last=ERROR nl=5759958 pass=245
+05:50:20.619 [0m[32mI (677388) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:50:20.625 [0m[32mI (677394) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:50:20.629 [0m[32mI (677398) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:50:20.633 [0m[32mI (677403) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:50:20.638 [0m[32mI (677408) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:50:20.644 [0m[32mI (677413) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:50:20.648 [0m[32mI (677418) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:50:20.653 [0m[32mI (677423) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:50:20.659 [0m[32mI (677428) MONITOR: Heap: free=16432 B, min free=15424 B
+05:50:20.663 [0m[32mI (677433) MONITOR: MCU temperature: 54.234 C.
+05:50:20.668 [0m[32mI (677438) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:50:25.618 [0m[32mI (682388) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:50:25.623 [0m[32mI (682393) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:50:25.628 [0m[32mI (682398) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:50:25.633 [0m[32mI (682403) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:50:25.638 [0m[32mI (682408) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:50:25.642 [0m[32mI (682413) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:50:25.648 [0m[32mI (682418) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:50:25.652 [0m[32mI (682423) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:50:25.658 [0m[32mI (682428) MONITOR: Heap: free=16432 B, min free=15424 B
+05:50:25.663 [0m[32mI (682434) MONITOR: MCU temperature: 53.810 C.
+05:50:25.667 [0m[32mI (682438) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:50:26.858 [0m[32mI (683628) SPIKE: CPU P5 win=10003ms cnt/ms=50.0 idle=63.9 gui=6.4 fg=29.5 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:50:26.863 [0m[32mI (683634) SPIKE: GUI P5 win=10003ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4600us sleep=on
+05:50:26.868 [0m[32mI (683638) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=93762
+05:50:26.873 [0m[32mI (683643) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:50:26.878 [0m[32mI (683648) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=108200
+05:50:26.888 [0m[32mI (683658) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:50:26.892 [0m[32mI (683663) SPIKE: UNDER P5 total=0 win=0
+05:50:26.897 [0m[32mI (683668) SPIKE: SDREAD P5 fg32K n=65293 min=1826us avg=1926us max=7115us
+05:50:26.903 [0m[32mI (683673) SPIKE: SDREAD P5 fg4K n=8193 avg=521us max=5046us err=1 last=ERROR nl=5965149 pass=254
+05:50:30.614 [0m[32mI (687386) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:50:30.619 [0m[32mI (687390) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:50:30.624 [0m[32mI (687395) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:50:30.629 [0m[32mI (687400) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:50:30.635 [0m[32mI (687405) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:50:30.640 [0m[32mI (687410) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:50:30.644 [0m[32mI (687415) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:50:30.650 [0m[32mI (687420) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:50:30.654 [0m[32mI (687426) MONITOR: Heap: free=16432 B, min free=15424 B
+05:50:30.659 [0m[32mI (687430) MONITOR: MCU temperature: 54.458 C.
+05:50:30.664 [0m[32mI (687435) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:50:35.618 [0m[32mI (692389) MONITOR: Monitor Task: total=1024 B, min free=388 B, peak=62.1%
+05:50:35.623 [0m[32mI (692394) MONITOR: GUI Task: total=8192 B, min free=4992 B, peak=39.0%
+05:50:35.626 [0m[32mI (692399) MONITOR: IDLE: total=512 B, min free=384 B, peak=25.0%
+05:50:35.633 [0m[32mI (692404) MONITOR: Foreground Task: total=6144 B, min free=3968 B, peak=35.4%
+05:50:35.638 [0m[32mI (692409) MONITOR: Log Task: total=2048 B, min free=1272 B, peak=37.8%
+05:50:35.642 [0m[32mI (692414) MONITOR: Playback Task: total=20480 B, min free=3052 B, peak=85.0%
+05:50:35.648 [0m[32mI (692419) MONITOR: Storage Task: total=4096 B, min free=2028 B, peak=50.4%
+05:50:35.653 [0m[32mI (692424) MONITOR: Tmr Svc: total=512 B, min free=340 B, peak=33.5%
+05:50:35.657 [0m[32mI (692429) MONITOR: Heap: free=16432 B, min free=15424 B
+05:50:35.662 [0m[32mI (692434) MONITOR: MCU temperature: 54.059 C.
+05:50:35.668 [0m[32mI (692439) MONITOR: GUI max frame: 33514764 cycles = 69822.4 us @ 480 MHz
+05:50:36.855 [0m[32mI (693626) SPIKE: CPU P5 win=10001ms cnt/ms=50.0 idle=64.0 gui=6.4 fg=29.4 sto=0.0 pb=0.0 log=0.0 mon=0.0 tmr=0.0 oth=0.2
+05:50:36.860 [0m[32mI (693631) SPIKE: GUI P5 win=10001ms loops=625 flush=66 sleep_avg=15.5ms frame_max=4637us sleep=on
+05:50:36.870 [0m[32mI (693641) SPIKE: LOCK GLOBAL ph hold=11023us@Foreground_Task/OpenFile wait=130076us@Foreground_Task/ReadFile n=96953
+05:50:36.875 [0m[32mI (693646) SPIKE: LOCKBLK GLOBAL ph longest_wait_blocked_by=Storage_Task/OpenByLocator
+05:50:36.880 [0m[32mI (693651) SPIKE: LOCK GLOBAL all hold=1728270us@Storage_Task/MountFlash wait=350893us@Storage_Task/ReclaimFlash n=111391
+05:50:36.884 [0m[32mI (693656) SPIKE: SDREAD P5 audio32K n=250 min=2351us avg=3298us max=6277us
+05:50:36.890 [0m[32mI (693661) SPIKE: UNDER P5 total=0 win=0
+05:50:36.900 [0m[32mI (693671) SPIKE: SDREAD P5 fg32K n=67528 min=1826us avg=1924us max=7115us
+05:50:36.906 [0m[32mI (693676) SPIKE: SDREAD P5 fg4K n=8473 avg=520us max=5046us err=1 last=ERROR nl=6169358 pass=262
