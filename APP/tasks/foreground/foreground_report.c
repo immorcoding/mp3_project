@@ -455,6 +455,7 @@ void foreground_report_window(const char *phase, ForegroundLoadKindTypeDef kind,
     const uint32_t guard = Service_Filesystem_SpikeForbiddenCalls();
     ForegroundStatTypeDef audio_read;
 
+    foreground_load_refresh(kind);
     foreground_report_cpu(phase, window_ms);
     foreground_report_gui(phase, window_ms);
     foreground_report_locks();

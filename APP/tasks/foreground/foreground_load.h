@@ -62,6 +62,7 @@ bool foreground_load_begin(ForegroundLoadKindTypeDef kind, char *detail, size_t 
 void foreground_load_end(ForegroundLoadKindTypeDef kind);
 void foreground_load_step(ForegroundLoadKindTypeDef kind);
 bool foreground_load_finished(ForegroundLoadKindTypeDef kind);
+void foreground_load_refresh(ForegroundLoadKindTypeDef kind);
 void foreground_gui_step(void);
 const char *foreground_status_name(uint32_t status);
 

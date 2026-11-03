@@ -619,6 +619,22 @@ static void foreground_flash_reclaim(void)
 }
 
 /**
+ * @brief 汇总前刷新负载的“当前值”：Flash 负载重新读一次块计数。
+ * @param[in] kind 当前阶段的负载种类。
+ * @note  回收之外的时间（正在写文件、时间到）块计数已经变了，所以输出前读一次，别用最近一次回收之后的旧值。
+ */
+void foreground_load_refresh(ForegroundLoadKindTypeDef kind)
+{
+    Service_Filesystem_SpikeFlashBlocksTypeDef blocks;
+
+    if ((kind == FOREGROUND_LOAD_FLASH) && foreground_load_stats_data.FlashBlocksValid &&
+        Service_Filesystem_SpikeFlashBlocks(&blocks))
+    {
+        foreground_load_stats_data.FlashBlocksNow = blocks;
+    }
+}
+
+/**
  * @brief 一个阶段的负载是否已经达到目标，可以提前结束。
  * @param[in] kind 当前阶段的负载种类。
  * @return true 目标已达成；目前只有 Flash 负载在观察到足够多次真擦除的回收后为真。
