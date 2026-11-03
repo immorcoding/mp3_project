@@ -51,8 +51,6 @@
 #define FOREGROUND_FLASH_IDLE_RECLAIMS 4U
 /** @brief 一个回收阶段最多调用的次数，防止在水位附近一直擦。 */
 #define FOREGROUND_FLASH_RECLAIM_STAGE_CAP 64U
-/** @brief 观察到这么多次真擦除的回收后，P3 提前结束。 */
-#define FOREGROUND_FLASH_ERASE_GOAL 16U
 /** @brief 写入之间只让出 1 ms：消耗空闲块的速度决定能否在时限内逼近水位。 */
 #define FOREGROUND_FLASH_PACE_MS 1U
 #define FOREGROUND_FLASH_RECLAIM_PACE_MS 5U
@@ -637,12 +635,13 @@ void foreground_load_refresh(ForegroundLoadKindTypeDef kind)
 /**
  * @brief 一个阶段的负载是否已经达到目标，可以提前结束。
  * @param[in] kind 当前阶段的负载种类。
- * @return true 目标已达成；目前只有 Flash 负载在观察到足够多次真擦除的回收后为真。
+ * @return 恒为 false。第二遍板测发现：擦够次数就退出时 P3 只跑了 9 s，音频读取样本为 0、手动切歌也赶不上，
+ *         所以 P3 改为固定时长跑满，真擦除次数只统计。
  */
 bool foreground_load_finished(ForegroundLoadKindTypeDef kind)
 {
-    return (kind == FOREGROUND_LOAD_FLASH) &&
-           (foreground_load_stats_data.FlashReclaimErase.Count >= FOREGROUND_FLASH_ERASE_GOAL);
+    (void)kind;
+    return false;
 }
 
 /**

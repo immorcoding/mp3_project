@@ -46,7 +46,7 @@ static const ForegroundPhaseTypeDef foreground_phases[] = {
     {"P0", "baseline_gui_no_sleep", 30000U, false, FOREGROUND_LOAD_NONE, false},
     {"P1", "gui_sleep", 30000U, true, FOREGROUND_LOAD_NONE, false},
     {"P2", "txt_read", 60000U, true, FOREGROUND_LOAD_TXT, false},
-    {"P3", "flash_write_reclaim", 120000U, true, FOREGROUND_LOAD_FLASH, false},
+    {"P3", "flash_write_reclaim", 60000U, true, FOREGROUND_LOAD_FLASH, false},
     {"P4", "ui_cell_synthetic", 30000U, true, FOREGROUND_LOAD_CELL, false},
     {"P5", "manual_unplug_switch_page", 0U, true, FOREGROUND_LOAD_TXT, true},
 };
