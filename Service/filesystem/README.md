@@ -54,6 +54,8 @@ FatFs 按路径打开每次从文件夹第 0 个目录项起逐项比较长文�
 
 约束：`configUSE_RECURSIVE_MUTEXES` 为 0，公开函数之间互相调用时走不加锁的 `_locked` 内部版本（`FormatAndMountFlash`、`RecoverAndMountFlash` 里的卸载与挂载，`MountSD`、`UnmountSD` 里的就绪检查）；同一任务重复拿同一把锁用 `configASSERT` 挡住。`GbkToUnicode` 只读 CP936 表，不拿锁。`f_stat`、`f_mkdir` 经 `find_volume` 可能在重新挂载时调用 `clear_lock`，它只写本卷的条目，没有包进表锁（推断不影响另一卷，未验证）。
 
+热插拔刷新和 Flash 块计数不是文件接口，但和文件接口共用同一个设备，所以也走卷锁：`Service_Filesystem_SpikeHotplugProcess()`（操作名 `HotplugRefresh`，等价于 `Platform_SD_Process()`，无卡时 DeInit 端口、插卡时 Init，不能和别的任务的 DMA 传输并发）、`Service_Filesystem_SpikeFlashBlocks()`（`FlashBlocks`）、`Service_Filesystem_SpikeReclaimFlashMeasured()`（`ReclaimFlash`，同一次持锁内读回收前后的块计数与擦除计数）。它们在只编进固件的 `filesystem_spike_platform.c`，主机测试不编译。
+
 统计（`filesystem_spike.h`）：每把锁的最长持锁与最长等锁（各带任务名和操作名，等锁另带当时的持锁者）、拿锁次数，按阶段窗口和自启动各一组；每个任务最近一次公开调用的持锁时长；GUI 或播放任务误调文件接口的次数。耗时用 DWT 周期计数器，同时记 tick：区间超过 4 s（DWT 480 MHz 约 8.9 s 回绕）改按 tick 取整到毫秒。
 
 ## 私有实现与编译依赖

@@ -20,6 +20,7 @@
 
 #include "APP/tasks/foreground/foreground_stats.h"
 #include "APP/ui_cell/ui_cell.h"
+#include "Service/filesystem/filesystem_spike.h"
 
 /** @brief 一个阶段里前台任务施加的负载种类。 */
 typedef enum
@@ -41,9 +42,16 @@ typedef struct
     uint32_t TxtPasses;             /**< 读到文件尾回绕的次数。 */
     ForegroundStatTypeDef FlashWrite;   /**< 64 KiB 写。 */
     ForegroundStatTypeDef FlashSync;    /**< 每次写之后的同步。 */
-    ForegroundStatTypeDef FlashReclaim; /**< 一次回收机会。 */
+    ForegroundStatTypeDef FlashReclaimErase; /**< 真擦除的回收：FTL 的 SessionErases 在这次调用前后加一。 */
+    ForegroundStatTypeDef FlashReclaimIdle;  /**< 空转的回收：没有擦除，空闲块数仍高于水位。 */
     uint32_t FlashFiles;            /**< 写满并删除的测试文件个数。 */
     uint32_t FlashErrors;           /**< Flash 负载失败次数。 */
+    uint32_t FlashErasesInReclaim;  /**< 回收调用里观察到的擦除块数之和。 */
+    bool FlashBlocksValid;          /**< 块计数读取成功，下面的计数与水位有效。 */
+    Service_Filesystem_SpikeFlashBlocksTypeDef FlashBlocksStart; /**< 阶段开始时的块计数。 */
+    Service_Filesystem_SpikeFlashBlocksTypeDef FlashBlocksNow;   /**< 最近一次回收之后的块计数。 */
+    uint32_t FlashGcLow;            /**< FTL 回收启动水位：空闲块数不高于它才开始擦（按 FTL 公式推算）。 */
+    uint32_t FlashGcHigh;           /**< FTL 回收停止水位：空闲块数不低于它就停。 */
 } ForegroundLoadStatsTypeDef;
 
 void foreground_load_init(void);
@@ -53,6 +61,7 @@ const UiCell *foreground_load_cell(void);
 bool foreground_load_begin(ForegroundLoadKindTypeDef kind, char *detail, size_t detail_size);
 void foreground_load_end(ForegroundLoadKindTypeDef kind);
 void foreground_load_step(ForegroundLoadKindTypeDef kind);
+bool foreground_load_finished(ForegroundLoadKindTypeDef kind);
 void foreground_gui_step(void);
 const char *foreground_status_name(uint32_t status);
 

@@ -28,9 +28,22 @@ typedef enum
     SPIKE_UNPLUG_STAGE_COUNT              /**< 阶段个数，不是真实阶段。 */
 } SpikeUnplugStageTypeDef;
 
+/**
+ * @brief 拔出收尾是怎么被触发的（板测发现，#191）。
+ * @note  传输在途时拔卡，设备层把状态直接写成 NOT_PRESENT，之后 `Platform_SD_Process` 比较前后状态相同，
+ *        不给 REMOVED 事件（被吞）。所以拔出判断另加“卡不在且卷还挂着”这一条，两条路径要分开计数。
+ */
+typedef enum
+{
+    SPIKE_UNPLUG_VIA_STATE = 0U,   /**< `Platform_SD_Process` 给出 REMOVED（状态变化）。 */
+    SPIKE_UNPLUG_VIA_PRESENCE,     /**< 事件被吞：卡检测电平显示不在，且卷还挂着。 */
+    SPIKE_UNPLUG_VIA_INSERT        /**< 只收到 INSERTED 而卷还挂着（换卡，或拔出被吞且在消抖内插回）。 */
+} SpikeUnplugViaTypeDef;
+
 /** @brief 一次完整的拔卡时间线，所有时刻为相对检测中断的毫秒。 */
 typedef struct
 {
+    SpikeUnplugViaTypeDef Via;                  /**< 拔出收尾由哪条判断触发。 */
     uint32_t StageMs[SPIKE_UNPLUG_STAGE_COUNT]; /**< 各阶段时刻；未到达的阶段为 UINT32_MAX。 */
     uint32_t UnmountStatus;                     /**< 卸载返回的 Service 状态值。 */
     bool ForegroundRead;                        /**< 前台任务是否记到了拔卡后第一次失败的读取。 */
@@ -40,6 +53,7 @@ typedef struct
 } SpikeUnplugReportTypeDef;
 
 void spike_unplug_note_detect_isr(void);
+void spike_unplug_set_via(SpikeUnplugViaTypeDef via);
 void spike_unplug_note(SpikeUnplugStageTypeDef stage);
 void spike_unplug_note_unmount_done(uint32_t status);
 void spike_unplug_cancel(void);

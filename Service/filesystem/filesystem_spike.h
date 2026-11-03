@@ -15,6 +15,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "Platform/flash/platform_flash.h"
+#include "Platform/sd/platform_sd.h"
+#include "Service/service.h"
+
 #define SERVICE_FILESYSTEM_SPIKE_LOCK_MAX 3U     /* 全局一把时只有 1 把；每卷一把时为 SD、Flash、表锁共 3 把。 */
 #define SERVICE_FILESYSTEM_SPIKE_NAME_BYTES 16U  /* 任务名缓冲，含结尾 NUL，与 configMAX_TASK_NAME_LEN 一致。 */
 
@@ -32,7 +36,23 @@ typedef struct
     uint32_t AcquireCount;                                        /**< 拿锁次数。 */
 } Service_Filesystem_SpikeLockStatsTypeDef;
 
+/** @brief Flash 卷的块计数快照与 FTL 水位推算所需的几何（spike #191）。 */
+typedef struct
+{
+    uint32_t FreeBlocks;      /**< 已确认擦除的空闲块数。 */
+    uint32_t StaleBlocks;     /**< 失效块数，待回收擦除。 */
+    uint32_t ValidGroups;     /**< 有效组数。 */
+    uint32_t SessionErases;   /**< 自 FTL 绑定以来的数据块擦除累计数，回收是否真擦除以它的差值为准。 */
+    uint32_t DataBlocks;      /**< 数据块总数（FTL 分区块数减两个卷头）。 */
+    uint32_t ReserveBlocks;   /**< 预留块数；回收水位按它的百分比算。 */
+} Service_Filesystem_SpikeFlashBlocksTypeDef;
+
 void Service_Filesystem_SpikeInit(void);
+Platform_StatusTypeDef Service_Filesystem_SpikeHotplugProcess(Platform_SD_EventTypeDef *event);
+bool Service_Filesystem_SpikeFlashBlocks(Service_Filesystem_SpikeFlashBlocksTypeDef *blocks);
+Service_StatusTypeDef Service_Filesystem_SpikeReclaimFlashMeasured(
+    Service_Filesystem_SpikeFlashBlocksTypeDef *before,
+    Service_Filesystem_SpikeFlashBlocksTypeDef *after);
 bool Service_Filesystem_SpikePerVolume(void);
 uint32_t Service_Filesystem_SpikeLockCount(void);
 const char *Service_Filesystem_SpikeLockName(uint32_t index);

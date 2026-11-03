@@ -15,6 +15,7 @@
 #include "APP/tasks/storage/catalog/storage_catalog.h"
 #include "APP/tasks/storage/stream/storage_audio_stream.h"
 #include "APP/tasks/storage/benchmark/storage_sd_benchmark.h"
+#include "APP/tasks/foreground/foreground_load.h"
 #include "APP/tasks/foreground/spike_unplug.h"
 #include "APP/app_config.h"
 
@@ -23,6 +24,7 @@
 
 #include "Platform/sd/platform_sd.h"
 #include "Service/filesystem/filesystem_service.h"
+#include "Service/filesystem/filesystem_spike.h"
 #include "Service/log/log_service.h"
 
 /** @brief Storage Task 发送 SD 子系统日志时使用的稳定标签。 */
@@ -142,10 +144,14 @@ static Storage_StatusTypeDef storage_sd_mount(void)
     }
     else
     {
+        char text[64];
+
         storage_sd_volume_mounted = false;
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                               storage_sd_log_tag,
-                               "Filesystem mount failed.");
+        (void)snprintf(text,
+                       sizeof(text),
+                       "Filesystem mount failed (status=%s).",
+                       foreground_status_name((uint32_t)result));
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, storage_sd_log_tag, text);
     }
 
     return storage_sd_from_service(result);
@@ -171,12 +177,37 @@ static Storage_StatusTypeDef storage_sd_unmount(void)
     result = Service_Filesystem_UnmountSD();
     if (result != SERVICE_OK)
     {
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                               storage_sd_log_tag,
-                               "Filesystem unmount failed.");
+        char text[64];
+
+        (void)snprintf(text,
+                       sizeof(text),
+                       "Filesystem unmount failed (status=%s).",
+                       foreground_status_name((uint32_t)result));
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, storage_sd_log_tag, text);
     }
 
     return storage_sd_from_service(result);
+}
+
+/**
+  * @brief  拔出收尾：关音频流、作废曲库、卸载卷（卸载让所有任务的文件与目录 Token 失效）。
+  * @retval STORAGE_OK 卷对象已注销。
+  * @retval STORAGE_ERROR 注销失败。
+  * @note   spike #191：拔出事件、被吞的拔出和换卡共用这一条路径，同时给拔卡时间线打点。
+  *         卸载要先拿 SD 卷锁，所以会等在途的 SD 传输先返回。
+  */
+static Storage_StatusTypeDef storage_sd_teardown_volume(void)
+{
+    Storage_StatusTypeDef unmount_status;
+
+    storage_audio_stream_card_removed(); /* 先关 FIL 再写 CARD_REMOVED，卸载卷前不得有打开对象。 */
+    spike_unplug_note(SPIKE_UNPLUG_STAGE_STREAM_CLOSED);
+    (void)storage_catalog_invalidate();
+    spike_unplug_note(SPIKE_UNPLUG_STAGE_CATALOG_INVALID);
+    spike_unplug_note(SPIKE_UNPLUG_STAGE_UNMOUNT_ENTER);
+    unmount_status = storage_sd_unmount();
+    spike_unplug_note_unmount_done((uint32_t)unmount_status);
+    return unmount_status;
 }
 
 /**
@@ -296,28 +327,60 @@ Storage_StatusTypeDef storage_sd_init(TaskHandle_t task_handle)
   * @brief  处理已完成消抖的一次 SD 卡检测事件。
   * @note   仅能在 Storage Task 普通上下文调用。插卡后挂载，拔卡后先注销 FatFs
   *         卷对象；本函数不执行机械触点消抖。
+  *         spike #191（板测发现，只修在这个分支）：传输在途时拔卡，设备层把状态直接写成 NOT_PRESENT，
+  *         `Platform_SD_Process` 比较前后状态相同，不给 REMOVED。所以拔出判断不再只靠事件：
+  *         卡检测电平显示不在且卷还挂着，也走完整的拔出收尾；只收到 INSERTED 而卷还挂着（换卡，或拔出
+  *         被吞后插回）同样先拔出收尾再挂载，这样其他任务遗留的打开对象不会让挂载返回 BUSY。
+  *         热插拔刷新经 Filesystem 的 SD 卷锁执行，不和别的任务的 DMA 传输并发。
   * @retval STORAGE_OK 无事件，或插拔后的挂载/卸载成功。
   * @retval STORAGE_ERROR 刷新失败，或挂载/卸载失败。
   */
 Storage_StatusTypeDef storage_sd_process(void)
 {
     Platform_SD_EventTypeDef event;
+    const bool mounted_before = storage_sd_volume_mounted;
+    bool removed_by_state;
+    bool removed_by_presence;
+    bool swapped;
+    bool teardown;
+    Storage_StatusTypeDef teardown_status = STORAGE_OK;
 
-    if (Platform_SD_Process(&event) != PLATFORM_OK)
+    if (Service_Filesystem_SpikeHotplugProcess(&event) != PLATFORM_OK)
     {
         spike_unplug_cancel();
         storage_sd_post_diagnostics("Hotplug refresh");
         return STORAGE_ERROR;
     }
 
-    if (event != PLATFORM_SD_EVENT_REMOVED)
+    removed_by_state = (event == PLATFORM_SD_EVENT_REMOVED);
+    removed_by_presence = !removed_by_state && mounted_before && !Platform_SD_IsPresent();
+    swapped = !removed_by_state && !removed_by_presence && (event == PLATFORM_SD_EVENT_INSERTED) && mounted_before;
+    teardown = removed_by_state || removed_by_presence || swapped;
+
+    if (teardown)
     {
-        spike_unplug_cancel(); /* 插卡或消抖后没有变化：这次边沿不是拔卡。 */
+        spike_unplug_set_via(removed_by_state      ? SPIKE_UNPLUG_VIA_STATE
+                             : removed_by_presence ? SPIKE_UNPLUG_VIA_PRESENCE
+                                                   : SPIKE_UNPLUG_VIA_INSERT);
+        teardown_status = storage_sd_teardown_volume();
+    }
+    else
+    {
+        spike_unplug_cancel(); /* 正常插卡，或消抖后没有变化：这次边沿不是拔卡。 */
     }
 
     if (event == PLATFORM_SD_EVENT_INSERTED)
     {
-        storage_audio_stream_card_removed(); /* 换卡视同拔卡：旧卡的 FIL 先关。 */
+        if (teardown)
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO,
+                                   storage_sd_log_tag,
+                                   "Old volume unmounted before mounting the inserted card.");
+        }
+        else
+        {
+            storage_audio_stream_card_removed(); /* 换卡视同拔卡：旧卡的 FIL 先关（拔出收尾已做过则不重复）。 */
+        }
         storage_sd_log_card_ready("Card inserted");
         if (storage_sd_mount() != STORAGE_OK)
         {
@@ -337,17 +400,12 @@ Storage_StatusTypeDef storage_sd_process(void)
         return STORAGE_OK;
     }
 
-    if (event == PLATFORM_SD_EVENT_REMOVED)
+    if (teardown)
     {
-        storage_audio_stream_card_removed(); /* 先关 FIL 再写 CARD_REMOVED，卸载卷前不得有打开对象。 */
-        spike_unplug_note(SPIKE_UNPLUG_STAGE_STREAM_CLOSED);
-        (void)storage_catalog_invalidate();
-        spike_unplug_note(SPIKE_UNPLUG_STAGE_CATALOG_INVALID);
-        spike_unplug_note(SPIKE_UNPLUG_STAGE_UNMOUNT_ENTER);
-        Storage_StatusTypeDef unmount_status = storage_sd_unmount();
-        spike_unplug_note_unmount_done((uint32_t)unmount_status);
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, storage_sd_log_tag, "Card removed.");
-        return unmount_status;
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO,
+                               storage_sd_log_tag,
+                               removed_by_state ? "Card removed (via state)." : "Card removed (via presence).");
+        return teardown_status;
     }
 
     return STORAGE_OK;

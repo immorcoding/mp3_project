@@ -425,6 +425,38 @@ static void test_handle_invalidation(void)
 }
 
 /**
+ * @brief 板测发现（#191）：别的任务留着打开的文件时 MountSD 返回 BUSY；先 UnmountSD 让所有 Token 失效，
+ *        卸载到挂载之间别的任务打开得到 NOT_READY，之后 MountSD 成功，旧 Token 仍是 INVALID_HANDLE。
+ *        这正是拔出被吞或换卡路径“先完整拔出收尾再挂载”所依赖的行为。
+ */
+static void test_remount_after_unmount_with_leaked_handle(void)
+{
+    Service_Filesystem_FileHandleTypeDef leaked = {0};
+    Service_Filesystem_FileHandleTypeDef reopened = {0};
+    uint8_t data = 5;
+    uint32_t transferred;
+
+    assert(Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_SD,
+                                       "leaked.bin",
+                                       SERVICE_FILESYSTEM_FILE_MODE_CREATE_NEW,
+                                       &leaked) == SERVICE_OK);
+
+    assert(Service_Filesystem_MountSD() == SERVICE_BUSY);
+
+    assert(Service_Filesystem_UnmountSD() == SERVICE_OK);
+    assert(Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_SD,
+                                       "leaked.bin",
+                                       SERVICE_FILESYSTEM_FILE_MODE_READ,
+                                       &reopened) == SERVICE_NOT_READY);
+    assert(Service_Filesystem_ReadFile(leaked, &data, 1U, &transferred) == SERVICE_INVALID_HANDLE);
+    assert(Service_Filesystem_CloseFile(leaked) == SERVICE_INVALID_HANDLE);
+
+    assert(Service_Filesystem_MountSD() == SERVICE_OK);
+    assert(Service_Filesystem_ReadFile(leaked, &data, 1U, &transferred) == SERVICE_INVALID_HANDLE);
+    assert(Service_Filesystem_RemoveFile(SERVICE_FILESYSTEM_VOLUME_SD, "leaked.bin") == SERVICE_OK);
+}
+
+/**
  * @brief 四种打开方式及已存在文件的错误码。
  */
 static void test_file_modes(void)
@@ -546,6 +578,7 @@ int main(void)
     test_path_contract();
     test_directory();
     test_handle_invalidation();
+    test_remount_after_unmount_with_leaked_handle();
     test_file_modes();
     test_rename_and_info();
     test_flash_lifecycle();

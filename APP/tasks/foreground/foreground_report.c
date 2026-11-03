@@ -356,6 +356,44 @@ static void foreground_report_stat_line(const char *key,
 }
 
 /**
+ * @brief 输出 Flash 负载的块计数与擦除小结。
+ * @param[in] phase 阶段名。
+ * @param[in] load 负载统计。
+ * @note  `blocks` 行给出空闲块与失效块的阶段开始值和当前值，以及 FTL 回收水位（空闲块数不高于 low 才开始擦，
+ *        不低于 high 才停）；`erases` 行里 `phase` 是 FTL 擦除计数在本阶段的增量，`reclaim` 是其中回收调用里
+ *        观察到的部分，`other` 是差值（写入路径里的前台回收，正常应为 0）；`reached` 为 no 时 `to_low` 是
+ *        空闲块数离水位还差多少。
+ */
+static void foreground_report_flash_blocks(const char *phase, const ForegroundLoadStatsTypeDef *load)
+{
+    const Service_Filesystem_SpikeFlashBlocksTypeDef *start = &load->FlashBlocksStart;
+    const Service_Filesystem_SpikeFlashBlocksTypeDef *now = &load->FlashBlocksNow;
+    uint32_t phase_erases;
+    uint32_t to_low;
+
+    foreground_logf("FLASHIO %s files=%lu err=%lu", phase, (unsigned long)load->FlashFiles,
+                    (unsigned long)load->FlashErrors);
+    if (!load->FlashBlocksValid)
+    {
+        foreground_logf("FLASHIO %s blocks=unavailable", phase);
+        return;
+    }
+
+    phase_erases = now->SessionErases - start->SessionErases;
+    to_low = (now->FreeBlocks > load->FlashGcLow) ? (now->FreeBlocks - load->FlashGcLow) : 0U;
+    foreground_logf("FLASHIO %s blocks free=%lu>%lu stale=%lu>%lu valid=%lu low=%lu high=%lu reserve=%lu", phase,
+                    (unsigned long)start->FreeBlocks, (unsigned long)now->FreeBlocks,
+                    (unsigned long)start->StaleBlocks, (unsigned long)now->StaleBlocks,
+                    (unsigned long)now->ValidGroups, (unsigned long)load->FlashGcLow,
+                    (unsigned long)load->FlashGcHigh, (unsigned long)start->ReserveBlocks);
+    foreground_logf("FLASHIO %s erases phase=%lu reclaim=%lu other=%lu real_calls=%lu idle_calls=%lu reached=%s to_low=%lu",
+                    phase, (unsigned long)phase_erases, (unsigned long)load->FlashErasesInReclaim,
+                    (unsigned long)(phase_erases - load->FlashErasesInReclaim),
+                    (unsigned long)load->FlashReclaimErase.Count, (unsigned long)load->FlashReclaimIdle.Count,
+                    (load->FlashReclaimErase.Count != 0U) ? "yes" : "no", (unsigned long)to_low);
+}
+
+/**
  * @brief 输出本阶段负载自己的统计行。
  * @param[in] phase 阶段名。
  * @param[in] kind 阶段的负载种类。
@@ -379,9 +417,9 @@ static void foreground_report_load(const char *phase, ForegroundLoadKindTypeDef 
         case FOREGROUND_LOAD_FLASH:
             foreground_report_stat_line("FLASHIO", phase, "write64K", &load->FlashWrite);
             foreground_report_stat_line("FLASHIO", phase, "sync", &load->FlashSync);
-            foreground_report_stat_line("FLASHIO", phase, "reclaim", &load->FlashReclaim);
-            foreground_logf("FLASHIO %s files=%lu err=%lu", phase, (unsigned long)load->FlashFiles,
-                            (unsigned long)load->FlashErrors);
+            foreground_report_stat_line("FLASHIO", phase, "reclaim_erase", &load->FlashReclaimErase);
+            foreground_report_stat_line("FLASHIO", phase, "reclaim_idle", &load->FlashReclaimIdle);
+            foreground_report_flash_blocks(phase, load);
             break;
 
         case FOREGROUND_LOAD_CELL:
@@ -474,7 +512,11 @@ void foreground_report_unplug(void)
     foreground_report_stage_text(catalog, report.StageMs[SPIKE_UNPLUG_STAGE_CATALOG_INVALID]);
     foreground_report_stage_text(enter, report.StageMs[SPIKE_UNPLUG_STAGE_UNMOUNT_ENTER]);
     foreground_report_stage_text(done, report.StageMs[SPIKE_UNPLUG_STAGE_UNMOUNT_DONE]);
-    foreground_logf("UNPLUG detect_isr=0 debounce_end=%s stream_closed=%s catalog_invalid=%s", debounce, stream, catalog);
+    foreground_logf("UNPLUG via=%s detect_isr=0 debounce_end=%s stream_closed=%s catalog_invalid=%s",
+                    (report.Via == SPIKE_UNPLUG_VIA_STATE)      ? "state"
+                    : (report.Via == SPIKE_UNPLUG_VIA_PRESENCE) ? "presence"
+                                                                : "insert",
+                    debounce, stream, catalog);
     foreground_logf("UNPLUG unmount_enter=%s unmount_done=%s unmount_status=%s (ms from detect ISR)", enter, done,
                     (report.UnmountStatus == 0U) ? "OK" : "ERROR");
     if (report.ForegroundRead)

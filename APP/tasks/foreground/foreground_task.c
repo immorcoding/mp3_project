@@ -46,7 +46,7 @@ static const ForegroundPhaseTypeDef foreground_phases[] = {
     {"P0", "baseline_gui_no_sleep", 30000U, false, FOREGROUND_LOAD_NONE, false},
     {"P1", "gui_sleep", 30000U, true, FOREGROUND_LOAD_NONE, false},
     {"P2", "txt_read", 60000U, true, FOREGROUND_LOAD_TXT, false},
-    {"P3", "flash_write_reclaim", 60000U, true, FOREGROUND_LOAD_FLASH, false},
+    {"P3", "flash_write_reclaim", 120000U, true, FOREGROUND_LOAD_FLASH, false},
     {"P4", "ui_cell_synthetic", 30000U, true, FOREGROUND_LOAD_CELL, false},
     {"P5", "manual_unplug_switch_page", 0U, true, FOREGROUND_LOAD_TXT, true},
 };
@@ -60,16 +60,17 @@ static const ForegroundPhaseTypeDef foreground_phases[] = {
 static bool foreground_task_begin_phase(uint32_t index)
 {
     const ForegroundPhaseTypeDef *phase = &foreground_phases[index];
-    char detail[64];
+    char detail[80];
 
+    /* 先清统计再开始：Flash 负载在开始时要记下块计数的起点，TXT 负载失败时要记状态。 */
+    foreground_load_stats_reset();
+    Service_Filesystem_SpikeWindowReset();
     if (!foreground_load_begin(phase->Load, detail, sizeof(detail)))
     {
         foreground_logf("PHASE skip %s %s UNTESTED reason=%s", phase->Name, phase->Label, detail);
         return false;
     }
 
-    foreground_load_stats_reset();
-    Service_Filesystem_SpikeWindowReset();
     gui_task_set_sleep_enabled(phase->GuiSleep);
     foreground_report_baseline();
     foreground_logf("PHASE start %s %s gui_sleep=%s dur=%lums %s", phase->Name, phase->Label,
@@ -81,14 +82,16 @@ static bool foreground_task_begin_phase(uint32_t index)
  * @brief 结束一个阶段：输出阶段汇总与结束行，收尾负载。
  * @param[in] index 阶段序号。
  * @param[in] active_ms 阶段内播放状态下经过的毫秒数。
+ * @param[in] goal_reached true 为负载达到目标而提前结束，false 为时间到。
  */
-static void foreground_task_end_phase(uint32_t index, uint32_t active_ms)
+static void foreground_task_end_phase(uint32_t index, uint32_t active_ms, bool goal_reached)
 {
     const ForegroundPhaseTypeDef *phase = &foreground_phases[index];
 
     foreground_report_window(phase->Name, phase->Load, true);
     foreground_load_end(phase->Load);
-    foreground_logf("PHASE end %s %s active=%lums", phase->Name, phase->Label, (unsigned long)active_ms);
+    foreground_logf("PHASE end %s %s active=%lums reason=%s", phase->Name, phase->Label, (unsigned long)active_ms,
+                    goal_reached ? "goal_reached" : "time_up");
 }
 
 /**
@@ -184,10 +187,13 @@ void foreground_task(void *handle)
 
         foreground_load_step(foreground_phases[phase_index].Load);
 
-        if ((foreground_phases[phase_index].DurationMs != 0U) &&
-            (active_ms >= foreground_phases[phase_index].DurationMs))
+        if (((foreground_phases[phase_index].DurationMs != 0U) &&
+             (active_ms >= foreground_phases[phase_index].DurationMs)) ||
+            foreground_load_finished(foreground_phases[phase_index].Load))
         {
-            foreground_task_end_phase(phase_index, active_ms);
+            foreground_task_end_phase(phase_index,
+                                      active_ms,
+                                      foreground_load_finished(foreground_phases[phase_index].Load));
             phase_running = false;
             phase_index++;
             if (phase_index >= FOREGROUND_PHASE_COUNT)

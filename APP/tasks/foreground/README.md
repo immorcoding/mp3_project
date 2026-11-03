@@ -37,19 +37,19 @@ cmake --build build/firmware-debug-pervol
 ## 上板步骤
 
 1. 用 DFU 烧录一个固件（外部 Loader 已装好），插好带 `Spike/big.txt` 的卡，开串口日志。
-2. 开机后在界面里按播放。前台任务在音乐处于播放状态时开始，P0 至 P4 自动进行，约 3.5 分钟（30 + 30 + 60 + 60 + 30 s）：
+2. 开机后在界面里按播放。前台任务在音乐处于播放状态时开始，P0 至 P4 自动进行，最多约 4.5 分钟（30 + 30 + 60 + 最长 120 + 30 s；P3 观察到足够多次真擦除就提前结束）：
 
 | 阶段 | 时长 | GUI | 前台任务做什么 |
 |---|---|---|---|
 | P0 | 30 s | 不睡 | 无负载（基线） |
 | P1 | 30 s | 睡 | 无负载 |
 | P2 | 60 s | 睡 | 读大 TXT 模拟分页：顺序读 32 KiB 块并统计换行，每 8 块在随机页起点读 4 KiB |
-| P3 | 60 s | 睡 | Flash 卷：每次写 64 KiB 并同步，写到约 1 MiB 后删除，再连续调 16 次 `ReclaimFlash` |
+| P3 | 最长 120 s | 睡 | Flash 卷：每次写 64 KiB 并同步，写到约 1 MiB 后删除，再回收。开始时按 FTL 回收水位算出要写多少空闲块才会让回收真擦除（见下文“Flash 回收怎么触发”），写到水位以下后回收才会擦除；观察到 16 次真擦除的回收就提前结束，否则 120 s 到时结束 |
 | P4 | 30 s | 睡 | `ui_cell` 合成拷贝：每 16 ms 写 6 KiB，GUI 每圈读（合成场景，结果仅作参考） |
 | P5 | 不限 | 睡 | 持续读 TXT，等手动操作 |
 
 3. P5 开始后（日志出现 `PHASE start P5`）手动做三件事，每件之间留 15 s 以上：
-   - **拔卡**：直接拔出 SD 卡，看 `UNPLUG` 几行；需要时再插回去（前台任务每 500 ms 重新打开 TXT）。
+   - **拔卡**：直接拔出 SD 卡，看 `UNPLUG via=… ` 几行和 `SD: Card removed (via state|presence).`；需要时再插回去（前台任务每 500 ms 重新打开 TXT），插回后应是 `Card inserted`、`Filesystem mounted.`，并且音乐能再播。拔卡时前台任务有读取在途最能暴露上一轮的问题，请拔 2 至 3 次。
    - **切歌和翻页**：连按下一首、在 Queue 页滑动，看 `Switch`、`LOCK`、`UNDER`。
    - **切到非唱盘页面**：从 Now Playing 滑到别的页面停 30 s，对比这段窗口的 `GUI ... flush=`；切回来再对比一次。
 4. 换另一个固件重复一遍。两个固件的 P0 与 P1 是同一个对照（GUI 不睡与睡），P2 与 P3 的差别是“锁粒度”。
@@ -69,8 +69,11 @@ cmake --build build/firmware-debug-pervol
 | 等锁最长时是被谁挡住 | `SPIKE LOCKBLK <锁> ph longest_wait_blocked_by=<任务>/<操作>` | 尽力而为：取等锁开始那一刻的持锁者 |
 | 切歌到出声的时延 | `PLAYBACK` 标签的 `Switch idx=<位置> lat=<us>` | 命令被播放任务处理到输出重新起播，微秒；边界日志，每次换曲一行 |
 | 欠载次数 | `SPIKE UNDER <阶段> total=… win=…` | `total` 是开机以来累计（在播放状态机里累加，Platform 的计数每次 Start 清零），`win` 是本窗口增量 |
-| Flash 写入与回收耗时 | `SPIKE FLASHIO <阶段> write64K|sync|reclaim n=… min=… avg=… max=…us`，另有 `FLASHIO <阶段> files=… err=…` | 持锁时长；只在 P3 有数。对比 P3 与 P2、P1 的 `SDREAD` 和 `UNDER` 看 Flash 写是否拖慢 SD 读 |
-| 拔卡时序 | `SPIKE UNPLUG detect_isr=0 debounce_end=+… stream_closed=+… catalog_invalid=+…`、`UNPLUG unmount_enter=+… unmount_done=+… unmount_status=…`、`UNPLUG fg_read status=… returned_at=+…ms in_lock=…us` | 全部是相对检测中断（第一个边沿，ISR 里只存 tick）的毫秒。卸载要先拿 SD 锁，`unmount_done` 与 `unmount_enter` 的差含等在途读取；`fg_read` 是前台任务拔卡后第一次失败的读取：状态、返回时刻、持锁多久（在途读取等 DMA 超时时可达数百毫秒）。3 s 内没有读取失败则写 `fg_read=none` |
+| Flash 写入与同步耗时 | `SPIKE FLASHIO <阶段> write64K|sync n=… min=… avg=… max=…us` | 持锁时长；只在 P3 有数。对比 P3 与 P2、P1 的 `SDREAD audio32K` 和 `UNDER` 看 Flash 写是否拖慢 SD 读 |
+| 一次回收的实际耗时 | `SPIKE FLASHIO <阶段> reclaim_erase n=… min=… avg=… max=…us`（真擦除）与 `reclaim_idle …`（空转） | 口径：在同一次 Flash 卷锁内读回收前后 FTL 的 `SessionErases`，差值不为零就是真擦除（FTL 擦除并校验完一块后才加一），否则是空转。`reclaim_erase` 是票上要的数；`n=0` 说明这次没触发到水位 |
+| 空闲块与失效块的前后值 | `SPIKE FLASHIO <阶段> blocks free=<开始>><现在> stale=<开始>><现在> valid=… low=… high=… reserve=…` 与 `FLASHIO <阶段> erases phase=… reclaim=… other=… real_calls=… idle_calls=… reached=… to_low=…` | `low`、`high` 是按 FTL 公式推算的回收水位（`PHASE start P3` 行里还有 `need`：还要消耗多少空闲块才到 `low`）。`erases` 的 `phase` 是本阶段擦除总数，`reclaim` 是回收调用里观察到的，`other` 是差值（写入路径里的前台回收，正常为 0）；`to_low` 为 0 以外说明时间到时还没到水位，请再跑一次 P3（空闲块的消耗在重启后保留） |
+| 拔卡时序 | `SPIKE UNPLUG via=state|presence|insert detect_isr=0 debounce_end=+… stream_closed=+… catalog_invalid=+…`、`UNPLUG unmount_enter=+… unmount_done=+… unmount_status=…`、`UNPLUG fg_read status=… returned_at=+…ms in_lock=…us` | 全部是相对检测中断（第一个边沿，ISR 里只存 tick）的毫秒。`via` 说明拔出收尾由哪条判断触发：`state` 是 `Platform_SD_Process` 给出 REMOVED；`presence` 是事件被吞（传输在途时拔卡，设备层把状态直接写成 NOT_PRESENT），由“卡检测电平显示不在且卷还挂着”触发；`insert` 是只收到 INSERTED 而卷还挂着（换卡，或拔出被吞后插回）。卸载要先拿 SD 锁，`unmount_done` 与 `unmount_enter` 的差含等在途读取；`fg_read` 是前台任务拔卡后第一次失败的读取：状态、返回时刻、持锁多久（在途读取等 DMA 超时时可达数百毫秒）。3 s 内没有读取失败则写 `fg_read=none` |
+| 插卡初始化持锁多久 | `SPIKE LOCK <SD 或 GLOBAL> ph|all …@Storage_Task/HotplugRefresh` | 热插拔刷新（无卡时 DeInit、插卡时 Init）现在在 SD 卷锁内执行，操作名 `HotplugRefresh`；在 `hold=` 里看到它就是插卡初始化的持锁时长 |
 | 唱盘不在屏幕上时是否还刷屏 | `SPIKE GUI <阶段> win=…ms loops=… flush=… sleep_avg=…ms frame_max=…us sleep=on|off` | 窗口内 GUI 循环数、flush 次数、平均睡眠、最长一圈。`sleep=off` 只在 P0 |
 | `ui_cell` 持锁时长 | `SPIKE CELL P4 write n=… avg=… max=…us (synthetic 6KiB)` 与 `read …` | 写和读各自的持锁平均与最大，合成场景 |
 | GUI 拿不到锁的频率 | `SPIKE CELLGUI P4 try=… fail=… (synthetic, reference only)` | `try` 是序号变了、GUI 尝试拿锁拷贝的次数，`fail` 是其中没拿到的；仅作参考 |
@@ -79,6 +82,13 @@ cmake --build build/firmware-debug-pervol
 其余行：`SPIKE INIT …`（锁模式、`_FS_LOCK`、`_USE_LFN`）、`SPIKE PHASE start|end|skip|wait|pause|all_done …`。
 
 拔卡后 Queue 清空的延迟、连滑和连按切歌的显示延迟**没有测**，票上记“未测”，转 0.10.0 板级验收。
+
+## Flash 回收怎么触发（读代码所得，`Components/flash_ftl/flash_ftl.c`，未对照手册，除注明板测外未实测）
+
+- **写路径里没有擦除**：写一个逻辑组（7 个 512 B 扇区，3584 B）= 取下一个空闲块（循环游标），编程头页和最多 14 个数据页（全 0xFF 的页跳过），每页编程后读回 256 B 校验，再编程提交页并读回校验，最后切换 RAM 映射、把旧版本所在块标成失效（不是空闲）。整组以下的写还要先读旧块 4 KiB。**只有空闲块数不高于 2（`FLASH_FTL_MIN_FREE_BLOCKS`）时，写入自己才会先做一次前台回收（擦一块）**。所以第一轮板测里 `write64K` 的 0.33 至 0.74 s（板测，平均约 0.63 s）是约 19 至 21 次组提交（64 KiB 除以 3584 B 约 18.3，再加 FAT 与目录扇区所在的组）的页编程加读回校验，每组约 17 至 36 ms，不含擦除。P3 的 `erases ... other=` 是验证：写入路径里的擦除应为 0。
+- **回收有水位**：`ReclaimFlash` 受理一次 GC 步骤，`low = ceil(预留块 × 75%)`，`high = ceil(预留块 × 90%)`。空闲块数不高于 `low` 时置“要回收”，不低于 `high` 时清除；没有“要回收”就直接返回成功，不擦除——这就是第一轮板测里 96 次回收全部约 14 µs 的原因。要回收时按游标找下一个失效块，擦除、读回 8 × 512 B 校验后标成空闲，`SessionErases` 加一；**一次调用至多擦一块**。
+- **本板的数**：FTL 分区 24 MiB = 6144 块，扣两个卷头得 6142 个数据块，预留块 `ceil(6142 × 10%)` = 615，逻辑容量 5527 组（38689 个扇区），所以 `low` = 462、`high` = 554（`PHASE start P3` 行里会给出算出的值，和这里对不上就是 FTL 参数变了）。每次写一个逻辑组消耗一个空闲块，旧版本变失效而不是空闲，所以**刚格式化的卷要先消耗约 5680 个空闲块（约 270 次 64 KiB 写）才会第一次擦除**；消耗在重启后保留（启动扫描只把已擦除的块算空闲），板上之前跑过的 P3 都在为这次累积。
+- **P3 怎么做**：开始时读空闲块数，算出 `need` = 空闲块数 − `low`，写入之间只让出 1 ms 以最快消耗空闲块；每写完一个约 1 MiB 的文件、删除之后进入回收阶段：每次回收读前后 `SessionErases`，真擦除就继续回收（一个阶段至多 64 次），连续 4 次空转回到写入。观察到 16 次真擦除就提前结束 P3，120 s 到了还没到水位就结束并在 `erases ... to_low=` 里写出还差多少。不动 FTL，不写满卷（逻辑上只占 1 MiB，且只碰 `Spike/load.bin`）。
 
 ## 读数时要知道的
 
@@ -90,6 +100,8 @@ cmake --build build/firmware-debug-pervol
 - `ui_cell` 的格子和 GUI 副本、32 KiB 读缓冲放在 AXI SRAM（现有的 `.lvgl_large_ram_array` 段）；合成数据源与 Flash 写入的数据源是 SDRAM 里只读的壁纸资源区，不另占内存。栈和 TCB 在 DTCM。
 
 ## 风险（上板前必须知道）
+
+- **第一轮板测的发现，这轮只修了 spike 分支，产品代码路径没有**：前台任务读取时拔卡，设备层（`SDCard_FailTransfer`）发现卡不在，直接把状态写成 NOT_PRESENT；消抖结束后 `Platform_SD_Process` 比较前后状态相同，不给 REMOVED，于是音频流不关、卷不卸载；插回才得到 INSERTED，此时旧卷还挂着，遗留的打开对象让 `MountSD` 返回 BUSY（主机测试复现了这一点），Storage 认为卷未挂载，音乐不可用。这轮在 `storage_sd_process()` 里补了三处：拔出判断不再只靠状态变化（卡检测电平显示不在且卷还挂着也走完整收尾）；只收到 INSERTED 而卷还挂着时先完整拔出收尾再挂载（卸载让所有任务的 Token 失效，所以挂载不再因别的任务开着文件而 BUSY）；热插拔刷新经 SD 卷锁执行。`Components/`、`Platform/` 没改，所以主线上同样的问题仍在，要等票里决定怎么修。
 
 - 每卷一把锁时 `f_open`、`f_close`（写打开的文件先在表锁外 `f_sync`）、`f_opendir`、`f_unlink`、`f_rename`、`f_mount` 整个调用都包在打开表锁里，里面有磁盘读写。Flash 卷上的创建或删除会让 SD 上的打开等表锁，这正是要测的代价，但也意味着“每卷一把”并不能让所有操作互不影响。
 - 全局一把锁时，Flash 擦除或 64 KiB 写入期间 Storage 读音频块要等锁，可能欠载；这是预期的对照。

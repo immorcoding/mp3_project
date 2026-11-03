@@ -20,6 +20,7 @@ static volatile bool spike_unplug_armed;
 static volatile TickType_t spike_unplug_t0;
 static volatile uint32_t spike_unplug_stage_ms[SPIKE_UNPLUG_STAGE_COUNT];
 static volatile uint32_t spike_unplug_unmount_status;
+static volatile SpikeUnplugViaTypeDef spike_unplug_via;
 static volatile bool spike_unplug_foreground_set;
 static volatile uint32_t spike_unplug_foreground_status;
 static volatile uint32_t spike_unplug_foreground_ms;
@@ -54,6 +55,19 @@ void spike_unplug_note_detect_isr(void)
     }
     spike_unplug_foreground_set = false;
     spike_unplug_armed = true;
+}
+
+/**
+ * @brief 记下这次拔出收尾是由哪条判断触发的。
+ * @param[in] via 触发来源。
+ * @note  时间线未待命时忽略；Storage Task 在开始收尾之前调用。
+ */
+void spike_unplug_set_via(SpikeUnplugViaTypeDef via)
+{
+    if (spike_unplug_armed)
+    {
+        spike_unplug_via = via;
+    }
 }
 
 /**
@@ -132,6 +146,7 @@ bool spike_unplug_take_report(SpikeUnplugReportTypeDef *report)
     {
         report->StageMs[index] = spike_unplug_stage_ms[index];
     }
+    report->Via = spike_unplug_via;
     report->UnmountStatus = spike_unplug_unmount_status;
     report->ForegroundRead = spike_unplug_foreground_set;
     report->ForegroundStatus = spike_unplug_foreground_status;

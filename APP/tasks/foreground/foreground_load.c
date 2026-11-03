@@ -43,11 +43,29 @@
 #define FOREGROUND_FLASH_CHUNK_BYTES 65536U
 /** @brief 写到约 1 MiB 后删除。 */
 #define FOREGROUND_FLASH_TARGET_BYTES (1024U * 1024U)
-/** @brief 删除之后连续调用的回收次数。 */
-#define FOREGROUND_FLASH_RECLAIMS 16U
-#define FOREGROUND_FLASH_PACE_MS 20U
-#define FOREGROUND_FLASH_RECLAIM_PACE_MS 10U
+/**
+ * @brief 删除之后进入回收阶段：每次调用都看 FTL 的擦除计数有没有加一，连续空转这么多次就回到写入。
+ * @note  板测（#191 第一轮）里回收 96 次全是空转（约 14 µs），因为 FTL 只在空闲块数不高于水位时才擦除
+ *        （flash_ftl.c 的 GC 步骤，读代码所得），所以现在先按水位算出要写多少，写到水位以下再回收。
+ */
+#define FOREGROUND_FLASH_IDLE_RECLAIMS 4U
+/** @brief 一个回收阶段最多调用的次数，防止在水位附近一直擦。 */
+#define FOREGROUND_FLASH_RECLAIM_STAGE_CAP 64U
+/** @brief 观察到这么多次真擦除的回收后，P3 提前结束。 */
+#define FOREGROUND_FLASH_ERASE_GOAL 16U
+/** @brief 写入之间只让出 1 ms：消耗空闲块的速度决定能否在时限内逼近水位。 */
+#define FOREGROUND_FLASH_PACE_MS 1U
+#define FOREGROUND_FLASH_RECLAIM_PACE_MS 5U
 #define FOREGROUND_FLASH_ERROR_BACKOFF_MS 500U
+/** @brief 写一个 64 KiB 约消耗的空闲块数（19 个逻辑组加文件系统元数据），只用于估算还要写几次。 */
+#define FOREGROUND_FLASH_BLOCKS_PER_WRITE 21U
+/**
+ * @brief FTL 回收水位占预留块的百分比。
+ * @note  复制自 Components/flash_ftl 的 FLASH_FTL_GC_START_RESERVE_PERCENT、STOP（该头是私有的，不能包含），
+ *        公式 (预留块 × 百分比 + 99) / 100 同样取自 flash_ftl.c；FTL 改了这些值这里要同步，日志里会同时给出算出的水位。
+ */
+#define FOREGROUND_FLASH_GC_START_PERCENT 75U
+#define FOREGROUND_FLASH_GC_STOP_PERCENT 90U
 
 /** @brief ui_cell 合成场景：6 KiB，每 16 ms 写一次。 */
 #define FOREGROUND_CELL_BYTES 6144U
@@ -88,7 +106,8 @@ static Service_Filesystem_FileHandleTypeDef foreground_flash_file;
 static bool foreground_flash_open;
 static uint32_t foreground_flash_written;
 static uint32_t foreground_flash_chunk_index;
-static uint32_t foreground_flash_reclaims_left;
+static uint32_t foreground_flash_idle_in_row;
+static uint32_t foreground_flash_stage_calls;
 
 static UiCell foreground_cell;
 static uint32_t foreground_cell_gui_seen;
@@ -199,6 +218,40 @@ static bool foreground_txt_open_file(void)
 }
 
 /**
+ * @brief 记下 P3 开始时的块计数，按 FTL 公式算出回收水位，并估算要写多少才能到水位以下。
+ * @param[out] detail 写入 PHASE start 行的补充信息。
+ * @param[in] detail_size detail 的字节数。
+ * @note  块计数读取失败时只给出提示，P3 仍照常写入和回收，只是没有水位信息。
+ */
+static void foreground_flash_begin_plan(char *detail, size_t detail_size)
+{
+    Service_Filesystem_SpikeFlashBlocksTypeDef blocks;
+    ForegroundLoadStatsTypeDef *stats = &foreground_load_stats_data;
+    uint32_t need;
+
+    if (!Service_Filesystem_SpikeFlashBlocks(&blocks))
+    {
+        (void)snprintf(detail, detail_size, "blocks=unavailable");
+        return;
+    }
+
+    stats->FlashBlocksValid = true;
+    stats->FlashBlocksStart = blocks;
+    stats->FlashBlocksNow = blocks;
+    stats->FlashGcLow = (blocks.ReserveBlocks * FOREGROUND_FLASH_GC_START_PERCENT + 99U) / 100U;
+    stats->FlashGcHigh = (blocks.ReserveBlocks * FOREGROUND_FLASH_GC_STOP_PERCENT + 99U) / 100U;
+    need = (blocks.FreeBlocks > stats->FlashGcLow) ? (blocks.FreeBlocks - stats->FlashGcLow) : 0U;
+    (void)snprintf(detail,
+                   detail_size,
+                   "free=%lu stale=%lu low=%lu high=%lu need=%lu",
+                   (unsigned long)blocks.FreeBlocks,
+                   (unsigned long)blocks.StaleBlocks,
+                   (unsigned long)stats->FlashGcLow,
+                   (unsigned long)stats->FlashGcHigh,
+                   (unsigned long)need);
+}
+
+/**
  * @brief 判断一个阶段的负载能否开始，并做开始前的准备。
  * @param[in] kind 负载种类。
  * @param[out] detail 能开始时写入补充信息（如文件大小），不能开始时写入原因。
@@ -243,6 +296,7 @@ bool foreground_load_begin(ForegroundLoadKindTypeDef kind, char *detail, size_t 
             foreground_flash_state = FOREGROUND_FLASH_PREPARE;
             foreground_flash_open = false;
             foreground_flash_chunk_index = 0U;
+            foreground_flash_begin_plan(detail, detail_size);
             return true;
 
         case FOREGROUND_LOAD_CELL:
@@ -509,7 +563,8 @@ static void foreground_flash_write(void)
             return;
         }
         foreground_load_stats_data.FlashFiles++;
-        foreground_flash_reclaims_left = FOREGROUND_FLASH_RECLAIMS;
+        foreground_flash_idle_in_row = 0U;
+        foreground_flash_stage_calls = 0U;
         foreground_flash_state = FOREGROUND_FLASH_RECLAIM;
     }
 
@@ -517,29 +572,61 @@ static void foreground_flash_write(void)
 }
 
 /**
- * @brief Flash 负载的回收态：删除之后反复调用 ReclaimFlash。
- * @note  Storage 主循环在音频流打开时不回收，所以由前台任务调用。
+ * @brief Flash 负载的回收态：删除之后反复调用回收，并把真擦除和空转分开统计。
+ * @note  Storage 主循环在音频流打开时不回收，所以由前台任务调用。口径：同一次 Flash 卷锁内读回收前后的
+ *        FTL `SessionErases`，差值不为零就是真擦除（FTL 在擦除并校验完一块后才加一），否则是空转。
+ *        真擦除继续回收，连续空转几次或到阶段调用上限就回到写入。
  */
 static void foreground_flash_reclaim(void)
 {
-    Service_StatusTypeDef status = Service_Filesystem_ReclaimFlash();
+    ForegroundLoadStatsTypeDef *stats = &foreground_load_stats_data;
+    Service_Filesystem_SpikeFlashBlocksTypeDef before;
+    Service_Filesystem_SpikeFlashBlocksTypeDef after;
+    Service_StatusTypeDef status = Service_Filesystem_SpikeReclaimFlashMeasured(&before, &after);
+    const uint32_t hold_us = Service_Filesystem_SpikeLastHoldUs();
+    uint32_t erased;
 
     if (status != SERVICE_OK)
     {
         foreground_flash_fail(status);
         return;
     }
-    foreground_stat_add(&foreground_load_stats_data.FlashReclaim, Service_Filesystem_SpikeLastHoldUs());
 
-    if (foreground_flash_reclaims_left > 0U)
+    erased = after.SessionErases - before.SessionErases;
+    if (stats->FlashBlocksValid)
     {
-        foreground_flash_reclaims_left--;
+        stats->FlashBlocksNow = after;
     }
-    if (foreground_flash_reclaims_left == 0U)
+    if (erased != 0U)
+    {
+        foreground_stat_add(&stats->FlashReclaimErase, hold_us);
+        stats->FlashErasesInReclaim += erased;
+        foreground_flash_idle_in_row = 0U;
+    }
+    else
+    {
+        foreground_stat_add(&stats->FlashReclaimIdle, hold_us);
+        foreground_flash_idle_in_row++;
+    }
+
+    foreground_flash_stage_calls++;
+    if ((foreground_flash_idle_in_row >= FOREGROUND_FLASH_IDLE_RECLAIMS) ||
+        (foreground_flash_stage_calls >= FOREGROUND_FLASH_RECLAIM_STAGE_CAP))
     {
         foreground_flash_state = FOREGROUND_FLASH_PREPARE;
     }
     vTaskDelay(pdMS_TO_TICKS(FOREGROUND_FLASH_RECLAIM_PACE_MS));
+}
+
+/**
+ * @brief 一个阶段的负载是否已经达到目标，可以提前结束。
+ * @param[in] kind 当前阶段的负载种类。
+ * @return true 目标已达成；目前只有 Flash 负载在观察到足够多次真擦除的回收后为真。
+ */
+bool foreground_load_finished(ForegroundLoadKindTypeDef kind)
+{
+    return (kind == FOREGROUND_LOAD_FLASH) &&
+           (foreground_load_stats_data.FlashReclaimErase.Count >= FOREGROUND_FLASH_ERASE_GOAL);
 }
 
 /**
