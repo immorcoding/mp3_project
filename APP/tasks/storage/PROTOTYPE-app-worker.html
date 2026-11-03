@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PROTOTYPE · 应用架构对比</title>
+<title>PROTOTYPE · 应用架构 C</title>
 <style>
 :root{
   --bg:#f7f7f5;--panel:#ffffff;--ink:#1c2024;--muted:#60676f;--line:#dfe1e4;
-  --accent:#0f766e;--accent-soft:#d5ece9;--cpu:#3f4a56;--dma:#cfd4da;--danger:#c2342b;--danger-soft:#f7dcd9;
+  --accent:#0f766e;--accent-soft:#d5ece9;--cpu:#3f4a56;--dma:#cfd4da;--lock:#b9c3d3;--danger:#c2342b;--danger-soft:#f7dcd9;
   --warn:#9a6700;--warn-soft:#fbeecb;--code:#f2f2ef;
 }
 @media (prefers-color-scheme:dark){:root{
   --bg:#15181b;--panel:#1d2125;--ink:#e6e8ea;--muted:#9aa2ab;--line:#30363c;
-  --accent:#3fb9ab;--accent-soft:#17403c;--cpu:#8d99a6;--dma:#3a4149;--danger:#ef6a60;--danger-soft:#4a211e;
+  --accent:#3fb9ab;--accent-soft:#17403c;--cpu:#8d99a6;--dma:#3a4149;--lock:#4d5a70;--danger:#ef6a60;--danger-soft:#4a211e;
   --warn:#e0b34a;--warn-soft:#3d3112;--code:#23282d;
 }}
 *{box-sizing:border-box}
@@ -40,7 +40,7 @@ button:disabled{opacity:.45;cursor:default}
 .steps button.done::before{content:"✓ ";color:var(--accent)}
 .btns{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .watch{border-left:3px solid var(--accent);padding:6px 10px;background:var(--accent-soft);border-radius:0 6px 6px 0;margin-bottom:12px}
-.codes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.codes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:10px}
 @media (max-width:900px){.codes{grid-template-columns:minmax(0,1fr)}}
 pre{margin:0;background:var(--code);border-radius:6px;padding:10px 12px;font:12px/1.55 Consolas,"Cascadia Mono",monospace;overflow:auto}
 .arch{margin-bottom:12px}
@@ -49,6 +49,8 @@ svg.tl{display:block;width:100%}
 svg.tl text{font:11px "Microsoft YaHei UI","PingFang SC",system-ui,sans-serif;fill:var(--ink)}
 .legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:12px;color:var(--muted)}
 .legend i{display:inline-block;width:18px;height:11px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.shown{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:8px;font-size:13px}
+.shown label{display:flex;gap:4px;align-items:center;cursor:pointer}
 table{border-collapse:collapse;width:100%;font-size:13px}
 th,td{border-top:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
 thead th{border-top:0;color:var(--muted);font-weight:600}
@@ -56,15 +58,15 @@ tbody th{font-weight:500;width:170px;color:var(--muted)}
 .bad{color:var(--danger);font-weight:600}
 .warn{color:var(--warn);font-weight:600}
 .ok{color:var(--accent);font-weight:600}
-.log{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;font-size:12px}
-@media (max-width:1100px){.log{grid-template-columns:minmax(0,1fr)}}
+.log{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;font-size:12px}
 .log ul{margin:0;padding-left:16px}
-.params{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:6px 18px;margin:10px 0}
+.params{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:6px 18px;margin:10px 0}
 .params label{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px}
 .params input{width:70px;font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 4px}
 .src{font-size:11px;padding:0 5px;border-radius:3px;background:var(--warn-soft);color:var(--warn)}
 .src.real{background:var(--accent-soft);color:var(--accent)}
 select{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:4px}
+.rules{margin:6px 0 0;padding-left:20px}
 </style>
 </head>
 <body>
@@ -75,60 +77,64 @@ select{font:inherit;color:inherit;background:var(--panel);border:1px solid var(-
 
 <div class="wrap">
   <span class="tag">原型 · 可丢弃 · 不合入 main · 分支 prototype/app-worker</span>
-  <h1>应用架构对比：Worker 到底解决什么</h1>
-  <p><b>要回答的问题：</b>把应用分成“GUI 一半 + Worker 一半”、文件操作走通用请求之后，同样的操作和现在的写法相比，界面、音频和接入成本分别怎么变？新规则碰到棘手情形会不会出问题？</p>
-  <p class="muted small">这是逻辑模拟，不是板测。三种架构跑同一批操作、同一组耗时参数，每 1 ms 模拟一次 FreeRTOS 抢占和时间片，请求往返的开销按 0 计。部分耗时是假设（见页面底部的参数）。Books、Settings 现在还不存在，“现状写法”指继续按名称槽的方式接入它们。</p>
+  <h1>应用架构 C：应用任务持锁读 SD</h1>
+  <p><b>要回答的问题：</b>按选项 C 分工之后，应用接入、界面、音频和拔卡分别表现如何？这些规则碰到棘手情形会不会漏？和现状写法、A（请求队列）比差在哪？</p>
+  <p class="muted small">这是逻辑模拟，不是板测。各写法跑同一批操作、同一组耗时参数，每 1 ms 模拟一次 FreeRTOS 抢占、时间片和互斥锁（放锁时高优先级等待者立刻抢占，持锁者继承等待者的优先级）。部分耗时是假设，见页面底部。Books、Settings 现在还不存在，“现状写法”指继续按名称槽的方式接入它们。C 和 A 用同一份应用代码，只有文件接口的内部实现不同。</p>
 
   <details open>
-    <summary>Worker 是什么</summary>
+    <summary>C 长什么样：谁持锁、谁能等</summary>
     <div style="margin-top:8px">
-      <p><b>Worker 就是一个普通的 FreeRTOS 任务，和 GUI、Storage 并列。它专门替应用做“需要等”的事。</b>等 SD 时它睡着，不占 CPU，其他任务照常跑。</p>
-      <p>打个比方：GUI 是不能离开大厅的服务员，Storage 是唯一能进仓库的管理员，Worker 是跑腿的。跑腿的拿单子去仓库门口等货，服务员继续招呼客人，管理员也不用学会做菜。在下面的时间线里，Worker 一行的<b>斜纹</b>就是它在等。</p>
+      <p><b>应用任务（上一版叫 Worker）就是一个普通的 FreeRTOS 任务，专门替应用做“需要等”的事。</b>GUI 不能等，所以读文件、读标签都放在这里。<b>应用代码本身看不到 SD 锁</b>：锁在 Filesystem Service 的每个公开函数里，进门拿、出门放。</p>
+      <table>
+        <thead><tr><th>任务</th><th>优先级</th><th>只做什么</th><th>绝不做</th></tr></thead>
+        <tbody>
+          <tr><th>播放</th><td>4</td><td>解码、补 PCM</td><td>碰文件、拿锁</td></tr>
+          <tr><th>音频流</th><td>3</td><td>读文件、填块池，到安全水位后让路</td><td>解码</td></tr>
+          <tr><th>卷管理</th><td>3</td><td>消抖、挂载卸载、发布卷事件</td><td>具体的文件读写</td></tr>
+          <tr><th>GUI</th><td>2</td><td>LVGL 和不用等的交互，没活就睡</td><td>等文件、做重活</td></tr>
+          <tr><th>应用任务</th><td>2</td><td>前台流程（读书页、读标签）和当前曲信息</td><td>CPU 重活</td></tr>
+          <tr><th>后台任务</th><td>1</td><td>扫描、建索引、解码封面、存设置</td><td>抢前台</td></tr>
+        </tbody>
+      </table>
       <div class="codes">
         <div>
-          <h3>现状写法：翻一页书（示意）</h3>
-<pre>/* GUI 任务：不能等，只能每帧查一次状态 */
-void gui_books_step(void) {
-    switch (book_slot.Status) {
-    case IDLE:
-        if (want_page) storage_bookbuffer_request(page);
-        break;
-    case READY:
-        layout_page(book_slot.Data);  /* 排版也卡在 GUI 里 */
-        book_slot.Status = IDLE;
-        break;
-    }
+          <h3>应用任务：翻一页书（示意）</h3>
+<pre>void books_turn_page(int n) {
+    file_t f = fs_open(SD, book_path);  /* 里面拿锁、做完就放 */
+    fs_read(f, offset_of(n), buf, len); /* 等 DMA 时持 SD 锁 */
+    fs_close(f);
+    layout_page(buf, &amp;page);            /* 不持任何锁 */
+    book_model_publish(&amp;page);          /* 短锁，只拷贝内存 */
 }
 
-/* Storage 任务：主循环多一步，还要懂“书” */
-void storage_bookbuffer_load(void) {
-    if (book_slot.Status != PENDING) return;
-    read_book_chunk(book_slot.Page, book_slot.Data);
-    book_slot.Status = READY;
-}
-
-/* 另外还要：新 FLAG、bind、拔卡收尾、主循环调用…… */</pre>
-        </div>
-        <div>
-          <h3>新架构：翻一页书（示意）</h3>
-<pre>/* GUI 任务：只取结果，永远不等 */
+/* GUI 任务：只取结果，永远不等 */
 void gui_books_step(void) {
     if (book_model_take(&amp;page)) show_page(&amp;page);
+}</pre>
+        </div>
+        <div>
+          <h3>Filesystem Service：每个公开函数都这样（示意）</h3>
+<pre>status_t fs_read(file_t f, ...) {
+    assert(!is_gui_or_playback_task());  /* 规则 4 */
+    lock(volume_lock(f));    /* 按优先级排队，带优先级继承 */
+    status_t s = read_block_unlocked(f, ...);
+    unlock(volume_lock(f));  /* 绝不跨调用持有 */
+    return s;
 }
 
-/* Worker 任务：可以写“读完再往下” */
-void books_turn_page(int n) {
-    file_t f = storage_open(book_path);   /* 发请求，睡到结果回来 */
-    storage_read(f, offset_of(n), buf, len);
-    storage_close(f);
-    layout_page(buf, &amp;page);              /* 重活也不卡界面 */
-    book_model_publish(&amp;page);            /* 短锁写入，GUI 下一帧看到 */
-}
-
-/* Storage 任务：不用改。
-   它只执行 open / read / close，不知道“书”是什么。 */</pre>
+/* 音频流任务：到安全水位后每补一块让一下 */
+fs_read(stream, block-&gt;Data, BLOCK_BYTES);
+if (blocks_ready() &gt;= LOW_WATER) vTaskDelay(1);</pre>
         </div>
       </div>
+      <p style="margin:10px 0 0"><b>C 必须守住的规则：</b></p>
+      <ol class="rules small">
+        <li>锁藏在 Service 里：一次公开调用拿一次，返回前放掉，绝不跨调用持有。</li>
+        <li>它是最内层的锁：持有界面数据锁时，不许调用文件接口。</li>
+        <li>持锁时长有上界：一次最多读 32 KiB，扫描按批做。</li>
+        <li>调用者受限：GUI 和播放任务一调用文件接口就断言失败。</li>
+        <li>音频到水位后让路。</li>
+      </ol>
     </div>
   </details>
 </div>
@@ -145,7 +151,7 @@ void books_turn_page(int n) {
     </div>
     <div class="panel">
       <h2>自由操作</h2>
-      <p class="small muted" style="margin-bottom:6px">三种架构同时执行。点击后时间走：
+      <p class="small muted" style="margin-bottom:6px">所有写法同时执行。点击后时间走：
         <select id="after"><option value="settle">直到做完</option><option value="50">只走 50 ms</option></select></p>
       <div class="btns" id="free"></div>
     </div>
@@ -155,13 +161,15 @@ void books_turn_page(int n) {
     <div class="watch" id="watch"></div>
     <div class="panel" id="panel-tl">
       <h2>时间线 <span class="muted small" id="tl-range" style="font-weight:400"></span></h2>
+      <div class="shown" id="shown"></div>
       <div class="legend">
         <span><i style="background:var(--cpu)"></i>占 CPU</span>
         <span><i style="background:var(--dma)"></i>等屏幕 DMA（界面正常）</span>
         <span><i style="background:var(--accent)"></i>读写存储</span>
-        <span><i style="background:repeating-linear-gradient(45deg,var(--accent) 0 2px,var(--accent-soft) 2px 6px)"></i>睡着，等别人的结果</span>
+        <span><i style="background:repeating-linear-gradient(45deg,var(--accent) 0 2px,var(--accent-soft) 2px 6px)"></i>睡着，等锁或等结果</span>
+        <span><i style="background:var(--lock)"></i>锁的持有者（颜色区分谁持有，悬停看名字）</span>
         <span><i style="background:var(--danger)"></i>GUI 被卡住</span>
-        <span>▼ 用户操作　● 结果显示到界面</span>
+        <span>▼ 用户操作　● 结果显示到界面（空白 = 任务在睡）</span>
       </div>
       <div id="timelines"></div>
     </div>
@@ -176,7 +184,7 @@ void books_turn_page(int n) {
       <p class="small muted" style="margin:8px 0 0">现状的数字按 <code>storage_namebuffer</code> 接入时实际动到的位置计：<code>storage_task.c</code> 3 处（bind、主循环 load、未就绪收尾）、<code>storage_task_config.h</code> 1 处（FLAG）。几种访问也可以合并成一个槽，但合并之后就等于在造通用请求队列。每个应用拆成几种访问是我的估计。</p>
     </div>
     <details class="panel">
-      <summary>事件记录（每种架构最近的动作）</summary>
+      <summary>事件记录（每种写法最近的动作）</summary>
       <div class="log" id="log" style="margin-top:8px"></div>
     </details>
     <details class="panel">
@@ -187,11 +195,12 @@ void books_turn_page(int n) {
     <section>
       <h2>这个原型回答不了的问题</h2>
       <ul class="small" style="margin:0;padding-left:18px">
-        <li>Worker 和后台任务的栈放哪、够不够：需要实测内部 RAM。</li>
-        <li>SD 实际吞吐、封面解码和排版的真实耗时：页面上是假设值。</li>
-        <li>在 Worker 里排版时读字体是否安全：LVGL 不是线程安全的，要先确认只读路径。</li>
-        <li><code>_FS_LOCK</code> 现在是 2，新架构同时打开的文件对象更多，要调大（<code>ffconf.h</code>，改之前要你确认）。</li>
-        <li>“Worker + 拿锁直接读 SD”（上一轮的选项 C）这里没有单独模拟。</li>
+        <li><b>FatFs 能否每卷一把锁：</b>要把 <code>_USE_LFN</code> 从 1 改成 2 或 3；文件锁表 <code>Files[]</code> 跨卷共享且没有保护（<code>ff.c:541</code>），官方文档没提。可以把 <code>_FS_LOCK</code> 设为 0 由 Service 自己查重（Flipper 的做法，待核实），或者先用一把全局锁。把参数“每卷一把锁”改成 0 可以看全局锁的效果。</li>
+        <li><b>任务的栈够不够：</b>音频流、应用任务、后台任务、卷管理都会走到 FatFs，都要留深栈，需要实测内部 RAM。</li>
+        <li><b>完成通知：</b>SD、Flash 的完成通知要改成不绑定任务；未决的“迟到 DMA 完成事件”要一起解决。这里没有模拟。</li>
+        <li><b>排版能否放在 LVGL 之外：</b>LVGL 不是线程安全的，读字体这条路径要先确认。</li>
+        <li><b>多少算重活：</b>这里 40 ms 的排版留在应用任务，会把帧间隔撑到约 50 ms。阈值要板测后再定。</li>
+        <li><b>真实耗时：</b>SD 吞吐、擦除、解码、排版都是假设值。GUI 从不睡是读代码得到的（<code>gui_task.c:56</code>），没有实测 CPU 占比。</li>
       </ul>
     </section>
   </div>
@@ -205,52 +214,59 @@ const Model = (() => {
     frameCpuMs: 15, frameDmaMs: 15,
     decodePeriodMs: 24, decodeCpuMs: 4,
     blockReadMs: 3, openMs: 2, tagMs: 3,
-    layoutCpuMs: 40, flashSaveMs: 60,
+    layoutCpuMs: 40, flashSaveMs: 60, flashEraseMs: 400,
     coverReadMs: 6, coverDecodeMs: 300,
-    scanMs: 2000, scanStepMs: 16, mountMs: 20,
-    msPerBlock: 819, blockCount: 32, lowWater: 4,
+    scanMs: 2000, scanStepMs: 64, mountMs: 20,
+    msPerBlock: 819, blockCount: 32, lowWater: 4, audioYieldMs: 1,
     tDataMs: 2000, debounceMs: 30, sdTimeoutMs: 500,
     bigBookReads: 160, indexCpuMs: 1,
+    perVolumeLock: 1, guiSleeps: 1,
   };
 
   const ARCHS = {
-    slots:  { name: '现状写法', sub: '应用在 GUI 里轮询，Storage 代读，每种访问一个槽', lanes: ['GUI', 'Storage'] },
-    worker: { name: '新架构', sub: 'GUI 只读结果，Worker 可以等，Storage 只执行通用文件请求', lanes: ['GUI', 'Worker', '后台作业', 'Storage'] },
-    lock:   { name: '对照：GUI 拿锁直接读 SD', sub: '没有 Worker，GUI 自己等；Storage 仍负责音频和扫描', lanes: ['GUI', 'Storage'] },
+    slots: { name: '现状写法', sub: '应用在 GUI 里轮询，Storage 代读，每种访问一个槽', lanes: ['GUI', 'Storage'] },
+    c:     { name: 'C：应用任务持锁读（目标）', sub: '谁要读谁自己读，锁藏在 Service 里，每卷一把', lanes: ['GUI', '应用任务', '后台任务', '音频流', '卷管理', 'SD 锁', 'Flash 锁'] },
+    a:     { name: 'A：请求队列', sub: '应用代码和 C 相同，文件操作发给 Storage 执行', lanes: ['GUI', '应用任务', '后台任务', 'Storage'] },
+    lock:  { name: '对照：GUI 拿锁直接读', sub: '没有应用任务，GUI 自己等', lanes: ['GUI', 'Storage', 'SD 锁'] },
   };
 
   /* ---------- 规则：纯函数，验证通过后可以直接搬进固件 ---------- */
   const Policy = {
-    /** Storage 每圈只做一件有上界的事。 */
+    /** C：音频到安全水位后每补一块让一下。 */
+    audioShouldYield: (blocks, lowWater) => blocks >= lowWater,
+    /** C：这次调用该拿哪把锁。 */
+    lockFor: (volume, perVolume) => (perVolume ? volume : 'sd'),
+    /** A：Storage 每圈只做一件有上界的事。 */
     chooseNext(f) {
       if (f.cardDue) return 'card';
       if (f.cardAbsent && f.sdWaiting) return 'flush';
       if (f.sdUsable && f.streamRequest) return 'stream-open';
-      if (f.sdUsable && f.streamOpen && f.blocks < f.lowWater) return 'stream-block'; /* 音频快见底：最优先 */
+      if (f.sdUsable && f.streamOpen && f.blocks < f.lowWater) return 'stream-block';
       if (f.fgWaiting) return 'fg';
-      if (f.sdUsable && f.streamOpen && f.blocks <= f.capacity - 1) return 'stream-block'; /* 补满预读 */
+      if (f.sdUsable && f.streamOpen && f.blocks <= f.capacity - 1) return 'stream-block';
       if (f.bgWaiting) return 'bg';
       return null;
     },
     /** 哪些操作是规则允许的。 */
     checkRule(arch, what, ctx) {
+      const target = arch === 'c' || arch === 'a';
       switch (what) {
         case 'turn-page':
           if (ctx.fg === 'books') return { ok: true, reason: '' };
-          return arch === 'worker'
-            ? { ok: false, reason: 'Books 不在前台，拒绝' }
-            : { ok: true, reason: '没有前台规则，后台页面也能发请求' };
+          return target ? { ok: false, reason: 'Books 不在前台，拒绝' } : { ok: true, reason: '没有前台规则，后台页面也能发请求' };
         case 'scroll':
           if (ctx.fg === 'music') return { ok: true, reason: '' };
-          return arch === 'worker'
-            ? { ok: false, reason: '音乐不在前台，拒绝' }
-            : { ok: true, reason: '没有前台规则，后台页面也能发请求' };
+          return target ? { ok: false, reason: '音乐不在前台，拒绝' } : { ok: true, reason: '没有前台规则，后台页面也能发请求' };
         case 'gui-read':
           if (arch === 'lock') return { ok: true, reason: '允许，但这一帧会等 SD' };
-          return { ok: false, reason: arch === 'worker' ? '拒绝：GUI 任务不发文件请求，否则就会等' : '拒绝：现有规则不让 GUI 碰 FatFs' };
-        case 'worker-lvgl':
-          if (arch === 'worker') return { ok: false, reason: '拒绝：Worker 只能写界面数据，由 GUI 任务显示' };
-          return { ok: true, reason: '不适用（没有 Worker）' };
+          if (arch === 'slots') return { ok: false, reason: '拒绝：现有规则不让 GUI 碰 FatFs' };
+          return { ok: false, reason: '断言失败：GUI 任务不能调用文件接口' };
+        case 'app-lvgl':
+          if (target) return { ok: false, reason: '拒绝：应用任务只能写界面数据，由 GUI 显示' };
+          return { ok: true, reason: '不适用（没有应用任务）' };
+        case 'nested-lock':
+          if (target) return { ok: false, reason: '拒绝：否则 GUI 取界面数据时会连带等 SD' };
+          return { ok: true, reason: '不适用（没有界面数据锁）' };
         default:
           return { ok: true, reason: '' };
       }
@@ -272,25 +288,24 @@ const Model = (() => {
     return {
       apps: ['音乐', ...apps.map(a => a.name)],
       slots: {
-        loopKnows: [...MUSIC_ACCESSES, ...added],
-        sharedEdits: added.length * 4 + apps.length,
-        newStorageModules: added.length,
-        businessIn: 'Storage 任务：' + ['读标签', ...added].join('、'),
-        oneOff: '无',
+        loopKnows: [...MUSIC_ACCESSES, ...added], sharedEdits: added.length * 4 + apps.length, newStorageModules: added.length,
+        newFsOp: '不适用（业务写在 Storage 里）', deepStack: ['Storage'],
+        businessIn: 'Storage 任务：' + ['读标签', ...added].join('、'), oneOff: '无',
       },
-      worker: {
-        loopKnows: ['音频流', '通用文件请求（前台 / 后台）'],
-        sharedEdits: apps.length * 2,
-        newStorageModules: 0,
-        businessIn: '各应用自己的 Worker 代码',
-        oneOff: 'Worker 与后台任务、通用请求层、Storage 主循环改造、音乐迁移、ADR 与规则修改',
+      c: {
+        loopKnows: [], sharedEdits: apps.length * 2, newStorageModules: 0,
+        newFsOp: '1 处：函数里包一层锁', deepStack: ['音频流', '应用任务', '后台任务', '卷管理'],
+        businessIn: '各应用自己的代码，跑在应用任务或后台任务', oneOff: '四个新任务、Service 入口加锁、完成通知改造、FatFs 配置、音乐迁移、ADR 与规则修改',
+      },
+      a: {
+        loopKnows: ['音频流', '通用文件请求（前台 / 后台）'], sharedEdits: apps.length * 2, newStorageModules: 0,
+        newFsOp: '4 处：枚举、结构、分发、客户端包装', deepStack: ['Storage'],
+        businessIn: '各应用自己的代码，跑在应用任务或后台任务', oneOff: '两个新任务、18 个文件操作的请求层、Storage 主循环改造、音乐迁移、ADR 与规则修改',
       },
       lock: {
-        loopKnows: ['音频流', '扫描'],
-        sharedEdits: apps.length,
-        newStorageModules: 0,
-        businessIn: 'GUI 任务（所以界面要等）',
-        oneOff: 'SD/Flash 完成通知改造、FatFs 配置或 Service 层加锁、拔卡处理分散到各调用方',
+        loopKnows: ['音频流', '扫描'], sharedEdits: apps.length, newStorageModules: 0,
+        newFsOp: '1 处：函数里包一层锁', deepStack: ['GUI', 'Storage'],
+        businessIn: 'GUI 任务（所以界面要等）', oneOff: 'Service 入口加锁、完成通知改造、FatFs 配置',
       },
     };
   }
@@ -300,6 +315,7 @@ const Model = (() => {
   const io = (ms, label, kind = 'sd', extra = {}) => ({ op: 'io', ms, label, kind, ...extra });
   const wait = (cond, label, kind = 'wait') => ({ op: 'wait', cond, label, kind });
   const sleep = ms => ({ op: 'io', ms, label: '', kind: 'idle' });
+  const yieldCpu = { op: 'yield' };
 
   function log(w, text) { w.events.push({ t: w.t, text }); }
   function startOp(w, kind, label, extra = {}) {
@@ -318,12 +334,12 @@ const Model = (() => {
   function failOps(w, kind, note) { openOps(w, kind).forEach(o => { o.failed = true; endOp(w, o, note); }); }
 
   /* ---------- 显示到界面（只在 GUI 任务里调用） ---------- */
-  function showPage(w, page) { w.ui.page = page; openOps(w, 'page').filter(o => o.target <= page).forEach(o => endOp(w, o)); }
-  function showTitle(w, title) { w.ui.title = title; openOps(w, 'title').filter(o => o.target <= title).forEach(o => endOp(w, o)); }
+  function showPage(w, page) { w.ui.page = page; w.ui.dirty = true; openOps(w, 'page').filter(o => o.target <= page).forEach(o => endOp(w, o)); }
+  function showTitle(w, title) { w.ui.title = title; w.ui.dirty = true; openOps(w, 'title').filter(o => o.target <= title).forEach(o => endOp(w, o)); }
   function showSaved(w, n) { w.ui.saved = n; openOps(w, 'save').filter(o => o.target <= n).forEach(o => endOp(w, o)); }
-  function showCover(w, n) { w.ui.cover = n; openOps(w, 'cover').filter(o => o.target <= n).forEach(o => endOp(w, o)); }
+  function showCover(w, n) { w.ui.cover = n; w.ui.dirty = true; openOps(w, 'cover').filter(o => o.target <= n).forEach(o => endOp(w, o)); }
   function showWindow(w, idx) {
-    w.ui.window = idx;
+    w.ui.window = idx; w.ui.dirty = true;
     const hit = openOps(w, 'window').filter(o => o.target === idx);
     if (hit.length) {
       const latest = hit[hit.length - 1];
@@ -332,7 +348,7 @@ const Model = (() => {
     }
   }
 
-  /* ---------- 卡与音频（三种架构共用） ---------- */
+  /* ---------- 卡与音频（各写法共用） ---------- */
   const sdMounted = w => w.card.state === 'ready' || w.card.state === 'scanning';
   const cardDue = w => w.card.flag && w.t >= w.card.debounceUntil;
 
@@ -353,41 +369,66 @@ const Model = (() => {
   function stopStream(w, reason) {
     w.audio.open = false; w.audio.req = false; w.audio.level = 0;
     w.audio.state = 'stopped'; w.audio.endReason = reason;
-    w.audio.underrunning = false; w.audio.dataWait = 0;
+    w.audio.underrunning = false; w.audio.dataWait = 0; w.audio.waitingBlock = 0;
     failOps(w, 'stream', reason);
   }
   function onCardGone(w) {
     w.card.state = 'absent'; w.card.flag = false; w.card.catalogReady = false;
     stopStream(w, '卡已拔出');
-    /* 对照组里 GUI 可能还卡在超时上：这一页的失败要等 GUI 醒来才看得到。 */
-    const guiStuck = w.tasks.some(t => t.lane === 'GUI' && t.state === 'io' && t.op.failed);
-    ['page', 'window', 'title', 'index', 'cover', 'scan'].filter(k => !(guiStuck && k === 'page')).forEach(k => failOps(w, k, '卡已拔出'));
+    ['page', 'window', 'title', 'index', 'cover', 'scan'].forEach(k => failOps(w, k, '卡已拔出'));
     w.want.title = 0; w.want.window = null; w.want.bigBook = null;
     w.want.page = w.ui.page; w.want.cover = w.ui.cover;
     w.model.title = 0; w.model.window = null; w.model.page = w.ui.page; w.model.cover = w.ui.cover;
-    w.ui.title = 0; w.ui.window = null; w.ui.notice = '卡已拔出';
-    w.cache.clear();
+    w.ui.title = 0; w.ui.window = null; w.ui.notice = '卡已拔出'; w.ui.dirty = true;
+    w.cache.clear(); w.job.scan = false;
     openOps(w, 'remove').forEach(o => endOp(w, o));
   }
   function finishScan(w) {
-    w.card.state = 'ready'; w.card.catalogReady = true;
+    w.card.state = 'ready'; w.card.catalogReady = true; w.job.scan = false;
     w.want.title = 1; w.want.window = 0; w.ui.notice = '';
     openOps(w, 'scan').forEach(o => endOp(w, o));
   }
 
-  function* withFile(w, gen) { w.held++; const r = yield* gen; w.held--; return r; }
-
-  function* sdCall(w, ms, label, extra = {}) {
-    if (w.arch !== 'lock') return yield io(ms, label, 'sd', { sd: true, ...extra });
-    yield* takeLock(w, '等锁：SD 正被别人用');
-    const ok = yield io(ms, label, 'sd', { sd: true, ...extra });
-    w.lock.holder = null;
+  /* ---------- 锁 ---------- */
+  function* takeLock(w, name, label) {
+    const lk = w.locks[name];
+    const start = w.t;
+    while (lk.holder) yield { ...wait(() => !lk.holder, label), lockWait: name };
+    lk.holder = w.current;
+    const waited = w.t - start;
+    if (waited > w.m.lockMaxWait) { w.m.lockMaxWait = waited; w.m.lockMaxWho = w.current.lane; }
+  }
+  /** C 的文件接口：进门拿锁，做完放锁。放锁是调度点。 */
+  function* fsLocked(w, volume, ms, label, extra = {}) {
+    if (volume === 'sd') {
+      while (w.card.state === 'debounce') yield wait(() => w.card.state !== 'debounce', '等消抖：' + label);
+      if (!sdMounted(w)) return false;
+    }
+    const name = Policy.lockFor(volume, w.p.perVolumeLock);
+    yield* takeLock(w, name, '等锁：' + label);
+    const ok = yield io(ms, label, 'sd', { sd: volume === 'sd', ...extra });
+    w.locks[name].holder = null;
+    yield yieldCpu;
     return ok;
   }
-  function* takeLock(w, label) {
-    while (w.lock.holder) yield wait(() => !w.lock.holder, label);
-    w.lock.holder = w.current;
+  /** A 的文件接口：发请求，睡到结果回来。 */
+  function* rpc(w, cls, volume, ms, label, extra = {}) {
+    const req = { ms, label, done: false, ok: false, vol: volume, book: !!extra.book };
+    w.q[cls].push(req);
+    yield wait(() => req.done, '等 Storage：' + label);
+    return req.ok;
   }
+  /** 应用代码只调这一个：C 和 A 共用同一份流程。 */
+  function* fsCall(w, cls, volume, ms, label, extra = {}) {
+    if (w.arch === 'a') return yield* rpc(w, cls, volume, ms, label, extra);
+    return yield* fsLocked(w, volume, ms, label, extra);
+  }
+  /** 音频与卷的 SD 操作：现状和 A 在 Storage 里直接做，C 和对照组要拿锁。 */
+  function* sdCall(w, ms, label, extra = {}) {
+    if (w.arch === 'slots' || w.arch === 'a') return yield io(ms, label, 'sd', { sd: true, ...extra });
+    return yield* fsLocked(w, 'sd', ms, label, extra);
+  }
+
   function* openStream(w) {
     w.audio.req = false;
     const seq = w.audio.seq;
@@ -396,7 +437,8 @@ const Model = (() => {
   }
   function* readBlock(w) {
     const seq = w.audio.seq;
-    const ok = yield* sdCall(w, w.p.blockReadMs, '补音频块');
+    const ok = yield* sdCall(w, w.p.blockReadMs, '补音频块', { audioRead: true });
+    w.audio.reading = false;
     if (!ok) { w.audio.open = false; return; }
     if (seq !== w.audio.seq) return;
     w.audio.level = Math.min(w.p.blockCount, w.audio.level + 1);
@@ -410,11 +452,20 @@ const Model = (() => {
   const pageNeed = w => w.want.page > w.model.page;
   const coverNeed = w => w.want.cover > w.model.cover;
   const saveNeed = w => w.want.save > w.model.saved;
+  const saveLabel = w => (w.want.saveMs > w.p.flashSaveMs ? '写设置到 Flash（含回收擦除）' : '写设置到 Flash');
 
   function* frame(w) {
     yield cpu(w.p.frameCpuMs, '刷新一帧');
     w.frames.push(w.t);
     yield io(w.p.frameDmaMs, '等屏幕 DMA', 'dma');
+  }
+  /** GUI 一圈的收尾：有动画或有变化才画；没活时，目标架构睡觉，现在的写法空转。 */
+  function* guiDraw(w) {
+    const animating = w.audio.state === 'playing' || w.audio.state === 'opening';
+    if (animating || w.ui.dirty) { w.ui.dirty = false; yield* frame(w); return; }
+    const canSleep = (w.arch === 'c' || w.arch === 'a') && w.p.guiSleeps;
+    if (canSleep) yield sleep(16);
+    else yield cpu(1, '空转');
   }
   function* playbackTask(w) {
     while (true) {
@@ -427,6 +478,7 @@ const Model = (() => {
   function* guiSlots(w) {
     const S = w.slots, p = w.p;
     while (true) {
+      w.beats.push(w.t);
       const mounted = w.card.state === 'ready';
       if (S.name.status === 'READY') { if (S.name.target) { w.model.title = S.name.target; showTitle(w, S.name.target); } S.name.status = 'IDLE'; }
       if (S.name.status === 'IDLE' && titleNeed(w) && mounted) { S.name.target = w.want.title; S.name.status = 'PENDING'; }
@@ -449,7 +501,7 @@ const Model = (() => {
         if (!S.cover.failed) { yield cpu(p.coverDecodeMs, 'GUI 里解码封面', 'heavy'); w.model.cover = S.cover.target; showCover(w, S.cover.target); }
         S.cover.status = 'IDLE';
       }
-      yield* frame(w);
+      yield* guiDraw(w);
     }
   }
   function slotsStorageHasWork(w) {
@@ -465,7 +517,7 @@ const Model = (() => {
       yield wait(() => slotsStorageHasWork(w), null, 'idle');
       if (cardDue(w)) {
         if (!w.card.present) {
-          [S.list, S.name, S.book, S.index, S.cover].forEach(s => { if (s.status === 'PENDING') { s.status = 'IDLE'; } });
+          [S.list, S.name, S.book, S.index, S.cover].forEach(s => { if (s.status === 'PENDING') s.status = 'IDLE'; });
           log(w, '拔卡收尾：逐个槽调用 complete_unavailable');
           onCardGone(w);
           continue;
@@ -508,39 +560,38 @@ const Model = (() => {
         S.cover.failed = !ok; S.cover.status = 'READY';
       }
       if (S.save.status === 'PENDING') {
-        yield io(p.flashSaveMs, '写设置到 Flash', 'sd');
+        yield io(w.want.saveMs, saveLabel(w), 'sd');
         S.save.status = 'READY';
       }
       if (sdOk() && needBlock(w)) yield* readBlock(w);
     }
   }
 
-  /* ========== 新架构 ========== */
-  function* guiWorker(w) {
+  /* ========== C 与 A 共用：GUI、应用任务、后台任务 ========== */
+  function* guiTarget(w) {
     while (true) {
+      w.beats.push(w.t);
       if (w.model.title !== w.ui.title && w.model.title) showTitle(w, w.model.title);
       if (w.model.page > w.ui.page) showPage(w, w.model.page);
       if (w.model.window !== w.ui.window && w.model.window !== null) showWindow(w, w.model.window);
       if (w.model.saved > w.ui.saved) showSaved(w, w.model.saved);
       if (w.model.cover > w.ui.cover) showCover(w, w.model.cover);
       if (w.model.indexDone) { w.model.indexDone = false; openOps(w, 'index').forEach(o => endOp(w, o)); }
-      yield* frame(w);
+      yield* guiDraw(w);
     }
-  }
-  function* rpc(w, cls, ms, label, extra = {}) {
-    const req = { ms, label, done: false, ok: false, vol: extra.vol || 'sd', book: !!extra.book };
-    w.q[cls].push(req);
-    yield wait(() => req.done, '等 Storage：' + label);
-    return req.ok;
   }
   function* flowTitle(w) {
     const t = w.want.title;
-    const ok = yield* withFile(w, rpc(w, 'fg', w.p.openMs + w.p.tagMs, '读当前曲标签'));
+    w.held++;
+    const ok = yield* fsCall(w, 'fg', 'sd', w.p.openMs + w.p.tagMs, '读当前曲标签');
+    w.held--;
     if (ok) w.model.title = t;
   }
   function* flowPage(w) {
     const t = w.want.page;
-    const ok = yield* withFile(w, rpc(w, 'fg', w.p.openMs + w.p.blockReadMs, '读书页', { book: true }));
+    w.held++;
+    const ok = yield* fsCall(w, 'fg', 'sd', w.p.openMs + w.p.blockReadMs, '读书页', { book: true });
+    w.held--;
     if (!ok) return;
     yield cpu(w.p.layoutCpuMs, '排版书页');
     w.model.page = t;
@@ -548,72 +599,97 @@ const Model = (() => {
   function* flowWindow(w) {
     const target = w.want.window;
     for (let i = 0; i < 12; i++) {
-      if (w.want.window !== target) { log(w, 'Worker：需求变了，放弃第 ' + target + ' 行开始的这一窗'); return; }
+      if (w.want.window !== target) { log(w, '应用任务：需求变了，放弃第 ' + target + ' 行开始的这一窗'); return; }
       if (titleNeed(w)) yield* flowTitle(w);
       const pos = target + i;
       if (w.cache.has(pos)) continue;
-      const ok = yield* withFile(w, rpc(w, 'fg', w.p.openMs + w.p.tagMs, '读第 ' + pos + ' 行标签'));
+      w.held++;
+      const ok = yield* fsCall(w, 'fg', 'sd', w.p.openMs + w.p.tagMs, '读第 ' + pos + ' 行标签');
+      w.held--;
       if (!ok) return;
       w.cache.add(pos);
     }
     w.model.window = target;
   }
-  function* flowCover(w) {
-    const t = w.want.cover;
-    const ok = yield* withFile(w, rpc(w, 'fg', w.p.coverReadMs, '读封面数据'));
-    if (!ok) return;
-    yield cpu(w.p.coverDecodeMs, '解码封面');
-    w.model.cover = t;
-  }
-  function* flowIndex(w) {
-    const book = w.want.bigBook;
-    w.held++;
-    while (book.left > 0) {
-      if (w.fg !== 'books') {
-        openOps(w, 'index').forEach(o => { o.abandoned = true; o.note = '离开 Books，取消'; });
-        w.want.bigBook = null; w.held--; return;
-      }
-      if (titleNeed(w)) yield* flowTitle(w);
-      const ok = yield* rpc(w, 'fg', w.p.blockReadMs, '读书文件块', { book: true });
-      if (!ok) { w.held--; return; }
-      yield cpu(w.p.indexCpuMs, '建分页索引');
-      book.left--;
-    }
-    w.want.bigBook = null; w.held--;
-    w.model.indexDone = true;
-  }
-  function* workerTask(w) {
+  function* appTask(w) {
     while (true) {
-      yield wait(() => titleNeed(w) || saveNeed(w) || pageNeed(w) || windowNeed(w) || coverNeed(w) || !!w.want.bigBook, null, 'idle');
+      yield wait(() => titleNeed(w) || windowNeed(w) || pageNeed(w), null, 'idle');
       if (titleNeed(w)) { yield* flowTitle(w); continue; }
-      if (saveNeed(w)) {
-        const t = w.want.save;
-        const ok = yield* rpc(w, 'fg', w.p.flashSaveMs, '写设置到 Flash', { vol: 'flash' });
-        if (ok) w.model.saved = t;
-        continue;
-      }
       if (windowNeed(w)) { yield* flowWindow(w); continue; }
       if (pageNeed(w)) { yield* flowPage(w); continue; }
-      if (coverNeed(w)) { yield* flowCover(w); continue; }
-      if (w.want.bigBook) { yield* flowIndex(w); continue; }
     }
   }
   function* backgroundTask(w) {
+    const p = w.p;
     while (true) {
-      yield wait(() => !!w.job.scan, null, 'idle');
-      let left = w.p.scanMs;
-      w.held++;
-      while (left > 0) {
-        const ms = Math.min(left, w.p.scanStepMs);
-        const ok = yield* rpc(w, 'bg', ms, '扫描一小批目录项');
-        if (!ok) break;
-        left -= ms;
+      yield wait(() => saveNeed(w) || coverNeed(w) || !!w.want.bigBook || w.job.scan, null, 'idle');
+      if (saveNeed(w)) {
+        const t = w.want.save;
+        const ok = yield* fsCall(w, 'bg', 'flash', w.want.saveMs, saveLabel(w));
+        if (ok) w.model.saved = t;
+        continue;
       }
-      w.held--;
-      if (left <= 0) finishScan(w);
-      w.job.scan = false;
+      if (coverNeed(w)) {
+        const t = w.want.cover;
+        w.held++;
+        const ok = yield* fsCall(w, 'bg', 'sd', p.coverReadMs, '读封面数据');
+        w.held--;
+        if (ok) { yield cpu(p.coverDecodeMs, '解码封面'); w.model.cover = t; }
+        continue;
+      }
+      if (w.want.bigBook) {
+        const book = w.want.bigBook;
+        if (w.fg !== 'books') {
+          openOps(w, 'index').forEach(o => { o.abandoned = true; o.note = '离开 Books，取消'; });
+          w.want.bigBook = null;
+          continue;
+        }
+        const ok = yield* fsCall(w, 'bg', 'sd', p.blockReadMs, '读书文件块', { book: true });
+        if (!ok) continue;
+        yield cpu(p.indexCpuMs, '建分页索引');
+        book.left--;
+        if (book.left <= 0 && w.want.bigBook === book) { w.want.bigBook = null; w.model.indexDone = true; }
+        continue;
+      }
+      if (w.job.scan) {
+        const ms = Math.min(w.job.scanLeft, p.scanStepMs);
+        const ok = yield* fsCall(w, 'bg', 'sd', ms, '扫描一批目录项');
+        if (!ok) continue;
+        w.job.scanLeft -= ms;
+        if (w.job.scanLeft <= 0) finishScan(w);
+      }
     }
   }
+
+  /* ========== 只有 C：音频流任务、卷管理任务 ========== */
+  function* audioTask(w) {
+    while (true) {
+      yield wait(() => sdMounted(w) && (w.audio.req || needBlock(w)), null, 'idle');
+      if (w.audio.req) { yield* openStream(w); continue; }
+      yield* readBlock(w);
+      if (Policy.audioShouldYield(Math.ceil(w.audio.level), w.p.lowWater)) yield sleep(w.p.audioYieldMs);
+    }
+  }
+  function* volumeTask(w) {
+    const p = w.p;
+    while (true) {
+      yield wait(() => cardDue(w), null, 'idle');
+      if (!w.card.present) {
+        yield* takeLock(w, 'sd', '等锁：卸载卷');
+        log(w, '卷管理：发布“卷消失”事件，音频流和应用任务各自收尾');
+        onCardGone(w);
+        w.locks.sd.holder = null;
+        yield yieldCpu;
+      } else {
+        w.card.flag = false;
+        w.card.state = 'scanning';
+        yield* sdCall(w, p.mountMs, '挂载卷');
+        w.job.scan = true; w.job.scanLeft = p.scanMs;
+      }
+    }
+  }
+
+  /* ========== 只有 A：Storage 执行请求 ========== */
   const usable = (w, r) => r.vol === 'flash' || sdMounted(w);
   function storageFacts(w) {
     return {
@@ -630,7 +706,12 @@ const Model = (() => {
       bgWaiting: w.q.bg.some(r => usable(w, r)),
     };
   }
-  function* storageWorker(w) {
+  function flushSd(w) {
+    [...w.q.fg, ...w.q.bg].filter(r => r.vol === 'sd').forEach(r => { r.ok = false; r.done = true; });
+    w.q.fg = w.q.fg.filter(r => r.vol !== 'sd');
+    w.q.bg = w.q.bg.filter(r => r.vol !== 'sd');
+  }
+  function* storageQueue(w) {
     const p = w.p;
     while (true) {
       yield wait(() => Policy.chooseNext(storageFacts(w)) !== null, null, 'idle');
@@ -638,26 +719,23 @@ const Model = (() => {
       if (job === 'card') {
         if (!w.card.present) {
           log(w, '拔卡收尾：请求队列统一返回“卡已拔出”');
-          [...w.q.fg, ...w.q.bg].filter(r => r.vol === 'sd').forEach(r => { r.ok = false; r.done = true; });
-          w.q.fg = w.q.fg.filter(r => r.vol !== 'sd'); w.q.bg = w.q.bg.filter(r => r.vol !== 'sd');
+          flushSd(w);
           onCardGone(w);
         } else {
           w.card.flag = false;
           w.card.state = 'scanning';
           yield io(p.mountMs, '挂载卷');
-          w.job.scan = true;
+          w.job.scan = true; w.job.scanLeft = p.scanMs;
         }
       } else if (job === 'flush') {
-        [...w.q.fg, ...w.q.bg].filter(r => r.vol === 'sd').forEach(r => { r.ok = false; r.done = true; });
-        w.q.fg = w.q.fg.filter(r => r.vol !== 'sd'); w.q.bg = w.q.bg.filter(r => r.vol !== 'sd');
+        flushSd(w);
       } else if (job === 'stream-open') {
         yield* openStream(w);
       } else if (job === 'stream-block') {
         yield* readBlock(w);
       } else {
         const q = w.q[job];
-        const i = q.findIndex(r => usable(w, r));
-        const req = q.splice(i, 1)[0];
+        const req = q.splice(q.findIndex(r => usable(w, r)), 1)[0];
         const ok = req.vol === 'flash'
           ? (yield io(req.ms, req.label, 'sd'))
           : (yield io(req.ms, req.label, 'sd', { sd: true, book: req.book }));
@@ -670,41 +748,51 @@ const Model = (() => {
   function* guiLock(w) {
     const p = w.p;
     while (true) {
+      w.beats.push(w.t);
       const sdOk = sdMounted(w);
       if (titleNeed(w) && sdOk) {
         const t = w.want.title;
-        const ok = yield* withFile(w, sdCall(w, p.openMs + p.tagMs, 'GUI 等 SD：读曲名'));
+        w.held++;
+        const ok = yield* sdCall(w, p.openMs + p.tagMs, 'GUI 等 SD：读曲名');
+        w.held--;
         if (ok) { w.model.title = t; showTitle(w, t); }
       } else if (saveNeed(w)) {
         const t = w.want.save;
-        yield io(p.flashSaveMs, 'GUI 等 Flash：写设置');
+        yield io(w.want.saveMs, 'GUI 等 Flash：写设置');
         w.model.saved = t; showSaved(w, t);
       } else if (pageNeed(w) && sdOk) {
         const t = w.want.page;
-        const ok = yield* withFile(w, sdCall(w, p.openMs + p.blockReadMs, 'GUI 等 SD：读书页', { book: true }));
+        w.held++;
+        const ok = yield* sdCall(w, p.openMs + p.blockReadMs, 'GUI 等 SD：读书页', { book: true });
+        w.held--;
         if (ok) { yield cpu(p.layoutCpuMs, 'GUI 里排版', 'heavy'); w.model.page = t; showPage(w, t); }
-        else failOps(w, 'page', '卡已拔出');
       } else if (windowNeed(w) && sdOk) {
         const target = w.want.window;
         if (w.lockWin.target !== target) { w.lockWin.target = target; w.lockWin.row = 0; }
-        const ok = yield* withFile(w, sdCall(w, p.openMs + p.tagMs, 'GUI 等 SD：读一行标签'));
+        w.held++;
+        const ok = yield* sdCall(w, p.openMs + p.tagMs, 'GUI 等 SD：读一行标签');
+        w.held--;
         if (ok && w.want.window === target) {
           w.lockWin.row++;
           if (w.lockWin.row >= 12) { w.model.window = target; showWindow(w, target); w.lockWin.target = null; }
         }
       } else if (coverNeed(w) && sdOk) {
         const t = w.want.cover;
-        const ok = yield* withFile(w, sdCall(w, p.coverReadMs, 'GUI 等 SD：读封面'));
+        w.held++;
+        const ok = yield* sdCall(w, p.coverReadMs, 'GUI 等 SD：读封面');
+        w.held--;
         if (ok) { yield cpu(p.coverDecodeMs, 'GUI 里解码封面', 'heavy'); w.model.cover = t; showCover(w, t); }
       } else if (w.want.bigBook && sdOk) {
         const ok = yield* sdCall(w, p.blockReadMs, 'GUI 等 SD：读书文件块', { book: true });
         if (ok) {
           yield cpu(p.indexCpuMs, 'GUI 里建索引', 'heavy');
-          w.want.bigBook.left--;
-          if (w.want.bigBook.left <= 0) { w.want.bigBook = null; openOps(w, 'index').forEach(o => endOp(w, o)); }
+          if (w.want.bigBook) {
+            w.want.bigBook.left--;
+            if (w.want.bigBook.left <= 0) { w.want.bigBook = null; openOps(w, 'index').forEach(o => endOp(w, o)); }
+          }
         }
       }
-      yield* frame(w);
+      yield* guiDraw(w);
     }
   }
   function* storageLock(w) {
@@ -713,14 +801,21 @@ const Model = (() => {
     while (true) {
       yield wait(hasWork, null, 'idle');
       if (cardDue(w)) {
-        if (!w.card.present) { log(w, '拔卡收尾：各调用方自己处理返回的错误'); onCardGone(w); continue; }
+        if (!w.card.present) {
+          yield* takeLock(w, 'sd', '等锁：卸载卷');
+          log(w, '拔卡收尾：各调用方自己处理返回的错误');
+          onCardGone(w);
+          w.locks.sd.holder = null;
+          yield yieldCpu;
+          continue;
+        }
         w.card.flag = false;
         w.card.state = 'scanning';
         yield* sdCall(w, p.mountMs, '挂载卷');
         let left = p.scanMs;
         while (left > 0) {
           const ms = Math.min(left, p.scanStepMs);
-          const ok = yield* sdCall(w, ms, '扫描一小批目录项');
+          const ok = yield* sdCall(w, ms, '扫描一批目录项');
           if (!ok) break;
           left -= ms;
         }
@@ -739,29 +834,34 @@ const Model = (() => {
     const w = {
       arch, p: params, t: 0, tasks: [], sched: [], current: null,
       fg: init.fg || 'music',
-      opSeq: 0, ops: [], events: [], ruleNotes: [], frames: [],
+      opSeq: 0, ops: [], events: [], ruleNotes: [], frames: [], beats: [],
       card: { present: !noCard, state: noCard ? 'absent' : 'ready', flag: false, debounceUntil: 0, catalogReady: !noCard, armedRemove: false },
-      audio: { state: playing ? 'playing' : 'stopped', open: playing, req: false, seq: 1, level: playing ? params.blockCount : 0, dataWait: 0, underrunning: false, endReason: '' },
-      want: { page: 0, window: noCard ? null : 0, title: noCard ? 0 : 1, save: 0, cover: 0, bigBook: null },
+      audio: { state: playing ? 'playing' : 'stopped', open: playing, req: false, seq: 1, level: playing ? params.blockCount : 0, dataWait: 0, underrunning: false, endReason: '', reading: false, waitingBlock: 0 },
+      want: { page: 0, window: noCard ? null : 0, title: noCard ? 0 : 1, save: 0, saveMs: params.flashSaveMs, cover: 0, bigBook: null },
       model: { page: 0, window: noCard ? null : 0, title: noCard ? 0 : 1, saved: 0, cover: 0, indexDone: false },
-      ui: { page: 0, window: noCard ? null : 0, title: noCard ? 0 : 1, saved: 0, cover: 0, notice: noCard ? '无卡' : '' },
+      ui: { page: 0, window: noCard ? null : 0, title: noCard ? 0 : 1, saved: 0, cover: 0, notice: noCard ? '无卡' : '', dirty: false },
       slots: { list: { status: 'IDLE', target: null, filled: 0 }, name: { status: 'IDLE', target: 0 }, book: { status: 'IDLE', target: 0, failed: false }, index: { status: 'IDLE', left: 0 }, cover: { status: 'IDLE', target: 0, failed: false }, save: { status: 'IDLE', target: 0 } },
-      q: { fg: [], bg: [] }, job: { scan: false }, lock: { holder: null }, lockWin: { target: null, row: 0 },
+      q: { fg: [], bg: [] }, job: { scan: false, scanLeft: 0 }, locks: { sd: { holder: null }, flash: { holder: null } }, lockWin: { target: null, row: 0 },
       cache: new Set(noCard ? [] : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
-      held: 0, segs: {}, levels: [],
-      m: null,
+      held: 0, segs: {}, levels: [], m: null,
     };
     const add = (lane, prio, gen) => w.tasks.push({ lane, prio, gen, state: 'ready', op: null, lastRun: -1, tickOp: null, pendingResult: undefined });
-    add('Playback', 3, playbackTask(w));
-    if (arch === 'slots') { add('Storage', 2, storageSlots(w)); add('GUI', 1, guiSlots(w)); }
-    if (arch === 'worker') { add('Storage', 2, storageWorker(w)); add('GUI', 1, guiWorker(w)); add('Worker', 1, workerTask(w)); add('后台作业', 1, backgroundTask(w)); }
-    if (arch === 'lock') { add('Storage', 2, storageLock(w)); add('GUI', 1, guiLock(w)); }
+    if (arch === 'slots') { add('Playback', 3, playbackTask(w)); add('Storage', 2, storageSlots(w)); add('GUI', 1, guiSlots(w)); }
+    if (arch === 'c') {
+      add('Playback', 4, playbackTask(w)); add('音频流', 3, audioTask(w)); add('卷管理', 3, volumeTask(w));
+      add('GUI', 2, guiTarget(w)); add('应用任务', 2, appTask(w)); add('后台任务', 1, backgroundTask(w));
+    }
+    if (arch === 'a') {
+      add('Playback', 4, playbackTask(w)); add('Storage', 3, storageQueue(w));
+      add('GUI', 2, guiTarget(w)); add('应用任务', 2, appTask(w)); add('后台任务', 1, backgroundTask(w));
+    }
+    if (arch === 'lock') { add('Playback', 3, playbackTask(w)); add('Storage', 2, storageLock(w)); add('GUI', 1, guiLock(w)); }
     resetMetrics(w);
     return w;
   }
   function resetMetrics(w) {
-    w.m = { viewStart: w.t, minLevel: w.audio.level, underruns: 0, maxDataWait: 0, storageMaxUnit: 0, storageMaxLabel: '', peakOpen: 0 };
-    w.segs = {}; w.levels = []; w.frames = w.frames.slice(-1);
+    w.m = { viewStart: w.t, minLevel: w.audio.level, underruns: 0, audioMaxWait: 0, sdMaxUnit: 0, sdMaxLabel: '', peakOpen: 0, lockMaxWait: 0, lockMaxWho: '' };
+    w.segs = {}; w.levels = []; w.frames = w.frames.slice(-1); w.beats = w.beats.slice(-1);
     w.ops = w.ops.filter(o => o.end === null && !o.abandoned);
     w.events = []; w.ruleNotes = [];
   }
@@ -773,6 +873,7 @@ const Model = (() => {
       const { value, done } = task.gen.next(input);
       input = undefined;
       if (done) { task.state = 'done'; task.op = null; return; }
+      if (value.op === 'yield') { task.state = 'ready'; task.op = null; return; }
       if (value.op === 'cpu') {
         if (value.ms <= 0) continue;
         task.op = { ...value, remaining: value.ms }; task.state = 'cpu'; return;
@@ -780,10 +881,8 @@ const Model = (() => {
       if (value.op === 'io') {
         if (value.ms <= 0) { input = true; continue; }
         task.op = { ...value, remaining: value.ms, started: w.t, failed: false }; task.state = 'io';
-        if (value.book && w.card.armedRemove) {
-          w.card.armedRemove = false;
-          applyRemove(w);
-        }
+        if (value.audioRead) { w.audio.reading = true; w.audio.waitingBlock = 0; }
+        if (value.book && w.card.armedRemove) { w.card.armedRemove = false; applyRemove(w); }
         return;
       }
       if (value.op === 'wait') {
@@ -800,6 +899,14 @@ const Model = (() => {
     if (last && last.end === t && last.kind === kind && last.label === label) { last.end = t + 1; return; }
     list.push({ start: t, end: t + 1, kind, label });
   }
+  /** 持锁者继承等待者的优先级。 */
+  function effPrio(w, t) {
+    let prio = t.prio;
+    Object.entries(w.locks).forEach(([name, lk]) => {
+      if (lk.holder === t) w.tasks.forEach(x => { if (x.state === 'wait' && x.op && x.op.lockWait === name) prio = Math.max(prio, x.prio); });
+    });
+    return prio;
+  }
   function tick(w) {
     while (w.sched.length && w.sched[0].at <= w.t) applyAction(w, w.sched.shift().action);
     /* 音频按真实时间消耗 */
@@ -813,31 +920,36 @@ const Model = (() => {
     }
     if (a.state === 'opening' || a.underrunning) {
       a.dataWait++;
-      w.m.maxDataWait = Math.max(w.m.maxDataWait, a.dataWait);
       if (a.dataWait >= w.p.tDataMs) { log(w, '无数据超时，停止播放'); stopStream(w, '无数据超时'); }
+    }
+    if (needBlock(w) && !a.reading && sdMounted(w)) {
+      a.waitingBlock++;
+      w.m.audioMaxWait = Math.max(w.m.audioMaxWait, a.waitingBlock);
     }
     /* 单 CPU：选最高优先级，同级按时间片轮转。任务切换是微秒级，所以唤醒和发请求在同一拍内完成。 */
     let ran = false;
     w.tasks.forEach(t => { t.tickOp = null; });
-    for (let guard = 0; !ran && guard < 200; guard++) {
+    for (let guard = 0; !ran && guard < 300; guard++) {
       w.tasks.forEach(t => { if (t.state === 'wait' && t.op.cond()) { t.state = 'ready'; t.op = null; } });
       const ready = w.tasks.filter(t => t.state === 'ready' || t.state === 'cpu');
       if (!ready.length) break;
-      const top = Math.max(...ready.map(t => t.prio));
-      const pick = ready.filter(t => t.prio === top).sort((x, y) => x.lastRun - y.lastRun)[0];
+      const top = Math.max(...ready.map(t => effPrio(w, t)));
+      const pick = ready.filter(t => effPrio(w, t) === top).sort((x, y) => x.lastRun - y.lastRun)[0];
       if (pick.state === 'ready') { advanceGen(w, pick); continue; }
       pick.op.remaining--; pick.lastRun = w.t; pick.tickOp = pick.op; ran = true;
       if (pick.op.remaining <= 0) { pick.state = 'ready'; pick.op = null; }
     }
+    if (w.locks.sd.holder) record(w, 'SD 锁', w.t, 'lock', w.locks.sd.holder.lane);
+    if (w.locks.flash.holder) record(w, 'Flash 锁', w.t, 'lock', w.locks.flash.holder.lane);
     w.tasks.forEach(t => {
       const op = t.tickOp || t.op;
       if (op) record(w, t.lane, w.t, op.kind, op.label);
       if (t.state === 'io') {
         t.op.remaining--;
         if (t.op.remaining <= 0) {
-          if (t.lane === 'Storage' && t.op.kind === 'sd') {
+          if (t.op.sd) {
             const unit = w.t + 1 - t.op.started;
-            if (unit > w.m.storageMaxUnit) { w.m.storageMaxUnit = unit; w.m.storageMaxLabel = t.op.label; }
+            if (unit > w.m.sdMaxUnit) { w.m.sdMaxUnit = unit; w.m.sdMaxLabel = t.lane + '：' + t.op.label; }
           }
           t.pendingResult = !t.op.failed;
           t.state = 'ready'; t.op = null;
@@ -845,7 +957,8 @@ const Model = (() => {
       }
     });
     w.m.minLevel = Math.min(w.m.minLevel, a.level);
-    w.m.peakOpen = Math.max(w.m.peakOpen, (a.open ? 1 : 0) + w.held);
+    const openNow = (a.open ? 1 : 0) + w.held + (w.want.bigBook || w.slots.index.status === 'PENDING' ? 1 : 0) + (w.card.state === 'scanning' ? 1 : 0);
+    w.m.peakOpen = Math.max(w.m.peakOpen, openNow);
     w.levels.push(a.level);
     w.t++;
   }
@@ -856,10 +969,12 @@ const Model = (() => {
   }
   function applyAction(w, a) {
     const p = w.p;
+    w.ui.dirty = true;
     switch (a.type) {
       case 'SWITCH': w.fg = a.app; log(w, '前台切到 ' + ({ music: '音乐', books: 'Books', settings: 'Settings' })[a.app]); break;
       case 'TURN_PAGE':
         if (!note(w, 'turn-page', '翻页').ok) break;
+        if (w.card.state === 'absent') { const o = startOp(w, 'page', '翻一页'); o.failed = true; endOp(w, o, '没有卡'); break; }
         w.want.page++;
         startOp(w, 'page', '翻一页', { target: w.want.page });
         break;
@@ -869,19 +984,21 @@ const Model = (() => {
         w.want.window = a.index;
         startOp(w, 'window', 'Queue 滑到第 ' + a.index + ' 行', { target: a.index });
         break;
-      case 'NEXT_TRACK':
+      case 'NEXT_TRACK': {
         if (!w.card.catalogReady) { log(w, '曲库还没好，不能切歌'); break; }
-        a.seq = w.audio.seq + 1;
-        w.audio.seq = a.seq;
+        const seq = w.audio.seq + 1;
+        w.audio.seq = seq;
         w.audio.level = 0; w.audio.open = false; w.audio.req = true; w.audio.state = 'opening';
-        w.audio.underrunning = false; w.audio.dataWait = 0;
-        w.want.title = a.seq;
+        w.audio.underrunning = false; w.audio.dataWait = 0; w.audio.waitingBlock = 0;
+        w.want.title = seq;
         startOp(w, 'stream', a.auto ? '自动切歌到出声' : '切歌到出声');
-        startOp(w, 'title', '曲名更新', { target: a.seq });
+        startOp(w, 'title', '曲名更新', { target: seq });
         break;
+      }
       case 'SAVE':
         w.want.save++;
-        startOp(w, 'save', '保存设置', { target: w.want.save });
+        w.want.saveMs = a.erase ? p.flashSaveMs + p.flashEraseMs : p.flashSaveMs;
+        startOp(w, 'save', a.erase ? '保存设置（触发回收擦除）' : '保存设置', { target: w.want.save });
         break;
       case 'COVER':
         if (!w.card.catalogReady) break;
@@ -889,7 +1006,7 @@ const Model = (() => {
         startOp(w, 'cover', '封面显示', { target: w.want.cover });
         break;
       case 'BIG_BOOK':
-        if (!sdMounted(w)) break;
+        if (w.card.state === 'absent') break;
         w.want.bigBook = { left: p.bigBookReads };
         startOp(w, 'index', '打开大书并建索引');
         break;
@@ -914,7 +1031,7 @@ const Model = (() => {
   function settled(w) {
     if (w.sched.length) return false;
     if (w.ops.some(o => o.end === null && !o.abandoned)) return false;
-    if (w.card.flag || w.audio.req) return false;
+    if (w.card.flag || w.audio.req || w.card.armedRemove) return false;
     if (needBlock(w)) return false;
     return true;
   }
@@ -958,65 +1075,77 @@ const Model = (() => {
 <script>
 const SCENARIOS = [
   { id: 'page', tab: '1 翻一页书', init: { fg: 'books' },
-    desc: '音乐在播放，用户在 Books 翻一页。这是理解 Worker 最直接的场景。',
+    desc: '音乐在播放，用户在 Books 翻一页。这是看清“应用任务”和“谁持锁”最直接的场景。',
     steps: [
-      { label: '翻一页', actions: [[20, { type: 'TURN_PAGE' }]], watch: '看新架构的 Worker 一行：斜纹是它在等 Storage，这期间 GUI 一直在刷新。再看排版那 40 ms：现状写法和对照组压在 GUI 上（红色），新架构压在 Worker 上。排版这一段在 Worker 上被拉长了，因为要和 GUI 分时间片；换来的是帧间隔更小。' },
-      { label: '连翻 3 页（每次隔 100 ms）', actions: [[20, { type: 'TURN_PAGE' }], [120, { type: 'TURN_PAGE' }], [220, { type: 'TURN_PAGE' }]], watch: '比较“用户操作耗时”和“界面最长帧间隔”。这两项之间是一笔交换：新架构不是样样更快。' },
+      { label: '翻一页', actions: [[20, { type: 'TURN_PAGE' }]], watch: '看 C 的“应用任务”一行：绿色是它自己读 SD，这几毫秒里“SD 锁”一行显示持有者是应用任务；随后的深色是排版，这时已经放锁。GUI 一直在刷新。再对比现状写法：排版压在 GUI 上（红色）。' },
+      { label: '连翻 3 页（每次隔 100 ms）', actions: [[20, { type: 'TURN_PAGE' }], [120, { type: 'TURN_PAGE' }], [220, { type: 'TURN_PAGE' }]], watch: '比较“用户操作耗时”和“界面最长卡顿”。C 和 A 这里完全一样，因为应用代码是同一份。' },
     ] },
   { id: 'integrate', tab: '2 再加一个应用', init: {},
-    desc: '这是你定的标准：再加一个应用，Storage 主循环、通知 FLAG 和共用层要改多少。看时间线下方的“接入成本”表。',
+    desc: '这是你定的标准：再加一个应用，共用层要改多少。',
     steps: [
-      { label: '接入 Books', integrate: 'books', watch: '看“Storage 主循环要认识谁”和“共用层累计改动”。现状写法每多一种访问，就多一个 FLAG 和主循环调用。' },
-      { label: '再接入 Settings', integrate: 'settings', watch: '新架构只多两行注册：gui_task 的 step 和 Worker 的流程表。Storage 不动。' },
-      { label: '再接入曲库页', integrate: 'library', watch: '继续看“业务逻辑住在哪”。现状写法里，读标签、查专辑这些都住进 Storage 任务。' },
-      { label: '再接入封面', integrate: 'cover', watch: '新架构的代价是开头那笔一次性投入，见表格最后一行。' },
+      { label: '接入 Books', integrate: 'books', watch: 'C 没有中央主循环，所以“主循环要认识谁”是 0 个。现状写法每多一种访问，就多一个 FLAG 和主循环调用。' },
+      { label: '再接入 Settings', integrate: 'settings', watch: 'C 和 A 都只多两行注册。差别在“新增一个文件操作”：C 包一层锁，A 要改四处。' },
+      { label: '再接入曲库页', integrate: 'library', watch: '看“业务逻辑住在哪”。现状写法里，读标签、查专辑都住进 Storage 任务。' },
+      { label: '再接入封面', integrate: 'cover', watch: 'C 的代价在“要留 FatFs 栈的任务”和一次性投入：四个任务都要留深栈。' },
     ] },
   { id: 'scroll', tab: '3 快速滑 Queue', init: {},
-    desc: '用户快速连滑。现在的单槽一旦开始读一窗就要读完；新架构的 Worker 每读一行都检查需求变没变。',
+    desc: '用户快速连滑。现在的单槽一旦开始读一窗就要读完；C 的应用任务每读一行都检查需求变没变。',
     steps: [
-      { label: '连滑 4 次（每次隔 20 ms，每次 12 行）', actions: [[20, { type: 'SCROLL', index: 12 }], [40, { type: 'SCROLL', index: 24 }], [60, { type: 'SCROLL', index: 36 }], [80, { type: 'SCROLL', index: 48 }]], watch: '看“用户操作耗时”的最后一项：滑到第 48 行的那一窗多久到位。现状写法要把旧窗读完才接新请求；新架构在两行之间就放弃旧窗。' },
-      { label: '滑回第 0 行', actions: [[20, { type: 'SCROLL', index: 0 }]], watch: '新架构里 Worker 持有的行缓存直接命中，不读 SD。现状写法也能加缓存，但要加在 Storage 任务里。' },
+      { label: '连滑 4 次（每次隔 20 ms，每次 12 行）', actions: [[20, { type: 'SCROLL', index: 12 }], [40, { type: 'SCROLL', index: 24 }], [60, { type: 'SCROLL', index: 36 }], [80, { type: 'SCROLL', index: 48 }]], watch: '看“用户操作耗时”的最后一项：滑到第 48 行的那一窗多久到位。现状写法要把旧窗读完才接新请求；C 在两行之间就放弃旧窗。' },
+      { label: '滑回第 0 行', actions: [[20, { type: 'SCROLL', index: 0 }]], watch: '应用任务持有的行缓存直接命中，不读 SD。现状写法也能加缓存，但要加在 Storage 任务里。' },
     ] },
   { id: 'scan', tab: '4 插卡扫描时操作', init: { card: 'absent', fg: 'books' },
-    desc: '插卡后要扫描曲库（板测 12000 首约 2 秒）。这段时间用户翻书、保存设置会怎样？',
+    desc: '插卡后要扫描曲库（板测 12000 首约 2 秒）。这段时间用户翻书、保存设置会怎样？屏幕静止时 GUI 在 C 里会睡，所以它那一行是空的。',
     steps: [
-      { label: '插卡，100 ms 后翻书，150 ms 后保存设置', actions: [[20, { type: 'CARD_INSERT' }], [120, { type: 'TURN_PAGE' }], [170, { type: 'SAVE' }]], watch: '现状写法的 Storage 一行是一整段扫描，别的请求都要等它结束。对照组看 GUI 一行：锁一直被 Storage 拿回去。新架构把扫描切成小批，请求可以插进去，代价是扫描总时间变长。这个差别对应现在 STOR-8 记录的摩擦。' },
+      { label: '插卡，100 ms 后翻书，150 ms 后保存设置', actions: [[20, { type: 'CARD_INSERT' }], [120, { type: 'TURN_PAGE' }], [170, { type: 'SAVE' }]], watch: '现状写法的 Storage 一行是一整段扫描，别的请求都要等它结束。C 的扫描按批持锁，“SD 锁”一行能看到后台任务和应用任务交替持有。这对应现在 STOR-8 记录的摩擦。' },
     ] },
   { id: 'contend', tab: '5 切歌瞬间翻书', init: { fg: 'books' },
-    desc: '最考验 Storage 排程的时刻：切歌后音频缓冲是空的，同时前台也要读文件。',
+    desc: '最考验 C 的时刻：切歌后音频缓冲是空的，音频流优先级最高，而前台也要读文件。靠的是“到水位后让路”这条规则。',
     steps: [
-      { label: '切歌，2 ms 后翻书', actions: [[20, { type: 'NEXT_TRACK' }], [22, { type: 'TURN_PAGE' }]], watch: '看音频缓冲那一行和“切歌到出声”。三种写法的出声时间相同。新架构先把音频补到安全水位，再服务前台，然后才补满；书页和现状写法差不多，帧间隔更小。对照组看 GUI 一行：Storage 连续补块，GUI 拿不到锁，书页和曲名都明显更晚。' },
+      { label: '切歌，2 ms 后翻书', actions: [[20, { type: 'NEXT_TRACK' }], [22, { type: 'TURN_PAGE' }]], watch: '看 C 的“SD 锁”一行：先是音频流连续持锁补到安全水位，然后应用任务插进来读书页和曲名，结果和 A 相同。把底部参数“音频让路”改成 0 再跑一次，就能看到没有这条规则时书页晚多少。' },
     ] },
   { id: 'cover', tab: '6 切歌时解码封面', init: {},
-    desc: '封面解码是 CPU 重活（这里假设 300 ms）。现在的任务里没有适合放它的地方。',
+    desc: '封面解码是 CPU 重活（这里假设 300 ms）。规则是吃 CPU 的放后台任务，它的优先级低于 GUI。',
     steps: [
-      { label: '切歌并解码封面', actions: [[20, { type: 'NEXT_TRACK' }], [20, { type: 'COVER' }]], watch: '现状写法和对照组的解码都压在 GUI 上，界面停约 300 ms。新架构放在 Worker，界面不停，但封面显示得更晚，因为解码要和 GUI 分时间片。' },
-      { label: '解码封面时马上切到 Books 翻页', actions: [[20, { type: 'COVER' }], [40, { type: 'SWITCH', app: 'books' }], [40, { type: 'TURN_PAGE' }]], watch: '这是新架构的弱点：只有一个 Worker，翻页要排在解码后面，所以这里翻页最慢。界面倒是一直能动；另外两种写法的界面会整段停住。可能的解法是给重活单独一个任务，这一点留待决定。' },
+      { label: '切歌并解码封面', actions: [[20, { type: 'NEXT_TRACK' }], [20, { type: 'COVER' }]], watch: '现状写法的解码压在 GUI 上，界面停约 300 ms。C 放在后台任务，只在 GUI 的空隙里跑，界面不停，代价是封面显示得更晚。' },
+      { label: '解码封面时马上切到 Books 翻页', actions: [[20, { type: 'COVER' }], [40, { type: 'SWITCH', app: 'books' }], [40, { type: 'TURN_PAGE' }]], watch: '解码在后台任务，应用任务是空闲的，所以翻页不用排在解码后面。这是把重活和前台流程分开的好处。' },
     ] },
   { id: 'title', tab: '7 看书时自动切歌', init: { fg: 'books' },
-    desc: '规则说同时只有一个前台应用。但用户看书时歌会自动切到下一首，曲名（将来的 Mini Player）谁来读？这个场景考验前台规则的边界。',
+    desc: '规则说同时只有一个前台应用。但用户看书时歌会自动切到下一首，曲名（将来的 Mini Player）谁来读？',
     steps: [
-      { label: '打开大书建索引，100 ms 后自动切歌', actions: [[20, { type: 'BIG_BOOK' }], [120, { type: 'NEXT_TRACK', auto: true }]], watch: '新架构里，曲名是“系统需求”，不算前台应用，Worker 在长流程的两步之间先处理它。这意味着规则要补一条：长流程每步之间要让路。另外看一个代价：同时打开的文件对象超过了现在的 _FS_LOCK。' },
-      { label: '建索引时离开 Books', actions: [[20, { type: 'BIG_BOOK' }], [200, { type: 'SWITCH', app: 'music' }]], watch: '新架构在下一步检查点取消索引，不再读 SD。另外两种写法里，已经开始的工作会继续做完。' },
+      { label: '打开大书建索引，100 ms 后自动切歌', actions: [[20, { type: 'BIG_BOOK' }], [120, { type: 'NEXT_TRACK', auto: true }]], watch: '曲名算系统需求，不看前台是谁，由应用任务处理。建索引在后台任务，按块持锁，所以不会挡住曲名。看“音频补块最长等待”：音频最多等后台读完一块。代价是建索引比现状写法慢，因为后台任务只在 GUI 的空隙里运行。' },
+      { label: '建索引时离开 Books', actions: [[20, { type: 'BIG_BOOK' }], [200, { type: 'SWITCH', app: 'music' }]], watch: 'C 在下一块之前发现 Books 不在前台，取消索引，不再读 SD。现状写法里，已经开始的工作会继续做完。' },
     ] },
   { id: 'remove', tab: '8 读取中拔卡', init: { fg: 'books' },
-    desc: '用户在翻页时拔卡，读取正好进行中，要等 500 ms 超时。三种架构都在“书页读取进行中”这一刻拔卡。',
+    desc: '用户翻页时拔卡，读取正好进行中，要等 500 ms 超时。C 里应用任务这时持着 SD 锁。',
     steps: [
-      { label: '翻一页，读取进行中拔卡', actions: [[10, { type: 'ARM_REMOVE' }], [20, { type: 'TURN_PAGE' }]], watch: '现状写法和新架构都是 Storage 在等超时，界面继续刷新。对照组是 GUI 自己在等，界面停 500 ms。另外看事件记录：现状要逐个槽收尾，新架构由请求队列统一返回错误。' },
+      { label: '翻一页，读取进行中拔卡', actions: [[10, { type: 'ARM_REMOVE' }], [20, { type: 'TURN_PAGE' }]], watch: '看 C：应用任务持锁等超时，卷管理在“SD 锁”上排队，音频流也等着，但 GUI 不受影响。勾上“对照”可以看 GUI 持锁时界面停 500 ms。事件记录里，C 由卷管理发布事件统一收尾。' },
     ] },
-  { id: 'illegal', tab: '9 不该发生的事', init: {},
-    desc: '试几件规则应该拦住的事，看三种架构怎么回应。结果在“规则检查”一行。',
+  { id: 'flash', tab: '9 存设置碰上擦除', init: { fg: 'books' },
+    desc: '保存设置时 FTL 可能当场回收（前台不足先回收），Flash 擦除要等硬件。SD 和 Flash 是两块独立的硬件，理应互不影响。擦除耗时是假设值。',
     steps: [
-      { label: 'GUI 里直接读文件', actions: [[20, { type: 'RULE', what: 'gui-read', label: 'GUI 直接读文件' }]], watch: '现在和新架构都禁止这样做。对照组允许，代价就是界面等 SD。' },
-      { label: 'Worker 直接改 LVGL 对象', actions: [[20, { type: 'RULE', what: 'worker-lvgl', label: 'Worker 改 LVGL' }]], watch: 'LVGL 只能在 GUI 任务里调用。Worker 只写界面数据。' },
-      { label: 'Books 不在前台时翻页', actions: [[20, { type: 'TURN_PAGE' }]], watch: '只有新架构有“一个前台应用”的规则。现状和对照组里，后台页面也能发请求，也会占用 SD。' },
+      { label: '保存设置（触发擦除），50 ms 后翻书并切歌', actions: [[20, { type: 'SAVE', erase: true }], [70, { type: 'TURN_PAGE' }], [70, { type: 'NEXT_TRACK' }]], watch: '现状写法和 A 只有一个执行者，擦除期间 SD 也读不了，书页、开流都要等。C 每卷一把锁，看“SD 锁”和“Flash 锁”两行同时被不同任务持有。把底部参数“每卷一把锁”改成 0，可以看全局锁时的效果。' },
+    ] },
+  { id: 'spin', tab: '10 如果 GUI 不睡', init: { card: 'absent', fg: 'books' }, params: { guiSleeps: 0 },
+    desc: '这是 C 的前提。现在的 GUI 循环从不睡（gui_task.c:56），屏幕静止时也在空转。后台任务优先级低于 GUI，就永远拿不到 CPU。这个场景把 C 和 A 的 GUI 也改成空转。',
+    steps: [
+      { label: '插卡，等 3 秒', maxMs: 3000, actions: [[20, { type: 'CARD_INSERT' }]], watch: 'C 和 A 的 GUI 一行满是“空转”，后台任务发不出下一批扫描，“插卡到曲库可用”一直没完成。回到场景 4 对比 GUI 会睡的情况。所以 GUI 没活就睡要先做。' },
+    ] },
+  { id: 'illegal', tab: '11 不该发生的事', init: {},
+    desc: '试几件规则应该拦住的事，看各写法怎么回应。结果在“规则检查”一行。',
+    steps: [
+      { label: 'GUI 里直接读文件', actions: [[20, { type: 'RULE', what: 'gui-read', label: 'GUI 直接读文件' }]], watch: 'C 在文件接口入口断言调用者，GUI 和播放任务一调用就失败。对照组允许，代价就是界面等 SD。' },
+      { label: '应用任务直接改 LVGL 对象', actions: [[20, { type: 'RULE', what: 'app-lvgl', label: '应用任务改 LVGL' }]], watch: 'LVGL 只能在 GUI 任务里调用，应用任务只写界面数据。' },
+      { label: '持有界面数据锁时读文件', actions: [[20, { type: 'RULE', what: 'nested-lock', label: '持界面数据锁读文件' }]], watch: '文件锁必须是最内层的锁。否则 GUI 取界面数据时会连带等 SD，界面就又卡了。' },
+      { label: 'Books 不在前台时翻页', actions: [[20, { type: 'TURN_PAGE' }]], watch: '只有 C 和 A 有“一个前台应用”的规则。现状写法里，后台页面也能发请求、占用 SD。' },
     ] },
 ];
 
 const FREE = [
   ['切到音乐', { type: 'SWITCH', app: 'music' }], ['切到 Books', { type: 'SWITCH', app: 'books' }], ['切到 Settings', { type: 'SWITCH', app: 'settings' }],
   ['翻一页', { type: 'TURN_PAGE' }], ['打开大书建索引', { type: 'BIG_BOOK' }],
-  ['Queue 滑 6 行', { type: 'SCROLL', delta: 6 }], ['切歌', { type: 'NEXT_TRACK' }], ['解码封面', { type: 'COVER' }], ['保存设置', { type: 'SAVE' }],
+  ['Queue 滑 6 行', { type: 'SCROLL', delta: 6 }], ['切歌', { type: 'NEXT_TRACK' }], ['解码封面', { type: 'COVER' }],
+  ['保存设置', { type: 'SAVE' }], ['保存设置（触发擦除）', { type: 'SAVE', erase: true }],
   ['插卡', { type: 'CARD_INSERT' }], ['拔卡', { type: 'CARD_REMOVE' }],
 ];
 
@@ -1035,21 +1164,25 @@ const PARAM_INFO = [
   ['frameDmaMs', 'GUI 一帧屏幕 DMA（ms）', '假设', false],
   ['layoutCpuMs', '排版一页 CPU（ms）', '假设', false],
   ['flashSaveMs', '写设置到 Flash（ms）', '假设', false],
+  ['flashEraseMs', '回收擦除（ms）', '假设', false],
   ['coverDecodeMs', '解码封面 CPU（ms）', '假设', false],
-  ['scanStepMs', '新架构扫描每批（ms）', '假设', false],
+  ['scanStepMs', '扫描每批持锁（ms）', '假设', false],
   ['lowWater', '音频安全水位（块）', '假设', false],
+  ['audioYieldMs', '音频让路（ms）', '假设', false],
   ['bigBookReads', '大书索引读取次数', '假设', false],
+  ['perVolumeLock', '每卷一把锁（1 是，0 全局一把）', '待核实', false],
 ];
 
 let params = { ...Model.DEFAULTS };
 let cmp = null, scenario = SCENARIOS[0], stepIdx = 0, integrated = [], watchText = '', scrollPos = 0;
+let shown = ['slots', 'c', 'a'];
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function startScenario(s) {
   scenario = s; stepIdx = 0; integrated = []; scrollPos = 0;
-  cmp = Model.createCompare(params, s.init);
+  cmp = Model.createCompare({ ...params, ...(s.params || {}) }, s.init);
   cmp.advance(150);
   watchText = s.id === 'integrate' ? '点左侧高亮的步骤开始。' : '还没有操作，下面是平时的样子。点左侧高亮的步骤开始。';
   render();
@@ -1057,16 +1190,14 @@ function startScenario(s) {
 function runStep(step) {
   if (step.integrate) {
     integrated.push(step.integrate);
-    watchText = step.watch;
-    stepIdx++;
+    watchText = step.watch; stepIdx++;
     render();
     return;
   }
   cmp.newView();
   cmp.schedule(step.actions);
-  cmp.runUntilSettled();
-  watchText = step.watch;
-  stepIdx++;
+  cmp.runUntilSettled(150, step.maxMs || 9000);
+  watchText = step.watch; stepIdx++;
   render();
 }
 function freeAction(label, action) {
@@ -1088,8 +1219,26 @@ function render() {
   const costOnly = scenario.id === 'integrate';
   $('panel-tl').style.display = costOnly ? 'none' : '';
   $('panel-compare').style.display = costOnly ? 'none' : '';
-  renderTabs(); if (!costOnly) { renderTimelines(); renderCompare(); } renderInteg(); renderLog();
+  renderTabs(); renderShown();
+  if (!costOnly) { renderTimelines(); renderCompare(); }
+  renderInteg(); renderLog();
   $('watch').textContent = watchText;
+}
+function renderShown() {
+  const box = $('shown'); box.innerHTML = '';
+  Object.entries(Model.ARCHS).forEach(([key, meta]) => {
+    const row = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = shown.includes(key); cb.dataset.arch = key;
+    cb.onchange = () => {
+      shown = Object.keys(Model.ARCHS).filter(k => (k === key ? cb.checked : shown.includes(k)));
+      if (!shown.length) shown = ['c'];
+      render();
+    };
+    row.appendChild(cb);
+    row.appendChild(document.createTextNode(meta.name));
+    box.appendChild(row);
+  });
 }
 function renderTabs() {
   $('tabs').innerHTML = '';
@@ -1125,7 +1274,8 @@ function renderTimelines() {
   $('tl-range').textContent = '共 ' + (end - start) + ' ms';
   const step = niceStep(end - start);
   let html = '';
-  Object.entries(Model.ARCHS).forEach(([key, meta]) => {
+  shown.forEach(key => {
+    const meta = Model.ARCHS[key];
     const w = cmp.worlds[key];
     const laneH = 22, gap = 3, topH = 34, audioH = 26;
     const height = topH + meta.lanes.length * (laneH + gap) + audioH + 6;
@@ -1145,6 +1295,10 @@ function renderTimelines() {
         let fill, ink = '#fff';
         if (seg.kind === 'wait') { fill = bad ? 'url(#hatch-bad)' : 'url(#hatch)'; ink = 'var(--ink)'; }
         else if (seg.kind === 'dma') { fill = 'var(--dma)'; }
+        else if (seg.kind === 'lock') {
+          fill = { '应用任务': 'var(--accent-soft)', '后台任务': 'var(--warn-soft)', '卷管理': 'var(--danger-soft)', 'GUI': 'var(--danger-soft)' }[seg.label] || 'var(--lock)';
+          ink = 'var(--ink)';
+        }
         else if (seg.kind === 'heavy') { fill = 'var(--danger)'; }
         else if (seg.kind === 'sd') { fill = bad ? 'var(--danger)' : 'var(--accent)'; }
         else { fill = 'var(--cpu)'; }
@@ -1152,17 +1306,15 @@ function renderTimelines() {
         s += '<rect x="' + sx.toFixed(2) + '" y="' + y + '" width="' + sw.toFixed(2) + '" height="' + laneH + '" style="fill:' + fill + '"><title>' + esc(tip) + '</title></rect>';
         const text = seg.label;
         if (seg.kind !== 'dma' && seg.label !== '刷新一帧' && sw > text.length * 11.5 + 8) {
-          const plate = ink !== '#fff';
-          if (plate) s += '<rect x="' + (sx + 3) + '" y="' + (y + 4) + '" width="' + (text.length * 11.5 + 2) + '" height="14" style="fill:var(--panel)" opacity=".85"/>';
+          if (seg.kind === 'wait') s += '<rect x="' + (sx + 3) + '" y="' + (y + 4) + '" width="' + (text.length * 11.5 + 2) + '" height="14" style="fill:var(--panel)" opacity=".85"/>';
           s += '<text x="' + (sx + 4) + '" y="' + (y + 15) + '" style="fill:' + ink + ';pointer-events:none">' + esc(text) + '</text>';
         }
       });
     });
-    /* 音频缓冲 */
     const ay = topH + meta.lanes.length * (laneH + gap);
-    s += '<text x="0" y="' + (ay + 15) + '" style="font-weight:600">音频</text>';
+    s += '<text x="0" y="' + (ay + 15) + '" style="font-weight:600">音频缓冲</text>';
     s += '<rect x="' + labelW + '" y="' + ay + '" width="' + plotW + '" height="' + audioH + '" style="fill:var(--bg)"/>';
-    const lv = w.levels, cap = params.blockCount;
+    const lv = w.levels, cap = w.p.blockCount;
     if (lv.length) {
       const stride = Math.max(1, Math.floor(lv.length / plotW));
       let pts = x(start) + ',' + (ay + audioH);
@@ -1170,19 +1322,14 @@ function renderTimelines() {
       pts += ' ' + x(start + lv.length - 1).toFixed(1) + ',' + (ay + audioH);
       s += '<polygon points="' + pts + '" style="fill:var(--accent-soft);stroke:var(--accent)"><title>音频缓冲（满 = ' + cap + ' 块）</title></polygon>';
     }
-    /* 用户操作与结果 */
-    const shown = w.ops.filter(op => op.start >= start);
-    shown.forEach((op, i) => {
+    const ops = w.ops.filter(op => op.start >= start);
+    ops.forEach((op, i) => {
       const px = x(op.start);
       s += '<line x1="' + px + '" x2="' + px + '" y1="14" y2="' + (height - 4) + '" stroke-dasharray="3 3" style="stroke:var(--ink)" opacity=".55"/>';
       s += '<text x="' + (px - 4) + '" y="12" style="fill:var(--ink)"><title>' + esc(op.label) + '</title>▼</text>';
-      const nextX = i + 1 < shown.length ? x(shown[i + 1].start) : width;
-      if (px + 10 + op.label.length * 11.5 < nextX) {
-        s += '<text x="' + (px + 8) + '" y="12" style="fill:var(--ink)">' + esc(op.label) + '</text>';
-      }
-      if (op.end !== null) {
-        s += '<circle cx="' + x(op.end) + '" cy="' + (topH + laneH / 2) + '" r="4.5" style="fill:var(--panel);stroke:var(--ink);stroke-width:1.5"><title>' + esc(op.label + '：' + (op.end - op.start) + ' ms') + '</title></circle>';
-      }
+      const nextX = i + 1 < ops.length ? x(ops[i + 1].start) : width;
+      if (px + 10 + op.label.length * 11.5 < nextX) s += '<text x="' + (px + 8) + '" y="12" style="fill:var(--ink)">' + esc(op.label) + '</text>';
+      if (op.end !== null) s += '<circle cx="' + x(op.end) + '" cy="' + (topH + laneH / 2) + '" r="4.5" style="fill:var(--panel);stroke:var(--ink);stroke-width:1.5"><title>' + esc(op.label + '：' + (op.end - op.start) + ' ms') + '</title></circle>';
     });
     s += '</svg>';
     html += '<div class="arch"><h3>' + esc(meta.name) + '<span>' + esc(meta.sub) + '</span></h3>' + s + '</div>';
@@ -1190,11 +1337,12 @@ function renderTimelines() {
   box.innerHTML = html;
 }
 
-function frameGap(w) {
-  const fr = w.frames.filter(t => t >= cmp.viewStart - 60);
+/** 界面最长卡顿：相邻两次 GUI 循环的最大间隔。 */
+function maxStall(w) {
+  const b = w.beats.filter(t => t >= cmp.viewStart - 60);
   let max = 0;
-  for (let i = 1; i < fr.length; i++) max = Math.max(max, fr[i] - fr[i - 1]);
-  if (fr.length) max = Math.max(max, cmp.now() - fr[fr.length - 1]);
+  for (let i = 1; i < b.length; i++) max = Math.max(max, b[i] - b[i - 1]);
+  if (b.length) max = Math.max(max, cmp.now() - b[b.length - 1]);
   return max;
 }
 function opsCell(w) {
@@ -1215,27 +1363,27 @@ function uiCell(w) {
   return '<div>前台：' + app + '</div><div>曲名：' + (u.title ? '第 ' + u.title + ' 首' : '--') + '</div><div>书页：第 ' + u.page + ' 页</div><div>Queue：' + win + '</div><div>音频：' + audio + '</div><div>设置已存：' + u.saved + ' 次</div>' + (u.notice ? '<div class="warn">提示：' + esc(u.notice) + '</div>' : '');
 }
 function renderCompare() {
-  const keys = Object.keys(Model.ARCHS);
-  const row = (title, fn) => '<tr><th>' + title + '</th>' + keys.map(k => '<td>' + fn(cmp.worlds[k], k) + '</td>').join('') + '</tr>';
-  let h = '<table><thead><tr><th></th>' + keys.map(k => '<th>' + esc(Model.ARCHS[k].name) + '</th>').join('') + '</tr></thead><tbody>';
+  const row = (title, fn) => '<tr><th>' + title + '</th>' + shown.map(k => '<td>' + fn(cmp.worlds[k], k) + '</td>').join('') + '</tr>';
+  let h = '<table><thead><tr><th></th>' + shown.map(k => '<th>' + esc(Model.ARCHS[k].name) + '</th>').join('') + '</tr></thead><tbody>';
   h += row('用户操作耗时', w => opsCell(w));
-  h += row('界面最长帧间隔', w => {
-    const g = frameGap(w);
+  h += row('界面最长卡顿', w => {
+    const g = maxStall(w);
     const cls = g > 300 ? 'bad' : g > 80 ? 'warn' : '';
     return '<span class="' + cls + '">' + g + ' ms</span>';
   });
   h += row('音频', w => {
-    const m = w.m;
-    const lv = m.minLevel;
-    const sec = (lv * params.msPerBlock / 1000).toFixed(1);
-    const un = m.underruns ? '<span class="bad">断音 ' + m.underruns + ' 次</span>' : '断音 0 次';
-    return '缓冲最低 ' + lv.toFixed(1) + ' 块（约 ' + sec + ' 秒）；' + un;
+    const lv = w.m.minLevel;
+    const sec = (lv * w.p.msPerBlock / 1000).toFixed(1);
+    const un = w.m.underruns ? '<span class="bad">断音 ' + w.m.underruns + ' 次</span>' : '断音 0 次';
+    return '缓冲最低 ' + lv.toFixed(1) + ' 块（约 ' + sec + ' 秒）；' + un + '<div class="muted small">补块最长等待 ' + w.m.audioMaxWait + ' ms</div>';
   });
-  h += row('Storage 单次最长占用', w => {
-    const v = w.m.storageMaxUnit;
-    const cls = v > 300 ? 'warn' : '';
-    return '<span class="' + cls + '">' + v + ' ms</span>' + (w.m.storageMaxLabel ? '<div class="muted small">' + esc(w.m.storageMaxLabel) + '</div>' : '');
+  h += row('SD 单次最长占用', w => {
+    const v = w.m.sdMaxUnit;
+    return '<span class="' + (v > 300 ? 'warn' : '') + '">' + v + ' ms</span>' + (w.m.sdMaxLabel ? '<div class="muted small">' + esc(w.m.sdMaxLabel) + '</div>' : '');
   });
+  h += row('最长等锁', w => (w.arch === 'c' || w.arch === 'lock')
+    ? w.m.lockMaxWait + ' ms' + (w.m.lockMaxWho ? '<div class="muted small">' + esc(w.m.lockMaxWho) + '</div>' : '')
+    : '<span class="muted">没有文件锁</span>');
   h += row('同时打开文件对象峰值', w => {
     const v = w.m.peakOpen;
     return v > 2 ? '<span class="warn">' + v + '</span>（现在 _FS_LOCK = 2，要调大）' : String(v);
@@ -1260,18 +1408,19 @@ function renderInteg() {
   reset.textContent = '清空'; reset.onclick = () => { integrated = []; renderInteg(); };
   btns.appendChild(reset);
   const c = Model.integrationCost(integrated);
-  const keys = ['slots', 'worker', 'lock'];
-  const row = (t, fn) => '<tr><th>' + t + '</th>' + keys.map(k => '<td>' + fn(c[k]) + '</td>').join('') + '</tr>';
-  $('integ').innerHTML = '<p class="small muted">已接入：' + esc(c.apps.join('、')) + '</p><table><thead><tr><th></th>' + keys.map(k => '<th>' + esc(Model.ARCHS[k].name) + '</th>').join('') + '</tr></thead><tbody>'
-    + row('Storage 主循环要认识谁', v => '<b>' + v.loopKnows.length + ' 个</b>：' + esc(v.loopKnows.join('、')))
+  const row = (t, fn) => '<tr><th>' + t + '</th>' + shown.map(k => '<td>' + fn(c[k]) + '</td>').join('') + '</tr>';
+  $('integ').innerHTML = '<p class="small muted">已接入：' + esc(c.apps.join('、')) + '</p><table><thead><tr><th></th>' + shown.map(k => '<th>' + esc(Model.ARCHS[k].name) + '</th>').join('') + '</tr></thead><tbody>'
+    + row('主循环要认识谁', v => '<b>' + v.loopKnows.length + ' 个</b>' + (v.loopKnows.length ? '：' + esc(v.loopKnows.join('、')) : '（没有中央主循环）'))
     + row('共用层累计改动', v => '<b>' + v.sharedEdits + ' 处</b>')
     + row('Storage 里新增的模块', v => '<b>' + v.newStorageModules + ' 个</b>')
+    + row('新增一个文件操作', v => esc(v.newFsOp))
+    + row('要留 FatFs 栈的任务', v => '<b>' + v.deepStack.length + ' 个</b>：' + esc(v.deepStack.join('、')))
     + row('业务逻辑住在哪', v => esc(v.businessIn))
     + row('一次性投入', v => esc(v.oneOff))
     + '</tbody></table>';
 }
 function renderLog() {
-  $('log').innerHTML = Object.keys(Model.ARCHS).map(k => {
+  $('log').innerHTML = shown.map(k => {
     const w = cmp.worlds[k];
     const items = w.events.slice(-14).map(e => '<li>' + (e.t - cmp.firstAction) + ' ms：' + esc(e.text) + '</li>').join('');
     return '<div><h3>' + esc(Model.ARCHS[k].name) + '</h3><ul>' + (items || '<li class="muted">没有</li>') + '</ul></div>';
@@ -1294,15 +1443,15 @@ function buildStatic() {
   const ps = $('params');
   PARAM_INFO.forEach(([key, label, src, real]) => {
     const row = document.createElement('label');
-    row.innerHTML = '<span>' + esc(label) + ' <span class="src' + (real ? ' real' : '') + '">' + esc(src) + '</span></span><input type="number" min="1" data-key="' + key + '" value="' + params[key] + '">';
+    row.innerHTML = '<span>' + esc(label) + ' <span class="src' + (real ? ' real' : '') + '">' + esc(src) + '</span></span><input type="number" min="0" data-key="' + key + '" value="' + params[key] + '">';
     ps.appendChild(row);
   });
   $('params-apply').onclick = () => {
-    ps.querySelectorAll('input').forEach(i => { const v = Number(i.value); if (v > 0) params[i.dataset.key] = v; });
+    ps.querySelectorAll('input').forEach(i => { const v = Number(i.value); if (v >= 0) params[i.dataset.key] = v; });
     startScenario(scenario);
   };
   let timer;
-  window.addEventListener('resize', () => { clearTimeout(timer); timer = setTimeout(renderTimelines, 150); });
+  window.addEventListener('resize', () => { clearTimeout(timer); timer = setTimeout(() => { if (scenario.id !== 'integrate') renderTimelines(); }, 150); });
 }
 buildStatic();
 startScenario(SCENARIOS[0]);
