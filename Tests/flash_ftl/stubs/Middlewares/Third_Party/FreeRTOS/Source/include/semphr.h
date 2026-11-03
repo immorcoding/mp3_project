@@ -21,16 +21,20 @@ static inline SemaphoreHandle_t xSemaphoreCreateMutexStatic(StaticSemaphore_t *b
 }
 
 /**
- * @brief 获取互斥量替身；已被持有时中止进程，因为单线程下它永远等不到。
+ * @brief 获取互斥量替身。不等待（ticks 为 0）时被持有就返回 pdFALSE；会等待却已被持有时中止进程，
+ *        因为单线程下它永远等不到。
  * @param[in,out] handle 互斥量。
- * @param[in] ticks 超时，未使用。
- * @return 恒为 pdTRUE。
+ * @param[in] ticks 超时。
+ * @return pdTRUE 为已获取；pdFALSE 为不等待且被持有。
  */
 static inline BaseType_t xSemaphoreTake(SemaphoreHandle_t handle, TickType_t ticks)
 {
-    (void)ticks;
     if (handle->Taken != 0)
     {
+        if (ticks == 0U)
+        {
+            return pdFALSE;
+        }
         fprintf(stderr, "host mutex taken twice: self-deadlock on target\n");
         abort();
     }

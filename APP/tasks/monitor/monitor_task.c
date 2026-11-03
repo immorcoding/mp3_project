@@ -70,6 +70,11 @@ static UBaseType_t monitor_get_task_stack_words(const char *task_name)
         return APP_PLAYBACK_TASK_STACK_WORDS;
     }
 
+    if (strcmp(task_name, "Foreground Task") == 0)
+    {
+        return APP_FOREGROUND_TASK_STACK_WORDS;
+    }
+
     if (strcmp(task_name, "IDLE") == 0)
     {
         return configMINIMAL_STACK_SIZE;

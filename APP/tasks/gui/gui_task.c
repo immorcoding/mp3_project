@@ -12,6 +12,8 @@
 #include "gui_task.h"
 #include "music/gui_music.h"
 
+#include "APP/tasks/foreground/foreground_load.h"
+
 #include <stddef.h>
 
 #include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
@@ -129,6 +131,7 @@ void gui_task(void *handle)
         gui_music_step(&input);
         /* gui_books_step(&input); */
         /* gui_settings_step(&input); */
+        foreground_gui_step(); /* spike #191：P4 合成场景里从 ui_cell 读最新数据，永不等待。 */
 
         {
             /* 计数器由 app_init() 在 Resource 加载前启动；这里只读，不复位，避免干扰其他测量。 */

@@ -304,7 +304,7 @@ Service_StatusTypeDef Service_Filesystem_FormatAndMountFlash(void)
     TCHAR drive_path[FILESYSTEM_DRIVE_PATH_LENGTH];
     Service_StatusTypeDef status;
 
-    filesystem_lock_acquire(SERVICE_FILESYSTEM_VOLUME_FLASH, "FormatMountFlash");
+    filesystem_lock_acquire(SERVICE_FILESYSTEM_VOLUME_FLASH, "FormatMount");
 
     status = filesystem_flash_unmount_locked();
     if (status != SERVICE_OK)
@@ -360,7 +360,7 @@ Service_StatusTypeDef Service_Filesystem_RecoverAndMountFlash(void)
 {
     Service_StatusTypeDef status;
 
-    filesystem_lock_acquire(SERVICE_FILESYSTEM_VOLUME_FLASH, "RecoverMountFlash");
+    filesystem_lock_acquire(SERVICE_FILESYSTEM_VOLUME_FLASH, "RecoverMount");
 
     status = filesystem_flash_unmount_locked();
     if (status == SERVICE_OK)

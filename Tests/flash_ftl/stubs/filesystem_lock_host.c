@@ -38,6 +38,43 @@ unsigned host_lock_stub_log_count(void)
     return host_lock_log_count;
 }
 
+static unsigned host_lock_notify_count;
+static uint32_t host_lock_notify_value;
+
+/**
+ * @brief 任务通知替身：只记录次数和最近一次置位的值。
+ * @param[in] task 目标任务，未使用。
+ * @param[in] value 通知值。
+ * @param[in] action 通知动作，主机测试只用 eSetBits。
+ * @return 恒为 pdTRUE。
+ */
+BaseType_t xTaskNotify(TaskHandle_t task, uint32_t value, eNotifyAction action)
+{
+    (void)task;
+    (void)action;
+    host_lock_notify_count++;
+    host_lock_notify_value = value;
+    return pdTRUE;
+}
+
+/**
+ * @brief 通知替身收到的次数。
+ * @return 次数。
+ */
+unsigned host_lock_stub_notify_count(void)
+{
+    return host_lock_notify_count;
+}
+
+/**
+ * @brief 通知替身最近一次收到的值。
+ * @return 值。
+ */
+uint32_t host_lock_stub_notify_value(void)
+{
+    return host_lock_notify_value;
+}
+
 /**
  * @brief 周期计数器替身：每次读取前进 480 个周期（480 MHz 下 1 µs）。
  * @return 当前读数。

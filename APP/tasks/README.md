@@ -5,6 +5,7 @@
 ## APP 内部 Interface
 
 - `app_task_start()`：由 `APP/app.c` 创建 bootstrap task 并启动调度器；
+- `foreground_task()`（spike #191）：用 `xTaskCreateStatic` 创建，见 [前台任务](foreground/README.md)；
 - `log_task()`、`storage_task()`、`playback_task()`、`monitor_task()`、`gui_task()`：仅作为 FreeRTOS `TaskFunction_t` 交给创建器。播放任务用 `xTaskCreateStatic` 创建（TCB 与栈在 `app_tasks.c` 的 DTCM `.bss`），其余任务仍用 `xTaskCreate`；
 - `playback_command_send()`、`playback_snapshot_read()`：播放任务公开合同（`playback/playback_contract.h`），只给 GUI 音乐分区和模拟器脚本化后端使用，见 [播放任务](playback/README.md)。
 
@@ -26,7 +27,8 @@ Task 是 APP 创建后的运行时执行上下文：任务通过 Service/Platfor
 |---|---|---|---|---|
 | Playback Task | 3 | 5120 | `xTaskCreateStatic`，DTCM | 唯一的播放状态机；解码、PCM 半区补满与提交、快照发布 |
 | Storage Task | 2 | 1024 | `xTaskCreate` | SD 热插拔、曲库、FatFs、Flash 回收、音频流读块 |
-| GUI Task | 1 | 2048 | `xTaskCreate` | LVGL 唯一执行上下文 |
+| GUI Task | 1 | 2048 | `xTaskCreate` | LVGL 唯一执行上下文；每圈结束后按 `Service_GUI_Process()` 的返回值睡 1 至 16 ms（spike #191） |
+| Foreground Task（spike #191，不合入） | 1 | 1536 | `xTaskCreateStatic`，默认 `.bss`（DTCM） | 按阶段给系统施加文件读写与 `ui_cell` 负载并汇总日志，见 [前台任务](foreground/README.md) |
 | Log Task | 1 | 512 | `xTaskCreate` | 日志消费 |
 | Monitor Task | 1 | 256 | `xTaskCreate` | 结温与板级监控 |
 | Boot（Create Task） | 0 | 128 | `xTaskCreate` | 创建其余任务后自删 |
@@ -45,6 +47,7 @@ Task 是 APP 创建后的运行时执行上下文：任务通过 Service/Platfor
 
 - 任务入口不得返回；
 - Task 之间不能共享 FatFs 对象或绕过其资源所有者；播放任务不碰 FatFs，音频文件的打开、读取、关闭只在 Storage Task；
+- spike #191（可丢弃分支）：Filesystem 公开入口自己加锁，Foreground Task 与 Storage Task 可以同时调用文件接口，仍不共享 `FIL`/`DIR`，每个 Token 只有创建它的任务使用；GUI 与播放任务调用文件接口时不停机，只计数并记一次 WARN；
 - ISR 只唤醒任务，不能把文件系统、日志格式化或设备初始化移入中断。
 
 ## 命名

@@ -13,6 +13,7 @@
 
 #include "APP/tasks/app_tasks.h"
 
+#include "APP/tasks/foreground/foreground_task.h"
 #include "APP/tasks/log/log_task.h"
 #include "APP/tasks/monitor/monitor_task.h"
 #include "APP/tasks/playback/playback_task.h"
@@ -30,6 +31,10 @@
 /* Playback Task 的 TCB 与栈静态持有（A7），位于 DTCM .bss，不占内核堆。 */
 static StaticTask_t playback_task_tcb;
 static StackType_t playback_task_stack[APP_PLAYBACK_TASK_STACK_WORDS];
+
+/* Foreground Task（spike #191）的 TCB 与栈静态持有，位于默认 .bss（DTCM），不动链接脚本。 */
+static StaticTask_t foreground_task_tcb;
+static StackType_t foreground_task_stack[APP_FOREGROUND_TASK_STACK_WORDS];
 
 /**
   * @brief  创建应用运行所需的全部任务，然后删除自身。
@@ -105,6 +110,18 @@ static void create_task(void *handle)
                      NULL,
                      APP_GUI_TASK_PRIORITY,
                      NULL) != pdPASS))
+    {
+        Error_Handler();
+    }
+
+    /* spike #191：Foreground Task 与 GUI 同级，静态创建，栈和 TCB 放默认 .bss。 */
+    if (xTaskCreateStatic(foreground_task,
+                          "Foreground Task",
+                          APP_FOREGROUND_TASK_STACK_WORDS,
+                          NULL,
+                          APP_FOREGROUND_TASK_PRIORITY,
+                          foreground_task_stack,
+                          &foreground_task_tcb) == NULL)
     {
         Error_Handler();
     }

@@ -15,6 +15,7 @@
 #include "APP/tasks/storage/catalog/storage_catalog.h"
 #include "APP/tasks/storage/stream/storage_audio_stream.h"
 #include "APP/tasks/storage/benchmark/storage_sd_benchmark.h"
+#include "APP/tasks/foreground/spike_unplug.h"
 #include "APP/app_config.h"
 
 #include <stdint.h>
@@ -198,6 +199,8 @@ static void storage_sd_detect_callback(void *context)
     TaskHandle_t task_handle = (TaskHandle_t)context;
     BaseType_t higher_priority_task_woken = pdFALSE;
 
+    spike_unplug_note_detect_isr(); /* spike #191：拔卡时间线的起点，ISR 里只存 tick。 */
+
     if (task_handle != NULL)
     {
         (void)xTaskNotifyIndexedFromISR(task_handle,
@@ -302,8 +305,14 @@ Storage_StatusTypeDef storage_sd_process(void)
 
     if (Platform_SD_Process(&event) != PLATFORM_OK)
     {
+        spike_unplug_cancel();
         storage_sd_post_diagnostics("Hotplug refresh");
         return STORAGE_ERROR;
+    }
+
+    if (event != PLATFORM_SD_EVENT_REMOVED)
+    {
+        spike_unplug_cancel(); /* 插卡或消抖后没有变化：这次边沿不是拔卡。 */
     }
 
     if (event == PLATFORM_SD_EVENT_INSERTED)
@@ -331,8 +340,12 @@ Storage_StatusTypeDef storage_sd_process(void)
     if (event == PLATFORM_SD_EVENT_REMOVED)
     {
         storage_audio_stream_card_removed(); /* 先关 FIL 再写 CARD_REMOVED，卸载卷前不得有打开对象。 */
+        spike_unplug_note(SPIKE_UNPLUG_STAGE_STREAM_CLOSED);
         (void)storage_catalog_invalidate();
+        spike_unplug_note(SPIKE_UNPLUG_STAGE_CATALOG_INVALID);
+        spike_unplug_note(SPIKE_UNPLUG_STAGE_UNMOUNT_ENTER);
         Storage_StatusTypeDef unmount_status = storage_sd_unmount();
+        spike_unplug_note_unmount_done((uint32_t)unmount_status);
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, storage_sd_log_tag, "Card removed.");
         return unmount_status;
     }

@@ -9,6 +9,7 @@
 #include "APP/tasks/storage/sd/storage_sd.h"
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark.h"
 #include "APP/tasks/storage/benchmark/storage_sdram_benchmark_config.h"
+#include "APP/tasks/foreground/spike_unplug.h"
 #include "catalog/storage_listbuffer.h"
 #include "catalog/storage_namebuffer.h"
 #include "stream/storage_audio_block.h"
@@ -304,6 +305,7 @@ void storage_task(void *handle)
                                       debounce_start,
                                       pdMS_TO_TICKS(STORAGE_SD_DEBOUNCE_MS)) == 0U))
         {
+            spike_unplug_note(SPIKE_UNPLUG_STAGE_DEBOUNCE_END);
             if (storage_sd_process() != STORAGE_OK)
             {
                 (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,

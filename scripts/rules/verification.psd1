@@ -14,6 +14,7 @@
         'playback_service'
         'playback_task'
         'monitor_warn'
+        'ui_cell'
         'board_test_card'
     )
 
@@ -202,6 +203,19 @@
             PathPatterns = @(
                 '^APP/tasks/monitor/'
                 '^Tests/monitor_warn/'
+            )
+        }
+        @{
+            # spike #191：交接格子 ui_cell 与它的耗时测量头；FreeRTOS 头、周期计数器、tick 与任务通知替身沿用 flash_ftl 的 stubs。
+            Name = 'ui_cell'
+            PathPatterns = @(
+                '^APP/ui_cell/'
+                '^APP/spike_time\.h$'
+                '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
+                '^Tests/flash_ftl/stubs/'
+                '^Service/service\.h$'
+                '^Service/log/log_service(?:_config)?\.h$'
+                '^Tests/ui_cell/'
             )
         }
         @{
