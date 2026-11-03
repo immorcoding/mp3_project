@@ -172,10 +172,10 @@ Platform 与 APP 中的静态状态见 §2.5 与 §3.1。
 
 ### 3.3 映射区的读取者
 
-- 仓库内 `Platform_Flash_EnableMemoryMappedMode` 的唯一调用点是启动基准（`APP/tasks/storage/benchmark/storage_flash_benchmark.c:200`）。该基准由 `STORAGE_FLASH_BENCHMARK_ENABLE` 控制（`APP/tasks/storage/storage_flash.c:69-71`），产品默认 0（`APP/app_config.h:23-24`）。
-- 基准文档写明“成功后映射保持开启，供后续 Resource Pack 使用”（`APP/tasks/storage/benchmark/README.md:11`），未见其他读取者。
+- 仓库内 `Platform_Flash_EnableMemoryMappedMode` 有两个调用点。一是资源服务（`Service/resource/resource_service.c:547`）：`Service_Resource_Init()` 在 `app_init()` 里、调度器启动前运行（`APP/app.c:138`），把资源复制进 SDRAM，不向其他 Module 发布 NOR 指针（`Service/resource/README.md:31`）。二是启动基准（`APP/tasks/storage/benchmark/storage_flash_benchmark.c:200`），由 `STORAGE_FLASH_BENCHMARK_ENABLE` 控制（`APP/tasks/storage/storage_flash.c:69-71`），产品默认 0（`APP/app_config.h:23-24`）。
+- 基准文档写明“成功后映射保持开启，供后续 Resource Pack 使用”（`APP/tasks/storage/benchmark/README.md:11`）。运行中未见其他读取者。
 - 映射窗口：`0x90000000`，32 MiB（`Platform/flash/platform_flash_config.h:24-25`）。
-- 检索：在 `Platform`、`Adapters`、`APP`、`Components`、`Service` 中搜索 `EnableMemoryMappedMode|MemoryMapped|0x90000000`，除 benchmark、适配器与 Platform 本身外无命中；CMSIS 头文件中的定义不计。
+- 检索：在 `Platform`、`Adapters`、`APP`、`Components`、`Service` 中搜索 `EnableMemoryMappedMode|MemoryMapped|0x90000000`，除 benchmark、资源服务、适配器与 Platform 本身外无命中；CMSIS 头文件中的定义不计。（初版漏掉了资源服务，主会话核对后更正。）
 
 ### 3.4 时序与预算
 
