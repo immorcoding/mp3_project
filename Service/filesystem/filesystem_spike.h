@@ -19,7 +19,8 @@
 #include "Platform/sd/platform_sd.h"
 #include "Service/service.h"
 
-#define SERVICE_FILESYSTEM_SPIKE_LOCK_MAX 3U     /* 全局一把时只有 1 把；每卷一把时为 SD、Flash、表锁共 3 把。 */
+#define SERVICE_FILESYSTEM_SPIKE_LOCK_MAX 4U     /* 全局一把时只有 1 把；每卷一把时为 SD、Flash、打开表锁、槽表锁共 4 把。 */
+#define SERVICE_FILESYSTEM_SPIKE_OP_MAX 20U      /* 每把锁按操作分开记最长持有的条目数；用尽后其余操作并入最后一项“(other)”。 */
 #define SERVICE_FILESYSTEM_SPIKE_NAME_BYTES 16U  /* 任务名缓冲，含结尾 NUL，与 configMAX_TASK_NAME_LEN 一致。 */
 
 /** @brief 一把锁在一个统计范围（阶段窗口或自启动）内的极值。 */
@@ -35,6 +36,14 @@ typedef struct
     const char *BlockerOperation;                                 /**< 该次等锁开始时的持锁者操作名（尽力而为，可能为空）。 */
     uint32_t AcquireCount;                                        /**< 拿锁次数。 */
 } Service_Filesystem_SpikeLockStatsTypeDef;
+
+/** @brief 一把锁上某个公开操作的持有统计（#199：表锁最长持有要按操作分开）。 */
+typedef struct
+{
+    const char *Operation;  /**< 操作名（静态字符串）；NULL 表示该项未使用。 */
+    uint32_t Count;         /**< 该操作拿锁次数。 */
+    uint32_t HoldMaxUs;     /**< 该操作单次持锁最长，微秒。 */
+} Service_Filesystem_SpikeOpStatsTypeDef;
 
 /** @brief Flash 卷的块计数快照与 FTL 水位推算所需的几何（spike #191）。 */
 typedef struct
@@ -59,6 +68,10 @@ const char *Service_Filesystem_SpikeLockName(uint32_t index);
 bool Service_Filesystem_SpikeGetLockStats(uint32_t index,
                                           Service_Filesystem_SpikeLockStatsTypeDef *window,
                                           Service_Filesystem_SpikeLockStatsTypeDef *total);
+uint32_t Service_Filesystem_SpikeGetOpStats(uint32_t index,
+                                            Service_Filesystem_SpikeOpStatsTypeDef *window,
+                                            Service_Filesystem_SpikeOpStatsTypeDef *total);
+bool Service_Filesystem_SpikeTableNarrow(void);
 void Service_Filesystem_SpikeWindowReset(void);
 uint32_t Service_Filesystem_SpikeLastHoldUs(void);
 uint32_t Service_Filesystem_SpikeForbiddenCalls(void);

@@ -28,7 +28,10 @@ typedef enum
     FOREGROUND_LOAD_NONE = 0U, /**< 无负载。 */
     FOREGROUND_LOAD_TXT,       /**< 读 SD 上的大 TXT，模拟分页。 */
     FOREGROUND_LOAD_FLASH,     /**< Flash 卷写入、同步、删除与回收。 */
-    FOREGROUND_LOAD_CELL       /**< ui_cell 合成拷贝。 */
+    FOREGROUND_LOAD_CELL,      /**< ui_cell 合成拷贝。 */
+    FOREGROUND_LOAD_FLASH_CYCLE_1M,  /**< #199：Flash 上循环建、写 1 MiB、同步、关、改名、删除。 */
+    FOREGROUND_LOAD_FLASH_CYCLE_16M, /**< #199：Flash 上建、写 16 MiB、同步、关、改名、删除，只做一轮。 */
+    FOREGROUND_LOAD_SD_OPEN_LAST     /**< #199：大目录卡上按路径重复打开最后一首。 */
 } ForegroundLoadKindTypeDef;
 
 /** @brief 负载统计，按阶段清零。 */

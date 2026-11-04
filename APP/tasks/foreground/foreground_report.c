@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "APP/tasks/foreground/foreground_cycle.h"
 #include "APP/tasks/foreground/spike_audio_read.h"
 #include "APP/tasks/foreground/spike_unplug.h"
 #include "APP/tasks/gui/gui_task.h"
@@ -324,6 +325,80 @@ static void foreground_report_locks(void)
     }
 }
 
+/** @brief 按操作分开的持有统计的临时拷贝，放静态区，不占前台任务的栈。 */
+static Service_Filesystem_SpikeOpStatsTypeDef foreground_report_ops_window[SERVICE_FILESYSTEM_SPIKE_OP_MAX];
+static Service_Filesystem_SpikeOpStatsTypeDef foreground_report_ops_total[SERVICE_FILESYSTEM_SPIKE_OP_MAX];
+
+/** @brief 一行 LOCKOP 日志里允许写到的字节数，留出余量给 128 B 的单条上限。 */
+#define FOREGROUND_REPORT_OPS_LINE_LIMIT 116U
+
+/**
+ * @brief 输出一把锁按操作分开的最长持有：若干个“操作=最长微秒/次数”挤在一行，放不下就换行。
+ * @param[in] lock_name 锁名。
+ * @param[in] scope "ph" 为阶段窗口，"all" 为自启动。
+ * @param[in] table 长度 SERVICE_FILESYSTEM_SPIKE_OP_MAX 的统计表。
+ * @note  没有拿锁记录的操作不输出。每条日志之后 `foreground_logf` 会让出几毫秒，不挤满 30 条的消息池。
+ */
+static void foreground_report_op_table(const char *lock_name,
+                                       const char *scope,
+                                       const Service_Filesystem_SpikeOpStatsTypeDef *table)
+{
+    char line[128];
+    size_t prefix;
+    size_t used;
+    uint32_t index;
+
+    prefix = (size_t)snprintf(line, sizeof(line), "LOCKOP %s %s", lock_name, scope);
+    used = prefix;
+    for (index = 0U; index < SERVICE_FILESYSTEM_SPIKE_OP_MAX; index++)
+    {
+        char item[48];
+        size_t length;
+
+        if ((table[index].Operation == NULL) || (table[index].Count == 0U))
+        {
+            continue;
+        }
+        length = (size_t)snprintf(item, sizeof(item), " %s=%luus/n%lu", table[index].Operation,
+                                  (unsigned long)table[index].HoldMaxUs, (unsigned long)table[index].Count);
+        if ((used > prefix) && ((used + length) > FOREGROUND_REPORT_OPS_LINE_LIMIT))
+        {
+            foreground_logf("%s", line);
+            used = prefix;
+            line[prefix] = '\0';
+        }
+        (void)snprintf(&line[used], sizeof(line) - used, "%s", item);
+        used += length;
+    }
+    if (used > prefix)
+    {
+        foreground_logf("%s", line);
+    }
+}
+
+/**
+ * @brief 阶段结束时输出每把锁按操作分开的最长持有（#199）；打开表锁另给自启动那一份。
+ */
+static void foreground_report_ops(void)
+{
+    uint32_t index;
+
+    for (index = 0U; index < Service_Filesystem_SpikeLockCount(); index++)
+    {
+        const char *name = Service_Filesystem_SpikeLockName(index);
+
+        if (Service_Filesystem_SpikeGetOpStats(index, foreground_report_ops_window, foreground_report_ops_total) == 0U)
+        {
+            continue;
+        }
+        foreground_report_op_table(name, "ph", foreground_report_ops_window);
+        if (strcmp(name, "TABLE") == 0)
+        {
+            foreground_report_op_table(name, "all", foreground_report_ops_total);
+        }
+    }
+}
+
 /**
  * @brief 输出欠载累计值与窗口增量。
  * @param[in] phase 阶段名。
@@ -394,6 +469,55 @@ static void foreground_report_flash_blocks(const char *phase, const ForegroundLo
 }
 
 /**
+ * @brief 输出 Flash 循环（#199）的统计：次数、各步骤的墙钟耗时、删除的卷锁持有、块计数。
+ * @param[in] phase 阶段名。
+ * @note  耗时都是墙钟（含等锁）；表锁最长持有按操作分开，见 LOCKOP 行。`partial` 为循环没写满目标就收尾的次数
+ *        （空间不足，或 16 MiB 文件到了写入时限），此时 `last_bytes` 是最近一次删除的实际大小。
+ */
+static void foreground_report_cycle(const char *phase)
+{
+    const ForegroundCycleStatsTypeDef *cycle = foreground_cycle_stats();
+
+    foreground_logf("CYCLE %s target=%lu cycles=%lu partial=%lu err=%lu last_bytes=%lu", phase,
+                    (unsigned long)cycle->TargetBytes, (unsigned long)cycle->Cycles,
+                    (unsigned long)cycle->PartialCycles, (unsigned long)cycle->Errors,
+                    (unsigned long)cycle->LastBytes);
+    foreground_report_stat_line("CYCLE", phase, "create", &cycle->Create);
+    foreground_report_stat_line("CYCLE", phase, "write64K", &cycle->WriteChunk);
+    foreground_report_stat_line("CYCLE", phase, "write_total", &cycle->WriteTotal);
+    foreground_report_stat_line("CYCLE", phase, "sync", &cycle->Sync);
+    foreground_report_stat_line("CYCLE", phase, "close", &cycle->Close);
+    foreground_report_stat_line("CYCLE", phase, "rename", &cycle->Rename);
+    foreground_report_stat_line("CYCLE", phase, "delete_wall", &cycle->Delete);
+    foreground_report_stat_line("CYCLE", phase, "delete_hold", &cycle->DeleteHold);
+    if (cycle->BlocksValid)
+    {
+        foreground_logf("CYCLE %s blocks free=%lu>%lu stale=%lu>%lu low=%lu erases=%lu", phase,
+                        (unsigned long)cycle->BlocksStart.FreeBlocks, (unsigned long)cycle->BlocksNow.FreeBlocks,
+                        (unsigned long)cycle->BlocksStart.StaleBlocks, (unsigned long)cycle->BlocksNow.StaleBlocks,
+                        (unsigned long)cycle->GcLow,
+                        (unsigned long)(cycle->BlocksNow.SessionErases - cycle->BlocksStart.SessionErases));
+    }
+}
+
+/**
+ * @brief 输出“大目录卡上按路径打开最后一首”（#199）的统计：目录规模、扫描耗时、打开的墙钟与 SD 卷锁持有。
+ * @param[in] phase 阶段名。
+ */
+static void foreground_report_openlast(const char *phase)
+{
+    const ForegroundOpenLastStatsTypeDef *open_last = foreground_openlast_stats();
+
+    foreground_logf("OPENLAST %s entries=%lu scan=%luus err=%lu last_status=%s last=%s", phase,
+                    (unsigned long)open_last->Entries, (unsigned long)open_last->ScanUs,
+                    (unsigned long)open_last->Errors, foreground_status_name(open_last->LastStatus),
+                    open_last->Last);
+    foreground_report_stat_line("OPENLAST", phase, "open_wall", &open_last->Open);
+    foreground_report_stat_line("OPENLAST", phase, "open_sd_hold", &open_last->OpenHold);
+    foreground_report_stat_line("OPENLAST", phase, "close", &open_last->Close);
+}
+
+/**
  * @brief 输出本阶段负载自己的统计行。
  * @param[in] phase 阶段名。
  * @param[in] kind 阶段的负载种类。
@@ -420,6 +544,15 @@ static void foreground_report_load(const char *phase, ForegroundLoadKindTypeDef 
             foreground_report_stat_line("FLASHIO", phase, "reclaim_erase", &load->FlashReclaimErase);
             foreground_report_stat_line("FLASHIO", phase, "reclaim_idle", &load->FlashReclaimIdle);
             foreground_report_flash_blocks(phase, load);
+            break;
+
+        case FOREGROUND_LOAD_FLASH_CYCLE_1M:
+        case FOREGROUND_LOAD_FLASH_CYCLE_16M:
+            foreground_report_cycle(phase);
+            break;
+
+        case FOREGROUND_LOAD_SD_OPEN_LAST:
+            foreground_report_openlast(phase);
             break;
 
         case FOREGROUND_LOAD_CELL:
@@ -459,6 +592,10 @@ void foreground_report_window(const char *phase, ForegroundLoadKindTypeDef kind,
     foreground_report_cpu(phase, window_ms);
     foreground_report_gui(phase, window_ms);
     foreground_report_locks();
+    if (final)
+    {
+        foreground_report_ops();
+    }
     spike_audio_read_get(&audio_read);
     foreground_report_stat_line("SDREAD", phase, "audio32K", &audio_read);
     foreground_report_underruns(phase);

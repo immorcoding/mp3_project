@@ -1,6 +1,6 @@
 /**
  * @file filesystem_lock.c
- * @brief Filesystem Module 私有锁与锁观测（spike，#191）。
+ * @brief Filesystem Module 私有锁与锁观测（spike，#191、#199）。
  *
  * @details
  *          锁用静态分配的 FreeRTOS 互斥量（带优先级继承），在 Boot Task 里经
@@ -11,6 +11,7 @@
 #include "Service/filesystem/filesystem_lock.h"
 #include "Service/filesystem/filesystem_spike.h"
 
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -21,11 +22,14 @@
 #include "Service/log/log_service.h"
 
 #if FILESYSTEM_LOCK_PER_VOLUME
-#define FILESYSTEM_LOCK_COUNT 3U        /* SD、Flash、打开表锁。 */
+#define FILESYSTEM_LOCK_COUNT 4U        /* SD、Flash、打开表锁、槽表锁。 */
 #define FILESYSTEM_LOCK_FLASH_INDEX 1U
 #define FILESYSTEM_LOCK_TABLE_INDEX 2U
+#define FILESYSTEM_LOCK_SLOT_INDEX 3U
+#define FILESYSTEM_LOCK_VOLUME_COUNT 2U /* 前两把是卷锁，只有它们记“最近一次公开调用的持锁时长”。 */
 #else
 #define FILESYSTEM_LOCK_COUNT 1U        /* 全局一把。 */
+#define FILESYSTEM_LOCK_VOLUME_COUNT 1U
 #endif
 
 /** @brief 超过这个 tick 数的区间不再信 32 位 DWT（4 s，远小于 480 MHz 下约 8.9 s 的回绕）。 */
@@ -36,6 +40,9 @@
 
 _Static_assert(configTICK_RATE_HZ == 1000U, "filesystem_lock tick 兜底按 1 kHz 换算");
 _Static_assert(FILESYSTEM_LOCK_COUNT <= SERVICE_FILESYSTEM_SPIKE_LOCK_MAX, "锁数量超过观测接口上限");
+
+/** @brief 最后一个操作条目留给“用尽后的其余操作”。 */
+#define FILESYSTEM_LOCK_OTHER_OPERATION "(other)"
 
 /** @brief 起点时间戳：周期数加 tick，用于在 DWT 回绕前兜底。 */
 typedef struct
@@ -56,6 +63,8 @@ typedef struct
     uint32_t WindowEpoch;
     Service_Filesystem_SpikeLockStatsTypeDef Window;
     Service_Filesystem_SpikeLockStatsTypeDef Total;
+    Service_Filesystem_SpikeOpStatsTypeDef OpWindow[SERVICE_FILESYSTEM_SPIKE_OP_MAX];
+    Service_Filesystem_SpikeOpStatsTypeDef OpTotal[SERVICE_FILESYSTEM_SPIKE_OP_MAX];
 } filesystem_lock_t;
 
 /** @brief 每个任务最近一次公开调用的持锁时长。 */
@@ -134,6 +143,7 @@ static void filesystem_lock_sync_window(filesystem_lock_t *lock)
     if (lock->WindowEpoch != filesystem_lock_window_epoch)
     {
         memset(&lock->Window, 0, sizeof(lock->Window));
+        memset(lock->OpWindow, 0, sizeof(lock->OpWindow));
         lock->WindowEpoch = filesystem_lock_window_epoch;
     }
 }
@@ -245,6 +255,61 @@ static void filesystem_lock_update_hold(Service_Filesystem_SpikeLockStatsTypeDef
 }
 
 /**
+ * @brief 在一张按操作分开的表里记一次持有。
+ * @param[in,out] table 长度 SERVICE_FILESYSTEM_SPIKE_OP_MAX 的表。
+ * @param[in] hold_us 本次持锁微秒。
+ * @param[in] operation 公开操作名（静态字符串）。
+ * @note  先按指针找（同一个字面量），再按内容找（编译器没有合并字面量时），都没有就占一个空位；
+ *        只剩最后一项时并入“(other)”。调用者已在临界区内，所以这里只做短的比较。
+ */
+static void filesystem_lock_update_operation(Service_Filesystem_SpikeOpStatsTypeDef *table,
+                                             uint32_t hold_us,
+                                             const char *operation)
+{
+    Service_Filesystem_SpikeOpStatsTypeDef *entry = NULL;
+    uint32_t index;
+
+    if (operation == NULL)
+    {
+        return;
+    }
+    for (index = 0U; index < SERVICE_FILESYSTEM_SPIKE_OP_MAX; index++)
+    {
+        if (table[index].Operation == operation)
+        {
+            entry = &table[index];
+            break;
+        }
+    }
+    for (index = 0U; (entry == NULL) && (index < SERVICE_FILESYSTEM_SPIKE_OP_MAX); index++)
+    {
+        if (table[index].Operation == NULL)
+        {
+            break;
+        }
+        if (strcmp(table[index].Operation, operation) == 0)
+        {
+            entry = &table[index];
+        }
+    }
+    if (entry == NULL)
+    {
+        const bool last = (index >= (SERVICE_FILESYSTEM_SPIKE_OP_MAX - 1U));
+
+        entry = &table[last ? (SERVICE_FILESYSTEM_SPIKE_OP_MAX - 1U) : index];
+        if (entry->Operation == NULL)
+        {
+            entry->Operation = last ? FILESYSTEM_LOCK_OTHER_OPERATION : operation;
+        }
+    }
+    entry->Count++;
+    if (hold_us > entry->HoldMaxUs)
+    {
+        entry->HoldMaxUs = hold_us;
+    }
+}
+
+/**
  * @brief 拿一把锁，等到拿到为止，并记录等锁与持锁起点。
  * @param[in,out] lock 要拿的锁。
  * @param[in] operation 公开操作名（静态字符串）。
@@ -299,28 +364,35 @@ static void filesystem_lock_give(filesystem_lock_t *lock)
     filesystem_lock_sync_window(lock);
     filesystem_lock_update_hold(&lock->Window, hold_us, lock->HolderName, lock->HolderOperation);
     filesystem_lock_update_hold(&lock->Total, hold_us, lock->HolderName, lock->HolderOperation);
+    filesystem_lock_update_operation(lock->OpWindow, hold_us, lock->HolderOperation);
+    filesystem_lock_update_operation(lock->OpTotal, hold_us, lock->HolderOperation);
 
-    for (index = 0U; index < FILESYSTEM_LOCK_LAST_HOLD_SLOTS; index++)
+    /* 只有卷锁记“最近一次公开调用的持锁时长”：表锁、槽表锁是调用中间的短锁，且可能在卷锁之后才放。 */
+    if ((lock - filesystem_locks) < (ptrdiff_t)FILESYSTEM_LOCK_VOLUME_COUNT)
     {
-        if (filesystem_lock_last_holds[index].Task == self)
+        for (index = 0U; index < FILESYSTEM_LOCK_LAST_HOLD_SLOTS; index++)
         {
-            slot = index;
-            break;
+            if (filesystem_lock_last_holds[index].Task == self)
+            {
+                slot = index;
+                break;
+            }
         }
-    }
-    for (index = 0U; (slot == FILESYSTEM_LOCK_LAST_HOLD_SLOTS) && (index < FILESYSTEM_LOCK_LAST_HOLD_SLOTS); index++)
-    {
-        if (filesystem_lock_last_holds[index].Task == NULL)
+        for (index = 0U; (slot == FILESYSTEM_LOCK_LAST_HOLD_SLOTS) && (index < FILESYSTEM_LOCK_LAST_HOLD_SLOTS);
+             index++)
         {
-            slot = index;
+            if (filesystem_lock_last_holds[index].Task == NULL)
+            {
+                slot = index;
+            }
         }
+        if (slot == FILESYSTEM_LOCK_LAST_HOLD_SLOTS)
+        {
+            slot = 0U;
+        }
+        filesystem_lock_last_holds[slot].Task = self;
+        filesystem_lock_last_holds[slot].HoldUs = hold_us;
     }
-    if (slot == FILESYSTEM_LOCK_LAST_HOLD_SLOTS)
-    {
-        slot = 0U;
-    }
-    filesystem_lock_last_holds[slot].Task = self;
-    filesystem_lock_last_holds[slot].HoldUs = hold_us;
     taskEXIT_CRITICAL();
 
     lock->Holder = NULL;
@@ -382,6 +454,24 @@ void filesystem_lock_table_release(void)
 {
     filesystem_lock_give(&filesystem_locks[FILESYSTEM_LOCK_TABLE_INDEX]);
 }
+
+/**
+ * @brief 拿槽表锁：只保护 Service 的文件槽、目录槽表，持有期间只读写内存。
+ * @param[in] operation 槽表操作名（静态字符串）。
+ * @note  最内层的锁：持有它时不再拿任何别的锁，所以可以在卷锁或打开表锁之内拿。
+ */
+void filesystem_lock_slot_acquire(const char *operation)
+{
+    filesystem_lock_take(&filesystem_locks[FILESYSTEM_LOCK_SLOT_INDEX], operation);
+}
+
+/**
+ * @brief 放槽表锁。
+ */
+void filesystem_lock_slot_release(void)
+{
+    filesystem_lock_give(&filesystem_locks[FILESYSTEM_LOCK_SLOT_INDEX]);
+}
 #endif
 
 /**
@@ -394,8 +484,17 @@ bool Service_Filesystem_SpikePerVolume(void)
 }
 
 /**
+ * @brief 打开表锁是否为窄范围（只包 f_open、f_opendir 和按定位符打开）。
+ * @return true 为窄表锁；false 为宽表锁，或全局一把锁时没有表锁。
+ */
+bool Service_Filesystem_SpikeTableNarrow(void)
+{
+    return FILESYSTEM_LOCK_TABLE_NARROW != 0;
+}
+
+/**
  * @brief 观测用的锁个数。
- * @return 全局一把时为 1，每卷一把时为 3（SD、Flash、表锁）。
+ * @return 全局一把时为 1，每卷一把时为 4（SD、Flash、打开表锁、槽表锁）。
  */
 uint32_t Service_Filesystem_SpikeLockCount(void)
 {
@@ -410,7 +509,7 @@ uint32_t Service_Filesystem_SpikeLockCount(void)
 const char *Service_Filesystem_SpikeLockName(uint32_t index)
 {
 #if FILESYSTEM_LOCK_PER_VOLUME
-    static const char *const names[FILESYSTEM_LOCK_COUNT] = {"SD", "FLASH", "TABLE"};
+    static const char *const names[FILESYSTEM_LOCK_COUNT] = {"SD", "FLASH", "TABLE", "SLOT"};
 #else
     static const char *const names[FILESYSTEM_LOCK_COUNT] = {"GLOBAL"};
 #endif
@@ -449,6 +548,46 @@ bool Service_Filesystem_SpikeGetLockStats(uint32_t index,
 }
 
 /**
+ * @brief 拷出一把锁按操作分开的最长持有，窗口与自启动各一份。
+ * @param[in] index 0 起始的锁序号。
+ * @param[out] window 阶段窗口的表，长度 SERVICE_FILESYSTEM_SPIKE_OP_MAX，可为 NULL。
+ * @param[out] total 自启动的表，长度 SERVICE_FILESYSTEM_SPIKE_OP_MAX，可为 NULL。
+ * @return 窗口表里已使用的条目数；序号越界返回 0。
+ */
+uint32_t Service_Filesystem_SpikeGetOpStats(uint32_t index,
+                                            Service_Filesystem_SpikeOpStatsTypeDef *window,
+                                            Service_Filesystem_SpikeOpStatsTypeDef *total)
+{
+    uint32_t used = 0U;
+    uint32_t item;
+
+    if (index >= FILESYSTEM_LOCK_COUNT)
+    {
+        return 0U;
+    }
+
+    taskENTER_CRITICAL();
+    filesystem_lock_sync_window(&filesystem_locks[index]);
+    if (window != NULL)
+    {
+        memcpy(window, filesystem_locks[index].OpWindow, sizeof(filesystem_locks[index].OpWindow));
+    }
+    if (total != NULL)
+    {
+        memcpy(total, filesystem_locks[index].OpTotal, sizeof(filesystem_locks[index].OpTotal));
+    }
+    for (item = 0U; item < SERVICE_FILESYSTEM_SPIKE_OP_MAX; item++)
+    {
+        if (filesystem_locks[index].OpWindow[item].Operation != NULL)
+        {
+            used++;
+        }
+    }
+    taskEXIT_CRITICAL();
+    return used;
+}
+
+/**
  * @brief 开始新的统计窗口：各锁的窗口统计在下次更新或读取时清零。
  */
 void Service_Filesystem_SpikeWindowReset(void)
@@ -459,7 +598,7 @@ void Service_Filesystem_SpikeWindowReset(void)
 /**
  * @brief 调用者任务最近一次完成的公开调用的持锁时长，读取后清零。
  * @return 微秒；该任务还没有记录、或上一次调用没有拿到锁（例如句柄无效）、或已被读过时为 0。
- *         每卷一把时是该次调用最后放的那把锁的持锁时长（卷锁）。
+ *         每卷一把时是该次调用的卷锁持锁时长（表锁、槽表锁不记入）。
  * @note  按任务记录，其他任务随后拿锁不会覆盖它，所以调用者可在调用返回后立即读取。
  *        读取即清零，所以没拿到锁就返回的调用不会读到上一次调用的旧值。
  */

@@ -98,9 +98,9 @@ static Service_StatusTypeDef filesystem_file_open_locked(Service_Filesystem_Volu
         result = f_lseek(object, f_size(object));
         if (result != FR_OK)
         {
-            filesystem_lock_table_acquire("OpenFile");
+            filesystem_lock_table_wide_acquire("OpenFile");
             (void)f_close(object);
-            filesystem_lock_table_release();
+            filesystem_lock_table_wide_release();
             filesystem_handle_release_file(handle);
             return filesystem_make_service_status(result);
         }
@@ -362,9 +362,9 @@ Service_StatusTypeDef Service_Filesystem_CloseFile(Service_Filesystem_FileHandle
     }
     if (result == FR_OK)
     {
-        filesystem_lock_table_acquire("CloseFile");
+        filesystem_lock_table_wide_acquire("CloseFile");
         result = f_close(object);
-        filesystem_lock_table_release();
+        filesystem_lock_table_wide_release();
     }
 
     status = filesystem_make_service_status(result);
@@ -415,9 +415,9 @@ static Service_StatusTypeDef filesystem_file_remove_locked(Service_Filesystem_Vo
         return SERVICE_INVALID_PARAM;
     }
 
-    filesystem_lock_table_acquire("RemoveFile");
+    filesystem_lock_table_wide_acquire("RemoveFile");
     result = f_unlink(native_path);
-    filesystem_lock_table_release();
+    filesystem_lock_table_wide_release();
     return filesystem_make_service_status(result);
 }
 
@@ -476,9 +476,9 @@ static Service_StatusTypeDef filesystem_file_rename_locked(Service_Filesystem_Vo
         return status;
     }
 
-    filesystem_lock_table_acquire("RenameFile");
+    filesystem_lock_table_wide_acquire("RenameFile");
     result = f_rename(native_old, native_new);
-    filesystem_lock_table_release();
+    filesystem_lock_table_wide_release();
     return filesystem_make_service_status(result);
 }
 

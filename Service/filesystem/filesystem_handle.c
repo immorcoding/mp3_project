@@ -114,7 +114,7 @@ static void filesystem_handle_invalidate_volume(Service_Filesystem_VolumeTypeDef
 {
     uint32_t index;
 
-    filesystem_lock_table_acquire("SlotInvalidate");
+    filesystem_lock_slot_acquire("SlotInvalidate");
     for (index = 0U; index < FILESYSTEM_FILE_SLOT_COUNT; index++)
     {
         if (filesystem_file_slots[index].in_use && (filesystem_file_slots[index].volume == volume))
@@ -133,7 +133,7 @@ static void filesystem_handle_invalidate_volume(Service_Filesystem_VolumeTypeDef
             memset(&filesystem_directory_slots[index].object, 0, sizeof(DIR));
         }
     }
-    filesystem_lock_table_release();
+    filesystem_lock_slot_release();
 }
 
 /**
@@ -196,7 +196,7 @@ bool filesystem_handle_volume_has_open(Service_Filesystem_VolumeTypeDef volume)
         return false;
     }
 
-    filesystem_lock_table_acquire("SlotHasOpen");
+    filesystem_lock_slot_acquire("SlotHasOpen");
     for (index = 0U; !found && (index < FILESYSTEM_FILE_SLOT_COUNT); index++)
     {
         found = filesystem_file_slots[index].in_use &&
@@ -208,7 +208,7 @@ bool filesystem_handle_volume_has_open(Service_Filesystem_VolumeTypeDef volume)
         found = filesystem_directory_slots[index].in_use &&
                 (filesystem_directory_slots[index].volume == volume);
     }
-    filesystem_lock_table_release();
+    filesystem_lock_slot_release();
 
     return found;
 }
@@ -271,7 +271,7 @@ Service_StatusTypeDef filesystem_handle_acquire_file(Service_Filesystem_VolumeTy
     }
 
     status = SERVICE_BUSY;
-    filesystem_lock_table_acquire("SlotAcquire");
+    filesystem_lock_slot_acquire("SlotAcquire");
     for (index = 0U; index < FILESYSTEM_FILE_SLOT_COUNT; index++)
     {
         filesystem_file_slot_t *slot = &filesystem_file_slots[index];
@@ -292,7 +292,7 @@ Service_StatusTypeDef filesystem_handle_acquire_file(Service_Filesystem_VolumeTy
             break;
         }
     }
-    filesystem_lock_table_release();
+    filesystem_lock_slot_release();
 
     return status;
 }
@@ -316,14 +316,14 @@ static Service_StatusTypeDef filesystem_handle_file_volume(
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_table_acquire("SlotVolume");
+    filesystem_lock_slot_acquire("SlotVolume");
     if (filesystem_file_slots[index].in_use &&
         (filesystem_file_slots[index].generation == (file.Token >> FILESYSTEM_HANDLE_GENERATION_SHIFT)))
     {
         *volume = filesystem_file_slots[index].volume;
         status = SERVICE_OK;
     }
-    filesystem_lock_table_release();
+    filesystem_lock_slot_release();
 
     return status;
 }
@@ -417,14 +417,14 @@ void filesystem_handle_release_file(Service_Filesystem_FileHandleTypeDef file)
         return;
     }
 
-    filesystem_lock_table_acquire("SlotRelease");
+    filesystem_lock_slot_acquire("SlotRelease");
     slot = &filesystem_file_slots[index];
     if (slot->in_use && (slot->generation == (file.Token >> FILESYSTEM_HANDLE_GENERATION_SHIFT)))
     {
         slot->in_use = false;
         memset(&slot->object, 0, sizeof(slot->object));
     }
-    filesystem_lock_table_release();
+    filesystem_lock_slot_release();
 }
 
 /**
@@ -452,7 +452,7 @@ Service_StatusTypeDef filesystem_handle_acquire_directory(
     }
 
     status = SERVICE_BUSY;
-    filesystem_lock_table_acquire("SlotAcquire");
+    filesystem_lock_slot_acquire("SlotAcquire");
     for (index = 0U; index < FILESYSTEM_DIRECTORY_SLOT_COUNT; index++)
     {
         filesystem_directory_slot_t *slot = &filesystem_directory_slots[index];
@@ -473,7 +473,7 @@ Service_StatusTypeDef filesystem_handle_acquire_directory(
             break;
         }
     }
-    filesystem_lock_table_release();
+    filesystem_lock_slot_release();
 
     return status;
 }
@@ -497,7 +497,7 @@ static Service_StatusTypeDef filesystem_handle_directory_volume(
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_table_acquire("SlotVolume");
+    filesystem_lock_slot_acquire("SlotVolume");
     if (filesystem_directory_slots[index].in_use &&
         (filesystem_directory_slots[index].generation ==
          (directory.Token >> FILESYSTEM_HANDLE_GENERATION_SHIFT)))
@@ -505,7 +505,7 @@ static Service_StatusTypeDef filesystem_handle_directory_volume(
         *volume = filesystem_directory_slots[index].volume;
         status = SERVICE_OK;
     }
-    filesystem_lock_table_release();
+    filesystem_lock_slot_release();
 
     return status;
 }
@@ -602,7 +602,7 @@ void filesystem_handle_release_directory(Service_Filesystem_DirectoryHandleTypeD
         return;
     }
 
-    filesystem_lock_table_acquire("SlotRelease");
+    filesystem_lock_slot_acquire("SlotRelease");
     slot = &filesystem_directory_slots[index];
     if (slot->in_use &&
         (slot->generation == (directory.Token >> FILESYSTEM_HANDLE_GENERATION_SHIFT)))
@@ -610,5 +610,5 @@ void filesystem_handle_release_directory(Service_Filesystem_DirectoryHandleTypeD
         slot->in_use = false;
         memset(&slot->object, 0, sizeof(slot->object));
     }
-    filesystem_lock_table_release();
+    filesystem_lock_slot_release();
 }

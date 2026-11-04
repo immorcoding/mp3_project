@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "APP/tasks/foreground/foreground_cycle.h"
 #include "APP/tasks/foreground/foreground_report.h"
 #include "APP/tasks/foreground/spike_audio_read.h"
 #include "APP/tasks/foreground/spike_unplug.h"
@@ -64,6 +65,11 @@
  */
 #define FOREGROUND_FLASH_GC_START_PERCENT 75U
 #define FOREGROUND_FLASH_GC_STOP_PERCENT 90U
+
+/** @brief #199：Flash 循环的目标字节数，以及 16 MiB 文件的写入时限（超过就按已写的字节数收尾，日志里标 partial）。 */
+#define FOREGROUND_CYCLE_1M_BYTES (1024U * 1024U)
+#define FOREGROUND_CYCLE_16M_BYTES (16U * 1024U * 1024U)
+#define FOREGROUND_CYCLE_16M_WRITE_CAP_MS 600000U
 
 /** @brief ui_cell 合成场景：6 KiB，每 16 ms 写一次。 */
 #define FOREGROUND_CELL_BYTES 6144U
@@ -167,6 +173,8 @@ void foreground_load_stats_reset(void)
     memset(&foreground_load_stats_data, 0, sizeof(foreground_load_stats_data));
     ui_cell_stats_reset(&foreground_cell);
     spike_audio_read_reset();
+    foreground_cycle_reset();
+    foreground_openlast_reset();
 }
 
 /**
@@ -304,6 +312,16 @@ bool foreground_load_begin(ForegroundLoadKindTypeDef kind, char *detail, size_t 
             foreground_cell_active = true;
             return true;
 
+        case FOREGROUND_LOAD_FLASH_CYCLE_1M:
+            return foreground_cycle_begin(FOREGROUND_CYCLE_1M_BYTES, 0U, detail, detail_size);
+
+        case FOREGROUND_LOAD_FLASH_CYCLE_16M:
+            return foreground_cycle_begin(FOREGROUND_CYCLE_16M_BYTES, FOREGROUND_CYCLE_16M_WRITE_CAP_MS, detail,
+                                          detail_size);
+
+        case FOREGROUND_LOAD_SD_OPEN_LAST:
+            return foreground_openlast_begin(detail, detail_size);
+
         default:
             return true;
     }
@@ -336,6 +354,15 @@ void foreground_load_end(ForegroundLoadKindTypeDef kind)
 
         case FOREGROUND_LOAD_CELL:
             foreground_cell_active = false;
+            break;
+
+        case FOREGROUND_LOAD_FLASH_CYCLE_1M:
+        case FOREGROUND_LOAD_FLASH_CYCLE_16M:
+            foreground_cycle_end();
+            break;
+
+        case FOREGROUND_LOAD_SD_OPEN_LAST:
+            foreground_openlast_end();
             break;
 
         default:
@@ -630,18 +657,30 @@ void foreground_load_refresh(ForegroundLoadKindTypeDef kind)
     {
         foreground_load_stats_data.FlashBlocksNow = blocks;
     }
+    if ((kind == FOREGROUND_LOAD_FLASH_CYCLE_1M) || (kind == FOREGROUND_LOAD_FLASH_CYCLE_16M))
+    {
+        foreground_cycle_refresh();
+    }
 }
 
 /**
  * @brief 一个阶段的负载是否已经达到目标，可以提前结束。
  * @param[in] kind 当前阶段的负载种类。
- * @return 恒为 false。第二遍板测发现：擦够次数就退出时 P3 只跑了 9 s，音频读取样本为 0、手动切歌也赶不上，
- *         所以 P3 改为固定时长跑满，真擦除次数只统计。
+ * @return P3 恒为 false。第二遍板测发现：擦够次数就退出时 P3 只跑了 9 s，音频读取样本为 0、手动切歌也赶不上，
+ *         所以 P3 改为固定时长跑满，真擦除次数只统计。#199 的 16 MiB 循环删除完成、按路径打开重复够次数时为 true，
+ *         1 MiB 循环按阶段时限结束。
  */
 bool foreground_load_finished(ForegroundLoadKindTypeDef kind)
 {
-    (void)kind;
-    return false;
+    switch (kind)
+    {
+        case FOREGROUND_LOAD_FLASH_CYCLE_16M:
+            return foreground_cycle_finished();
+        case FOREGROUND_LOAD_SD_OPEN_LAST:
+            return foreground_openlast_finished();
+        default:
+            return false;
+    }
 }
 
 /**
@@ -706,6 +745,13 @@ void foreground_load_step(ForegroundLoadKindTypeDef kind)
             break;
         case FOREGROUND_LOAD_CELL:
             foreground_cell_step();
+            break;
+        case FOREGROUND_LOAD_FLASH_CYCLE_1M:
+        case FOREGROUND_LOAD_FLASH_CYCLE_16M:
+            foreground_cycle_step();
+            break;
+        case FOREGROUND_LOAD_SD_OPEN_LAST:
+            foreground_openlast_step();
             break;
         default:
             vTaskDelay(pdMS_TO_TICKS(50U));

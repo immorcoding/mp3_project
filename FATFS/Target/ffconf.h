@@ -232,7 +232,7 @@
 /  _NORTC_MDAY and _NORTC_YEAR have no effect.
 /  These options have no effect at read-only configuration (_FS_READONLY = 1). */
 
-#define _FS_LOCK    4     /* 0:Disable or >=1:Enable；spike/app-tasks 从 2 调到 4：音频流、大 TXT、读标签同开 3 个（#191）。 */
+#define _FS_LOCK    9     /* 0:Disable or >=1:Enable；spike/app-tasks 从 2 调到 4（#191），再调到 9（#199）：不小于 Service 的槽总数（4 个文件槽 + 4 个目录槽 = 8），锁表不会满。 */
 /* The option _FS_LOCK switches file lock function to control duplicated file open
 /  and illegal operation to open objects. This option must be 0 when _FS_READONLY
 /  is 1.

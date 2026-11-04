@@ -339,9 +339,9 @@ Service_StatusTypeDef Service_Filesystem_CloseDirectory(
         return status;
     }
 
-    filesystem_lock_table_acquire("CloseDirectory");
+    filesystem_lock_table_wide_acquire("CloseDirectory");
     result = f_closedir(object);
-    filesystem_lock_table_release();
+    filesystem_lock_table_wide_release();
     status = filesystem_make_service_status(result);
     if (status == SERVICE_OK)
     {
@@ -420,9 +420,9 @@ Service_StatusTypeDef Service_Filesystem_RemoveDirectory(Service_Filesystem_Volu
         }
         else
         {
-            filesystem_lock_table_acquire("RemoveDirectory");
+            filesystem_lock_table_wide_acquire("RemoveDirectory");
             result = f_unlink(native_path);
-            filesystem_lock_table_release();
+            filesystem_lock_table_wide_release();
             status = (result == FR_DENIED) ? SERVICE_BUSY : filesystem_make_service_status(result);
         }
     }

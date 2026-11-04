@@ -83,6 +83,68 @@ cmake --build build/firmware-debug-pervol
 
 拔卡后 Queue 清空的延迟、连滑和连按切歌的显示延迟**没有测**，票上记“未测”，转 0.10.0 板级验收。
 
+## #199：表锁的最坏延迟（宽表锁与窄表锁）
+
+[#199](https://github.com/immorcoding/mp3_project/issues/199) 在同一分支上补测：每卷一把锁时，Flash 上的操作最多让 SD 打开文件多等多久。固件从 **P6** 开始，P0 至 P5（#191）不再自动跑，代码还在。
+
+**这次改了什么**
+
+- `SPIKE_TABLE_LOCK_NARROW`（要和 `SPIKE_LOCK_PER_VOLUME=ON` 一起）切换打开表锁的范围：**宽**（默认）是 `f_open`、`f_opendir`、`f_close`、`f_closedir`、`f_unlink`、`f_rename`、`f_mount` 和按定位符打开；**窄**只有会走到 FatFs `inc_lock` 的 `f_open`、`f_opendir` 和按定位符打开。窄表锁的依据是读 `ff.c`，没有做并发实测。
+- Service 的文件槽、目录槽表换成单独一把**槽表锁**（日志里叫 `SLOT`，最内层，持有期间只读写内存），不再和打开表锁共用，所以 `TABLE` 的数字里不再混入 `SlotVolume` 等操作。
+- `_FS_LOCK` 从 4 调到 9（不小于槽总数 8，锁表不会满）。
+- 每把锁按操作分开记最长持有，阶段结束时输出 `LOCKOP` 行。
+
+**三个新阶段**（阶段表见 `foreground_task.c`）
+
+| 阶段 | 时长 | 前台任务做什么 |
+|---|---|---|
+| P6 `sd_path_open_last` | 扫目录加 5 次打开，约 10 s | 只在**大目录卡**上跑：扫 `Music/`，条目不足 5000 就打 `UNTESTED` 跳过（普通卡）。找到后按路径重复打开、关闭最后一个文件 5 次，记墙钟耗时和 SD 卷锁持有。这一遍后面的 P7、P8 跳过 |
+| P7 `flash_cycle_1m` | 固定 120 s | Flash 卷反复循环：新建（CREATE_NEW）→ 写 1 MiB（64 KiB 一块）→ 同步 → 关闭 → 改名 → 删除。每一步记墙钟耗时，删除另记卷锁持有 |
+| P8 `flash_cycle_16m` | 删完就结束，上限 20 min | 同上，只做一轮，目标 16 MiB。写入时限 10 min，到了按已写的字节数收尾（`partial`），日志里的 `last_bytes` 是实际删除的大小 |
+
+**构建三个固件**（各用独立构建目录）
+
+```powershell
+# 宽表锁：build/firmware-debug-pervol/mp3_project.hex
+cmake -S . -B build/firmware-debug-pervol -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=cmake/gcc-arm-none-eabi.cmake -DSPIKE_LOCK_PER_VOLUME=ON
+cmake --build build/firmware-debug-pervol
+
+# 窄表锁：build/firmware-debug-pervol-narrow/mp3_project.hex
+cmake -S . -B build/firmware-debug-pervol-narrow -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=cmake/gcc-arm-none-eabi.cmake -DSPIKE_LOCK_PER_VOLUME=ON -DSPIKE_TABLE_LOCK_NARROW=ON
+cmake --build build/firmware-debug-pervol-narrow
+```
+
+启动后的 `SPIKE INIT lock=PER_VOLUME table=WIDE|NARROW fs_lock=9 lfn=2` 写明当前是哪一个。
+
+**日志行**（标签 `SPIKE`，`<阶段>` 是 P6/P7/P8）
+
+| 票上的数字 | 日志行 | 怎么读 |
+|---|---|---|
+| 表锁最长持有，按操作分开 | `SPIKE LOCKOP TABLE ph OpenFile=<us>us/n<次数> RemoveFile=… ` | 阶段结束输出一次，一行放不下就换行；`TABLE all` 是自启动。窄表锁里只会有 `OpenFile`、`OpenDirectory`、`OpenByLocator`，宽表锁多出 `CloseFile`、`RemoveFile`、`RenameFile` 等。`SD`、`FLASH`、`SLOT` 也各有 `ph` 行 |
+| 等表锁最长是多少、被谁挡 | `SPIKE LOCK TABLE ph … wait=<us>us@<任务>/<操作>` 与 `LOCKBLK TABLE ph longest_wait_blocked_by=…` | `Storage_Task/OpenFile` 被 `Foreground_Task/RemoveFile` 挡住就是要找的情形 |
+| 删除 1 MiB、16 MiB 的总耗时 | `SPIKE CYCLE <阶段> delete_wall n=… min=… avg=… max=…us` 与 `delete_hold`（Flash 卷锁持有） | 墙钟含等锁；`target=` 和 `last_bytes=` 说明文件有多大，`partial` 不为 0 时不是满 16 MiB |
+| 循环的其他步骤 | `CYCLE <阶段> create|write64K|write_total|sync|close|rename …` | 都是墙钟；`write_total` 是一个文件从第一块写到最后一块 |
+| Flash 块计数 | `CYCLE <阶段> blocks free=<开始>><现在> stale=… low=… erases=…` 与 `PHASE start` 行里的 `free= stale= low=` | 开始前先确认 `free` 接近或低于 `low`（回收水位）；这个消耗在重启后保留，上轮已耗到 `free` 只剩 2 |
+| 切歌到出声（Flash 负载下） | `PLAYBACK` 的 `Switch idx=… lat=<us>` | 用户在 P7 里按下一首 |
+| 欠载次数 | `SPIKE UNDER P7|P8 total=… win=…` | 同 #191 |
+| 大目录卡按路径打开最后一首 | `SPIKE OPENLAST P6 entries=… scan=…us …`，`open_wall`、`open_sd_hold`、`close` | `open_sd_hold` 是 SD 卷锁持有，`open_wall` 含等锁；同阶段 `LOCKOP TABLE ph OpenFile=…` 是同一次打开占表锁的时间 |
+
+**上板步骤（秒表时间点，P7 一开始就计时）**
+
+1. 烧录宽表锁固件（DFU），插**普通卡**（`Music/` 能连续播放 10 分钟以上；循环播放也可以），开串口日志（`capture-shared.ps1`，别在抓取时 `tail` 它）。确认 `SPIKE INIT … table=WIDE`。
+2. 按播放，同时开秒表。`PHASE skip P6 … UNTESTED` 是正常的，随后出现 `PHASE start P7`，看一眼该行的 `free=` 是否接近 `low=`。
+3. 秒表 **0:20、0:30、0:40、0:50、1:00、1:10、1:20** 各按一次下一首（共 7 次，间隔 10 s）；其余时间不用动。
+4. 2:00 前后 P7 结束，自动进入 P8（16 MiB，无需操作）。要等到出现 `PHASE end P8`，**最长约 10 分钟写入加删除时间**；期间音乐要一直播（放完了会 `PHASE pause`，重新按播放即可）。
+5. 换窄表锁固件，重复步骤 1 至 4。
+6. 大目录卡：换**大目录卡**（`make_card.py --set bigdir` 生成，12000 首同在 `Music/`），任意一个固件（建议窄表锁）烧好后按播放，P6 约 10 s 出结果，后面的 P7、P8 自动跳过，不用等。
+
+**读数时注意**
+
+- P7 一轮 1 MiB 在空闲块接近耗尽时约需 30 s（每 64 KiB 平均 1.8 至 2.3 s，#191 实测），120 s 内大概 3 至 4 轮，所以手动切歌撞上删除的概率不高；表锁的最坏等待以 `LOCKOP`、`delete_hold` 为准（等锁不会超过持有太多）。
+- 16 MiB 若超过卷剩余空间，`write64K` 会在 `NO_SPACE` 处收尾，`partial=1`，此时 `last_bytes` 才是实际大小。
+- DTCM 已用 93%（122072 / 131072 B），再加静态数据可能链接失败。
+- 窄表锁依据 `ff.c` 读码，并发正确性只能靠板测里不出现 `FR_INT_ERR`、`CYCLE error`、锁表满（`TOO_MANY_OPEN_FILES`）、文件损坏这些现象来旁证，不是证明。
+
 ## Flash 回收怎么触发（读代码所得，`Components/flash_ftl/flash_ftl.c`，未对照手册，除注明板测外未实测）
 
 - **写路径里没有擦除**：写一个逻辑组（7 个 512 B 扇区，3584 B）= 取下一个空闲块（循环游标），编程头页和最多 14 个数据页（全 0xFF 的页跳过），每页编程后读回 256 B 校验，再编程提交页并读回校验，最后切换 RAM 映射、把旧版本所在块标成失效（不是空闲）。整组以下的写还要先读旧块 4 KiB。**只有空闲块数不高于 2（`FLASH_FTL_MIN_FREE_BLOCKS`）时，写入自己才会先做一次前台回收（擦一块）**。所以第一轮板测里 `write64K` 的 0.33 至 0.74 s（板测，平均约 0.63 s）是约 19 至 21 次组提交（64 KiB 除以 3584 B 约 18.3，再加 FAT 与目录扇区所在的组）的页编程加读回校验，每组约 17 至 36 ms，不含擦除。P3 的 `erases ... other=` 是验证：写入路径里的擦除应为 0。
@@ -108,5 +170,5 @@ cmake --build build/firmware-debug-pervol
 - 卸载 SD 要先拿 SD 锁，拔卡时若前台任务有读取在途，卸载会等到那次读取返回（DMA 超时最多约 500 ms），期间音频流已关闭但卷还没卸。
 - 前台任务和 GUI 同优先级，P2 的连续读取在全局锁下可能让 Storage 的音频读取等一个 32 KiB 读的时间；优先级继承会把前台任务临时抬到 2。
 - 迟到的 SD DMA 完成事件问题（#188 第 7 条）没有解决：现在任何任务都可能在等，迟到事件可能被当成下一次传输的完成。
-- `_FS_LOCK` 为 4，而文件槽也是 4：音频流、标签读取、前台的 TXT 或 Flash 文件同时打开时第五个对象打开会得到 `SERVICE_ERROR` 或 `SERVICE_BUSY`。
+- `_FS_LOCK` 在 #191 时为 4（与 4 个文件槽相同，第五个对象打开会得到 `SERVICE_ERROR` 或 `SERVICE_BUSY`），#199 起为 9（不小于文件槽加目录槽共 8 个）。
 - 主机测试是单线程的，通过不等于并发没问题；两个固件都没有上板运行过。

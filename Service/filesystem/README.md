@@ -52,6 +52,12 @@ FatFs 按路径打开每次从文件夹第 0 个目录项起逐项比较长文�
 - **全局一把（默认）**：32 个公开函数中除 `GbkToUnicode` 外，入口拿同一把互斥锁、返回前放。它覆盖两个卷、文件/目录槽表、FatFs 的 `Files[]`、两个传输执行器和全部静态可写状态。
 - **每卷一把**：SD、Flash 各一把卷锁，外加一把短的“打开表锁”，包住会碰 FatFs `Files[]` 的调用（`f_open`、`f_open_dirent`、`f_close`、`f_opendir`、`f_closedir`、`f_unlink`、`f_rename`、`f_mount`）和 Service 的文件槽/目录槽表。锁顺序固定为卷锁 → 表锁。写打开的文件在 `CloseFile` 里先在表锁外 `f_sync`，不让 Flash 写盘持有表锁。按 Token 操作的函数先读出 Token 所属的卷，拿到卷锁后重新校验 Token。
 
+**#199 的变化**（[表锁的最坏延迟](https://github.com/immorcoding/mp3_project/issues/199)，仍是可丢弃分支）：
+
+- Service 的文件槽、目录槽表换成单独一把**槽表锁**（锁名 `SLOT`，最内层，持有期间只读写内存、不调用任何别的锁），不再和打开表锁共用。每卷一把时共 4 把锁：SD、Flash、打开表锁、槽表锁。
+- 打开表锁的范围由 `SPIKE_TABLE_LOCK_NARROW` 决定：**宽**（默认）如上；**窄**只包 `f_open`、`f_opendir` 和 `f_open_dirent`，也就是会走到 FatFs `inc_lock` 的调用。依据是读 `ff.c`：`inc_lock` 里“找空位并占用”是跨卷会冲突的唯一一步；`dec_lock`、`clear_lock` 只写本卷的条目，`chk_lock`、`enq_lock` 只读，其他卷的条目 `fs` 不同，比较到第一个字段就跳过；前提是 `_FS_LOCK`（现为 9）不小于槽总数 8，表不会满。没有做并发实测。窄表锁下 `f_close`、`f_closedir`、`f_unlink`、`f_rename`、`f_mount` 不再进表锁，`f_stat`、`f_mkdir` 重挂时碰 `Files[]` 的未决项也随之消失（它们只会走到 `clear_lock`）。
+- 每把锁按操作分开记最长持有（`Service_Filesystem_SpikeGetOpStats()`），只有卷锁记“最近一次公开调用的持锁时长”。
+
 约束：`configUSE_RECURSIVE_MUTEXES` 为 0，公开函数之间互相调用时走不加锁的 `_locked` 内部版本（`FormatAndMountFlash`、`RecoverAndMountFlash` 里的卸载与挂载，`MountSD`、`UnmountSD` 里的就绪检查）；同一任务重复拿同一把锁用 `configASSERT` 挡住。`GbkToUnicode` 只读 CP936 表，不拿锁。`f_stat`、`f_mkdir` 经 `find_volume` 可能在重新挂载时调用 `clear_lock`，它只写本卷的条目，没有包进表锁（推断不影响另一卷，未验证）。
 
 热插拔刷新和 Flash 块计数不是文件接口，但和文件接口共用同一个设备，所以也走卷锁：`Service_Filesystem_SpikeHotplugProcess()`（操作名 `HotplugRefresh`，等价于 `Platform_SD_Process()`，无卡时 DeInit 端口、插卡时 Init，不能和别的任务的 DMA 传输并发）、`Service_Filesystem_SpikeFlashBlocks()`（`FlashBlocks`）、`Service_Filesystem_SpikeReclaimFlashMeasured()`（`ReclaimFlash`，同一次持锁内读回收前后的块计数与擦除计数）。它们在只编进固件的 `filesystem_spike_platform.c`，主机测试不编译。

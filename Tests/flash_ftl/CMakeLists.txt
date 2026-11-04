@@ -126,3 +126,14 @@ target_include_directories(filesystem_lock_per_volume_tests BEFORE PRIVATE stubs
 target_compile_definitions(filesystem_lock_per_volume_tests PRIVATE SPIKE_LOCK_PER_VOLUME=1)
 target_compile_options(filesystem_lock_per_volume_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 add_test(NAME filesystem_lock_per_volume COMMAND filesystem_lock_per_volume_tests)
+
+# #199：窄表锁（只包 f_open、f_opendir 和按定位符打开）。
+add_executable(filesystem_lock_per_volume_narrow_tests
+    test_filesystem_lock.c
+    ../../Service/filesystem/filesystem_lock.c
+    stubs/filesystem_lock_host.c)
+target_include_directories(filesystem_lock_per_volume_narrow_tests BEFORE PRIVATE stubs ../..)
+target_compile_definitions(filesystem_lock_per_volume_narrow_tests PRIVATE
+    SPIKE_LOCK_PER_VOLUME=1 SPIKE_TABLE_LOCK_NARROW=1)
+target_compile_options(filesystem_lock_per_volume_narrow_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+add_test(NAME filesystem_lock_per_volume_narrow COMMAND filesystem_lock_per_volume_narrow_tests)

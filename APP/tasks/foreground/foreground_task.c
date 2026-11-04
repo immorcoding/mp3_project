@@ -49,8 +49,18 @@ static const ForegroundPhaseTypeDef foreground_phases[] = {
     {"P3", "flash_write_reclaim", 60000U, true, FOREGROUND_LOAD_FLASH, false},
     {"P4", "ui_cell_synthetic", 30000U, true, FOREGROUND_LOAD_CELL, false},
     {"P5", "manual_unplug_switch_page", 0U, true, FOREGROUND_LOAD_TXT, true},
+    /* #199：表锁最坏延迟。P6 只在大目录卡上跑（扫描 Music/ 的条目够多才算），那一遍的 P7、P8 跳过；
+     * 普通卡上 P6 跳过，P7 在 120 s 内反复建、写 1 MiB、同步、关、改名、删（用户每 10 s 切一次歌），
+     * P8 建、写 16 MiB、同步、关、改名、删一轮（写入时限 10 min，到了按已写的字节数收尾），删完就结束。 */
+    {"P6", "sd_path_open_last", 60000U, true, FOREGROUND_LOAD_SD_OPEN_LAST, false},
+    {"P7", "flash_cycle_1m", 120000U, true, FOREGROUND_LOAD_FLASH_CYCLE_1M, false},
+    {"P8", "flash_cycle_16m", 1200000U, true, FOREGROUND_LOAD_FLASH_CYCLE_16M, false},
 };
 #define FOREGROUND_PHASE_COUNT ((uint32_t)(sizeof(foreground_phases) / sizeof(foreground_phases[0])))
+/** @brief 第一个要跑的阶段序号：#191 的 P0 至 P5 已有结果，#199 的固件从 P6 开始。 */
+#define FOREGROUND_FIRST_PHASE 6U
+_Static_assert(FOREGROUND_FIRST_PHASE < (sizeof(foreground_phases) / sizeof(foreground_phases[0])),
+               "FOREGROUND_FIRST_PHASE 超出阶段表");
 
 /**
  * @brief 开始一个阶段：判断负载能否开始，能则清统计、设 GUI 睡眠开关并输出开始行。
@@ -101,7 +111,7 @@ static void foreground_task_end_phase(uint32_t index, uint32_t active_ms, bool g
  */
 void foreground_task(void *handle)
 {
-    uint32_t phase_index = 0U;
+    uint32_t phase_index = FOREGROUND_FIRST_PHASE;
     uint32_t active_ms = 0U;
     uint32_t window_start_ms = 0U;
     bool phase_running = false;
@@ -112,9 +122,12 @@ void foreground_task(void *handle)
     (void)handle;
 
     foreground_load_init();
-    foreground_logf("INIT lock=%s fs_lock=%d lfn=%d gui_sleep_default=on fg_stack_words=%u",
-                    Service_Filesystem_SpikePerVolume() ? "PER_VOLUME" : "GLOBAL", (int)_FS_LOCK, (int)_USE_LFN,
-                    (unsigned)APP_FOREGROUND_TASK_STACK_WORDS);
+    foreground_logf("INIT lock=%s table=%s fs_lock=%d lfn=%d gui_sleep_default=on fg_stack_words=%u",
+                    Service_Filesystem_SpikePerVolume() ? "PER_VOLUME" : "GLOBAL",
+                    !Service_Filesystem_SpikePerVolume() ? "none"
+                    : Service_Filesystem_SpikeTableNarrow() ? "NARROW"
+                                                            : "WIDE",
+                    (int)_FS_LOCK, (int)_USE_LFN, (unsigned)APP_FOREGROUND_TASK_STACK_WORDS);
     last_tick = xTaskGetTickCount();
 
     for (;;)

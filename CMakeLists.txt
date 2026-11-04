@@ -45,6 +45,20 @@ else()
     message(STATUS "spike #191: Filesystem 全局一把锁（_USE_LFN 1）")
 endif()
 
+# spike/app-tasks（#199，不合入）：每卷一把锁时打开表锁的范围。默认宽表锁（f_open、f_opendir、f_close、f_closedir、
+# f_unlink、f_rename、f_mount 和按定位符打开都在表锁内）；打开后改为窄表锁，只有会走到 FatFs inc_lock 的
+# f_open、f_opendir 和按定位符打开在表锁内。只在 SPIKE_LOCK_PER_VOLUME=ON 时有意义，且 _FS_LOCK 调到 9。
+option(SPIKE_TABLE_LOCK_NARROW "spike #199: 窄表锁（默认关，宽表锁；只在 SPIKE_LOCK_PER_VOLUME=ON 时有效）" OFF)
+if(SPIKE_TABLE_LOCK_NARROW)
+    if(NOT SPIKE_LOCK_PER_VOLUME)
+        message(FATAL_ERROR "SPIKE_TABLE_LOCK_NARROW 需要 SPIKE_LOCK_PER_VOLUME=ON")
+    endif()
+    add_compile_definitions(SPIKE_TABLE_LOCK_NARROW=1)
+    message(STATUS "spike #199: 窄表锁（只包 f_open、f_opendir 和按定位符打开）")
+elseif(SPIKE_LOCK_PER_VOLUME)
+    message(STATUS "spike #199: 宽表锁")
+endif()
+
 # 加入 STM32CubeMX 生成代码、FreeRTOS 内核和第三方图形库子目录（界面由 Service/gui/view 手写）
 add_subdirectory(cmake/stm32cubemx)
 add_subdirectory(Middlewares/Third_Party/FreeRTOS)

@@ -146,9 +146,9 @@ Service_StatusTypeDef Service_Filesystem_MountSD(void)
     else
     {
         filesystem_handle_set_mounted(SERVICE_FILESYSTEM_VOLUME_SD, false);
-        filesystem_lock_table_acquire("MountSD");
+        filesystem_lock_table_wide_acquire("MountSD");
         result = f_mount(&SDFatFS, sd_drive_path, 1U);
-        filesystem_lock_table_release();
+        filesystem_lock_table_wide_release();
         filesystem_handle_set_mounted(SERVICE_FILESYSTEM_VOLUME_SD, result == FR_OK);
         status = filesystem_make_service_status(result);
     }
@@ -184,9 +184,9 @@ Service_StatusTypeDef Service_Filesystem_UnmountSD(void)
     }
     else
     {
-        filesystem_lock_table_acquire("UnmountSD");
+        filesystem_lock_table_wide_acquire("UnmountSD");
         result = f_mount(NULL, sd_drive_path, 0U);
-        filesystem_lock_table_release();
+        filesystem_lock_table_wide_release();
         filesystem_handle_set_mounted(SERVICE_FILESYSTEM_VOLUME_SD, false);
         status = filesystem_make_service_status(result);
     }
@@ -240,9 +240,9 @@ static Service_StatusTypeDef filesystem_flash_mount_locked(void)
     }
 
     filesystem_handle_set_mounted(SERVICE_FILESYSTEM_VOLUME_FLASH, false);
-    filesystem_lock_table_acquire("MountFlash");
+    filesystem_lock_table_wide_acquire("MountFlash");
     result = f_mount(&USERFatFS, drive_path, 1U);
-    filesystem_lock_table_release();
+    filesystem_lock_table_wide_release();
     filesystem_handle_set_mounted(SERVICE_FILESYSTEM_VOLUME_FLASH, result == FR_OK);
     return filesystem_make_service_status(result);
 }
@@ -284,9 +284,9 @@ static Service_StatusTypeDef filesystem_flash_unmount_locked(void)
         return SERVICE_INVALID_PARAM;
     }
 
-    filesystem_lock_table_acquire("UnmountFlash");
+    filesystem_lock_table_wide_acquire("UnmountFlash");
     result = f_mount(NULL, drive_path, 0U);
-    filesystem_lock_table_release();
+    filesystem_lock_table_wide_release();
     filesystem_handle_set_mounted(SERVICE_FILESYSTEM_VOLUME_FLASH, false);
     return filesystem_make_service_status(result);
 }
