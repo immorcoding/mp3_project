@@ -10,3 +10,17 @@
 | `capture-shared.ps1` | 抓串口的脚本：与 `Tools/board_test_card/capture-serial.ps1` 相同，但日志文件允许边写边读 |
 | `extract.py`、`extract2.py` | 按阶段提取终值的脚本（路径是当时的临时目录） |
 | `comment-191-round1.md` | 第一遍发现的票评论原文 |
+
+# #199 板测原始日志
+
+[上板验证：表锁的最坏延迟](https://github.com/immorcoding/mp3_project/issues/199) 的证据，固件提交 `74f5045`。时间戳是本机时间，括号里是板上启动后的毫秒数；一个文件里有三次开机，用 `SPIKE: INIT` 行区分。
+
+| 行范围 | 开机 | 固件 | 卡 | 内容 |
+|---|---|---|---|---|
+| 19 至 4907 | 04:27:31 | 宽表锁（`table=WIDE`） | 普通卡（`Music/` 12 首） | P6 跳过，P7 1 MiB 循环加 7 次切歌，P8 约 15.4 MiB 一轮 |
+| 4908 至 9077 | 04:54:21 | 窄表锁（`table=NARROW`） | 普通卡 | 同上 |
+| 9078 起 | 05:13:48 | 窄表锁 | 大目录卡（`Music/` 12000 首，`Music.bigdir-0.9.0` 改名而来） | P6 按路径打开最后一首 5 次，P7、P8 跳过 |
+
+| 文件 | 内容 |
+|---|---|
+| `board-199.log` | 三次开机的串口日志，由 `capture-shared.ps1` 抓取 |
