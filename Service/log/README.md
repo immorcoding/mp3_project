@@ -30,6 +30,15 @@ Service_Log 将多个普通任务的短日志文本汇集到静态消息块池�
 - `Service_Log_Init()` 必须早于所有可能投递日志的任务。
 - **消息池深度与节拍（DIAG-3、#204）**：池深 `LOG_SERVICE_QUEUE_LENGTH` 为 30 块，每块正文 128 B。Log task 每 5 ms 一轮，每轮至多把一个 ready 消息转交日志核心（核心队列深度 5，满时暂不取），所以稳态排空速度至多约 200 行/s（USB 主机在读时）。一次突发的行数 B 约在 B × 5 ms 内排空；突发加上同一时刻其他任务的投递要少于 30 才不丢。当前最大的周期突发是 Monitor 每 5 s 的 12 行（约 60 ms 排空），核算见 [Monitor](../../APP/tasks/monitor/README.md)。Debug 构建另有 Filesystem 的持锁统计（标签 `FSLOCK`，见 [Filesystem](../filesystem/README.md)“持锁统计”）：每 10 s 在某次文件接口调用放锁后投一批 3 行，每行不超过约 80 个字符；与 Monitor 的 12 行恰好同时到，一批 15 行，仍少于 30，留给其他任务 15 块（约 75 ms 排空）。Release 不投。USB 主机不读时，核心队列 5 条加池内 30 块之后继续投递就会被丢弃并计入 `ServiceDropped`。池深不变，新增汇总类日志须注明节拍并核算。
 
+## 开机早期的丢行（每次开机 `Health` 的 `log_core=5(+5)`）
+
+调度器启动前，`main()` 里的 `LOG_Printf` 直接写日志核心队列（Log Task 还不存在，没人取），队列深度 `LOG_QUEUE_DEPTH` 是 5，满了丢最旧的并计入 `DroppedCount`。这一段启动序列共写 10 条 INFO：`LOG: Initialization successful.`、`PLATFORM: Initialization successful.`、`RESOURCE: RPKC1 …`、`RESOURCE: Loaded id=1` 至 `id=5`、`RESOURCE: Initialization time=…`、`RESOURCE: Initialization successful.`。留下最新 5 条，丢掉前 5 条：LOG、PLATFORM 两行，RPKC1 一行，`Loaded id=1`、`id=2`。所以每次开机的串口日志都从 `RESOURCE: Loaded id=3` 开始，Monitor 的第一批 `Health` 是 `log_core=5(+5)`，之后是 `(+0)`。
+
+- **`BOOT: FW` 没丢**：它是调度器启动之后由 Create Task 经 `Service_Log_Post()` 投的，走 30 块的 Service 消息池，不经过核心队列在 Log Task 起来之前的堆积。`HOOK:` 行同理（在 Storage Task 里投）。
+- **不是 #207–#209 引入的**：LOG/PLATFORM 两行自 2026-07-29、`RPKC1` 与 `Loaded` 行自 2026-09-01、队列深度 5 自 2026-08-30 就是这样；`APP/app.c`、`Components/log`、`Service/resource`、`Platform/log` 自 0.10.0 的 spec 提交起未改。
+- **判读 R1.3**：开机批次的 `log_core=5(+5)` 是基线，不算日志丢失；之后任何 `(+n)` 才算。
+- 依据是读代码加日志首行（保留的 5 条正好从 `Loaded id=3` 起），没有加打点实测。要让这 5 行也出得来，要么调大 `LOG_QUEUE_DEPTH`（占 RAM），要么把启动序列的汇总行压少，另开票。
+
 ## 命名
 
 公开 Interface 使用 `Service_Log_*`；私有类型、静态对象和局部变量使用 `snake_case`。

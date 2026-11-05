@@ -158,10 +158,10 @@ SD 的 DMA 分块等完成信号量超过预算（500 ms）时，`filesystem_sd_
 **日志**（每次超时一行 WARN，持 SD 卷锁时投递：`Service_Log_Post` 不阻塞，可以调用）：
 
 ```
-FSABORT stopped us=1523 R blk=123456 n=64
+W (9850) FSABORT: stopped us=43 R blk=0 n=64
 ```
 
-标签 `FSABORT`，字段依次是结果（`stopped`、`no_media`、`stuck`、`rejected`）、`us=` 中止调用本身的耗时（周期计数器，微秒；计数器没启动时按 tick，毫秒精度）、`R`/`W` 方向、`blk=` 这一分块的起始块、`n=` 块数；最长约 50 个字符，放得进 Service Log 的 127 字符。一张卡持续超时时每次调用最多一行，两次之间至少隔一次完整的 500 ms 等待，不会刷屏。
+（上面是第 2 次上板钩子构建的真实一行。串口里每行的前缀是 `<时间> <I|W|E> (<tick>) <标签>: `，**标签后面有冒号**；本文下面写 `FSABORT stopped …`、`HOOK late_dma ON …` 都是省略前缀的简写，在日志里搜要带冒号：`FSABORT: stopped`、`HOOK: late_dma ON`、`SDHOOK: late_dma`。）标签 `FSABORT`，字段依次是结果（`stopped`、`no_media`、`stuck`、`rejected`）、`us=` 中止调用本身的耗时（周期计数器，微秒；计数器没启动时按 tick，毫秒精度）、`R`/`W` 方向、`blk=` 这一分块的起始块、`n=` 块数；最长约 50 个字符，放得进 Service Log 的 127 字符。一张卡持续超时时每次调用最多一行，两次之间至少隔一次完整的 500 ms 等待，不会刷屏。
 
 **持锁上界。** 中止发生在持 SD 卷锁时，全程有界：等待 500 ms + 中止预算 100 ms（`SDCARD_ABORT_TIMEOUT_MS`，覆盖 CMD12、DPSM 静止、卡回到 TRANSFER 全部等待，每一步都带同一个截止点）+ 没停住时一次 `HAL_SD_DeInit()`。它进上面的“故障路径”行，与 R2.1 的关系：R2.1 的 20 ms 是**正常读**的上界，中止只在故障路径出现，不进 R2.1；500 ms 的等待加 100 ms 的中止预算仍小于播放侧的数据超时 T_data（现在 2 s）。**写方向**的预算偏紧（SDHC 写忙最长 250 ms，SDXC 500 ms）：产品路径不写 SD，写超时极少；万一卡在编程忙里超过 100 ms 没回到 TRANSFER，会走 `STUCK`，代价是重新插卡，不是数据损坏。
 
@@ -169,9 +169,9 @@ FSABORT stopped us=1523 R blk=123456 n=64
 
 `FILESYSTEM_HOOK_SD_LATE_DMA`（`filesystem_config.h`，默认 `0U`）是编译开关，代码写成 `if (FILESYSTEM_HOOK_SD_LATE_DMA != 0U)`，默认构建也编译，发布构建不开（CMake 在 Debug 以外的构建类型——Release、RelWithDebInfo、MinSizeRel——打开会直接报错）。打开方式：configure 时 `cmake --preset firmware-debug -DMP3_HOOK_SD_LATE_DMA=1`，关掉要显式 `-DMP3_HOOK_SD_LATE_DMA=0`（缓存变量留在构建目录里）。
 
-- **启动日志**：第一次 `InitSD()` 投一行 `HOOK late_dma ON period=16 timeout=1ms`（WARN，只投一次）；没有 `HOOK` 行就是没开。其他钩子各自在所属模块首次初始化时同样投一行 `HOOK`。
+- **启动日志**：第一次 `InitSD()` 投一行（WARN，只投一次），串口里是 `W (9835) HOOK: late_dma ON period=16 timeout=1ms`；没有 `HOOK:` 行就是没开（钩子关闭的构建里一行都不多）。它出现在 Storage Task 初始化 SD 的时刻，不在 `BOOT: FW` 旁边：第 2 次上板的实测是开机后约 9.8 s，在 `FLASH: Filesystem mounted.` 之后、`SD: Card ready` 之前；它不会被日志核心丢掉（日志核心只在调度器启动前的几百毫秒里丢最旧的几行，见 [Service Log](../log/README.md) 的“开机早期的丢行”）。其他钩子各自在所属模块首次初始化时同样投一行 `HOOK`。
 - **做什么**：每 `FILESYSTEM_HOOK_SD_LATE_DMA_PERIOD`（16）次读请求探测一次，探测在调用者自己的读**之前**、复用 DMA 中转缓冲：① 读目标块（调用者这次读的起始块，至多 64 块），记 FNV-1a 校验和；② 从块 0 读 32 KiB 但只等 `FILESYSTEM_HOOK_SD_LATE_DMA_TIMEOUT_MS`（1 ms），32 KiB 平均要 3 ms 以上，必然超时并被显式中止（`FSABORT` 那一行照常出现）；③ **紧接着**再读目标块，校验和必须与 ① 一致——受害读（块 0 一带）与目标块内容不同，迟到的旧 DMA 若落进 bounce buffer、或旧的完成信号被下一笔当成完成，内容会变；目标块起始于 `FILESYSTEM_HOOK_SD_LATE_DMA_MIN_BLOCK`（64）之前（引导区一带）、以及所有写请求，都不探测。
-- **结果行**（INFO，ERROR 见下）：`SDHOOK late_dma n=<探测序号> blk=<目标块> victim=<timeout|done|none> verify=<ok|MISMATCH|read_failed|skipped>`。判定：**通过**是 `victim=timeout verify=ok`，且前一行 `FSABORT` 是 `stopped`；`verify=MISMATCH`（ERROR）是迟到 DMA 或旧信号污染了紧接着的读，不通过；`verify=read_failed`（ERROR）是中止后紧接着的读失败，通常伴随 `FSABORT stuck`，卷保持 ERROR，按“恢复”一栏拔插卡；`victim=done` 是受害读居然在 1 ms 内完成，这次没有制造出迟到的 DMA，不算失败也不算证据；`verify=skipped`（WARN）是探测里第一次读就失败了。
+- **结果行**（INFO，ERROR 见下；串口里形如 `I (9855) SDHOOK: late_dma n=1 blk=42657 victim=timeout verify=ok`）：`SDHOOK late_dma n=<探测序号> blk=<目标块> victim=<timeout|done|none> verify=<ok|MISMATCH|read_failed|skipped>`。判定：**通过**是 `victim=timeout verify=ok`，且前一行 `FSABORT` 是 `stopped`；`verify=MISMATCH`（ERROR）是迟到 DMA 或旧信号污染了紧接着的读，不通过；`verify=read_failed`（ERROR）是中止后紧接着的读失败，通常伴随 `FSABORT stuck`，卷保持 ERROR，按“恢复”一栏拔插卡；`victim=done` 是受害读居然在 1 ms 内完成，这次没有制造出迟到的 DMA，不算失败也不算证据；`verify=skipped`（WARN）是探测里第一次读就失败了。
 - **代价**：每次探测给被探测的那次读加约 10–15 ms（估计，未测）且持 SD 卷锁；钩子构建的持锁统计不能当 R2.1 的证据。
 - 主机测试 `filesystem_sd_late_dma_hook`（同一份测试和 Service 源码，另带 `-DFILESYSTEM_HOOK_SD_LATE_DMA=1` 编一份）覆盖启动行只投一次、节拍、受害读用 1 ms、紧接着的读校验、内容被改写时的 `MISMATCH`、`read_failed`、`skipped`、`victim=done`、低块号与写请求不探测；默认构建的 `filesystem_completion_wait` 断言钩子关闭时没有 `HOOK` 行。
 
