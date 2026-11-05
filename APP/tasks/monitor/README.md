@@ -35,7 +35,7 @@ Monitor task 记录各任务栈高水位线，并翻转诊断 LED。它不参与
 - **`Health` 行**：`Health underrun=<累计>(+<增量>) log_svc=<累计>(+<增量>) log_core=<累计>(+<增量>)`。`underrun` 是开机以来的播放欠载次数（播放任务状态机累加）；`log_svc` 是 `Service_Log_Post()` 因消息池满、队列转移失败或文本过长而丢弃的条数；`log_core` 是日志核心（`Components/log`）队列溢出或发送错误的丢弃数（`LOG_StatsTypeDef.DroppedCount`），由 Log Task 刷新到 Service Log 的副本里，Monitor 不碰日志核心（DIAG-1）。括号内是相对上一批的增量。R1.3 要这三项为 0。USB 主机不读日志时 `log_svc` 与 `log_core` 会涨，这是丢失的真实原因，不是 Monitor 的问题；受影响时段的其他日志行不能当作完整证据。
 - 监控频率必须受限，避免诊断日志自身成为负载来源。
 - MCU 结温用于诊断，不代表设备周围环境温度；连续采样失败只记录一次错误，成功后解除抑制。
-- `monitor_task_config.h` 保存采样基础周期、快照间隔、本地日志缓冲长度、CPU 占比行的缓冲长度与任务数上限，以及未登记任务告警记录的容量与名字长度；CPU 占比与 `Health` 行的缓冲、基准放静态区（只由本任务访问），不占 1 KiB 的任务栈；这些参数只控制本 Task 的诊断负载，不属于 FreeRTOS 或其他 Task 的 Interface。
+- `monitor_task_config.h` 保存采样基础周期、快照间隔、本地日志缓冲长度、CPU 占比行的缓冲长度与任务数上限，以及未登记任务告警记录的容量与名字长度；CPU 占比与 `Health` 行的缓冲、基准、任务样本（含名字拷贝）和 `monitor_cpu_format()` 的排序工作区都放静态区（只由本任务访问），不占 1 KiB 的任务栈；成行单独在 `monitor_log_cpu_share()` 里做，不叠在 `monitor_log_stack_snapshot()` 的栈帧里；这些参数只控制本 Task 的诊断负载，不属于 FreeRTOS 或其他 Task 的 Interface。
 
 ## 命名
 

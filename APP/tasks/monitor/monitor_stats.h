@@ -54,7 +54,8 @@ typedef struct
   * @retval 写入的字符数（不含 NUL）；缓冲放不下时末字符改为 '~'，截断可见而不静默。
   * @note   格式 `CPU win=<ms>ms <键>=<百分比>…`，百分比一位小数（向下取整）；键为任务名首词小写后
   *         的前四个字符（`IDLE` 为 `idle`，`Playback Task` 为 `play`），按键的字典序排列，使每批
-  *         列序一致。总计数没有前进时输出 `CPU unavailable`。
+  *         列序一致。总计数没有前进时输出 `CPU unavailable`。内部排序工作区是静态的（避免占 Monitor 的
+  *         1 KiB 栈），所以不可重入，只允许一个任务调用。
   */
 size_t monitor_cpu_format(char *buffer,
                           size_t size,

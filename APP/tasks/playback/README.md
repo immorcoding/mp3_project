@@ -102,12 +102,12 @@
 | `Skip bad idx=N` | 跳过坏文件（含 Start 被拒、同步预算耗尽），N 为被跳过的曲目 |
 | `Finished idx=N` / `Auto idx=M` | 播完，随后自动前进到 M |
 | `Seek idx=N tgt=T land=L off=B map=toc\|lin[ clamp] lat=U` | 跳转执行成功后：PLAYING 在输出重新起播时，PAUSED 在预填完成时（见“跳转”） |
-| `Switch idx=N lat=U` | 用户切歌（NEXT、PREV、SELECT）后输出重新起播时（DIAG-6，见下） |
+| `Switch idx=N lat=U` / `Switch idx=N lat=U auto` | 用户切歌（NEXT、PREV、SELECT）或自动前进（播完前进、跳过坏文件续上）后输出重新起播时（DIAG-6，见下） |
 | `Stop reason=NAME` | 进入停止态，NAME 为快照 `StopReason` 的枚举名（去掉 `PLAYBACK_STOP_REASON_` 前缀） |
 
 一次「播放 → 切歌 → 暂停 → 停止」因此可按日志顺序重建，停止原因与快照一致。
 
-**Switch INFO**（DIAG-6、#204，常开，每次切歌一行）：`Switch idx=N lat=U`，`N` 是换到的曲库序号，`U` 是微秒。`lat` 在固件里算好：状态机处理这条切歌命令时读一次周期计数器（`ReadCycles`），输出重新起播（`OutputStarted`）时再读，差值经 `CyclesToUs` 换算；它是“命令被播放任务处理到起播”的时延，**不含**按键到命令入队的 GUI 一段，也不含命令在 FIFO 里等待的时间。只在 PLAYING 下真正换了一首时开始计（`TrackStartCount` 加 1）；暂停中换曲不出声、不记。起播前被停止（含坏文件跳过后停止）作废，起播前又来一次切歌则以最后一次为准、从最后一条命令算起。停止态 TOGGLE 开播、跳转（有自己的 `Seek` 行）和播完自动前进不记 Switch。Ops 缺 `ReadCycles` 或 `CyclesToUs` 时 `lat=0`。R1.4 的阈值：无负载 ≤ 50 ms（spike 参考约 22–26 ms）。
+**Switch INFO**（DIAG-6、#204，常开，每次换曲一行，曲目边界）：用户切歌记 `Switch idx=N lat=U`，自动前进记 `Switch idx=N lat=U auto`；`N` 是换到的曲库序号，`U` 是微秒。`lat` 在固件里算好：状态机处理这条切歌命令（或决定自动前进）时读一次周期计数器（`ReadCycles`），输出重新起播（`OutputStarted`）时再读，差值经 `CyclesToUs` 换算；用户切歌的 `lat` 是“命令被播放任务处理到起播”，**不含**按键到命令入队的 GUI 一段，也不含命令在 FIFO 里等待的时间；自动前进的 `lat` 从状态机决定前进（流尾放完、游标前进）算到下一首起播，即曲间间隙，长跑（清单 1 C1、R7.1）靠它取边界证据。只在 PLAYING 下计：用户切歌要真正换了一首（`TrackStartCount` 加 1），自动前进包括播完前进和跳过坏文件后续上（不含 ALL_BAD 等停止）；暂停中换曲或前进不出声、不记。起播前被停止作废；起播前又来一次用户切歌则以最后一次为准、从最后一条命令算起，且不带 `auto`；自动前进或用户切歌之后遇到坏文件续上，沿用原起点与原种类，仍只记一行。停止态 TOGGLE 开播与跳转（有自己的 `Seek` 行）不记 Switch；开播后第一首就是坏文件而续上时，会记一行 `auto`（与长跑里的自动前进无法区分，R1.4 和 R4.1 只看不带 `auto` 的行）。Ops 缺 `ReadCycles` 或 `CyclesToUs` 时 `lat=0`。R1.4 的阈值：无负载 ≤ 50 ms（spike 参考约 22–26 ms）。
 
 **欠载累计**（DIAG-6）：Platform 的欠载计数每次 Start 清零，状态机把播放模块每次回报的次数累加成开机以来的总数（`playback_machine_underrun_total()`），外壳经 `playback_task_get_underrun_total()` 公开只读。写者只有播放任务，32 位对齐读取不撕裂；Monitor 每 5 s 读一次，输出在 `Health` 行（见 [Monitor](../monitor/README.md)）。
 
@@ -118,4 +118,4 @@
 
 ## 主机测试
 
-`Tests/playback_task/`：假存储窗口与假播放模块（含线性假 `MapSeek`/`ReopenStream` 与假周期计数器），覆盖跳转（`playback_task_seek`：执行与落点、三种忽略、最新者胜、带偏移重开、暂停中预填、越尾、`TrackStartCount`、作废、计时、Seek INFO）、切歌时延与欠载累计（`playback_task_switch`：Switch INFO 的格式、触发与作废）、K3 全部格子、K5 的快照字段、流身份与块交接、切歌清理顺序、暂停、EOF 与短文件、游标环形步进与代次绑定，以及 B5 坏文件有界跳过、B6 每一行停止原因、B7/B8 超时、B10 与 K3 的 AUDIO_FAULT 锁存。
+`Tests/playback_task/`：假存储窗口与假播放模块（含线性假 `MapSeek`/`ReopenStream` 与假周期计数器），覆盖跳转（`playback_task_seek`：执行与落点、三种忽略、最新者胜、带偏移重开、暂停中预填、越尾、`TrackStartCount`、作废、计时、Seek INFO）、切歌时延与欠载累计（`playback_task_switch`：Switch INFO 的格式、触发、auto 与作废）、K3 全部格子、K5 的快照字段、流身份与块交接、切歌清理顺序、暂停、EOF 与短文件、游标环形步进与代次绑定，以及 B5 坏文件有界跳过、B6 每一行停止原因、B7/B8 超时、B10 与 K3 的 AUDIO_FAULT 锁存。

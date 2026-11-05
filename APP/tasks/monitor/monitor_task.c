@@ -47,6 +47,10 @@ static monitor_warn_record_t monitor_warned_tasks;
 static monitor_cpu_baseline_t monitor_cpu_baseline;
 static monitor_cpu_sample_t monitor_cpu_samples[MONITOR_CPU_TASK_MAX];
 static monitor_health_t monitor_health_previous;
+static char monitor_cpu_names[MONITOR_CPU_TASK_MAX][MONITOR_WARNED_NAME_LENGTH];
+static uint8_t monitor_cpu_sample_count;
+static uint32_t monitor_cpu_sample_total;
+static TickType_t monitor_cpu_sample_tick;
 static TickType_t monitor_window_start_tick;
 static char monitor_line[MONITOR_LOG_LINE_LENGTH];
 
@@ -103,38 +107,54 @@ static UBaseType_t monitor_get_task_stack_words(const char *task_name)
 }
 
 /**
-  * @brief  记录 CPU 占比一行：与上一批快照的运行计数差值，单位 %，包含空闲任务（DIAG-6、R1.1）。
+  * @brief  把任务快照里的运行计数拷进静态样本区，供稍后 monitor_log_cpu_share() 使用。
   * @param[in]  task_snapshot uxTaskGetSystemState() 填充的快照。
   * @param[in]  task_count 快照里的任务数。
   * @param[in]  run_time_total 同一次调用给出的总运行计数。
-  * @note   窗口长度取两批之间的 FreeRTOS 节拍差，只用于显示；首批从启动算起。格式与键的规则见
-  *         monitor_stats.h。
+  * @note   名字拷进静态缓冲，快照释放后样本仍有效。拷贝与成行分开，使成行（含 monitor_cpu_format 的排序与
+  *         snprintf）不叠在 monitor_log_stack_snapshot 的栈帧里（Monitor 栈只有 1 KiB）。
   */
-static void monitor_log_cpu_share(const TaskStatus_t *task_snapshot,
-                                  UBaseType_t task_count,
-                                  uint32_t run_time_total)
+static void monitor_capture_cpu_samples(const TaskStatus_t *task_snapshot,
+                                        UBaseType_t task_count,
+                                        uint32_t run_time_total)
 {
-    const TickType_t now_tick = xTaskGetTickCount();
-    uint8_t sample_count = 0U;
-
-    for (UBaseType_t index = 0U; (index < task_count) && (sample_count < MONITOR_CPU_TASK_MAX); index++)
+    monitor_cpu_sample_count = 0U;
+    for (UBaseType_t index = 0U; (index < task_count) && (monitor_cpu_sample_count < MONITOR_CPU_TASK_MAX); index++)
     {
-        monitor_cpu_samples[sample_count].name = task_snapshot[index].pcTaskName;
-        monitor_cpu_samples[sample_count].run_time = task_snapshot[index].ulRunTimeCounter;
-        sample_count++;
+        char *name = monitor_cpu_names[monitor_cpu_sample_count];
+
+        (void)strncpy(name, task_snapshot[index].pcTaskName, MONITOR_WARNED_NAME_LENGTH - 1U);
+        name[MONITOR_WARNED_NAME_LENGTH - 1U] = '\0';
+        monitor_cpu_samples[monitor_cpu_sample_count].name = name;
+        monitor_cpu_samples[monitor_cpu_sample_count].run_time = task_snapshot[index].ulRunTimeCounter;
+        monitor_cpu_sample_count++;
     }
 
+    monitor_cpu_sample_total = run_time_total;
+    monitor_cpu_sample_tick = xTaskGetTickCount();
+}
+
+/**
+  * @brief  记录 CPU 占比一行：与上一批样本的运行计数差值，单位 %，包含空闲任务（DIAG-6、R1.1）。
+  * @note   用 monitor_capture_cpu_samples() 留下的静态样本；窗口长度取两批之间的 FreeRTOS 节拍差，只用于显示，
+  *         首批从启动算起。格式与键的规则见 monitor_stats.h。须在 monitor_log_stack_snapshot() 返回之后调用。
+  */
+static void monitor_log_cpu_share(void)
+{
     (void)monitor_cpu_format(monitor_line,
                              sizeof(monitor_line),
                              &monitor_cpu_baseline,
                              monitor_cpu_samples,
-                             sample_count,
-                             run_time_total,
-                             (uint32_t)((now_tick - monitor_window_start_tick) * portTICK_PERIOD_MS));
+                             monitor_cpu_sample_count,
+                             monitor_cpu_sample_total,
+                             (uint32_t)((monitor_cpu_sample_tick - monitor_window_start_tick) * portTICK_PERIOD_MS));
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "MONITOR", monitor_line);
 
-    monitor_cpu_baseline_store(&monitor_cpu_baseline, monitor_cpu_samples, sample_count, run_time_total);
-    monitor_window_start_tick = now_tick;
+    monitor_cpu_baseline_store(&monitor_cpu_baseline,
+                               monitor_cpu_samples,
+                               monitor_cpu_sample_count,
+                               monitor_cpu_sample_total);
+    monitor_window_start_tick = monitor_cpu_sample_tick;
 }
 
 /**
@@ -220,7 +240,7 @@ static void monitor_log_stack_snapshot(void)
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "MONITOR", message);
     }
 
-    monitor_log_cpu_share(task_snapshot, task_count, run_time_total);
+    monitor_capture_cpu_samples(task_snapshot, task_count, run_time_total);
 
     vPortFree(task_snapshot);
 
@@ -331,6 +351,7 @@ void monitor_task(void *handle)
             monitor_log_stack_snapshot();
             monitor_log_temperature();
             monitor_log_gui_max_frame();
+            monitor_log_cpu_share();
             monitor_log_health();
         }
 

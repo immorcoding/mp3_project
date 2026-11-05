@@ -81,6 +81,7 @@ static size_t monitor_stats_mark_truncated(char *buffer, size_t size)
   * @param[in]  count 样本个数。
   * @param[in]  total 本次快照的总计数。
   * @param[in]  window_ms 本窗口毫秒数，只用于显示。
+  * @note   内部排序工作区是静态的，所以不可重入：只允许一个任务（Monitor Task）调用。
   * @return 写入的字符数（不含 NUL）；放不下时末字符为 '~'。
   */
 size_t monitor_cpu_format(char *buffer,
@@ -91,7 +92,8 @@ size_t monitor_cpu_format(char *buffer,
                           uint32_t total,
                           uint32_t window_ms)
 {
-    monitor_cpu_entry_t entries[MONITOR_CPU_TASK_MAX];
+    /* 排序用的工作区放静态区：192 B 放栈上会压到只有 1 KiB 的 Monitor 栈（#204）。不可重入，只由 Monitor Task（和单线程主机测试）调用。 */
+    static monitor_cpu_entry_t entries[MONITOR_CPU_TASK_MAX];
     const uint32_t delta_total = total - previous->total;
     uint8_t entry_count = 0U;
     size_t used;

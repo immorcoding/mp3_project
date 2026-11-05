@@ -198,6 +198,123 @@ static void test_switch_while_paused_logs_nothing(void)
 }
 
 /**
+ * @brief 让当前流读尽并放完，触发播完自动前进（决定前进发生在最后一次唤醒里）。
+ */
+static void finish_track_and_advance(void)
+{
+    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    for (uint32_t i = 0U; i < 4U; i++)
+    {
+        world_wake();
+    }
+    fake_player_release_tail();
+    world_wake();
+}
+
+/**
+ * @brief 播完自动前进：下一首输出起播时记 `Switch idx=N lat=U auto`，lat 从决定前进的那一刻算起。
+ */
+static void test_auto_advance_logs_switch_with_auto_suffix(void)
+{
+    start_playing_with_output();
+
+    finish_track_and_advance();
+    assert(count_switch_logs() == 0U);
+    fake_cycles_advance(12000U * CYCLES_PER_US);
+    complete_switch();
+
+    assert(count_switch_logs() == 1U);
+    assert(strcmp(last_switch_log(), "Switch idx=1 lat=12000 auto") == 0);
+}
+
+/**
+ * @brief 末曲播完环回首曲，同样记 auto。
+ */
+static void test_auto_advance_wraps_from_the_last_track(void)
+{
+    world_reset();
+    world_start_playing(GEN, TRACKS);
+    fake_player_emit_output_started();
+    world_wake();
+    world_send_select(GEN, TRACKS - 1U);
+    complete_switch();
+    assert(strcmp(last_switch_log(), "Switch idx=4 lat=0") == 0);
+
+    finish_track_and_advance();
+    fake_cycles_advance(3000U * CYCLES_PER_US);
+    complete_switch();
+
+    assert(count_switch_logs() == 2U);
+    assert(strcmp(last_switch_log(), "Switch idx=0 lat=3000 auto") == 0);
+}
+
+/**
+ * @brief 自动前进后遇到坏文件续上：仍是一行 auto，序号是最终起播的那首，lat 从决定前进算起。
+ */
+static void test_auto_advance_through_a_bad_file_logs_one_auto_line(void)
+{
+    start_playing_with_output();
+
+    finish_track_and_advance();
+    fake_cycles_advance(2000U * CYCLES_PER_US);
+    world_open_bad_file();
+    fake_cycles_advance(3000U * CYCLES_PER_US);
+    complete_switch();
+
+    assert(count_switch_logs() == 1U);
+    assert(strcmp(last_switch_log(), "Switch idx=2 lat=5000 auto") == 0);
+}
+
+/**
+ * @brief 用户切歌遇到坏文件续上：仍按用户切歌记，不带 auto，lat 从用户命令算起。
+ */
+static void test_user_switch_through_a_bad_file_stays_a_user_line(void)
+{
+    start_playing_with_output();
+
+    world_send(PLAYBACK_COMMAND_NEXT);
+    fake_cycles_advance(4000U * CYCLES_PER_US);
+    world_open_bad_file();
+    fake_cycles_advance(6000U * CYCLES_PER_US);
+    complete_switch();
+
+    assert(count_switch_logs() == 1U);
+    assert(strcmp(last_switch_log(), "Switch idx=2 lat=10000") == 0);
+}
+
+/**
+ * @brief 自动前进等待起播时用户又切歌：以用户切歌为准，不带 auto。
+ */
+static void test_user_switch_overrides_a_pending_auto_advance(void)
+{
+    start_playing_with_output();
+
+    finish_track_and_advance();
+    fake_cycles_advance(9000U * CYCLES_PER_US);
+    world_send(PLAYBACK_COMMAND_NEXT);
+    fake_cycles_advance(1000U * CYCLES_PER_US);
+    complete_switch();
+
+    assert(count_switch_logs() == 1U);
+    assert(strcmp(last_switch_log(), "Switch idx=2 lat=1000") == 0);
+}
+
+/**
+ * @brief 暂停中播完前进不出声，不记 Switch。
+ */
+static void test_auto_advance_while_paused_logs_nothing(void)
+{
+    start_playing_with_output();
+    world_send(PLAYBACK_COMMAND_TOGGLE);
+    assert(world_snapshot().State == PLAYBACK_STATE_PAUSED);
+
+    finish_track_and_advance();
+    complete_switch();
+
+    assert(count_switch_logs() == 0U);
+}
+
+/**
  * @brief 欠载累计：每次播放模块回报的次数并入开机以来的总数。
  */
 static void test_underrun_total_accumulates_reports(void)
@@ -231,6 +348,12 @@ int main(void)
     test_stop_before_output_restarts_voids_the_switch();
     test_latest_switch_wins_and_times_from_the_latest_command();
     test_switch_while_paused_logs_nothing();
+    test_auto_advance_logs_switch_with_auto_suffix();
+    test_auto_advance_wraps_from_the_last_track();
+    test_auto_advance_through_a_bad_file_logs_one_auto_line();
+    test_user_switch_through_a_bad_file_stays_a_user_line();
+    test_user_switch_overrides_a_pending_auto_advance();
+    test_auto_advance_while_paused_logs_nothing();
     test_underrun_total_accumulates_reports();
     puts("playback_task_switch: OK");
     return 0;

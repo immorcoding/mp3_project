@@ -140,8 +140,9 @@ typedef struct
     Service_Playback_SeekPointTypeDef SeekPoint;/**< 本次跳转的映射结果（偏移、落点、方式、是否钳位）。 */
     uint32_t SeekTargetMs;                     /**< 本次跳转的目标毫秒。 */
     uint32_t SeekStartCycles;                  /**< 处理 SEEK 命令时的周期计数器读数，供 lat。 */
-    bool SwitchActive;                         /**< 一次用户换曲命令（NEXT、PREV、SELECT）已执行且输出尚未重新起播（DIAG-6）；停止使其作废，更新的换曲覆盖它。 */
-    uint32_t SwitchStartCycles;                /**< 处理该换曲命令时的周期计数器读数，供 Switch 的 lat。 */
+    bool SwitchActive;                         /**< 一次换曲（用户的 NEXT、PREV、SELECT，或自动前进）已执行且输出尚未重新起播（DIAG-6）；停止使其作废，更新的用户换曲覆盖它。 */
+    bool SwitchAuto;                           /**< 等待起播的换曲是自动前进（播完前进、跳过坏文件续上），Switch 行带 auto 后缀；用户换曲为假。 */
+    uint32_t SwitchStartCycles;               /**< 处理该换曲命令时的周期计数器读数，供 Switch 的 lat。 */
     uint32_t UnderrunTotal;                    /**< 开机以来播放模块回报的欠载次数累计（Platform 的计数每次 Start 清零，这里累加）。 */
     bool SeekHoldEnd;                         /**< 当前流由跳转重开且尚未起播过：暂停中回报流尾放完（含钳位后零帧）时不前进，等恢复。 */
 } Playback_MachineTypeDef;
