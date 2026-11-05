@@ -32,6 +32,8 @@
             Name = 'flash_ftl'
             PathPatterns = @(
                 '^Components/flash_ftl/'
+                # SD Card Component 的显式中止测试（test_sd_abort.c）编译 Components/sd/sd.c。
+                '^Components/sd/'
                 '^FATFS/'
                 '^Middlewares/Third_Party/FatFs/'
                 '^Service/filesystem/'

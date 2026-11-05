@@ -64,7 +64,7 @@ FatFs 按路径打开每次从文件夹第 0 个目录项起逐项比较长文�
 | 状态 | 归属 |
 |---|---|
 | 文件槽、目录槽、卷的初始化与挂载标志、`SDFatFS`/`USERFatFS`、FatFs 的 `FatFs[]` 卷表项 | 所属卷的卷锁（槽按卷分区） |
-| SD 完成信号量、事件值、DMA 中转缓冲 | SD 卷锁 |
+| SD 完成信号量、事件值、DMA 中转缓冲、中止/钩子日志行的静态缓冲、钩子的读计数与探测计数 | SD 卷锁 |
 | Flash 完成信号量、Platform 在飞操作、格式化工作区 | Flash 卷锁 |
 | 目录定位符采集用的扇区缓冲 | 所属卷的卷锁（每卷一份，两卷的 `ReadDirectory` 可以同时进行） |
 | FatFs 锁表 `Files[]` | 见窄表锁：打开三处用表锁；关闭与卸载只写本卷的项 |
@@ -86,7 +86,9 @@ FatFs 按路径打开每次从文件夹第 0 个目录项起逐项比较长文�
 | 回收 | Flash | 一块约 40–50 ms | 一次最多一块 |
 | 插卡初始化 | SD | 约 186 ms | 此时没有在读的音频 |
 | `MountFlash` | Flash | 3.3–8.3 s（8.3 s 的原因没查） | 只在启动时 |
-| 故障路径 | 所属卷 | SD 单块 500 ms 超时；Flash 写预算 120 s | 不算正常上界 |
+| 故障路径：SD 单块超时 | SD | 500 ms 等待 + 显式中止上界 100 ms（含 CMD12、DPSM 静止、卡回到 TRANSFER；停不住再加一次 `HAL_SD_DeInit`，微秒级），约 0.6 s；一次请求在第一个失败的分块就返回，所以一次调用不会超过这个数 | 不算正常上界，也不进 R2.1（R2.1 量的是正常读）；小于播放侧 T_data（现在 2 s） |
+| 故障路径：Flash 写 | Flash | 写预算 120 s | 不算正常上界 |
+| 迟到 DMA 钩子的一次探测（仅钩子构建） | SD | 目标块读一次、受害读等 1 ms 再中止、目标块再读一次，约 10–15 ms（估计，未测），加在被探测的那次读上 | 钩子构建里持锁统计的 SD 最长持有会因此超过 R2.1 的 20 ms，**R2.1 必须用钩子关闭的构建量** |
 
 ### 持锁统计
 
@@ -122,7 +124,7 @@ FatFs disk_* → SD 或 USER BSP 强定义 → 私有执行器 → Platform。�
 
 ### 完成来源
 
-- **SD**：SDMMC1 中断 → STM32 SDMMC IRQ Adapter → Platform SD 的传输回调（`InitSD` 经 `Platform_SD_SetTransferCallback` 订阅）→ SD 执行器的回调：先把事件值（读完成、写完成、错误、中止）写进一个 `volatile` 变量，再 `xSemaphoreGiveFromISR`。任务拿到信号量后才读事件值并交给 `Platform_SD_CompleteTransfer()`。同一次等待内后到的事件覆盖先到的（与原先覆盖式通知一致）。
+- **SD**：SDMMC1 中断 → STM32 SDMMC IRQ Adapter → Platform SD 的传输回调（`InitSD` 经 `Platform_SD_SetTransferCallback` 订阅）→ SD 执行器的回调：先把事件值（读完成、写完成、错误、中止）写进一个 `volatile` 变量，再 `xSemaphoreGiveFromISR`。任务拿到信号量后才读事件值并交给 `Platform_SD_CompleteTransfer()`。同一次等待内后到的事件覆盖先到的（与原先覆盖式通知一致）。等待超时则不经事件值，改为显式中止（见“显式中止”）。
 - **Flash**：QSPI/MDMA 中断 → STM32 QSPI IRQ Adapter → Platform Flash 的操作回调（`InitFlash` 经 `Platform_Flash_SetOperationCallback` 订阅）→ Flash 执行器的回调：只 `xSemaphoreGiveFromISR`，不带事件值。信号只是提示，结果以 `Platform_Flash_ProcessOperation()` 为准，且每 `FILESYSTEM_FLASH_WAIT_SLICE_MS` 重查一次，所以信号被合并或丢失也只是晚一个周期。
 - 两个回调都只用 `FromISR` 版本，并把 `higher_priority_task_woken` 交给 `portYIELD_FROM_ISR`，不做别的事。回调对应的中断优先级必须满足 `configMAX_SYSCALL_INTERRUPT_PRIORITY`（与改用信号量之前调用 `xTaskNotifyIndexedFromISR` 的要求相同）。
 
@@ -135,8 +137,41 @@ FatFs disk_* → SD 或 USER BSP 强定义 → 私有执行器 → Platform。�
 超时之后才到达的中断会让信号量保持置位，没有任务在等。处理方式：
 
 - **清理时机**：每次**启动传输之前**（SD：每个 DMA 分块的 `Platform_SD_Start*Blocks` 之前；Flash：`filesystem_flash_transfer_finish` 进入时，此时 Start 已经发生但还没有第一次 `Process`）用 `xSemaphoreTake(…, 0)` 清掉。SD 不能在启动之后清，否则会丢掉本次传输自己的中断；Flash 可以在 Start 之后清，因为第一次 `Process` 才是权威，清理之前到达的完成已经体现在 Platform 状态里。
-- **SD 没有被清掉的窗口**：旧 DMA 在“清理之后、本次启动之前”才完成，这条路径清不到，也无法靠信号量区分（中断说不出是哪次传输结束的）。实际上超时会让 Device 进 `ERROR`，`Start*` 在 `ERROR` 下被拒绝，要等卡重新初始化才能再传，所以这个窗口难以构造（#188 也没有构造出来）；彻底解决靠有上界的显式 Abort（ADR-0024 第 7 条，#209 的范围），本票不改。
+- **SD 在清理之后、本次启动之前才完成的窗口，由显式中止关掉**（#209）：中断说不出是哪次传输结束的，信号量清理清不到这个窗口，所以不靠清理而靠顺序——等待超时后先 `Platform_SD_AbortTransfer()` 让硬件静止（`STOPPED`：数据通路空闲、SDMMC 中断全部屏蔽、IDMA 已关；`NO_MEDIA`、`STUCK`：SDMMC 已断电关时钟、NVIC 挂起位已清），**之后**才 `xSemaphoreTake(…, 0)` 清掉信号量和事件值，Device 要等中止返回才离开 BUSY，同一个任务持着 SD 卷锁，下一笔 Start 只能在这之后发生。中止返回之后不会再有被中止那一笔的中断：此前已经发生的中断在任务被打断之前整个跑完了（单核，任务与 ISR 不会同时运行），它给出的信号被这次清掉；此后外设已经不再请求中断。启动前的 `prepare_wait` 清理作为第二道保险保留。`STUCK` 时 Device 保持 ERROR，`Start*` 被拒，要等卡重新初始化（拔插卡或显式再 Init）才有下一笔传输，重新初始化会完整复位 HAL 句柄。主机测试 `test_sd_completion_that_lands_during_abort_is_cleared_after_it` 覆盖“中断落进中止期间”；真实的 ISR 时序靠第 2 次上板。
 - **Flash 不会返回后还有 DMA 在飞**：超时只触发 `Abort`，执行器继续 `Process` 直到控制器静止才返回，所以返回之后到的信号最多是最后一次完成中断没被取走；它被下一次进入时清掉，即使没清，最坏也只是第一次等待提前醒来一次，`Process` 仍报忙就继续等。
+
+### 显式中止（#209）
+
+SD 的 DMA 分块等完成信号量超过预算（`FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS`，500 ms）时，`filesystem_sd_transfer_finish` 调 `Platform_SD_AbortTransfer()`，不再向 Platform 提交 ERROR 事件：
+
+| Platform 结果 | 含义 | Service 的动作 | 之后 |
+|---|---|---|---|
+| `STOPPED` | 传输已停止，卡回到 TRANSFER，Device 回到 READY | 清信号量和事件值，记 WARN，这一笔返回失败（FatFs 得到 `MSD_ERROR`） | 下一笔可以立即启动，不重新初始化 |
+| `NO_MEDIA` | 中止时卡已拔出，SDMMC 已反初始化 | 同上 | Device 为 NOT_PRESENT |
+| `STUCK` | 上界内没停住，SDMMC 已 `HAL_SD_DeInit()`，IRQ 节点已注销 | 同上 | 卷保持 ERROR，新的 `Start*` 被拒，不等待、不再中止；拔插卡或显式再 Init 才恢复 |
+| `REJECTED` | 没有在飞的传输，或 Port 不支持中止 | 退回旧做法：向 Platform 提交 ERROR 事件，Device 进 ERROR | 同 `STUCK` |
+
+错误事件、方向不符的事件和被拒的启动**不**触发中止：前者 HAL 在 ISR 里已经自己收了尾，后者硬件根本没启动。
+
+**日志**（每次超时一行 WARN，持 SD 卷锁时投递：`Service_Log_Post` 不阻塞，可以调用）：
+
+```
+FSABORT stopped us=1523 R blk=123456 n=64
+```
+
+标签 `FSABORT`，字段依次是结果（`stopped`、`no_media`、`stuck`、`rejected`）、`us=` 中止调用本身的耗时（周期计数器，微秒；计数器没启动时按 tick，毫秒精度）、`R`/`W` 方向、`blk=` 这一分块的起始块、`n=` 块数；最长约 50 个字符，放得进 Service Log 的 127 字符。一张卡持续超时时每次调用最多一行，两次之间至少隔一次完整的 500 ms 等待，不会刷屏。
+
+**持锁上界。** 中止发生在持 SD 卷锁时，全程有界：等待 500 ms + 中止预算 100 ms（`SDCARD_ABORT_TIMEOUT_MS`，覆盖 CMD12、DPSM 静止、卡回到 TRANSFER 全部等待，每一步都带同一个截止点）+ 没停住时一次 `HAL_SD_DeInit()`。它进上面的“故障路径”行，与 R2.1 的关系：R2.1 的 20 ms 是**正常读**的上界，中止只在故障路径出现，不进 R2.1；500 ms 的等待加 100 ms 的中止预算仍小于播放侧的数据超时 T_data（现在 2 s）。**写方向**的预算偏紧（SDHC 写忙最长 250 ms，SDXC 500 ms）：产品路径不写 SD，写超时极少；万一卡在编程忙里超过 100 ms 没回到 TRANSFER，会走 `STUCK`，代价是重新插卡，不是数据损坏。
+
+### 迟到 DMA 测试钩子（DIAG-7、#209）
+
+`FILESYSTEM_HOOK_SD_LATE_DMA`（`filesystem_config.h`，默认 `0U`）是编译开关，代码写成 `if (FILESYSTEM_HOOK_SD_LATE_DMA != 0U)`，默认构建也编译，发布构建不开（CMake 在 Release 打开会直接报错）。打开方式：configure 时 `cmake --preset firmware-debug -DMP3_HOOK_SD_LATE_DMA=1`，关掉要显式 `-DMP3_HOOK_SD_LATE_DMA=0`（缓存变量留在构建目录里）。
+
+- **启动日志**：第一次 `InitSD()` 投一行 `HOOK late_dma ON period=16 timeout=1ms`（WARN，只投一次）；没有 `HOOK` 行就是没开。其他钩子各自在所属模块首次初始化时同样投一行 `HOOK`。
+- **做什么**：每 `FILESYSTEM_HOOK_SD_LATE_DMA_PERIOD`（16）次读请求探测一次，探测在调用者自己的读**之前**、复用 DMA 中转缓冲：① 读目标块（调用者这次读的起始块，至多 64 块），记 FNV-1a 校验和；② 从块 0 读 32 KiB 但只等 `FILESYSTEM_HOOK_SD_LATE_DMA_TIMEOUT_MS`（1 ms），32 KiB 平均要 3 ms 以上，必然超时并被显式中止（`FSABORT` 那一行照常出现）；③ **紧接着**再读目标块，校验和必须与 ① 一致——受害读（块 0 一带）与目标块内容不同，迟到的旧 DMA 若落进 bounce buffer、或旧的完成信号被下一笔当成完成，内容会变；目标块起始于 `FILESYSTEM_HOOK_SD_LATE_DMA_MIN_BLOCK`（64）之前（引导区一带）、以及所有写请求，都不探测。
+- **结果行**（INFO，ERROR 见下）：`SDHOOK late_dma n=<探测序号> blk=<目标块> victim=<timeout|done|none> verify=<ok|MISMATCH|read_failed|skipped>`。判定：**通过**是 `victim=timeout verify=ok`，且前一行 `FSABORT` 是 `stopped`；`verify=MISMATCH`（ERROR）是迟到 DMA 或旧信号污染了紧接着的读，不通过；`verify=read_failed`（ERROR）是中止后紧接着的读失败，通常伴随 `FSABORT stuck`，卷保持 ERROR，按“恢复”一栏拔插卡；`victim=done` 是受害读居然在 1 ms 内完成，这次没有制造出迟到的 DMA，不算失败也不算证据；`verify=skipped`（WARN）是探测里第一次读就失败了。
+- **代价**：每次探测给被探测的那次读加约 10–15 ms（估计，未测）且持 SD 卷锁；钩子构建的持锁统计不能当 R2.1 的证据。
+- 主机测试 `filesystem_sd_late_dma_hook`（同一份测试和 Service 源码，另带 `-DFILESYSTEM_HOOK_SD_LATE_DMA=1` 编一份）覆盖启动行只投一次、节拍、受害读用 1 ms、紧接着的读校验、内容被改写时的 `MISMATCH`、`read_failed`、`skipped`、`victim=done`、低块号与写请求不探测；默认构建的 `filesystem_completion_wait` 断言钩子关闭时没有 `HOOK` 行。
 
 ### 磁盘状态与 STA_NOINIT
 

@@ -591,6 +591,57 @@ Platform_StatusTypeDef Platform_SD_CompleteTransfer(
 }
 
 /**
+  * @brief  在上界内中止一笔等待超时的 DMA 传输，并让 SDMMC 与 Device 回到一个确定的状态。
+  * @param[out] result 接收结果分类，可为空。
+  * @retval PLATFORM_OK 传输已停住（PLATFORM_SD_ABORT_STOPPED），Device 回到 READY。
+  * @retval PLATFORM_SD_ERROR 没有干净地停住：卡已拔出、到上界还没停（SDMMC 已反初始化，Device 保持 ERROR）、
+  *         没有在飞的传输，或 SDMMC IRQ 节点与新状态对不上。具体原因见 *result。
+  * @note   只能在普通任务上下文、由刚刚等待这笔传输超时的任务调用（它持 SD 卷锁）；耗时不超过
+  *         Components/sd 的中止上界加一次反初始化。返回之后 SDMMC 不会再为被中止的那笔传输产生中断：
+  *         STOPPED 时数据通路静止且中断全部屏蔽，其余结果 SDMMC 已断电。Device 不再是 READY 时同时注销
+  *         SDMMC 传输 IRQ 节点（与 Refresh 的规则一致），以免重新初始化后 HAL 回调指针被复位而节点仍显示已注册。
+  */
+Platform_StatusTypeDef Platform_SD_AbortTransfer(Platform_SD_AbortResultTypeDef *result)
+{
+    Platform_SD_AbortResultTypeDef outcome;
+    const bool was_busy = (SDCard_GetState(&hplatform_sd.Device) == SDCARD_STATE_BUSY);
+    const SDCard_StatusTypeDef status = SDCard_AbortTransfer(&hplatform_sd.Device);
+
+    if (status == SDCARD_OK)
+    {
+        outcome = PLATFORM_SD_ABORT_STOPPED;
+    }
+    else if (!was_busy)
+    {
+        outcome = PLATFORM_SD_ABORT_REJECTED;
+    }
+    else if (SDCard_GetState(&hplatform_sd.Device) == SDCARD_STATE_NOT_PRESENT)
+    {
+        outcome = PLATFORM_SD_ABORT_NO_MEDIA;
+    }
+    else if (hplatform_sd.Device.ErrorCode == SDCARD_ERROR_PORT_ABORT)
+    {
+        outcome = PLATFORM_SD_ABORT_STUCK;
+    }
+    else
+    {
+        outcome = PLATFORM_SD_ABORT_REJECTED;
+    }
+
+    if (result != NULL)
+    {
+        *result = outcome;
+    }
+
+    if (platform_sd_sync_transfer_irq() != PLATFORM_OK)
+    {
+        return PLATFORM_SD_ERROR;
+    }
+
+    return (outcome == PLATFORM_SD_ABORT_STOPPED) ? PLATFORM_OK : PLATFORM_SD_ERROR;
+}
+
+/**
   * @brief  等待本板 SD 卡完成内部编程并回到可传输状态。
   * @retval PLATFORM_OK 介质已经可以接受下一条命令。
   * @retval PLATFORM_SD_ERROR 无卡、状态非法、底层错误或等待超时。

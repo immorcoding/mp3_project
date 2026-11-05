@@ -68,6 +68,13 @@ const char *lock_env_log_tag(uint32_t index);
 const char *lock_env_log_text(uint32_t index);
 
 /**
+ * @brief 第 index 条日志的等级（`Service_Log_LevelTypeDef` 的数值）。
+ * @param[in] index 从 0 起的序号。
+ * @return 等级数值；序号越界为 0。
+ */
+uint32_t lock_env_log_level(uint32_t index);
+
+/**
  * @brief 最长的一条日志正文的字符数（不含结尾 '\0'）。
  * @return 字符数，没有日志为 0。
  */

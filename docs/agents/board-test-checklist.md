@@ -264,6 +264,8 @@
 | R2.3 | `_USE_LFN 2` 后访问文件的任务的栈 | | Monitor 栈行 | 最低剩余 ≥ 256 B | | |
 | R2.4 | GUI、播放调用文件接口即停机（临时改动构建，不提交） | | 串口日志 / 调试器 | 停机 | | |
 
+R2.1 用钩子关闭的 Debug 构建量（探测会给被探测的那次读加约 10–15 ms 且持 SD 锁，钩子构建的持锁数字不是 R2.1 的证据）。R2.2 用钩子打开的 Debug 构建：`cmake --preset firmware-debug -DMP3_HOOK_SD_LATE_DMA=1` 后构建，启动日志出现 `HOOK late_dma ON period=16 timeout=1ms`（没有这一行就是没开）。烧录后正常播放，每 16 次读请求自动探测一次（连续播放约每十几秒一次），每次探测在日志里是两行：`FSABORT stopped us=<微秒> R blk=0 n=64`（WARN，受害读超时后的中止，`us` 是中止耗时）和 `SDHOOK late_dma n=<序号> blk=<目标块> victim=timeout verify=ok`。**通过**：`victim=timeout verify=ok` 连续出现 ≥ 20 次，没有 `MISMATCH`、`read_failed`、`stuck`，播放不断音、不报读错误；`us` 记录最大值。`victim=done` 不算证据（那次没造出迟到 DMA）；`verify=MISMATCH` 是迟到 DMA 污染了紧接着的读，不通过；出现 `FSABORT stuck` 时卷保持 ERROR，检查是否真的保持（读文件失败、不自动恢复），再拔插卡看能否恢复，这条分支在健康卡上构造不出来，没出现就记“未测”。中途拔卡会得到 `FSABORT no_media`，可顺手记一次。
+
 **第 3 次：卷任务**
 
 | # | 项与方法 | 固件提交 | 证据来源 | 阈值 | 实测 | 结果 |

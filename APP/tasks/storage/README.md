@@ -72,7 +72,7 @@ Storage Task 是 SD 热插拔生命周期决策和 FatFs 卷访问的唯一任�
 ## 约束
 
 - `STORAGE_NOTIFY_EVENT` 属于本 Module：GPIO EXTI 置 `STORAGE_NOTIFY_FLAG_SD_DETECT`，主循环立刻进入消抖中；静默 30 ms 后才调用 `Platform_SD_Process()`。GUI 窗口请求置 `STORAGE_NOTIFY_FLAG_LISTBUFFER`，且仅 SD 已挂载时 `request` 成功；名字请求置 `STORAGE_NOTIFY_FLAG_NAMEBUFFER`，任何 SD 状态下都可提交，未就绪时按代次 0 应答。这些 FLAG 不得拆成轮流阻塞的独立槽。SD 就绪由挂载事实决定，不由播放列表代次决定。
-- SD 完成信号量不由本任务主循环消费。它属于 Filesystem Service 的同步 SDMMC DMA 执行器；执行器在调用者（现在是 Storage Task）上下文、于 FatFs 读写期间等待它，超时后迟到的旧信号在下一次启动传输前被清掉（见 [Filesystem Service](../../../Service/filesystem/README.md)）。
+- SD 完成信号量不由本任务主循环消费。它属于 Filesystem Service 的同步 SDMMC DMA 执行器；执行器在调用者（现在是 Storage Task）上下文、于 FatFs 读写期间等待它，超时后先显式中止在飞的 DMA（有上界，停不住就反初始化、卷保持 ERROR），再清掉迟到的旧信号，下一次启动传输前还会再清一次（见 [Filesystem Service](../../../Service/filesystem/README.md) 的“显式中止”）。
 - Flash 完成信号量属于 Filesystem Service Flash 执行器。它提示一个 QSPI 异步操作的完成、状态匹配、错误或中止；Flash 物理 benchmark 经 `Service_Filesystem_ReadFlashArray()` 等诊断入口等待该信号量并触发 `Platform_Flash_ProcessOperation()` 判定结果。读取信号不能直接视为数据可用，写擦的状态匹配信号也不能直接视为 Device 已恢复 READY。
 - APP 不注册 SDMMC 传输回调，不使用 `BSP_SD_*`、不调用 `HAL_SD_*`，也不访问 `hsd1` 或 DMA bounce buffer。
 - 插卡只有在 Platform SD 报告 `READY` 后才挂载，成功后扫描曲库并生成顺序播放列表；拔卡先作废曲库与播放列表，再注销 FatFs 卷。设备不格式化 SD；未格式化只记录告警。

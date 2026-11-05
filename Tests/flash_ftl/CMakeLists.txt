@@ -130,7 +130,7 @@ add_executable(filesystem_completion_tests
     ../../Middlewares/Third_Party/FatFs/src/diskio.c
     ../../Middlewares/Third_Party/FatFs/src/option/cc936.c)
 target_include_directories(filesystem_completion_tests BEFORE PRIVATE
-    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../..
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../stubs/lock_env ../..
     ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
 target_compile_features(filesystem_completion_tests PRIVATE c_std_11)
 target_compile_options(filesystem_completion_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
@@ -143,6 +143,25 @@ set_source_files_properties(
     ../../Middlewares/Third_Party/FatFs/src/option/cc936.c
     PROPERTIES COMPILE_OPTIONS "-w")
 add_test(NAME filesystem_completion_wait COMMAND filesystem_completion_tests)
+
+# 迟到 DMA 测试钩子（DIAG-7）：同一份测试与 Service 源码，用 -DFILESYSTEM_HOOK_SD_LATE_DMA=1 再编一份，只跑钩子用例。
+# 默认构建的 filesystem_completion_tests 里钩子是关的（`if (0)`），这里验证钩子打开时的行为。
+get_target_property(COMPLETION_SOURCES filesystem_completion_tests SOURCES)
+add_executable(filesystem_sd_hook_tests ${COMPLETION_SOURCES})
+target_include_directories(filesystem_sd_hook_tests BEFORE PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../stubs/lock_env ../..
+    ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
+target_compile_features(filesystem_sd_hook_tests PRIVATE c_std_11)
+target_compile_definitions(filesystem_sd_hook_tests PRIVATE FILESYSTEM_HOOK_SD_LATE_DMA=1)
+target_compile_options(filesystem_sd_hook_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+set_source_files_properties(
+    ../../FATFS/Target/user_diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c
+    PROPERTIES COMPILE_OPTIONS "-w")
+add_test(NAME filesystem_sd_late_dma_hook COMMAND filesystem_sd_hook_tests)
 
 
 # Release 构建的 Service（带 -DNDEBUG，与固件 Release 一致）：同一套用例，另加“不投统计日志”。
@@ -234,3 +253,12 @@ foreach(SCENARIO reenter_same_volume hold_one_volume_enter_other hold_table_ente
     set_tests_properties(filesystem_lock_${SCENARIO} PROPERTIES
         ENVIRONMENT "FILESYSTEM_LOCK_SCENARIO=${SCENARIO}")
 endforeach()
+
+# SD Card Component 的显式中止：真实的 Components/sd/sd.c，Port 层用测试内的假实现。
+add_executable(sd_abort_tests
+    test_sd_abort.c
+    ../../Components/sd/sd.c)
+target_include_directories(sd_abort_tests PRIVATE ../..)
+target_compile_features(sd_abort_tests PRIVATE c_std_11)
+target_compile_options(sd_abort_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+add_test(NAME sd_component_abort COMMAND sd_abort_tests)

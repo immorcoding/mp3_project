@@ -535,6 +535,273 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_sync(
     }
 }
 
+/**
+  * @brief  判断自 start_tick 起经过的毫秒数是否仍在预算之内。
+  * @param[in] start_tick 起点，来自 HAL_GetTick()。
+  * @param[in] timeout_ms 预算；0 表示一点时间都没有，恒为 false。
+  * @retval true 还没到点。
+  * @note   无符号差可安全跨越 HAL_GetTick() 的 32 位回绕点；精度为 1 ms，所以实际上界在
+  *         timeout_ms-1 到 timeout_ms 之间。
+  */
+static bool sd_stm32_hal_in_budget(uint32_t start_tick, uint32_t timeout_ms)
+{
+    return (uint32_t)(HAL_GetTick() - start_tick) < timeout_ms;
+}
+
+/**
+  * @brief  由 HAL Handle 的外设实例得到对应的 NVIC 中断号。
+  * @param[in] hal_sd 当前 SD Handle。
+  * @return SDMMC2 返回 SDMMC2_IRQn，其余按 SDMMC1 处理（与本 Adapter 固定使用 SDMMC1 一致）。
+  */
+static IRQn_Type sd_stm32_hal_irqn(const SD_HandleTypeDef *hal_sd)
+{
+    return (hal_sd->Instance == SDMMC2) ? SDMMC2_IRQn : SDMMC1_IRQn;
+}
+
+/**
+  * @brief  发送一条短响应命令，并在预算内等它结束（命令通路不再活动）。
+  * @param[in,out] hal_sd 当前 SD Handle。
+  * @param[in] command_index 命令序号（本函数只用于 CMD12 与 CMD13）。
+  * @param[in] argument 命令参数。
+  * @param[in] start_tick 本次中止的起点，来自 HAL_GetTick()。
+  * @param[in] timeout_ms 本次中止的总预算。
+  * @param[out] status_flags 接收命令结束时的 STA 快照，可为空。
+  * @retval true 命令通路在预算内结束（含响应超时与 CRC 错误，由调用者按 status_flags 判断）。
+  * @retval false 到预算还没结束（命令通路卡住）。
+  * @note   这是 SDMMC_GetCmdResp1() 的有上界版本：HAL 的循环次数上界按 SystemCoreClock 折算，
+  *         STOP_TRANSMISSION 用的 SDMMC_STOPTRANSFERTIMEOUT 乘法在 32 位里会回绕，不能当作可预期的上界。
+  */
+static bool sd_stm32_hal_send_command_bounded(SD_HandleTypeDef *hal_sd,
+                                              uint32_t command_index,
+                                              uint32_t argument,
+                                              uint32_t start_tick,
+                                              uint32_t timeout_ms,
+                                              uint32_t *status_flags)
+{
+    SDMMC_CmdInitTypeDef command;
+    uint32_t sta;
+
+    command.Argument = argument;
+    command.CmdIndex = command_index;
+    command.Response = SDMMC_RESPONSE_SHORT;
+    command.WaitForInterrupt = SDMMC_WAIT_NO;
+    command.CPSM = SDMMC_CPSM_ENABLE;
+    (void)SDMMC_SendCommand(hal_sd->Instance, &command);
+
+    for (;;)
+    {
+        sta = hal_sd->Instance->STA;
+        if (((sta & (SDMMC_FLAG_CCRCFAIL | SDMMC_FLAG_CMDREND | SDMMC_FLAG_CTIMEOUT | SDMMC_FLAG_BUSYD0END)) != 0U) &&
+            ((sta & SDMMC_FLAG_CMDACT) == 0U))
+        {
+            break;
+        }
+
+        if (!sd_stm32_hal_in_budget(start_tick, timeout_ms))
+        {
+            return false;
+        }
+    }
+
+    if (status_flags != NULL)
+    {
+        *status_flags = sta;
+    }
+
+    __SDMMC_CLEAR_FLAG(hal_sd->Instance, SDMMC_STATIC_CMD_FLAGS);
+    return true;
+}
+
+/**
+  * @brief  轮询卡状态（CMD13），直到回到 TRANSFER；每一步都受同一个预算约束。
+  * @param[in] context 指向 Adapter Context，用于读卡检测。
+  * @param[in,out] hal_sd 当前 SD Handle，使用其中的相对卡地址。
+  * @param[in] start_tick 本次中止的起点。
+  * @param[in] timeout_ms 本次中止的总预算。
+  * @retval true 卡在预算内回到 TRANSFER。
+  * @retval false 到预算还没回到 TRANSFER、命令通路卡住，或卡已被拔出。
+  */
+static bool sd_stm32_hal_wait_card_transfer(const void *context,
+                                            SD_HandleTypeDef *hal_sd,
+                                            uint32_t start_tick,
+                                            uint32_t timeout_ms)
+{
+    uint32_t sta;
+
+    for (;;)
+    {
+        if (!sd_stm32_hal_send_command_bounded(hal_sd,
+                                               SDMMC_CMD_SEND_STATUS,
+                                               (uint32_t)(hal_sd->SdCard.RelCardAdd << 16U),
+                                               start_tick,
+                                               timeout_ms,
+                                               &sta))
+        {
+            return false;
+        }
+
+        if (((sta & (SDMMC_FLAG_CTIMEOUT | SDMMC_FLAG_CCRCFAIL)) == 0U) &&
+            (SDMMC_GetCommandResponse(hal_sd->Instance) == SDMMC_CMD_SEND_STATUS))
+        {
+            const uint32_t card_state =
+                (SDMMC_GetResponse(hal_sd->Instance, SDMMC_RESP1) >> 9U) & 0x0FU;
+
+            if (card_state == HAL_SD_CARD_TRANSFER)
+            {
+                return true;
+            }
+        }
+
+        if ((!sd_stm32_hal_is_present(context)) ||
+            (!sd_stm32_hal_in_budget(start_tick, timeout_ms)))
+        {
+            return false;
+        }
+    }
+}
+
+/**
+  * @brief  让数据通路静止：发 CMD12 终止传输、等 DPSM 回到空闲、关 IDMA、复位 FIFO、清标志，再确认卡回到 TRANSFER。
+  * @param[in] context 指向 Adapter Context。
+  * @param[in,out] hal_sd 当前 SD Handle。
+  * @param[in] start_tick 本次中止的起点。
+  * @param[in] timeout_ms 本次中止的总预算。
+  * @retval true 全部步骤在预算内完成。
+  * @retval false 任一步到预算还没完成；硬件状态未定，调用者必须反初始化 SDMMC。
+  * @note   顺序依据 HAL_SD_Abort() 与 HAL_SD_IRQHandler() 的错误分支，等待全部改成有上界：
+  *         1. CMD12（CMDSTOP 置位、CMDTRANS 清零）向 DPSM 发中止信号；响应超时与 CRC 错误不算失败——
+  *            传输可能刚好自己结束，卡不再响应 CMD12（HAL 同样容忍响应超时）；
+  *         2. 等 STA.DPSMACT 回到 0。IDMA 使能位只能在 DPSM 静止之后写（HAL 注释：不等标志，
+  *            后面的 IDMACTRL 清零不会生效，下一笔读写会失败），所以这一步必须先于第 3 步；
+  *         3. IDMACTRL 清零并回读确认；DCTRL.FIFORST 复位 FIFO（尽力而为，HAL 错误分支同样使用）；
+  *         4. 清全部静态标志；
+  *         5. CMD13 轮询直到卡回到 TRANSFER（写入方向的 R1b 忙由此等掉）。
+  *         已经自己结束的传输（DPSM 静止且 IDMA 已关）跳过第 1、2 步。
+  */
+static bool sd_stm32_hal_quiesce_data_path(const void *context,
+                                           SD_HandleTypeDef *hal_sd,
+                                           uint32_t start_tick,
+                                           uint32_t timeout_ms)
+{
+    SDMMC_TypeDef *sdmmc = hal_sd->Instance;
+    const bool needs_stop = ((sdmmc->STA & SDMMC_FLAG_DPSMACT) != 0U) ||
+                            ((sdmmc->IDMACTRL & SDMMC_IDMA_IDMAEN) != 0U);
+
+    __SDMMC_CMDTRANS_DISABLE(sdmmc);
+
+    if (needs_stop)
+    {
+        bool command_finished;
+
+        __SDMMC_CMDSTOP_ENABLE(sdmmc);
+        command_finished = sd_stm32_hal_send_command_bounded(hal_sd,
+                                                             SDMMC_CMD_STOP_TRANSMISSION,
+                                                             0U,
+                                                             start_tick,
+                                                             timeout_ms,
+                                                             NULL);
+        __SDMMC_CMDSTOP_DISABLE(sdmmc);
+        if (!command_finished)
+        {
+            return false;
+        }
+
+        while ((sdmmc->STA & SDMMC_FLAG_DPSMACT) != 0U)
+        {
+            if (!sd_stm32_hal_in_budget(start_tick, timeout_ms))
+            {
+                return false;
+            }
+        }
+    }
+
+    sdmmc->IDMACTRL = SDMMC_DISABLE_IDMA;
+    if ((sdmmc->IDMACTRL & SDMMC_IDMA_IDMAEN) != 0U)
+    {
+        return false;
+    }
+
+    sdmmc->DCTRL |= SDMMC_DCTRL_FIFORST;
+    __HAL_SD_CLEAR_FLAG(hal_sd, SDMMC_STATIC_FLAGS);
+
+    return sd_stm32_hal_wait_card_transfer(context, hal_sd, start_tick, timeout_ms);
+}
+
+/**
+  * @brief  在上界内中止在飞的 DMA 传输；停不住就反初始化 SDMMC。不调用 HAL_SD_Abort()。
+  * @param[in,out] context 必须指向有效 SDCard_STM32HALAdapterTypeDef。
+  * @param[in] timeout_ms 从调用起算的总预算，单位为毫秒，覆盖 CMD12、DPSM 静止与卡回到 TRANSFER 全部等待。
+  * @retval SDCARD_PORT_OK 传输已停住；HAL Handle 的 State 回到 READY、Context 回到 NONE、ErrorCode 清零，
+  *         读方向的 DMA 缓冲区已作废 D-Cache；Port 仍可继续使用。
+  * @retval SDCARD_PORT_NOT_PRESENT 开始时或结束时卡已不在；已 HAL_SD_DeInit。
+  * @retval SDCARD_PORT_TIMEOUT 到预算还没停住；已 HAL_SD_DeInit。
+  * @retval SDCARD_PORT_ERROR Context 无效，或停住之后作废 D-Cache 失败（后者已 HAL_SD_DeInit）。
+  * @note   HAL_SD_Abort() 的数据超时常量 SDMMC_SWDATATIMEOUT 是 0xFFFFFFFF ms，等于没有上界，所以这里自己写序列，
+  *         并自己恢复 HAL Handle 的 State、Context（HAL 升级时要复核，见 README）。
+  *
+  *         与 SDMMC 中断的竞争：第一步先把 SDMMC 的中断屏蔽寄存器清零，之后外设不再为被中止的传输请求中断；
+  *         此前已经发生的中断在任务被打断之前就整个跑完了（单核，任务不会与 ISR 同时运行），其效果是 State 已经
+  *         回到 READY 和完成回调已经给出信号，本函数照常收尾，Service 在中止返回之后再清一次完成信号量。
+  *         收尾时清 NVIC 挂起位，避免重新使能后冒出一次过期的中断。
+  *
+  *         D-Cache：必须先确认 IDMA 已关（quiesce 的第 3 步回读）再作废读缓冲区的缓存行，否则迟到的 DMA 写入会落在
+  *         刚作废过的行之后。反初始化路径不作废缓存：硬件状态未定，缓冲区此后由下一笔传输开始前的
+  *         Clean+Invalidate 重新建立一致性。
+  */
+static SDCard_PortStatusTypeDef sd_stm32_hal_abort_transfer(void *context, uint32_t timeout_ms)
+{
+    SDCard_STM32HALAdapterTypeDef *adapter = context;
+    SD_HandleTypeDef *hal_sd;
+    uint32_t start_tick;
+    SDCard_PortStatusTypeDef result = SDCARD_PORT_OK;
+
+    if ((adapter == NULL) || (adapter->Handle == NULL))
+    {
+        return SDCARD_PORT_ERROR;
+    }
+
+    hal_sd = adapter->Handle;
+    start_tick = HAL_GetTick();
+
+    /* 第一步：外设不再为这笔传输产生中断。HAL_SD_IRQHandler() 读的是原始 STA 而不是被屏蔽后的状态，
+     * 所以 NVIC 里残留的挂起位在最后统一清掉。 */
+    hal_sd->Instance->MASK = 0U;
+
+    if (!sd_stm32_hal_is_present(context))
+    {
+        result = SDCARD_PORT_NOT_PRESENT;
+    }
+    else if (!sd_stm32_hal_quiesce_data_path(context, hal_sd, start_tick, timeout_ms))
+    {
+        result = sd_stm32_hal_is_present(context) ? SDCARD_PORT_TIMEOUT : SDCARD_PORT_NOT_PRESENT;
+    }
+    else if ((adapter->DMAReadPending) &&
+             (adapter->DMABuffer != NULL) &&
+             (adapter->DMAByteCount != 0U) &&
+             (!CortexM7DCache_Invalidate_Aligned(adapter->DMABuffer, adapter->DMAByteCount)))
+    {
+        result = SDCARD_PORT_ERROR;
+    }
+    else
+    {
+        /* 与 HAL_SD_Abort() 成功路径一致：State 回 READY、Context 回 NONE；ErrorCode 清零。 */
+        hal_sd->ErrorCode = HAL_SD_ERROR_NONE;
+        hal_sd->State = HAL_SD_STATE_READY;
+        hal_sd->Context = SD_CONTEXT_NONE;
+    }
+
+    sd_stm32_hal_clear_dma_metadata(adapter);
+
+    if (result != SDCARD_PORT_OK)
+    {
+        /* 没有干净地停住：断电并关时钟，卷由 Device 保持 ERROR（或 NOT_PRESENT），重新初始化才恢复。 */
+        (void)HAL_SD_DeInit(hal_sd);
+    }
+
+    NVIC_ClearPendingIRQ(sd_stm32_hal_irqn(hal_sd));
+    return result;
+}
+
 /* Private variables ---------------------------------------------------------*/
 /**
   * @brief SD Card Device 使用的 STM32 HAL SDMMC Port 操作表。
@@ -549,7 +816,8 @@ static const SDCard_PortOpsTypeDef sd_stm32_hal_ops = {
     .WriteBlocks = sd_stm32_hal_write_blocks,
     .StartReadBlocks = sd_stm32_hal_read_blocks_dma,
     .StartWriteBlocks = sd_stm32_hal_write_blocks_dma,
-    .Sync = sd_stm32_hal_sync
+    .Sync = sd_stm32_hal_sync,
+    .AbortTransfer = sd_stm32_hal_abort_transfer
 };
 
 /* Exported functions --------------------------------------------------------*/

@@ -20,7 +20,10 @@
   - 迟到的旧信号：超时之后才到的完成中断，不会让下一次传输或下一次 Flash 等待白白过去。
   - 创建时机：信号量先于向 Platform 订阅创建；初始化之前传输函数失败；重复初始化不重建信号量、不丢信号。
   - 不依赖调用任务：别的任务格式化、挂载并读写 Flash 卷，磁盘状态与初始化它的任务读到同一个答案（旧实现里这里是 `STA_NOINIT`）。
-  - 保真边界：主机单线程，桩不切换任务也不真阻塞；通过不证明真实 ISR 时序、优先级、DMA 与 Cache 行为，也不证明迟到 DMA 完成事件在板上不会覆盖 bounce buffer（那是显式 Abort 的范围）。
+  - 显式中止（#209）：超时先向 Platform 提交中止而不是 ERROR；中止期间落进来的完成中断留下的信号在中止返回后被清掉；停住后紧接着再读成功；`stuck` 之后卷保持被拒（不等待、不再中止）；`no_media`；Platform 不受理时退回提交 ERROR；错误事件、方向不符、启动被拒不触发中止；WARN 行 `FSABORT <结果> us=<微秒> <R|W> blk=<块> n=<块数>` 的内容与等级，周期计数器不可用时按 tick 算耗时。
+  - 保真边界：主机单线程，桩不切换任务也不真阻塞；通过不证明真实 ISR 时序、优先级、DMA 与 Cache 行为，也不证明迟到 DMA 完成事件在板上不会覆盖 bounce buffer——主机里的“中断落进中止期间”只是脚本化的一次回调；中止的 HAL 寄存器序列（Adapter）和 `Platform_SD_AbortTransfer`（Platform）没有主机测试，靠固件构建、读 HAL 源码和第 2 次上板（R2.2）。
+- 迟到 DMA 钩子（`filesystem_sd_late_dma_hook`，同一份 `test_filesystem_completion.c` 与 Service 源码，另带 `-DFILESYSTEM_HOOK_SD_LATE_DMA=1` 编成 `filesystem_sd_hook_tests`，只跑钩子用例）：启动日志只投一行 `HOOK`；每 16 次读请求探测一次，受害读只等 1 ms 并被中止，紧接着的读与探测前的读内容一致才记 `verify=ok`；用脚本让紧接着的读缓冲被“迟到的旧 DMA”改写时记 `MISMATCH`（替换掉比较后这条用例会失败）；中止停不住记 `read_failed`；第一次读就失败记 `skipped`；受害读在 1 ms 内完成记 `victim=done`；块号低于 64 与所有写请求不探测。默认构建的 `filesystem_completion_wait` 断言钩子关闭时没有 `HOOK` 行。钩子本身是开发期工具，通过只证明探测逻辑，不证明迟到 DMA 在板上不会发生。
+- SD Card Component 的显式中止（`sd_component_abort`，`test_sd_abort.c`）：真实的 `Components/sd/sd.c`，假 Port。覆盖：BUSY 中止成功回 READY 并可立即再读、Port 只收到一次中止且上界有限；不在 BUSY 拒绝且 Port 不被调用；卡已拔出进 NOT_PRESENT 且 Port 不被重复反初始化；上界内没停住保持 ERROR、新传输被拒、`Refresh` 不重试、显式 `Init` 或拔插卡恢复且 Port 不被重复反初始化；Port 没有安装中止操作时进 ERROR 而不是留在 BUSY。
 - 入口加锁（`filesystem_lock_behavior`，`test_filesystem_lock.c`）：真实的 Filesystem Service 与 FatFs，共用 FreeRTOS 桩的互斥锁，加周期计数器与 Service Log 的替身（[`Tests/stubs/lock_env/`](../stubs/lock_env/lock_env_stub.h)），RAM 盘与传输层替身替代硬件。覆盖：
   - 每次公开调用（文件、目录、卷生命周期、Flash 诊断）对所属卷的锁拿放各一次，另一卷的锁不碰；多步函数（`FormatAndMountFlash`、`RecoverAndMountFlash`）也只拿一次；参数、路径、槽号越界的句柄在拿锁之前就被拒，不拿锁。
   - 一卷的锁被“别的任务”占着，另一卷的调用不等；入口等锁直到钩子放行；内核拿取失败（超时）时继续等。

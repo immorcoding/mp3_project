@@ -201,6 +201,10 @@ $catalogConfigImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catal
 Assert-HarnessSequence -Expected @('music_gui', 'storage_catalog') -Actual $catalogConfigImpact.HostModules `
     -Message '曲库配置头（含曲目标签读取常量与窗口条数）变化必须选择 Storage 曲库与音乐 GUI 主机测试'
 
+$sdComponentImpact = Get-HarnessImpact -ChangedPath @('Components/sd/sd.c')
+Assert-HarnessSequence -Expected @('flash_ftl') -Actual $sdComponentImpact.HostModules `
+    -Message 'SD Card Component 变化必须选择 flash_ftl 主机测试（显式中止的状态机测试在其中）'
+
 $monitorWarnImpact =Get-HarnessImpact -ChangedPath @('APP/tasks/monitor/monitor_warn.c')
 Assert-HarnessSequence -Expected @('monitor_warn') -Actual $monitorWarnImpact.HostModules `
     -Message 'Monitor 变化选择 monitor_warn 主机测试'

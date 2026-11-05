@@ -137,8 +137,17 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # 在此添加用户自定义的头文件搜索路径
 )
 
+# 测试钩子（DIAG-7）：每个场景一个默认关闭的编译开关，代码里写成 if (开关)，默认构建也编译；发布构建不开。
+# 板测要开时在 configure 时带上，例如：cmake --preset firmware-debug -DMP3_HOOK_SD_LATE_DMA=1
+# （缓存变量会留在构建目录里，关掉要显式 -DMP3_HOOK_SD_LATE_DMA=0）。打开的钩子在启动日志里各有一行 HOOK。
+set(MP3_HOOK_SD_LATE_DMA 0 CACHE STRING "迟到 DMA 测试钩子（#209，Service/filesystem）：1 打开，0 关闭（默认）")
+if(MP3_HOOK_SD_LATE_DMA AND CMAKE_BUILD_TYPE STREQUAL "Release")
+    message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_SD_LATE_DMA 只能在 Debug 构建里打开。")
+endif()
+
 # 添加工程级编译宏
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+    FILESYSTEM_HOOK_SD_LATE_DMA=${MP3_HOOK_SD_LATE_DMA}
     # 在此添加用户自定义的编译宏
 )
 

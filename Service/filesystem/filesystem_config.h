@@ -50,6 +50,19 @@
 #define FILESYSTEM_SD_BLOCK_SIZE             512U    /* FATFS 与当前 SD Card Device 使用的单个逻辑块大小，单位为字节。 */
 #define FILESYSTEM_SD_DMA_BLOCK_COUNT        64U     /* 单次 SDMMC DMA 最多合并的逻辑块数，64 块即 32 KiB 中转缓冲区。 */
 #define FILESYSTEM_SD_DMA_BUFFER_ALIGNMENT   PLATFORM_DCACHE_LINE_SIZE  /* SDMMC DMA 中转对齐，复用 Platform 公开的 D-Cache 行大小。 */
+#define FILESYSTEM_SD_LOG_LINE_BYTES         128U    /* 中止结果与钩子日志行的静态缓冲（含结尾 '\0'），与 Service Log 单条正文容量相同。 */
+
+/* filesystem_sd_transfer.c：迟到 DMA 测试钩子（DIAG-7、#209）。默认关闭，写成 `if (开关)` 而不是 `#if`，默认构建也编译，发布构建不开。
+ * 打开：构建时 -DFILESYSTEM_HOOK_SD_LATE_DMA=1（CMake 缓存变量 MP3_HOOK_SD_LATE_DMA=1，见根 CMakeLists.txt）。
+ * 做法：每 PERIOD 次读请求探测一次，探测在调用者自己的读之前：读目标块并算校验和；再让一笔 32 KiB 读（块 0 起）只等
+ * TIMEOUT_MS 而超时并被显式中止；紧接着再读目标块，校验和必须与第一次一致；目标块起始于 MIN_BLOCK 之前（引导区一带，
+ * 可能与受害块内容相同）时不探测。 */
+#ifndef FILESYSTEM_HOOK_SD_LATE_DMA
+#define FILESYSTEM_HOOK_SD_LATE_DMA          0U
+#endif
+#define FILESYSTEM_HOOK_SD_LATE_DMA_PERIOD       16U  /* 每多少次读请求探测一次。 */
+#define FILESYSTEM_HOOK_SD_LATE_DMA_TIMEOUT_MS    1U  /* 受害读的单块等待上限，单位为毫秒；32 KiB 的读平均 3 ms 以上，所以必然超时。 */
+#define FILESYSTEM_HOOK_SD_LATE_DMA_MIN_BLOCK    64U  /* 目标块起始号低于它不探测。 */
 
 /* filesystem_sd_bsp.c */
 /* 依据：SD 规范读访问上限 100 ms、SDHC 写忙 250 ms、SDXC 写忙 500 ms，另含 32 KiB 分块的传输时间；
