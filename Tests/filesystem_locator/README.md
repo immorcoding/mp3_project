@@ -4,7 +4,7 @@
 
 ## 被测对象与替身
 
-- 链接真实的 Filesystem Service（服务、文件、目录、路径、句柄、状态映射和定位符打开）与 FatFs（`ff.c`、`ff_gen_drv.c`、`diskio.c`、`cc936.c`），配置取自仓库 `FATFS/Target/ffconf.h`（CMake 复制并去掉 MCU 头）。
+- 链接真实的 Filesystem Service（服务、文件、目录、路径、句柄、状态映射和定位符打开）与 FatFs（`ff.c`、`ff_gen_drv.c`、`diskio.c`、`cc936.c`），配置取自仓库 `FATFS/Target/ffconf.h`（CMake 复制并去掉 MCU 头）；**`_FS_LOCK` 在 CMake 里固定为 2**（“锁表满”用例按“锁表只有两项”写），产品值随 CubeMX 导出变化也不影响本测试。其余数值（如 `_USE_LFN`）仍取产品值。FreeRTOS 头来自共用桩 [`Tests/stubs/freertos/`](../stubs/freertos/README.md)。
 - **`ff.c` 是构建目录里的副本**：CMake 把仓库的 `ff.c` 复制并统一成 LF，再用 `git apply` 应用 `patches/fatfs/` 下的补丁（副本已含该补丁则跳过）。测试因此不依赖工作树里的 `ff.c` 是否已被用户打上补丁；补丁无法应用到当前 `ff.c`（上游变了）时配置阶段直接失败。
 - 介质是 `ram_disk.c`：2 GiB 的稀疏 RAM 盘，只替代 FatFs 的磁盘驱动接口并统计读扇区次数；SD/Flash 传输层的四个符号由测试文件里的最小替身提供。
 

@@ -397,7 +397,7 @@ void swap_out(int *a, int *b)
             'Drivers/STM32H7xx_HAL_Driver/Src/a.c'
             'Middlewares/Third_Party/minimp3/minimp3.h'
             'Middlewares/ST/x/y.c'
-            'Tests/flash_ftl/stubs/Middlewares/Third_Party/FreeRTOS/Source/include/task.h'
+            'Tests/stubs/freertos/Middlewares/Third_Party/FreeRTOS/Source/include/task.h'
             'Tools/external_loader/third_party/cmsis/core_cm7.h'
             'build/gen/x.c'
             'cmake/stm32cubemx/x.c'
