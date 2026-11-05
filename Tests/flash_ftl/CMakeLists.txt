@@ -262,3 +262,50 @@ target_include_directories(sd_abort_tests PRIVATE ../..)
 target_compile_features(sd_abort_tests PRIVATE c_std_11)
 target_compile_options(sd_abort_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 add_test(NAME sd_component_abort COMMAND sd_abort_tests)
+
+# SD 读路径的整条链（#209）：FatFs 的 sd_diskio.c（CubeMX 生成，原样传 SD_TIMEOUT）→ filesystem_sd_bsp.c →
+# filesystem_sd_transfer.c → platform_sd.c → Components/sd/sd.c，以及 Storage 的 storage_sd.c 与 Filesystem Service。
+# 只有硬件一侧用替身：假 Port（内存 FAT12 镜像）、两个 IRQ Adapter 的注册函数、HAL 头与 CubeMX 句柄。
+# sd_diskio.c 选 SD_TIMEOUT 靠 HAL 的 SDMMC_DATATIMEOUT；替身头里写了同一个值，这里在配置时核对 HAL 头里的定义没变。
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_sdmmc.h"
+    LL_SDMMC_DATATIMEOUT REGEX "^#define SDMMC_DATATIMEOUT +[(][(]uint32_t[)]0xFFFFFFFFU[)]")
+if(NOT LL_SDMMC_DATATIMEOUT)
+    message(FATAL_ERROR "stm32h7xx_ll_sdmmc.h 里的 SDMMC_DATATIMEOUT 不再是 0xFFFFFFFF：更新 Tests/stubs/stm32_hal/stm32h7xx_hal.h 和 test_sd_removal_chain.c")
+endif()
+add_executable(sd_removal_chain_tests
+    test_sd_removal_chain.c
+    ../stubs/freertos/freertos_stub.c
+    ../stubs/lock_env/lock_env_cycle_counter.c
+    ../stubs/lock_env/lock_env_log.c
+    ../../Components/sd/sd.c
+    ../../Platform/sd/platform_sd.c
+    ../../APP/tasks/storage/sd/storage_sd.c
+    ../../Service/filesystem/filesystem_service.c
+    ../../Service/filesystem/filesystem_file.c
+    ../../Service/filesystem/filesystem_directory.c
+    ../../Service/filesystem/filesystem_path.c
+    ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_lock.c
+    ../../Service/filesystem/filesystem_status.c
+    ../../Service/filesystem/filesystem_text.c
+    ../../Service/filesystem/sd/filesystem_sd_transfer.c
+    ../../Service/filesystem/sd/filesystem_sd_bsp.c
+    ../../FATFS/Target/sd_diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c)
+target_include_directories(sd_removal_chain_tests BEFORE PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../stubs/lock_env ../stubs/stm32_hal ../..
+    ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
+target_compile_features(sd_removal_chain_tests PRIVATE c_std_11)
+target_compile_options(sd_removal_chain_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+# Vendor 与 CubeMX 生成的文件不启用本仓库的警告集。
+set_source_files_properties(
+    ../../FATFS/Target/sd_diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c
+    PROPERTIES COMPILE_OPTIONS "-w")
+add_test(NAME sd_removal_chain COMMAND sd_removal_chain_tests)

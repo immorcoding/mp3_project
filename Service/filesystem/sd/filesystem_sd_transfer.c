@@ -247,12 +247,12 @@ static void filesystem_sd_transfer_abort_after_timeout(bool is_read,
 
 /**
   * @brief  将收到的 DMA 事件提交给 Platform SD 状态机。
-  * @param  expected_event 当前操作方向所要求的完成事件。
-  * @param  timeout_ms 本 DMA 分块的最长等待时间，单位为毫秒。
-  * @param  start_block 这一分块的起始块（超时后写日志用）。
-  * @param  block_count 这一分块的块数（超时后写日志用）。
+  * @param[in] expected_event 当前操作方向所要求的完成事件。
+  * @param[in] timeout_ms 本 DMA 分块的最长等待时间，单位为毫秒。
+  * @param[in] start_block 这一分块的起始块（超时后写日志用）。
+  * @param[in] block_count 这一分块的块数（超时后写日志用）。
   * @retval true DMA 与传输后的 SD 卡同步均成功。
-  * @retval false 超时、错误、中止、方向不符或同步失败。
+  * @retval false 超时（已显式中止）、错误、方向不符或同步失败。
   */
 static bool filesystem_sd_transfer_finish(
     Platform_SD_TransferEventTypeDef expected_event,

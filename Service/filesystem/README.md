@@ -114,7 +114,7 @@ FSLOCK table n=1 hold=4000us:Open wait=0us:-
 
 `filesystem_path.c` 校验 UTF-8 相对路径并加盘符转 TCHAR。`filesystem_handle.c` 管理静态 `FIL`/`DIR` 槽（按卷分区）与代次 Token。`filesystem_lock.c/.h` 是卷锁、表锁、拒绝名单与持锁统计。`filesystem_file.c` / `filesystem_directory.c` 实现公开文件与目录 API。`filesystem_status.c` 合并 FRESULT 映射与盘符路径。`filesystem_file_locator.c` 实现按定位符打开，`filesystem_locator.h` 是定位符布局，`filesystem_ff_patch.h` 声明 `ff.c` 补丁函数。`sd/filesystem_sd_bsp.c` 强定义 BSP_SD_*，`sd/filesystem_sd_transfer.c/.h` 执行 SDMMC DMA。`flash/filesystem_flash_bsp.c` 强定义 BSP_USER_DISKIO_*，`flash/filesystem_flash_transfer.c/.h` 执行 Flash 请求并等待通知；诊断实现在 `flash/filesystem_flash_access.c`。
 
-Service 包含 FatFs 卷对象/公开 API、中间件 BSP 契约、Platform SD/Flash 产品接口、原生 FreeRTOS 和 Log Service。FATFS 生成 Glue 只包含其契约，不包含 Service 头。FTL/W25Qxx/HAL 不作为 Service 的直接实现依赖。
+Service 包含 FatFs 卷对象/公开 API、中间件 BSP 契约、Platform SD/Flash 产品接口、原生 FreeRTOS、Log Service，以及 Cortex-M7 周期计数器 Adapter（`Adapters/cortex/cycle_counter`：持锁统计在 Debug 里用它量持有与等待，SD 显式中止在所有构建里用它量耗时写 `FSABORT` 日志；计数器没启动时改用 tick，毫秒精度）。FATFS 生成 Glue 只包含其契约，不包含 Service 头。FTL/W25Qxx/HAL 不作为 Service 的直接实现依赖。
 
 ## 请求与事件路径
 
@@ -142,7 +142,9 @@ FatFs disk_* → SD 或 USER BSP 强定义 → 私有执行器 → Platform。�
 
 ### 显式中止（#209）
 
-SD 的 DMA 分块等完成信号量超过预算（`FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS`，500 ms）时，`filesystem_sd_transfer_finish` 调 `Platform_SD_AbortTransfer()`，不再向 Platform 提交 ERROR 事件：
+**预算来自 BSP，不来自 FatFs。** CubeMX 生成的 `sd_diskio.c` 传给 `BSP_SD_ReadBlocks/WriteBlocks` 的超时是 `SD_TIMEOUT`，即 HAL 的 `SDMMC_DATATIMEOUT`（0xFFFFFFFF）；`pdMS_TO_TICKS` 用 64 位算，等待约 49.7 天，真卡死时会一直持 SD 卷锁、永远走不到下面的中止。所以 `filesystem_sd_bsp.c` 忽略 FatFs 传来的值，每个 DMA 分块一律等 `FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS`（500 ms）。主机测试 `sd_removal_chain` 走真实的 `SD_read` → BSP 路径断言等待的 ticks 是 500。
+
+SD 的 DMA 分块等完成信号量超过预算（500 ms）时，`filesystem_sd_transfer_finish` 调 `Platform_SD_AbortTransfer()`，不再向 Platform 提交 ERROR 事件：
 
 | Platform 结果 | 含义 | Service 的动作 | 之后 |
 |---|---|---|---|
@@ -165,7 +167,7 @@ FSABORT stopped us=1523 R blk=123456 n=64
 
 ### 迟到 DMA 测试钩子（DIAG-7、#209）
 
-`FILESYSTEM_HOOK_SD_LATE_DMA`（`filesystem_config.h`，默认 `0U`）是编译开关，代码写成 `if (FILESYSTEM_HOOK_SD_LATE_DMA != 0U)`，默认构建也编译，发布构建不开（CMake 在 Release 打开会直接报错）。打开方式：configure 时 `cmake --preset firmware-debug -DMP3_HOOK_SD_LATE_DMA=1`，关掉要显式 `-DMP3_HOOK_SD_LATE_DMA=0`（缓存变量留在构建目录里）。
+`FILESYSTEM_HOOK_SD_LATE_DMA`（`filesystem_config.h`，默认 `0U`）是编译开关，代码写成 `if (FILESYSTEM_HOOK_SD_LATE_DMA != 0U)`，默认构建也编译，发布构建不开（CMake 在 Debug 以外的构建类型——Release、RelWithDebInfo、MinSizeRel——打开会直接报错）。打开方式：configure 时 `cmake --preset firmware-debug -DMP3_HOOK_SD_LATE_DMA=1`，关掉要显式 `-DMP3_HOOK_SD_LATE_DMA=0`（缓存变量留在构建目录里）。
 
 - **启动日志**：第一次 `InitSD()` 投一行 `HOOK late_dma ON period=16 timeout=1ms`（WARN，只投一次）；没有 `HOOK` 行就是没开。其他钩子各自在所属模块首次初始化时同样投一行 `HOOK`。
 - **做什么**：每 `FILESYSTEM_HOOK_SD_LATE_DMA_PERIOD`（16）次读请求探测一次，探测在调用者自己的读**之前**、复用 DMA 中转缓冲：① 读目标块（调用者这次读的起始块，至多 64 块），记 FNV-1a 校验和；② 从块 0 读 32 KiB 但只等 `FILESYSTEM_HOOK_SD_LATE_DMA_TIMEOUT_MS`（1 ms），32 KiB 平均要 3 ms 以上，必然超时并被显式中止（`FSABORT` 那一行照常出现）；③ **紧接着**再读目标块，校验和必须与 ① 一致——受害读（块 0 一带）与目标块内容不同，迟到的旧 DMA 若落进 bounce buffer、或旧的完成信号被下一笔当成完成，内容会变；目标块起始于 `FILESYSTEM_HOOK_SD_LATE_DMA_MIN_BLOCK`（64）之前（引导区一带）、以及所有写请求，都不探测。

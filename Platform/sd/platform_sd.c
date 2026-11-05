@@ -41,6 +41,7 @@ typedef struct
     void *TransferContext; /**< 原样传给 TransferCallback 的调用者上下文。 */
     bool IRQRegistered; /**< DetectIRQCallback 是否已经注册到 GPIO EXTI Adapter。 */
     bool TransferIRQRegistered; /**< TransferIRQCallback 是否已经注册到 SDMMC IRQ Adapter。 */
+    Platform_SD_StateTypeDef ReportedState; /**< 最近一次告诉上层的状态（Init 之后、每次成功的 Process 之后）；拔出事件按它判断。 */
 } Platform_SD_HandleTypeDef;
 
 /** @brief 本板唯一 SD 卡槽对应的私有实例。 */
@@ -248,6 +249,8 @@ Platform_StatusTypeDef Platform_SD_Init(Platform_SD_DetectCallback_t detect_call
         status = PLATFORM_SD_ERROR;
     }
 
+    /* 上层（Storage）按 Init 之后的状态自己决定要不要挂载，这是它最后一次知道的状态。 */
+    hplatform_sd.ReportedState = Platform_SD_GetState();
     return status;
 }
 
@@ -285,6 +288,7 @@ Platform_StatusTypeDef Platform_SD_DeInit(void)
     hplatform_sd.DetectContext = NULL;
     hplatform_sd.TransferCallback = NULL;
     hplatform_sd.TransferContext = NULL;
+    hplatform_sd.ReportedState = PLATFORM_SD_STATE_RESET;
 
     return platform_sd_status(SDCard_DeInit(&hplatform_sd.Device));
 }
@@ -379,15 +383,22 @@ Platform_StatusTypeDef Platform_SD_ClearTransferCallback(void)
 
 /**
   * @brief  处理一次已经完成消抖的 SD 卡状态刷新并生成稳定事件。
-  * @param  event 接收本次产生的稳定状态变化，不能为空。
+  * @param[out] event 接收本次产生的稳定状态变化，不能为空。
   * @retval PLATFORM_OK 刷新成功；无状态变化时 *event 为 EVENT_NONE。
   * @retval PLATFORM_SD_ERROR 参数无效、Platform 尚未初始化或刷新失败。
   * @note   本函数不等待也不消抖。调用者必须确保其在普通执行上下文调用，并且
   *         SD_CD 输入已稳定；Storage Task 的任务通知循环负责这一时序。
+  *
+  *         拔出事件按“最近一次告诉上层的状态”判断，而不是按本函数入口时 Device 的状态：读写中途拔卡时，
+  *         `SDCard_FailTransfer`、`SDCard_AbortTransfer` 或启动被拒会在本函数之前就把 Device 写成 NOT_PRESENT，
+  *         入口状态已经等于刷新后的状态，旧写法因此吞掉拔出，Storage 不卸载卷，被占用的文件槽不释放，
+  *         重新插卡时挂载返回 BUSY。这样 READY → NOT_PRESENT 不管发生在本函数里还是之前，都恰好报告一次 REMOVED。
+  *         插入事件仍按入口状态判断：静默的拔出之后卡在本函数之前又插回，看到的是 NOT_PRESENT → READY，
+  *         报告 INSERTED（Storage 视同换卡）。
   */
 Platform_StatusTypeDef Platform_SD_Process(Platform_SD_EventTypeDef *event)
 {
-    Platform_SD_StateTypeDef previous_state;
+    Platform_SD_StateTypeDef entry_state;
     Platform_SD_StateTypeDef current_state;
     Platform_StatusTypeDef status;
 
@@ -397,7 +408,7 @@ Platform_StatusTypeDef Platform_SD_Process(Platform_SD_EventTypeDef *event)
     }
 
     *event = PLATFORM_SD_EVENT_NONE;
-    previous_state = Platform_SD_GetState();
+    entry_state = Platform_SD_GetState();
     status = Platform_SD_Refresh();
 
     if (status != PLATFORM_OK)
@@ -407,17 +418,18 @@ Platform_StatusTypeDef Platform_SD_Process(Platform_SD_EventTypeDef *event)
 
     current_state = Platform_SD_GetState();
 
-    if ((previous_state != current_state) &&
+    if ((entry_state != current_state) &&
         (current_state == PLATFORM_SD_STATE_READY))
     {
         *event = PLATFORM_SD_EVENT_INSERTED;
     }
-    else if ((previous_state != current_state) &&
+    else if ((hplatform_sd.ReportedState != current_state) &&
              (current_state == PLATFORM_SD_STATE_NOT_PRESENT))
     {
         *event = PLATFORM_SD_EVENT_REMOVED;
     }
 
+    hplatform_sd.ReportedState = current_state;
     return PLATFORM_OK;
 }
 

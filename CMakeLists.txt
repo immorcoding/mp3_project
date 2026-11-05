@@ -141,8 +141,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # 板测要开时在 configure 时带上，例如：cmake --preset firmware-debug -DMP3_HOOK_SD_LATE_DMA=1
 # （缓存变量会留在构建目录里，关掉要显式 -DMP3_HOOK_SD_LATE_DMA=0）。打开的钩子在启动日志里各有一行 HOOK。
 set(MP3_HOOK_SD_LATE_DMA 0 CACHE STRING "迟到 DMA 测试钩子（#209，Service/filesystem）：1 打开，0 关闭（默认）")
-if(MP3_HOOK_SD_LATE_DMA AND CMAKE_BUILD_TYPE STREQUAL "Release")
-    message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_SD_LATE_DMA 只能在 Debug 构建里打开。")
+if(MP3_HOOK_SD_LATE_DMA AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_SD_LATE_DMA 只能在 Debug 构建里打开（当前 ${CMAKE_BUILD_TYPE}）。")
 endif()
 
 # 添加工程级编译宏

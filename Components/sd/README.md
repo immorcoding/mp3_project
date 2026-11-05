@@ -37,7 +37,7 @@ SD Card Device 经自身拥有的 `SDCard_PortOpsTypeDef` 发起介质请求；A
 | 不在 `BUSY` | 不变 | `SDCARD_ERROR` | `NOT_READY` | Port 不被调用 |
 | Port 没有安装 `AbortTransfer` | `ERROR` | `SDCARD_ERROR` | `PORT_NOT_BOUND` | 与其他可选 Port 操作缺失时一致 |
 
-卡不在时本函数与 `SDCard_FailTransfer()` 一样先于“比较前后状态”把 Device 写成 `NOT_PRESENT`，所以 `Platform_SD_Process()` 之后看到的前后状态相同，拔出事件会被吞掉——这是 ADR-0024 背景里记的同一个已知问题，由卷任务票（对账而不是靠状态变化事件）解决，不在本票范围。
+卡不在时本函数与 `SDCard_FailTransfer()` 一样会在 `Platform_SD_Process()` 之前就把 Device 写成 `NOT_PRESENT`（ADR-0024 背景里记的同一个问题）。Component 不管这个：Platform 的 `Platform_SD_Process()` 按“最近一次告诉上层的状态”判断拔出，所以这种静默的 READY → NOT_PRESENT 仍恰好报告一次 REMOVED（见 [Platform SD](../../Platform/sd/README.md)）。
 
 ## 约束
 

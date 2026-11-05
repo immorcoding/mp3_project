@@ -559,6 +559,28 @@ static IRQn_Type sd_stm32_hal_irqn(const SD_HandleTypeDef *hal_sd)
 }
 
 /**
+  * @brief  对 HAL Handle 的 SDMMC 外设做一次 RCC 复位脉冲，清掉 HAL_SD_DeInit() 留下的寄存器状态。
+  * @param[in] hal_sd 当前 SD Handle。
+  * @note   SDMMC1 在 AHB3RSTR 的 SDMMC1RST，SDMMC2 在 AHB2RSTR 的 SDMMC2RST（宏名和实例对应读自
+  *         stm32h7xx_hal_rcc.h）。在 HAL_SD_DeInit() 之后调用，此时外设时钟已被 MspDeInit 关掉；复位不依赖外设时钟，
+  *         依据是 HAL_DeInit() 也在不先使能时钟的情况下复位整条总线上的外设——这一点没有实测。
+  *         复位之后 MASK、IDMACTRL、DCTRL、POWER 等回到复位值，所以重新插卡走完整的初始化。
+  */
+static void sd_stm32_hal_reset_peripheral(const SD_HandleTypeDef *hal_sd)
+{
+    if (hal_sd->Instance == SDMMC2)
+    {
+        __HAL_RCC_SDMMC2_FORCE_RESET();
+        __HAL_RCC_SDMMC2_RELEASE_RESET();
+    }
+    else
+    {
+        __HAL_RCC_SDMMC1_FORCE_RESET();
+        __HAL_RCC_SDMMC1_RELEASE_RESET();
+    }
+}
+
+/**
   * @brief  发送一条短响应命令，并在预算内等它结束（命令通路不再活动）。
   * @param[in,out] hal_sd 当前 SD Handle。
   * @param[in] command_index 命令序号（本函数只用于 CMD12 与 CMD13）。
@@ -794,8 +816,11 @@ static SDCard_PortStatusTypeDef sd_stm32_hal_abort_transfer(void *context, uint3
 
     if (result != SDCARD_PORT_OK)
     {
-        /* 没有干净地停住：断电并关时钟，卷由 Device 保持 ERROR（或 NOT_PRESENT），重新初始化才恢复。 */
+        /* 没有干净地停住：断电并关时钟，再对外设做一次 RCC 复位，卷由 Device 保持 ERROR（或 NOT_PRESENT），
+         * 重新初始化才恢复。HAL_SD_DeInit() 不复位 SDMMC 寄存器，卡死的 IDMA/DPSM 会留着，重插后 HAL_SD_Init()
+         * 的 SCR 轮询读可能被残留的 IDMA 写进 bounce buffer。 */
         (void)HAL_SD_DeInit(hal_sd);
+        sd_stm32_hal_reset_peripheral(hal_sd);
     }
 
     NVIC_ClearPendingIRQ(sd_stm32_hal_irqn(hal_sd));

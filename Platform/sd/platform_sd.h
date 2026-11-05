@@ -98,7 +98,7 @@ typedef enum
     PLATFORM_SD_ABORT_STOPPED = 0U, /**< 传输已停止、卡回到可传输状态，Device 回到 READY，可以立即再传。 */
     PLATFORM_SD_ABORT_NO_MEDIA,     /**< 中止时发现卡已拔出：Device 进入 NOT_PRESENT，SDMMC 已反初始化。 */
     PLATFORM_SD_ABORT_STUCK,        /**< 到上界还没停住：SDMMC 已反初始化，Device 保持 ERROR，要拔插卡（或显式再初始化）才恢复。 */
-    PLATFORM_SD_ABORT_REJECTED      /**< 没有在飞的传输（Device 不在 BUSY）或 Port 不支持中止，什么都没做。 */
+    PLATFORM_SD_ABORT_REJECTED      /**< 没有受理：Device 不在 BUSY（状态不变），或 Port 没有安装中止操作（Device 进入 ERROR）。 */
 } Platform_SD_AbortResultTypeDef;
 
 /**

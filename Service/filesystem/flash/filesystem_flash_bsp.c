@@ -10,7 +10,7 @@
 /**
  * @brief 检查 USER 逻辑盘是否就绪，不触发扫描或格式化。
  * @param lun 驱动内编号，当前后端仅使用 0；不是全局卷号。
- * @return 0 表示已就绪；STA_NOINIT 表示后端或调用上下文未就绪。
+ * @return 0 表示已就绪；STA_NOINIT 表示后端未就绪（卷未初始化或未挂载）。
  * @note 强实现只在持 Flash 卷锁的公开调用里被 FatFs 调用；默认弱实现始终返回 STA_NOINIT。
  */
 DSTATUS BSP_USER_DISKIO_Init(BYTE lun)
