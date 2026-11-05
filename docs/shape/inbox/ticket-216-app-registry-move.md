@@ -1,0 +1,5 @@
+# Inbox: ticket-216-app-registry-move
+
+- 2026-11-04 · routes · route · ROUTES.md 的 `Routed:` 行与条目新增 `APP/apps/*/`：应用目录（注册表 `APP/apps/app_table.c` 加每应用一目录）。Entry: [应用接入约定](../../../APP/apps/README.md) → 目标应用 README（现有 [music](../../../APP/apps/music/README.md)）。Areas: [Architecture](../architecture.md)（ARC-23 至 ARC-28，正文 [architecture.apps](../architecture.apps.md)）；音乐另加 [GUI](../gui.md)。依据：#216 把 `APP/tasks/gui/music/` 搬到 `APP/apps/music/gui/`，`APP/tasks/gui/` 只剩循环。
+- 2026-11-04 · routes · route · ROUTES.md 的 `Tests/`、`Tools/gui_simulator/` 条目若按模块列主机测试，新增 `Tests/music_gui`（原 `Tests/gui_task` 的 5 个音乐用例，只改路径）；`Tests/gui_task` 只剩 `gui_service_input`。`scripts/rules/verification.psd1` 新增主机模块 `music_gui`，`GuiScenarioPathPatterns` 把 `^APP/tasks/gui/music/` 换成 `^APP/apps/music/gui/` 并加 `^APP/apps/app_table\.[ch]$`（#216）。
+- 2026-11-04 · architecture · proposed · ARC-23 已含“应用之间不互相包含”，现由 `scripts/check-layer-includes.ps1` 的 `app` 种类硬检查（`APP/apps/<应用>/` 下的文件不得包含 `APP/apps/<别的应用>/`，含 `../` 相对写法；`APP/apps/app_table.*` 直接在 apps 下，不受限）。“设置值的只读头”例外尚无对应文件，等设置应用那张票按实际头名加白名单。建议 ARC-23 补一句“由分层检查强制”（#216）。

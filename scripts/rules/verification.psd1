@@ -4,6 +4,7 @@
         'flash_ftl'
         'filesystem_locator'
         'gui_task'
+        'music_gui'
         'gui_theme'
         'gui_canvas'
         'gui_font'
@@ -80,14 +81,22 @@
                 '^APP/tasks/gui/'
                 '^Service/gui/gui_service_input'
                 '^Service/gui/gui_service\.(c|h)$'
-                '^Service/gui/main/queue/'
-                '^Service/gui/main/transport/'
-                # gui_music_transport 的 reducer 测试依赖播放合同；其余为测试编译到的 Platform/Service 聚合头与配置头（由 check-test-paths.ps1 发现）。
-                '^APP/tasks/playback/playback_contract\.h$'
+                # gui_service_input 的测试编译到的 Platform/Service 聚合头与配置头（由 check-test-paths.ps1 发现）。
                 '^Platform/platform\.h$'
                 '^Platform/lcd/platform_lcd\.h$'
                 '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
                 '^Service/service\.h$'
+                '^Tests/gui_task/'
+            )
+        }
+        @{
+            Name = 'music_gui'
+            PathPatterns = @(
+                '^APP/apps/music/gui/'
+                '^Service/gui/main/queue/'
+                '^Service/gui/main/transport/'
+                # gui_music_transport 的 reducer 测试依赖播放合同。
+                '^APP/tasks/playback/playback_contract\.h$'
                 # gui_music_queue_rows 的测试按窗口槽头构造 READY 窗口（#140）。
                 '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
                 '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
@@ -95,7 +104,7 @@
                 '^APP/tasks/storage/storage_task\.h$'
                 '^APP/tasks/storage/storage_task_config\.h$'
                 '^Service/filesystem/filesystem_types\.h$'
-                '^Tests/gui_task/'
+                '^Tests/music_gui/'
             )
         }
         @{
@@ -242,9 +251,10 @@
         '^Platform/lcd/platform_lcd\.h$'
         '^Platform/touch/platform_touch\.h$'
         '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
-        # 模拟器编译真实 APP 音乐分区；fakes/storage_sim.c 实现 Storage 窗口槽与 SD 状态头，
+        # 模拟器编译真实 APP 注册表与音乐 GUI 分区；fakes/storage_sim.c 实现 Storage 窗口槽与 SD 状态头，
         # fakes/playback_sim.c 实现播放合同头（FIFO 深度取播放任务配置），fakes/log_sim.c 实现 Service Log 头。
-        '^APP/tasks/gui/music/'
+        '^APP/apps/music/gui/'
+        '^APP/apps/app_table\.[ch]$'
         '^APP/tasks/playback/playback_(?:contract|task_config)\.h$'
         '^Service/log/log_service(?:_config)?\.h$'
         '^APP/tasks/storage/catalog/storage_listbuffer\.h$'

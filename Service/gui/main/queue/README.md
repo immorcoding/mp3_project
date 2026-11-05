@@ -20,7 +20,7 @@ Noto 下为 46 px，曲名 Y 6、歌手 Y 24（从 Panel 上沿量起），一�
 取值在 `gui_service_main_queue_config.h`。整行滚动步长取首行实际高度加 `QueueTab` 行距，不写死像素（GUI-16）。
 
 歌手 Label 原样显示传入的文本；歌手为空串时的占位文案 `Unknown Artist` 由 GUI Task 的
-`gui_music_queue_rows()` 备好（GUI-25，文案定义在 `APP/tasks/gui/music/gui_music_text.h`），本 Module 不替换。
+`gui_music_queue_rows()` 备好（GUI-25，文案定义在 `APP/apps/music/gui/gui_music_text.h`），本 Module 不替换。
 
 当前/非当前只改 Border Opa、曲名颜色角色（Accent ↔ Ink，经 `service_gui_theme_style_replace()`）、
 Long mode 和右侧符号 Opa。不改 Border Width，以免文字漂移。点按 `CLICKED` 立刻只刷新这些样式，

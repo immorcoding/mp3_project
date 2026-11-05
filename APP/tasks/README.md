@@ -6,7 +6,7 @@
 
 - `app_task_start()`：由 `APP/app.c` 创建 bootstrap task 并启动调度器；
 - `log_task()`、`storage_task()`、`playback_task()`、`monitor_task()`、`gui_task()`：仅作为 FreeRTOS `TaskFunction_t` 交给创建器。播放任务用 `xTaskCreateStatic` 创建（TCB 与栈在 `app_tasks.c` 的 DTCM `.bss`），其余任务仍用 `xTaskCreate`；
-- `playback_command_send()`、`playback_snapshot_read()`：播放任务公开合同（`playback/playback_contract.h`），只给 GUI 音乐分区和模拟器脚本化后端使用，见 [播放任务](playback/README.md)。
+- `playback_command_send()`、`playback_snapshot_read()`：播放任务公开合同（`playback/playback_contract.h`），只给音乐应用 GUI 分区（`APP/apps/music/gui/`）和模拟器脚本化后端使用，见 [播放任务](playback/README.md)。
 
 本目录不是独立的跨 Module Interface；其头文件和任务入口只服务于顶层 `APP` Module，其他层不得包含或调用。
 
