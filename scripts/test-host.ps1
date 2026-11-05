@@ -2,8 +2,8 @@
 param(
     [string]$HostCompiler,
 
-    [ValidateSet('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'music_gui', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'playback_service', 'playback_task', 'monitor_warn', 'board_test_card')]
-    [string[]]$Module = @('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'music_gui', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'playback_service', 'playback_task', 'monitor_warn', 'board_test_card'),
+    [ValidateSet('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'music_gui', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'ui_cell', 'playback_service', 'playback_task', 'monitor_warn', 'board_test_card')]
+    [string[]]$Module = @('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'music_gui', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'ui_cell', 'playback_service', 'playback_task', 'monitor_warn', 'board_test_card'),
 
     # 跳过慢用例（规则里声明 HasSlowTests 的模块，目前是样本卡的整文件确定性用例）：CHANGED 用，FULL 不带此开关、全跑。
     [switch]$SkipSlow

@@ -9,6 +9,7 @@
 - `app_table.h` / `app_table.c`：注册表，应用目录里唯一认识所有应用的地方。
 - `<app>/gui/`：应用的 GUI 分区（`gui_init`、`gui_step` 的实现、窗口协议、播放命令与快照归约）。LVGL 的那一半在 `Service/gui/main/<app>/` 与 `view/`，属于 Service 层，不放这里。
 - `<app>/foreground/`、后台作业、界面数据与最新需求：随后续票加入同一应用目录，现在还没有。
+- 共用层的 `ui_cell`（界面数据短锁）在 `APP/ui_cell/`，不属于任何应用，见 [ui_cell](../ui_cell/README.md)；应用自己的格子结构体放在应用目录里。
 - 应用的 README 写它自己的私有 Interface、运行时路径与编译期依赖；共用约定只写在本页。
 
 ## 注册表

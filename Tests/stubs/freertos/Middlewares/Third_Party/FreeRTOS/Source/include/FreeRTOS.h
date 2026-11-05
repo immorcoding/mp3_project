@@ -20,6 +20,11 @@ typedef unsigned long UBaseType_t;
 #define pdPASS (pdTRUE)
 #define pdFAIL (pdFALSE)
 
+/* 与产品 FreeRTOSConfig.h 一致：configASSERT 无条件生效，失败时调用 vAssertCalled。
+ * 桩里的 vAssertCalled 打印位置后 abort()；测试用 SIGABRT 处理函数捕获（见 freertos_stub.c）。 */
+void vAssertCalled(const char *file, uint32_t line);
+#define configASSERT(x)                              do                                               {                                                    if ((x) == 0)                                    {                                                    vAssertCalled(__FILE__, (uint32_t)__LINE__);         }                                            } while (0)
+
 #define portMAX_DELAY ((TickType_t)0xffffffffUL)
 #define pdMS_TO_TICKS(ms) ((TickType_t)(((uint64_t)(ms) * (uint64_t)configTICK_RATE_HZ) / 1000U))
 /* 主机桩没有中断，让出请求没有意义，只对参数求值以免产生未使用警告。 */
