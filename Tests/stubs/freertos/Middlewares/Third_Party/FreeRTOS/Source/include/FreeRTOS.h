@@ -27,7 +27,9 @@ void vAssertCalled(const char *file, uint32_t line);
 
 #define portMAX_DELAY ((TickType_t)0xffffffffUL)
 #define pdMS_TO_TICKS(ms) ((TickType_t)(((uint64_t)(ms) * (uint64_t)configTICK_RATE_HZ) / 1000U))
-/* 主机桩没有中断，让出请求没有意义，只对参数求值以免产生未使用警告。 */
-#define portYIELD_FROM_ISR(x) ((void)(x))
+/* 主机桩没有中断，不会真的让出；记录“非零标志的让出请求”次数，供测试核对回调把 GiveFromISR 的
+ * higher_priority_task_woken 交给了 portYIELD_FROM_ISR。定义在 freertos_stub.c。 */
+void vStubPortYieldFromISR(BaseType_t higher_priority_task_woken);
+#define portYIELD_FROM_ISR(x) vStubPortYieldFromISR((BaseType_t)(x))
 
 #endif

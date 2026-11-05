@@ -52,6 +52,8 @@ static TickType_t tick_step;
 static FreertosStub_BlockHook block_hook;
 static void *block_hook_context;
 static uint32_t infinite_waits_unsatisfied;
+static BaseType_t give_from_isr_woken;
+static uint32_t isr_yield_requests;
 
 /**
  * @brief 取得句柄背后的桩状态。
@@ -127,6 +129,8 @@ void freertos_stub_reset(void)
     block_hook = NULL;
     block_hook_context = NULL;
     infinite_waits_unsatisfied = 0U;
+    give_from_isr_woken = pdFALSE;
+    isr_yield_requests = 0U;
     memset(task_pool, 0, sizeof(task_pool));
     task_count = 0U;
     current_task = freertos_stub_task_create();
@@ -238,6 +242,45 @@ TickType_t xTaskGetTickCount(void)
 {
     current_tick += tick_step;
     return current_tick;
+}
+
+/**
+ * @brief 让之后的 GiveFromISR 报告给定的 higher_priority_task_woken。
+ * @param[in] woken pdTRUE 或 pdFALSE。
+ */
+void freertos_stub_set_give_from_isr_woken(BaseType_t woken)
+{
+    give_from_isr_woken = woken;
+}
+
+/**
+ * @brief 读取 portYIELD_FROM_ISR 以非零标志被调用的次数。
+ * @return 累计次数。
+ */
+uint32_t freertos_stub_isr_yield_requests(void)
+{
+    return isr_yield_requests;
+}
+
+/**
+ * @brief portYIELD_FROM_ISR 的桩实现：只记录非零请求，不让出。
+ * @param[in] higher_priority_task_woken 回调传入的标志。
+ */
+void vStubPortYieldFromISR(BaseType_t higher_priority_task_woken)
+{
+    if (higher_priority_task_woken != pdFALSE)
+    {
+        isr_yield_requests++;
+    }
+}
+
+/**
+ * @brief 让当前任务延时：主机桩没有调度，只让 tick 前进给定长度。
+ * @param[in] ticks_to_delay 延时的 tick 数，0 表示不前进。
+ */
+void vTaskDelay(TickType_t ticks_to_delay)
+{
+    current_tick += ticks_to_delay;
 }
 
 /**
@@ -387,17 +430,18 @@ BaseType_t xSemaphoreGive(SemaphoreHandle_t semaphore)
 }
 
 /**
- * @brief 中断里释放信号量；主机桩没有调度，不请求让出。
+ * @brief 中断里释放信号量；主机桩没有调度，不真的让出，只按脚本报告是否唤醒了更高优先级任务。
  * @param[in] semaphore 信号量句柄。
- * @param[out] higher_priority_task_woken 可为 NULL，写入 pdFALSE。
+ * @param[out] higher_priority_task_woken 可为 NULL，写入脚本值（默认 pdFALSE）。
  * @retval pdTRUE 释放成功。
  * @retval pdFALSE 信号量本来就可用。
  */
 BaseType_t xSemaphoreGiveFromISR(SemaphoreHandle_t semaphore, BaseType_t *higher_priority_task_woken)
 {
+    state_of(semaphore)->stats.give_from_isr_calls++;
     if (higher_priority_task_woken != NULL)
     {
-        *higher_priority_task_woken = pdFALSE;
+        *higher_priority_task_woken = give_from_isr_woken;
     }
     return xSemaphoreGive(semaphore);
 }

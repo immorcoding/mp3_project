@@ -374,6 +374,64 @@ static void test_notify_wait_hook_delivers_notification(void)
 }
 
 /**
+ * @brief 中断里 Give 单独计数，且按脚本报告“唤醒了更高优先级任务”；portYIELD_FROM_ISR 只在传入非零时计一次让出。
+ */
+static void test_give_from_isr_counts_and_reports_woken(void)
+{
+    StaticSemaphore_t storage;
+    SemaphoreHandle_t gate;
+    FreertosStub_SemaphoreStats stats;
+    BaseType_t woken = pdFALSE;
+
+    freertos_stub_reset();
+    gate = xSemaphoreCreateBinaryStatic(&storage);
+
+    /* 默认不唤醒更高优先级任务：传入的标志保持原值语义（桩写入 pdFALSE），不请求让出。 */
+    assert(xSemaphoreGiveFromISR(gate, &woken) == pdTRUE);
+    assert(woken == pdFALSE);
+    portYIELD_FROM_ISR(woken);
+    assert(freertos_stub_isr_yield_requests() == 0U);
+    assert(xSemaphoreTake(gate, 0U) == pdTRUE);
+
+    /* 脚本让下一次 GiveFromISR 报告唤醒了更高优先级任务。 */
+    freertos_stub_set_give_from_isr_woken(pdTRUE);
+    assert(xSemaphoreGiveFromISR(gate, &woken) == pdTRUE);
+    assert(woken == pdTRUE);
+    portYIELD_FROM_ISR(woken);
+    assert(freertos_stub_isr_yield_requests() == 1U);
+
+    /* 任务里的 Give 与中断里的 Give 分开计数；Give 失败（已有信号）也算一次调用。 */
+    assert(xSemaphoreTake(gate, 0U) == pdTRUE);
+    assert(xSemaphoreGive(gate) == pdTRUE);
+    assert(xSemaphoreGiveFromISR(gate, NULL) == pdFALSE);
+    stats = freertos_stub_semaphore_stats(gate);
+    assert(stats.give_calls == 4U);
+    assert(stats.give_from_isr_calls == 3U);
+
+    /* reset 清掉脚本与计数。 */
+    freertos_stub_reset();
+    assert(freertos_stub_isr_yield_requests() == 0U);
+    gate = xSemaphoreCreateBinaryStatic(&storage);
+    assert(xSemaphoreGiveFromISR(gate, &woken) == pdTRUE);
+    assert(woken == pdFALSE);
+}
+
+/**
+ * @brief vTaskDelay 让 tick 前进给定长度；0 个 tick 不前进。
+ */
+static void test_task_delay_advances_tick(void)
+{
+    freertos_stub_reset();
+    freertos_stub_set_tick(40U);
+    vTaskDelay(1U);
+    assert(xTaskGetTickCount() == 41U);
+    vTaskDelay(25U);
+    assert(xTaskGetTickCount() == 66U);
+    vTaskDelay(0U);
+    assert(xTaskGetTickCount() == 66U);
+}
+
+/**
  * @brief 运行全部桩行为用例。
  * @return 全部断言通过为零，否则终止进程。
  */
@@ -394,6 +452,8 @@ int main(void)
     test_notify_state_clear_is_per_index();
     test_notify_targets_the_named_task();
     test_notify_wait_hook_delivers_notification();
+    test_give_from_isr_counts_and_reports_woken();
+    test_task_delay_advances_tick();
     puts("freertos_stub tests passed");
     return 0;
 }

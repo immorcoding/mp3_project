@@ -46,7 +46,8 @@ typedef struct
     uint32_t take_calls;         /**< 拿取调用总数（含失败）。 */
     uint32_t take_successes;     /**< 拿取成功次数。 */
     uint32_t waits;              /**< 拿取时对象不可用且超时不为 0 的次数。 */
-    uint32_t give_calls;         /**< 释放调用总数（含失败）。 */
+    uint32_t give_calls;         /**< 释放调用总数（含失败，含中断里的释放）。 */
+    uint32_t give_from_isr_calls; /**< 其中经 xSemaphoreGiveFromISR 的调用数（含失败）。 */
     uint32_t give_successes;     /**< 释放成功次数。 */
     TickType_t last_timeout_ticks; /**< 最近一次拿取传入的超时。 */
 } FreertosStub_SemaphoreStats;
@@ -80,6 +81,19 @@ void freertos_stub_set_block_hook(FreertosStub_BlockHook hook, void *context);
  * @return 累计次数，reset 后清零。
  */
 uint32_t freertos_stub_unsatisfied_infinite_waits(void);
+
+/**
+ * @brief 让之后每次 xSemaphoreGiveFromISR 报告的 higher_priority_task_woken 为给定值，
+ *        用来核对被测回调把它交给了 portYIELD_FROM_ISR；reset 后恢复 pdFALSE。
+ * @param[in] woken pdTRUE 或 pdFALSE。
+ */
+void freertos_stub_set_give_from_isr_woken(BaseType_t woken);
+
+/**
+ * @brief portYIELD_FROM_ISR 以非零标志被调用的次数（桩不真的让出）。
+ * @return 累计次数，reset 后清零。
+ */
+uint32_t freertos_stub_isr_yield_requests(void);
 
 /**
  * @brief 读取某个信号量的调用统计。
