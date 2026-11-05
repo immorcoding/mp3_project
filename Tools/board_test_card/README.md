@@ -15,7 +15,7 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 `Tools/board_test_card/test_*.py` 是主机模块 `board_test_card`（`scripts/rules/verification.psd1`，`Kind = 'Python'`），由 `./scripts/test-host.ps1 -Module board_test_card` 运行（需要 `python` 在 PATH 中）：
 
 - FULL（`./scripts/verify.ps1`、`capture-verification.ps1 -Mode FULL`）全跑。
-- CHANGED（pre-push）在改动落在 `Tools/board_test_card/` 或 `Tests/playback_service/fixtures/xing/`（`test_card_seek.py` 逐字节核对这些夹具）时选中它，并带 `-SkipSlow`：只跳过 `test_card_glyphs.py` 与 `test_card_soak.py` 的整文件用例（约 45 s 与 25 s），其余约 15 s。`test_card_soak.py` 的整文件编码用例（约 25 s）同理；这些用例读环境变量 `MP3_SKIP_SLOW_TESTS=1` 自行跳过，所以直接 `python Tools/board_test_card/test_card_glyphs.py` 仍全跑。
+- CHANGED（pre-push）在改动落在 `Tools/board_test_card/` 或 `Tests/playback_service/fixtures/xing/`（`test_card_seek.py` 逐字节核对这些夹具）时选中它，并带 `-SkipSlow`：只跳过 `test_card_glyphs.py` 与 `test_card_soak.py` 的整文件用例（约 45 s 与 25 s），其余约 15 s。这些用例读环境变量 `MP3_SKIP_SLOW_TESTS=1` 自行跳过，所以直接 `python Tools/board_test_card/test_card_glyphs.py` 仍全跑。
 - 未安装 `lameenc` 时：运行开头打印“未安装 lameenc”，依赖它的整文件用例（glyphs、seek、xing、bigdir 探针曲）由用例自身 skip，`-v` 输出里能看到每条 skip 的原因；其余合同用例照常运行，不算失败。要跑全套先 `pip install lameenc`（字节数以 1.9.0 为准）。
 - 单个用例手动运行同前：`python Tools/board_test_card/test_card_names.py` 等。
 
@@ -131,24 +131,25 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 
 ```powershell
 python Tools/board_test_card/make_card.py <输出目录> --set soak
-python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Combined --set soak
+python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Soak --set soak
 ```
 
-- 要让循环严格是这三首，库里就只能有它们：单独放一个文件夹（同下文“三文件夹”，上板前改名成 `Music`）；与综合文件夹混放时，循环会带上其余曲目。
+- 要让循环严格是这三首，库里就只能有它们：单独放卡上的 `Soak` 文件夹（同下文“三文件夹”，上板前改名成 `Music`）；与 `Combined` 混放时，循环会带上其余曲目，清单 3 R7.1 不成立。
 - 合同（三首、采样率与比特率及顺序、不进 `all`、不与其他子集重名）由 `python Tools/board_test_card/test_card_soak.py` 检查；读回 MPEG 帧头核对采样率与比特率、字节数、逐字节确定性需要 `lameenc`，未装时跳过，且属慢用例（CHANGED 带 `-SkipSlow` 时跳过，见上文“测试”）。
 
-### 三文件夹（一张卡，只复制一次）
+### 三文件夹加长跑文件夹（一张卡）
 
-用户只有一张 SD 卡，所有验收样本一次装完：卡上建三个文件夹，上板前把要用的那个改名成 `Music`，其余保持原名。固件曲库只扫 `Music/`（含子目录），没有 `Music` 就是空库（清单配置 D）。
+用户只有一张 SD 卡，所有验收样本一次装完：卡上建三个验收文件夹（综合、异常、大目录，各复制一次）加一个长跑文件夹 `Soak`（约 25 MB，不算额外负担），上板前把要用的那个改名成 `Music`，其余保持原名。固件曲库只扫 `Music/`（含子目录），没有 `Music` 就是空库（清单配置 D）。
 
 | 文件夹 | 内容 | 命令（`<输出目录>` 每条各用一个） | 用途 |
 |---|---|---|---|
-| `Combined`（综合） | `all`，再 `seek`，再 5 首以上真实歌曲；长跑样本也可放这里 | `--copy-to I:\Combined --set all`，再 `--copy-to I:\Combined --set seek` | 大部分回归、跳转、交互项，以及可选的长跑 |
+| `Combined`（综合） | `all`，再 `seek`，再 5 首以上真实歌曲 | `--copy-to I:\Combined --set all`，再 `--copy-to I:\Combined --set seek` | 大部分回归、跳转、交互项 |
 | `Abnormal`（异常） | 整库不可播 | `--copy-to I:\Abnormal --set all-unsupported` | 清单 1 F4（ALL_BAD）；清空 `Music` 测空库 |
 | `BigDir`（大目录） | `bigdir`：11998 首根目录文件 + 末尾子目录 `zz-tail-subdir/` 的 2 首 | `--copy-to I:\BigDir --set bigdir` | 清单 1 O 组、清单 3 R6.6 |
+| `Soak`（长跑） | `soak`：32、44.1、48 kHz 三首 320 kbps | `--copy-to I:\Soak --set soak` | 清单 1 C1、清单 3 R7.1（库里只有这三首才是三首循环） |
 
 - 各文件夹里的复制顺序就是 FAT 目录项顺序，也是入库顺序：按上文各表逐个复制，不要整夹拖拽；`--copy-to` 已按此顺序。
 - 改文件夹名只改它在上级目录里的那一个目录项，不动里面的目录项顺序（按 FAT 结构推断）。
-- 卡上留约 1 GiB 空闲：`bigdir` 约 260 MB 有效数据，12000 个文件按簇取整后占用更多，另有综合文件夹和输出目录所在盘同样要有余量。
+- 卡上留约 1 GiB 空闲：`bigdir` 约 260 MB 有效数据，12000 个文件按簇取整后占用更多，另有 `Combined`、`Soak` 和输出目录所在盘同样要有余量。
 - **这个做法还没在板上试过**，第一次上板时确认：改名后曲库顺序与文件夹创建时一致；`Combined` 里 `all` 的坏文件仍按目录顺序跳过；改名切换前后卡上的目录项顺序没变。
 - 某个子集想重新装：删掉那个文件夹后重建，再按顺序复制，不必格式化整张卡。
