@@ -69,10 +69,12 @@ file(GLOB RESOURCE_PACK_SOURCES CONFIGURE_DEPENDS
     "${REPO_ROOT}/Components/resource_pack/*.c"
 )
 
-# 真实的 APP 音乐分区；它依赖的 Storage 窗口槽与 SD 状态由 fakes/storage_sim.c 提供，
-# 播放合同由 fakes/playback_sim.c 提供，Service Log 由 fakes/log_sim.c 提供。
+# 真实的 APP 应用注册表与音乐 GUI 分区；分区依赖的 Storage 窗口槽与 SD 状态由
+# fakes/storage_sim.c 提供，播放合同由 fakes/playback_sim.c 提供，Service Log 由
+# fakes/log_sim.c 提供。sim_main.c 和产品 gui_task.c 一样遍历 app_table。
 file(GLOB APP_GUI_MUSIC_SOURCES CONFIGURE_DEPENDS
-    "${REPO_ROOT}/APP/tasks/gui/music/*.c"
+    "${REPO_ROOT}/APP/apps/app_table.c"
+    "${REPO_ROOT}/APP/apps/music/gui/*.c"
 )
 # 假 Storage 的曲目显示名经真实的提取纯函数产生（与 Storage 名称槽同一实现）。
 list(APPEND APP_GUI_MUSIC_SOURCES

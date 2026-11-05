@@ -1,6 +1,6 @@
 # GUI 模拟器
 
-在 Windows PC 上运行**真实的** LVGL v8.3.11、`Service/gui`（含手写界面 `view/`）与 APP 音乐分区 `APP/tasks/gui/music`，用 SDL2 窗口替代 ST7789 + FT6X36。目的是在不烧录的情况下迭代界面与 GUI 运行时（Canvas、Pager、主题、Queue、Transport），并用场景回归守住界面等价性（ADR-0016）。
+在 Windows PC 上运行**真实的** LVGL v8.3.11、`Service/gui`（含手写界面 `view/`）与 APP 应用注册表 `APP/apps/app_table.c` 与音乐 GUI 分区 `APP/apps/music/gui`，用 SDL2 窗口替代 ST7789 + FT6X36。目的是在不烧录的情况下迭代界面与 GUI 运行时（Canvas、Pager、主题、Queue、Transport），并用场景回归守住界面等价性（ADR-0016）。
 
 本工程是独立 host CMake 工程，不进入目标固件，不是板级验收（`PASS_HOST_ONLY` 也不算，见 `docs/shape/sources/verification.md`）。
 
@@ -14,7 +14,7 @@ cmake --build build/gui_simulator
 ./build/gui_simulator/gui_simulator.exe
 ```
 
-窗口为 240×320 的 2 倍放大（`SIM_DISPLAY_ZOOM`）。鼠标左键 = 触摸；`T` 切换 Default/Solid 主题；`C` 在拔卡与重新挂载之间切换并把曲库代次 +1（拔卡：真实 `gui_music` 按窗口协议 CLEAR 清空 Queue；假播放后端在播放或暂停中按拔卡停止，无当前曲，播放键、时间、进度与唱盘随快照归零；无卡再按播放，开启约 100 ms 后按 NOT_READY 停止；重新挂载：Queue 重新 request，无当前曲故无高亮）；`G` 模拟重扫：代次 +1，但已显示的 Queue 窗口保留到下一次 request，用于制造过期窗口（点旧窗口的行，假后端按 CATALOG_CHANGED 停止）；`E` 模拟重扫得到空库（再按一次恢复固定曲库），代次 +1，之后按播放得到 `No tracks` 与曲名 `--`；`S` 挂起/恢复假播放后端的命令处理（挂起时命令只入队、位置照走，FIFO 满后 `playback_command_send()` 返回队列满，stdout 打印 `[playback] queue full` 与 `[log]` 行；恢复后一圈处理完）；`B` 让假后端之后一次开启应答为坏文件（连按 k 次则之后 k 次开启都坏）：按 B5 沿最近一次移动的方向跳到下一首、跳过数 +1，连跳数达到曲目数（16）即按 ALL_BAD 停止；`R` 让假后端按 K1 枚举顺序以下一个非 NONE 原因立即停止（停止态也再停一次，停止次数 +1；CARD_REMOVED、NOT_READY、NO_TRACK、CATALOG_CHANGED 变为无当前曲，AUDIO_FAULT 锁存，之后停止态按播放或点行只让停止次数 +1，重启模拟器才解除）；`A` 在 stdout 打印 `[anim] running N`（LVGL 运行中动画数，核对唱盘旋转与状态行闪烁不叠加）；`L` 以 300 ms 淡出回到 Lock（产品暂无重新锁屏入口，只用于核对 Lock 呼吸随屏幕重启）；`Esc` 退出。启动后约 5 s 进入 Lock，向上拖动解锁。
+窗口为 240×320 的 2 倍放大（`SIM_DISPLAY_ZOOM`）。鼠标左键 = 触摸；`T` 切换 Default/Solid 主题；`C` 在拔卡与重新挂载之间切换并把曲库代次 +1（拔卡：真实音乐分区按窗口协议 CLEAR 清空 Queue；假播放后端在播放或暂停中按拔卡停止，无当前曲，播放键、时间、进度与唱盘随快照归零；无卡再按播放，开启约 100 ms 后按 NOT_READY 停止；重新挂载：Queue 重新 request，无当前曲故无高亮）；`G` 模拟重扫：代次 +1，但已显示的 Queue 窗口保留到下一次 request，用于制造过期窗口（点旧窗口的行，假后端按 CATALOG_CHANGED 停止）；`E` 模拟重扫得到空库（再按一次恢复固定曲库），代次 +1，之后按播放得到 `No tracks` 与曲名 `--`；`S` 挂起/恢复假播放后端的命令处理（挂起时命令只入队、位置照走，FIFO 满后 `playback_command_send()` 返回队列满，stdout 打印 `[playback] queue full` 与 `[log]` 行；恢复后一圈处理完）；`B` 让假后端之后一次开启应答为坏文件（连按 k 次则之后 k 次开启都坏）：按 B5 沿最近一次移动的方向跳到下一首、跳过数 +1，连跳数达到曲目数（16）即按 ALL_BAD 停止；`R` 让假后端按 K1 枚举顺序以下一个非 NONE 原因立即停止（停止态也再停一次，停止次数 +1；CARD_REMOVED、NOT_READY、NO_TRACK、CATALOG_CHANGED 变为无当前曲，AUDIO_FAULT 锁存，之后停止态按播放或点行只让停止次数 +1，重启模拟器才解除）；`A` 在 stdout 打印 `[anim] running N`（LVGL 运行中动画数，核对唱盘旋转与状态行闪烁不叠加）；`L` 以 300 ms 淡出回到 Lock（产品暂无重新锁屏入口，只用于核对 Lock 呼吸随屏幕重启）；`Esc` 退出。启动后约 5 s 进入 Lock，向上拖动解锁。
 
 ## 脚本参数（无人值守截图）
 
@@ -71,7 +71,7 @@ LVGL 在动画链表为空时暂停动画定时器、新动画开始时恢复，
 
 ## 替身边界
 
-编译真实的 `Service/gui` 与 APP 音乐分区（`gui_music*.c`）；只替换它们已有的 Seam，不改生产代码：
+编译真实的 `Service/gui`、APP 注册表（`app_table.c`，`sim_main.c` 和产品 `gui_task.c` 一样遍历 `gui_init`、`gui_step`）与音乐 GUI 分区（`gui_music*.c`）；只替换它们已有的 Seam，不改生产代码：
 
 | 产品依赖 | 模拟器替身 |
 | --- | --- |
@@ -82,7 +82,7 @@ LVGL 在动画链表为空时暂停动画定时器、新动画开始时恢复，
 | Cortex-M7 周期计数器 Adapter | `fakes/cycle_counter_sim.c`：SDL 高精度计数器，只用于字体解码耗时日志（不参与帧哈希，PC 耗时不代表板上） |
 | `lv_conf.h` | `config/sim_lv_conf.h`：包装产品配置，只关 DMA2D、`.lvgl_large_ram_array` 段与 FPS/内存浮层 |
 | `APP/tasks/storage` 中音乐分区用到的部分：`storage_listbuffer` / `storage_namebuffer` 全局对象、`storage_listbuffer_*`、`storage_namebuffer_*`、`storage_task_sd_is_ready/mounted()` | `fakes/storage_sim.c`：16 首固定曲目——原 10 首英文曲目（第 0–9 首，没有目录与扩展名）、5 个中文与文件名规则样本（第 10–14 首：`Music/a.b.MP3`、`Music/繁體 龍 喆 镕.mp3`、中文长名、`Music/Jay Chou 周杰伦 - 晴天.mp3`、`Music/晴天.mp3`）、最后一首超长英文名（第 15 首，需要滚动；开播后按上一首先绕到它，再依次到第 14、13…首）；超过一窗 12 条，Queue 滚到末尾时按窗口协议换窗。`E` 键切换空库；窗口行与名称槽都按生产头给出 {曲目显示名 `Title`, 歌手 `Artist`}（窗口行不含路径）：`storage_sim_tags` 中的第 5 首（`Experience`）给出假 TIT2 `Experience (Einaudi Live)` 与 TPE1 `Ludovico Einaudi`，位置 6（`Merry Christmas Mr. Lawrence`）给出同名 TIT2 与多值 TPE1 连写的 `Ryuichi Sakamoto / David Sylvian`，第 7 首（`Kiss the Rain`）给出假 TIT2 `Kiss the Rain (Live)`、无 TPE1，位置 8 给出中文 TIT2 `晴天（2003 年演唱会现场版）` 与 TPE1 `周杰伦`，位置 9 给出 `Beyoncé® – Halo™` 与宽于 Queue 一行的西文 TPE1（不读标签字节，替代生产 `storage_track_text_read()` 的“取到”结果），其余曲目经真实的 `storage_catalog_display_name()` 回退文件主名、歌手为空；窗口一次填完，不模拟生产的逐圈一行（生产窗口填满前保持 `PENDING`，GUI 只见整窗，二者在 GUI 侧不可区分；逐圈排程进板级验收）；不模拟打开失败、读取错误等标签侧回退与读取耗时（这些在板级验收）；`sim_main.c` 每圈先于 `gui_music_step()` 调 `storage_sim_step()`，上一圈 request 的窗口与名字本圈填成 READY；名称槽同生产：代次不符、越界或未挂载应答代次 0；脚本开关 `--name-fail` 让指定位置走防御分支（代次 0），`--name-delay`、`--window-delay` 分别让名称槽与窗口槽应答多等若干圈；另给假播放后端提供当前代次与曲目数 |
-| `APP/tasks/playback`：`playback_contract.h` 的 `playback_command_send()` / `playback_snapshot_read()` | `fakes/playback_sim.c`：命令 FIFO 深度取 `PLAYBACK_COMMAND_QUEUE_DEPTH`（8）；`sim_main.c` 每圈在 `gui_music_step()` 之前调 `playback_sim_step()`，把 FIFO 取空并回显序号（挂起时跳过），再按虚拟时钟推进；按 #71 K3 命令表、K4 字段与 K5 转换点响应；每次从曲首开启一首（SELECT、播放/暂停中 NEXT/PREV、停止态开播、播完前进、跳过坏文件后开下一首）`TrackStartCount` 加 1；SEEK 先核对曲目身份（停止态、无当前曲、身份不符、开启中或总时长未知一律忽略并回显），然后 `PositionMs = min(TargetMs, DurationMs)`，`TrackStartCount` 不变，播放中落在末尾则下一圈按播完前进、暂停中停在末尾；FIFO 里连续的 SEEK 只执行最后一条（最新者胜），被跳过的同样回显；`--seek-echo-delay` 拉长 SEEK 的回显；开启后约 100 ms 应答：确认代次（开机首播从代次 0 变为当前代次）、给出总时长（第 k 首 2:30 + k × 10 s），或按 NOT_READY / CATALOG_CHANGED / NO_TRACK 停止，或按 `B` 键排队的坏文件跳过（B5）；播放中位置按虚拟时钟前进，播完自动前进；拔卡时有流则按 CARD_REMOVED 停止；`R` 键注入其余停止原因，AUDIO_FAULT 锁存（K3、B10） |
+| `APP/tasks/playback`：`playback_contract.h` 的 `playback_command_send()` / `playback_snapshot_read()` | `fakes/playback_sim.c`：命令 FIFO 深度取 `PLAYBACK_COMMAND_QUEUE_DEPTH`（8）；`sim_main.c` 每圈在各应用 `gui_step` 之前调 `playback_sim_step()`，把 FIFO 取空并回显序号（挂起时跳过），再按虚拟时钟推进；按 #71 K3 命令表、K4 字段与 K5 转换点响应；每次从曲首开启一首（SELECT、播放/暂停中 NEXT/PREV、停止态开播、播完前进、跳过坏文件后开下一首）`TrackStartCount` 加 1；SEEK 先核对曲目身份（停止态、无当前曲、身份不符、开启中或总时长未知一律忽略并回显），然后 `PositionMs = min(TargetMs, DurationMs)`，`TrackStartCount` 不变，播放中落在末尾则下一圈按播完前进、暂停中停在末尾；FIFO 里连续的 SEEK 只执行最后一条（最新者胜），被跳过的同样回显；`--seek-echo-delay` 拉长 SEEK 的回显；开启后约 100 ms 应答：确认代次（开机首播从代次 0 变为当前代次）、给出总时长（第 k 首 2:30 + k × 10 s），或按 NOT_READY / CATALOG_CHANGED / NO_TRACK 停止，或按 `B` 键排队的坏文件跳过（B5）；播放中位置按虚拟时钟前进，播完自动前进；拔卡时有流则按 CARD_REMOVED 停止；`R` 键注入其余停止原因，AUDIO_FAULT 锁存（K3、B10） |
 | `Service/log`：`Service_Log_Post()` | `fakes/log_sim.c`：同步打印 `[log] <等级> <tag>: <text>` |
 
 ## 已知差异

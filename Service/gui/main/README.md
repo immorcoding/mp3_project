@@ -74,7 +74,7 @@ GUI Task
             -> Default：生成长期模糊壁纸、裁剪并绑定；Solid：半透明 Wash 薄层
 GUI Task 循环
   -> Service_GUI_ConsumeInput()
-  -> gui_music_step() / 命令与窗口协议
+  -> app_table 各应用 gui_step()（音乐为 gui_music_step()）/ 命令与窗口协议
   -> Service_GUI_Process()
 Service_GUI_ThemeApply()
   -> service_gui_main_apply_theme() -> background 按新外观更新
