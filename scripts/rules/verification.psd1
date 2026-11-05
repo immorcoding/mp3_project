@@ -32,6 +32,17 @@
             Name = 'flash_ftl'
             PathPatterns = @(
                 '^Components/flash_ftl/'
+                # SD Card Component 的显式中止测试（test_sd_abort.c）编译 Components/sd/sd.c。
+                '^Components/sd/'
+                # SD 读路径整条链（test_sd_removal_chain.c）：真实的 Platform SD 与 Storage 的 SD 生命周期，HAL 一侧用头文件替身。
+                '^Platform/sd/platform_sd\.c$'
+                '^APP/tasks/storage/sd/storage_sd\.(?:c|h)$'
+                '^APP/tasks/storage/storage_task(?:_config)?\.h$'
+                '^APP/tasks/storage/catalog/storage_catalog(?:_config)?\.h$'
+                '^APP/tasks/storage/stream/storage_audio_(?:block|config|stream)\.h$'
+                '^Adapters/stm32_hal/irq/stm32_(?:gpio_exti|sdmmc)_irq\.h$'
+                '^Adapters/stm32_hal/sd/sd_stm32_hal_adapter\.h$'
+                '^Tests/stubs/stm32_hal/'
                 '^FATFS/'
                 '^Middlewares/Third_Party/FatFs/'
                 '^Service/filesystem/'

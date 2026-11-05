@@ -16,22 +16,8 @@
 #include "Service/filesystem/filesystem_directory.h"
 #include "Service/filesystem/filesystem_file.h"
 
-/**
- * @brief 从文件 Token 的槽号算出所属卷，用来决定拿哪把卷锁。
- * @param[in] file 调用者传入的句柄。
- * @param[out] volume 成功时写入所属卷。
- * @return true 槽号在范围内；false 表示 Token 不可能有效（含全零 Token），调用者直接返回 INVALID_HANDLE。
- * @note  纯计算，不读槽内容，不要求持锁。槽号合法不代表句柄有效：有效性必须拿锁后用 lookup 核对。
- */
 bool filesystem_handle_file_volume(Service_Filesystem_FileHandleTypeDef file,
                                    Service_Filesystem_VolumeTypeDef *volume);
-
-/**
- * @brief 从目录 Token 的槽号算出所属卷，用来决定拿哪把卷锁。
- * @param[in] directory 调用者传入的句柄。
- * @param[out] volume 成功时写入所属卷。
- * @return true 槽号在范围内；false 表示 Token 不可能有效。
- */
 bool filesystem_handle_directory_volume(Service_Filesystem_DirectoryHandleTypeDef directory,
                                         Service_Filesystem_VolumeTypeDef *volume);
 

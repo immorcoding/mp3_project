@@ -33,8 +33,10 @@
 
 _Static_assert(_MAX_SS == _MIN_SS, "locator capture assumes one fixed sector size");
 
+_Static_assert(SERVICE_FILESYSTEM_VOLUME_FLASH < FILESYSTEM_VOLUME_COUNT, "one sector buffer per volume");
+
 /** @brief 取回目录项所在扇区用的缓冲，避免占任务栈。每卷一份：只在所属卷的卷锁内使用，两卷的 ReadDirectory 可以同时进行而不共用它。 */
-static BYTE filesystem_directory_sector_buffer[2][_MAX_SS];
+static BYTE filesystem_directory_sector_buffer[FILESYSTEM_VOLUME_COUNT][_MAX_SS];
 
 /**
  * @brief 小端读 16 位。

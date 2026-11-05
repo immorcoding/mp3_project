@@ -54,46 +54,11 @@ typedef enum
     FILESYSTEM_OP_COUNT     /**< 操作个数，不是操作。 */
 } filesystem_lock_op_t;
 
-/**
- * @brief 判断卷枚举是否可作为锁的下标。
- * @param[in] volume 调用者传入的卷。
- * @return true 表示 SD 或 Flash。
- */
 bool filesystem_lock_volume_valid(Service_Filesystem_VolumeTypeDef volume);
-
-/**
- * @brief 检查调用者不在拒绝名单里；每个会等锁的公开入口的第一件事，在等锁之前。
- * @note  名单里的任务（GUI、播放）进来就 `configASSERT` 停机，Release 也保留。
- */
 void filesystem_lock_check_caller(void);
-
-/**
- * @brief 拿所属卷的卷锁，等到拿到为止。
- * @param[in] volume 目标卷，必须合法（调用前用 `filesystem_lock_volume_valid` 挡掉）。
- * @param[in] operation 本次公开调用的操作，只用于持锁统计。
- * @note  第一次调用时创建三把锁（静态存储，不占堆）。同一任务已持这把锁、已持另一卷的锁、
- *        或正持表锁时断言停机。
- */
 void filesystem_lock_take(Service_Filesystem_VolumeTypeDef volume, filesystem_lock_op_t operation);
-
-/**
- * @brief 放所属卷的卷锁；之后在统计开关打开时按节拍投一批汇总日志（锁已放，不在持锁时投递）。
- * @param[in] volume 目标卷。
- * @note  必须由拿锁的任务调用，否则断言停机。
- */
 void filesystem_lock_give(Service_Filesystem_VolumeTypeDef volume);
-
-/**
- * @brief 拿窄表锁，等到拿到为止；只能在已持一把卷锁时调用。
- * @param[in] operation 表锁内的打开操作：`FILESYSTEM_OP_OPEN`、`_OPEN_LOCATOR` 或 `_OPEN_DIR`。
- * @note  已持表锁（重复拿）或没有持卷锁（锁序反了）时断言停机。表锁内不得拿任何别的锁。
- */
 void filesystem_lock_table_take(filesystem_lock_op_t operation);
-
-/**
- * @brief 放窄表锁。
- * @note  必须由拿锁的任务调用，否则断言停机。
- */
 void filesystem_lock_table_give(void);
 
 #endif /* FILESYSTEM_LOCK_H */

@@ -19,8 +19,10 @@
 #include "FATFS/Target/bsp_driver_user_diskio.h"
 #include "Platform/flash/platform_flash.h"
 #include "Platform/sd/platform_sd.h"
+#include "Service/log/log_service.h"
 
 #include "freertos_stub.h"
+#include "lock_env_stub.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -42,7 +44,7 @@ FATFS USERFatFS;
 
 #define SD_BLOCK_BYTES FILESYSTEM_SD_BLOCK_SIZE
 #define SD_MAX_EVENTS 4U
-#define SD_MAX_COMPLETIONS 8U
+#define SD_MAX_COMPLETIONS 64U
 #define SD_MAX_TEST_BLOCKS (FILESYSTEM_SD_DMA_BLOCK_COUNT * 2U + 1U)
 
 /** @brief Platform SD 替身的脚本与观察值。 */
@@ -62,10 +64,36 @@ typedef struct
     Platform_SD_TransferEventTypeDef completed[SD_MAX_COMPLETIONS];     /**< CompleteTransfer 收到的事件。 */
     uint32_t complete_calls;                                           /**< CompleteTransfer 次数。 */
     Platform_StatusTypeDef complete_status;                            /**< CompleteTransfer 的返回值。 */
+
+    /* 显式中止（#209）：脚本与观察。以下字段由 begin_test 清零。 */
+    Platform_SD_AbortResultTypeDef abort_result;                       /**< AbortTransfer 报告的结果；0 即 STOPPED。 */
+    uint32_t abort_us;                                                 /**< 中止“花”的微秒（推进假周期计数器）。 */
+    uint32_t abort_ticks;                                              /**< 中止“花”的 tick（用来走周期计数器不可用时的兜底）。 */
+    bool abort_fires_late_completion;                                  /**< 中止期间有一次读完成中断落进来。 */
+    uint32_t abort_calls;                                              /**< AbortTransfer 次数。 */
+    bool device_failed;                                                /**< 中止没有停住后 Device 保持 ERROR：之后的 Start 被拒绝。 */
+    char sequence[128];                                                /**< 对 Platform 的调用顺序：S 启动、A 中止、C 提交事件。 */
+    Platform_SD_TransferEventTypeDef wait_plan[8];                     /**< 按等待次序给的中断事件；NONE 表示这次等待没有中断（超时）。 */
+    uint32_t wait_plan_len;                                            /**< 0 表示不用计划，沿用 irq_events 脚本。 */
+    uint32_t wait_index;                                               /**< 已经消耗的计划项数。 */
+    bool corrupt_read_after_abort;                                     /**< 中止之后的下一笔读，缓冲首块被“迟到的旧 DMA”写坏。 */
 } FakeSd;
 
 static FakeSd fake_sd;
 static SemaphoreHandle_t sd_done;
+
+/**
+ * @brief 把一次对 Platform 的调用记进顺序串。
+ * @param[in] call 'S' 启动、'A' 中止、'C' 提交事件。
+ */
+static void sd_sequence_add(char call)
+{
+    size_t length = strlen(fake_sd.sequence);
+
+    assert(length + 1U < sizeof(fake_sd.sequence));
+    fake_sd.sequence[length] = call;
+    fake_sd.sequence[length + 1U] = '\0';
+}
 
 /**
  * @brief 订阅传输事件：记录回调，并记下此刻执行器的信号量是否已经存在。
@@ -97,6 +125,11 @@ Platform_StatusTypeDef Platform_SD_StartReadBlocks(uint8_t *data,
                                                    uint32_t block_count)
 {
     fake_sd.start_calls++;
+    sd_sequence_add('S');
+    if (fake_sd.device_failed)
+    {
+        return PLATFORM_SD_ERROR;
+    }
     if (fake_sd.start_status != PLATFORM_OK)
     {
         return fake_sd.start_status;
@@ -104,6 +137,11 @@ Platform_StatusTypeDef Platform_SD_StartReadBlocks(uint8_t *data,
     for (uint32_t index = 0U; index < block_count; index++)
     {
         memset(&data[index * SD_BLOCK_BYTES], (int)(uint8_t)(start_block + index), SD_BLOCK_BYTES);
+    }
+    if (fake_sd.corrupt_read_after_abort && (fake_sd.abort_calls > 0U))
+    {
+        memset(data, 0xEE, SD_BLOCK_BYTES);
+        fake_sd.corrupt_read_after_abort = false;
     }
     return PLATFORM_OK;
 }
@@ -121,6 +159,11 @@ Platform_StatusTypeDef Platform_SD_StartWriteBlocks(const uint8_t *data,
 {
     (void)start_block;
     fake_sd.start_calls++;
+    sd_sequence_add('S');
+    if (fake_sd.device_failed)
+    {
+        return PLATFORM_SD_ERROR;
+    }
     if (fake_sd.start_status != PLATFORM_OK)
     {
         return fake_sd.start_status;
@@ -142,7 +185,38 @@ Platform_StatusTypeDef Platform_SD_CompleteTransfer(Platform_SD_TransferEventTyp
 {
     assert(fake_sd.complete_calls < SD_MAX_COMPLETIONS);
     fake_sd.completed[fake_sd.complete_calls++] = event;
+    sd_sequence_add('C');
     return fake_sd.complete_status;
+}
+
+/**
+ * @brief 显式中止：按脚本“花时间”、可选地让一次读完成中断落进中止期间，报告脚本里的结果。
+ * @param[out] result 结果分类，可为空。
+ * @return STOPPED 时 PLATFORM_OK，其余 PLATFORM_SD_ERROR；没有停住时 Device 保持 ERROR，之后的 Start 被拒绝。
+ */
+Platform_StatusTypeDef Platform_SD_AbortTransfer(Platform_SD_AbortResultTypeDef *result)
+{
+    fake_sd.abort_calls++;
+    sd_sequence_add('A');
+    lock_env_advance_us(fake_sd.abort_us);
+    if (fake_sd.abort_ticks != 0U)
+    {
+        vTaskDelay(fake_sd.abort_ticks);
+    }
+    if (fake_sd.abort_fires_late_completion && (fake_sd.callback != NULL))
+    {
+        fake_sd.callback(PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE, fake_sd.context);
+    }
+    if (result != NULL)
+    {
+        *result = fake_sd.abort_result;
+    }
+    if (fake_sd.abort_result != PLATFORM_SD_ABORT_STOPPED)
+    {
+        fake_sd.device_failed = true;
+        return PLATFORM_SD_ERROR;
+    }
+    return PLATFORM_OK;
 }
 
 /**
@@ -151,6 +225,20 @@ Platform_StatusTypeDef Platform_SD_CompleteTransfer(Platform_SD_TransferEventTyp
 static void sd_fire_scripted_irqs(void)
 {
     uint32_t count = fake_sd.irq_event_count;
+
+    if (fake_sd.wait_plan_len != 0U)
+    {
+        if (fake_sd.wait_index < fake_sd.wait_plan_len)
+        {
+            const Platform_SD_TransferEventTypeDef planned = fake_sd.wait_plan[fake_sd.wait_index++];
+
+            if ((planned != PLATFORM_SD_TRANSFER_EVENT_NONE) && (fake_sd.callback != NULL))
+            {
+                fake_sd.callback(planned, fake_sd.context);
+            }
+        }
+        return;
+    }
 
     if (!fake_sd.irq_every_wait)
     {
@@ -534,6 +622,8 @@ static void begin_test(void)
 {
     freertos_stub_reset();
     freertos_stub_set_block_hook(interrupt_on_wait, NULL);
+    lock_env_counter_reset();
+    lock_env_log_reset();
     memset(&fake_sd.start_status, 0, sizeof(fake_sd) - offsetof(FakeSd, start_status));
     fake_sd.complete_status = PLATFORM_OK;
     fake_flash.start_status = PLATFORM_OK;
@@ -610,6 +700,8 @@ static void test_sd_init_creates_semaphore_before_subscribing(void)
     assert(fake_sd.set_callback_calls == 1U);
     assert(fake_sd.semaphore_existed_when_callback_set);
     assert(xSemaphoreTake(sd_done, 0U) == pdFALSE);
+    /* 钩子默认关闭：启动日志里没有 HOOK 行（DIAG-7：没有行就是没开）。 */
+    assert(lock_env_log_count() == 0U);
 
     /* 一个已到达的信号，在再次 InitSD（挂载与卸载路径的幂等就绪检查）之后仍在。 */
     fake_sd.callback(PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE, fake_sd.context);
@@ -705,17 +797,173 @@ static void test_sd_write_completes_on_interrupt(void)
 }
 
 /**
- * @brief 超时：没有中断，等满本分块预算，向 Platform 提交 ERROR，返回失败。
+ * @brief 超时：没有中断，等满本分块预算，先向 Platform 提交显式中止（不再提交 ERROR），然后返回失败。
+ *        中止停住了，所以 Device 回到可用状态，不留信号。
  */
-static void test_sd_timeout_fails_the_transfer(void)
+static void test_sd_timeout_aborts_the_transfer_before_failing(void)
 {
     begin_test();
+    fake_sd.abort_us = 1500U;
+
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 7U, 1U, 100U));
+
+    assert(strcmp(fake_sd.sequence, "SA") == 0);
+    assert(fake_sd.abort_calls == 1U);
+    assert(fake_sd.complete_calls == 0U);
+    assert(xTaskGetTickCount() == pdMS_TO_TICKS(100U));
+    assert(xSemaphoreTake(sd_done, 0U) == pdFALSE);
+}
+
+/**
+ * @brief 中止的结果和耗时记一行 WARN（标签 FSABORT）：结果名、微秒、方向、起始块、块数；读和写都一样。
+ */
+static void test_sd_abort_result_and_elapsed_time_are_logged_as_one_warn_line(void)
+{
+    begin_test();
+    fake_sd.abort_us = 1500U;
+
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 7U, 1U, 100U));
+
+    assert(lock_env_log_count() == 1U);
+    assert(strcmp(lock_env_log_tag(0U), "FSABORT") == 0);
+    assert(strcmp(lock_env_log_text(0U), "stopped us=1500 R blk=7 n=1") == 0);
+    assert(lock_env_log_level(0U) == (uint32_t)SERVICE_LOG_LEVEL_WARN);
+
+    begin_test();
+    fake_sd.abort_us = 20U;
+    assert(!filesystem_sd_transfer_write_blocks(sd_buffer, 9U, 3U, 100U));
+    assert(lock_env_log_count() == 1U);
+    assert(strcmp(lock_env_log_text(0U), "stopped us=20 W blk=9 n=3") == 0);
+}
+
+/**
+ * @brief 周期计数器没有启动（频率为 0）时，耗时改按 tick 算，毫秒精度，而不是除以零。
+ */
+static void test_sd_abort_elapsed_time_falls_back_to_ticks_without_cycle_counter(void)
+{
+    begin_test();
+    lock_env_set_counter_unavailable(true);
+    fake_sd.abort_ticks = 3U;
+
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 5U, 2U, 100U));
+
+    assert(lock_env_log_count() == 1U);
+    assert(strcmp(lock_env_log_text(0U), "stopped us=3000 R blk=5 n=2") == 0);
+}
+
+/**
+ * @brief 中止期间落进来的完成中断（中断在屏蔽之前就跑完了）留下的信号，在中止返回之后立刻清掉：
+ *        关掉“清理之后、本次 Start 之前才完成”的窗口——硬件先停、信号量后清、下一笔才允许启动。
+ *        紧接着再读也不被这个旧信号“完成”。
+ */
+static void test_sd_completion_that_lands_during_abort_is_cleared_after_it(void)
+{
+    begin_test();
+    fake_sd.abort_fires_late_completion = true;
 
     assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 0U, 1U, 100U));
 
-    assert(fake_sd.complete_calls == 1U);
+    assert(xSemaphoreTake(sd_done, 0U) == pdFALSE);
+
+    /* 紧接着再读：这次没有脚本化的中断，必须超时而不是被中止期间的旧信号“完成”。 */
+    fake_sd.abort_fires_late_completion = false;
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 0U, 1U, 100U));
+    assert(fake_sd.abort_calls == 2U);
+    assert(fake_sd.complete_calls == 0U);
+}
+
+/**
+ * @brief 到上界还没停住：记 stuck；卷保持 ERROR，之后的传输在启动处就被拒绝——不等待、不再中止、不提交事件。
+ */
+static void test_sd_abort_that_does_not_stop_is_reported_and_the_volume_stays_refused(void)
+{
+    FreertosStub_SemaphoreStats before;
+
+    begin_test();
+    fake_sd.abort_result = PLATFORM_SD_ABORT_STUCK;
+
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 11U, 4U, 100U));
+
+    assert(lock_env_log_count() == 1U);
+    assert(strcmp(lock_env_log_text(0U), "stuck us=0 R blk=11 n=4") == 0);
+    assert(fake_sd.complete_calls == 0U);
+
+    before = snapshot(sd_done);
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 11U, 4U, 100U));
+    assert(!filesystem_sd_transfer_write_blocks(sd_buffer, 11U, 4U, 100U));
+    assert(strcmp(fake_sd.sequence, "SASS") == 0);
+    assert(snapshot(sd_done).waits == before.waits);
+    assert(lock_env_log_count() == 1U);
+}
+
+/**
+ * @brief 中止时发现卡已拔出：记 no_media，不提交事件。
+ */
+static void test_sd_abort_with_card_removed_is_reported_as_no_media(void)
+{
+    begin_test();
+    fake_sd.abort_result = PLATFORM_SD_ABORT_NO_MEDIA;
+
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 3U, 1U, 100U));
+
+    assert(strcmp(lock_env_log_text(0U), "no_media us=0 R blk=3 n=1") == 0);
+    assert(fake_sd.complete_calls == 0U);
+}
+
+/**
+ * @brief Platform 没有受理中止（没有在飞的传输或 Port 不支持）：退回旧做法，向 Platform 提交 ERROR，
+ *        让 Device 进入 ERROR；日志记 rejected。
+ */
+static void test_sd_rejected_abort_falls_back_to_completing_with_error(void)
+{
+    begin_test();
+    fake_sd.abort_result = PLATFORM_SD_ABORT_REJECTED;
+
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 2U, 1U, 100U));
+
+    assert(strcmp(fake_sd.sequence, "SAC") == 0);
     assert(fake_sd.completed[0] == PLATFORM_SD_TRANSFER_EVENT_ERROR);
-    assert(xTaskGetTickCount() == pdMS_TO_TICKS(100U));
+    assert(strcmp(lock_env_log_text(0U), "rejected us=0 R blk=2 n=1") == 0);
+}
+
+/**
+ * @brief 中止停住之后紧接着再读成功（R2.2 的“超时后紧接着再读并校验”）：数据正确，没有多余的事件。
+ */
+static void test_sd_read_right_after_a_stopped_abort_succeeds(void)
+{
+    begin_test();
+
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 0U, 1U, 100U)); /* 超时，中止停住 */
+    assert(strcmp(fake_sd.sequence, "SA") == 0);
+
+    sd_script_one(PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE);
+    assert(filesystem_sd_transfer_read_blocks(sd_buffer, 21U, 2U, 100U));
+
+    assert(strcmp(fake_sd.sequence, "SASC") == 0);
+    assert(sd_buffer[0] == 21U && sd_buffer[SD_BLOCK_BYTES] == 22U);
+    assert(fake_sd.abort_calls == 1U);
+    assert(lock_env_log_count() == 1U);
+}
+
+/**
+ * @brief 不是超时的失败（错误事件、方向不符、启动被拒）不触发中止：硬件已经自己收尾，或根本没启动。
+ */
+static void test_sd_failures_other_than_timeout_do_not_abort(void)
+{
+    begin_test();
+    sd_script_one(PLATFORM_SD_TRANSFER_EVENT_ERROR);
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 0U, 1U, 100U));
+
+    begin_test();
+    sd_script_one(PLATFORM_SD_TRANSFER_EVENT_WRITE_COMPLETE);
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 0U, 1U, 100U));
+
+    begin_test();
+    fake_sd.start_status = PLATFORM_BUSY;
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 0U, 1U, 100U));
+
+    assert(fake_sd.abort_calls == 0U);
+    assert(lock_env_log_count() == 0U);
 }
 
 /**
@@ -788,21 +1036,21 @@ static void test_sd_late_signal_from_a_timed_out_transfer_is_discarded(void)
 {
     begin_test();
 
-    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 0U, 1U, 100U)); /* 超时 */
-    assert(fake_sd.completed[0] == PLATFORM_SD_TRANSFER_EVENT_ERROR);
+    assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 0U, 1U, 100U)); /* 超时，中止停住 */
+    assert(fake_sd.abort_calls == 1U);
 
     /* 超时之后，旧 DMA 才完成：信号量被置位，没有任何任务在等。 */
     fake_sd.callback(PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE, fake_sd.context);
 
     /* 下一次传输没有新的中断：必须仍然超时，而不是被旧信号“完成”。 */
     assert(!filesystem_sd_transfer_read_blocks(sd_buffer, 0U, 1U, 100U));
-    assert(fake_sd.complete_calls == 2U);
-    assert(fake_sd.completed[1] == PLATFORM_SD_TRANSFER_EVENT_ERROR);
+    assert(fake_sd.abort_calls == 2U);
+    assert(fake_sd.complete_calls == 0U);
 
     /* 再下一次有真正的中断：成功，且没有多余信号留下。 */
     sd_script_one(PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE);
     assert(filesystem_sd_transfer_read_blocks(sd_buffer, 0U, 1U, 100U));
-    assert(fake_sd.completed[2] == PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE);
+    assert(fake_sd.completed[0] == PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE);
     assert(xSemaphoreTake(sd_done, 0U) == pdFALSE);
 }
 
@@ -1080,6 +1328,204 @@ static void test_flash_volume_works_from_a_task_that_did_not_initialize_it(void)
  * @brief 运行全部用例。
  * @return 断言全部通过返回 0。
  */
+
+/* ------------------------------------------------------------------------- */
+/* 迟到 DMA 测试钩子（FILESYSTEM_HOOK_SD_LATE_DMA=1 的构建）                  */
+/* ------------------------------------------------------------------------- */
+
+#if FILESYSTEM_HOOK_SD_LATE_DMA
+
+/**
+ * @brief 开始一个钩子用例：重置脚本，做 PERIOD-1 次普通读，钩子的计数停在“下一次读就触发探测”。
+ *        每个用例恰好消耗 PERIOD 次读请求，所以钩子的计数在用例之间保持对齐。
+ */
+static void hook_begin_period(void)
+{
+    Platform_SD_TransferEventTypeDef ok = PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE;
+
+    begin_test();
+    sd_script_irq(&ok, 1U, true);
+    for (uint32_t index = 0U; index + 1U < FILESYSTEM_HOOK_SD_LATE_DMA_PERIOD; index++)
+    {
+        assert(filesystem_sd_transfer_read_blocks(sd_buffer, 500U, 1U, 100U));
+    }
+    assert(lock_env_log_count() == 0U);
+    assert(fake_sd.start_calls == FILESYSTEM_HOOK_SD_LATE_DMA_PERIOD - 1U);
+    fake_sd.sequence[0] = '\0';
+    fake_sd.irq_event_count = 0U;
+}
+
+/**
+ * @brief 做第 PERIOD 次读请求（触发探测的那一次），中断事件按等待次序由计划给出。
+ * @param[in] probe_start_block 这次读的起始块（探测的目标块）。
+ * @param[in] plan 第 PERIOD 次读（含探测里的三次读）按等待次序给的中断事件；NONE 表示这次等待超时。
+ * @param[in] plan_len 计划项数。
+ * @return 调用者这次读的结果。
+ */
+static bool hook_run_probe_read(uint32_t probe_start_block,
+                                const Platform_SD_TransferEventTypeDef *plan,
+                                uint32_t plan_len)
+{
+    fake_sd.wait_plan_len = plan_len;
+    fake_sd.wait_index = 0U;
+    memcpy(fake_sd.wait_plan, plan, plan_len * sizeof(plan[0]));
+    return filesystem_sd_transfer_read_blocks(sd_buffer, probe_start_block, 2U, 100U);
+}
+
+/**
+ * @brief 钩子打开时，InitSD 在启动日志里投一行 HOOK，说明开了什么；重复 InitSD 不重复投。
+ */
+static void test_hook_announces_itself_once_in_the_boot_log(void)
+{
+    begin_test();
+    assert(Service_Filesystem_InitSD() == SERVICE_OK);
+    sd_done = freertos_stub_last_created_semaphore();
+    assert(Service_Filesystem_InitSD() == SERVICE_OK);
+
+    assert(lock_env_log_count() == 1U);
+    assert(strcmp(lock_env_log_tag(0U), "HOOK") == 0);
+    assert(strcmp(lock_env_log_text(0U), "late_dma ON period=16 timeout=1ms") == 0);
+}
+
+/**
+ * @brief 每 PERIOD 次读请求探测一次：先读目标块、再让一笔读超时（单块超时 1 ms）并被中止、紧接着再读目标块并校验内容
+ *        一致，然后调用者自己的读照常完成。中止的 WARN 行照常出现，探测结果再记一行 INFO。
+ */
+static void test_hook_probes_every_period_and_verifies_the_read_after_the_abort(void)
+{
+    const Platform_SD_TransferEventTypeDef plan[] = {
+        PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE, PLATFORM_SD_TRANSFER_EVENT_NONE,
+        PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE, PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE};
+
+    hook_begin_period();
+
+    assert(hook_run_probe_read(100U, plan, 4U));
+
+    assert(strcmp(fake_sd.sequence, "SCSASCSC") == 0);
+    assert(sd_buffer[0] == 100U && sd_buffer[SD_BLOCK_BYTES] == 101U);
+    assert(lock_env_log_count() == 2U);
+    assert(strcmp(lock_env_log_tag(0U), "FSABORT") == 0);
+    assert(strcmp(lock_env_log_text(0U), "stopped us=0 R blk=0 n=64") == 0);
+    assert(strcmp(lock_env_log_tag(1U), "SDHOOK") == 0);
+    assert(strcmp(lock_env_log_text(1U), "late_dma n=1 blk=100 victim=timeout verify=ok") == 0);
+    assert(lock_env_log_level(1U) == (uint32_t)SERVICE_LOG_LEVEL_INFO);
+    /* 受害读只等 1 ms，其余读没有超时。 */
+    assert(xTaskGetTickCount() == pdMS_TO_TICKS(FILESYSTEM_HOOK_SD_LATE_DMA_TIMEOUT_MS));
+}
+
+/**
+ * @brief 迟到的旧 DMA 把缓冲写坏的话，探测里的第二次读与第一次不一致：记 MISMATCH，等级 ERROR。
+ */
+static void test_hook_reports_a_mismatch_when_a_late_write_corrupts_the_next_read(void)
+{
+    const Platform_SD_TransferEventTypeDef plan[] = {
+        PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE, PLATFORM_SD_TRANSFER_EVENT_NONE,
+        PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE, PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE};
+
+    hook_begin_period();
+    fake_sd.corrupt_read_after_abort = true;
+
+    assert(hook_run_probe_read(100U, plan, 4U));
+
+    assert(lock_env_log_count() == 2U);
+    assert(strcmp(lock_env_log_text(1U), "late_dma n=2 blk=100 victim=timeout verify=MISMATCH") == 0);
+    assert(lock_env_log_level(1U) == (uint32_t)SERVICE_LOG_LEVEL_ERROR);
+}
+
+/**
+ * @brief 中止没有停住（stuck）：卷保持 ERROR，探测里紧接着的那次读被拒绝，记 read_failed（ERROR）；调用者自己的读也失败。
+ */
+static void test_hook_reports_read_failed_when_the_abort_does_not_stop(void)
+{
+    const Platform_SD_TransferEventTypeDef plan[] = {
+        PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE, PLATFORM_SD_TRANSFER_EVENT_NONE};
+
+    hook_begin_period();
+    fake_sd.abort_result = PLATFORM_SD_ABORT_STUCK;
+
+    assert(!hook_run_probe_read(100U, plan, 2U));
+
+    assert(strcmp(fake_sd.sequence, "SCSASS") == 0);
+    assert(lock_env_log_count() == 2U);
+    assert(strcmp(lock_env_log_text(0U), "stuck us=0 R blk=0 n=64") == 0);
+    assert(strcmp(lock_env_log_text(1U), "late_dma n=3 blk=100 victim=timeout verify=read_failed") == 0);
+    assert(lock_env_log_level(1U) == (uint32_t)SERVICE_LOG_LEVEL_ERROR);
+}
+
+/**
+ * @brief 目标块落在卷头部（引导区一带，与受害块内容可能相同）时不探测：不多读、不记日志。
+ */
+static void test_hook_skips_reads_near_the_start_of_the_volume(void)
+{
+    const Platform_SD_TransferEventTypeDef plan[] = {PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE};
+
+    hook_begin_period();
+
+    assert(hook_run_probe_read(10U, plan, 1U));
+
+    assert(strcmp(fake_sd.sequence, "SC") == 0);
+    assert(lock_env_log_count() == 0U);
+}
+
+/**
+ * @brief 受害读在 1 ms 内居然完成了（卡很快）：记 victim=done，说明这次没有制造出迟到的 DMA，不算失败。
+ */
+static void test_hook_reports_when_the_victim_read_did_not_time_out(void)
+{
+    const Platform_SD_TransferEventTypeDef plan[] = {
+        PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE, PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE,
+        PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE, PLATFORM_SD_TRANSFER_EVENT_READ_COMPLETE};
+
+    hook_begin_period();
+
+    assert(hook_run_probe_read(100U, plan, 4U));
+
+    assert(fake_sd.abort_calls == 0U);
+    assert(lock_env_log_count() == 1U);
+    assert(strcmp(lock_env_log_text(0U), "late_dma n=4 blk=100 victim=done verify=ok") == 0);
+    assert(lock_env_log_level(0U) == (uint32_t)SERVICE_LOG_LEVEL_INFO);
+}
+
+/**
+ * @brief 探测里第一次读（读目标块）就失败：不做受害读和校验，记 skipped（WARN）；失败本身已由中止的那一行说明。
+ */
+static void test_hook_skips_verification_when_the_first_probe_read_fails(void)
+{
+    const Platform_SD_TransferEventTypeDef plan[] = {PLATFORM_SD_TRANSFER_EVENT_NONE};
+
+    hook_begin_period();
+
+    assert(!hook_run_probe_read(100U, plan, 1U));
+
+    assert(lock_env_log_count() >= 2U);
+    assert(strcmp(lock_env_log_text(0U), "stopped us=0 R blk=100 n=2") == 0);
+    assert(strcmp(lock_env_log_text(1U), "late_dma n=5 blk=100 victim=none verify=skipped") == 0);
+    assert(lock_env_log_level(1U) == (uint32_t)SERVICE_LOG_LEVEL_WARN);
+}
+
+/**
+ * @brief 写请求从不触发探测，也不计入读请求的节拍。
+ */
+static void test_hook_never_probes_writes(void)
+{
+    const Platform_SD_TransferEventTypeDef done = PLATFORM_SD_TRANSFER_EVENT_WRITE_COMPLETE;
+
+    begin_test();
+    sd_script_irq(&done, 1U, true);
+    for (uint32_t index = 0U; index < FILESYSTEM_HOOK_SD_LATE_DMA_PERIOD * 2U; index++)
+    {
+        assert(filesystem_sd_transfer_write_blocks(sd_buffer, 500U, 1U, 100U));
+    }
+    assert(fake_sd.abort_calls == 0U);
+    assert(lock_env_log_count() == 0U);
+}
+
+#endif /* FILESYSTEM_HOOK_SD_LATE_DMA */
+
+/**
+ * @brief 依次运行用例：默认构建跑 SD 与 Flash 完成等待用例；钩子构建只跑迟到 DMA 钩子用例。
+ * @return 全部通过时为 0，断言失败时进程中止。
+ */
 int main(void)
 {
     strcpy(SDPath, "1:/");
@@ -1087,13 +1533,35 @@ int main(void)
     retUSER = FATFS_LinkDriver(&USER_Driver, USERPath);
     assert(retUSER == 0U);
 
+#if FILESYSTEM_HOOK_SD_LATE_DMA
+    /* 钩子构建：只跑钩子用例（别的用例的读次数会被钩子的节拍打乱）。 */
+    test_hook_announces_itself_once_in_the_boot_log();
+    test_hook_probes_every_period_and_verifies_the_read_after_the_abort();
+    test_hook_reports_a_mismatch_when_a_late_write_corrupts_the_next_read();
+    test_hook_reports_read_failed_when_the_abort_does_not_stop();
+    test_hook_skips_reads_near_the_start_of_the_volume();
+    test_hook_reports_when_the_victim_read_did_not_time_out();
+    test_hook_skips_verification_when_the_first_probe_read_fails();
+    test_hook_never_probes_writes();
+    puts("filesystem_completion: SD late-DMA hook tests passed");
+    return 0;
+#endif
+
     test_sd_transfer_refused_before_init();
     test_sd_init_creates_semaphore_before_subscribing();
     test_sd_read_completes_on_interrupt();
     test_sd_interrupt_requests_yield_only_when_a_task_was_woken();
     test_sd_read_in_chunks_waits_once_per_chunk();
     test_sd_write_completes_on_interrupt();
-    test_sd_timeout_fails_the_transfer();
+    test_sd_timeout_aborts_the_transfer_before_failing();
+    test_sd_abort_result_and_elapsed_time_are_logged_as_one_warn_line();
+    test_sd_abort_elapsed_time_falls_back_to_ticks_without_cycle_counter();
+    test_sd_completion_that_lands_during_abort_is_cleared_after_it();
+    test_sd_abort_that_does_not_stop_is_reported_and_the_volume_stays_refused();
+    test_sd_abort_with_card_removed_is_reported_as_no_media();
+    test_sd_rejected_abort_falls_back_to_completing_with_error();
+    test_sd_read_right_after_a_stopped_abort_succeeds();
+    test_sd_failures_other_than_timeout_do_not_abort();
     test_sd_error_event_fails_the_transfer();
     test_sd_wrong_direction_event_fails_the_transfer();
     test_sd_last_interrupt_event_wins();

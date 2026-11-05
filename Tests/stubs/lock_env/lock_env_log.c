@@ -15,6 +15,7 @@
 
 static LockEnv_PostHook post_hook;
 static uint32_t log_count;
+static uint32_t log_levels[LOCK_ENV_LOG_MAX];
 static char log_tags[LOCK_ENV_LOG_MAX][LOCK_ENV_TAG_MAX];
 static char log_texts[LOCK_ENV_LOG_MAX][LOCK_ENV_TEXT_MAX];
 static uint32_t longest_text;
@@ -27,6 +28,7 @@ void lock_env_log_reset(void)
     post_hook = NULL;
     log_count = 0U;
     longest_text = 0U;
+    memset(log_levels, 0, sizeof(log_levels));
     memset(log_tags, 0, sizeof(log_tags));
     memset(log_texts, 0, sizeof(log_texts));
 }
@@ -70,6 +72,16 @@ const char *lock_env_log_text(uint32_t index)
 }
 
 /**
+ * @brief 第 index 条的等级。
+ * @param[in] index 序号。
+ * @return 等级数值或 0。
+ */
+uint32_t lock_env_log_level(uint32_t index)
+{
+    return (index < log_count) ? log_levels[index] : 0U;
+}
+
+/**
  * @brief 最长一条正文的字符数。
  * @return 字符数。
  */
@@ -90,7 +102,6 @@ Service_StatusTypeDef Service_Log_Post(Service_Log_LevelTypeDef level, const cha
 {
     size_t length;
 
-    (void)level;
     if ((tag == NULL) || (text == NULL))
     {
         return SERVICE_INVALID_PARAM;
@@ -110,6 +121,7 @@ Service_StatusTypeDef Service_Log_Post(Service_Log_LevelTypeDef level, const cha
     }
     if (log_count < LOCK_ENV_LOG_MAX)
     {
+        log_levels[log_count] = (uint32_t)level;
         strncpy(log_tags[log_count], tag, LOCK_ENV_TAG_MAX - 1U);
         memcpy(log_texts[log_count], text, length + 1U);
         log_count++;

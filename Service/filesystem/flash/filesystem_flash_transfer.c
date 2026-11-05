@@ -49,8 +49,8 @@ bool filesystem_flash_transfer_is_ready(void)
  * @brief 建立完成信号量并向 Platform 注册长期事件回调。
  * @return true 表示首次注册成功或已经注册过；false 表示信号量创建或 Platform 订阅失败。
  * @note 信号量先于订阅创建：Platform 只在订阅之后才会调用 ISR 回调，所以 ISR 看到的
- *       信号量总是已经存在的。重复调用不重建信号量，也不重新订阅。第一次调用须在任何任务
- *       使用文件接口之前完成，不与其他调用并发。注册成功后不再临时转移回调。
+ *       信号量总是已经存在的。重复调用不重建信号量，也不重新订阅。调用者（`InitFlash` 与挂载路径）
+ *       已持 Flash 卷锁，所以第一次调用与别的调用串行，不会重复创建。注册成功后不再临时转移回调。
  */
 bool filesystem_flash_transfer_init(void)
 {

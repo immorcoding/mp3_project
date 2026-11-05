@@ -29,7 +29,6 @@
 #include "Service/log/log_service.h"
 #endif
 
-#define FILESYSTEM_LOCK_VOLUME_COUNT 2U /* 卷锁个数：SD、Flash，下标就是卷枚举值。 */
 #define FILESYSTEM_LOCK_TABLE_INDEX 2U  /* 表锁的下标，紧跟在两把卷锁之后。 */
 #define FILESYSTEM_LOCK_COUNT 3U        /* 锁的总数；没有槽表锁，也没有第三把卷级锁。 */
 
@@ -73,7 +72,8 @@ typedef struct
 static filesystem_lock_entry_t filesystem_locks[FILESYSTEM_LOCK_COUNT];
 static volatile bool filesystem_locks_created;
 
-/* 调用者拒绝名单：APP 启动时登记 GUI 与播放任务（只有 Boot Task 写），之后各任务在公开入口只读。
+/* 调用者拒绝名单：APP 的 Create Task 在创建完 GUI 与播放任务之后立即登记它们（只有 Create Task 写；被登记的任务那时可能已经在运行，
+ * 它们按设计不调用文件接口），之后各任务在公开入口只读。
  * 先写句柄、后加计数，读者按计数读，所以单核上不会读到半个条目。 */
 static TaskHandle_t filesystem_denied_tasks[FILESYSTEM_DENIED_CALLER_MAX];
 static volatile uint32_t filesystem_denied_count;
@@ -130,9 +130,14 @@ bool filesystem_lock_volume_valid(Service_Filesystem_VolumeTypeDef volume)
 }
 
 /**
- * @brief 登记一个不得调用文件接口的任务。
- * @param[in] task 任务句柄，非空。
- * @note  APP 启动时调用（见 filesystem_service.h）。名单满了、句柄为空都断言停机。
+ * @brief 登记一个不得调用文件接口的任务（GUI 与播放任务）。
+ * @param[in] task 任务句柄，非空。重复登记同一个句柄无效果。
+ * @note  APP 的 Create Task 在创建完这两个任务之后立即调用（`app_tasks.c`）。被登记的任务那时可能已经在运行
+ *        （播放任务的优先级高于 Create Task，创建后立刻跑到第一次阻塞），但它们按设计不调用文件接口，
+ *        所以创建到登记之间不会有调用。登记之后，这个任务只要进入任何 Filesystem 公开函数（文件、目录、卷生命周期、
+ *        Flash 诊断；`Service_Filesystem_GbkToUnicode` 除外），入口立即 `configASSERT` 停机，Release 也保留，
+ *        检查在等锁之前。登记超过 `FILESYSTEM_DENIED_CALLER_MAX` 个、登记空句柄同样断言停机。
+ *        用禁用名单而不是允许名单，是为了新增任务时共用层不用改。
  */
 void Service_Filesystem_DenyCaller(TaskHandle_t task)
 {
@@ -447,9 +452,11 @@ static void filesystem_lock_leave(filesystem_lock_entry_t *entry)
 }
 
 /**
- * @brief 拿所属卷的卷锁。
- * @param[in] volume 目标卷。
- * @param[in] operation 本次公开调用的操作。
+ * @brief 拿所属卷的卷锁，等到拿到为止。
+ * @param[in] volume 目标卷，必须合法（调用前用 `filesystem_lock_volume_valid` 挡掉）。
+ * @param[in] operation 本次公开调用的操作，只用于持锁统计。
+ * @note  第一次调用时创建三把锁（静态存储，不占堆）。同一任务已持这把锁、已持另一卷的锁、
+ *        或正持表锁时断言停机。
  */
 void filesystem_lock_take(Service_Filesystem_VolumeTypeDef volume, filesystem_lock_op_t operation)
 {
@@ -474,8 +481,9 @@ void filesystem_lock_take(Service_Filesystem_VolumeTypeDef volume, filesystem_lo
 }
 
 /**
- * @brief 放所属卷的卷锁；之后按节拍投汇总日志。
+ * @brief 放所属卷的卷锁；之后在统计开关打开时按节拍投一批汇总日志（锁已放，不在持锁时投递）。
  * @param[in] volume 目标卷。
+ * @note  必须由拿锁的任务调用，否则断言停机。
  */
 void filesystem_lock_give(Service_Filesystem_VolumeTypeDef volume)
 {
@@ -487,8 +495,9 @@ void filesystem_lock_give(Service_Filesystem_VolumeTypeDef volume)
 }
 
 /**
- * @brief 拿窄表锁；只能在已持一把卷锁时调用。
- * @param[in] operation 表锁内的打开操作。
+ * @brief 拿窄表锁，等到拿到为止；只能在已持一把卷锁时调用。
+ * @param[in] operation 表锁内的打开操作：`FILESYSTEM_OP_OPEN`、`_OPEN_LOCATOR` 或 `_OPEN_DIR`。
+ * @note  已持表锁（重复拿）或没有持卷锁（锁序反了）时断言停机。表锁内不得拿任何别的锁。
  */
 void filesystem_lock_table_take(filesystem_lock_op_t operation)
 {
@@ -506,6 +515,7 @@ void filesystem_lock_table_take(filesystem_lock_op_t operation)
 
 /**
  * @brief 放窄表锁。表锁在卷锁内，所以这里不投汇总日志，等放卷锁之后再投。
+ * @note  必须由拿锁的任务调用，否则断言停机。
  */
 void filesystem_lock_table_give(void)
 {

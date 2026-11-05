@@ -4,10 +4,11 @@
 
 ## 公开 Interface
 
-- `Platform_SD_Init()`、`Platform_SD_DeInit()`、`Platform_SD_Process()`：管理卡槽生命周期并刷新已经消抖的卡检测状态。
+- `Platform_SD_Init()`、`Platform_SD_DeInit()`、`Platform_SD_Process()`：管理卡槽生命周期并刷新已经消抖的卡检测状态。`Platform_SD_Process()` 的拔出事件按“最近一次告诉上层的状态”（Init 之后、每次成功的 Process 之后记下）判断，而不是按入口时 Device 的状态：读写中途拔卡时，`SDCard_FailTransfer`、`SDCard_AbortTransfer` 或被拒的启动会在 Process 之前就把 Device 写成 NOT_PRESENT，按入口状态比较会吞掉拔出，Storage 不卸载卷、被占用的文件槽不释放，重新插卡时挂载返回 BUSY；按已报告状态比较，READY → NOT_PRESENT 无论发生在 Process 里还是之前都恰好报告一次 REMOVED。插入事件仍按入口状态判断：静默拔出之后卡在 Process 之前又插回，看到 NOT_PRESENT → READY，报告 INSERTED（Storage 视同换卡）。
 - `Platform_SD_SetTransferCallback()`、`Platform_SD_ClearTransferCallback()`：管理唯一的、ISR 安全的 SDMMC 传输事件订阅者；这是单槽位，不是回调链表。
 - `Platform_SD_StartReadBlocks()`、`Platform_SD_StartWriteBlocks()`：启动已装配的 DMA 块传输。
 - `Platform_SD_CompleteTransfer()`：在任务上下文提交已完成、失败或中止的 Device 传输。
+- `Platform_SD_AbortTransfer(result)`：等传输完成事件超时后，在上界内显式中止在飞的 DMA（#209），`result` 报告 `STOPPED`（Device 回到 READY，可立即再传）、`NO_MEDIA`（卡已拔出，SDMMC 已反初始化）、`STUCK`（上界内没停住，SDMMC 已反初始化，Device 保持 ERROR）或 `REJECTED`（没有受理：Device 不在 BUSY，状态不变；或 Port 没有安装中止操作，Device 进入 ERROR）；返回 `PLATFORM_OK` 当且仅当 `STOPPED`。上界和耗时的细节在 [SD Card Component](../../Components/sd/README.md) 与 [STM32 SD Adapter](../../Adapters/stm32_hal/sd/README.md)。
 - `Platform_SD_GetState()`、`Platform_SD_IsPresent()`、`Platform_SD_GetInfo()`、`Platform_SD_GetDiagnostics()`：提供稳定的板级状态观察。
 
 ## 编译期依赖与装配
@@ -26,6 +27,7 @@
 - Platform 不包含 FreeRTOS，也不调用 `xTaskNotify...`、FatFs、Cache 维护函数或日志。
 - Filesystem Service 在 Platform 初始化后设置传输订阅者；Platform 的 IRQ 转发回调只转换并转交强类型事件。
 - 卡检测和传输完成是不同事件源。Platform 不分配 FreeRTOS 通知索引，也不创建信号量；卡检测的通知槽属于 APP，传输完成的信号量属于 Filesystem Service。
+- `Platform_SD_AbortTransfer()` 返回前，Device 不再是 READY 时同时注销 SDMMC 传输 IRQ 节点（与 `Platform_SD_Refresh()` 同一规则）：`STUCK` 之后 HAL 回调指针会在重新初始化时被复位，节点若仍显示“已注册”就不会再注册，之后每笔传输都会等不到完成事件。
 - `Platform_SD_ClearTransferCallback()` 仅用于确认没有 DMA 在飞时的真实运行时回收；正常拔卡不应清除订阅者，否则下次插卡不能自动恢复 SDMMC IRQ Adapter。
 
 ## 命名

@@ -816,6 +816,65 @@ SDCard_StatusTypeDef SDCard_FailTransfer(SDCard_HandleTypeDef *hsdcard)
 }
 
 /**
+  * @brief  在上界内中止一笔在飞的 DMA 传输，并按结果决定 Device 的持续状态。
+  * @param[in,out] hsdcard 正在执行 DMA 传输（BUSY）的 SD Card Device。
+  * @retval SDCARD_OK 传输已停住，Device 回到 READY，可以立即再启动下一笔。
+  * @retval SDCARD_ERROR 不在 BUSY、Port 不支持中止，或没有停住（详见 ErrorCode）。
+  */
+SDCard_StatusTypeDef SDCard_AbortTransfer(SDCard_HandleTypeDef *hsdcard)
+{
+    SDCard_PortStatusTypeDef port_status;
+
+    if (hsdcard == NULL)
+    {
+        return SDCARD_ERROR;
+    }
+
+    if ((!sdcard_is_port_bound(hsdcard)) ||
+        (hsdcard->PortOps->AbortTransfer == NULL))
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_PORT_NOT_BOUND,
+                           SDCARD_PORT_ERROR,
+                           SDCARD_STATE_ERROR);
+    }
+
+    if (hsdcard->State != SDCARD_STATE_BUSY)
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_NOT_READY,
+                           SDCARD_PORT_OK,
+                           hsdcard->State);
+    }
+
+    port_status = hsdcard->PortOps->AbortTransfer(hsdcard->PortContext, SDCARD_ABORT_TIMEOUT_MS);
+    if (port_status == SDCARD_PORT_OK)
+    {
+        hsdcard->ErrorCode = SDCARD_ERROR_TRANSFER_ABORTED;
+        hsdcard->LastPortStatus = SDCARD_PORT_TIMEOUT;
+        hsdcard->State = SDCARD_STATE_READY;
+        return SDCARD_OK;
+    }
+
+    /* Port 契约：非 OK 返回之前 Port 已经自行反初始化，Device 不能再对它反初始化。 */
+    hsdcard->IsPortInitialized = false;
+
+    if (port_status == SDCARD_PORT_NOT_PRESENT)
+    {
+        return sdcard_fail(hsdcard,
+                           SDCARD_ERROR_NOT_PRESENT,
+                           SDCARD_PORT_NOT_PRESENT,
+                           SDCARD_STATE_NOT_PRESENT);
+    }
+
+    /* 没有停住（TIMEOUT）或中止本身失败：卷保持 ERROR，不自动重试；恢复靠显式 Init 或拔插卡。 */
+    return sdcard_fail(hsdcard,
+                       SDCARD_ERROR_PORT_ABORT,
+                       port_status,
+                       SDCARD_STATE_ERROR);
+}
+
+/**
   * @brief  显式等待 SD 卡完成所有内部传输。
   * @note   未来 FatFs 的 CTRL_SYNC 可以直接映射到本函数。
   */

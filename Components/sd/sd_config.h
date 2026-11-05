@@ -15,5 +15,6 @@
 /* sd.c */
 #define SDCARD_TRANSFER_TIMEOUT_MS  1000u  /* 单次阻塞块传输允许的默认时间，单位为毫秒。 */
 #define SDCARD_SYNC_TIMEOUT_MS      1000u  /* 等待卡完成内部编程并回到 TRANSFER 状态的默认时间，单位为毫秒。 */
+#define SDCARD_ABORT_TIMEOUT_MS      100u  /* 显式中止在飞 DMA 传输的上界，单位为毫秒；到点还没停就由 Port 反初始化，Device 保持 ERROR。 */
 
 #endif /* SDCARD_CONFIG_H */
