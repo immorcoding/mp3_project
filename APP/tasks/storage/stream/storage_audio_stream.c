@@ -21,6 +21,10 @@
 #include "Service/filesystem/filesystem_file.h"
 #include "Service/log/log_service.h"
 
+/* 音频块一次读完，不能超过文件接口单次读写的上限（超过会返回 SERVICE_INVALID_PARAM，不截短也不拆分）。 */
+_Static_assert(STORAGE_AUDIO_BLOCK_BYTES <= SERVICE_FILESYSTEM_IO_MAX_BYTES,
+               "audio block must fit one Filesystem transfer");
+
 static const char storage_audio_log_tag[] = "Audio";
 
 /* 两个长度 1 的覆盖队列做“最新值”信箱：整份原子可见，后写覆盖先写。存储静态放 DTCM。 */

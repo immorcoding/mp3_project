@@ -18,6 +18,10 @@ typedef enum
     eSetValueWithoutOverwrite
 } eNotifyAction;
 
+/* 主机桩没有中断也没有调度：临界区什么都不做，只让被测代码里成对嵌套的写法能编译。 */
+#define taskENTER_CRITICAL() ((void)0)
+#define taskEXIT_CRITICAL() ((void)0)
+
 TickType_t xTaskGetTickCount(void);
 void vTaskDelay(TickType_t ticks_to_delay);
 TaskHandle_t xTaskGetCurrentTaskHandle(void);

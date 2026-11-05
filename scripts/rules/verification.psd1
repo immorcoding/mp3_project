@@ -47,6 +47,9 @@
                 '^Tests/flash_ftl/'
                 # 共用 FreeRTOS 桩：flash_ftl 的文件基准用它的假 tick，freertos_stub_tests 测它自己。
                 '^Tests/stubs/freertos/'
+                # 持锁统计依赖的周期计数器与 Service Log 的主机替身，以及编进测试的周期计数器头。
+                '^Tests/stubs/lock_env/'
+                '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
             )
         }
         @{
@@ -59,6 +62,9 @@
                 '^FATFS/'
                 # 共用 FreeRTOS 桩，以及主机测试编译的 Platform/Service/APP 头（由 check-test-paths.ps1 发现）。
                 '^Tests/stubs/freertos/'
+                # 持锁统计依赖的周期计数器与 Service Log 的主机替身，以及编进测试的周期计数器头。
+                '^Tests/stubs/lock_env/'
+                '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
                 '^Platform/platform\.h$'
                 '^Platform/flash/platform_flash\.h$'
                 '^Platform/sd/platform_sd\.h$'

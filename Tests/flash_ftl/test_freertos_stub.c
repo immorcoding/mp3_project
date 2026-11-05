@@ -110,6 +110,44 @@ static void test_last_created_semaphore_reaches_module_internal_lock(void)
     assert(xSemaphoreGive(internal) == pdTRUE);
 }
 
+/**
+ * @brief 被测模块有多把内部锁时，测试按创建顺序枚举它们；reset 之后清空列表。
+ */
+static void test_created_semaphores_are_listed_in_creation_order(void)
+{
+    static StaticSemaphore_t first_buffer;
+    static StaticSemaphore_t second_buffer;
+    SemaphoreHandle_t first;
+    SemaphoreHandle_t pooled;
+    SemaphoreHandle_t second;
+
+    freertos_stub_reset();
+    assert(freertos_stub_created_semaphore_count() == 0U);
+
+    first = xSemaphoreCreateMutexStatic(&first_buffer);
+    pooled = xSemaphoreCreateBinary();
+    second = xSemaphoreCreateMutexStatic(&second_buffer);
+    assert(freertos_stub_created_semaphore_count() == 3U);
+    assert(freertos_stub_created_semaphore(0U) == first);
+    assert(freertos_stub_created_semaphore(1U) == pooled);
+    assert(freertos_stub_created_semaphore(2U) == second);
+    assert(freertos_stub_created_semaphore(3U) == NULL);
+
+    freertos_stub_reset();
+    assert(freertos_stub_created_semaphore_count() == 0U);
+}
+
+/**
+ * @brief 临界区宏在主机桩里不做事，但可以成对嵌套使用（被测模块在临界区里更新统计）。
+ */
+static void test_critical_section_macros_are_nestable_no_ops(void)
+{
+    taskENTER_CRITICAL();
+    taskENTER_CRITICAL();
+    taskEXIT_CRITICAL();
+    taskEXIT_CRITICAL();
+}
+
 /** @brief 阻塞钩子的记录。 */
 typedef struct
 {
@@ -442,6 +480,8 @@ int main(void)
     test_failed_take_consumes_timeout();
     test_scripted_take_failures_then_recover();
     test_last_created_semaphore_reaches_module_internal_lock();
+    test_created_semaphores_are_listed_in_creation_order();
+    test_critical_section_macros_are_nestable_no_ops();
     test_binary_semaphore_starts_empty_and_holds_one_signal();
     test_wait_on_closed_gate_succeeds_when_hook_opens_it();
     test_hook_only_runs_when_a_take_would_block();

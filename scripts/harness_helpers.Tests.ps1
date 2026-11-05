@@ -274,6 +274,22 @@ Assert-HarnessEqual -Expected 0 -Actual $freertosStubImpact.UnknownPaths.Count `
 Assert-HarnessEqual -Expected $false -Actual $freertosStubImpact.RequiresAllHostTests `
     -Message '共用 FreeRTOS 桩变化不应回退全部主机测试'
 
+# Filesystem 持锁统计在主机上依赖的周期计数器与 Service Log 替身（Tests/stubs/lock_env，#208）被 flash_ftl、
+# filesystem_locator 编译：改它们必须选中这两个模块，且不落入未知路径。
+$lockEnvStubImpact = Get-HarnessImpact -ChangedPath @(
+    'Tests/stubs/lock_env/lock_env_stub.h'
+    'Tests/stubs/lock_env/lock_env_cycle_counter.c'
+    'Tests/stubs/lock_env/lock_env_log.c')
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $lockEnvStubImpact.HostModules `
+    -Message '持锁统计的主机替身变化必须选择 filesystem_locator 与 flash_ftl 主机测试'
+Assert-HarnessEqual -Expected 0 -Actual $lockEnvStubImpact.UnknownPaths.Count `
+    -Message 'Tests/stubs/lock_env 由主机模块规则覆盖，不应落入未知路径'
+
+# Filesystem 的入口锁模块（filesystem_lock.[ch]）在 Service/filesystem 下，已由两个模块的规则覆盖。
+$filesystemLockImpact = Get-HarnessImpact -ChangedPath @('Service/filesystem/filesystem_lock.c', 'Service/filesystem/filesystem_lock.h')
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $filesystemLockImpact.HostModules `
+    -Message 'Filesystem 入口锁变化必须同时选择文件定位符与 FTL 主机测试'
+
 # ui_cell（#217）是 APP 私有的界面数据短锁模块：生产路径与测试目录各自选中 ui_cell，不落入未知路径。
 $uiCellImpact = Get-HarnessImpact -ChangedPath @('APP/ui_cell/ui_cell.c', 'APP/ui_cell/ui_cell.h', 'Tests/ui_cell/test_ui_cell.c')
 Assert-HarnessSequence -Expected @('ui_cell') -Actual $uiCellImpact.HostModules `

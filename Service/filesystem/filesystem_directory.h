@@ -1,6 +1,10 @@
 /**
  * @file filesystem_directory.h
- * @brief Storage Task 独占的卷感知目录 Interface。
+ * @brief 卷感知目录 Interface：线程安全，GUI 与播放任务不得调用（`Service_Filesystem_DenyCaller`）。
+ *
+ * @details
+ *          每个函数在入口拿所属卷的锁、返回前放（一次调用只拿一次），句柄有效性在锁内检查；
+ *          语义同 `filesystem_file.h`。
  */
 
 #ifndef FILESYSTEM_DIRECTORY_H

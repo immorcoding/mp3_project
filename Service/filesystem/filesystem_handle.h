@@ -1,6 +1,11 @@
 /**
  * @file filesystem_handle.h
  * @brief Filesystem Module 私有文件/目录槽、Token 与按卷失效。
+ *
+ * @details
+ *          槽按卷固定分配：文件槽从 0 起先 SD 后 Flash，目录槽同理；每个槽只由所属卷的卷锁保护。
+ *          所以从 Token 的槽号就能算出该拿哪把卷锁（`filesystem_handle_*_volume`），不读任何共享状态。
+ *          除这两个函数外，本头的所有函数都要求调用者已持有对应卷的卷锁。
  */
 
 #ifndef FILESYSTEM_HANDLE_H
@@ -10,6 +15,25 @@
 #include "Middlewares/Third_Party/FatFs/src/ff.h"
 #include "Service/filesystem/filesystem_directory.h"
 #include "Service/filesystem/filesystem_file.h"
+
+/**
+ * @brief 从文件 Token 的槽号算出所属卷，用来决定拿哪把卷锁。
+ * @param[in] file 调用者传入的句柄。
+ * @param[out] volume 成功时写入所属卷。
+ * @return true 槽号在范围内；false 表示 Token 不可能有效（含全零 Token），调用者直接返回 INVALID_HANDLE。
+ * @note  纯计算，不读槽内容，不要求持锁。槽号合法不代表句柄有效：有效性必须拿锁后用 lookup 核对。
+ */
+bool filesystem_handle_file_volume(Service_Filesystem_FileHandleTypeDef file,
+                                   Service_Filesystem_VolumeTypeDef *volume);
+
+/**
+ * @brief 从目录 Token 的槽号算出所属卷，用来决定拿哪把卷锁。
+ * @param[in] directory 调用者传入的句柄。
+ * @param[out] volume 成功时写入所属卷。
+ * @return true 槽号在范围内；false 表示 Token 不可能有效。
+ */
+bool filesystem_handle_directory_volume(Service_Filesystem_DirectoryHandleTypeDef directory,
+                                        Service_Filesystem_VolumeTypeDef *volume);
 
 void filesystem_handle_set_volume_initialized(Service_Filesystem_VolumeTypeDef volume, bool ready);
 void filesystem_handle_set_mounted(Service_Filesystem_VolumeTypeDef volume, bool mounted);

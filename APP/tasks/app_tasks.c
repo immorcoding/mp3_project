@@ -19,6 +19,7 @@
 #include "APP/tasks/storage/storage_task.h"
 #include "APP/tasks/gui/gui_task.h"
 
+#include "Service/filesystem/filesystem_service.h"
 #include "Service/log/log_service.h"
 #include "generated/fw_version.h"
 #include "main.h"
@@ -40,12 +41,18 @@ static StackType_t playback_task_stack[APP_PLAYBACK_TASK_STACK_WORDS];
   *         已完成 storage_audio_stream_init()，播放任务才能调用 Storage 请求信箱；
   *         Playback Task 优先级 3 高于 Create Task，创建后立即运行到首次阻塞，
   *         完成命令 FIFO、状态信箱与回调注册，早于 GUI Task 发出第一条命令。
-  *         它以 xTaskCreateStatic 创建，句柄不保留（任务经自身句柄接收通知）。
+  *         它以 xTaskCreateStatic 创建，句柄只用于登记拒绝名单（任务经自身句柄接收通知）。
   *         GUI Task 持续推进 LVGL；SPI DMA 刷新时会由 GUI Service 的 wait callback
   *         阻塞等待传输完成。各任务的栈深度与优先级由 app_config.h 集中配置。
+  *         GUI Task 与 Playback Task 创建后立即登记进 Filesystem 的调用者拒绝名单
+  *         （`Service_Filesystem_DenyCaller`）：它们一调用文件接口就在入口断言停机，Release 也保留。
+  *         登记发生在创建之后；它们按设计不调用文件接口，所以创建到登记之间不会有调用。
   */
 static void create_task(void *handle)
 {
+    TaskHandle_t playback_task_handle;
+    TaskHandle_t gui_task_handle = NULL;
+
     (void)handle;
 
     if (Service_Log_Init() != SERVICE_OK)
@@ -78,16 +85,18 @@ static void create_task(void *handle)
         Error_Handler();
     }
 
-    if (xTaskCreateStatic(playback_task,
-                          "Playback Task",
-                          APP_PLAYBACK_TASK_STACK_WORDS,
-                          NULL,
-                          APP_PLAYBACK_TASK_PRIORITY,
-                          playback_task_stack,
-                          &playback_task_tcb) == NULL)
+    playback_task_handle = xTaskCreateStatic(playback_task,
+                                             "Playback Task",
+                                             APP_PLAYBACK_TASK_STACK_WORDS,
+                                             NULL,
+                                             APP_PLAYBACK_TASK_PRIORITY,
+                                             playback_task_stack,
+                                             &playback_task_tcb);
+    if (playback_task_handle == NULL)
     {
         Error_Handler();
     }
+    Service_Filesystem_DenyCaller(playback_task_handle);
 
     if ((xTaskCreate(monitor_task,
                      "Monitor Task",
@@ -100,10 +109,11 @@ static void create_task(void *handle)
                      APP_GUI_TASK_STACK_WORDS,
                      NULL,
                      APP_GUI_TASK_PRIORITY,
-                     NULL) != pdPASS))
+                     &gui_task_handle) != pdPASS))
     {
         Error_Handler();
     }
+    Service_Filesystem_DenyCaller(gui_task_handle);
 
     vTaskDelete(NULL);
 }

@@ -1,25 +1,28 @@
 /**
  * @file filesystem_flash_access.c
  * @brief 启动诊断的同步包装；经唯一 Flash 执行器等待并安全收尾。
+ *
+ * @details
+ *          诊断操作和逻辑卷请求共用同一个 Flash 完成信号量与 Platform 在飞操作，所以同样先拿 Flash 卷锁，
+ *          并在等锁之前检查调用者不在拒绝名单里。拿放各一次，包装之间不互相调用。
  */
 
 #include "Service/filesystem/filesystem_flash_access.h"
+#include "Service/filesystem/filesystem_lock.h"
 #include "Service/filesystem/flash/filesystem_flash_transfer.h"
 
 /**
- * @brief 同步执行启动诊断的原始数组读取，不用于逻辑卷访问。
- * @param address 芯片绝对字节地址，满足 Platform 原始读取的范围与对齐约束。
- * @param data DMA 接收缓冲，满足 Platform 的可达性、对齐及 Cache line 独占条件。
- * @param data_length 读取字节数，不为零，完整范围位于芯片内。
- * @param timeout_ms 非零毫秒预算；到期触发安全收尾，不立即释放缓冲。
- * @return SERVICE_OK 表示读取和 Cache 收尾完成；NOT_READY 表示执行器未初始化或超时预算为零；
- *         其余为启动、传输或收尾失败，输出不可视为有效。
- * @note 仅启动诊断独占期调用；直到返回前缓冲保持有效。
+ * @brief 同步读取数组的持锁部分。
+ * @param[in] address 芯片绝对字节地址。
+ * @param[out] data DMA 接收缓冲。
+ * @param[in] data_length 读取字节数。
+ * @param[in] timeout_ms 非零毫秒预算。
+ * @return 见 `Service_Filesystem_ReadFlashArray`。
  */
-Service_StatusTypeDef Service_Filesystem_ReadFlashArray(uint32_t address,
-                                                       uint8_t *data,
-                                                       uint32_t data_length,
-                                                       uint32_t timeout_ms)
+static Service_StatusTypeDef filesystem_flash_access_read_array_locked(uint32_t address,
+                                                                       uint8_t *data,
+                                                                       uint32_t data_length,
+                                                                       uint32_t timeout_ms)
 {
     if (!filesystem_flash_transfer_is_ready() || !timeout_ms)
     {
@@ -30,15 +33,38 @@ Service_StatusTypeDef Service_Filesystem_ReadFlashArray(uint32_t address,
 }
 
 /**
- * @brief 同步读取 ADR-0009 保留自检扇区。
- * @param region 首或尾自检区域，不接受任意物理写入分区。
- * @param data 满足 Platform DMA 条件的 4 KiB 接收缓冲。
- * @param data_length 必须为一个自检扇区的字节数。
- * @param timeout_ms 非零毫秒预算，超时后仍等待安全收尾。
- * @return SERVICE_OK 表示已完成读取与 Cache 收尾；失败时数据不可用。
- * @note 仅启动诊断独占期调用；返回前不能复用缓冲。
+ * @brief 同步执行启动诊断的原始数组读取，不用于逻辑卷访问。
+ * @param address 芯片绝对字节地址，满足 Platform 原始读取的范围与对齐约束。
+ * @param data DMA 接收缓冲，满足 Platform 的可达性、对齐及 Cache line 独占条件。
+ * @param data_length 读取字节数，不为零，完整范围位于芯片内。
+ * @param timeout_ms 非零毫秒预算；到期触发安全收尾，不立即释放缓冲。
+ * @return SERVICE_OK 表示读取和 Cache 收尾完成；NOT_READY 表示执行器未初始化或超时预算为零；
+ *         其余为启动、传输或收尾失败，输出不可视为有效。
+ * @note 拿 Flash 卷锁一次，直到返回前缓冲保持有效。
  */
-Service_StatusTypeDef Service_Filesystem_ReadFlashDiagnostic(
+Service_StatusTypeDef Service_Filesystem_ReadFlashArray(uint32_t address,
+                                                       uint8_t *data,
+                                                       uint32_t data_length,
+                                                       uint32_t timeout_ms)
+{
+    Service_StatusTypeDef status;
+
+    filesystem_lock_check_caller();
+    filesystem_lock_take(SERVICE_FILESYSTEM_VOLUME_FLASH, FILESYSTEM_OP_FLASH_DIAG);
+    status = filesystem_flash_access_read_array_locked(address, data, data_length, timeout_ms);
+    filesystem_lock_give(SERVICE_FILESYSTEM_VOLUME_FLASH);
+    return status;
+}
+
+/**
+ * @brief 同步读取保留自检扇区的持锁部分。
+ * @param[in] region 首或尾自检区域。
+ * @param[out] data 4 KiB 接收缓冲。
+ * @param[in] data_length 必须为一个自检扇区的字节数。
+ * @param[in] timeout_ms 非零毫秒预算。
+ * @return 见 `Service_Filesystem_ReadFlashDiagnostic`。
+ */
+static Service_StatusTypeDef filesystem_flash_access_read_diagnostic_locked(
     Platform_Flash_DiagnosticRegionTypeDef region,
     uint8_t *data,
     uint32_t data_length,
@@ -53,13 +79,36 @@ Service_StatusTypeDef Service_Filesystem_ReadFlashDiagnostic(
 }
 
 /**
- * @brief 同步擦除一个保留自检扇区，不提供任意地址擦除。
- * @param region 首或尾自检区域，禁止用来操作 FTL 分区。
- * @param timeout_ms 非零毫秒预算，超时不代表 NOR 内部擦除已取消。
- * @return SERVICE_OK 表示擦除完成且 Platform 已成功收尾。
- * @warning 破坏目标自检区内容，仅显式启动诊断调用。
+ * @brief 同步读取 ADR-0009 保留自检扇区。
+ * @param region 首或尾自检区域，不接受任意物理写入分区。
+ * @param data 满足 Platform DMA 条件的 4 KiB 接收缓冲。
+ * @param data_length 必须为一个自检扇区的字节数。
+ * @param timeout_ms 非零毫秒预算，超时后仍等待安全收尾。
+ * @return SERVICE_OK 表示已完成读取与 Cache 收尾；失败时数据不可用。
+ * @note 拿 Flash 卷锁一次；返回前不能复用缓冲。
  */
-Service_StatusTypeDef Service_Filesystem_EraseFlashDiagnostic(
+Service_StatusTypeDef Service_Filesystem_ReadFlashDiagnostic(
+    Platform_Flash_DiagnosticRegionTypeDef region,
+    uint8_t *data,
+    uint32_t data_length,
+    uint32_t timeout_ms)
+{
+    Service_StatusTypeDef status;
+
+    filesystem_lock_check_caller();
+    filesystem_lock_take(SERVICE_FILESYSTEM_VOLUME_FLASH, FILESYSTEM_OP_FLASH_DIAG);
+    status = filesystem_flash_access_read_diagnostic_locked(region, data, data_length, timeout_ms);
+    filesystem_lock_give(SERVICE_FILESYSTEM_VOLUME_FLASH);
+    return status;
+}
+
+/**
+ * @brief 同步擦除保留自检扇区的持锁部分。
+ * @param[in] region 首或尾自检区域。
+ * @param[in] timeout_ms 非零毫秒预算。
+ * @return 见 `Service_Filesystem_EraseFlashDiagnostic`。
+ */
+static Service_StatusTypeDef filesystem_flash_access_erase_diagnostic_locked(
     Platform_Flash_DiagnosticRegionTypeDef region, uint32_t timeout_ms)
 {
     if (!filesystem_flash_transfer_is_ready() || !timeout_ms)
@@ -71,16 +120,35 @@ Service_StatusTypeDef Service_Filesystem_EraseFlashDiagnostic(
 }
 
 /**
- * @brief 同步编程保留自检区的一个已擦除物理页。
- * @param region 首或尾自检区域。
- * @param page_offset 相对扇区首地址的偏移，按 256 B 页对齐。
- * @param data 返回前保持有效且不改写的输入缓冲。
- * @param data_length 1..256 B，不得跨越目标页。
- * @param timeout_ms 非零毫秒预算，到期后继续安全收尾。
- * @return SERVICE_OK 表示编程完成且 Platform 已成功收尾；失败不代表数据一定未写入。
- * @warning 仅显式启动诊断调用，目标页须先擦除，不操作 FTL。
+ * @brief 同步擦除一个保留自检扇区，不提供任意地址擦除。
+ * @param region 首或尾自检区域，禁止用来操作 FTL 分区。
+ * @param timeout_ms 非零毫秒预算，超时不代表 NOR 内部擦除已取消。
+ * @return SERVICE_OK 表示擦除完成且 Platform 已成功收尾。
+ * @warning 破坏目标自检区内容，仅显式启动诊断调用。
+ * @note 拿 Flash 卷锁一次。
  */
-Service_StatusTypeDef Service_Filesystem_ProgramFlashDiagnostic(
+Service_StatusTypeDef Service_Filesystem_EraseFlashDiagnostic(
+    Platform_Flash_DiagnosticRegionTypeDef region, uint32_t timeout_ms)
+{
+    Service_StatusTypeDef status;
+
+    filesystem_lock_check_caller();
+    filesystem_lock_take(SERVICE_FILESYSTEM_VOLUME_FLASH, FILESYSTEM_OP_FLASH_DIAG);
+    status = filesystem_flash_access_erase_diagnostic_locked(region, timeout_ms);
+    filesystem_lock_give(SERVICE_FILESYSTEM_VOLUME_FLASH);
+    return status;
+}
+
+/**
+ * @brief 同步编程保留自检区一个页的持锁部分。
+ * @param[in] region 首或尾自检区域。
+ * @param[in] page_offset 相对扇区首地址的偏移。
+ * @param[in] data 输入缓冲。
+ * @param[in] data_length 1..256 B。
+ * @param[in] timeout_ms 非零毫秒预算。
+ * @return 见 `Service_Filesystem_ProgramFlashDiagnostic`。
+ */
+static Service_StatusTypeDef filesystem_flash_access_program_diagnostic_locked(
     Platform_Flash_DiagnosticRegionTypeDef region,
     uint32_t page_offset,
     const uint8_t *data,
@@ -94,4 +162,32 @@ Service_StatusTypeDef Service_Filesystem_ProgramFlashDiagnostic(
     return filesystem_flash_transfer_finish(
         Platform_Flash_StartDiagnosticPageProgram(region, page_offset, data, data_length),
         timeout_ms);
+}
+
+/**
+ * @brief 同步编程保留自检区的一个已擦除物理页。
+ * @param region 首或尾自检区域。
+ * @param page_offset 相对扇区首地址的偏移，按 256 B 页对齐。
+ * @param data 返回前保持有效且不改写的输入缓冲。
+ * @param data_length 1..256 B，不得跨越目标页。
+ * @param timeout_ms 非零毫秒预算，到期后继续安全收尾。
+ * @return SERVICE_OK 表示编程完成且 Platform 已成功收尾；失败不代表数据一定未写入。
+ * @warning 仅显式启动诊断调用，目标页须先擦除，不操作 FTL。
+ * @note 拿 Flash 卷锁一次。
+ */
+Service_StatusTypeDef Service_Filesystem_ProgramFlashDiagnostic(
+    Platform_Flash_DiagnosticRegionTypeDef region,
+    uint32_t page_offset,
+    const uint8_t *data,
+    uint32_t data_length,
+    uint32_t timeout_ms)
+{
+    Service_StatusTypeDef status;
+
+    filesystem_lock_check_caller();
+    filesystem_lock_take(SERVICE_FILESYSTEM_VOLUME_FLASH, FILESYSTEM_OP_FLASH_DIAG);
+    status = filesystem_flash_access_program_diagnostic_locked(
+        region, page_offset, data, data_length, timeout_ms);
+    filesystem_lock_give(SERVICE_FILESYSTEM_VOLUME_FLASH);
+    return status;
 }

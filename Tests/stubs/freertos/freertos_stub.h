@@ -110,6 +110,22 @@ FreertosStub_SemaphoreStats freertos_stub_semaphore_stats(SemaphoreHandle_t sema
 SemaphoreHandle_t freertos_stub_last_created_semaphore(void);
 
 /**
+ * @brief 自 reset 以来创建（动态或静态）的信号量个数；被测模块有多把内部锁时，测试按创建顺序枚举。
+ *        列表最多记 32 个，超出的不记。
+ * @return 个数，reset 后清零。
+ */
+uint32_t freertos_stub_created_semaphore_count(void);
+
+/**
+ * @brief 按创建顺序取第 index 个创建的信号量。
+ * @param[in] index 从 0 起的序号。
+ * @return 句柄；序号超出已创建个数时为 NULL。
+ * @note  reset 只清列表，不清被测模块自己静态存储里的信号量：模块的锁是第一次使用时才创建的，
+ *        所以测试应当在第一次调用被测模块之前 reset，之后只比较统计的增量，不再 reset。
+ */
+SemaphoreHandle_t freertos_stub_created_semaphore(uint32_t index);
+
+/**
  * @brief 让某个信号量接下来的 N 次拿取失败（即使它空闲），用来模拟别的任务占着锁。
  * @param[in] semaphore 信号量句柄。
  * @param[in] count 失败次数；失败的拿取不改变持有状态，仍按超时前进 tick。
