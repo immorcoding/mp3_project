@@ -1,8 +1,8 @@
 # GUI Task
 
-GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后循环：Consume 一次输入、调用各产品分区 `step`、再 `Service_GUI_Process()`。SPI DMA 刷新期间的等待由 GUI Service 的 wait callback 完成。本目录不创建界面对象；界面由 `Service/gui/view/` 手写。
+GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后遍历应用注册表 `APP/apps/app_table.c`：对每个应用调用一次 `gui_init`，之后每圈 Consume 一次输入、对每个应用调用 `gui_step`、再 `Service_GUI_Process()`；注册表里的空字段跳过。SPI DMA 刷新期间的等待由 GUI Service 的 wait callback 完成。本目录不创建界面对象；界面由 `Service/gui/view/` 手写。
 
-`gui_task.c` 不包含 `storage_listbuffer.h`、`storage_namebuffer.h` 或 `playback_contract.h`。音乐播放器在 `music/`：窗口协议、播放命令与播放快照的归约都在该分区内；GUI 不读写播放游标、不持 playing 真值。Books / Settings 以后各加一个 `step`，不要把它们的 `switch` 写回任务主循环。
+`gui_task.c` 不包含任何应用头，只包含 `APP/apps/app_table.h`。音乐播放器在 `APP/apps/music/gui/`（[README](../../apps/music/gui/README.md)）：窗口协议、播放命令与播放快照的归约都在该分区内；GUI 不读写播放游标、不持 playing 真值。Books / Settings 以后在注册表里各加一行，不要把它们的 `switch` 写回任务主循环；接入约定见 [APP/apps](../../apps/README.md)。
 
 ## 公开 Interface
 
@@ -12,13 +12,13 @@ GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后�
 
 ## 编译期依赖
 
-- `Service_GUI_Init()` / `Service_GUI_Process()` / `Service_GUI_ConsumeInput()` / `Service_GUI_TransportApply()` / `Service_GUI_ProgressApply()` / `Service_GUI_TimeApply()` / `Service_GUI_TitleApply()` / `Service_GUI_VinylApply()` / `Service_GUI_QueueApply()`（后几项由 `music/` 调用）；
-- `music/gui_music.h`；
+- `Service_GUI_Init()` / `Service_GUI_Process()` / `Service_GUI_ConsumeInput()` / `Service_GUI_TransportApply()` / `Service_GUI_ProgressApply()` / `Service_GUI_TimeApply()` / `Service_GUI_TitleApply()` / `Service_GUI_VinylApply()` / `Service_GUI_QueueApply()`（后几项由音乐 GUI 分区调用，不经本任务）；
+- `APP/apps/app_table.h`（注册表的 `gui_init`、`gui_step`）；
 - FreeRTOS Task 入口签名。
 
 ## 运行时请求与事件路径
 
-任务启动时调用 `Service_GUI_Init(GUI_NOTIFY_LCD_TRANSFER)`；失败视为致命并进入 `Error_Handler()`。随后 `gui_music_init()`，再循环：把 `input.command` 置 `NONE`，`ConsumeInput`，`gui_music_step`，`Process()`。LCD DMA 最终 ISR 只通知本任务并调用 `lv_disp_flush_ready()`；其余 LVGL API 均在本 Task。
+任务启动时调用 `Service_GUI_Init(GUI_NOTIFY_LCD_TRANSFER)`；失败视为致命并进入 `Error_Handler()`。随后按注册表顺序调用各应用的 `gui_init`，再循环：把 `input.command` 置 `NONE`，`ConsumeInput`，按注册表顺序调用各应用的 `gui_step`，`Process()`。LCD DMA 最终 ISR 只通知本任务并调用 `lv_disp_flush_ready()`；其余 LVGL API 均在本 Task。
 
 ## 资源与约束
 
@@ -30,4 +30,4 @@ GUI Task 是 LVGL 的唯一执行上下文。它初始化 GUI Service，随后�
 
 ## 命名
 
-任务入口使用 `gui_task()`；通知枚举使用 `GUI_NOTIFY_*`。音乐分区符号使用 `gui_music_*`。
+任务入口使用 `gui_task()`；通知枚举使用 `GUI_NOTIFY_*`。音乐分区符号使用 `gui_music_*`，在 `APP/apps/music/gui/`。

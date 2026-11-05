@@ -8,7 +8,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-#include "APP/tasks/gui/music/gui_music_queue_window.h"
+#include "APP/apps/music/gui/gui_music_queue_window.h"
 
 /**
  * @brief 未挂载时不 request，也不清空本来就没有的 Queue。

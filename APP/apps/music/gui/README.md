@@ -1,13 +1,13 @@
-# GUI Task 音乐分区
+# 音乐应用的 GUI 分区
 
-`music/` 是 GUI Task 的音乐播放器编排，不是独立 Service。它做两件事：把带 `MUSIC_` 前缀的输入翻译成 [#71](https://github.com/immorcoding/mp3_project/issues/71) 公开合同的播放命令，把每圈读到的播放快照画出来；同时推进 Queue 窗口协议与曲名请求。不持 playing 真值、不读写播放游标、不打开文件、不解码、不使用 LVGL（#72 A1–A3）。
+本目录 `APP/apps/music/gui/` 是音乐应用的 GUI 编排，由 GUI Task 经注册表 [`APP/apps/app_table.c`](../../app_table.c) 的 `gui_init`、`gui_step` 两列调用（接入约定见 [APP/apps](../../README.md)），不是独立 Service。它做两件事：把带 `MUSIC_` 前缀的输入翻译成 [#71](https://github.com/immorcoding/mp3_project/issues/71) 公开合同的播放命令，把每圈读到的播放快照画出来；同时推进 Queue 窗口协议与曲名请求。不持 playing 真值、不读写播放游标、不打开文件、不解码、不使用 LVGL（#72 A1–A3）。
 
 ## 私有 Interface
 
 - `gui_music_init()`：复位窗口客户与快照归约，把播放键画成 PLAY、进度条为 0、唱盘归零。时间 Label 的初始 `0:00/--:--` 由 Service 在 Init 时写入。
 - `gui_music_step(input)`：先发命令，再读一次快照归约，再跑窗口协议，最后只对与上一圈不同的显示部分调用 `Service_GUI_*`（见“运行时路径”）。
 - `gui_music_queue_window_*()`：listbuffer 窗口 request / APPLY / CLEAR 时机；APPLY 时记下已显示窗口的曲库代次。下一窗起点让可见首行之上留 `GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS`（3）行给回滑，回到窗口顶部时一次退回这么多行（#157）。
-- `gui_music_queue_rows()`：把 READY 窗口槽每行的 {曲目显示名 `Title`, 歌手 `Artist`} 按 `Length`（不超过容量）整理成两个平行指针数组，APPLY 时交给 `Service_GUI_QueueApply()`；歌手为空串的行交出界面文案 `Unknown Artist`（GUI-25，定义在 `gui_music_text.h`，唱盘页歌手行复用），不是 `--`，窗口槽本身不改。窗口行只有显示文本，本分区不解析路径（GUI-9）。主机测试见 `Tests/gui_task`。
+- `gui_music_queue_rows()`：把 READY 窗口槽每行的 {曲目显示名 `Title`, 歌手 `Artist`} 按 `Length`（不超过容量）整理成两个平行指针数组，APPLY 时交给 `Service_GUI_QueueApply()`；歌手为空串的行交出界面文案 `Unknown Artist`（GUI-25，定义在 `gui_music_text.h`，唱盘页歌手行复用），不是 `--`，窗口槽本身不改。窗口行只有显示文本，本分区不解析路径（GUI-9）。主机测试见 `Tests/music_gui`。
 - `gui_music_text.h`：只含宏，集中定义取不到曲目元数据时的界面占位文案（目前是 `GUI_MUSIC_TEXT_UNKNOWN_ARTIST`，GUI-25），Storage 与窗口行内容不变，占位只在 GUI 侧替换；被 `gui_music_queue_rows.c` 与 `gui_music_title.c`（唱盘页歌手行）包含。
 - `gui_music_transport_*()`：纯 C 快照归约（不含 LVGL，只包含 `playback_contract.h`），见下节。
 - `gui_music_title_*()`：纯 C 曲名客户（不含 LVGL，不包含 Storage 头），与 Queue 窗口客户并列，见“曲名”。
@@ -45,7 +45,7 @@
 - `gui_music_title_text(client, action, Title, Artist, &text)` 在 poll 之后决定本圈要不要 Apply、Apply 哪一对：`ACCEPT` 一律交出 {槽内 `Title`, 槽内 `Artist` 或 `Unknown Artist`}；否则只在显示与上次交出的不同时交出 {`""`, `""`}（空白）或 {`"--"`, `""`}。
 - `gui_music.c` 执行动作：`REQUEST` 调 `storage_namebuffer_request(位置, 代次)`，被拒时 `gui_music_title_request_failed()` 下一圈重试；`gui_music_title_text()` 返回真时调 `Service_GUI_TitleApply(title, artist)`；`ACCEPT` 与 `DISCARD` 在 Apply 之后把槽写回 `IDLE`。
 - 先读槽 `Status`，为 `READY` 时才读应答代次与名字：`READY` 期间 Storage 不再写槽。
-- 时序证据：主机测试 `Tests/gui_task` 覆盖以上全部规则（每次 Apply 同时断言曲名与歌手）；模拟器场景 `music_artist`、`music_title_play_start`、`music_title_switch`、`music_title_next_burst`、`music_title_bad_file`、`music_title_unavailable` 用假 Storage 的应答延迟与“取不到”开关拍出对应画面（[#120](https://github.com/immorcoding/mp3_project/issues/120)）。真机 Storage 应答时延与 GUI 刷新节拍的组合进板级验收。
+- 时序证据：主机测试 `Tests/music_gui` 覆盖以上全部规则（每次 Apply 同时断言曲名与歌手）；模拟器场景 `music_artist`、`music_title_play_start`、`music_title_switch`、`music_title_next_burst`、`music_title_bad_file`、`music_title_unavailable` 用假 Storage 的应答延迟与“取不到”开关拍出对应画面（[#120](https://github.com/immorcoding/mp3_project/issues/120)）。真机 Storage 应答时延与 GUI 刷新节拍的组合进板级验收。
 
 ## 编译期依赖
 

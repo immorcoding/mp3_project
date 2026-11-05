@@ -128,6 +128,33 @@ Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'cortex' -IncludePath
 Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'cortex' -IncludePath 'Service/gui/gui_service.h') `
     -Message 'Cortex Adapter 禁止 Service'
 
+Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'app' -SourceApp 'music' -IncludePath 'APP/apps/music/gui/gui_music.h') `
+    -Message '应用允许包含自己目录的头'
+Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'app' -SourceApp 'music' -IncludePath 'APP/tasks/playback/playback_contract.h') `
+    -Message '应用允许包含 APP/tasks 的公开合同'
+Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'app' -SourceApp 'music' -IncludePath 'Service/gui/gui_service.h') `
+    -Message '应用允许包含 Service 公开头'
+Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'app' -SourceApp 'music' -IncludePath 'gui_music_text.h') `
+    -Message '应用允许同目录相对包含'
+Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'app' -SourceApp 'music' -IncludePath 'APP/apps/books/gui/gui_books.h') `
+    -Message '应用禁止包含另一个应用的头'
+Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'app' -SourceApp 'music' -IncludePath 'APP\apps\books\gui\gui_books.h') `
+    -Message '应用禁止包含另一个应用的头（反斜杠写法）'
+Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'app' -SourceApp 'music' -SourceDirectory 'APP/apps/music/gui' -IncludePath '../../books/gui/gui_books.h') `
+    -Message '应用禁止经 .. 相对路径包含另一个应用的头'
+Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'app' -SourceApp 'music' -SourceDirectory 'APP/apps/music/gui' -IncludePath '../foreground/music_foreground.h') `
+    -Message '应用允许经 .. 相对路径包含自己目录的头'
+Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'app' -SourceApp 'music' -IncludePath 'apps/books/gui/gui_books.h') `
+    -Message '应用禁止以 apps/ 起头的路径包含另一个应用'
+Assert-Equal -Expected 'music' -Actual (Get-LayerSourceApp -RelativePath 'APP/apps/music/gui/gui_music.c') `
+    -Message '应从路径取出应用名'
+Assert-Null -Actual (Get-LayerSourceApp -RelativePath 'APP/apps/app_table.c') `
+    -Message '注册表本身不属于任何应用'
+Assert-Equal -Expected 'app' -Actual (Get-LayerSourceKind -RelativePath 'APP/apps/music/gui/gui_music.c') `
+    -Message 'APP/apps 下的源文件按应用检查'
+Assert-Null -Actual (Get-LayerSourceKind -RelativePath 'APP/tasks/gui/gui_task.c') `
+    -Message 'APP/tasks 不在分层检查扫描根内'
+
 $repositoryRoot = Split-Path -Path $PSScriptRoot -Parent
 Invoke-LayerIncludeCheck -RepositoryRoot $repositoryRoot
 
@@ -154,6 +181,7 @@ function Assert-FixtureViolation {
         New-Item -ItemType Directory -Path (Join-Path -Path $fixtureRoot -ChildPath 'Adapters/cortex') | Out-Null
         New-Item -ItemType Directory -Path (Join-Path -Path $fixtureRoot -ChildPath 'Platform') | Out-Null
         New-Item -ItemType Directory -Path (Join-Path -Path $fixtureRoot -ChildPath 'Service') | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path -Path $fixtureRoot -ChildPath 'APP/apps') -Force | Out-Null
         $targetFile = Join-Path -Path $fixtureRoot -ChildPath $RelativeFile
         New-Item -ItemType Directory -Path (Split-Path -Path $targetFile -Parent) -Force | Out-Null
         Set-Content -LiteralPath $targetFile -Value "$IncludeLine`n" -Encoding ascii
@@ -197,10 +225,19 @@ Assert-FixtureViolation -RelativeFile 'Adapters/stm32_hal/foo/foo.c' `
     -ExpectedPattern 'APP/app\.h' `
     -FailureMessage 'HAL Adapter 夹具含 APP 头时分层检查应失败。'
 
+Assert-FixtureViolation -RelativeFile 'APP/apps/music/gui/foo.c' `
+    -IncludeLine '#include "APP/apps/books/gui/gui_books.h"' `
+    -ExpectedPattern 'APP/apps/books/gui/gui_books\.h' `
+    -FailureMessage '应用夹具包含另一个应用的头时分层检查应失败。'
+Assert-FixtureViolation -RelativeFile 'APP/apps/music/gui/foo.c' `
+    -IncludeLine '#include "../../books/gui_books.h"' `
+    -ExpectedPattern 'books/gui_books\.h' `
+    -FailureMessage '应用夹具经 .. 包含另一个应用的头时分层检查应失败。'
+
 $indexFixtureRoot = Join-Path -Path ([System.IO.Path]::GetTempPath()) `
     -ChildPath ('layer-index-fixture-' + [Guid]::NewGuid().ToString('N'))
 try {
-    $scanRoots = @('Components', 'Adapters/bridge', 'Adapters/stm32_hal', 'Adapters/cortex', 'Platform', 'Service')
+    $scanRoots = @('Components', 'Adapters/bridge', 'Adapters/stm32_hal', 'Adapters/cortex', 'Platform', 'Service', 'APP/apps')
     foreach ($scanRoot in $scanRoots) {
         $directory = Join-Path -Path $indexFixtureRoot -ChildPath $scanRoot
         New-Item -ItemType Directory -Path $directory -Force | Out-Null
