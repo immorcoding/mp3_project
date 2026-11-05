@@ -15,7 +15,6 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
-#include <assert.h>
 #include <string.h>
 
 static StaticSemaphore_t lock_buffer; /* 全模块唯一的锁，静态存储。 */
@@ -24,7 +23,8 @@ static SemaphoreHandle_t lock_handle; /* 第一次 ui_cell_init 时创建。 */
 /**
  * @brief 调试版：断言写者唯一。第一次写入的任务成为写者，之后其他任务写同一格子即失败。
  * @param[in,out] cell 格子。
- * @note  Release（定义 NDEBUG）整体编译掉，不占时间也不占字段。
+ * @note  固件 Release 带 `-DNDEBUG`（CMake 的 Release 默认参数），这段连同头里的两个字段整体编译掉，
+ *        不占时间也不占字段；Debug 没有 `NDEBUG`，保留。断言用产品的 `configASSERT`。
  */
 static void assert_single_writer(UiCellTypeDef *cell)
 {
@@ -36,7 +36,7 @@ static void assert_single_writer(UiCellTypeDef *cell)
         cell->writer_known = true;
         cell->writer = current;
     }
-    assert(cell->writer == current);
+    configASSERT(cell->writer == current);
 #else
     (void)cell;
 #endif
@@ -71,18 +71,18 @@ static void wake_reader(const UiCellTypeDef *cell)
  * @param[in,out] storage 数据存放处；本函数不改写内容，调用者在这之前放好初值（静态存储为全零）。
  * @param[in] size 数据大小（字节），非 0。
  * @param[in] wake 写入成功后的叫醒函数；结果格传 NULL。
- * @note  只在调度器启动前（Boot Task）或单线程环境调用，不与其他 ui_cell 函数并发。
+ * @note  只在 Boot Task 里、其他使用者任务创建之前调用，不与其他 ui_cell 函数并发。
  */
 void ui_cell_init(UiCellTypeDef *cell, void *storage, size_t size, UiCell_WakeCallback_t wake)
 {
-    assert(cell != NULL);
-    assert(storage != NULL);
-    assert(size > 0U);
+    configASSERT(cell != NULL);
+    configASSERT(storage != NULL);
+    configASSERT(size > 0U);
 
     if (lock_handle == NULL)
     {
         lock_handle = xSemaphoreCreateMutexStatic(&lock_buffer);
-        assert(lock_handle != NULL);
+        configASSERT(lock_handle != NULL);
     }
 
     cell->storage = storage;
@@ -105,12 +105,12 @@ void ui_cell_write(UiCellTypeDef *cell, const void *src)
 {
     BaseType_t taken;
 
-    assert(cell != NULL);
-    assert(src != NULL);
+    configASSERT(cell != NULL);
+    configASSERT(src != NULL);
     assert_single_writer(cell);
 
     taken = xSemaphoreTake(lock_handle, portMAX_DELAY);
-    assert(taken == pdTRUE); /* portMAX_DELAY 在真实内核里不会失败；桩里要靠钩子放行。 */
+    configASSERT(taken == pdTRUE); /* portMAX_DELAY 在真实内核里不会失败；桩里要靠钩子放行。 */
     if (taken != pdTRUE)
     {
         return;
@@ -131,8 +131,8 @@ void ui_cell_write(UiCellTypeDef *cell, const void *src)
  */
 bool ui_cell_try_write(UiCellTypeDef *cell, const void *src)
 {
-    assert(cell != NULL);
-    assert(src != NULL);
+    configASSERT(cell != NULL);
+    configASSERT(src != NULL);
     assert_single_writer(cell);
 
     if (xSemaphoreTake(lock_handle, 0U) != pdTRUE)
@@ -157,9 +157,9 @@ bool ui_cell_try_write(UiCellTypeDef *cell, const void *src)
  */
 bool ui_cell_read_if_changed(const UiCellTypeDef *cell, void *dst, uint32_t *seen)
 {
-    assert(cell != NULL);
-    assert(dst != NULL);
-    assert(seen != NULL);
+    configASSERT(cell != NULL);
+    configASSERT(dst != NULL);
+    configASSERT(seen != NULL);
 
     if (cell->sequence == *seen) /* 先不拿锁比较序号：没变化的帧不碰锁。 */
     {

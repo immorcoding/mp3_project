@@ -7,6 +7,7 @@
 - `FreeRTOS.h`：`TickType_t`、`BaseType_t`、`pd*` 常量、`portMAX_DELAY`、`pdMS_TO_TICKS`。
 - `semphr.h`：互斥锁与二值信号量（动态与静态创建、`Take`、`Give`、`GiveFromISR`、`Delete`）。
 - `task.h`：`xTaskGetTickCount`、`xTaskGetCurrentTaskHandle`，以及带下标的任务通知（`xTaskNotifyIndexed`、`xTaskNotifyWaitIndexed`、`ulTaskNotifyTakeIndexed`、`xTaskNotifyStateClearIndexed` 与 `FromISR` 版本；不带下标的写法映射到 0 号槽）。
+- `FreeRTOS.h` 还提供与产品一致的 `configASSERT`（无条件生效，失败调用桩里的 `vAssertCalled`：打印文件和行号后 `abort()`；测试用 `SIGABRT` 处理函数捕获）。
 - `freertos_stub.h`：脚本化与观察接口。`freertos_stub_reset` 清空一切；`freertos_stub_set_tick` / `set_tick_step` 控制时间；`freertos_stub_semaphore_fail_next_takes` 让接下来 N 次拿取失败（“拿不到锁”）；`freertos_stub_set_block_hook` 安装阻塞钩子，在“将要等待”时替别的任务或中断做事（“关闸时等待”：钩子里放行或不放行）；`freertos_stub_last_created_semaphore` 交出最近创建的信号量（被测模块把锁藏在内部时用它取句柄）；`freertos_stub_semaphore_stats`、`freertos_stub_notification_*`、`freertos_stub_notify_calls` 供测试读取结果。
 
 ## 保真边界

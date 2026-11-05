@@ -8,6 +8,8 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define STUB_SEMAPHORE_POOL_SIZE 16U
@@ -98,6 +100,18 @@ static SemaphoreHandle_t create_from_pool(StubSemaphoreKind kind, uint32_t initi
         }
     }
     return NULL;
+}
+
+/**
+ * @brief 产品 configASSERT 失败时的出口：打印文件和行号后 abort()。
+ * @param[in] file 断言所在文件。
+ * @param[in] line 断言所在行。
+ * @note  真实固件里这里是不可恢复的停机；主机测试用 SIGABRT 处理函数捕获以验证断言触发。
+ */
+void vAssertCalled(const char *file, uint32_t line)
+{
+    (void)fprintf(stderr, "configASSERT failed: %s:%lu\n", file, (unsigned long)line);
+    abort();
 }
 
 /**
