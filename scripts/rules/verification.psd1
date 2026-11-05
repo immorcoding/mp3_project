@@ -12,6 +12,7 @@
         'resource_pack'
         'storage_audio_stream'
         'storage_catalog'
+        'ui_cell'
         'playback_service'
         'playback_task'
         'monitor_warn'
@@ -180,6 +181,15 @@
                 '^Middlewares/Third_Party/FatFs/src/(?:ff\.h|integer\.h|option/cc936\.c)$'
                 '^FATFS/Target/ffconf\.h$'
                 '^Tests/storage_catalog/'
+            )
+        }
+        @{
+            Name = 'ui_cell'
+            PathPatterns = @(
+                '^APP/ui_cell/'
+                # 真实 ui_cell.c 链接共用 FreeRTOS 桩（互斥锁、任务句柄）。
+                '^Tests/stubs/freertos/'
+                '^Tests/ui_cell/'
             )
         }
         @{

@@ -86,6 +86,30 @@ static void test_scripted_take_failures_then_recover(void)
     assert(xSemaphoreGive(mutex) == pdTRUE);
 }
 
+/**
+ * @brief 被测模块在内部创建锁、不交出句柄时，测试经“最近创建的信号量”拿到它来脚本化拿不到。
+ */
+static void test_last_created_semaphore_reaches_module_internal_lock(void)
+{
+    static StaticSemaphore_t module_buffer;
+    SemaphoreHandle_t pooled;
+    SemaphoreHandle_t internal;
+
+    freertos_stub_reset();
+    assert(freertos_stub_last_created_semaphore() == NULL);
+
+    pooled = xSemaphoreCreateMutex();
+    assert(freertos_stub_last_created_semaphore() == pooled);
+
+    internal = xSemaphoreCreateMutexStatic(&module_buffer);
+    assert(freertos_stub_last_created_semaphore() == internal);
+
+    freertos_stub_semaphore_fail_next_takes(freertos_stub_last_created_semaphore(), 1U);
+    assert(xSemaphoreTake(internal, 0U) == pdFALSE);
+    assert(xSemaphoreTake(internal, 0U) == pdTRUE);
+    assert(xSemaphoreGive(internal) == pdTRUE);
+}
+
 /** @brief 阻塞钩子的记录。 */
 typedef struct
 {
@@ -359,6 +383,7 @@ int main(void)
     test_mutex_is_exclusive_until_given();
     test_failed_take_consumes_timeout();
     test_scripted_take_failures_then_recover();
+    test_last_created_semaphore_reaches_module_internal_lock();
     test_binary_semaphore_starts_empty_and_holds_one_signal();
     test_wait_on_closed_gate_succeeds_when_hook_opens_it();
     test_hook_only_runs_when_a_take_would_block();

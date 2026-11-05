@@ -123,6 +123,11 @@ function Get-LayerIncludeViolation {
     }
 
     if ($SourceKind -eq 'service') {
+        # ui_cell 是 APP 私有的界面数据短锁（ARC-24）：Service/gui 不认识格子，连不带 APP/ 前缀的写法也拦。
+        if ($normalized -match '(?i)(^|/)ui_cell(/|\.h$)') {
+            return "禁止包含 '$normalized'。Service/gui 不得包含 APP/ui_cell；界面数据的格子由 APP 与应用持有，Service 只经自己的公开接口交换（ARC-24）。"
+        }
+
         if ($isHalHeader) {
             return "禁止包含 '$normalized'。Service 不得依赖 HAL、CMSIS 或 CubeMX 外设头；进入硬件应经 Platform。"
         }

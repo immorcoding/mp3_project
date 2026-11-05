@@ -44,6 +44,7 @@ static uint32_t task_count;
 static TaskHandle_t current_task;
 static StaticSemaphore_t semaphore_pool[STUB_SEMAPHORE_POOL_SIZE];
 static bool semaphore_in_use[STUB_SEMAPHORE_POOL_SIZE];
+static SemaphoreHandle_t last_created_semaphore;
 static TickType_t current_tick;
 static TickType_t tick_step;
 static FreertosStub_BlockHook block_hook;
@@ -76,6 +77,7 @@ static SemaphoreHandle_t init_semaphore(StaticSemaphore_t *buffer, StubSemaphore
     memset(buffer, 0, sizeof(*buffer));
     state->kind = kind;
     state->count = initial_count;
+    last_created_semaphore = buffer;
     return buffer;
 }
 
@@ -105,6 +107,7 @@ void freertos_stub_reset(void)
 {
     memset(semaphore_pool, 0, sizeof(semaphore_pool));
     memset(semaphore_in_use, 0, sizeof(semaphore_in_use));
+    last_created_semaphore = NULL;
     current_tick = 0U;
     tick_step = 0U;
     block_hook = NULL;
@@ -231,6 +234,15 @@ TickType_t xTaskGetTickCount(void)
 FreertosStub_SemaphoreStats freertos_stub_semaphore_stats(SemaphoreHandle_t semaphore)
 {
     return state_of(semaphore)->stats;
+}
+
+/**
+ * @brief 最近一次创建（动态或静态）的信号量。
+ * @return 句柄；reset 之后还没创建过则为 NULL。
+ */
+SemaphoreHandle_t freertos_stub_last_created_semaphore(void)
+{
+    return last_created_semaphore;
 }
 
 /**
