@@ -269,7 +269,8 @@ int main(int argc, char *argv[])
             }
         }
 
-        Service_GUI_Process();
+        /* 返回值是板上 GUI Task 每圈该睡的毫秒数；模拟器每圈固定推进 SIM_CLOCK_STEP_MS，忽略它。 */
+        (void)Service_GUI_Process();
 
         if (!options.hidden)
         {

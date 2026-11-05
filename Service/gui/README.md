@@ -8,7 +8,7 @@
 
 - `Service_GUI_Init(notify_index)`：仅由 GUI Task 调用一次。`notify_index` 是本任务 `GUI_NotifyIndexTypeDef` 给出的 LCD DMA 完成槽。初始化 LVGL，注册 v8 显示驱动与 Pointer 输入驱动，绑定 LCD DMA 最终回调；以 STARTUP 外观初始化共享颜色 style，由 `view/` 创建全部 Screen 并加载 Boot，再应用 Screen 外观、准备 Main 与 Boot。
 - `Service_GUI_ThemeApply(id)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`；启动序列未结束（Boot 仍存在）时返回 `SERVICE_BUSY`，因为 Boot 可能正显示共享 Canvas 工作帧。首次生成毛玻璃失败时回滚到原外观。切换 Default/Solid 调色板，刷新共享颜色 style 与 BootReveal/Lock/Main 的壁纸或 Ground，再设置 Music Tab 毛玻璃或薄层；首次切到 Default 时按需生成长期模糊壁纸。
-- `Service_GUI_Process()`：仅在同一 GUI Task 上下文周期调用。按 FreeRTOS Tick 推进 LVGL 时间，并调用 `lv_timer_handler()` 处理刷新、动画和输入。
+- `uint32_t Service_GUI_Process()`：仅在同一 GUI Task 上下文周期调用。按 FreeRTOS Tick 推进 LVGL 时间，并调用 `lv_timer_handler()` 处理刷新、动画和输入。返回值是调用者本圈结束后该睡的毫秒数（GUI-28），恒为 1 至 `SERVICE_GUI_SLEEP_MAX_MS`（16，等于 `LV_DISP_DEF_REFR_PERIOD`，`gui_service.c` 用 `_Static_assert` 守住）：`lv_timer_handler()` 的返回值减去本圈实际耗时（FreeRTOS Tick），再夹上下限。不能直接按 handler 的返回值睡：`lv_tick` 只在每圈开头推进，handler 运行期间时间不动，返回值接近一整个周期，直接睡会把渲染耗时叠到帧间隔上。输入槽里有尚未取走的命令时只给下限 `SERVICE_GUI_SLEEP_MIN_MS`（1），让下一圈马上 `ConsumeInput`；没有定时器待命（`LV_NO_TIMER_READY`）、handler 已到期或本圈耗时超过返回值，分别落在上限、下限、下限。本函数自己不睡眠，由 GUI Task 在其测量段之外 `vTaskDelay`；忽略返回值（GUI 模拟器每圈固定推进 5 ms）只是不让出 CPU，LVGL 行为不变。新结果到达不提前唤醒 GUI。下限 1 ms 只睡到下一个 Tick，实际 0 至 1 ms。
 - `Service_GUI_QueueApply(titles, artists, length, window_index, current_index)`：仅由同一 GUI Task 调用。把一窗曲名与歌手填进 Queue 可见行：第 i 行曲名 Label 显示 `titles[i]`，歌手 Label 显示 `artists[i]`；`artists` 与 `titles` 平行，`NULL` 表示全部行歌手为空，单项可为 `""`（GUI-25：不替换成 `--`，不解析路径）。`length` 为 0 时全部 Hidden，`titles`/`artists` 可为 NULL。`window_index` 是本窗在播放列表上的起点，用于已有行转 head。`current_index` 是正在播放的播放列表下标；无当前曲时为 `SERVICE_GUI_QUEUE_NO_CURRENT`。不包含 `storage_listbuffer.h`。Label 会拷贝文本。
 - `Service_GUI_ConsumeInput(input)`：仅由同一 GUI Task 调用。取走上一圈 `Process()` 记下的一次点击。无点击时 `command` 为 `SERVICE_GUI_INPUT_NONE` 且返回 `SERVICE_OK`，不用 `SERVICE_NOT_READY` 表示空闲。`MUSIC_QUEUE_SELECT` 时 `param` 为播放列表下标；进度条手势 `MUSIC_SEEK_PRESS` / `MUSIC_SEEK_DRAG` / `MUSIC_SEEK_RELEASE` 时为 0..`SERVICE_GUI_SEEK_SCALE`（1000）千分比，`MUSIC_SEEK_CANCEL`（触摸丢失）时为 0。输入是单槽，后一次覆盖未取走的一次，唯一的合并是：未取走的 `SEEK_PRESS` 遇到 `SEEK_DRAG` 时保留按下、比例取拖动的值（LVGL 同一次读触摸先发 PRESSED 再发 PRESSING）。不包含 `storage_listbuffer.h`。
 - `Service_GUI_TransportApply(playing)`：仅由同一 GUI Task 调用。把 `MusicPlayPauseIcon` 换成 `LV_SYMBOL_PAUSE` 或 `LV_SYMBOL_PLAY`。
@@ -54,7 +54,10 @@ GUI Task
   -> Platform LCD 最终 ISR 回调
   -> Service GUI: lv_disp_flush_ready() + GUI Task 通知
   -> LVGL wait_cb 继续刷新
+  -> Process() 返回睡眠毫秒数 -> GUI Task: vTaskDelay（测量段之外）
 ```
+
+每圈节奏：GUI Task 的一圈依次为 `ConsumeInput`、各应用 `gui_step`、`Process()`（含渲染与等 DMA）、`vTaskDelay`。睡眠让出 CPU 给同级与低优先级任务；屏幕仍只按 16 ms 刷新定时器更新，触摸轮询定时器（`LV_INDEV_DEF_READ_PERIOD` 16 ms）与动画定时器也在各自到期时刻被叫醒，睡眠不会晚于任何一个定时器的到期时刻。松手产生的命令由 `Process()` 内的 LVGL 事件回调写入输入槽，该圈返回下限，下一圈开头即取走。
 
 触摸路径为：
 
@@ -83,7 +86,8 @@ LVGL Pointer read_cb
 ```text
 Service/gui/
 ├─ gui_service.c / .h / _config.h    GUI Task 生命周期、显示/触摸和 DMA 桥接、ThemeApply 编排
-├─ gui_service_input.c / .h          点击命令单槽（Process 写入，下一圈 Consume）
+├─ gui_service_input.c / .h          点击命令单槽（Process 写入，下一圈 Consume）；`has_pending` 供睡眠决定只睡下限
+├─ gui_service_sleep.c / .h          每圈睡眠时长：定时器返回值减本圈耗时、夹上下限、有待取输入取下限（不含 LVGL，主机测试）
 ├─ view/                             手写界面：创建全部 Screen、静态样式、对象句柄、默认壁纸
 │  ├─ gui_service_view.c / .h        创建顺序、句柄、壁纸入口
 │  ├─ gui_service_view_boot.c        Boot / BootReveal
@@ -173,6 +177,6 @@ Service/gui/
 
 ## 验证
 
-- 主机测试：`Tests/gui_theme`（调色板）、`Tests/gui_canvas`（合成）、`Tests/gui_font`（字体 bin 解码器）、`Tests/gui_task`（输入单槽）、`Tests/music_gui`（窗口协议、Transport）。
-- 界面等价性：`./Tools/gui_simulator/run-scenarios.ps1` 在 PC 上原样运行本 Module，逐帧比对场景基线；见 [Tools/gui_simulator/README.md](../../Tools/gui_simulator/README.md)。
-- 板级：显示刷新、DMA、触摸与真实帧率仍须上板（`hw:pending`）。
+- 主机测试：`Tests/gui_theme`（调色板）、`Tests/gui_canvas`（合成）、`Tests/gui_font`（字体 bin 解码器）、`Tests/gui_task`（输入单槽、睡眠时长计算）、`Tests/music_gui`（窗口协议、Transport）。睡眠时长的主机测试只证明减耗时、夹上下限与有待取输入取下限的算术，不证明 `Process()` 里传的耗时与待取标志取得对，也不证明真实节拍。
+- 界面等价性：`./Tools/gui_simulator/run-scenarios.ps1` 在 PC 上原样运行本 Module，逐帧比对场景基线；见 [Tools/gui_simulator/README.md](../../Tools/gui_simulator/README.md)。模拟器忽略 `Process()` 的返回值，不覆盖睡眠。
+- 板级：显示刷新、DMA、触摸与真实帧率仍须上板（`hw:pending`）；睡眠后的 CPU 空闲比例、最长帧与松手到出声时延同样只能上板量。

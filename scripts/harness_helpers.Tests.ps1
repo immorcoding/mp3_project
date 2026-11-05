@@ -133,6 +133,10 @@ $inputImpact = Get-HarnessImpact -ChangedPath @('Service/gui/gui_service_input.c
 Assert-HarnessSequence -Expected @('gui_task') -Actual $inputImpact.HostModules `
     -Message 'GUI 输入单槽变化必须选择 GUI Task 主机测试'
 
+$sleepImpact = Get-HarnessImpact -ChangedPath @('Service/gui/gui_service_sleep.c')
+Assert-HarnessSequence -Expected @('gui_task') -Actual $sleepImpact.HostModules `
+    -Message 'GUI 睡眠时长计算变化必须选择 GUI Task 主机测试'
+
 $transportImpact = Get-HarnessImpact -ChangedPath @('Service/gui/main/transport/gui_service_main_transport.c')
 Assert-HarnessSequence -Expected @('music_gui') -Actual $transportImpact.HostModules `
     -Message 'Now Playing 三键 Module 变化必须选择音乐 GUI 主机测试'
