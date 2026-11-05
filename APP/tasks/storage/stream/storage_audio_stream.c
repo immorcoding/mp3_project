@@ -10,10 +10,9 @@
 #include "storage_audio_range.h"
 #include "storage_audio_result.h"
 
-#include "APP/tasks/storage/catalog/storage_catalog.h"
-#include "APP/tasks/storage/catalog/storage_sheet.h"
-#include "APP/tasks/storage/catalog/storage_track_diag.h"
-#include "APP/tasks/storage/catalog/storage_track_open.h"
+#include "APP/apps/music/catalog/catalog.h"
+#include "APP/apps/music/catalog/catalog_track_diag.h"
+#include "APP/apps/music/catalog/catalog_track_open.h"
 #include "APP/tasks/storage/storage_task_config.h"
 
 #include <string.h>
@@ -45,7 +44,7 @@ static Service_Filesystem_FileHandleTypeDef storage_audio_file;
 static bool storage_audio_file_open;
 static bool storage_audio_stalled;                             /* 读到 NO_MEDIA / NOT_READY / INVALID_HANDLE：不再读，等卷事件。 */
 static uint32_t storage_audio_remaining;                       /* 音频区间内尚未读出的字节数。 */
-static char storage_audio_path[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
+static Catalog_TrackTypeDef storage_audio_track;
 static uint8_t storage_audio_head[STORAGE_AUDIO_RANGE_HEAD_BYTES];
 static uint8_t storage_audio_tail[STORAGE_AUDIO_RANGE_TAIL_BYTES];
 
@@ -294,11 +293,11 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t audio_of
             }
             else
             {
-                const uint32_t seek_start = storage_track_diag_begin();
+                const uint32_t seek_start = catalog_track_diag_begin();
 
                 position = storage_audio_range_seek_position(&range, audio_offset);
                 status = Service_Filesystem_SeekFile(storage_audio_file, (uint64_t)position);
-                *lseek_us = storage_track_diag_elapsed_us(seek_start);
+                *lseek_us = catalog_track_diag_elapsed_us(seek_start);
                 if (status == SERVICE_OK)
                 {
                     *audio_bytes = range.End - range.Start;
@@ -331,9 +330,8 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t audio_of
 static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequestTypeDef *request,
                                                          Storage_AudioMediaTypeDef media)
 {
-    uint32_t sheet_generation;
     uint16_t track_count;
-    uint16_t catalog_index;
+    bool found;
     uint32_t audio_bytes = 0U;
     uint32_t remaining = 0U;
     uint32_t open_us = 0U;
@@ -346,34 +344,28 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
         return STORAGE_AUDIO_OPEN_NOT_READY;
     }
 
-    sheet_generation = storage_sheet_generation();
-    if ((sheet_generation == 0U) || (sheet_generation != storage_catalog_generation()))
+    /* 代次、条数、路径和定位符一次读全（同一把锁内）：中途重扫或拔卡不会读到半新半旧的内容。 */
+    found = catalog_read_track(request->Position, &storage_audio_track);
+    if (storage_audio_track.Generation == 0U)
     {
         return STORAGE_AUDIO_OPEN_NOT_READY;
     }
-    track_count = storage_catalog_index_num();
+    track_count = storage_audio_track.Count;
     if (track_count == 0U)
     {
         return STORAGE_AUDIO_OPEN_NO_TRACK;
     }
-    if (((request->Generation != 0U) && (request->Generation != sheet_generation)) ||
-        (request->Position >= track_count))
-    {
-        return STORAGE_AUDIO_OPEN_STALE;
-    }
-
-    catalog_index = storage_sheet_catalog_index(request->Position);
-    if ((catalog_index == UINT16_MAX) ||
-        (storage_catalog_copy_path(catalog_index, storage_audio_path, sizeof(storage_audio_path)) != STORAGE_OK))
+    if (((request->Generation != 0U) && (request->Generation != storage_audio_track.Generation)) ||
+        (request->Position >= track_count) || !found)
     {
         return STORAGE_AUDIO_OPEN_STALE;
     }
 
     /* 位置已通过 STALE 校验：此后即使 BAD_FILE，播放任务也要靠代次与曲目数继续跳过坏文件。 */
-    storage_audio_record.Generation = sheet_generation;
+    storage_audio_record.Generation = storage_audio_track.Generation;
     storage_audio_record.TrackCount = track_count;
 
-    status = storage_track_open(request->Position, catalog_index, storage_audio_path, &storage_audio_file, &open_us);
+    status = catalog_track_open(request->Position, &storage_audio_track, &storage_audio_file, &open_us);
     if (status != SERVICE_OK)
     {
         return storage_audio_classify_open_status(status, true);
@@ -384,7 +376,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
     if (result == STORAGE_AUDIO_OPEN_OK)
     {
         /* 曲目或跳转边界上记一行（DIAG-5）；off= 取请求里的 AudioOffset，不是钳位后的落点。 */
-        storage_track_diag_stream_done(request->Position, request->AudioOffset, open_us, lseek_us);
+        catalog_track_diag_stream_done(request->Position, request->AudioOffset, open_us, lseek_us);
         storage_audio_remaining = remaining;
         storage_audio_record.AudioBytes = audio_bytes;
         if (remaining == 0U)

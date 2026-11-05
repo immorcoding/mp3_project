@@ -5,10 +5,9 @@
 
 #include "storage_listbuffer.h"
 
-#include "storage_catalog.h"
-#include "storage_sheet.h"
-#include "storage_track_diag.h"
-#include "storage_track_text.h"
+#include "APP/apps/music/catalog/catalog.h"
+#include "APP/apps/music/catalog/catalog_track_diag.h"
+#include "APP/apps/music/catalog/catalog_track_text.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -30,6 +29,9 @@ static TaskHandle_t storage_listbuffer_task;
 static Storage_ListBufferFillTypeDef storage_listbuffer_fill;
 
 Storage_ListBufferTypeDef storage_listbuffer;
+
+/** @brief 本圈一次读全的曲库内容（路径约 256 B），放静态区以免占任务栈；只由 Storage Task 使用。 */
+static Catalog_TrackTypeDef storage_listbuffer_track;
 
 /**
  * @brief 打成空窗 READY（代次 0），并复位填写进度。
@@ -109,19 +111,18 @@ Storage_StatusTypeDef storage_listbuffer_request(uint16_t index_offset,
  * @note 仅 Storage Task 在 SD 就绪路径调用，每圈一次（STOR-16）。首圈检查代次：Sheet 代次为 0、
  *       与 Catalog 不一致、或与请求代次不一致（请求非 0）时打成空窗 READY。之后每圈先核对 Sheet
  *       代次仍是开始时的代次，变化则以空窗（代次 0）收尾，GUI 看不到半窗。
- * @note 每行经 storage_track_text_read() 写曲目显示名与歌手；标签侧失败只令该行回退文件主名、
+ * @note 每行经 catalog_track_text_read() 写曲目显示名与歌手；标签侧失败只令该行回退文件主名、
  *       歌手为空，不中断整窗；文件主名也提取不出、Sheet 映射或路径拷贝失败时该行两列为空串
  *       （防御分支），整窗继续（#135 G）。只在列表末尾停止，Length 写成实际填好的行数。
- * @note 每圈最坏一次 按定位符打开（核对不符退回路径打开）+ 取长度 + 至多 STORAGE_CATALOG_TEXT_MAX_READS 次读取 + f_close。
+ * @note 每圈最坏一次 按定位符打开（核对不符退回路径打开）+ 取长度 + 至多 CATALOG_TEXT_MAX_READS 次读取 + f_close。
  */
 Storage_StatusTypeDef storage_listbuffer_load(void)
 {
     Storage_ListBufferRowTypeDef *row;
-    const StorageTrackText_ResultTypeDef *track;
-    uint32_t sheet_generation;
+    const CatalogTrackText_ResultTypeDef *track;
     uint32_t list_index;
     uint32_t start_cycles;
-    uint16_t catalog_index;
+    bool found;
     bool stop;
 
     if (storage_listbuffer.Status != STORAGE_LISTBUFFER_PENDING)
@@ -129,48 +130,48 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
         return STORAGE_OK;
     }
 
-    sheet_generation = storage_sheet_generation();
+    /* 每圈先把这一行的代次、条数、路径和定位符一次读全；位置越界时也带回代次和条数，用来判断列表末尾。 */
+    list_index = (uint32_t)storage_listbuffer.Index + storage_listbuffer_fill.Filled;
+    found = catalog_read_track((uint16_t)((list_index > UINT16_MAX) ? UINT16_MAX : list_index),
+                               &storage_listbuffer_track);
 
     if (!storage_listbuffer_fill.Started)
     {
-        if ((sheet_generation == 0U) || (sheet_generation != storage_catalog_generation()) ||
+        if ((storage_listbuffer_track.Generation == 0U) ||
             ((storage_listbuffer.Generation != 0U) &&
-             (storage_listbuffer.Generation != sheet_generation)))
+             (storage_listbuffer.Generation != storage_listbuffer_track.Generation)))
         {
             storage_listbuffer_complete_empty();
             return STORAGE_OK;
         }
 
         storage_listbuffer_fill.Started = true;
-        storage_listbuffer_fill.Generation = sheet_generation;
+        storage_listbuffer_fill.Generation = storage_listbuffer_track.Generation;
         storage_listbuffer_fill.Filled = 0U;
-        storage_track_diag_window_begin();
+        catalog_track_diag_window_begin();
     }
-    else if ((sheet_generation != storage_listbuffer_fill.Generation) ||
-             (sheet_generation != storage_catalog_generation()))
+    else if (storage_listbuffer_track.Generation != storage_listbuffer_fill.Generation)
     {
         storage_listbuffer_complete_empty();
         return STORAGE_OK;
     }
 
-    list_index = (uint32_t)storage_listbuffer.Index + storage_listbuffer_fill.Filled;
     stop = (storage_listbuffer_fill.Filled >= storage_listbuffer.Length) ||
-           (list_index >= storage_catalog_index_num());
+           (list_index >= storage_listbuffer_track.Count);
 
     if (!stop)
     {
         row = &storage_listbuffer.Rows[storage_listbuffer_fill.Filled];
-        start_cycles = storage_track_diag_begin();
-        catalog_index = storage_sheet_catalog_index((uint16_t)list_index);
-        if (catalog_index == UINT16_MAX)
+        start_cycles = catalog_track_diag_begin();
+        if (!found)
         {
             track = NULL; /* 单行映射失败：该行两列为空串，整窗继续（#135 G）。 */
         }
         else
         {
-            track = storage_track_text_read((uint16_t)list_index, catalog_index); /* 路径拷贝失败同样得 NULL。 */
+            track = catalog_track_text_read((uint16_t)list_index, &storage_listbuffer_track);
         }
-        storage_track_diag_row_done(start_cycles, track);
+        catalog_track_diag_row_done(start_cycles, track);
         if (track != NULL)
         {
             (void)memcpy(row->Title, track->Text.Title, sizeof(row->Title));
@@ -185,7 +186,7 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
         storage_listbuffer_fill.Filled++;
         list_index++;
         stop = (storage_listbuffer_fill.Filled >= storage_listbuffer.Length) ||
-               (list_index >= storage_catalog_index_num());
+               (list_index >= storage_listbuffer_track.Count);
     }
 
     if (!stop)
@@ -193,7 +194,7 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
         return STORAGE_OK;
     }
 
-    storage_track_diag_window_end();
+    catalog_track_diag_window_end();
     storage_listbuffer.Length = storage_listbuffer_fill.Filled;
     storage_listbuffer.Generation = storage_listbuffer_fill.Generation;
     storage_listbuffer_fill.Started = false;

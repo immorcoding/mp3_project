@@ -10,7 +10,7 @@
   *          曲目（与旧演示分区一致）、5 个中文与文件名规则样本、一首需要滚动的超长英文名；
   *          `E` 键可把曲库换成空库。窗口行与名称槽都按生产给出 {曲目显示名, 歌手}：
   *          storage_sim_tags 里的曲目给出假 TIT2/TPE1（替代生产读标签），其余经真实的
-  *          storage_catalog_display_name() 回退文件主名、歌手为空。没有 Storage Task：
+  *          catalog_display_name() 回退文件主名、歌手为空。没有 Storage Task：
   *          sim_main.c 每圈先调 storage_sim_step()，上一圈 request 的窗口与名字在本圈填成 READY。
   *          名称槽另有两个脚本开关：让某首的名字取不到（按生产防御分支应答代次 0），
   *          让应答多等若干圈（制造空白帧与过期应答）。
@@ -28,13 +28,13 @@
 #include <string.h>
 
 #include "APP/tasks/storage/storage_task.h"
-#include "APP/tasks/storage/catalog/storage_catalog_name.h"
+#include "APP/apps/music/catalog/catalog_name.h"
 #include "APP/tasks/storage/catalog/storage_listbuffer.h"
 #include "APP/tasks/storage/catalog/storage_namebuffer.h"
 
 /*
  * 固定曲库的曲库相对路径；窗口行与名称槽的曲目显示名在无假标签时都由它经真实的
- * storage_catalog_display_name() 提取。原 10 首英文曲目没有目录与扩展名，提取结果与
+ * catalog_display_name() 提取。原 10 首英文曲目没有目录与扩展名，提取结果与
  * 原文相同；第 10–14 首是中文与文件名规则样本，位于超长英文名之前，
  * 使开播后“上一首”仍绕到超长英文名，再按上一首依次得到中文短名、中英混排、中文长名、缺字与点号名。
  * 共 16 首，超过一窗 12 条，Queue 滚动到末尾时按窗口协议换窗。
@@ -61,7 +61,7 @@ static const char *const storage_sim_titles[] = {
 #define STORAGE_SIM_TITLE_COUNT \
     ((uint16_t)(sizeof(storage_sim_titles) / sizeof(storage_sim_titles[0])))
 
-/** @brief 一首曲目的假标签：替代生产 storage_catalog_track_text() 的“取到”结果。 */
+/** @brief 一首曲目的假标签：替代生产 catalog_track_text() 的“取到”结果。 */
 typedef struct
 {
     uint16_t Index;      /* 播放列表位置。 */
@@ -104,8 +104,8 @@ static uint32_t storage_sim_window_waited;                  /* 当前窗口 PEND
 /**
  * @brief 同生产曲目文本：有假 TIT2 取标题与歌手，否则回退文件主名、歌手为空。
  * @param[in] index 播放列表位置，须在固定曲库范围内。
- * @param[out] title 曲目显示名，容量 STORAGE_CATALOG_NAME_BYTES。
- * @param[out] artist 歌手，容量 STORAGE_CATALOG_NAME_BYTES；取不到为空串。
+ * @param[out] title 曲目显示名，容量 CATALOG_NAME_BYTES。
+ * @param[out] artist 歌手，容量 CATALOG_NAME_BYTES；取不到为空串。
  * @return false 表示文件主名提取失败（生产的防御分支），此时两列为空串。
  */
 static bool storage_sim_track_text(uint16_t index, char *title, char *artist)
@@ -113,10 +113,10 @@ static bool storage_sim_track_text(uint16_t index, char *title, char *artist)
     uint16_t i;
 
     artist[0] = '\0';
-    if (!storage_catalog_display_name(storage_sim_titles[index],
+    if (!catalog_display_name(storage_sim_titles[index],
                                       (uint32_t)strlen(storage_sim_titles[index]),
                                       title,
-                                      STORAGE_CATALOG_NAME_BYTES))
+                                      CATALOG_NAME_BYTES))
     {
         title[0] = '\0';
         return false;
@@ -126,10 +126,10 @@ static bool storage_sim_track_text(uint16_t index, char *title, char *artist)
     {
         if (storage_sim_tags[i].Index == index)
         {
-            (void)snprintf(title, STORAGE_CATALOG_NAME_BYTES, "%s", storage_sim_tags[i].Title);
+            (void)snprintf(title, CATALOG_NAME_BYTES, "%s", storage_sim_tags[i].Title);
             if (storage_sim_tags[i].Artist != NULL)
             {
-                (void)snprintf(artist, STORAGE_CATALOG_NAME_BYTES, "%s", storage_sim_tags[i].Artist);
+                (void)snprintf(artist, CATALOG_NAME_BYTES, "%s", storage_sim_tags[i].Artist);
             }
             break;
         }

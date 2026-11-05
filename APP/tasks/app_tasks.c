@@ -14,6 +14,7 @@
 
 #include "APP/tasks/app_tasks.h"
 
+#include "APP/apps/music/catalog/catalog.h"
 #include "APP/tasks/log/log_task.h"
 #include "APP/tasks/monitor/monitor_task.h"
 #include "APP/tasks/playback/playback_task.h"
@@ -65,6 +66,8 @@ static StackType_t volume_task_stack[APP_VOLUME_TASK_STACK_WORDS]
   * @param  handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
   * @note   启动分三段：内存准备归本任务（可选的 SDRAM 自检，做完才创建用到 SDRAM 的任务）；卷启动由 Volume Task
   *         决定时机（它入口先创建 Flash 启动任务，再初始化 SD）；SD 基准在 Volume Task 发卷就绪之前跑。
+  *         曲库锁（`catalog_boot_init()`，静态互斥量）也在内存准备里创建，早于创建 Storage Task，
+  *         所以早于任何任务第一次读写曲库。
   *         Service_Log 必须先于任意可能调用 Service_Log_Post() 的任务创建。SDRAM 自检在 Log Task 创建之后、
   *         Storage Task 创建之前运行（独占 SDRAM，块池 NOLOAD 段此后才有主，HWD-2）；本任务只有 128 word 栈，
   *         自检加 snprintf 的栈深度核算见 `APP/tasks/volume/README.md`。
@@ -117,6 +120,9 @@ static void create_task(void *handle)
     /* 内存准备：SDRAM 破坏性自检必须早于任何使用 SDRAM 的任务（Flash 的 FTL 表、块池、曲库）。 */
     storage_sdram_benchmark_run();
 #endif
+
+    /* 曲库锁（静态互斥量）：早于创建任何会读写曲库的任务。 */
+    catalog_boot_init();
 
     if (xTaskCreate(storage_task,
                     "Storage Task",

@@ -1,9 +1,9 @@
 /**
- * @file test_storage_catalog_name.c
- * @brief 曲目显示名纯函数的主机测试：只经 storage_catalog_display_name 观察输出。
+ * @file test_catalog_name.c
+ * @brief 曲目显示名纯函数的主机测试：只经 catalog_display_name 观察输出。
  */
 
-#include "APP/tasks/storage/catalog/storage_catalog_name.h"
+#include "APP/apps/music/catalog/catalog_name.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -16,10 +16,10 @@
  */
 static void expect_name(const char *path, const char *expected)
 {
-    char out[STORAGE_CATALOG_NAME_BYTES];
+    char out[CATALOG_NAME_BYTES];
 
     memset(out, 0x5A, sizeof(out));
-    assert(storage_catalog_display_name(path, (uint32_t)strlen(path), out, sizeof(out)));
+    assert(catalog_display_name(path, (uint32_t)strlen(path), out, sizeof(out)));
     assert(strcmp(out, expected) == 0);
 }
 
@@ -30,10 +30,10 @@ static void expect_name(const char *path, const char *expected)
  */
 static void expect_failure(const char *path, uint32_t path_bytes)
 {
-    char out[STORAGE_CATALOG_NAME_BYTES];
+    char out[CATALOG_NAME_BYTES];
 
     memset(out, 0x5A, sizeof(out));
-    assert(!storage_catalog_display_name(path, path_bytes, out, sizeof(out)));
+    assert(!catalog_display_name(path, path_bytes, out, sizeof(out)));
     assert(out[0] == '\0');
 }
 
@@ -82,15 +82,15 @@ static void test_extension_only_name(void)
 /** @brief 空路径、以斜杠结尾的路径、空指针与缓冲不足都失败。 */
 static void test_degenerate_inputs(void)
 {
-    char out[STORAGE_CATALOG_NAME_BYTES];
+    char out[CATALOG_NAME_BYTES];
 
     expect_failure("", 0U);
     expect_failure("Music/", 6U);
-    assert(!storage_catalog_display_name(NULL, 4U, out, sizeof(out)));
-    assert(!storage_catalog_display_name("a.mp3", 5U, NULL, sizeof(out)));
-    assert(!storage_catalog_display_name("a.mp3", 5U, out, 0U));
-    assert(!storage_catalog_display_name("ab.mp3", 6U, out, 2U));
-    assert(storage_catalog_display_name("ab.mp3", 6U, out, 3U));
+    assert(!catalog_display_name(NULL, 4U, out, sizeof(out)));
+    assert(!catalog_display_name("a.mp3", 5U, NULL, sizeof(out)));
+    assert(!catalog_display_name("a.mp3", 5U, out, 0U));
+    assert(!catalog_display_name("ab.mp3", 6U, out, 2U));
+    assert(catalog_display_name("ab.mp3", 6U, out, 3U));
     assert(strcmp(out, "ab") == 0);
 }
 
@@ -98,11 +98,11 @@ static void test_degenerate_inputs(void)
 static void test_capacity_boundary(void)
 {
     char path[6U + 260U + 5U];
-    char out[STORAGE_CATALOG_NAME_BYTES];
+    char out[CATALOG_NAME_BYTES];
     uint32_t length;
 
     length = make_long_path(path, 251U);
-    assert(storage_catalog_display_name(path, length, out, sizeof(out)));
+    assert(catalog_display_name(path, length, out, sizeof(out)));
     assert(strlen(out) == 251U);
     assert(out[250] == 'a');
 
@@ -115,7 +115,7 @@ static void test_capacity_boundary(void)
     memcpy(path + 6U + 248U, "\xE6\x99\xB4", 3U);
     memcpy(path + 6U + 251U, ".mp3", 4U);
     length = 6U + 251U + 4U;
-    assert(storage_catalog_display_name(path, length, out, sizeof(out)));
+    assert(catalog_display_name(path, length, out, sizeof(out)));
     assert(strlen(out) == 251U);
     assert(memcmp(out + 248, "\xE6\x99\xB4", 4U) == 0);
 
@@ -129,15 +129,15 @@ static void test_capacity_boundary(void)
 /** @brief 共享的 .mp3 扩展名判断：扫描收录与去扩展名共用。 */
 static void test_has_mp3_extension(void)
 {
-    assert(storage_catalog_has_mp3_extension("a.mp3", 5U));
-    assert(storage_catalog_has_mp3_extension("a.MP3", 5U));
-    assert(storage_catalog_has_mp3_extension("a.Mp3", 5U));
-    assert(storage_catalog_has_mp3_extension(".mp3", 4U));
-    assert(!storage_catalog_has_mp3_extension("a.mp4", 5U));
-    assert(!storage_catalog_has_mp3_extension("a.mP3x", 6U));
-    assert(!storage_catalog_has_mp3_extension("amp3", 4U));
-    assert(!storage_catalog_has_mp3_extension("mp3", 3U));
-    assert(!storage_catalog_has_mp3_extension(NULL, 5U));
+    assert(catalog_has_mp3_extension("a.mp3", 5U));
+    assert(catalog_has_mp3_extension("a.MP3", 5U));
+    assert(catalog_has_mp3_extension("a.Mp3", 5U));
+    assert(catalog_has_mp3_extension(".mp3", 4U));
+    assert(!catalog_has_mp3_extension("a.mp4", 5U));
+    assert(!catalog_has_mp3_extension("a.mP3x", 6U));
+    assert(!catalog_has_mp3_extension("amp3", 4U));
+    assert(!catalog_has_mp3_extension("mp3", 3U));
+    assert(!catalog_has_mp3_extension(NULL, 5U));
 }
 
 /** @brief 非法 UTF-8 一律失败。 */
@@ -167,6 +167,6 @@ int main(void)
     test_degenerate_inputs();
     test_capacity_boundary();
     test_invalid_utf8();
-    puts("storage_catalog_name: ok");
+    puts("catalog_name: ok");
     return 0;
 }

@@ -11,7 +11,7 @@
         'w25qxx'
         'resource_pack'
         'storage_audio_stream'
-        'storage_catalog'
+        'music_catalog'
         'ui_cell'
         'volume'
         'playback_service'
@@ -119,8 +119,7 @@
                 '^APP/tasks/playback/playback_contract\.h$'
                 # gui_music_queue_rows 的测试按窗口槽头构造 READY 窗口（#140）。
                 '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
-                '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
-                '^APP/tasks/storage/catalog/storage_catalog_name\.h$'
+                '^APP/apps/music/catalog/catalog_name\.h$'
                 '^APP/tasks/storage/storage_task\.h$'
                 '^APP/tasks/storage/storage_task_config\.h$'
                 '^Service/filesystem/filesystem_types\.h$'
@@ -184,27 +183,24 @@
             )
         }
         @{
-            Name = 'storage_catalog'
+            Name = 'music_catalog'
             PathPatterns = @(
-                '^APP/tasks/storage/catalog/storage_catalog(?:_name|_text)?\.[ch]$'
-                '^APP/tasks/storage/catalog/storage_sheet\.[ch]$'
-                '^APP/tasks/storage/catalog/storage_track_(?:open|text|diag)\.[ch]$'
-                '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
+                '^APP/apps/music/catalog/'
                 # 按定位符打开的测试以假实现替换 Filesystem / Log Service 与周期计数器 Adapter，只依赖它们的公开头。
                 '^Service/filesystem/filesystem_(?:file|directory)\.h$'
                 '^Service/log/log_service(?:_config)?\.h$'
                 '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
                 '^Service/service\.h$'
-                '^APP/tasks/storage/storage_task(?:_config)?\.h$'
-                # 超预算阈值与 T_data/2 的编译期断言在 test_storage_catalog_text.c。
-                '^APP/tasks/playback/playback_task_config\.h$'
                 '^Service/filesystem/filesystem_types\.h$'
+                # 曲库读卷状态（volume_status 在测试里用假实现）并用静态互斥量做短锁（共用 FreeRTOS 桩）。
+                '^APP/tasks/volume/volume_event\.h$'
+                '^Tests/stubs/freertos/'
                 '^Components/id3_reader/'
                 '^Service/filesystem/filesystem_text\.[ch]$'
                 # GBK 查表测试链接真实 cc936.c，并复制 FATFS/Target/ffconf.h。
                 '^Middlewares/Third_Party/FatFs/src/(?:ff\.h|integer\.h|option/cc936\.c)$'
                 '^FATFS/Target/ffconf\.h$'
-                '^Tests/storage_catalog/'
+                '^Tests/music_catalog/'
             )
         }
         @{
@@ -311,13 +307,12 @@
         '^Service/log/log_service(?:_config)?\.h$'
         '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
         '^APP/tasks/storage/catalog/storage_namebuffer\.h$'
-        # 假 Storage 的曲目显示名经真实的提取纯函数产生（模拟器编译 storage_catalog_name.c）。
-        '^APP/tasks/storage/catalog/storage_catalog_name\.[ch]$'
+        # 假 Storage 的曲目显示名经真实的提取纯函数产生（模拟器编译 catalog_name.c）。
+        '^APP/apps/music/catalog/catalog_name\.[ch]$'
         # 模拟器嵌入同一份字体 bin，fakes/resource_sim.c 实现字体查询头，fakes/cycle_counter_sim.c 实现周期计数器头。
         '^Resources/fonts/'
         '^Service/resource/resource_service\.h$'
         '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
-        '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
         '^APP/tasks/storage/storage_task(?:_config)?\.h$'
         '^Service/filesystem/filesystem_types\.h$'
     )
