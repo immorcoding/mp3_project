@@ -39,7 +39,7 @@ Next id: RES-11
 
 ### Rules
 
-- **RES-3** · provisional · 必需资源复制到归属明确的 SDRAM 后验证目标 CRC 和 Cache 交接，再启动消费者；任务期不持有 NOR 指针或 Entry View，未来按需读取经 Storage Task 串行接口。_Why:_ FTL 间接操作会退出 QSPI 映射，窗口不具备长期有效性。_Source:_ [Resource Service](../../Service/resource/README.md)
+- **RES-3** · provisional · 必需资源复制到归属明确的 SDRAM 后验证目标 CRC 和 Cache 交接，再启动消费者；任务期不持有 NOR 指针或 Entry View，未来按需读取经文件接口。_Why:_ FTL 间接操作会退出 QSPI 映射，窗口不具备长期有效性。_Source:_ [Resource Service](../../Service/resource/README.md)
 - **RES-5** · provisional · Platform SDRAM/Flash 成功后才加载；先验证来源窗口、PackSize、ID/类型与业务 Metadata、目标容量，再复制和目标 CRC；必需项任何失败阻止任务启动并保留诊断，只有可选项可警告继续。_Why:_ 避免未初始化或不兼容资源被消费者使用，目标 CRC 同时验证复制结果。_Source:_ [Resource Service](../../Service/resource/README.md)
 - **RES-6** · provisional · 资源目标采用链接器预留 SDRAM NOLOAD 区域，32 B Cache 向外取整仍须在自身归属内；启动 CPU 复制链仅 Clean，不重复扫 NOR 或无因 Invalidate。_Why:_ 尾部 Cache Line 不能覆盖别的所有者，校验与可见性须对应真实数据方向。_Source:_ [Resource Service](../../Service/resource/README.md)
 - **RES-10** · exploring · FONT 是可选资源：缺失、类型或 Metadata 不符、目标区不足或 CRC 错误时，Resource Service 记 WARN 并继续启动，不覆盖必需项诊断；可用时消费者只读其 SDRAM 区，解码到自己的 NOLOAD 区，运行期不读 NOR 或映射窗口；不可用时消费者回退内建字体。_Why:_ 固件与资源包要能分步烧录与回滚，字体缺失不应阻止启动。_Source:_ [CJK 字体方案](https://github.com/immorcoding/mp3_project/issues/105)、[0.7.0 spec](https://github.com/immorcoding/mp3_project/issues/112)

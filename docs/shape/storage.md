@@ -12,8 +12,8 @@ Next id: STOR-18
 
 ## Open questions
 
-- MP3 封面的展示：拟归 Now Playing，载荷待对应 spec 落定。播放时越过 ID3v2 与尾部 ID3v1/APE 归 Storage（见词典“音频帧流”），不属本问题。
-- SD 读取超过 `FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS`（500 ms，按每个 32 KiB DMA 分块）后，迟到的 SDMMC DMA 完成事件是否会被下一次传输误当作完成：超时只把设备置 ERROR 并不中止在途 DMA，下次传输前会清通知挂起位，残余窗口是迟到 IRQ 落在恢复之后、清位之后，而通知值不带传输序号。主机测试无法证实，待上板构造超时（拔卡或低速卡）后紧接读写；成立则给通知加传输序号，或在恢复路径显式 Abort DMA（hw:pending，见板上状态）。
+- MP3 封面的展示：拟归 Now Playing，载荷待对应 spec 落定。播放时越过 ID3v2 与尾部 ID3v1/APE 归音频读取任务（见词典“音频帧流”），不属本问题。
+- SD 读取超时后，迟到的 SDMMC DMA 完成事件会不会被下一次传输误当作完成：已定用有上界的显式 Abort（[ADR-0024](../adr/0024-file-interface-concurrency.md)），不加传输序号；待板级验收（[0.10.0 spec](https://github.com/immorcoding/mp3_project/issues/202) R2.2），超时构造不出来前仍算未证实。
 
 ## Titles
 

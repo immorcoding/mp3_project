@@ -1,6 +1,6 @@
 # ADR-0010：USER DiskIO 契约与 Filesystem Service 执行所有权
 
-- 状态：已接受、已实施；主机回归与固件构建通过，硬件验收待完成
+- 状态：已接受、已实施；主机回归与固件构建通过，硬件验收待完成。“Storage Task 仍是唯一执行上下文”已由 [ADR-0024](0024-file-interface-concurrency.md) 替代（2026-11-04）
 - 日期：2026-08-31
 - 技术方案：[Flash FTL 首版设计](../shape/storage.durability.md)
 - 相关决定：[ADR-0002](0002-layering-and-interface-ownership.md)、[ADR-0005](0005-sd-filesystem-task-ownership.md)

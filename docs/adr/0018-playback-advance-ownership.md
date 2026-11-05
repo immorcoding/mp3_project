@@ -4,7 +4,7 @@
 - 日期：2026-10-08
 - 相关 ticket：[0.6.0 地图](https://github.com/immorcoding/mp3_project/issues/29)、[Playback 状态机与接口](https://github.com/immorcoding/mp3_project/issues/35)
 - 相关决定：[ADR-0002](0002-layering-and-interface-ownership.md)、[ADR-0015](0015-volume-roles-and-resource-install.md)、[ADR-0017](0017-mp3-decoder-minimp3.md)
-- 相关技术文档：[Storage](../../APP/tasks/storage/README.md)、[Storage 规则](../shape/storage.md)
+- 相关技术文档：Storage（`APP/tasks/storage/README.md`，0.10.0 起拆到各任务）、[Storage 规则](../shape/storage.md)
 
 ## 背景
 

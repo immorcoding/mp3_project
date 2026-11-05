@@ -10,7 +10,7 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 - [0002-layering-and-interface-ownership.md](0002-layering-and-interface-ownership.md)：三类关系、Ops Interface 所有权与装配规则。
 - [0003-pmic-softi2c-bridge.md](0003-pmic-softi2c-bridge.md)：AXP2101、SoftI2C、Bridge 与 Platform Power 的边界。
 - [0004-log-single-consumer-and-output-adapter.md](0004-log-single-consumer-and-output-adapter.md)：日志单消费者、静态消息池与可替换输出后端。
-- [0005-sd-filesystem-task-ownership.md](0005-sd-filesystem-task-ownership.md)：SD、FatFs、DMA 与 Storage Task 的所有权。
+- [0005-sd-filesystem-task-ownership.md](0005-sd-filesystem-task-ownership.md)：SD、FatFs、DMA 与 Storage Task 的所有权；第 3 条已由 ADR-0024 替代。
 - [0006-cache-range-ownership.md](0006-cache-range-ownership.md)：Cortex-M7 D-Cache 范围与 DMA 缓冲区约束。
 - [0007-gui-runtime-and-squareline-boundary.md](0007-gui-runtime-and-squareline-boundary.md)：GUI Task、GUI Service 与 SquareLine 生成边界；已由 ADR-0016 取代。
 - [0008-sdram-early-init-and-noload-ownership.md](0008-sdram-early-init-and-noload-ownership.md)：SDRAM 早期初始化、正式初始化与 NOLOAD 缓冲责任。
@@ -29,3 +29,5 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 - [0020-playback-state-machine-ownership.md](0020-playback-state-machine-ownership.md)：播放状态机归 APP 播放任务（推进、开启交接、流身份、命令与状态两条通道，2026-10-09 修订），游标只由它写；播放模块只做解码与输出管线；FIL 归 Storage Task；对外只公开停止/播放/暂停三态。
 - [0021-seek-by-reopen-with-audio-offset.md](0021-seek-by-reopen-with-audio-offset.md)：跳转用带音频区间偏移的重开流，不在已打开的 FIL 内 seek；Storage 只钳偏移、不认识格式；毫秒到字节映射与落点归 Service/playback。
 - [0022-fatfs-open-by-locator-patch.md](0022-fatfs-open-by-locator-patch.md)：给 FatFs `ff.c` 加一个按目录项位置打开的函数（ARC-2 唯一例外）；文件定位符归 Filesystem Service；patch 文件、FAST 检查与重打脚本守护，Vendor 改动由用户提交。
+- [0023-task-split-and-app-contract.md](0023-task-split-and-app-contract.md)：任务直接调用阻塞的文件接口（选项 C），不再有中央 Storage 主循环；任务分工、`ui_cell` 交接、后台作业单步函数、应用是一个目录加注册表一行。
+- [0024-file-interface-concurrency.md](0024-file-interface-concurrency.md)：每卷一把锁只在 Service 入口拿，`Files[]` 用窄表锁，迟到 DMA 用有上界的 Abort；消抖等闸、对账、卷事件是叫醒加卷序号。

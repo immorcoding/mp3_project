@@ -3,6 +3,7 @@
 - 状态：已接受、已实施
 - 日期：2026-09-02
 - 修订：2026-09-04。Flash 是否在无文件系统时格式化，由 Storage Task 宏 `STORAGE_FLASH_AUTO_FORMAT` 控制；Service 仍不自行格式化。
+- 修订：2026-11-04。“执行上下文必须是唯一 Storage Task”已由 [ADR-0024](0024-file-interface-concurrency.md) 替代；是否自动格式化归卷任务（[ADR-0023](0023-task-split-and-app-contract.md)）。接口形状和其余决定仍有效。
 - 相关决定：[ADR-0005](0005-sd-filesystem-task-ownership.md)、[ADR-0010](0010-fatfs-user-diskio-service-ownership.md)、[ADR-0012](0012-filesystem-public-seams.md)、[ADR-0013](0013-usb-msc-product-scope.md)
 
 ## 背景

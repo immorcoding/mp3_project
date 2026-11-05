@@ -15,6 +15,10 @@ Next id: GIT-6
 - **GIT-4** · settled · 不用 `--no-verify`；Agent 不强推任何分支，确需覆盖远端时须用户明确授权（强推仍被 Agent Hook 拦截，授权后需先放行 Hook 或由用户执行）。_Why:_ Hook 是 FAST/CHANGED 的唯一自动闸门；强推丢历史且不可逆。_Check:_ Agent Hook `Get-AgentHookShellViolation`（`scripts/hooks/agent_hooks.Tests.ps1` 在 FAST）。
 - **GIT-5** · exploring · Agent 的 worktree 放在 `.claude/worktrees/<name>`（已 git-ignored），草稿与日志放会话临时目录（`$CLAUDE_JOB_DIR/tmp`），不在仓库根创建文件。_Why:_ 0.6.0 工作后仓库根杂物需手工清理。
 
+### Signals
+
+- 2026-11-04 · cite · GIT-3 · 0.10.0 的并发票排成一条链、最多叠一层：上一张等上板时，下一张从它的分支切出来继续做；上板按顺序跑，问题在那张票的分支上修，再合并到后面的分支，不强推。用完看要不要成规则（[迁移切片与分支顺序](https://github.com/immorcoding/mp3_project/issues/201)）。
+
 ### Rejected
 
 - `YYYY/M/D HH:MM 中文` 时间前缀标题：与 Git 自带时间戳重复，且无类型信息。（v0.5.0 前的格式）

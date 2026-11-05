@@ -26,4 +26,4 @@ STOR-2/3/10 的硬件来源材料。分区决定见 [ADR-0009](../../adr/0009-w2
 | SD完成 | 数据DMA完成后卡仍可能在编程，需回到TRANSFER才接下一命令；无卡不是初始化致命失败 |
 | Cache | H7专用缓冲独占32 B line且DMA可达；发送前Clean，接收前Clean+Invalidate、完成后Invalidate；FatFs任意指针不保证两项前提 |
 
-可移除SD使用可返回错误的HAL初始化，CubeMX void入口的Error_Handler策略不适用于无卡。Adapter复制的初始化选项与生成的NVIC/回调配置必须同步核对。独立启动诊断的两路读回与测量范围查 [benchmark README](../../../APP/tasks/storage/benchmark/README.md)，不在此维护性能日志或调用流水。
+可移除SD使用可返回错误的HAL初始化，CubeMX void入口的Error_Handler策略不适用于无卡。Adapter复制的初始化选项与生成的NVIC/回调配置必须同步核对。独立启动诊断的两路读回与测量范围查 benchmark README（0.10.0 前在 `APP/tasks/storage/benchmark/`，之后在 `APP/tasks/volume/benchmark/`），不在此维护性能日志或调用流水。

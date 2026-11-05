@@ -13,6 +13,7 @@
 
 ### Signals
 
+- 2026-11-04 · friction · ARC-17 · 0.10.0 的 Flash 启动任务用静态栈（约 4 KiB，AXI 新段），Log、Monitor、GUI 仍是动态栈，都与规则字面不符；用户决定留给补丁版本一起调整（[地图评论](https://github.com/immorcoding/mp3_project/issues/186#issuecomment-6631678855)）。
 - 2026-11-03 · cite · ARC-17 · 0.10.0 的四个新任务（音频读取、卷、前台、后台）定为静态创建，栈放 AXI SRAM 新段，DTCM 留给播放；初值未上板（[任务分工定稿与命名](https://github.com/immorcoding/mp3_project/issues/189)）。
 - 2026-10-17 · cite · ARC-17 · 播放任务的命令队列与状态信箱也用 `xQueueCreateStatic`，控制块与存储在 DTCM `.bss`（约 360 B），不占内核堆，创建不会失败（#80）。
 - 2026-10-17 · cite · new · `playback_task()` 在队列创建、播放模块初始化或音频回调注册失败时记日志并 `vTaskDelete(NULL)`（`FreeRTOSConfig.h` 未开 `INCLUDE_vTaskSuspend`），快照保持全零；用户可能日后改为 `Error_Handler()`（同 `app_tasks.c` 创建失败）。该路径主机测试无法覆盖。

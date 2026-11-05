@@ -63,6 +63,7 @@ Next id: HAR-16
 - 2026-10-31 · friction · HAR-15 · 在仓库子目录（如 `build/host/<模块>/`）里对副本 `git apply` 会把补丁路径当作仓库根相对路径而 Skipped；主机测试用 `GIT_CEILING_DIRECTORIES` 绕开，且副本已含补丁（用户提交 Vendor 改动之后）时先 `--reverse --check` 跳过。
 - 2026-11-01 · cite · HAR-5 · 仓库根超过 56 个字符时 FULL（`verify.ps1`）自动 `subst` 到空闲盘符运行、结束含失败卸载，证据目录与 metadata 仍写真实路径（#183，`scripts/short_root.ps1`）。
 - 2026-11-01 · cite · HAR-11 · `verification.psd1` 的主机模块可设 `Kind = 'Python'`（unittest 模块，如 `board_test_card`），测试目录 `TestDirectory`、慢用例 `HasSlowTests` 也在该文件登记；CHANGED 传 `-SkipSlow` 跳过慢用例，FULL 全跑（#183）。
+- 2026-11-03 · friction · HAR-11 · `Tests/filesystem_locator` 的“锁表满”用例依赖产品 `ffconf.h` 的 `_FS_LOCK`（原值 2）。#191 把它调到 4 后，用例在没有生产代码改动时失败（锁表与文件槽同时用尽，测不出锁表满）。主机测试复制产品配置时，凡用例依赖某个配置数值，就在测试的 CMake 里显式固定它，并注释原因。
 
 ## collaboration
 
@@ -80,3 +81,4 @@ Next id: HAR-16
 ### Signals
 
 - 2026-10-20 · friction · HAR-8 · #98 把链接脚本改名为 `STM32H743xG_flash.ld`，`hardware.md` 的两处链接必须与改名同一提交，否则 `check-docs` 断链、FULL 失败；pre-commit 的写入分支检查拦住了分支上的链接修改。用户批准的绕法：先在 `main` 把两处链接改成纯文本文件名（`7f53d80`），再合入分支。
+- 2026-11-04 · friction · HAR-8 · 0.10.0 要搬 `APP/tasks/storage/`，领域文件不能在分支上改，所以第 0 步先把 `storage.catalog.md`、`storage.volumes.md` 里指向它的链接改成纯文本，合入 `main` 后再补。这是上面 Proposed 那条的第二次证据。

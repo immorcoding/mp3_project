@@ -24,6 +24,10 @@ Next id: WF-16
 - **WF-2** · exploring · 雾里的大块工作走 `/wayfinder`；已清晰的功能走 `/to-spec` → `/to-tickets` → `/implement`。 _Why:_ 流程深度随不确定性选择，清晰任务无需重复探索。
 - **WF-15** · exploring · 一个次版本只做一个带来新能力的用户可见功能（新数据来源或格式解析、新任务或模块、新资源类型或字节契约变化、公开 Interface 变化、新领域词条，满足其一即算；只追加、不改已有语义的接口扩展是否算次版本，由用户在规划时决定）；补丁版本放修复、打磨与小功能，小功能只在已有页面上、用已有数据路径中的数据新增或调整呈现，不触及上述任何一项，板级验收一次板测可完成；补丁同样以一份 spec 作父事项，写范围、交付与板级验收，可带一节呈现设计或一张原型票，不做边界或架构决定。 _Why:_ 次版本的范围仍能在一条集成分支上完成板级验收；呈现层的小增量不必等下一个次版本，涉及新能力的改动仍需完整规划；集成 PR 与合并板测清单需要父事项（GIT-3）。 _Source:_ [打磨阶段地图](https://github.com/immorcoding/mp3_project/issues/100)、2026-10-27 ID3/字体版本规划、2026-10-28 0.8.2 规划（唱盘页歌手行要给 `Service_GUI_TitleApply` 追加歌手参数）
 
+### Signals
+
+- 2026-11-04 · friction · WF-15 · 0.10.0 只改架构，按判定条件算次版本（新任务、公开接口变化），但规则开头写的“带来新能力的用户可见功能”它没有；这是一次没有新能力的次版本（[0.10.0 spec](https://github.com/immorcoding/mp3_project/issues/202)）。
+
 ## hardware-evidence
 
 板级状态与验收证据。
@@ -37,6 +41,8 @@ Next id: WF-16
 ### Signals
 
 - 2026-10-19 · friction · WF-3 · Underruns 与回调计数无日志（固件版本已由启动日志 `BOOT: FW <提交号>[-dirty] <构建类型>` 输出），B/C/D 组多行只能听感或外部仪器；是否加固件侧诊断出口留给后续决定。
+- 2026-11-03 · friction · WF-12 · 板测要的数字多，Service Log 消息池只有 30 条，汇总类日志要注明节拍（#191，同时引 DIAG-3）。
+- 2026-11-03 · friction · WF-3 · `capture-serial.ps1` 用 `Add-Content` 写文件，边抓边读（如 `tail -F`）会让写入失败、静默丢日志，#191 第一遍因此丢了 P0、P1；`Tools/board_test_card/capture-shared.ps1` 允许边写边读。
 
 ## sessions
 
