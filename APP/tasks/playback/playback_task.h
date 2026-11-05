@@ -9,6 +9,8 @@
 #ifndef PLAYBACK_TASK_H
 #define PLAYBACK_TASK_H
 
+#include <stdint.h>
+
 #include "APP/tasks/playback/playback_task_config.h"
 
 /**
@@ -22,5 +24,6 @@ typedef enum
 } Playback_NotifyIndexTypeDef;
 
 void playback_task(void *handle);
+uint32_t playback_task_get_underrun_total(void);
 
 #endif /* PLAYBACK_TASK_H */

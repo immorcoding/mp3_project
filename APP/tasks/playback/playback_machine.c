@@ -173,6 +173,58 @@ static void log_seek_done(const Playback_MachineTypeDef *machine)
 }
 
 /**
+ * @brief 记 Switch INFO：换曲（用户命令或自动前进）被决定到输出重新起播的时延（DIAG-6），每次换曲一行，自动前进带 auto 后缀。
+ * @param[in,out] machine 状态机。
+ * @note  时延 = 命令被本状态机处理时的周期计数器读数到现在的差，经 CyclesToUs 换算为微秒；Ops 缺 ReadCycles
+ *        或 CyclesToUs 时记 0。只在换曲边界调用，不进每帧路径；文本只含曲库序号与数值。
+ */
+static void log_switch_done(Playback_MachineTypeDef *machine)
+{
+    char text[PLAYBACK_MACHINE_LOG_TEXT_SIZE];
+    unsigned long latency_us = 0UL;
+
+    if (!machine->SwitchActive)
+    {
+        return;
+    }
+
+    machine->SwitchActive = false;
+    if (machine->Ops->LogInfo == NULL)
+    {
+        return;
+    }
+    if ((machine->Ops->ReadCycles != NULL) && (machine->Ops->CyclesToUs != NULL))
+    {
+        latency_us = (unsigned long)machine->Ops->CyclesToUs(machine->Ops->ReadCycles() - machine->SwitchStartCycles);
+    }
+
+    (void)snprintf(text, sizeof(text), "Switch idx=%u lat=%lu%s",
+                   (unsigned)machine->Snapshot.Index,
+                   latency_us,
+                   machine->SwitchAuto ? " auto" : "");
+    machine->Ops->LogInfo(text);
+}
+
+/**
+ * @brief 播放中自动换到下一首（播完前进、跳过坏文件续上）时开始计 Switch 的时延；已有等待起播的换曲则保持原起点。
+ * @param[in,out] machine 状态机。
+ * @param[in] start_cycles 决定前进那一刻的周期计数器读数。
+ * @note  用户换曲优先：已在等待的用户换曲不被改成 auto；跳过坏文件接在用户换曲或自动前进之后时沿用原起点与原种类。
+ *        只在 PLAYING 下计（暂停中前进不出声）；Ops 缺 ReadCycles 时起点为 0，lat 记 0。
+ */
+static void begin_auto_switch(Playback_MachineTypeDef *machine, uint32_t start_cycles)
+{
+    if (machine->SwitchActive || (machine->Snapshot.State != PLAYBACK_STATE_PLAYING))
+    {
+        return;
+    }
+
+    machine->SwitchActive = true;
+    machine->SwitchAuto = true;
+    machine->SwitchStartCycles = start_cycles;
+}
+
+/**
  * @brief 把手中的块放回空闲队列（B15）。
  * @param[in,out] machine 状态机。
  */
@@ -375,6 +427,7 @@ static void enter_stopped(Playback_MachineTypeDef *machine, Playback_StopReasonT
 
     close_stream(machine);
     machine->OutputRunning = false;
+    machine->SwitchActive = false;
     if (had_player_stream && !abandon_player_stream(machine))
     {
         reason = PLAYBACK_STOP_REASON_AUDIO_FAULT;
@@ -632,6 +685,13 @@ static void handle_seek(Playback_MachineTypeDef *machine, const Playback_Command
  */
 static void handle_command(Playback_MachineTypeDef *machine, const Playback_CommandTypeDef *command)
 {
+    const bool is_switch_kind = (command->Kind == PLAYBACK_COMMAND_NEXT) ||
+                                (command->Kind == PLAYBACK_COMMAND_PREV) ||
+                                (command->Kind == PLAYBACK_COMMAND_SELECT);
+    const uint32_t switch_start_cycles = (is_switch_kind && (machine->Ops->ReadCycles != NULL)) ?
+                                             machine->Ops->ReadCycles() : 0U;
+    const uint32_t starts_before = machine->Snapshot.TrackStartCount;
+
     switch (command->Kind)
     {
     case PLAYBACK_COMMAND_TOGGLE:
@@ -656,6 +716,15 @@ static void handle_command(Playback_MachineTypeDef *machine, const Playback_Comm
 
     default:
         break;
+    }
+
+    if (is_switch_kind && (machine->Snapshot.TrackStartCount != starts_before) &&
+        (machine->Snapshot.State == PLAYBACK_STATE_PLAYING))
+    {
+        /* 真正换了一首且在放：等输出重新起播再记；最新一次换曲覆盖未完成的上一次。 */
+        machine->SwitchActive = true;
+        machine->SwitchAuto = false;
+        machine->SwitchStartCycles = switch_start_cycles;
     }
 
     machine->Snapshot.HandledCommandSeq = command->Seq;
@@ -728,6 +797,8 @@ static void begin_player_stream(Playback_MachineTypeDef *machine)
  */
 static void skip_bad_file(Playback_MachineTypeDef *machine)
 {
+    const uint32_t start_cycles = (machine->Ops->ReadCycles != NULL) ? machine->Ops->ReadCycles() : 0U;
+
     if (machine->TrackCount == 0U)
     {
         enter_stopped(machine, PLAYBACK_STOP_REASON_NO_TRACK, false);
@@ -745,6 +816,7 @@ static void skip_bad_file(Playback_MachineTypeDef *machine)
 
     (void)step_cursor(machine, machine->SkipForward);
     switch_to_cursor_track(machine);
+    begin_auto_switch(machine, start_cycles);
 }
 
 /**
@@ -892,6 +964,7 @@ static void finish_input_if_drained(Playback_MachineTypeDef *machine)
  */
 static void advance_after_stream_end(Playback_MachineTypeDef *machine)
 {
+    const uint32_t start_cycles = (machine->Ops->ReadCycles != NULL) ? machine->Ops->ReadCycles() : 0U;
     bool moved;
 
     log_event(machine, "Finished", true);
@@ -901,6 +974,8 @@ static void advance_after_stream_end(Playback_MachineTypeDef *machine)
     if (moved && (machine->Snapshot.State != PLAYBACK_STATE_STOPPED))
     {
         log_event(machine, "Auto", true);
+        /* 播完前进是曲目边界：新曲起播时记 Switch ... auto（长跑里没有用户切歌，这一行是唯一的边界时延）。 */
+        begin_auto_switch(machine, start_cycles);
     }
 }
 
@@ -926,6 +1001,7 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
     if (report->Underruns > 0U)
     {
         machine->OutputRunning = false;
+        machine->UnderrunTotal += report->Underruns;
     }
     if (report->OutputStarted)
     {
@@ -933,6 +1009,7 @@ static void apply_pump_report(Playback_MachineTypeDef *machine, const Service_Pl
         machine->OutputRunning = true;
         machine->OutputSinceMs = machine->NowMs;
         machine->ConsecutiveSkips = 0U;
+        log_switch_done(machine);
     }
     if (report->OutputProgress)
     {
@@ -1095,6 +1172,17 @@ static void check_timeouts(Playback_MachineTypeDef *machine)
     {
         enter_stopped(machine, PLAYBACK_STOP_REASON_NO_DATA, true);
     }
+}
+
+/**
+ * @brief 读开机以来播放模块回报的欠载次数累计（DIAG-6）。
+ * @param[in] machine 状态机实例。
+ * @return 累计次数；Platform 的计数每次 Start 清零，这里在状态机里累加。
+ * @note  写者只有播放任务；32 位对齐读取在 Cortex-M7 上不撕裂，其他任务（Monitor）可只读。
+ */
+uint32_t playback_machine_underrun_total(const Playback_MachineTypeDef *machine)
+{
+    return machine->UnderrunTotal;
 }
 
 /**

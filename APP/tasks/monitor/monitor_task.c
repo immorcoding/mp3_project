@@ -13,7 +13,9 @@
 #include "APP/tasks/monitor/monitor_task.h"
 #include "APP/tasks/gui/gui_task.h"
 #include "APP/tasks/monitor/monitor_task_config.h"
+#include "APP/tasks/monitor/monitor_stats.h"
 #include "APP/tasks/monitor/monitor_warn.h"
+#include "APP/tasks/playback/playback_task.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -30,8 +32,27 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/portable.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
+/* 一批最多的日志行数：每个任务一行栈占用，加 Heap、温度、GUI 最长帧、CPU 占比、Health 五行（DIAG-6）。
+ * 一批在 5 s 内一次投完，不分散；它自己必须放得进 Service Log 的 30 块消息池，余量留给同时到来的其他任务日志。
+ * 实际任务数 7，一批 12 行。 */
+#define MONITOR_BATCH_FIXED_LINES 5U
+_Static_assert((MONITOR_CPU_TASK_MAX + MONITOR_BATCH_FIXED_LINES) <= LOG_SERVICE_QUEUE_LENGTH,
+               "one Monitor batch must fit the Service Log message pool");
+
 /* 已告警的未登记任务名；静态零初始化即为空记录，仅 Monitor Task 访问。 */
 static monitor_warn_record_t monitor_warned_tasks;
+
+/* 5 s 批次的 CPU 占比与健康行状态；都只由 Monitor Task 访问，放静态区，不占 1 KiB 的任务栈。
+ * 零初始化的基准即“首个窗口从启动算起”。 */
+static monitor_cpu_baseline_t monitor_cpu_baseline;
+static monitor_cpu_sample_t monitor_cpu_samples[MONITOR_CPU_TASK_MAX];
+static monitor_health_t monitor_health_previous;
+static char monitor_cpu_names[MONITOR_CPU_TASK_MAX][MONITOR_WARNED_NAME_LENGTH];
+static uint8_t monitor_cpu_sample_count;
+static uint32_t monitor_cpu_sample_total;
+static TickType_t monitor_cpu_sample_tick;
+static TickType_t monitor_window_start_tick;
+static char monitor_line[MONITOR_LOG_LINE_LENGTH];
 
 /**
   * @brief  返回由 App 创建或 FreeRTOS 内核创建的任务总栈深度。
@@ -86,6 +107,77 @@ static UBaseType_t monitor_get_task_stack_words(const char *task_name)
 }
 
 /**
+  * @brief  把任务快照里的运行计数拷进静态样本区，供稍后 monitor_log_cpu_share() 使用。
+  * @param[in]  task_snapshot uxTaskGetSystemState() 填充的快照。
+  * @param[in]  task_count 快照里的任务数。
+  * @param[in]  run_time_total 同一次调用给出的总运行计数。
+  * @note   名字拷进静态缓冲，快照释放后样本仍有效。拷贝与成行分开，使成行（含 monitor_cpu_format 的排序与
+  *         snprintf）不叠在 monitor_log_stack_snapshot 的栈帧里（Monitor 栈只有 1 KiB）。
+  */
+static void monitor_capture_cpu_samples(const TaskStatus_t *task_snapshot,
+                                        UBaseType_t task_count,
+                                        uint32_t run_time_total)
+{
+    monitor_cpu_sample_count = 0U;
+    for (UBaseType_t index = 0U; (index < task_count) && (monitor_cpu_sample_count < MONITOR_CPU_TASK_MAX); index++)
+    {
+        char *name = monitor_cpu_names[monitor_cpu_sample_count];
+
+        (void)strncpy(name, task_snapshot[index].pcTaskName, MONITOR_WARNED_NAME_LENGTH - 1U);
+        name[MONITOR_WARNED_NAME_LENGTH - 1U] = '\0';
+        monitor_cpu_samples[monitor_cpu_sample_count].name = name;
+        monitor_cpu_samples[monitor_cpu_sample_count].run_time = task_snapshot[index].ulRunTimeCounter;
+        monitor_cpu_sample_count++;
+    }
+
+    monitor_cpu_sample_total = run_time_total;
+    monitor_cpu_sample_tick = xTaskGetTickCount();
+}
+
+/**
+  * @brief  记录 CPU 占比一行：与上一批样本的运行计数差值，单位 %，包含空闲任务（DIAG-6、R1.1）。
+  * @note   用 monitor_capture_cpu_samples() 留下的静态样本；窗口长度取两批之间的 FreeRTOS 节拍差，只用于显示，
+  *         首批从启动算起。格式与键的规则见 monitor_stats.h。须在 monitor_log_stack_snapshot() 返回之后调用。
+  */
+static void monitor_log_cpu_share(void)
+{
+    (void)monitor_cpu_format(monitor_line,
+                             sizeof(monitor_line),
+                             &monitor_cpu_baseline,
+                             monitor_cpu_samples,
+                             monitor_cpu_sample_count,
+                             monitor_cpu_sample_total,
+                             (uint32_t)((monitor_cpu_sample_tick - monitor_window_start_tick) * portTICK_PERIOD_MS));
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "MONITOR", monitor_line);
+
+    monitor_cpu_baseline_store(&monitor_cpu_baseline,
+                               monitor_cpu_samples,
+                               monitor_cpu_sample_count,
+                               monitor_cpu_sample_total);
+    monitor_window_start_tick = monitor_cpu_sample_tick;
+}
+
+/**
+  * @brief  记录欠载与日志丢失一行：累计值与本批增量（DIAG-6、R1.3）。
+  * @note   日志丢失取 Service_Log 的两项计数；欠载取播放任务状态机的累计。
+  */
+static void monitor_log_health(void)
+{
+    Service_Log_DropStatsTypeDef drops = {0U, 0U};
+    monitor_health_t current;
+
+    (void)Service_Log_GetDropStats(&drops);
+    current.underruns = playback_task_get_underrun_total();
+    current.log_service_drops = drops.ServiceDropped;
+    current.log_core_drops = drops.CoreDropped;
+
+    (void)monitor_health_format(monitor_line, sizeof(monitor_line), &current, &monitor_health_previous);
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "MONITOR", monitor_line);
+
+    monitor_health_previous = current;
+}
+
+/**
   * @brief  取得当前任务快照并记录各任务的栈历史峰值。
   * @note   FreeRTOS 仅保证 HighWaterMark 的单位为 StackType_t。输出字节数时
   *         必须乘 sizeof(StackType_t)；未知任务的总栈深度为 0，不能计算比例，
@@ -95,6 +187,7 @@ static void monitor_log_stack_snapshot(void)
 {
     UBaseType_t task_count = uxTaskGetNumberOfTasks();
     TaskStatus_t *task_snapshot;
+    uint32_t run_time_total = 0U;
 
     task_snapshot = pvPortMalloc(task_count * sizeof(TaskStatus_t));
     if (task_snapshot == NULL)
@@ -102,7 +195,7 @@ static void monitor_log_stack_snapshot(void)
         return;
     }
 
-    task_count = uxTaskGetSystemState(task_snapshot, task_count, NULL);
+    task_count = uxTaskGetSystemState(task_snapshot, task_count, &run_time_total);
 
     for (UBaseType_t index = 0U; index < task_count; index++)
     {
@@ -146,6 +239,8 @@ static void monitor_log_stack_snapshot(void)
 
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, "MONITOR", message);
     }
+
+    monitor_capture_cpu_samples(task_snapshot, task_count, run_time_total);
 
     vPortFree(task_snapshot);
 
@@ -256,6 +351,8 @@ void monitor_task(void *handle)
             monitor_log_stack_snapshot();
             monitor_log_temperature();
             monitor_log_gui_max_frame();
+            monitor_log_cpu_share();
+            monitor_log_health();
         }
 
         (void)Platform_LED_Toggle(PLATFORM_LED_ID_STATUS);

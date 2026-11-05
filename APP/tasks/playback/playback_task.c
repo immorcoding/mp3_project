@@ -326,6 +326,16 @@ static const Playback_MachineOpsTypeDef playback_task_ops = {
 };
 
 /**
+ * @brief 读开机以来的欠载累计次数（DIAG-6）；任意任务可调用。
+ * @return 累计次数；播放任务尚未启动时为 0。
+ * @note  写者只有播放任务；32 位对齐读取不撕裂，Monitor 只读取窗口差值用。
+ */
+uint32_t playback_task_get_underrun_total(void)
+{
+    return playback_machine_underrun_total(&playback_task_machine);
+}
+
+/**
  * @brief Storage 音频流的唤醒回调：把原因映射成本任务的 FLAG。
  * @param[in] reason 唤醒原因。
  * @note  在 Storage Task 上下文调用，不得阻塞。

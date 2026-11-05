@@ -14,3 +14,15 @@ target_compile_features(monitor_warn_tests PRIVATE c_std_11)
 target_compile_options(monitor_warn_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 
 add_test(NAME monitor_warn_dedup COMMAND monitor_warn_tests)
+
+# Monitor 5 s 批次的 CPU 占比与健康行（纯 C）。
+add_executable(monitor_stats_tests
+    test_monitor_stats.c
+    ../../APP/tasks/monitor/monitor_stats.c
+)
+
+target_include_directories(monitor_stats_tests PRIVATE ../..)
+target_compile_features(monitor_stats_tests PRIVATE c_std_11)
+target_compile_options(monitor_stats_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+
+add_test(NAME monitor_stats COMMAND monitor_stats_tests)
