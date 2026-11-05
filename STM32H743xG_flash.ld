@@ -132,6 +132,13 @@ SECTIONS
           .rodata.*
       )
 
+      *APP/tasks/volume/benchmark/*.obj(
+          .text
+          .text.*
+          .rodata
+          .rodata.*
+      )
+      
       . = ALIGN(4);
   } >FLASH2
 
@@ -359,6 +366,19 @@ SECTIONS
     . = ALIGN(32);
   } >RAM
 
+  /*
+   * 任务栈与任务间数据（音频读取、卷、前台、后台、Flash 启动任务的栈，ui_cell 的格子，GUI 副本），
+   * 位于 AXI SRAM，避开 DTCM 容量不足。NOLOAD，不自动清零：栈由 xTaskCreateStatic 填充，
+   * 其余由拥有者在首次使用前完整写入。只经 CPU 读写，不作 DMA 源或目标，不需要 Cache 维护。
+   * 放在既有 AXI 段之后，不移动它们的地址。
+   */
+  .app_axi_ram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.app_axi_ram)
+    . = ALIGN(32);
+  } >RAM
+
   /* FTL 扫描在使用前完整重建；禁止与破坏性 SDRAM 诊断同时使用。 */
   .flash_ftl_tables (NOLOAD) :
   {
@@ -441,6 +461,22 @@ SECTIONS
         "GUI font decode region size mismatch")
   ASSERT((__gui_font_decode_end__ - __gui_font_decode_start__) >= 636240,
         "GUI font decode region smaller than the committed font needs")
+
+  /*
+   * 应用数据（行缓存、组装缓冲等）；NOLOAD，不自动清零，由拥有者在首次使用前完整写入。
+   * 只经 CPU 读写，不作 DMA 源或目标。上限 8 MiB。放在既有 SDRAM 段之后，不移动它们的地址。
+   */
+  .apps_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __apps_sdram_start__ = .;
+    *(.apps_sdram)
+    . = ALIGN(32);
+    __apps_sdram_end__ = .;
+  } >SDRAM
+
+  ASSERT((__apps_sdram_end__ - __apps_sdram_start__) <= 0x800000,
+        "Apps SDRAM section exceeds 8 MiB")
 
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack (NOLOAD) :
