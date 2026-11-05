@@ -34,7 +34,7 @@
 
 /* 一批最多的日志行数：每个任务一行栈占用，加 Heap、温度、GUI 最长帧、CPU 占比、Health 五行（DIAG-6）。
  * 一批在 5 s 内一次投完，不分散；它自己必须放得进 Service Log 的 30 块消息池，余量留给同时到来的其他任务日志。
- * 实际任务数 7，一批 12 行。 */
+ * 实际任务数 8（含开机后几秒内还没自删的 Flash 启动任务），一批 13 行；稳态 7 个任务、12 行。 */
 #define MONITOR_BATCH_FIXED_LINES 5U
 _Static_assert((MONITOR_CPU_TASK_MAX + MONITOR_BATCH_FIXED_LINES) <= LOG_SERVICE_QUEUE_LENGTH,
                "one Monitor batch must fit the Service Log message pool");
@@ -69,6 +69,18 @@ static UBaseType_t monitor_get_task_stack_words(const char *task_name)
     if (strcmp(task_name, "Storage Task") == 0)
     {
         return APP_STORAGE_TASK_STACK_WORDS;
+    }
+
+    if (strcmp(task_name, "Volume Task") == 0)
+    {
+        return APP_VOLUME_TASK_STACK_WORDS;
+    }
+
+    /* 一次性任务：只在开机后 MountFlash 期间存在（3.3 至 8.3 s），自删之后 Monitor 读不到它的栈，
+     * 所以它自删前自己打一行栈水位。名字必须与 volume_flash_task.c 创建时一致。 */
+    if (strcmp(task_name, "Flash Boot Task") == 0)
+    {
+        return APP_FLASH_BOOT_TASK_STACK_WORDS;
     }
 
     if (strcmp(task_name, "Log Task") == 0)

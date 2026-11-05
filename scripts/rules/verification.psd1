@@ -13,6 +13,7 @@
         'storage_audio_stream'
         'storage_catalog'
         'ui_cell'
+        'volume'
         'playback_service'
         'playback_task'
         'monitor_warn'
@@ -34,19 +35,16 @@
                 '^Components/flash_ftl/'
                 # SD Card Component 的显式中止测试（test_sd_abort.c）编译 Components/sd/sd.c。
                 '^Components/sd/'
-                # SD 读路径整条链（test_sd_removal_chain.c）：真实的 Platform SD 与 Storage 的 SD 生命周期，HAL 一侧用头文件替身。
+                # SD 读路径整条链（test_sd_removal_chain.c）：真实的 Platform SD 与卷任务的 SD 部分（对账、闸、卷事件），HAL 一侧用头文件替身。
                 '^Platform/sd/platform_sd\.c$'
-                '^APP/tasks/storage/sd/storage_sd\.(?:c|h)$'
-                '^APP/tasks/storage/storage_task(?:_config)?\.h$'
-                '^APP/tasks/storage/catalog/storage_catalog(?:_config)?\.h$'
-                '^APP/tasks/storage/stream/storage_audio_(?:block|config|stream)\.h$'
+                '^APP/tasks/volume/(?:sd/volume_sd|volume_event|volume_reconcile|volume_task(?:_config)?)\.(?:c|h)$'
                 '^Adapters/stm32_hal/irq/stm32_(?:gpio_exti|sdmmc)_irq\.h$'
                 '^Adapters/stm32_hal/sd/sd_stm32_hal_adapter\.h$'
                 '^Tests/stubs/stm32_hal/'
                 '^FATFS/'
                 '^Middlewares/Third_Party/FatFs/'
                 '^Service/filesystem/'
-                '^APP/tasks/storage/benchmark/'
+                '^APP/tasks/volume/benchmark/'
                 # 主机测试编译的 Platform/Service/APP 头（由 check-test-paths.ps1 发现）。
                 '^Platform/platform\.h$'
                 '^Platform/flash/platform_flash\.h$'
@@ -211,6 +209,22 @@
                 # 真实 ui_cell.c 链接共用 FreeRTOS 桩（互斥锁、任务句柄）。
                 '^Tests/stubs/freertos/'
                 '^Tests/ui_cell/'
+            )
+        }
+        @{
+            # 卷任务（#211）：对账表、卷事件、SD 部分与 Flash 启动流程，Filesystem Service 的入口用测试内的假实现替换，
+            # 只依赖它们的公开头；链接共用 FreeRTOS 桩与 Service Log 替身。任务入口与 Flash 启动任务的创建
+            # （volume_task.c、flash/volume_flash_task.c）不进主机测试，由固件构建和上板核对。
+            Name = 'volume'
+            PathPatterns = @(
+                '^APP/tasks/volume/'
+                '^APP/app_config\.h$'
+                '^Service/filesystem/filesystem_(?:card|service|types)\.h$'
+                '^Service/service\.h$'
+                '^Service/log/log_service(?:_config)?\.h$'
+                '^Tests/stubs/freertos/'
+                '^Tests/stubs/lock_env/'
+                '^Tests/volume/'
             )
         }
         @{

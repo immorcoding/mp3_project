@@ -88,7 +88,8 @@ static const StorageTrackText_ResultTypeDef *storage_track_text_fallback(Storage
  * @param[in] position 播放列表位置，只用于核对不符时的日志。
  * @param[in] catalog_index 曲目的 Catalog 下标；调用者须已核对 Sheet 与 Catalog 代次一致。
  * @return 本 Module 持有的结果，下一次调用前有效；NULL 表示文件主名提取失败（STOR-15 的防御分支），
- *         或下标已不在曲库内（拷不出路径）。
+ *         或下标已不在曲库内（拷不出路径），或打开时得到 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`（卷不可用，
+ *         不是文件错误，不回退、不计数）。
  * @note  只由 Storage Task 调用。先按曲库里的文件定位符打开，核对不符退回按路径打开（STOR-17、ARC-19）；
  *        打开失败按“打开失败”回退文件主名；取文件长度失败按“读取错误”回退；
  *        其余标签侧结果由 storage_catalog_track_text() 判定。标签读取 FIL 用完即关，与音频流 FIL 合计
@@ -99,6 +100,7 @@ const StorageTrackText_ResultTypeDef *storage_track_text_read(uint16_t position,
     StorageTrackText_ResultTypeDef *result = &storage_track_text_result;
     StorageCatalog_TextRequestTypeDef request;
     Service_Filesystem_FileHandleTypeDef file = {0};
+    Service_StatusTypeDef open_status;
     uint64_t size64 = 0U;
     const char *path = storage_track_text_path;
     uint32_t path_bytes;
@@ -112,7 +114,13 @@ const StorageTrackText_ResultTypeDef *storage_track_text_read(uint16_t position,
     result->OpenFailed = false;
     result->OpenUs = 0U;
 
-    if (storage_track_open(position, catalog_index, path, &file, &result->OpenUs) != SERVICE_OK)
+    open_status = storage_track_open(position, catalog_index, path, &file, &result->OpenUs);
+    if (Service_Filesystem_StatusIsVolumeUnavailable(open_status))
+    {
+        /* 卷没了或正在对账：不是文件错误，不回退文件主名、不算“打开失败”；调用者的窗口或名字槽随后被卷事件收掉。 */
+        return NULL;
+    }
+    if (open_status != SERVICE_OK)
     {
         result->OpenFailed = true;
         return storage_track_text_fallback(result, path, path_bytes, STORAGE_CATALOG_TEXT_NO_ID3V2);

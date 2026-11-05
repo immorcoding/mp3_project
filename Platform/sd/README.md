@@ -4,7 +4,7 @@
 
 ## 公开 Interface
 
-- `Platform_SD_Init()`、`Platform_SD_DeInit()`、`Platform_SD_Process()`：管理卡槽生命周期并刷新已经消抖的卡检测状态。`Platform_SD_Process()` 的拔出事件按“最近一次告诉上层的状态”（Init 之后、每次成功的 Process 之后记下）判断，而不是按入口时 Device 的状态：读写中途拔卡时，`SDCard_FailTransfer`、`SDCard_AbortTransfer` 或被拒的启动会在 Process 之前就把 Device 写成 NOT_PRESENT，按入口状态比较会吞掉拔出，Storage 不卸载卷、被占用的文件槽不释放，重新插卡时挂载返回 BUSY；按已报告状态比较，READY → NOT_PRESENT 无论发生在 Process 里还是之前都恰好报告一次 REMOVED。插入事件仍按入口状态判断：静默拔出之后卡在 Process 之前又插回，看到 NOT_PRESENT → READY，报告 INSERTED（Storage 视同换卡）。
+- `Platform_SD_Init()`、`Platform_SD_DeInit()`、`Platform_SD_Process()`：管理卡槽生命周期并刷新已经消抖的卡检测状态。`Platform_SD_Process()` 的拔出事件按“最近一次告诉上层的状态”（Init 之后、每次成功的 Process 之后记下）判断，而不是按入口时 Device 的状态：读写中途拔卡时，`SDCard_FailTransfer`、`SDCard_AbortTransfer` 或被拒的启动会在 Process 之前就把 Device 写成 NOT_PRESENT，按入口状态比较会吞掉拔出，卷任务不会收到拔出事件，卷不卸载、被占用的文件槽不释放，重新插卡时挂载返回 BUSY；按已报告状态比较，READY → NOT_PRESENT 无论发生在 Process 里还是之前都恰好报告一次 REMOVED。插入事件仍按入口状态判断：静默拔出之后卡在 Process 之前又插回，看到 NOT_PRESENT → READY，报告 INSERTED（卷任务的对账视同换卡，走 `remount`）。**调用者不再是 APP**：自 0.10.0 起 APP 不包含 `platform_sd.h`，`Platform_SD_Init/Process` 只经 Filesystem Service 的 `StartSD`/`RefreshSD` 在 SD 卷锁内调用（设备状态由卷锁保护，APP 不绕过；原因见 [Filesystem Service](../../Service/filesystem/README.md) 的“为什么刷新和启动必须持 SD 卷锁”），由卷任务（[`APP/tasks/volume/`](../../APP/tasks/volume/README.md)）在消抖之后调用；卡检测回调由卷任务提供、在 ISR 里只发一个任务通知。
 - `Platform_SD_SetTransferCallback()`、`Platform_SD_ClearTransferCallback()`：管理唯一的、ISR 安全的 SDMMC 传输事件订阅者；这是单槽位，不是回调链表。
 - `Platform_SD_StartReadBlocks()`、`Platform_SD_StartWriteBlocks()`：启动已装配的 DMA 块传输。
 - `Platform_SD_CompleteTransfer()`：在任务上下文提交已完成、失败或中止的 Device 传输。

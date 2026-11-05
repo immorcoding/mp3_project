@@ -41,6 +41,9 @@ static uint32_t music_catalog_generation;
 /** @brief 本轮扫描的工作下标，上电为零，每次开扫前清零。 */
 static uint32_t music_catalog_index;
 
+/** @brief 本轮扫描因为卷不可用（NO_MEDIA、NOT_READY、INVALID_HANDLE）被丢弃；每次开扫前清零，只在 Storage Task 访问。 */
+static bool music_catalog_scan_aborted;
+
 static StorageCatalog_MusicTypeDef MusicCatalogPool
     __attribute__((section(".storage_catalog"), aligned(32)));
 
@@ -103,7 +106,7 @@ static uint32_t storage_catalog_scan_clock_us(void)
 
 /**
  * @brief 记扫描结束一行 INFO：结果、条数、耗时（DIAG-6）。
- * @param[in] result 结果名，静态字符串：ok、dfs_error、sheet_error。
+ * @param[in] result 结果名，静态字符串：ok、dfs_error、sheet_error、aborted。
  * @note  常开，每次扫描一行；文本只含结果名与数值。耗时单位微秒，含目录读取、打开与扫描中的任务切换，不含建播放列表。
  */
 static void storage_catalog_scan_log_end(const char *result)
@@ -209,7 +212,8 @@ static bool storage_catalog_music_join_path(char *destination,
 
 /**
  * @brief 用路径栈遍历 `Music/`，同时只开一个目录句柄；每个 `.mp3` 条目连同它的文件定位符写入曲库。
- * @return STORAGE_OK 扫描完成（含没有 `Music/`、子目录打不开、表满截断）；STORAGE_ERROR 目录读取或关闭失败。
+ * @return STORAGE_OK 扫描完成（含没有 `Music/`、子目录打不开、表满截断）；STORAGE_ERROR 目录读取或关闭失败，
+ *         或卷不可用（`music_catalog_scan_aborted` 置位，不记 ERROR）。
  */
 static Storage_StatusTypeDef storage_catalog_music_dfs(void)
 {
@@ -222,18 +226,27 @@ static Storage_StatusTypeDef storage_catalog_music_dfs(void)
     while (stack_top > 0U)
     {
         char current[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
+        Service_StatusTypeDef open_status;
         Service_StatusTypeDef read_status;
+        Service_StatusTypeDef close_status;
 
         stack_top--;
         (void)memcpy(current,
                       storage_catalog_dir_stack[stack_top],
                       sizeof(current));
 
-        if (Service_Filesystem_OpenDirectory(SERVICE_FILESYSTEM_VOLUME_SD,
-                                             current,
-                                             &music_directory) != SERVICE_OK)
+        open_status = Service_Filesystem_OpenDirectory(SERVICE_FILESYSTEM_VOLUME_SD,
+                                                       current,
+                                                       &music_directory);
+        if (open_status != SERVICE_OK)
         {
             storage_catalog_scan_clock_poll();
+            if (Service_Filesystem_StatusIsVolumeUnavailable(open_status))
+            {
+                /* 卷没了或正在对账：不是“没有 Music 目录”，也不是子目录坏了；丢弃本次扫描，等卷事件。 */
+                music_catalog_scan_aborted = true;
+                return STORAGE_ERROR;
+            }
             if ((stack_top == 0U) && (strcmp(current, "Music") == 0))
             {
                 (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
@@ -259,9 +272,16 @@ static Storage_StatusTypeDef storage_catalog_music_dfs(void)
             storage_catalog_scan_clock_poll();
             if (read_status != SERVICE_OK)
             {
-                (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                                       storage_catalog_log_tag,
-                                       "Music Directory Read Failed.");
+                if (Service_Filesystem_StatusIsVolumeUnavailable(read_status))
+                {
+                    music_catalog_scan_aborted = true; /* 同上：不是文件错误，丢弃本次扫描。 */
+                }
+                else
+                {
+                    (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                           storage_catalog_log_tag,
+                                           "Music Directory Read Failed.");
+                }
                 result = STORAGE_ERROR;
                 break;
             }
@@ -309,8 +329,13 @@ static Storage_StatusTypeDef storage_catalog_music_dfs(void)
             }
         }
 
-        if (Service_Filesystem_CloseDirectory(music_directory) != SERVICE_OK)
+        close_status = Service_Filesystem_CloseDirectory(music_directory);
+        if (close_status != SERVICE_OK)
         {
+            if (Service_Filesystem_StatusIsVolumeUnavailable(close_status))
+            {
+                music_catalog_scan_aborted = true;
+            }
             result = STORAGE_ERROR;
             break;
         }
@@ -326,15 +351,26 @@ static Storage_StatusTypeDef storage_catalog_music_dfs(void)
 
 /**
  * @brief 扫描已挂载 SD 的 `Music/`，写入 Music Catalog，成功后生成顺序播放列表。
- * @return STORAGE_OK 扫描完成（含空目录或表满截断）；STORAGE_ERROR 读取、关闭或建表失败。
- * @note 仅 Storage Task 在 MountSD 成功之后调用。不 memset 整池。
+ * @return STORAGE_OK 扫描完成（含空目录或表满截断），或卷在扫描期间不可用而丢弃了本次扫描（曲库保持无效）；
+ *         STORAGE_ERROR 读取、关闭或建表失败。
+ * @note 仅 Storage Task 在卷就绪（卷事件）之后调用。不 memset 整池。
  */
 Storage_StatusTypeDef storage_catalog_music_init(void)
 {
     storage_catalog_music_reset();
     storage_catalog_scan_clock_start();
+    music_catalog_scan_aborted = false;
     if (storage_catalog_music_dfs() != STORAGE_OK)
     {
+        if (music_catalog_scan_aborted)
+        {
+            /* 扫描期间卷消失或正在对账：丢弃已收录的条目，不发布播放列表，曲库保持无效，等卷事件重新扫描。
+             * 这不是文件错误（#195 第 9 条、#196），所以返回成功、不记 ERROR。 */
+            storage_catalog_music_reset();
+            storage_catalog_scan_log_end("aborted");
+            return STORAGE_OK;
+        }
+
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_catalog_log_tag,
                                "Music catalog dfs failed.");

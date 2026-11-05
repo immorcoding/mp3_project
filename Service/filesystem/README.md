@@ -1,21 +1,21 @@
 # 文件系统 Service
 
-本 Module 持有 SD/Flash FatFs 卷生命周期，并同步执行块访问与卷感知文件/目录操作。完成通知不绑定任何任务（每卷一个静态二值信号量，见“请求与事件路径”）。文件接口是线程安全的：每卷一把卷锁在公开函数入口拿，另有一把只罩 `f_open`、`f_opendir` 和按定位符打开的窄表锁；GUI 与播放任务不得调用（入口断言停机）。规则与持锁上界见“并发模型”（ARC-21、[ADR-0024](../../docs/adr/0024-file-interface-concurrency.md)）。目前调用者仍只有 Storage Task，锁不会被争用；真实并发在后面的票才出现。SD 另有一道“闸”和三个卷任务用的入口（启动、刷新、暂停与恢复），见“SD 闸与卷生命周期入口”：它们已经在这里，但还没有调用者。仍是一个 Filesystem Module；`sd/` 和 `flash/` 是私有实现分区。公开 Interface 按调用者切开，没有总揽头；卷与路径上限在 `filesystem_types.h`，供文件、目录和生命周期头共用。卡检测、消抖、启动和回收时机由 APP 决定。
+本 Module 持有 SD/Flash FatFs 卷生命周期，并同步执行块访问与卷感知文件/目录操作。完成通知不绑定任何任务（每卷一个静态二值信号量，见“请求与事件路径”）。文件接口是线程安全的：每卷一把卷锁在公开函数入口拿，另有一把只罩 `f_open`、`f_opendir` 和按定位符打开的窄表锁；GUI 与播放任务不得调用（入口断言停机）。规则与持锁上界见“并发模型”（ARC-21、[ADR-0024](../../docs/adr/0024-file-interface-concurrency.md)）。调用者现在有两个任务：卷任务（SD 的启动、刷新、暂停与恢复、挂载与卸载）和 Storage Task（读写文件与目录），Flash 一侧是 Flash 启动任务（初始化、挂载、格式化）和 Storage Task（回收），所以锁第一次真的会被争用；真实并发由第 3 次上板验证。SD 另有一道“闸”和三个卷任务用的入口（启动、刷新、暂停与恢复），见“SD 闸与卷生命周期入口”。仍是一个 Filesystem Module；`sd/` 和 `flash/` 是私有实现分区。公开 Interface 按调用者切开，没有总揽头；卷与路径上限在 `filesystem_types.h`，供文件、目录和生命周期头共用。卡检测、消抖、启动和回收时机由 APP 决定。
 
 当前文件与目录语义见 [ADR-0014](../../docs/adr/0014-filesystem-volume-aware-file-interface.md)。公开接缝切开与 `Reclaim` 命名见 [ADR-0012](../../docs/adr/0012-filesystem-public-seams.md)。当前产品不提供 USB MSC，见 [ADR-0013](../../docs/adr/0013-usb-msc-product-scope.md)。SD 为曲库主介质、Flash FTL 为机内盘与资源安装暂存，见 [ADR-0015](../../docs/adr/0015-volume-roles-and-resource-install.md)。
 
 ## 公开 Interface
 
 - `filesystem_types.h`：逻辑卷枚举与 UTF-8 路径/名称上限。文件头、目录头需要 Volume 或长度时只包含本头，互不包含。
-- `filesystem_service.h`：卷生命周期。SD 为 `InitSD()/MountSD/UnmountSD`；Flash 为 `InitFlash()`（建立完成信号量并订阅）、`MountFlash`（扫描 FTL 并挂载 FAT）、`UnmountFlash`、`FormatAndMountFlash`、`RecoverAndMountFlash`、`ReclaimFlash`。设备不提供 SD 格式化入口。`Service_Filesystem_DenyCaller(TaskHandle_t)` 登记不得调用文件接口的任务（APP 启动时登记 GUI 与播放任务，见“并发模型”）。`InitSD()`/`InitFlash()` 没有参数：完成通知由 Service 自己的信号量承担，不借用任何任务的通知槽，Service 也不认识 APP 类型。两者各自须在任何任务使用文件接口之前调用一次（目前由 Storage Task 在启动时调用），调用时拿所属卷的卷锁；`InitSD()` 之后可以重复调用，只重新订阅传输事件，不重建信号量，挂载与卸载路径用它做幂等的就绪检查，`InitFlash()` 重复调用不做任何事。
-- `filesystem_card.h`：SD 卡槽的卷生命周期入口，调用者是卷任务（还没有）。`Service_Filesystem_StartSD(detect_callback, detect_context, &card)`（注册卡检测回调并初始化设备）、`Service_Filesystem_RefreshSD(&card)`（SD 卷锁内刷新，给出在不在、就绪否、是否重新初始化过、容量和诊断，类型 `Service_Filesystem_CardStatusTypeDef`）、`Service_Filesystem_PauseSD()` / `Service_Filesystem_ResumeSD()`（闸）。APP 因此不再需要包含 `platform_sd.h`。
+- `filesystem_service.h`：卷生命周期。SD 为 `InitSD()/MountSD/UnmountSD`；Flash 为 `InitFlash()`（建立完成信号量并订阅）、`MountFlash`（扫描 FTL 并挂载 FAT）、`UnmountFlash`、`FormatAndMountFlash`、`RecoverAndMountFlash`、`ReclaimFlash`。设备不提供 SD 格式化入口。`Service_Filesystem_DenyCaller(TaskHandle_t)` 登记不得调用文件接口的任务（APP 启动时登记 GUI 与播放任务，见“并发模型”）。`InitSD()`/`InitFlash()` 没有参数：完成通知由 Service 自己的信号量承担，不借用任何任务的通知槽，Service 也不认识 APP 类型。两者各自须在任何任务使用文件接口之前调用一次（SD 由卷任务在 `StartSD` 之后、第一次 `MountSD` 之前调用；Flash 由 Flash 启动任务在启动时调用），调用时拿所属卷的卷锁；`InitSD()` 之后可以重复调用，只重新订阅传输事件，不重建信号量，挂载与卸载路径用它做幂等的就绪检查，`InitFlash()` 重复调用不做任何事。
+- `filesystem_card.h`：SD 卡槽的卷生命周期入口，调用者是卷任务（`APP/tasks/volume/sd/volume_sd.c`）。`Service_Filesystem_StartSD(detect_callback, detect_context, &card)`（注册卡检测回调并初始化设备）、`Service_Filesystem_RefreshSD(&card)`（SD 卷锁内刷新，给出在不在、就绪否、是否重新初始化过、容量和诊断，类型 `Service_Filesystem_CardStatusTypeDef`）、`Service_Filesystem_PauseSD()` / `Service_Filesystem_ResumeSD()`（闸）。APP 因此不再需要包含 `platform_sd.h`。
 - `filesystem_types.h` 另有失败分类函数 `Service_Filesystem_StatusIsVolumeUnavailable(status)`：`NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 为真，不算文件错误（调用者不写 `READ_ERROR`、不回退、不缓存，先看卷序号）。
 - `filesystem_file.h`：卷感知文件访问。`OpenFile/ReadFile/WriteFile/SeekFile/GetFilePosition/GetFileSize/SyncFile/CloseFile/RemoveFile/RenameFile/GetFileInfo`。调用必须给出 Volume；相对路径只在该卷内解释。另有 `OpenFileByLocator`（按文件定位符只读打开，见下节“文件定位符与 FatFs 补丁”）。`ReadFile`/`WriteFile` 单次不超过 `SERVICE_FILESYSTEM_IO_MAX_BYTES`（32 KiB），超过返回 `SERVICE_INVALID_PARAM`，不截短也不在内部拆分。
 - `filesystem_directory.h`：卷感知目录访问。`OpenDirectory/ReadDirectory/RewindDirectory/CloseDirectory/CreateDirectory/RemoveDirectory`。空路径表示所选卷的根目录；文件接口不得把空路径当作文件名。`ReadDirectory` 给出的目录项带文件定位符 `Locator`。
 - `filesystem_text.h`：文本编码查表。`GbkToUnicode(gbk_code)` 把 GBK 双字节码（首字节在高 8 位）转 Unicode 码点，0 表示无映射；内部调用 FatFs `ff_convert(code, 1)`，只读 CP936 表（Resource Service 在任务启动前就绪），不访问介质、不阻塞，可在任何任务上下文调用。由 Storage 的 `storage_track_text_read()` 作为 GBK 查表回调注入曲目文本函数，FatFs 类型不出本 Module（ARC-12）。
 - `filesystem_flash_access.h`：启动诊断的同步包装。`ReadFlashArray/ReadFlashDiagnostic/EraseFlashDiagnostic/ProgramFlashDiagnostic`。这是唯一允许包含 `platform_flash.h` 的公开头，以便使用 Platform 诊断区域枚举。
 
-`FormatAndMountFlash` 显式注销卷、格式化 FTL、建立 FAT12/16 superfloppy，成功返回时 Flash 文件系统必须已经重新挂载。本 Service **不会**在启动或 `MountFlash` 失败时自行调用它。Storage Task 在 `SERVICE_NO_FILESYSTEM` 时是否调用，由 `STORAGE_FLASH_AUTO_FORMAT` 决定。
+`FormatAndMountFlash` 显式注销卷、格式化 FTL、建立 FAT12/16 superfloppy，成功返回时 Flash 文件系统必须已经重新挂载。本 Service **不会**在启动或 `MountFlash` 失败时自行调用它。Flash 启动任务（`APP/tasks/volume/flash/`）在 `SERVICE_NO_FILESYSTEM` 时是否调用，由 `VOLUME_FLASH_AUTO_FORMAT` 决定。
 `RecoverAndMountFlash` 注销旧卷、恢复硬件并重扫，成功返回时卷已经挂载；旧文件/目录对象不可沿用。
 `ReclaimFlash` 给 FTL 一次最多回收一块的机会，水位和目标仍归 FTL，可能什么都不擦。
 
@@ -110,7 +110,7 @@ FSLOCK table n=1 hold=4000us:Open wait=0us:-
 
 ## SD 闸与卷生命周期入口
 
-来自 [卷生命周期与卷事件](https://github.com/immorcoding/mp3_project/issues/195) 的 Service 部分，由 #210 落地。**目前没有调用者**：Storage Task 仍直接调 `Platform_SD_*`（见本节末“给卷任务”），谁也没有关过闸，所以用户看不到变化，调用者仍把新状态码当失败处理。
+来自 [卷生命周期与卷事件](https://github.com/immorcoding/mp3_project/issues/195) 的 Service 部分，由 #210 落地，#211 的卷任务接线（`APP/tasks/volume/sd/volume_sd.c` 是唯一调用者，APP 不再包含 `platform_sd.h`）。卷任务在边沿处关闸、静默 30 ms、对账、开闸；调用者对 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 不当文件错误。
 
 ### 入口签名
 
@@ -127,7 +127,7 @@ void Service_Filesystem_ResumeSD(void);
 
 `Service_Filesystem_CardStatusTypeDef`：`Present`（卡检测脚表示有卡）、`Ready`（设备 READY）、`Reinitialized`（本次调用把卡（重新）初始化过）、`CapacityBytes`、`BlockSize`（`Ready` 时有效）、`DeviceError`、`PortStatus`（最近一次设备错误的诊断）。失败时也尽力填写：卷任务在“刷新失败但卡不在”时同样要卸载。
 
-- `StartSD`：只调用一次（Platform 不允许重复初始化，第二次返回 `ERROR`）；无卡同样成功，此时 `Ready` 为假。它只做 Platform 一侧，卡就绪后卷任务还要调 `InitSD()` 再 `MountSD()`，次序与原来的 Storage Task 一致。
+- `StartSD`：只调用一次（Platform 不允许重复初始化，第二次返回 `ERROR`）；无卡同样成功，此时 `Ready` 为假。它只做 Platform 一侧，卡就绪后卷任务还要调 `InitSD()` 再 `MountSD()`，次序与原来的 Storage Task 一致（现在由卷任务调用）。
 - `RefreshSD`：包 `Platform_SD_Process`。`Reinitialized` 取自 Platform 的 INSERTED 事件，它按进入时的设备状态判断，所以“读写失败时设备被先写成无卡、卡又回来”（被吞的拔出，#191 的 `via=presence`）也报告为 `Reinitialized`。卡在而设备 ERROR 又没有边沿时，刷新成功但 `Ready` 为假，不自动恢复。
 - `PauseSD` / `ResumeSD`：关闸、开闸。二者是标志，不是计数：消抖期间每个新边沿再关一次没有副作用，一次开闸就够。不拿卷锁、不阻塞，不检查拒绝名单（不等任何东西）；`StartSD` / `RefreshSD` 要等 SD 卷锁，所以和其他会等锁的入口一样，GUI 与播放任务调用会断言停机。
 
@@ -170,12 +170,13 @@ CubeMX 生成的 `FATFS/Target/sd_diskio.c` 在 `SD_read` / `SD_write` 成功之
 - **已知漏洞**（推断，板上没测到）：数据脚比检测脚先断时，第一次失败仍是 `ERROR`，调用者按今天的做法报读取错误；之后卡检测脚到位，后续调用得到 `NO_MEDIA`。
 - 失败后 FatFs 把对象标成出错：同一个 `FIL` 的后续调用会得到 `FR_INT_ERR`（同样映射成 `ERROR`，所以同样改成 `NO_MEDIA`），`CloseFile` 关不掉；这些对象和槽由卷任务的 `UnmountSD` 一起释放（卸载释放本卷全部槽，主机测试覆盖）。
 
-### 给卷任务（#211）
+### 卷任务怎么用这些入口（#211）
 
-- `APP/tasks/storage/sd/storage_sd.c` 现在直接调 `Platform_SD_Init`、`Platform_SD_Process`、`Platform_SD_GetInfo/GetDiagnostics`，**不经 SD 卷锁**。它是现在唯一的调用者所以没有竞争，但卷任务把卡检测放到另一个任务之后，`Process` 会与别的任务的读写并发，上面的无超时循环会让读写者空转。切到 `StartSD` / `RefreshSD` 的接线由 #211 做，不在 #210 里。
-- 每次 `PauseSD` 必须配 `ResumeSD`，所有路径（含失败路径）都配；卷任务自己的挂载、卸载、刷新不受闸挡，所以关着闸调用它们是正常用法。
-- 收尾顺序里的“拿 SD 卷锁等在途调用退出”是 `RefreshSD`（和 `UnmountSD`）入口自己的拿锁完成的，不需要另一个入口。
-- 收到 `Service_Filesystem_StatusIsVolumeUnavailable(status)` 为真的结果，回到等待点先看卷序号。
+- 卷任务（`APP/tasks/volume/sd/volume_sd.c`）已经切到 `StartSD` / `RefreshSD`，不再直接调 `Platform_SD_*`，APP 不再包含 `platform_sd.h`。上面那个无超时的 `while (BSP_SD_GetCardState() != MSD_OK)` 循环因此不会让读写者持锁空转：改 Device 状态的入口都在 SD 卷锁内，状态只能在不持锁的间隙变化。
+- 每次 `PauseSD` 都配 `ResumeSD`，所有路径（对账成功、挂载失败、刷新失败、换卡、无卡）都配；卷任务的做法是“闸只在一次消抖过程的第一个边沿关一次，每次过程以一次开闸结束；对账期间又来了新边沿则闸保持关闭、重新消抖”，主机测试穷举 384 种组合核对。卷任务自己的挂载、卸载、刷新不受闸挡，所以关着闸调用它们是正常用法。
+- 收尾顺序里的“拿 SD 卷锁等在途调用退出”是 `RefreshSD`（和 `UnmountSD`）入口自己的拿锁完成的，不需要另一个入口。已知窗口：`RefreshSD` 和 `UnmountSD` 是两个独立的持锁入口，放锁到再拿锁之间已通过闸、正在等锁的调用可能抢到锁，见 [卷任务](../../APP/tasks/volume/README.md)“已知窗口”。
+- 收到 `Service_Filesystem_StatusIsVolumeUnavailable(status)` 为真的结果，回到等待点先看卷序号（Storage Task 的做法见 [存储任务](../../APP/tasks/storage/README.md)“卷事件与失败约定”）。
+- `StartSD` 之后卷任务仍调 `InitSD()` 再 `MountSD()`；`RefreshSD` 返回 `ERROR` 时 `card` 仍填写，“刷新失败但卡不在”以及“刷新失败而卡在、设备进了 ERROR”都卸载旧卷，刷新失败时不挂载。
 
 
 ## 主机测试的保真边界
@@ -245,7 +246,7 @@ W (9850) FSABORT: stopped us=43 R blk=0 n=64
 
 `FILESYSTEM_HOOK_SD_LATE_DMA`（`filesystem_config.h`，默认 `0U`）是编译开关，代码写成 `if (FILESYSTEM_HOOK_SD_LATE_DMA != 0U)`，默认构建也编译，发布构建不开（CMake 在 Debug 以外的构建类型——Release、RelWithDebInfo、MinSizeRel——打开会直接报错）。打开方式：configure 时 `cmake --preset firmware-debug -DMP3_HOOK_SD_LATE_DMA=1`，关掉要显式 `-DMP3_HOOK_SD_LATE_DMA=0`（缓存变量留在构建目录里）。
 
-- **启动日志**：第一次 `InitSD()` 投一行（WARN，只投一次），串口里是 `W (9835) HOOK: late_dma ON period=16 timeout=1ms`；没有 `HOOK:` 行就是没开（钩子关闭的构建里一行都不多）。它出现在 Storage Task 初始化 SD 的时刻，不在 `BOOT: FW` 旁边：第 2 次上板的实测是开机后约 9.8 s，在 `FLASH: Filesystem mounted.` 之后、`SD: Card ready` 之前；它不会被日志核心丢掉（日志核心只在调度器启动前的几百毫秒里丢最旧的几行，见 [Service Log](../log/README.md) 的“开机早期的丢行”）。其他钩子各自在所属模块首次初始化时同样投一行 `HOOK`。
+- **启动日志**：第一次 `InitSD()` 投一行（WARN，只投一次），串口里是 `W (9835) HOOK: late_dma ON period=16 timeout=1ms`；没有 `HOOK:` 行就是没开（钩子关闭的构建里一行都不多）。它出现在第一次 `InitSD()` 的时刻，不在 `BOOT: FW` 旁边：第 2 次上板（那时 Storage Task 先挂载 Flash 再初始化 SD）的实测是开机后约 9.8 s，在 `FLASH: Filesystem mounted.` 之后、`SD: Card ready` 之前；**#211 之后第一次 `InitSD()` 在卷任务启动 SD 时，不再等 Flash 挂载，约在开机后 0.2 至 0.6 s、`SD: Card ready` 之后、`SD: Filesystem mounted.` 之前**（卷任务启动 SD，Flash 挂载在 Flash 启动任务里并行进行）；它不会被日志核心丢掉（日志核心只在调度器启动前的几百毫秒里丢最旧的几行，见 [Service Log](../log/README.md) 的“开机早期的丢行”）。其他钩子各自在所属模块首次初始化时同样投一行 `HOOK`。
 - **做什么**：每 `FILESYSTEM_HOOK_SD_LATE_DMA_PERIOD`（16）次读请求探测一次，探测在调用者自己的读**之前**、复用 DMA 中转缓冲：① 读目标块（调用者这次读的起始块，至多 64 块），记 FNV-1a 校验和；② 从块 0 读 32 KiB 但只等 `FILESYSTEM_HOOK_SD_LATE_DMA_TIMEOUT_MS`（1 ms），32 KiB 平均要 3 ms 以上，必然超时并被显式中止（`FSABORT` 那一行照常出现）；③ **紧接着**再读目标块，校验和必须与 ① 一致——受害读（块 0 一带）与目标块内容不同，迟到的旧 DMA 若落进 bounce buffer、或旧的完成信号被下一笔当成完成，内容会变；目标块起始于 `FILESYSTEM_HOOK_SD_LATE_DMA_MIN_BLOCK`（64）之前（引导区一带）、以及所有写请求，都不探测。
 - **结果行**（INFO，ERROR 见下；串口里形如 `I (9855) SDHOOK: late_dma n=1 blk=42657 victim=timeout verify=ok`）：`SDHOOK late_dma n=<探测序号> blk=<目标块> victim=<timeout|done|none> verify=<ok|MISMATCH|read_failed|skipped>`。判定：**通过**是 `victim=timeout verify=ok`，且前一行 `FSABORT` 是 `stopped`；`verify=MISMATCH`（ERROR）是迟到 DMA 或旧信号污染了紧接着的读，不通过；`verify=read_failed`（ERROR）是中止后紧接着的读失败，通常伴随 `FSABORT stuck`，卷保持 ERROR，按“恢复”一栏拔插卡；`victim=done` 是受害读居然在 1 ms 内完成，这次没有制造出迟到的 DMA，不算失败也不算证据；`verify=skipped`（WARN）是探测里第一次读就失败了。
 - **代价**：每次探测给被探测的那次读加约 10–15 ms（估计，未测）且持 SD 卷锁；钩子构建的持锁统计不能当 R2.1 的证据。

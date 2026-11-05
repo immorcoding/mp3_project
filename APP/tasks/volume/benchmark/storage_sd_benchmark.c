@@ -13,8 +13,8 @@
 #include "APP/app_config.h"
 #if STORAGE_SD_BENCHMARK_ENABLE
 /* Includes ------------------------------------------------------------------*/
-#include "APP/tasks/storage/benchmark/storage_sd_benchmark.h"
-#include "APP/tasks/storage/benchmark/storage_sd_benchmark_config.h"
+#include "APP/tasks/volume/benchmark/storage_sd_benchmark.h"
+#include "APP/tasks/volume/benchmark/storage_sd_benchmark_config.h"
 
 #include <stdint.h>
 #include <stdio.h>

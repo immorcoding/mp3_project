@@ -8,6 +8,7 @@
 
 #include "APP/tasks/playback/playback_task_config.h"
 #include "APP/tasks/storage/catalog/storage_catalog.h"
+#include "APP/tasks/storage/catalog/storage_sheet.h"
 #include "APP/tasks/storage/catalog/storage_track_diag.h"
 #include "APP/tasks/storage/catalog/storage_track_text.h"
 
@@ -147,6 +148,7 @@ static uint32_t g_sub_count;       /* Music/Sub/ 下的文件数 */
 static uint32_t g_zero_locator_id; /* 该文件扫描时给全零定位符；UINT32_MAX 表示没有 */
 static uint32_t g_stale_id;        /* 该文件按定位符打开时报核对不符（介质已变）；UINT32_MAX 表示没有 */
 static bool g_locator_failed;      /* 按定位符打开一律报其他失败（BUSY） */
+static Service_StatusTypeDef g_locator_failed_status = SERVICE_BUSY; /* 上面那个失败的具体状态 */
 static uint32_t g_locator_cost_us; /* 一次按定位符打开消耗的微秒 */
 static uint32_t g_path_cost_us;    /* 一次按路径打开消耗的微秒 */
 static uint32_t g_locator_calls;
@@ -157,6 +159,11 @@ static uint32_t g_dir_token;
 static uint32_t g_dir_pos;
 static uint32_t g_dir_read_cost_us; /* 一次目录读取消耗的微秒（推进假 DWT），扫描耗时的来源 */
 static bool g_read_dir_fail;        /* 目录读取一律报错 */
+static Service_StatusTypeDef g_open_root_status; /* 非 SERVICE_OK 时，打开 Music/ 返回它（卷不可用等） */
+static Service_StatusTypeDef g_open_sub_status;  /* 非 SERVICE_OK 时，打开 Music/Sub 返回它 */
+static Service_StatusTypeDef g_read_dir_status;  /* 非 SERVICE_OK 时，读满 g_read_dir_status_after 条之后读目录返回它 */
+static uint32_t g_read_dir_status_after;
+static uint32_t g_dir_reads;                     /* 本次扫描里 ReadDirectory 被调用的次数 */
 static bool g_music_missing;        /* 没有 Music/ 目录 */
 
 static uint8_t g_file_bytes[512];
@@ -243,10 +250,18 @@ Service_StatusTypeDef Service_Filesystem_OpenDirectory(Service_Filesystem_Volume
     }
     if (strcmp(path, "Music") == 0)
     {
+        if (g_open_root_status != SERVICE_OK)
+        {
+            return g_open_root_status;
+        }
         g_dir_token = 1U;
     }
     else if ((strcmp(path, "Music/Sub") == 0) && (g_sub_count != 0U))
     {
+        if (g_open_sub_status != SERVICE_OK)
+        {
+            return g_open_sub_status;
+        }
         g_dir_token = 2U;
     }
     else
@@ -271,6 +286,11 @@ Service_StatusTypeDef Service_Filesystem_ReadDirectory(Service_Filesystem_Direct
     uint32_t base = (directory.Token == 1U) ? ROOT_ID_BASE : SUB_ID_BASE;
 
     g_cycles += g_dir_read_cost_us;
+    g_dir_reads++;
+    if ((g_read_dir_status != SERVICE_OK) && (g_dir_reads > g_read_dir_status_after))
+    {
+        return g_read_dir_status;
+    }
     if (g_read_dir_fail)
     {
         return SERVICE_ERROR;
@@ -372,7 +392,7 @@ Service_Filesystem_LocatorOpenResultTypeDef Service_Filesystem_OpenFileByLocator
     g_cycles += g_locator_cost_us;
     if (g_locator_failed)
     {
-        *status = SERVICE_BUSY;
+        *status = g_locator_failed_status;
         return SERVICE_FILESYSTEM_LOCATOR_FAILED;
     }
     id = (locator->Opaque[0] >= 1000U) ? (locator->Opaque[0] - 1000U) : UINT32_MAX;
@@ -501,6 +521,7 @@ static void world_reset(void)
     g_zero_locator_id = UINT32_MAX;
     g_stale_id = UINT32_MAX;
     g_locator_failed = false;
+    g_locator_failed_status = SERVICE_BUSY;
     g_locator_cost_us = 0U;
     g_path_cost_us = 0U;
     g_log_cost_us = 0U;
@@ -510,6 +531,11 @@ static void world_reset(void)
     g_open_handles = 0U;
     g_dir_read_cost_us = 0U;
     g_read_dir_fail = false;
+    g_open_root_status = SERVICE_OK;
+    g_open_sub_status = SERVICE_OK;
+    g_read_dir_status = SERVICE_OK;
+    g_read_dir_status_after = 0U;
+    g_dir_reads = 0U;
     g_music_missing = false;
     g_cycles = 1000U;
     g_log_count = 0U;
@@ -712,6 +738,28 @@ static void test_locator_open_failure_is_not_retried_by_path(void)
     assert(g_path_calls == 0U);
     assert(g_open_handles == 0U);
     assert(log_count_prefix("Locator miss") == 0U);
+}
+
+/**
+ * @brief 打开时得到 NO_MEDIA / NOT_READY / INVALID_HANDLE（卷没了或正在对账）不是文件错误：不回退文件主名、
+ *        不记为“打开失败”，不退回路径打开；返回空，行留空，随后的卷事件会把整个窗口收掉（#195 第 9 条）。
+ */
+static void test_text_read_treats_a_volume_unavailable_open_as_no_result(void)
+{
+    static const Service_StatusTypeDef unavailable[] = {SERVICE_NO_MEDIA, SERVICE_NOT_READY, SERVICE_INVALID_HANDLE};
+
+    for (size_t index = 0U; index < sizeof(unavailable) / sizeof(unavailable[0]); index++)
+    {
+        world_reset();
+        scan(4U, 0U);
+        g_locator_failed = true;
+        g_locator_failed_status = unavailable[index];
+
+        assert(storage_track_text_read(1U, 1U) == NULL);
+        assert(g_path_calls == 0U);
+        assert(g_open_handles == 0U);
+        assert(log_count_prefix("Locator miss") == 0U);
+    }
 }
 
 /** @brief 曲库下标越界时无路径可开：返回空，不打开任何文件。 */
@@ -959,6 +1007,93 @@ static void test_scan_end_info_for_directory_read_failure(void)
 }
 
 /**
+ * @brief 日志里有没有 ERROR 级的行。
+ * @return 有为真。
+ */
+static bool log_has_error(void)
+{
+    for (uint32_t i = 0U; i < g_log_count; i++)
+    {
+        if (g_log[i].level == SERVICE_LOG_LEVEL_ERROR)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * @brief 打开 Music/ 就得到 NO_MEDIA / NOT_READY / INVALID_HANDLE（卷没了或正在对账）：不是“没有 Music 目录”，
+ *        丢弃本次扫描，不发布（曲库保持无效），不记 ERROR，等卷事件重新扫描（#196 的错误分类，#211）。
+ *        其他失败（这里的 SERVICE_ERROR）仍按空库发布，沿用 STOR-7。
+ */
+static void test_scan_is_discarded_when_the_volume_is_unavailable_on_root_open(void)
+{
+    static const Service_StatusTypeDef unavailable[] = {SERVICE_NO_MEDIA, SERVICE_NOT_READY, SERVICE_INVALID_HANDLE};
+
+    for (size_t index = 0U; index < sizeof(unavailable) / sizeof(unavailable[0]); index++)
+    {
+        world_reset();
+        scan(3U, 0U);
+        assert(storage_sheet_generation() != 0U);
+        assert(storage_catalog_invalidate() == STORAGE_OK);
+        g_log_count = 0U;
+        g_open_root_status = unavailable[index];
+
+        assert(storage_catalog_music_init() == STORAGE_OK);
+
+        assert(storage_sheet_generation() == 0U);
+        assert(storage_catalog_index_num() == 0U);
+        assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+        assert(log_count_prefix("Music Directory Open Failed") == 0U);
+        assert(!log_has_error());
+    }
+
+    world_reset();
+    g_open_root_status = SERVICE_ERROR;
+    scan(3U, 0U);
+    assert(storage_sheet_generation() != 0U); /* 其他失败按空库发布。 */
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=0 us=0") == 0);
+}
+
+/**
+ * @brief 扫描到一半读目录得到卷不可用：丢弃已经收录的条目，不发布，不记 ERROR；
+ *        打开子目录时卷不可用同样丢弃整次扫描，而不是跳过这个子目录继续。
+ */
+static void test_scan_is_discarded_when_the_volume_goes_away_mid_scan(void)
+{
+    world_reset();
+    scan(3U, 0U);
+    assert(storage_catalog_invalidate() == STORAGE_OK);
+    g_log_count = 0U;
+    g_root_count = 5U;
+    g_read_dir_status = SERVICE_NO_MEDIA;
+    g_read_dir_status_after = 2U;
+    g_dir_reads = 0U;
+
+    assert(storage_catalog_music_init() == STORAGE_OK);
+
+    assert(storage_sheet_generation() == 0U);
+    assert(storage_catalog_index_num() == 0U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+    assert(log_count_prefix("Music Directory Read Failed") == 0U);
+    assert(!log_has_error());
+
+    world_reset();
+    scan(3U, 2U);
+    assert(storage_catalog_invalidate() == STORAGE_OK);
+    g_log_count = 0U;
+    g_open_sub_status = SERVICE_NOT_READY;
+
+    assert(storage_catalog_music_init() == STORAGE_OK);
+
+    assert(storage_sheet_generation() == 0U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+    assert(log_count_prefix("Sub Directory Open Failed") == 0U);
+    assert(!log_has_error());
+}
+
+/**
  * @brief 运行全部用例。
  * @return 0 表示全部通过（失败由 assert 中止）。
  */
@@ -972,6 +1107,7 @@ int main(void)
     test_missing_locator_falls_back_to_path_open();
     test_each_locator_miss_is_logged();
     test_locator_open_failure_is_not_retried_by_path();
+    test_text_read_treats_a_volume_unavailable_open_as_no_result();
     test_text_read_with_unknown_catalog_index_returns_null();
     test_name_slot_info_separates_open_from_tag_read();
     test_name_slot_fallback_info_has_open();
@@ -988,6 +1124,8 @@ int main(void)
     test_scan_end_info_for_missing_music_directory();
     test_scan_end_info_for_truncated_catalog();
     test_scan_end_info_for_directory_read_failure();
+    test_scan_is_discarded_when_the_volume_is_unavailable_on_root_open();
+    test_scan_is_discarded_when_the_volume_goes_away_mid_scan();
     puts("storage_catalog_open: ok");
     return 0;
 }

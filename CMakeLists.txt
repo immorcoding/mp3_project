@@ -145,9 +145,17 @@ if(MP3_HOOK_SD_LATE_DMA AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_SD_LATE_DMA 只能在 Debug 构建里打开（当前 ${CMAKE_BUILD_TYPE}）。")
 endif()
 
+# 假抖动钩子（#211，APP/tasks/volume）：打开后卷任务每隔 5 s 自己调一次卡检测边沿入口，用于 R3.4；同样只允许 Debug。
+# configure 时 cmake --preset firmware-debug -DMP3_HOOK_FAKE_BOUNCE=1，关掉要显式 -DMP3_HOOK_FAKE_BOUNCE=0。
+set(MP3_HOOK_FAKE_BOUNCE 0 CACHE STRING "假抖动测试钩子（#211，APP/tasks/volume）：1 打开，0 关闭（默认）")
+if(MP3_HOOK_FAKE_BOUNCE AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_FAKE_BOUNCE 只能在 Debug 构建里打开（当前 ${CMAKE_BUILD_TYPE}）。")
+endif()
+
 # 添加工程级编译宏
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     FILESYSTEM_HOOK_SD_LATE_DMA=${MP3_HOOK_SD_LATE_DMA}
+    VOLUME_HOOK_FAKE_BOUNCE=${MP3_HOOK_FAKE_BOUNCE}
     # 在此添加用户自定义的编译宏
 )
 

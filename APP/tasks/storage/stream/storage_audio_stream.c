@@ -19,6 +19,7 @@
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/queue.h"
 #include "Service/filesystem/filesystem_file.h"
+#include "Service/filesystem/filesystem_types.h"
 #include "Service/log/log_service.h"
 
 /* 音频块一次读完，不能超过文件接口单次读写的上限（超过会返回 SERVICE_INVALID_PARAM，不截短也不拆分）。 */
@@ -42,6 +43,7 @@ static volatile Storage_AudioWake_Callback_t storage_audio_wake_callback;
 static Storage_AudioRecordTypeDef storage_audio_record;        /* 流记录信箱内容的本地副本。 */
 static Service_Filesystem_FileHandleTypeDef storage_audio_file;
 static bool storage_audio_file_open;
+static bool storage_audio_stalled;                             /* 读到 NO_MEDIA / NOT_READY / INVALID_HANDLE：不再读，等卷事件。 */
 static uint32_t storage_audio_remaining;                       /* 音频区间内尚未读出的字节数。 */
 static char storage_audio_path[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
 static uint8_t storage_audio_head[STORAGE_AUDIO_RANGE_HEAD_BYTES];
@@ -66,6 +68,7 @@ void storage_audio_stream_init(TaskHandle_t storage_task)
                                                     &storage_audio_record_control);
     (void)memset(&storage_audio_record, 0, sizeof(storage_audio_record));
     storage_audio_file_open = false;
+    storage_audio_stalled = false;
     storage_audio_remaining = 0U;
 }
 
@@ -184,6 +187,7 @@ static void storage_audio_close_file(void)
         (void)Service_Filesystem_CloseFile(storage_audio_file);
         storage_audio_file_open = false;
     }
+    storage_audio_stalled = false;
     storage_audio_remaining = 0U;
 }
 
@@ -199,19 +203,18 @@ static bool storage_audio_request_pending(void)
 /**
  * @brief 本圈是否还有工作，决定主循环能否阻塞等待。
  * @param[in] media 介质状态。
- * @return true 有待处理请求，或流已打开且有空闲块可读。消抖中为 false。
+ * @return true 有待处理请求，或流已打开、没有被卷不可用卡住、且有空闲块可读。
+ * @note  读到 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 之后流“停住”：不对同一个句柄重试，也不空转，
+ *        等卷事件（序号变了就写 `CARD_REMOVED`）。
  */
 bool storage_audio_stream_has_work(Storage_AudioMediaTypeDef media)
 {
-    if (media == STORAGE_AUDIO_MEDIA_DEBOUNCING)
-    {
-        return false;
-    }
+    (void)media;
     if (storage_audio_request_pending())
     {
         return true;
     }
-    return storage_audio_file_open && (storage_audio_block_free_count() != 0U);
+    return storage_audio_file_open && !storage_audio_stalled && (storage_audio_block_free_count() != 0U);
 }
 
 /**
@@ -223,10 +226,13 @@ bool storage_audio_stream_has_work(Storage_AudioMediaTypeDef media)
 static Storage_AudioOpenResultTypeDef storage_audio_map_open_status(Service_StatusTypeDef status,
                                                                     bool open_failure)
 {
+    if (Service_Filesystem_StatusIsVolumeUnavailable(status))
+    {
+        return STORAGE_AUDIO_OPEN_NOT_READY; /* NO_MEDIA / NOT_READY / INVALID_HANDLE 不是文件错误（#195 第 9 条）。 */
+    }
+
     switch (status)
     {
-        case SERVICE_NO_MEDIA:
-        case SERVICE_NOT_READY:
         case SERVICE_NO_FILESYSTEM:
             return STORAGE_AUDIO_OPEN_NOT_READY;
         case SERVICE_TIMEOUT:
@@ -420,17 +426,13 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
 
 /**
  * @brief 处理请求信箱：关闭旧流，开启新流并应答（主循环第一步）。
- * @param[in] media 介质状态。消抖中暂缓，不消费请求、不应答。
+ * @param[in] media 介质状态。消抖中不暂缓：文件调用在 Filesystem 入口等闸，开流的调用慢约 30 ms 后正常返回，或卸载后返回失败。
  * @note  开启 ≤ f_open + 标签探测（读头、读尾）；一次读块在随后的 read_block。
  */
 void storage_audio_stream_process_request(Storage_AudioMediaTypeDef media)
 {
     Storage_AudioRequestTypeDef request;
 
-    if (media == STORAGE_AUDIO_MEDIA_DEBOUNCING)
-    {
-        return;
-    }
     if (xQueueReceive(storage_audio_request_queue, &request, 0U) != pdTRUE)
     {
         return;
@@ -461,7 +463,7 @@ void storage_audio_stream_process_request(Storage_AudioMediaTypeDef media)
 
 /**
  * @brief 最多读一块并交给播放任务（主循环第三步）。
- * @param[in] media 介质状态。消抖中暂缓补块。
+ * @param[in] media 介质状态；未就绪不读。
  * @note  一块对应一次 SDMMC DMA，也是取消的上界。读完后若请求信箱已有新请求，说明流被取代，
  *        这个半读的块不入就绪队列，直接放回空闲队列。ENDED 只在最后一块入队之后才写。
  */
@@ -472,7 +474,7 @@ void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media)
     uint32_t want;
     uint32_t got = 0U;
 
-    if ((media != STORAGE_AUDIO_MEDIA_READY) || !storage_audio_file_open)
+    if ((media != STORAGE_AUDIO_MEDIA_READY) || !storage_audio_file_open || storage_audio_stalled)
     {
         return;
     }
@@ -489,6 +491,17 @@ void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media)
     if (storage_audio_request_pending())
     {
         (void)storage_audio_block_release(block);
+        return;
+    }
+    if (Service_Filesystem_StatusIsVolumeUnavailable(status))
+    {
+        /* 卡没了或正在对账：不是文件错误，不写 READ_ERROR、不重试这个句柄、不缓存。流停住，记录保持不变；
+         * 卷任务卸载后发卷事件，序号变了由 storage_audio_stream_card_removed() 写 CARD_REMOVED（#195 第 9 条）。 */
+        (void)storage_audio_block_release(block);
+        storage_audio_stalled = true;
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO,
+                               storage_audio_log_tag,
+                               "Audio read interrupted: volume unavailable, waiting for volume event.");
         return;
     }
     if ((status != SERVICE_OK) || (got == 0U))

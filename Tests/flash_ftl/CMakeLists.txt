@@ -67,7 +67,7 @@ add_executable(flash_file_benchmark_tests
     ../../Service/filesystem/filesystem_lock.c
     ../../Service/filesystem/filesystem_entry.c
     ../../Service/filesystem/filesystem_status.c
-    ../../APP/tasks/storage/benchmark/storage_flash_file_benchmark.c)
+    ../../APP/tasks/volume/benchmark/storage_flash_file_benchmark.c)
 target_include_directories(flash_file_benchmark_tests BEFORE PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../..
     ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
@@ -309,7 +309,8 @@ target_compile_options(sd_abort_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 add_test(NAME sd_component_abort COMMAND sd_abort_tests)
 
 # SD 读路径的整条链（#209）：FatFs 的 sd_diskio.c（CubeMX 生成，原样传 SD_TIMEOUT）→ filesystem_sd_bsp.c →
-# filesystem_sd_transfer.c → platform_sd.c → Components/sd/sd.c，以及 Storage 的 storage_sd.c 与 Filesystem Service。
+# filesystem_sd_transfer.c → platform_sd.c → Components/sd/sd.c，以及卷任务的 volume_sd.c（对账、闸、卷事件）与 Filesystem Service
+# （含启动、刷新与闸入口 filesystem_sd_card.c）。
 # 只有硬件一侧用替身：假 Port（内存 FAT12 镜像）、两个 IRQ Adapter 的注册函数、HAL 头与 CubeMX 句柄。
 # sd_diskio.c 选 SD_TIMEOUT 靠 HAL 的 SDMMC_DATATIMEOUT；替身头里写了同一个值，这里在配置时核对 HAL 头里的定义没变。
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_sdmmc.h"
@@ -324,7 +325,10 @@ add_executable(sd_removal_chain_tests
     ../stubs/lock_env/lock_env_log.c
     ../../Components/sd/sd.c
     ../../Platform/sd/platform_sd.c
-    ../../APP/tasks/storage/sd/storage_sd.c
+    ../../APP/tasks/volume/sd/volume_sd.c
+    ../../APP/tasks/volume/volume_reconcile.c
+    ../../APP/tasks/volume/volume_event.c
+    ../../Service/filesystem/sd/filesystem_sd_card.c
     ../../Service/filesystem/filesystem_service.c
     ../../Service/filesystem/filesystem_file.c
     ../../Service/filesystem/filesystem_directory.c

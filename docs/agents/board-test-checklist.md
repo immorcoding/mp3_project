@@ -264,7 +264,7 @@
 | R2.3 | `_USE_LFN 2` 后访问文件的任务的栈 | | Monitor 栈行 | 最低剩余 ≥ 256 B | | |
 | R2.4 | GUI、播放调用文件接口即停机（临时改动构建，不提交） | | 串口日志 / 调试器 | 停机 | | |
 
-R2.1 用钩子关闭的 Debug 构建量（探测会给被探测的那次读加约 10–15 ms 且持 SD 锁，钩子构建的持锁数字不是 R2.1 的证据）。R2.2 用钩子打开的 Debug 构建：`cmake --preset firmware-debug -DMP3_HOOK_SD_LATE_DMA=1` 后构建，串口日志出现 `W (…) HOOK: late_dma ON period=16 timeout=1ms`（**标签后面有冒号**，搜 `HOOK: late_dma ON`；没有这一行就是没开）。这一行由第一次 `InitSD()` 投，位置在 Storage Task 初始化 SD 的时刻——第 2 次上板实测是开机后约 9.8 s，`FLASH: Filesystem mounted.` 之后、`SD: Card ready` 之前，不在 `BOOT: FW` 旁边，也不会被日志核心丢掉。烧录后正常播放，每 16 次读请求自动探测一次（连续播放约每十几秒一次），每次探测在日志里是两行：`W (…) FSABORT: stopped us=<微秒> R blk=0 n=64`（WARN，受害读超时后的中止，`us` 是中止耗时；第 2 次上板实测 42–43 µs）和 `I (…) SDHOOK: late_dma n=<序号> blk=<目标块> victim=timeout verify=ok`。**通过**：`victim=timeout verify=ok` 连续出现 ≥ 20 次，没有 `MISMATCH`、`read_failed`、`stuck`，播放不断音、不报读错误；`us` 记录最大值。`victim=done` 不算证据（那次没造出迟到 DMA）；`verify=MISMATCH` 是迟到 DMA 污染了紧接着的读，不通过；出现 `FSABORT stuck` 时卷保持 ERROR，检查是否真的保持（读文件失败、不自动恢复），再拔插卡看能否恢复，这条分支在健康卡上构造不出来，没出现就记“未测”。中途拔卡会得到 `FSABORT no_media`，可顺手记一次。
+R2.1 用钩子关闭的 Debug 构建量（探测会给被探测的那次读加约 10–15 ms 且持 SD 锁，钩子构建的持锁数字不是 R2.1 的证据）。R2.2 用钩子打开的 Debug 构建：`cmake --preset firmware-debug -DMP3_HOOK_SD_LATE_DMA=1` 后构建，串口日志出现 `W (…) HOOK: late_dma ON period=16 timeout=1ms`（**标签后面有冒号**，搜 `HOOK: late_dma ON`；没有这一行就是没开）。这一行由第一次 `InitSD()` 投，位置在初始化 SD 的时刻——第 2 次上板（旧顺序：Storage Task 先挂 Flash 再初始化 SD）实测是开机后约 9.8 s，`FLASH: Filesystem mounted.` 之后、`SD: Card ready` 之前；**第 3 次上板起（#211）由卷任务启动 SD，不再等 Flash 挂载，约在开机后 0.2 至 0.6 s、`SD: Card ready` 之后、`SD: Filesystem mounted.` 之前**；都不在 `BOOT: FW` 旁边，也不会被日志核心丢掉。烧录后正常播放，每 16 次读请求自动探测一次（连续播放约每十几秒一次），每次探测在日志里是两行：`W (…) FSABORT: stopped us=<微秒> R blk=0 n=64`（WARN，受害读超时后的中止，`us` 是中止耗时；第 2 次上板实测 42–43 µs）和 `I (…) SDHOOK: late_dma n=<序号> blk=<目标块> victim=timeout verify=ok`。**通过**：`victim=timeout verify=ok` 连续出现 ≥ 20 次，没有 `MISMATCH`、`read_failed`、`stuck`，播放不断音、不报读错误；`us` 记录最大值。`victim=done` 不算证据（那次没造出迟到 DMA）；`verify=MISMATCH` 是迟到 DMA 污染了紧接着的读，不通过；出现 `FSABORT stuck` 时卷保持 ERROR，检查是否真的保持（读文件失败、不自动恢复），再拔插卡看能否恢复，这条分支在健康卡上构造不出来，没出现就记“未测”。中途拔卡会得到 `FSABORT no_media`，可顺手记一次。
 
 第 2 次上板的拔卡回归（清单 1 E、清单 2 E1）多看这几件事：读到一半拔卡有两条路径。HAL 先给出错误事件时，日志里没有 `FSABORT:` 行，`Stop reason=CARD_REMOVED` 约在拔卡后几十毫秒；等不到事件时，等待在约 500 ms（`FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS`，BSP 不再用 FatFs 传来的 0xFFFFFFFF）后超时，日志出现 `FSABORT: no_media us=…`。两条路径都必须满足：`Card removed.` 只出现一次（不管拔卡落在读之前、之中、之后），随后重新插卡出现 `Card inserted` 和 `Filesystem mounted.`，不出现 `Filesystem mount failed` 或 `Mount failed`（文件槽没有释放时挂载会返回 BUSY）。出现 `FSABORT stuck` 时卷保持 ERROR，日志里是 `Hotplug refresh failed`，要拔卡再插卡才恢复；这条分支在健康卡上构造不出来，没出现就记“未测”。
 
@@ -278,6 +278,24 @@ R2.1 用钩子关闭的 Debug 构建量（探测会给被探测的那次读加�
 | R3.4 | 假抖动（钩子，加一次手动轻触卡槽） | | 卷路径日志 + 听感 | 只开闸，流和窗口不受影响 | | |
 | R3.5 | `MountFlash` 期间插拔卡 | | 卷路径日志 | SD 不受影响 | | |
 | R3.6 | 卷任务和 Flash 启动任务的栈 | | Monitor 栈行；Flash 启动任务自打一行 | ≥ 256 B | | |
+
+第 3 次上板的构建与读法（#211；卷路径日志的完整格式和每个字段的含义见 [卷任务 README](../../APP/tasks/volume/README.md)“卷路径日志”）：
+
+- **构建**：R3.1、R3.2、R3.3、R3.5、R3.6 和回归行用钩子关闭的 Debug 构建（`cmake --preset firmware-debug -DMP3_HOOK_FAKE_BOUNCE=0`，缓存变量会留在构建目录里，之前开过要显式关）。R3.4 用钩子打开的 Debug 构建：`cmake --preset firmware-debug -DMP3_HOOK_FAKE_BOUNCE=1` 后构建，串口日志出现 `W (…) HOOK: fake_bounce ON period=5000ms`（**标签后面有冒号**，搜 `HOOK: fake_bounce ON`；没有这一行就是没开）。钩子构建每 5 s 有一个 30 ms 的闸，R3.1 的收尾时刻要在钩子关闭的构建上量。
+- **开机时间线**（参考，以串口 tick 为准）：开机后 0.1 s 内出现 `VOLUME: flash boot start`；SD 约 0.2 至 0.6 s 出现 `SD: Card ready`、`SD: Filesystem mounted.`、`VOLUME: sd boot path=mount …`；Flash 的 `MountFlash` 正常 3.3 s，之后出现 `VOLUME: flash ready path=mount … ms=<n>`；Flash 被压到只剩两个空闲块之后实测是 8.3 s，上次板测的 Flash 挂载大约 9 s，所以窗口很可能比 3 s 长得多，**以 `flash ready` 行的 tick 为准**。
+- **判读用的三类行**（标签 `VOLUME`，正文）：边沿 `sd edge src=<irq|hook>`；对账 `sd settle path=<idle|gate_only|mount|unmount|remount> refresh=<ok|fail> card=<pri> mount=<ok|fail|-> seq=<前>-><后> edges=<n> ref=<ms>ms end=<ms>ms gate=<open|kept>`（`end` 是从第一个边沿到开闸的**收尾时刻**，`remount` 的 `seq` 是 `a->a+2`）；Flash `flash boot start` / `flash ready … ms=<n>` / `flash boot failed …`。
+
+| # | 要做什么（计时从动作起算） | 通过时日志里看到 |
+|---|---|---|
+| R3.1 | 播放中拔卡，做 10 次，每次拔卡后等 3 s 再插回，等出现 `Scan done` 后再点播放（约 10 s 一轮）。至少一次落在读取中（日志有 `Audio: Audio read interrupted: …`） | `sd edge` → `sd settle path=unmount … seq=a->a+1 … end=<ms>ms` → `SD: Card removed.` → 播放侧 `Stop reason=CARD_REMOVED`；屏幕 “No SD card”、Queue 清空、游标重置；`end` 记录（参考 34 至 35 ms） |
+| R3.2 | 播放中把卡快速抽出再按回（约 20 ms 内，一半抽出的手法），做到见到一次为止，最多 10 次 | `path=remount card=pri … seq=a->a+2`，随后 `Card inserted`、`Filesystem mounted.`、曲库重新扫描；播放侧 `CARD_REMOVED`（旧流作废） |
+| R3.3 | ① 消抖内快速拔插：抽出再按回，10 次。② 插卡初始化中途再拔：卡推到位后**不到 0.15 s** 就拔出（插卡初始化约 186 ms），10 次 | ① `edges=` 大于 1，或 `path=gate_only`/`remount`；② `gate=kept` 或 `sd edge during settle`。至少命中一次；最终状态都正确：卡在位有 `Filesystem mounted.` 且能播放，卡不在位 `Card removed.` 之后没有新的 `mount`。一次都没命中记“部分” |
+| R3.4 | 钩子构建，播放 3 分钟（180 s，36 次人造边沿），其间手动轻触卡槽 3 次 | 连续 ≥ 20 次 `path=gate_only`，`seq=N->N` 不变；没有 `Stop reason`、没有 `CARD_REMOVED`；听感不断音，Queue 不闪；Monitor `Health` 的 `underrun` 增量 0；手动轻触的 `src=irq` 同样多数是 `gate_only` |
+| R3.5 | 复位后看到 `VOLUME: flash boot start` 就开始计时：**第 2 s 拔卡、第 3 s 插回；第 5 s 拔卡、第 6 s 插回**（在 `flash ready` 之前做完才算数，`flash ready` 晚于第 6 s 时都在窗口里；`flash ready` 早于第 2 s 时改为复位后立刻拔卡、插卡） | 这些操作的 `sd settle` 行在 `flash boot start` 与 `flash ready` 之间出现，`end` 与平时同量级（约 35 ms，不被拖到秒级），状态正确；记录 `flash ready` 的 `ms=`（R6.5） |
+| R3.6 | 做完上面所有插拔之后再读：Monitor 栈行 `Volume Task: total=4096 B, min free=…`；Flash 启动任务在 `flash ready` 之后自己打一行 `VOLUME: Flash Boot Task: total=4096 B, min free=… B, peak=…%` | 两者 `min free` 都 ≥ 256 B；更新 Monitor 栈行要等下一批（5 s 一批，插拔之后至少等 10 s） |
+
+回归行：清单 1 E（E1 播放中拔卡立即停止，E2 拔后再插卡不续播，E3 播放中轻触卡槽流保持）；清单 2 C1（播放中拔卡 `No SD card`）、C2（无卡时按播放 `SD card not ready`）、E1（拔卡 Queue 清空、`No SD card`、唱盘归零）。这次回归比以前多看一件事：**在途读取被拔卡打断时，C1/E1 应显示 “No SD card” 并且游标重置**（原来是读取错误、游标保留，这是用户确认过的第三处可见变化），日志里伴随 `Audio read interrupted`，没有 `Audio stream read failed.`。
+
 
 **第 4 次：音频读取**
 

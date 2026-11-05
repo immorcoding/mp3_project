@@ -57,12 +57,11 @@ typedef struct
     Storage_AudioEndTypeDef End;              /**< 终止状态。 */
 } Storage_AudioRecordTypeDef;
 
-/** @brief Storage 本圈看到的介质状态，由 storage_task 传入。 */
+/** @brief Storage 本圈看到的介质状态，由 storage_task 传入。消抖不在这里：消抖期间文件调用在 Filesystem 入口等闸。 */
 typedef enum
 {
-    STORAGE_AUDIO_MEDIA_READY = 0U,   /**< SD 已挂载且不在消抖中。 */
-    STORAGE_AUDIO_MEDIA_DEBOUNCING,   /**< 消抖中：暂缓流请求与补块，不应答。 */
-    STORAGE_AUDIO_MEDIA_ABSENT        /**< 未挂载。 */
+    STORAGE_AUDIO_MEDIA_READY = 0U,   /**< SD 已挂载，曲库扫描完成。 */
+    STORAGE_AUDIO_MEDIA_ABSENT        /**< 未挂载，或正在扫描曲库。 */
 } Storage_AudioMediaTypeDef;
 
 /** @brief 唤醒原因，供播放任务把它映射到自己的事件槽 FLAG。 */

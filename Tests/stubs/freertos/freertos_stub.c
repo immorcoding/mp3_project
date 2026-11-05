@@ -67,6 +67,8 @@ static TickType_t current_tick;
 static TickType_t tick_step;
 static FreertosStub_BlockHook block_hook;
 static void *block_hook_context;
+static FreertosStub_NotifyHook notify_hook;
+static void *notify_hook_context;
 static uint32_t infinite_waits_unsatisfied;
 static BaseType_t give_from_isr_woken;
 static uint32_t isr_yield_requests;
@@ -152,6 +154,8 @@ void freertos_stub_reset(void)
     tick_step = 0U;
     block_hook = NULL;
     block_hook_context = NULL;
+    notify_hook = NULL;
+    notify_hook_context = NULL;
     infinite_waits_unsatisfied = 0U;
     give_from_isr_woken = pdFALSE;
     isr_yield_requests = 0U;
@@ -201,6 +205,17 @@ void freertos_stub_set_block_hook(FreertosStub_BlockHook hook, void *context)
 {
     block_hook = hook;
     block_hook_context = context;
+}
+
+/**
+ * @brief 安装通知钩子；传 NULL 取消。
+ * @param[in] hook 钩子函数。
+ * @param[in,out] context 传给钩子的上下文。
+ */
+void freertos_stub_set_notify_hook(FreertosStub_NotifyHook hook, void *context)
+{
+    notify_hook = hook;
+    notify_hook_context = context;
 }
 
 /**
@@ -555,6 +570,10 @@ BaseType_t xTaskNotifyIndexed(TaskHandle_t task, UBaseType_t index, uint32_t val
 {
     UBaseType_t slot = checked_slot(task, index);
 
+    if (notify_hook != NULL)
+    {
+        notify_hook(task, index, value, notify_hook_context);
+    }
     if ((action == eSetValueWithoutOverwrite) && task->pending[slot])
     {
         return pdFAIL;
