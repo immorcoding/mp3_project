@@ -17,6 +17,16 @@ file(READ "${REPO_ROOT}/FATFS/Target/ffconf.h" HOST_FFCONF)
 foreach(HEADER main.h stm32h7xx_hal.h bsp_driver_sd.h)
     string(REPLACE "#include \"${HEADER}\"" "" HOST_FFCONF "${HOST_FFCONF}")
 endforeach()
+# 固定本测试依赖的 _FS_LOCK：“锁表满”用例按“锁表只有两项”写（打开两个不同文件即占满），
+# 产品 ffconf.h 的 _FS_LOCK 随 CubeMX 导出或调整而变化（#191 调过一次，0.10.0 要改成 9），
+# 不固定的话用例会在没有任何产品代码改动时失败（harness.md 2026-11-03 的 Signal）。
+# 这里只改主机副本，不动产品 ffconf.h；正则不再匹配时直接失败，免得固定悄悄失效。
+set(LOCATOR_TEST_FS_LOCK 2)
+if(NOT HOST_FFCONF MATCHES "#define _FS_LOCK[ 	]+[0-9]+")
+    message(FATAL_ERROR "ffconf.h 里找不到 _FS_LOCK 的定义，无法固定 _FS_LOCK=${LOCATOR_TEST_FS_LOCK}")
+endif()
+string(REGEX REPLACE "#define _FS_LOCK[ 	]+[0-9]+" "#define _FS_LOCK    ${LOCATOR_TEST_FS_LOCK}"
+       HOST_FFCONF "${HOST_FFCONF}")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/host_config")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/host_config/ffconf.h" "${HOST_FFCONF}")
 
@@ -75,7 +85,7 @@ add_executable(filesystem_locator_tests
     "${FATFS_SRC}/option/cc936.c")
 
 target_include_directories(filesystem_locator_tests BEFORE PRIVATE
-    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../flash_ftl/stubs ../..
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../..
     ../../FATFS/Target "${FATFS_SRC}")
 target_compile_features(filesystem_locator_tests PRIVATE c_std_11)
 target_compile_options(filesystem_locator_tests PRIVATE -O2 -UNDEBUG)

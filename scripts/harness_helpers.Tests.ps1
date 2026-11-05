@@ -254,6 +254,18 @@ $filesystemHostImpact = Get-HarnessImpact -ChangedPath @('Service/filesystem/fil
 Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $filesystemHostImpact.HostModules `
     -Message 'Filesystem Service 与 FatFs 变化必须同时选择文件定位符与 FTL 主机测试'
 
+# 共用 FreeRTOS 桩（Tests/stubs/freertos）被 flash_ftl 与 filesystem_locator 编译：改桩必须选中二者，且不落入未知路径。
+$freertosStubImpact = Get-HarnessImpact -ChangedPath @(
+    'Tests/stubs/freertos/freertos_stub.c'
+    'Tests/stubs/freertos/freertos_stub.h'
+    'Tests/stubs/freertos/Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h')
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $freertosStubImpact.HostModules `
+    -Message '共用 FreeRTOS 桩变化必须选择 filesystem_locator 与 flash_ftl 主机测试'
+Assert-HarnessEqual -Expected 0 -Actual $freertosStubImpact.UnknownPaths.Count `
+    -Message 'Tests/stubs/freertos 由主机模块规则覆盖，不应落入未知路径'
+Assert-HarnessEqual -Expected $false -Actual $freertosStubImpact.RequiresAllHostTests `
+    -Message '共用 FreeRTOS 桩变化不应回退全部主机测试'
+
 # 样本卡生成器的 Python 测试是主机模块 board_test_card（#183）：改该目录由 CHANGED 选中，不再落入未知路径。
 $boardCardImpact = Get-HarnessImpact -ChangedPath @('Tools/board_test_card/card_glyphs.py', 'Tools/board_test_card/test_card_names.py')
 Assert-HarnessSequence -Expected @('board_test_card') -Actual $boardCardImpact.HostModules `

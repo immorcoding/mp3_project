@@ -8,6 +8,7 @@
 #include "Service/filesystem/filesystem_service.h"
 #include "Service/log/log_service.h"
 #include "FATFS/App/fatfs.h"
+#include "freertos_stub.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -69,16 +70,6 @@ Service_StatusTypeDef filesystem_flash_transfer_recover(void)
 Service_StatusTypeDef filesystem_flash_transfer_reclaim(void)
 {
     return SERVICE_OK;
-}
-
-/**
- * @brief 提供假 tick，不测量硬件性能。
- * @return 每次调用递增 10 的 tick。
- */
-uint32_t xTaskGetTickCount(void)
-{
-    static uint32_t tick;
-    return tick += 10U;
 }
 
 /**
@@ -259,6 +250,9 @@ int test_flash_file_benchmark(void)
 {
     scenario = getenv("FLASH_FILE_SCENARIO");
     assert(scenario);
+    /* 共用 FreeRTOS 桩提供假 tick：每次查询前进 10，不测量硬件性能。 */
+    freertos_stub_reset();
+    freertos_stub_set_tick_step(10U);
     char placeholder[4];
     uint8_t work[4096];
     assert(FATFS_LinkDriver(&USER_Driver, placeholder) == 0);

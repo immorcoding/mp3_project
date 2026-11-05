@@ -13,6 +13,7 @@
 - MinGW PE 与 ARM ELF 对 weak 符号的处理不同：默认实现行为测试使用去掉 weak 属性的构建目录副本；ARM 强弱覆盖由实际链接确认。
 - FatFs 集成不运行 Service、FreeRTOS 或真实 HAL。
 - 默认 BSP 后端缺失时安全失败；测试显式保留 assert，不受 Release 的 `NDEBUG` 影响。
+- 共用 FreeRTOS 桩 [`Tests/stubs/freertos/`](../stubs/freertos/README.md) 的自测（`freertos_stub_behavior`）：互斥锁、二值信号量和任务通知的行为，以及“拿不到锁”“关闸时等待”的脚本化；文件基准用它的假 tick。
 
 测试结果不证明任意欠压、电气损坏或 CRC 碰撞可恢复，也不提供 FatFs 文件事务原子性。
 
