@@ -120,7 +120,7 @@ static void platform_sd_detect_irq_cb(uint16_t gpio_pin, void *context)
   * @param  event SDMMC IRQ Adapter 发布的源特定事件。
   * @param  context 注册时绑定的 Platform SD 私有 Handle。
   * @note   本函数运行在 IRQ 上下文；它不修改 Device 状态、不处理 Cache，也不调用
-  *         FreeRTOS。Storage Task 的已注入回调负责执行 xxxFromISR() 唤醒任务。
+  *         FreeRTOS。订阅者（Filesystem Service）的回调负责执行 xxxFromISR() 唤醒等待者。
   */
 static void platform_sd_transfer_irq_cb(STM32SDMMCIRQ_EventTypeDef event,
                                         void *context)
@@ -566,7 +566,7 @@ Platform_StatusTypeDef Platform_SD_StartWriteBlocks(const uint8_t *data,
 
 /**
   * @brief  在普通任务上下文处理已到达的 DMA 传输事件。
-  * @param  event Storage Task 从 IRQ 通知中取得的 Platform 传输事件。
+  * @param  event 等待传输的任务从 IRQ 信号中取得的 Platform 传输事件。
   * @retval PLATFORM_OK 数据阶段成功且介质已经回到 TRANSFER。
   * @retval PLATFORM_SD_ERROR DMA 失败/中止、事件非法或完成后的同步失败。
   * @note   此函数是 IRQ 与 Device 状态机之间唯一的普通上下文接缝。它不会等待

@@ -239,8 +239,8 @@ static bool storage_flash_benchmark_read_memory_mapped(
  * @brief  使用当前 MDMA 配置读回并校验刚完成轮询自检的两个保留扇区。
  * @retval true 首、尾 4 KiB 均经 MDMA 读取、普通上下文 Cache 收尾并逐字节校验。
  * @retval false 任一诊断区域无法启动、完成、收尾或匹配预期图样。
- * @note   调用者必须已由 Service_Filesystem_InitFlash() 绑定 Storage Task 的长期操作
- *         通知，且刚由本 Module 经受限擦写入口完成轮询读回验证。APP 不掌握
+ * @note   调用者必须已调用 Service_Filesystem_InitFlash() 建立长期的完成信号量与订阅，
+ *         且刚由本 Module 经受限擦写入口完成轮询读回验证。APP 不掌握
  *         保留扇区的物理地址或图样，只向 Platform 传递区域语义。
  */
 static bool storage_flash_benchmark_verify_diagnostic_with_mdma(void)

@@ -25,7 +25,7 @@
 - Platform Implementation 私有持有 Device、Adapter Context 和侵入式 IRQ 节点；Service 与 APP 不得访问它们。
 - Platform 不包含 FreeRTOS，也不调用 `xTaskNotify...`、FatFs、Cache 维护函数或日志。
 - Filesystem Service 在 Platform 初始化后设置传输订阅者；Platform 的 IRQ 转发回调只转换并转交强类型事件。
-- 卡检测和传输完成是不同事件源。Platform 不分配 FreeRTOS 通知索引；索引 `0` 与索引 `1` 属于上层 Module 的职责。
+- 卡检测和传输完成是不同事件源。Platform 不分配 FreeRTOS 通知索引，也不创建信号量；卡检测的通知槽属于 APP，传输完成的信号量属于 Filesystem Service。
 - `Platform_SD_ClearTransferCallback()` 仅用于确认没有 DMA 在飞时的真实运行时回收；正常拔卡不应清除订阅者，否则下次插卡不能自动恢复 SDMMC IRQ Adapter。
 
 ## 命名

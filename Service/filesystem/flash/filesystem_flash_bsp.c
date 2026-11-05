@@ -21,19 +21,19 @@ DSTATUS BSP_USER_DISKIO_Init(BYTE lun)
 /**
  * @brief 查询 USER 后端就绪状态，不访问介质。
  * @param lun 驱动内编号，当前仅支持 0。
- * @return 0 为可访问；STA_NOINIT 为未就绪或非所有者上下文。
- * @note 默认弱定义保持未就绪，不伪造介质存在或成功初始化。
+ * @return 0 为可访问；STA_NOINIT 为卷未就绪。
+ * @note 只看卷状态，不看调用任务：FatFs 每次进入都会查询它，非某个固定任务的调用者若在这里得到
+ *       STA_NOINIT，FatFs 会丢弃挂载状态并尝试重挂。默认弱定义保持未就绪，不伪造介质存在或成功初始化。
  */
 DSTATUS BSP_USER_DISKIO_GetStatus(BYTE lun)
 {
-    return lun == 0 && filesystem_flash_transfer_is_owner() &&
-                   Platform_Flash_GetVolumeState() == PLATFORM_FLASH_VOLUME_READY
+    return lun == 0 && Platform_Flash_GetVolumeState() == PLATFORM_FLASH_VOLUME_READY
                ? 0
                : STA_NOINIT;
 }
 
 /**
- * @brief 检查 USER 读写参数、所有者及完整逻辑范围。
+ * @brief 检查 USER 读写参数、卷就绪状态及完整逻辑范围。
  * @param[in] lun 驱动内编号，仅支持 0。
  * @param[in] data 用于非空检查的调用者缓冲，此处不读写其内容。
  * @param[in] lba 起始逻辑扇区号。

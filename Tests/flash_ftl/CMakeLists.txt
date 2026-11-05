@@ -75,7 +75,7 @@ target_compile_options(flash_file_benchmark_tests PRIVATE -UNDEBUG)
 foreach(OP WriteFile ReadFile SyncFile CloseFile RemoveFile)
     target_link_options(flash_file_benchmark_tests PRIVATE "-Wl,--wrap=Service_Filesystem_${OP}")
 endforeach()
-foreach(SCENARIO success exists nonowner short_write write_error sync_error read_error corrupt
+foreach(SCENARIO success exists not_initialized short_write write_error sync_error read_error corrupt
         close_once close_error delete_error contract)
     add_test(NAME flash_file_${SCENARIO} COMMAND flash_file_benchmark_tests)
     set_tests_properties(flash_file_${SCENARIO} PROPERTIES
@@ -99,6 +99,41 @@ target_include_directories(filesystem_service_tests BEFORE PRIVATE
     ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
 target_compile_options(filesystem_service_tests PRIVATE -UNDEBUG)
 add_test(NAME filesystem_service_volume_aware COMMAND filesystem_service_tests)
+
+# 完成等待：真实的 Service、SD/Flash 私有执行器、FatFs 与 USER DiskIO 胶水，加共用 FreeRTOS 桩；
+# 只有 Platform SD/Flash 用测试内的替身（成功、超时、错误、迟到的旧信号、不依赖调用任务）。
+add_executable(filesystem_completion_tests
+    test_filesystem_completion.c
+    ../stubs/freertos/freertos_stub.c
+    ../../Service/filesystem/filesystem_service.c
+    ../../Service/filesystem/filesystem_file.c
+    ../../Service/filesystem/filesystem_directory.c
+    ../../Service/filesystem/filesystem_path.c
+    ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_status.c
+    ../../Service/filesystem/sd/filesystem_sd_transfer.c
+    ../../Service/filesystem/flash/filesystem_flash_transfer.c
+    ../../Service/filesystem/flash/filesystem_flash_bsp.c
+    ../../Service/filesystem/flash/filesystem_flash_access.c
+    ../../FATFS/Target/user_diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c)
+target_include_directories(filesystem_completion_tests BEFORE PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../..
+    ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
+target_compile_features(filesystem_completion_tests PRIVATE c_std_11)
+target_compile_options(filesystem_completion_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+# Vendor 与 CubeMX 生成的胶水不启用本仓库的警告集。
+set_source_files_properties(
+    ../../FATFS/Target/user_diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c
+    PROPERTIES COMPILE_OPTIONS "-w")
+add_test(NAME filesystem_completion_wait COMMAND filesystem_completion_tests)
 
 # 共用 FreeRTOS 桩（Tests/stubs/freertos）自身的行为：互斥锁、信号量、任务通知与脚本化钩子。
 add_executable(freertos_stub_tests

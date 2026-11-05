@@ -24,8 +24,6 @@ typedef enum{
  */
 typedef enum{
     STORAGE_NOTIFY_EVENT = 0U,         /**< 主循环事件槽：卡检测与窗口请求以 FLAG 共存。 */
-    STORAGE_NOTIFY_SD_TRANSFER,        /**< SDMMC DMA 完成，由 Filesystem SD 执行器等待。 */
-    STORAGE_NOTIFY_FLASH_OPERATION,    /**< QSPI/MDMA 异步完成，由 Filesystem Flash 执行器等待。 */
     STORAGE_NOTIFY_COUNT               /**< 本任务占用的通知槽数量，不是可等待的事件。 */
 } Storage_NotifyIndexTypeDef;
 

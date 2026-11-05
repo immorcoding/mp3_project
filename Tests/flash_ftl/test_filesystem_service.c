@@ -22,7 +22,6 @@ uint8_t retUSER;
 FATFS SDFatFS;
 FATFS USERFatFS;
 
-static bool owner = true;
 static bool flash_format_called;
 static bool flash_recover_called;
 
@@ -120,31 +119,40 @@ static DRESULT ram_ioctl(BYTE pdrv, BYTE cmd, void *buff)
 static const Diskio_drvTypeDef ram_driver = {
     ram_initialize, ram_status, ram_read, ram_write, ram_ioctl};
 
-bool filesystem_sd_transfer_init(uint32_t notify_index)
-{
-    (void)notify_index;
-    return true;
-}
-
-bool filesystem_sd_transfer_is_bound(void)
+/**
+ * @brief SD 传输层替身：初始化结果固定。
+ * @return 固定值，见函数体。
+ */
+bool filesystem_sd_transfer_init(void)
 {
     return true;
 }
 
-uint32_t filesystem_sd_transfer_notify_index(void)
+/**
+ * @brief SD 传输层替身：就绪状态固定。
+ * @return 固定值，见函数体。
+ */
+bool filesystem_sd_transfer_is_ready(void)
 {
-    return 1U;
-}
-
-bool filesystem_flash_transfer_init(uint32_t notify_index)
-{
-    (void)notify_index;
     return true;
 }
 
-bool filesystem_flash_transfer_is_owner(void)
+/**
+ * @brief Flash 传输层替身：初始化恒成功。
+ * @return 恒为 true。
+ */
+bool filesystem_flash_transfer_init(void)
 {
-    return owner;
+    return true;
+}
+
+/**
+ * @brief Flash 传输层替身：恒已就绪。
+ * @return 恒为 true。
+ */
+bool filesystem_flash_transfer_is_ready(void)
+{
+    return true;
 }
 
 Service_StatusTypeDef filesystem_flash_transfer_open(void)
@@ -186,8 +194,8 @@ static void setup_volumes(void)
     retUSER = 0U;
     assert(SDPath[0] == '0');
     assert(USERPath[0] == '1');
-    assert(Service_Filesystem_InitSD(1U) == SERVICE_OK);
-    assert(Service_Filesystem_InitFlash(2U) == SERVICE_OK);
+    assert(Service_Filesystem_InitSD() == SERVICE_OK);
+    assert(Service_Filesystem_InitFlash() == SERVICE_OK);
     assert(f_mkfs(sd_drive, FM_FAT | FM_SFD, 0, work, sizeof(work)) == FR_OK);
     assert(f_mkfs(user_drive, FM_FAT | FM_SFD, 0, work, sizeof(work)) == FR_OK);
     assert(Service_Filesystem_MountSD() == SERVICE_OK);

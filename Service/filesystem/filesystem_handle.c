@@ -6,7 +6,6 @@
 #include "Service/filesystem/filesystem_handle.h"
 
 #include "Service/filesystem/filesystem_config.h"
-#include "Service/filesystem/flash/filesystem_flash_transfer.h"
 
 #include <string.h>
 
@@ -179,6 +178,14 @@ bool filesystem_handle_volume_has_open(Service_Filesystem_VolumeTypeDef volume)
     return false;
 }
 
+/**
+ * @brief 检查卷是否可接受文件或目录操作：已初始化（InitSD/InitFlash 成功）且已挂载。
+ * @param[in] volume 目标卷。
+ * @retval SERVICE_OK 卷已初始化并已挂载。
+ * @retval SERVICE_INVALID_PARAM 卷枚举非法。
+ * @retval SERVICE_NOT_READY 卷未初始化或未挂载。
+ * @note 两个卷用同一条规则，不看调用任务是谁。
+ */
 Service_StatusTypeDef filesystem_handle_volume_ready(Service_Filesystem_VolumeTypeDef volume)
 {
     if (!filesystem_handle_volume_valid(volume))
@@ -186,14 +193,7 @@ Service_StatusTypeDef filesystem_handle_volume_ready(Service_Filesystem_VolumeTy
         return SERVICE_INVALID_PARAM;
     }
 
-    if (volume == SERVICE_FILESYSTEM_VOLUME_FLASH)
-    {
-        if (!filesystem_flash_transfer_is_owner())
-        {
-            return SERVICE_NOT_READY;
-        }
-    }
-    else if (!filesystem_volume_initialized[volume])
+    if (!filesystem_volume_initialized[volume])
     {
         return SERVICE_NOT_READY;
     }

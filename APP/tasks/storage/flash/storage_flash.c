@@ -58,7 +58,7 @@ Storage_StatusTypeDef storage_flash_init(TaskHandle_t task_handle)
 
     storage_flash_owner_task = task_handle;
 
-    if (Service_Filesystem_InitFlash(STORAGE_NOTIFY_FLASH_OPERATION) != SERVICE_OK)
+    if (Service_Filesystem_InitFlash() != SERVICE_OK)
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_flash_log_tag,

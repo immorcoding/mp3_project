@@ -29,11 +29,11 @@ static uint8_t filesystem_mkfs_work_buffer[FILESYSTEM_MKFS_WORK_BUFFER_SIZE];
  * @brief 打开底层 Flash 逻辑卷并重建映射，不建立 FAT 文件系统。
  * @retval SERVICE_OK FTL 已就绪；重复打开就绪卷不重新扫描。
  * @retval SERVICE_NO_FILESYSTEM 没有可识别的 FTL 格式。
- * @note 仅初始化后的 Storage Task 调用；不自动格式化。
+ * @note 仅在 InitFlash 之后调用；不自动格式化。
  */
 static Service_StatusTypeDef filesystem_flash_open_volume(void)
 {
-    if (!filesystem_flash_transfer_is_owner() || (retUSER != 0U) || (USERPath[0] == '\0'))
+    if (!filesystem_flash_transfer_is_ready() || (retUSER != 0U) || (USERPath[0] == '\0'))
     {
         return SERVICE_NOT_READY;
     }
@@ -42,14 +42,14 @@ static Service_StatusTypeDef filesystem_flash_open_volume(void)
 }
 
 /**
- * @brief  检查 CubeMX 是否已成功链接 SD DiskIO Driver，并绑定 DMA 完成通知槽。
- * @param[in] notify_index Storage Task 通知数组中的 SD DMA 完成槽，由 APP 枚举注入。
- * @retval SERVICE_OK SD Driver 已由 main() 中的 MX_FATFS_Init() 链接，且执行器已绑定。
- * @retval SERVICE_NOT_READY 驱动尚未链接、索引越界或执行器绑定失败。
+ * @brief  检查 CubeMX 是否已成功链接 SD DiskIO Driver，并建立 DMA 完成信号量与订阅。
+ * @retval SERVICE_OK SD Driver 已由 main() 中的 MX_FATFS_Init() 链接，且完成信号量与订阅就绪。
+ * @retval SERVICE_NOT_READY 驱动尚未链接，或 Platform SD 尚不能接收传输订阅。
  * @note   本函数绝不再次调用 MX_FATFS_Init()，避免重复增加 FatFs 逻辑卷。
- *         首次绑定保存 notify_index；挂载/卸载再次进入时必须沿用已保存槽位。
+ *         不绑定调用任务：之后任何任务都可以执行 SD 传输。第一次调用须在任何任务使用
+ *         文件接口之前完成；挂载/卸载再次进入时只重新订阅，不重建信号量。
  */
-Service_StatusTypeDef Service_Filesystem_InitSD(uint32_t notify_index)
+Service_StatusTypeDef Service_Filesystem_InitSD(void)
 {
     if ((retSD != 0U) || (SDPath[0] == '\0'))
     {
@@ -57,7 +57,7 @@ Service_StatusTypeDef Service_Filesystem_InitSD(uint32_t notify_index)
         return SERVICE_NOT_READY;
     }
 
-    if (!filesystem_sd_transfer_init(notify_index))
+    if (!filesystem_sd_transfer_init())
     {
         filesystem_handle_set_volume_initialized(SERVICE_FILESYSTEM_VOLUME_SD, false);
         return SERVICE_NOT_READY;
@@ -68,18 +68,18 @@ Service_StatusTypeDef Service_Filesystem_InitSD(uint32_t notify_index)
 }
 
 /**
- * @brief  在已绑定执行器的前提下，用保存的通知槽做幂等就绪检查。
- * @retval SERVICE_OK 当前任务仍持有 SD 执行器。
- * @retval SERVICE_NOT_READY 尚未 InitSD，或再次绑定失败。
+ * @brief  在 InitSD 已建立执行器的前提下做幂等就绪检查（重新订阅传输事件）。
+ * @retval SERVICE_OK SD 执行器仍可接收 DMA 事件。
+ * @retval SERVICE_NOT_READY 尚未 InitSD，或重新订阅失败。
  */
-static Service_StatusTypeDef filesystem_sd_ensure_bound(void)
+static Service_StatusTypeDef filesystem_sd_ensure_ready(void)
 {
-    if (!filesystem_sd_transfer_is_bound())
+    if (!filesystem_sd_transfer_is_ready())
     {
         return SERVICE_NOT_READY;
     }
 
-    return Service_Filesystem_InitSD(filesystem_sd_transfer_notify_index());
+    return Service_Filesystem_InitSD();
 }
 
 /**
@@ -98,7 +98,7 @@ Service_StatusTypeDef Service_Filesystem_MountSD(void)
         return SERVICE_BUSY;
     }
 
-    if (filesystem_sd_ensure_bound() != SERVICE_OK)
+    if (filesystem_sd_ensure_ready() != SERVICE_OK)
     {
         return SERVICE_NOT_READY;
     }
@@ -124,7 +124,7 @@ Service_StatusTypeDef Service_Filesystem_UnmountSD(void)
     TCHAR sd_drive_path[FILESYSTEM_DRIVE_PATH_LENGTH];
     FRESULT result;
 
-    if (filesystem_sd_ensure_bound() != SERVICE_OK)
+    if (filesystem_sd_ensure_ready() != SERVICE_OK)
     {
         filesystem_handle_set_mounted(SERVICE_FILESYSTEM_VOLUME_SD, false);
         return SERVICE_NOT_READY;
@@ -141,15 +141,18 @@ Service_StatusTypeDef Service_Filesystem_UnmountSD(void)
 }
 
 /**
- * @brief 在当前 Storage Task 建立唯一 Flash 执行器和长期事件订阅。
- * @param[in] notify_index Storage Task 通知数组中的 QSPI/MDMA 完成槽，由 APP 枚举注入。
- * @retval SERVICE_OK 绑定成功，或已由同一任务绑定。
- * @retval SERVICE_NOT_READY 无有效任务、索引越界、订阅失败或其他任务已持有执行器。
- * @note 只在 Storage Task 普通上下文调用；不扫描、不挂载，也不格式化。
+ * @brief 建立 Flash 完成信号量和长期事件订阅，并把 Flash 卷标记为已初始化。
+ * @retval SERVICE_OK 订阅成功，或已经订阅过。
+ * @retval SERVICE_NOT_READY 信号量创建或 Platform 订阅失败。
+ * @note 不绑定调用任务：之后任何任务都可以执行 Flash 请求。第一次调用须在任何任务使用
+ *       文件接口之前完成；不扫描、不挂载，也不格式化。
  */
-Service_StatusTypeDef Service_Filesystem_InitFlash(uint32_t notify_index)
+Service_StatusTypeDef Service_Filesystem_InitFlash(void)
 {
-    return filesystem_flash_transfer_init(notify_index) ? SERVICE_OK : SERVICE_NOT_READY;
+    bool ready = filesystem_flash_transfer_init();
+
+    filesystem_handle_set_volume_initialized(SERVICE_FILESYSTEM_VOLUME_FLASH, ready);
+    return ready ? SERVICE_OK : SERVICE_NOT_READY;
 }
 
 /**
@@ -187,14 +190,14 @@ Service_StatusTypeDef Service_Filesystem_MountFlash(void)
 /**
  * @brief 注销 Flash FatFs 卷对象，并使该卷全部 Token 立即失效。
  * @retval SERVICE_OK 卷对象已注销。
- * @note 仅 Storage Task 调用；不等价于 f_sync。
+ * @note 不等价于 f_sync。
  */
 Service_StatusTypeDef Service_Filesystem_UnmountFlash(void)
 {
     TCHAR drive_path[FILESYSTEM_DRIVE_PATH_LENGTH];
     FRESULT result;
 
-    if (!filesystem_flash_transfer_is_owner() || (retUSER != 0U) || (USERPath[0] == '\0'))
+    if (!filesystem_flash_transfer_is_ready() || (retUSER != 0U) || (USERPath[0] == '\0'))
     {
         filesystem_handle_set_mounted(SERVICE_FILESYSTEM_VOLUME_FLASH, false);
         return SERVICE_NOT_READY;
