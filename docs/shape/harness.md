@@ -76,7 +76,7 @@ Next id: HAR-16
 
 ### Proposed
 
-- 2026-10-20 · provisional · HAR-8 补一句例外：仅“链接目标重命名”的文档引用修改，可随引起重命名的分支同步（须在 inbox 记明，合并后 drain 复核）。_Why:_ #98 链接脚本改名时，`hardware.md` 链接与改名必须同一提交，否则 `check-docs` 断链、FULL 失败；本次靠先在 `main` 改成纯文本绕过。仅一次证据，先排队，再遇到同类情况时决定。
+- 2026-10-20 · provisional · HAR-8 补一句例外：仅“链接目标重命名”的文档引用修改，可随引起重命名的分支同步（须在 inbox 记明，合并后 drain 复核）。_Why:_ 改名和链接必须同一提交，否则 `check-docs` 断链；#98 和 0.10.0 都靠先在 `main` 改成纯文本绕过。用户 2026-11-04 同意方向，但写入分支是硬检查（`scripts/shape_writer.ps1` 的 pre-commit、pre-push 和 Agent Hook），只改规则文字会和检查矛盾，要连检查一起改，所以还没写进规则。
 
 ### Signals
 
