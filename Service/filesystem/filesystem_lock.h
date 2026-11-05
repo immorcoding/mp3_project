@@ -51,11 +51,14 @@ typedef enum
     FILESYSTEM_OP_RECOVER,  /**< `RecoverAndMountFlash`。 */
     FILESYSTEM_OP_RECLAIM,  /**< `ReclaimFlash`。 */
     FILESYSTEM_OP_FLASH_DIAG, /**< Flash 启动诊断的四个同步包装。 */
+    FILESYSTEM_OP_START,    /**< `StartSD`：注册卡检测回调并初始化设备。 */
+    FILESYSTEM_OP_REFRESH,  /**< `RefreshSD`：在 SD 卷锁内刷新卡的现状。 */
     FILESYSTEM_OP_COUNT     /**< 操作个数，不是操作。 */
 } filesystem_lock_op_t;
 
 bool filesystem_lock_volume_valid(Service_Filesystem_VolumeTypeDef volume);
 void filesystem_lock_check_caller(void);
+void filesystem_lock_assert_caller_holds_none(void);
 void filesystem_lock_take(Service_Filesystem_VolumeTypeDef volume, filesystem_lock_op_t operation);
 void filesystem_lock_give(Service_Filesystem_VolumeTypeDef volume);
 void filesystem_lock_table_take(filesystem_lock_op_t operation);

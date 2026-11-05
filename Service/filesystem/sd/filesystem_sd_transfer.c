@@ -360,6 +360,18 @@ bool filesystem_sd_transfer_is_ready(void)
 }
 
 /**
+  * @brief  读卡检测脚：槽里现在有没有卡。
+  * @retval true 卡检测输入表示有卡。
+  * @retval false 表示没有卡，或 Platform 尚未绑定。
+  * @note   只读一次 GPIO 输入寄存器（经 Platform，不碰 SDMMC、不改任何状态），任务上下文安全，不阻塞。
+  *         调用者在 SD 卷锁内调用，让“读写失败”和“卡不在”是同一刻的结论。
+  */
+bool filesystem_sd_transfer_card_present(void)
+{
+    return Platform_SD_IsPresent();
+}
+
+/**
   * @brief  把不超过一个 DMA 中转缓冲的连续块读进 bounce buffer，不复制给调用者。
   * @param[in] start_block 第一个待读取的逻辑块。
   * @param[in] chunk_blocks 块数，不超过 FILESYSTEM_SD_DMA_BLOCK_COUNT。

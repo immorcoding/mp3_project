@@ -469,12 +469,113 @@ static void test_task_delay_advances_tick(void)
     assert(xTaskGetTickCount() == 66U);
 }
 
+/** @brief 事件组桩测试里，等待将要发生时替“别的任务”置位的钩子上下文。 */
+typedef struct
+{
+    EventGroupHandle_t group;
+    EventBits_t bits_to_set;
+    uint32_t calls;
+} SetBitsOnWait;
+
+/**
+ * @brief 阻塞钩子：事件组的等待将要发生时，别的任务置位。
+ * @param[in] wait 将要进行的等待。
+ * @param[in,out] context SetBitsOnWait。
+ */
+static void set_bits_on_event_wait(const FreertosStub_Wait *wait, void *context)
+{
+    SetBitsOnWait *state = (SetBitsOnWait *)context;
+
+    if ((wait->kind == FREERTOS_STUB_WAIT_EVENT_GROUP) && (wait->event_group == state->group))
+    {
+        state->calls++;
+        (void)xEventGroupSetBits(state->group, state->bits_to_set);
+    }
+}
+
+/**
+ * @brief 事件组：置位、清位、读位；等待的位已经置上就立刻返回而不进钩子，不清位时位保留。
+ */
+static void test_event_group_bits_set_clear_and_wait_without_blocking(void)
+{
+    StaticEventGroup_t storage;
+    EventGroupHandle_t group;
+    SetBitsOnWait state;
+    FreertosStub_EventGroupStats stats;
+
+    freertos_stub_reset();
+    group = xEventGroupCreateStatic(&storage);
+    assert(group != NULL);
+    assert(freertos_stub_last_created_event_group() == group);
+    assert(xEventGroupGetBits(group) == 0U);
+
+    assert((xEventGroupSetBits(group, 0x01U) & 0x01U) != 0U);
+    assert((xEventGroupSetBits(group, 0x04U) & 0x05U) == 0x05U);
+    state = (SetBitsOnWait){group, 0x02U, 0U};
+    freertos_stub_set_block_hook(set_bits_on_event_wait, &state);
+
+    /* 位已经在：立刻返回，不算阻塞，位保留（xClearOnExit 为假）。 */
+    assert((xEventGroupWaitBits(group, 0x01U, pdFALSE, pdFALSE, portMAX_DELAY) & 0x01U) != 0U);
+    assert(state.calls == 0U);
+    assert((xEventGroupGetBits(group) & 0x01U) != 0U);
+
+    /* 清位后再看：位没了。xEventGroupClearBits 返回清之前的值。 */
+    assert((xEventGroupClearBits(group, 0x01U) & 0x01U) != 0U);
+    assert((xEventGroupGetBits(group) & 0x01U) == 0U);
+    assert((xEventGroupGetBits(group) & 0x04U) != 0U);
+
+    stats = freertos_stub_event_group_stats(group);
+    assert(stats.wait_calls == 1U);
+    assert(stats.blocked_waits == 0U);
+    assert(stats.set_calls == 2U);
+    assert(stats.clear_calls == 1U);
+}
+
+/**
+ * @brief 事件组：等待的位没置上时先进钩子，钩子里置位则等待成功；钩子不置位则按超时返回当前位，
+ *        无限等待无人置位计入未满足次数。
+ */
+static void test_event_group_wait_blocks_until_hook_sets_the_bit(void)
+{
+    StaticEventGroup_t storage;
+    EventGroupHandle_t group;
+    SetBitsOnWait state;
+    FreertosStub_EventGroupStats stats;
+    TickType_t before;
+
+    freertos_stub_reset();
+    group = xEventGroupCreateStatic(&storage);
+    state = (SetBitsOnWait){group, 0x01U, 0U};
+    freertos_stub_set_block_hook(set_bits_on_event_wait, &state);
+
+    assert((xEventGroupWaitBits(group, 0x01U, pdFALSE, pdFALSE, portMAX_DELAY) & 0x01U) != 0U);
+    assert(state.calls == 1U);
+    stats = freertos_stub_event_group_stats(group);
+    assert(stats.blocked_waits == 1U);
+
+    /* 钩子不置位（位已被清）：有限等待让 tick 前进超时长度并返回没有该位的当前值。 */
+    assert((xEventGroupClearBits(group, 0x01U) & 0x01U) != 0U);
+    freertos_stub_set_block_hook(NULL, NULL);
+    freertos_stub_set_tick(500U);
+    before = xTaskGetTickCount();
+    assert((xEventGroupWaitBits(group, 0x01U, pdFALSE, pdFALSE, 30U) & 0x01U) == 0U);
+    assert((xTaskGetTickCount() - before) == 30U);
+
+    /* 超时 0 不阻塞也不进钩子；无限等待无人置位计入未满足次数。 */
+    assert((xEventGroupWaitBits(group, 0x01U, pdFALSE, pdFALSE, 0U) & 0x01U) == 0U);
+    assert(freertos_stub_unsatisfied_infinite_waits() == 0U);
+    assert((xEventGroupWaitBits(group, 0x01U, pdFALSE, pdFALSE, portMAX_DELAY) & 0x01U) == 0U);
+    assert(freertos_stub_unsatisfied_infinite_waits() == 1U);
+}
+
 /**
  * @brief 运行全部桩行为用例。
  * @return 全部断言通过为零，否则终止进程。
  */
 int main(void)
 {
+    test_event_group_bits_set_clear_and_wait_without_blocking();
+    test_event_group_wait_blocks_until_hook_sets_the_bit();
     test_tick_follows_script();
     test_mutex_is_exclusive_until_given();
     test_failed_take_consumes_timeout();

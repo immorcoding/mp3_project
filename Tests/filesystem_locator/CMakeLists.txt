@@ -74,6 +74,7 @@ add_executable(filesystem_locator_tests
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
     ../../Service/filesystem/filesystem_lock.c
+    ../../Service/filesystem/filesystem_entry.c
     ../../Service/filesystem/filesystem_status.c
     "${PATCHED_FF}"
     "${FATFS_SRC}/ff_gen_drv.c"

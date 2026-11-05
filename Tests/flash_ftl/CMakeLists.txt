@@ -65,6 +65,7 @@ add_executable(flash_file_benchmark_tests
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
     ../../Service/filesystem/filesystem_lock.c
+    ../../Service/filesystem/filesystem_entry.c
     ../../Service/filesystem/filesystem_status.c
     ../../APP/tasks/storage/benchmark/storage_flash_file_benchmark.c)
 target_include_directories(flash_file_benchmark_tests BEFORE PRIVATE
@@ -95,6 +96,7 @@ add_executable(filesystem_service_tests
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
     ../../Service/filesystem/filesystem_lock.c
+    ../../Service/filesystem/filesystem_entry.c
     ../../Service/filesystem/filesystem_status.c
     ../../Middlewares/Third_Party/FatFs/src/ff.c
     ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
@@ -119,6 +121,7 @@ add_executable(filesystem_completion_tests
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
     ../../Service/filesystem/filesystem_lock.c
+    ../../Service/filesystem/filesystem_entry.c
     ../../Service/filesystem/filesystem_status.c
     ../../Service/filesystem/sd/filesystem_sd_transfer.c
     ../../Service/filesystem/flash/filesystem_flash_transfer.c
@@ -173,6 +176,7 @@ add_library(filesystem_service_release_objects OBJECT
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
     ../../Service/filesystem/filesystem_lock.c
+    ../../Service/filesystem/filesystem_entry.c
     ../../Service/filesystem/filesystem_status.c
     ../../Service/filesystem/filesystem_text.c
     ../../Service/filesystem/flash/filesystem_flash_access.c)
@@ -227,6 +231,7 @@ add_executable(filesystem_lock_tests
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
     ../../Service/filesystem/filesystem_lock.c
+    ../../Service/filesystem/filesystem_entry.c
     ../../Service/filesystem/filesystem_status.c
     ../../Service/filesystem/filesystem_text.c
     ../../Service/filesystem/flash/filesystem_flash_access.c
@@ -252,6 +257,46 @@ foreach(SCENARIO reenter_same_volume hold_one_volume_enter_other hold_table_ente
     add_test(NAME filesystem_lock_${SCENARIO} COMMAND filesystem_lock_tests)
     set_tests_properties(filesystem_lock_${SCENARIO} PROPERTIES
         ENVIRONMENT "FILESYSTEM_LOCK_SCENARIO=${SCENARIO}")
+endforeach()
+
+# SD 卷生命周期的新入口（#210）：闸（暂停与恢复）、卷没挂时的拿锁前后检查、读写失败时的 NO_MEDIA、卸载释放槽、
+# 启动与刷新入口、失败分类函数。真实的 Service 与 FatFs，共用 FreeRTOS 桩（含事件组），RAM 盘和 Platform SD 替身替代硬件。
+# 会让进程 abort 的断言各在独立进程里跑（环境变量 FILESYSTEM_CARD_SCENARIO 选用例）。
+add_executable(filesystem_card_tests
+    test_filesystem_card.c
+    ../stubs/freertos/freertos_stub.c
+    ../stubs/lock_env/lock_env_cycle_counter.c
+    ../stubs/lock_env/lock_env_log.c
+    ../../Service/filesystem/filesystem_service.c
+    ../../Service/filesystem/filesystem_file.c
+    ../../Service/filesystem/filesystem_directory.c
+    ../../Service/filesystem/filesystem_path.c
+    ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_lock.c
+    ../../Service/filesystem/filesystem_entry.c
+    ../../Service/filesystem/filesystem_status.c
+    ../../Service/filesystem/filesystem_text.c
+    ../../Service/filesystem/sd/filesystem_sd_card.c
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c)
+target_include_directories(filesystem_card_tests BEFORE PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../stubs/lock_env ../..
+    ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
+target_compile_features(filesystem_card_tests PRIVATE c_std_11)
+target_compile_options(filesystem_card_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+set_source_files_properties(
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c
+    PROPERTIES COMPILE_OPTIONS "-w")
+add_test(NAME filesystem_card_behavior COMMAND filesystem_card_tests)
+foreach(SCENARIO gate_wait_holding_lock denied_start denied_refresh)
+    add_test(NAME filesystem_card_${SCENARIO} COMMAND filesystem_card_tests)
+    set_tests_properties(filesystem_card_${SCENARIO} PROPERTIES
+        ENVIRONMENT "FILESYSTEM_CARD_SCENARIO=${SCENARIO}")
 endforeach()
 
 # SD Card Component 的显式中止：真实的 Components/sd/sd.c，Port 层用测试内的假实现。
@@ -286,6 +331,7 @@ add_executable(sd_removal_chain_tests
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
     ../../Service/filesystem/filesystem_lock.c
+    ../../Service/filesystem/filesystem_entry.c
     ../../Service/filesystem/filesystem_status.c
     ../../Service/filesystem/filesystem_text.c
     ../../Service/filesystem/sd/filesystem_sd_transfer.c

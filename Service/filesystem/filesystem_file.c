@@ -10,6 +10,7 @@
 
 #include "Service/filesystem/filesystem_file.h"
 
+#include "Service/filesystem/filesystem_entry.h"
 #include "Service/filesystem/filesystem_handle.h"
 #include "Service/filesystem/filesystem_lock.h"
 #include "Service/filesystem/filesystem_path.h"
@@ -131,10 +132,13 @@ Service_StatusTypeDef Service_Filesystem_OpenFile(Service_Filesystem_VolumeTypeD
         return status;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_OPEN);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_OPEN, SERVICE_NOT_READY);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_file_open_locked(volume, native_path, mode, flags, file);
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -172,7 +176,11 @@ Service_StatusTypeDef Service_Filesystem_ReadFile(Service_Filesystem_FileHandleT
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_READ);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_READ, SERVICE_INVALID_HANDLE);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_handle_lookup_file(file, &object);
     if (status == SERVICE_OK)
     {
@@ -181,8 +189,7 @@ Service_StatusTypeDef Service_Filesystem_ReadFile(Service_Filesystem_FileHandleT
         *transferred = count;
         status = filesystem_make_service_status(result);
     }
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -220,7 +227,11 @@ Service_StatusTypeDef Service_Filesystem_WriteFile(Service_Filesystem_FileHandle
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_WRITE);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_WRITE, SERVICE_INVALID_HANDLE);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_handle_lookup_file(file, &object);
     if (status == SERVICE_OK)
     {
@@ -229,8 +240,7 @@ Service_StatusTypeDef Service_Filesystem_WriteFile(Service_Filesystem_FileHandle
         *transferred = count;
         status = filesystem_make_service_status(result);
     }
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -253,7 +263,11 @@ Service_StatusTypeDef Service_Filesystem_SeekFile(Service_Filesystem_FileHandleT
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_SEEK);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_SEEK, SERVICE_INVALID_HANDLE);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_handle_lookup_file(file, &object);
     if (status == SERVICE_OK)
     {
@@ -261,8 +275,7 @@ Service_StatusTypeDef Service_Filesystem_SeekFile(Service_Filesystem_FileHandleT
                      ? SERVICE_INVALID_PARAM
                      : filesystem_make_service_status(f_lseek(object, (FSIZE_t)offset));
     }
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -290,14 +303,17 @@ Service_StatusTypeDef Service_Filesystem_GetFilePosition(Service_Filesystem_File
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_TELL);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_TELL, SERVICE_INVALID_HANDLE);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_handle_lookup_file(file, &object);
     if (status == SERVICE_OK)
     {
         *position = (uint64_t)f_tell(object);
     }
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -325,14 +341,17 @@ Service_StatusTypeDef Service_Filesystem_GetFileSize(Service_Filesystem_FileHand
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_SIZE);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_SIZE, SERVICE_INVALID_HANDLE);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_handle_lookup_file(file, &object);
     if (status == SERVICE_OK)
     {
         *size = (uint64_t)f_size(object);
     }
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -353,14 +372,17 @@ Service_StatusTypeDef Service_Filesystem_SyncFile(Service_Filesystem_FileHandleT
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_SYNC);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_SYNC, SERVICE_INVALID_HANDLE);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_handle_lookup_file(file, &object);
     if (status == SERVICE_OK)
     {
         status = filesystem_make_service_status(f_sync(object));
     }
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -382,7 +404,11 @@ Service_StatusTypeDef Service_Filesystem_CloseFile(Service_Filesystem_FileHandle
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_CLOSE);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_CLOSE, SERVICE_INVALID_HANDLE);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_handle_lookup_file(file, &object);
     if (status == SERVICE_OK)
     {
@@ -392,8 +418,7 @@ Service_StatusTypeDef Service_Filesystem_CloseFile(Service_Filesystem_FileHandle
             filesystem_handle_release_file(file);
         }
     }
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -456,10 +481,13 @@ Service_StatusTypeDef Service_Filesystem_RemoveFile(Service_Filesystem_VolumeTyp
         return SERVICE_INVALID_PARAM;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_REMOVE);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_REMOVE, SERVICE_NOT_READY);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_file_remove_locked(volume, path);
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -516,10 +544,13 @@ Service_StatusTypeDef Service_Filesystem_RenameFile(Service_Filesystem_VolumeTyp
         return SERVICE_INVALID_PARAM;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_RENAME);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_RENAME, SERVICE_NOT_READY);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_file_rename_locked(volume, old_path, new_path);
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -586,8 +617,11 @@ Service_StatusTypeDef Service_Filesystem_GetFileInfo(Service_Filesystem_VolumeTy
         return SERVICE_INVALID_PARAM;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_INFO);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_INFO, SERVICE_NOT_READY);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_file_info_locked(volume, path, info);
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }

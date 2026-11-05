@@ -10,6 +10,7 @@
 #define HOST_STUB_FREERTOS_STUB_H
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
+#include "Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
@@ -20,7 +21,8 @@
 typedef enum
 {
     FREERTOS_STUB_WAIT_SEMAPHORE = 1, /**< 等待互斥锁或二值信号量。 */
-    FREERTOS_STUB_WAIT_NOTIFICATION   /**< 等待任务通知。 */
+    FREERTOS_STUB_WAIT_NOTIFICATION,  /**< 等待任务通知。 */
+    FREERTOS_STUB_WAIT_EVENT_GROUP    /**< 等待事件组的位。 */
 } FreertosStub_WaitKind;
 
 /** @brief 一次将要阻塞的等待。 */
@@ -31,6 +33,7 @@ typedef struct
     TaskHandle_t task;           /**< 等待通知时的当前任务，否则为 NULL。 */
     UBaseType_t index;           /**< 等待通知时的槽号。 */
     TickType_t ticks;            /**< 调用者给的超时，可能是 portMAX_DELAY。 */
+    EventGroupHandle_t event_group; /**< 等待事件组时的句柄，否则为 NULL（省略的初始化项即为 NULL）。 */
 } FreertosStub_Wait;
 
 /**
@@ -51,6 +54,30 @@ typedef struct
     uint32_t give_successes;     /**< 释放成功次数。 */
     TickType_t last_timeout_ticks; /**< 最近一次拿取传入的超时。 */
 } FreertosStub_SemaphoreStats;
+
+/** @brief 某个事件组的调用统计。 */
+typedef struct
+{
+    uint32_t wait_calls;    /**< 等待调用总数（含立刻满足的）。 */
+    uint32_t blocked_waits; /**< 等待时位不满足且超时不为 0 的次数（即将进入阻塞钩子）。 */
+    uint32_t set_calls;     /**< 置位调用次数。 */
+    uint32_t clear_calls;   /**< 清位调用次数。 */
+} FreertosStub_EventGroupStats;
+
+/**
+ * @brief 读取某个事件组的调用统计。
+ * @param[in] group 事件组句柄。
+ * @return 统计快照。
+ */
+FreertosStub_EventGroupStats freertos_stub_event_group_stats(EventGroupHandle_t group);
+
+/**
+ * @brief 最近一次创建的事件组；被测模块把事件组藏在内部时，测试在调用模块之后用它取得句柄。
+ * @return 句柄；reset 之后还没创建过则为 NULL。
+ * @note  reset 只清这个记录，不清被测模块静态存储里的事件组：模块的事件组是第一次使用时才创建的，
+ *        所以测试应当在第一次调用被测模块之前 reset，之后只比较统计的增量。
+ */
+EventGroupHandle_t freertos_stub_last_created_event_group(void);
 
 /**
  * @brief 丢弃所有对象与脚本，tick 归零、步长归零。

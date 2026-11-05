@@ -35,7 +35,14 @@
   - 断言停机各在独立进程里跑（环境变量 `FILESYSTEM_LOCK_SCENARIO`）：持卷锁时（回收的下层回调里）重入同一卷、进入另一卷，持卷锁加表锁（`f_open` 读盘时）进入另一卷。
   - 持锁统计（Debug）：每把锁的最长持有、最长等待和对应操作，节拍到了才投一批 3 行，数字与格式，投递时三把锁都已放掉，长持有（超过周期计数器回绕）与计数器未启动时改用 tick。
   - Release 配置（`filesystem_lock_release_tests`，同一份测试，Service 带 `-DNDEBUG` 单独编成 OBJECT 库）：所有锁的行为不变，拒绝名单与锁序断言仍在，节拍到了也不投统计日志。
-- 共用 FreeRTOS 桩 [`Tests/stubs/freertos/`](../stubs/freertos/README.md) 的自测（`freertos_stub_behavior`）：互斥锁、二值信号量和任务通知的行为，中断里 Give 的单独计数与“唤醒了更高优先级任务”的脚本化、`portYIELD_FROM_ISR` 的让出计数、`vTaskDelay`，以及“拿不到锁”“关闸时等待”的脚本化；文件基准用它的假 tick。
+- SD 闸与卷生命周期入口（`filesystem_card_behavior`，`test_filesystem_card.c`；#210）：真实的 Filesystem Service 与 FatFs，共用 FreeRTOS 桩（含事件组和阻塞钩子），RAM 盘、卡检测脚和 Platform SD 用测试内替身。覆盖：
+  - 闸：关闸时 SD 的 18 个文件与目录入口里的路径类和句柄类各自在拿锁之前等闸（等待发生时 SD 卷锁一次都没拿，开闸后拿放各一次）；闸开着不阻塞；Flash 入口连闸都不看；卷任务自己的 `InitSD/MountSD/UnmountSD/StartSD/RefreshSD` 关闸时照常；已持锁的调用（读盘中途关闸）不被打断，下一次调用才等；暂停和恢复是标志不是计数。
+  - 卷没挂：路径类入口立刻 `NOT_READY`、句柄类立刻 `INVALID_HANDLE`，SD 卷锁被占着、闸关着也不等（等待次数不变）；卸载使旧句柄失效且挂回后仍无效；拿锁等待期间卷被卸载，拿到锁后放锁并返回（拿放平衡）；等闸期间卷被卸载，开闸后不去拿锁；卸载释放本卷全部槽（SD 4 文件 2 目录占满，卸载挂回再占满），另一卷不受影响。
+  - `NO_MEDIA`：磁盘错误且卡检测脚显示卡不在返回 `NO_MEDIA`（脚在 SD 卷锁内读，替身断言），卡在仍是 `ERROR`；成功和其他失败（已存在、路径非法）不读脚；Flash 失败不读脚。
+  - 启动与刷新入口：在 SD 卷锁内调 Platform，回调与上下文原样交给 Platform，容量、`Present/Ready/Reinitialized`、诊断逐项回报；无卡成功；初始化或刷新失败返回 `ERROR` 且仍回报现状；空指针在拿锁之前被拒；被拒名单里的任务调用在等锁之前停机；失败分类函数的真值表。
+  - 持锁等闸断言：持 SD 卷锁时（读盘钩子里）关闸再进另一个 SD 入口，在开始等闸**之前**断言停机。
+  - 保真边界：主机单线程，桩不切换任务也不真阻塞，“闸关着时有人在等”靠阻塞钩子替卷任务开闸或卸载来脚本化；**只证明分支走对了**，不证明真实多任务交错（开闸时多个等待者按优先级怎样醒）、事件组在真实内核里的阻塞和放行、优先级继承、等闸的真实时长；Platform 是替身，不证明 `Platform_SD_Process` 在真实硬件上的行为，也不证明数据脚比检测脚先断时的分类（已知漏洞）。FatFs 的扇区窗口缓存目录扇区，所以 `NO_MEDIA` 用例用文件数据读制造磁盘错误；`OpenFileByLocator` 的闸与卷没挂用例在 `Tests/filesystem_locator`。
+- 共用 FreeRTOS 桩 [`Tests/stubs/freertos/`](../stubs/freertos/README.md) 的自测（`freertos_stub_behavior`）：互斥锁、二值信号量、事件组（置位、清位、读位、等待与阻塞钩子）和任务通知的行为，中断里 Give 的单独计数与“唤醒了更高优先级任务”的脚本化、`portYIELD_FROM_ISR` 的让出计数、`vTaskDelay`，以及“拿不到锁”“关闸时等待”的脚本化；文件基准用它的假 tick。
 
 入口加锁测试的保真边界：主机是单线程的，桩不切换任务也不真的阻塞，“别的任务占着锁”靠脚本化模拟（直接拿走互斥锁、让拿取失败、在将要等待时由钩子放锁）。PASS 证明每个分支走对、锁拿放平衡、顺序与断言符合规则；不证明真实的并发交错、优先级继承、两卷同时进行的 DMA/QSPI、窄表锁在真实交错下的正确性（它还取决于 `ff.c` 的 `dec_lock` 先写 `ctr` 后写 `fs`，由 Release 反汇编核对，不在主机测试范围）、持锁与等锁的真实时长，这些留给板级验收。
 

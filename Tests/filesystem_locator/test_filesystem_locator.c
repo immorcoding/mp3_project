@@ -9,6 +9,7 @@
  *          `patches/fatfs/` 补丁的副本，配置取自仓库 `ffconf.h`（见 CMakeLists.txt）。
  */
 
+#include "Service/filesystem/filesystem_card.h"
 #include "Service/filesystem/filesystem_config.h"
 #include "Service/filesystem/filesystem_directory.h"
 #include "Service/filesystem/filesystem_file.h"
@@ -58,6 +59,15 @@ bool filesystem_sd_transfer_init(void)
  * @return 恒为 true。
  */
 bool filesystem_sd_transfer_is_ready(void)
+{
+    return true;
+}
+
+/**
+ * @brief SD 传输层替身：卡检测脚，恒表示有卡（读写失败时不会被改成 NO_MEDIA）。
+ * @return 恒为 true。
+ */
+bool filesystem_sd_transfer_card_present(void)
 {
     return true;
 }
@@ -883,6 +893,73 @@ static void test_locator_opened_file_is_a_normal_read_only_file(void)
     assert(Service_Filesystem_CloseFile(file) == SERVICE_INVALID_HANDLE);
 }
 
+/** @brief 闸上等待时替“卷任务”开闸的钩子上下文。 */
+typedef struct
+{
+    EventGroupHandle_t gate;
+    uint32_t waits;
+    uint32_t sd_takes_at_wait;
+} GateProbe;
+
+/**
+ * @brief 阻塞钩子：调用者在闸上阻塞时记下此刻 SD 卷锁已被拿的次数，然后开闸。
+ * @param[in] wait 将要进行的等待。
+ * @param[in,out] context GateProbe。
+ */
+static void open_gate_when_waiting(const FreertosStub_Wait *wait, void *context)
+{
+    GateProbe *probe = (GateProbe *)context;
+
+    if ((wait->kind == FREERTOS_STUB_WAIT_EVENT_GROUP) && (wait->event_group == probe->gate))
+    {
+        probe->waits++;
+        probe->sd_takes_at_wait = freertos_stub_semaphore_stats(sd_lock).take_successes;
+        Service_Filesystem_ResumeSD();
+    }
+}
+
+/**
+ * @brief 按定位符打开同样走进门序列：关闸时在拿锁之前等闸，开闸后打开成功；卷没挂时不等锁、不等闸，
+ *        直接 FAILED 且状态为 NOT_READY；挂回后可用。
+ */
+static void test_locator_open_waits_at_the_gate_and_rejects_an_unmounted_volume(void)
+{
+    Service_Filesystem_FileHandleTypeDef file = {0};
+    Service_StatusTypeDef status = SERVICE_OK;
+    GateProbe probe = {freertos_stub_last_created_event_group(), 0U, 0U};
+    uint32_t sd_takes;
+
+    assert(probe.gate != NULL);
+    Service_Filesystem_PauseSD();
+    freertos_stub_set_block_hook(open_gate_when_waiting, &probe);
+    sd_takes = freertos_stub_semaphore_stats(sd_lock).take_successes;
+    assert(Service_Filesystem_OpenFileByLocator(SERVICE_FILESYSTEM_VOLUME_SD, &track_locators[2U], &file, &status) ==
+           SERVICE_FILESYSTEM_LOCATOR_OPENED);
+    freertos_stub_set_block_hook(NULL, NULL);
+    assert(status == SERVICE_OK);
+    assert(probe.waits == 1U);
+    assert(probe.sd_takes_at_wait == sd_takes); /* 等闸时还没拿锁。 */
+    assert(freertos_stub_semaphore_stats(sd_lock).take_successes - sd_takes == 1U);
+    assert(Service_Filesystem_CloseFile(file) == SERVICE_OK);
+
+    /* 卷没挂：SD 卷锁被占着、闸关着也立刻返回。 */
+    assert(Service_Filesystem_UnmountSD() == SERVICE_OK);
+    assert(xSemaphoreTake(sd_lock, 0U) == pdTRUE);
+    Service_Filesystem_PauseSD();
+    sd_takes = freertos_stub_semaphore_stats(sd_lock).take_successes;
+    assert(Service_Filesystem_OpenFileByLocator(SERVICE_FILESYSTEM_VOLUME_SD, &track_locators[2U], &file, &status) ==
+           SERVICE_FILESYSTEM_LOCATOR_FAILED);
+    assert(status == SERVICE_NOT_READY);
+    assert(freertos_stub_semaphore_stats(sd_lock).take_successes == sd_takes);
+    assert(xSemaphoreGive(sd_lock) == pdTRUE);
+    Service_Filesystem_ResumeSD();
+
+    assert(Service_Filesystem_MountSD() == SERVICE_OK);
+    assert(Service_Filesystem_OpenFileByLocator(SERVICE_FILESYSTEM_VOLUME_SD, &track_locators[2U], &file, &status) ==
+           SERVICE_FILESYSTEM_LOCATOR_OPENED);
+    assert(Service_Filesystem_CloseFile(file) == SERVICE_OK);
+}
+
 /**
  * @brief 测试入口：建一次镜像，按顺序跑各行为。
  * @return 全部断言通过时为 0。
@@ -907,6 +984,7 @@ int main(void)
     test_locator_open_takes_the_volume_lock_then_the_table_lock();
     test_denied_task_is_stopped_before_waiting_for_the_locator_open_locks();
     test_locator_opened_file_is_a_normal_read_only_file();
+    test_locator_open_waits_at_the_gate_and_rejects_an_unmounted_volume();
     puts("filesystem_locator: all tests passed");
     return 0;
 }

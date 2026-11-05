@@ -138,6 +138,15 @@ bool filesystem_sd_transfer_is_ready(void)
 }
 
 /**
+ * @brief SD 传输层替身：卡检测脚，恒表示有卡（读写失败时不会被改成 NO_MEDIA）。
+ * @return 恒为 true。
+ */
+bool filesystem_sd_transfer_card_present(void)
+{
+    return true;
+}
+
+/**
  * @brief Flash 传输层替身：初始化恒成功。
  * @return 恒为 true。
  */
