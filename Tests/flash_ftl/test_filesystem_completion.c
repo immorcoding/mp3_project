@@ -190,6 +190,15 @@ Platform_StatusTypeDef Platform_SD_CompleteTransfer(Platform_SD_TransferEventTyp
 }
 
 /**
+ * @brief 卡检测脚替身：本测试不涉及读写失败后的分类，恒表示有卡。
+ * @return 恒为 true。
+ */
+bool Platform_SD_IsPresent(void)
+{
+    return true;
+}
+
+/**
  * @brief 显式中止：按脚本“花时间”、可选地让一次读完成中断落进中止期间，报告脚本里的结果。
  * @param[out] result 结果分类，可为空。
  * @return STOPPED 时 PLATFORM_OK，其余 PLATFORM_SD_ERROR；没有停住时 Device 保持 ERROR，之后的 Start 被拒绝。

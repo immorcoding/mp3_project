@@ -46,7 +46,8 @@ typedef struct
 static filesystem_file_slot_t filesystem_file_slots[FILESYSTEM_FILE_SLOT_COUNT];
 static filesystem_directory_slot_t filesystem_directory_slots[FILESYSTEM_DIRECTORY_SLOT_COUNT];
 static bool filesystem_volume_initialized[FILESYSTEM_HANDLE_VOLUME_COUNT];
-static bool filesystem_volume_mounted[FILESYSTEM_HANDLE_VOLUME_COUNT];
+/* 挂载标志由所属卷的卷锁保护写入；入口在拿锁之前也读它（一个字节，只作提示），所以声明为 volatile。 */
+static volatile bool filesystem_volume_mounted[FILESYSTEM_HANDLE_VOLUME_COUNT];
 
 /**
  * @brief 检查卷枚举是否可作为内部数组下标。
@@ -257,6 +258,13 @@ void filesystem_handle_set_mounted(Service_Filesystem_VolumeTypeDef volume, bool
     }
 }
 
+/**
+ * @brief 卷是否标为已挂载。
+ * @param[in] volume 目标卷。
+ * @return true 已挂载；卷非法为 false。
+ * @note  不要求持锁：只写入发生在持卷锁时，读是一个字节。拿锁之前读到的值只是提示（入口随后在锁内再确认一次），
+ *        持卷锁时读到的值才是依据。
+ */
 bool filesystem_handle_is_mounted(Service_Filesystem_VolumeTypeDef volume)
 {
     return filesystem_handle_volume_valid(volume) && filesystem_volume_mounted[volume];

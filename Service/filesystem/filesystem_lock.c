@@ -114,6 +114,8 @@ static const char filesystem_lock_operation_names[FILESYSTEM_OP_COUNT][10] = {
     [FILESYSTEM_OP_RECOVER] = "Recover",
     [FILESYSTEM_OP_RECLAIM] = "Reclaim",
     [FILESYSTEM_OP_FLASH_DIAG] = "FlashDiag",
+    [FILESYSTEM_OP_START] = "Start",
+    [FILESYSTEM_OP_REFRESH] = "Refresh",
 };
 
 static const char *const filesystem_lock_names[FILESYSTEM_LOCK_COUNT] = {"sd", "flash", "table"};
@@ -170,6 +172,23 @@ void filesystem_lock_check_caller(void)
     for (uint32_t index = 0U; index < count; index++)
     {
         configASSERT(filesystem_denied_tasks[index] != self);
+    }
+}
+
+/**
+ * @brief 断言调用者此刻不持有任何一把 Filesystem 锁（两把卷锁和表锁）。
+ * @note  闸的等待在拿锁之前：持着锁去等闸，卷任务要这把锁才能完成对账并开闸，就是死锁；
+ *        所以进门等闸之前先检查，闸开着时也检查，错误因此每次都暴露而不是只在关闸时。
+ *        停机用 `configASSERT`，Release 也保留。读持有者字段不需要持锁：只有持锁的任务会把自己写进去，
+ *        所以“持有者是我”只可能是真的。
+ */
+void filesystem_lock_assert_caller_holds_none(void)
+{
+    const TaskHandle_t self = xTaskGetCurrentTaskHandle();
+
+    for (uint32_t index = 0U; index < FILESYSTEM_LOCK_COUNT; index++)
+    {
+        configASSERT((filesystem_locks[index].holder == NULL) || (filesystem_locks[index].holder != self));
     }
 }
 

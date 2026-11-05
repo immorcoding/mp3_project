@@ -5,6 +5,7 @@
 
 #include "Service/filesystem/filesystem_file.h"
 
+#include "Service/filesystem/filesystem_entry.h"
 #include "Service/filesystem/filesystem_ff_patch.h"
 #include "Service/filesystem/filesystem_handle.h"
 #include "Service/filesystem/filesystem_lock.h"
@@ -78,7 +79,8 @@ static Service_Filesystem_LocatorOpenResultTypeDef filesystem_file_open_locator_
  *                    FAILED 为失败原因（BUSY 为该卷槽用尽或文件被写打开，NOT_READY 为卷未就绪等）。
  * @return OPENED 已打开；MISMATCH 定位符为空或与介质上的目录项不符，未占槽，调用者应退回按路径打开；
  *         FAILED 其他失败。
- * @note  拿所属卷的卷锁一次；`f_open_dirent` 一步在窄表锁内。由 `ff.c` 补丁函数读出目录项并核对“是文件、未删除、
+ * @note  进门序列同其他入口（卷没挂立刻 NOT_READY、SD 等闸、拿所属卷的卷锁一次、拿到后再确认），失败为 `SERVICE_ERROR`
+ *        且卡检测脚显示卡不在时报告 NO_MEDIA；`f_open_dirent` 一步在窄表锁内。由 `ff.c` 补丁函数读出目录项并核对“是文件、未删除、
  *        非目录、起始簇与长度一致”，再像 `f_open` 结尾那样填 FIL 并登记锁，故 `CloseFile` 照常释放锁。只读打开。
  *        约 0.35 至 0.76 ms（SD）。
  */
@@ -112,8 +114,12 @@ Service_Filesystem_LocatorOpenResultTypeDef Service_Filesystem_OpenFileByLocator
         return SERVICE_FILESYSTEM_LOCATOR_FAILED;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_OPEN_LOCATOR);
+    *status = filesystem_entry_enter(volume, FILESYSTEM_OP_OPEN_LOCATOR, SERVICE_NOT_READY);
+    if (*status != SERVICE_OK)
+    {
+        return SERVICE_FILESYSTEM_LOCATOR_FAILED;
+    }
     result = filesystem_file_open_locator_locked(volume, drive_path, locator, file, status);
-    filesystem_lock_give(volume);
+    *status = filesystem_entry_leave(volume, *status);
     return result;
 }

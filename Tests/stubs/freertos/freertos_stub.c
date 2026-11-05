@@ -36,6 +36,15 @@ typedef struct
 
 _Static_assert(sizeof(StubSemaphore) <= sizeof(StaticSemaphore_t), "StaticSemaphore_t 放不下桩状态");
 
+/** @brief 放进 StaticEventGroup_t 缓冲区的真实状态。 */
+typedef struct
+{
+    EventBits_t bits;
+    FreertosStub_EventGroupStats stats;
+} StubEventGroup;
+
+_Static_assert(sizeof(StubEventGroup) <= sizeof(StaticEventGroup_t), "StaticEventGroup_t 放不下桩状态");
+
 /** @brief 假任务：每个通知槽一个值、一个待处理标志和一个通知计数。 */
 struct HostStubTask
 {
@@ -50,6 +59,7 @@ static TaskHandle_t current_task;
 static StaticSemaphore_t semaphore_pool[STUB_SEMAPHORE_POOL_SIZE];
 static bool semaphore_in_use[STUB_SEMAPHORE_POOL_SIZE];
 static SemaphoreHandle_t last_created_semaphore;
+static EventGroupHandle_t last_created_event_group;
 static SemaphoreHandle_t created_semaphores[STUB_CREATED_LOG_SIZE];
 static uint32_t created_semaphore_count;
 static uint32_t consecutive_unsatisfied_infinite_waits;
@@ -134,6 +144,7 @@ void freertos_stub_reset(void)
     memset(semaphore_pool, 0, sizeof(semaphore_pool));
     memset(semaphore_in_use, 0, sizeof(semaphore_in_use));
     last_created_semaphore = NULL;
+    last_created_event_group = NULL;
     memset(created_semaphores, 0, sizeof(created_semaphores));
     created_semaphore_count = 0U;
     consecutive_unsatisfied_infinite_waits = 0U;
@@ -422,7 +433,7 @@ BaseType_t xSemaphoreTake(SemaphoreHandle_t semaphore, TickType_t ticks_to_wait)
     }
     else if (state->count == 0U && ticks_to_wait != 0U)
     {
-        FreertosStub_Wait wait = {FREERTOS_STUB_WAIT_SEMAPHORE, semaphore, NULL, 0U, ticks_to_wait};
+        FreertosStub_Wait wait = {FREERTOS_STUB_WAIT_SEMAPHORE, semaphore, NULL, 0U, ticks_to_wait, NULL};
 
         state->stats.waits++;
         run_block_hook(&wait);
@@ -643,7 +654,7 @@ BaseType_t xTaskNotifyWaitIndexed(UBaseType_t index,
         task->value[slot] &= ~clear_on_entry;
         if (ticks_to_wait != 0U)
         {
-            FreertosStub_Wait wait = {FREERTOS_STUB_WAIT_NOTIFICATION, NULL, task, index, ticks_to_wait};
+            FreertosStub_Wait wait = {FREERTOS_STUB_WAIT_NOTIFICATION, NULL, task, index, ticks_to_wait, NULL};
 
             run_block_hook(&wait);
         }
@@ -680,7 +691,7 @@ uint32_t ulTaskNotifyTakeIndexed(UBaseType_t index, BaseType_t clear_count_on_ex
 
     if ((task->value[slot] == 0U) && (ticks_to_wait != 0U))
     {
-        FreertosStub_Wait wait = {FREERTOS_STUB_WAIT_NOTIFICATION, NULL, task, index, ticks_to_wait};
+        FreertosStub_Wait wait = {FREERTOS_STUB_WAIT_NOTIFICATION, NULL, task, index, ticks_to_wait, NULL};
 
         run_block_hook(&wait);
     }
@@ -696,4 +707,144 @@ uint32_t ulTaskNotifyTakeIndexed(UBaseType_t index, BaseType_t clear_count_on_ex
     task->value[slot] = (clear_count_on_exit != pdFALSE) ? 0U : (count - 1U);
     task->pending[slot] = false;
     return count;
+}
+
+/**
+ * @brief 取得事件组句柄背后的桩状态。
+ * @param[in] group 事件组句柄。
+ * @return 桩状态指针。
+ */
+static StubEventGroup *event_group_state(EventGroupHandle_t group)
+{
+    assert(group != NULL);
+    return (StubEventGroup *)(void *)group;
+}
+
+/**
+ * @brief 读取事件组的调用统计。
+ * @param[in] group 事件组句柄。
+ * @return 统计快照。
+ */
+FreertosStub_EventGroupStats freertos_stub_event_group_stats(EventGroupHandle_t group)
+{
+    return event_group_state(group)->stats;
+}
+
+/**
+ * @brief 最近一次创建的事件组。
+ * @return 句柄；reset 之后还没创建过则为 NULL。
+ */
+EventGroupHandle_t freertos_stub_last_created_event_group(void)
+{
+    return last_created_event_group;
+}
+
+/**
+ * @brief 在调用者缓冲区里创建事件组，所有位为零。
+ * @param[out] buffer 缓冲区。
+ * @return 句柄，即缓冲区地址。
+ */
+EventGroupHandle_t xEventGroupCreateStatic(StaticEventGroup_t *buffer)
+{
+    assert(buffer != NULL);
+    memset(buffer, 0, sizeof(*buffer));
+    last_created_event_group = buffer;
+    return buffer;
+}
+
+/**
+ * @brief 置位。主机桩没有等待者列表：等待由阻塞钩子在“将要阻塞”时替别的任务置位来脚本化。
+ * @param[in] group 事件组句柄。
+ * @param[in] bits_to_set 要置的位。
+ * @return 置位之后的位值。
+ */
+EventBits_t xEventGroupSetBits(EventGroupHandle_t group, EventBits_t bits_to_set)
+{
+    StubEventGroup *state = event_group_state(group);
+
+    state->stats.set_calls++;
+    state->bits |= bits_to_set;
+    consecutive_unsatisfied_infinite_waits = 0U;
+    return state->bits;
+}
+
+/**
+ * @brief 清位。
+ * @param[in] group 事件组句柄。
+ * @param[in] bits_to_clear 要清的位。
+ * @return 清位之前的位值（与真实 FreeRTOS 一致）。
+ */
+EventBits_t xEventGroupClearBits(EventGroupHandle_t group, EventBits_t bits_to_clear)
+{
+    StubEventGroup *state = event_group_state(group);
+    const EventBits_t previous = state->bits;
+
+    state->stats.clear_calls++;
+    state->bits &= ~bits_to_clear;
+    return previous;
+}
+
+/**
+ * @brief 读当前位，不计入清位调用。
+ * @param[in] group 事件组句柄。
+ * @return 当前位值。
+ */
+EventBits_t xEventGroupGetBits(EventGroupHandle_t group)
+{
+    return event_group_state(group)->bits;
+}
+
+/**
+ * @brief 判断位是否满足等待条件。
+ * @param[in] current 当前位值。
+ * @param[in] wanted 等待的位。
+ * @param[in] wait_for_all pdTRUE 要求全部位，否则任一位。
+ * @return true 条件满足。
+ */
+static bool event_bits_satisfied(EventBits_t current, EventBits_t wanted, BaseType_t wait_for_all)
+{
+    return (wait_for_all != pdFALSE) ? ((current & wanted) == wanted) : ((current & wanted) != 0U);
+}
+
+/**
+ * @brief 等事件组的位；不满足且超时不为 0 时先调阻塞钩子，仍不满足按超时返回当前位值。
+ * @param[in] group 事件组句柄。
+ * @param[in] bits_to_wait_for 等待的位。
+ * @param[in] clear_on_exit pdTRUE 时条件满足后清掉等待的位。
+ * @param[in] wait_for_all_bits pdTRUE 要求全部位。
+ * @param[in] ticks_to_wait 超时，0 表示不等，portMAX_DELAY 表示无限。
+ * @return 返回时的位值（清位之前）；超时时条件不满足。
+ */
+EventBits_t xEventGroupWaitBits(EventGroupHandle_t group,
+                                EventBits_t bits_to_wait_for,
+                                BaseType_t clear_on_exit,
+                                BaseType_t wait_for_all_bits,
+                                TickType_t ticks_to_wait)
+{
+    StubEventGroup *state = event_group_state(group);
+    EventBits_t result;
+
+    state->stats.wait_calls++;
+    if (!event_bits_satisfied(state->bits, bits_to_wait_for, wait_for_all_bits) && (ticks_to_wait != 0U))
+    {
+        FreertosStub_Wait wait = {FREERTOS_STUB_WAIT_EVENT_GROUP, NULL, NULL, 0U, ticks_to_wait, group};
+
+        state->stats.blocked_waits++;
+        run_block_hook(&wait);
+    }
+
+    result = state->bits;
+    if (event_bits_satisfied(result, bits_to_wait_for, wait_for_all_bits))
+    {
+        consecutive_unsatisfied_infinite_waits = 0U;
+        if (clear_on_exit != pdFALSE)
+        {
+            state->bits &= ~bits_to_wait_for;
+        }
+    }
+    else if (ticks_to_wait != 0U)
+    {
+        expire_wait(ticks_to_wait);
+    }
+    return result;
 }

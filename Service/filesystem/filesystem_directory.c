@@ -6,6 +6,7 @@
 #include "Service/filesystem/filesystem_directory.h"
 
 #include "Middlewares/Third_Party/FatFs/src/diskio.h"
+#include "Service/filesystem/filesystem_entry.h"
 #include "Service/filesystem/filesystem_handle.h"
 #include "Service/filesystem/filesystem_lock.h"
 #include "Service/filesystem/filesystem_locator.h"
@@ -249,10 +250,13 @@ Service_StatusTypeDef Service_Filesystem_OpenDirectory(
         return status;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_OPEN_DIR);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_OPEN_DIR, SERVICE_NOT_READY);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_directory_open_locked(volume, native_path, directory);
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -328,10 +332,13 @@ Service_StatusTypeDef Service_Filesystem_ReadDirectory(
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_READ_DIR);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_READ_DIR, SERVICE_INVALID_HANDLE);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_directory_read_locked(directory, entry, volume);
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -353,14 +360,17 @@ Service_StatusTypeDef Service_Filesystem_RewindDirectory(
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_REWIND);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_REWIND, SERVICE_INVALID_HANDLE);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_handle_lookup_directory(directory, &object);
     if (status == SERVICE_OK)
     {
         status = filesystem_make_service_status(f_readdir(object, NULL));
     }
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -382,7 +392,11 @@ Service_StatusTypeDef Service_Filesystem_CloseDirectory(
         return SERVICE_INVALID_HANDLE;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_CLOSE_DIR);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_CLOSE_DIR, SERVICE_INVALID_HANDLE);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_handle_lookup_directory(directory, &object);
     if (status == SERVICE_OK)
     {
@@ -392,8 +406,7 @@ Service_StatusTypeDef Service_Filesystem_CloseDirectory(
             filesystem_handle_release_directory(directory);
         }
     }
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -440,10 +453,13 @@ Service_StatusTypeDef Service_Filesystem_CreateDirectory(Service_Filesystem_Volu
         return SERVICE_INVALID_PARAM;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_MKDIR);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_MKDIR, SERVICE_NOT_READY);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_directory_create_locked(volume, path);
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }
 
 /**
@@ -506,8 +522,11 @@ Service_StatusTypeDef Service_Filesystem_RemoveDirectory(Service_Filesystem_Volu
         return SERVICE_INVALID_PARAM;
     }
 
-    filesystem_lock_take(volume, FILESYSTEM_OP_RMDIR);
+    status = filesystem_entry_enter(volume, FILESYSTEM_OP_RMDIR, SERVICE_NOT_READY);
+    if (status != SERVICE_OK)
+    {
+        return status;
+    }
     status = filesystem_directory_remove_locked(volume, path);
-    filesystem_lock_give(volume);
-    return status;
+    return filesystem_entry_leave(volume, status);
 }

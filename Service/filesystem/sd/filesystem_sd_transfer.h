@@ -17,6 +17,7 @@
 
 bool filesystem_sd_transfer_init(void);
 bool filesystem_sd_transfer_is_ready(void);
+bool filesystem_sd_transfer_card_present(void);
 bool filesystem_sd_transfer_read_blocks(uint8_t *destination,
                                         uint32_t start_block,
                                         uint32_t block_count,

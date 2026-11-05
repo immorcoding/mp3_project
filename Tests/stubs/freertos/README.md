@@ -6,6 +6,7 @@
 
 - `FreeRTOS.h`：`TickType_t`、`BaseType_t`、`pd*` 常量、`portMAX_DELAY`、`pdMS_TO_TICKS`。
 - `semphr.h`：互斥锁与二值信号量（动态与静态创建、`Take`、`Give`、`GiveFromISR`、`Delete`）。
+- `event_groups.h`：静态事件组（`xEventGroupCreateStatic`、`SetBits`、`ClearBits`、`GetBits`、`WaitBits`；位 0 至 23）。等待的位没置上且超时不为 0 时，先调阻塞钩子（`FREERTOS_STUB_WAIT_EVENT_GROUP`，`FreertosStub_Wait.event_group` 给出句柄），仍不满足按超时返回当前位（无限等待无人置位计入未满足次数，也受死锁保护）。`freertos_stub_event_group_stats` 读等待、阻塞、置位、清位次数，`freertos_stub_last_created_event_group` 取模块内部创建的事件组。没有等待者列表：开闸时“多个等待者一起醒”靠钩子里置位脚本化，不模拟谁先醒。
 - `task.h`：`xTaskGetTickCount`、`vTaskDelay`（只让 tick 前进）、`xTaskGetCurrentTaskHandle`，以及带下标的任务通知（`xTaskNotifyIndexed`、`xTaskNotifyWaitIndexed`、`ulTaskNotifyTakeIndexed`、`xTaskNotifyStateClearIndexed` 与 `FromISR` 版本；不带下标的写法映射到 0 号槽）。
 - `FreeRTOS.h` 还提供与产品一致的 `configASSERT`（无条件生效，失败调用桩里的 `vAssertCalled`：打印文件和行号后 `abort()`；测试用 `SIGABRT` 处理函数捕获）。
 - `task.h` 里的 `taskENTER_CRITICAL()`/`taskEXIT_CRITICAL()` 是不做事的宏（主机没有中断，只让被测代码里成对嵌套的写法能编译）。
@@ -17,6 +18,6 @@
 
 无限等待连续 10 万次都没人放行，桩判为死锁并 abort（被测代码“等到拿到为止”的重试循环否则会空转到测试超时），所以测试必须在钩子里放行；`INCLUDE_vTaskSuspend` 为 0 时真实内核的 `portMAX_DELAY` 也只是约 49.7 天的有限超时，被测代码因此要在超时后继续等。
 
-PASS 证明被测代码在“拿到、拿不到、等到、等不到”各分支上行为正确；不证明真实并发、优先级继承、递归持有、中断时序，也没有实现队列、计数信号量和定时器。这些留给板级验收。
+PASS 证明被测代码在“拿到、拿不到、等到、等不到”各分支上行为正确；不证明真实并发、优先级继承、递归持有、中断时序，也没有实现队列、计数信号量和定时器；事件组只有上面这些。这些留给板级验收。
 
 桩自身的行为测试在 `Tests/flash_ftl/test_freertos_stub.c`（CTest `freertos_stub_behavior`）。

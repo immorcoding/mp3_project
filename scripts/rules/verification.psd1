@@ -126,6 +126,8 @@
                 '^APP/tasks/storage/storage_task\.h$'
                 '^APP/tasks/storage/storage_task_config\.h$'
                 '^Service/filesystem/filesystem_types\.h$'
+                # filesystem_types.h 的失败分类函数需要 Service_StatusTypeDef（#210）。
+                '^Service/service\.h$'
                 '^Tests/music_gui/'
             )
         }
