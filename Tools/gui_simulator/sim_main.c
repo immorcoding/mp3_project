@@ -4,10 +4,11 @@
   * @brief   GUI 模拟器入口：SDL 事件泵 + 模拟 GUI Task 主循环。
   *
   * @details
-  *          循环结构与 APP/tasks/gui/gui_task.c 一致：ConsumeInput -> 产品分区 step
-  *          -> Service_GUI_Process()。产品分区是真实的 APP gui_music；它依赖的
-  *          Storage 窗口槽与 SD 状态由 fakes/storage_sim.c 代替，播放合同由
-  *          fakes/playback_sim.c 代替，两者每圈先于 gui_music_step() 推进一次。
+  *          循环结构与 APP/tasks/gui/gui_task.c 一致：ConsumeInput -> 遍历真实的
+  *          APP/apps/app_table.c 调用各应用的 gui_step -> Service_GUI_Process()。
+  *          应用是真实的 APP 音乐分区；它依赖的 Storage 窗口槽与 SD 状态由
+  *          fakes/storage_sim.c 代替，播放合同由 fakes/playback_sim.c 代替，
+  *          两者每圈先于各应用的 gui_step 推进一次。
   *
   *          键盘：T 切换 Default/Solid 主题；C 拔卡/重新挂载（代次 +1，拔卡时假
   *          后端按拔卡停止）；G 模拟重扫（代次 +1，已显示窗口保留到下一次
@@ -27,7 +28,7 @@
 
 #include "lvgl.h"
 
-#include "APP/tasks/gui/music/gui_music.h"
+#include "APP/apps/app_table.h"
 #include "Service/gui/gui_service.h"
 #include "Service/gui/view/gui_service_view.h"
 #include "fakes/playback_sim.h"
@@ -50,7 +51,7 @@ static void sim_handle_key(char key)
 {
     if ((key == 'c') || (key == 'C'))
     {
-        /* 拔卡/重新挂载：真实 gui_music 下一圈按窗口协议 CLEAR 或重新 request；
+        /* 拔卡/重新挂载：真实音乐分区下一圈按窗口协议 CLEAR 或重新 request；
            拔卡时假后端同时按 K5 停止，三态、唱盘与时间由快照驱动。 */
         if (!storage_sim_toggle_mount())
         {
@@ -233,7 +234,13 @@ int main(int argc, char *argv[])
 
     storage_sim_init();
     playback_sim_init();
-    gui_music_init();
+    for (size_t i = 0U; i < app_table_count; i++)
+    {
+        if (app_table[i].gui_init != NULL)
+        {
+            app_table[i].gui_init();
+        }
+    }
     printf("[sim] running. T: toggle theme, C: card remove/mount, G: rescan, "
            "S: suspend/resume playback, B: next open bad, R: stop with next reason, "
            "A: anim count, L: back to Lock, Esc: quit\n");
@@ -254,7 +261,13 @@ int main(int argc, char *argv[])
 
         storage_sim_step();
         playback_sim_step(sim_clock_now());
-        gui_music_step(&input);
+        for (size_t i = 0U; i < app_table_count; i++)
+        {
+            if (app_table[i].gui_step != NULL)
+            {
+                app_table[i].gui_step(&input);
+            }
+        }
 
         Service_GUI_Process();
 

@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "APP/tasks/gui/music/gui_music_transport.h"
+#include "APP/apps/music/gui/gui_music_transport.h"
 
 static Playback_StatusTypeDef fake_send_status;
 static Playback_CommandTypeDef fake_last_command;

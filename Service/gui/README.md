@@ -173,6 +173,6 @@ Service/gui/
 
 ## 验证
 
-- 主机测试：`Tests/gui_theme`（调色板）、`Tests/gui_canvas`（合成）、`Tests/gui_font`（字体 bin 解码器）、`Tests/gui_task`（输入单槽、窗口协议、Transport）。
+- 主机测试：`Tests/gui_theme`（调色板）、`Tests/gui_canvas`（合成）、`Tests/gui_font`（字体 bin 解码器）、`Tests/gui_task`（输入单槽）、`Tests/music_gui`（窗口协议、Transport）。
 - 界面等价性：`./Tools/gui_simulator/run-scenarios.ps1` 在 PC 上原样运行本 Module，逐帧比对场景基线；见 [Tools/gui_simulator/README.md](../../Tools/gui_simulator/README.md)。
 - 板级：显示刷新、DMA、触摸与真实帧率仍须上板（`hw:pending`）。

@@ -3,7 +3,7 @@
   * @file    playback_contract.h
   * @brief   播放任务公开合同：GUI 音乐分区与模拟器脚本化后端共用的命令与快照 Interface。
   * @note    来源：#71 K1–K5、#53。只含类型与两个函数声明，不暴露 FreeRTOS 句柄。
-  *          GUI 里只有音乐分区（APP/tasks/gui/music）包含本头，Service/gui 不得包含。
+  *          GUI 侧只有音乐应用的 GUI 分区（APP/apps/music/gui）包含本头，Service/gui 不得包含。
   *          任务入口与通知槽在 playback_task.h，不在本头里。
   ******************************************************************************
   */

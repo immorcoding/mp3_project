@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "APP/tasks/gui/music/gui_music_queue_rows.h"
+#include "APP/apps/music/gui/gui_music_queue_rows.h"
 
 /**
  * @brief 按行写入窗口槽的一行文本。
