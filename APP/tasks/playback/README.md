@@ -7,10 +7,11 @@
 ## 公开 Interface
 
 - `playback_contract.h`：音乐应用 GUI 分区（`APP/apps/music/gui/`）与模拟器脚本化后端共用的唯一合同，只含类型（`Playback_CommandTypeDef`、`Playback_SnapshotTypeDef` 等）与 `playback_command_send()`、`playback_snapshot_read()` 两个声明，字段以 #71 K1 为基础，0.9.0 加入跳转（[#172](https://github.com/immorcoding/mp3_project/issues/172) C 节、[#176](https://github.com/immorcoding/mp3_project/issues/176)）：命令种类末尾新增 `PLAYBACK_COMMAND_SEEK`，`Generation`/`Index` 由“仅 SELECT”改为“SELECT 与 SEEK”的曲目身份，命令新增 `TargetMs`（毫秒，仅 SEEK），快照新增 `TrackStartCount`，不暴露 FreeRTOS 句柄。GUI 里只有音乐分区（`APP/tasks/gui/music`）可以包含它，`Service/gui` 不得包含。真实后端与模拟器的假后端实现同一个头，在链接时互换。
-- `playback_task.h`：任务入口 `playback_task()` 与私有通知槽 `Playback_NotifyIndexTypeDef`（`PLAYBACK_NOTIFY_EVENT`）；由 `app_tasks.c` 以 `xTaskCreateStatic` 创建，不是跨模块 Interface。`playback_command_send()` 与 `playback_snapshot_read()` 的实现在 `playback_task.c`。
+- `playback_task.h`：任务入口 `playback_task()`、私有通知槽 `Playback_NotifyIndexTypeDef`（`PLAYBACK_NOTIFY_EVENT`）与只读的 `playback_task_get_underrun_total()`（开机以来欠载累计，Monitor 读）；由 `app_tasks.c` 以 `xTaskCreateStatic` 创建，不是跨模块 Interface。`playback_command_send()` 与 `playback_snapshot_read()` 的实现在 `playback_task.c`。
 - `playback_task_config.h`：事件 FLAG、命令 FIFO 深度与等待节拍等固定配置。
 - `playback_machine.h`：状态机的 Ops 与两个入口，只服务播放任务外壳，不是跨模块 Interface。
   - `playback_machine_init(machine, ops)`：快照全零（停止、无当前曲），不发布。
+  - `playback_machine_underrun_total(machine)`：开机以来欠载累计（DIAG-6），只读。
   - `playback_machine_step(machine, commands, command_count, now_ms)`：一次唤醒的全部工作。命令由外壳从命令 FIFO 取空（≤ 8 条）后传入；`now_ms` 是外壳传入的单调毫秒时刻（B9），状态机不读 tick、不依赖 FreeRTOS。
 
 ## 任务外壳
@@ -85,7 +86,7 @@
 - 播放模块：`BeginStream`、`Feed`、`FinishInput`、`Pump`、`PauseOutput`、`ResumeOutput`、`AbandonStream`，签名即 `Service_Playback_*`，外壳直接填函数指针。
 - 状态信箱：`PublishSnapshot` 覆盖写。
 - INFO / DEBUG 日志：`LogInfo(text)`、`LogDebug(text)` 可为空；外壳接到 `Service_Log_Post(INFO / DEBUG, "PLAYBACK", text)`（非阻塞，队列满丢弃）。单条 INFO 文本缓冲 `PLAYBACK_MACHINE_LOG_TEXT_SIZE` 为 96 B（Seek 行最长约 88 B，小于 Service_Log 单块正文 128 B）。
-- 周期计数器：`ReadCycles()`、`CyclesToUs(cycles)` 可为空；外壳接到 `CortexM7CycleCounter_Read()` 与按核心频率的换算，只供 Seek INFO 的 `lat`。
+- 周期计数器：`ReadCycles()`、`CyclesToUs(cycles)` 可为空；外壳接到 `CortexM7CycleCounter_Read()` 与按核心频率的换算，只供 Seek INFO 与 Switch INFO 的 `lat`。
 - 播放模块的跳转入口：`MapSeek`、`ReopenStream`，外壳直接填 `Service_Playback_MapSeek` 与 `Service_Playback_ReopenStream`。
 
 ## INFO 日志事件
@@ -101,9 +102,14 @@
 | `Skip bad idx=N` | 跳过坏文件（含 Start 被拒、同步预算耗尽），N 为被跳过的曲目 |
 | `Finished idx=N` / `Auto idx=M` | 播完，随后自动前进到 M |
 | `Seek idx=N tgt=T land=L off=B map=toc\|lin[ clamp] lat=U` | 跳转执行成功后：PLAYING 在输出重新起播时，PAUSED 在预填完成时（见“跳转”） |
+| `Switch idx=N lat=U` / `Switch idx=N lat=U auto` | 用户切歌（NEXT、PREV、SELECT）或自动前进（播完前进、跳过坏文件续上）后输出重新起播时（DIAG-6，见下） |
 | `Stop reason=NAME` | 进入停止态，NAME 为快照 `StopReason` 的枚举名（去掉 `PLAYBACK_STOP_REASON_` 前缀） |
 
 一次「播放 → 切歌 → 暂停 → 停止」因此可按日志顺序重建，停止原因与快照一致。
+
+**Switch INFO**（DIAG-6、#204，常开，每次换曲一行，曲目边界）：用户切歌记 `Switch idx=N lat=U`，自动前进记 `Switch idx=N lat=U auto`；`N` 是换到的曲库序号，`U` 是微秒。`lat` 在固件里算好：状态机处理这条切歌命令（或决定自动前进）时读一次周期计数器（`ReadCycles`），输出重新起播（`OutputStarted`）时再读，差值经 `CyclesToUs` 换算；用户切歌的 `lat` 是“命令被播放任务处理到起播”，**不含**按键到命令入队的 GUI 一段，也不含命令在 FIFO 里等待的时间；自动前进的 `lat` 从状态机决定前进（流尾放完、游标前进）算到下一首起播，即曲间间隙，长跑（清单 1 C1、R7.1）靠它取边界证据。只在 PLAYING 下计：用户切歌要真正换了一首（`TrackStartCount` 加 1），自动前进包括播完前进和跳过坏文件后续上（不含 ALL_BAD 等停止）；暂停中换曲或前进不出声、不记。起播前被停止作废；起播前又来一次用户切歌则以最后一次为准、从最后一条命令算起，且不带 `auto`；自动前进或用户切歌之后遇到坏文件续上，沿用原起点与原种类，仍只记一行。停止态 TOGGLE 开播与跳转（有自己的 `Seek` 行）不记 Switch；开播后第一首就是坏文件而续上时，会记一行 `auto`（与长跑里的自动前进无法区分，R1.4 和 R4.1 只看不带 `auto` 的行）。Ops 缺 `ReadCycles` 或 `CyclesToUs` 时 `lat=0`。R1.4 的阈值：无负载 ≤ 50 ms（spike 参考约 22–26 ms）。
+
+**欠载累计**（DIAG-6）：Platform 的欠载计数每次 Start 清零，状态机把播放模块每次回报的次数累加成开机以来的总数（`playback_machine_underrun_total()`），外壳经 `playback_task_get_underrun_total()` 公开只读。写者只有播放任务，32 位对齐读取不撕裂；Monitor 每 5 s 读一次，输出在 `Health` 行（见 [Monitor](../monitor/README.md)）。
 
 ## 编译期依赖
 
@@ -112,4 +118,4 @@
 
 ## 主机测试
 
-`Tests/playback_task/`：假存储窗口与假播放模块（含线性假 `MapSeek`/`ReopenStream` 与假周期计数器），覆盖跳转（`playback_task_seek`：执行与落点、三种忽略、最新者胜、带偏移重开、暂停中预填、越尾、`TrackStartCount`、作废、计时、Seek INFO）、K3 全部格子、K5 的快照字段、流身份与块交接、切歌清理顺序、暂停、EOF 与短文件、游标环形步进与代次绑定，以及 B5 坏文件有界跳过、B6 每一行停止原因、B7/B8 超时、B10 与 K3 的 AUDIO_FAULT 锁存。
+`Tests/playback_task/`：假存储窗口与假播放模块（含线性假 `MapSeek`/`ReopenStream` 与假周期计数器），覆盖跳转（`playback_task_seek`：执行与落点、三种忽略、最新者胜、带偏移重开、暂停中预填、越尾、`TrackStartCount`、作废、计时、Seek INFO）、切歌时延与欠载累计（`playback_task_switch`：Switch INFO 的格式、触发、auto 与作废）、K3 全部格子、K5 的快照字段、流身份与块交接、切歌清理顺序、暂停、EOF 与短文件、游标环形步进与代次绑定，以及 B5 坏文件有界跳过、B6 每一行停止原因、B7/B8 超时、B10 与 K3 的 AUDIO_FAULT 锁存。
