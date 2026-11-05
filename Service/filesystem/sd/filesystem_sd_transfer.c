@@ -4,10 +4,11 @@
   * @brief   在异步 SDMMC DMA 之上执行同步 FatFs 块读写。
   *
   * @details
- *          本 Module 由 Filesystem Service 持有，只能在 Storage Task 中进入。
- *          它把 Storage Task 句柄、索引通知、DMA 可访问的 bounce buffer、分块和
- *          Platform SD 状态提交隐藏在同步块读写 Interface 后。Cortex-M7 D-Cache
- *          维护属于 SD STM32 HAL Adapter 的后端 Implementation。
+ *          本 Module 由 Filesystem Service 持有。它把完成信号量、DMA 可访问的
+ *          bounce buffer、分块和 Platform SD 状态提交隐藏在同步块读写 Interface 后。
+ *          完成通知是一个静态二值信号量：SDMMC 中断给出，正在执行传输的任务（调用者，
+ *          不绑定固定任务）等待。Cortex-M7 D-Cache 维护属于 SD STM32 HAL Adapter 的
+ *          后端 Implementation。
   ******************************************************************************
   */
 
@@ -18,27 +19,32 @@
 #include <string.h>
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
-#include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
+#include "Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h"
 #include "Platform/sd/platform_sd.h"
 
 #if ((FILESYSTEM_SD_BLOCK_SIZE % FILESYSTEM_SD_DMA_BUFFER_ALIGNMENT) != 0U)
 #error "SD logical block size must satisfy the SD DMA buffer alignment contract."
 #endif
 
-static TaskHandle_t filesystem_sd_transfer_owner_task;
-static uint32_t filesystem_sd_notify_index;
-static bool filesystem_sd_notify_bound;
+/** @brief 完成信号量的静态存储；句柄在第一次 filesystem_sd_transfer_init() 时创建，之后不再重建。 */
+static StaticSemaphore_t filesystem_sd_done_storage;
+static SemaphoreHandle_t filesystem_sd_done;
+
+/** @brief 中断写入、任务在拿到信号量之后读取的最近一次传输事件（后到者覆盖先到者）。 */
+static volatile Platform_SD_TransferEventTypeDef filesystem_sd_event;
 
 static uint8_t filesystem_sd_dma_buffer[
     FILESYSTEM_SD_BLOCK_SIZE * FILESYSTEM_SD_DMA_BLOCK_COUNT]
     __attribute__((aligned(FILESYSTEM_SD_DMA_BUFFER_ALIGNMENT), section(".sd_dma_buffer")));
 
 /**
-  * @brief  向 Storage Task 发布一个 SDMMC 传输事件。
+  * @brief  发布一个 SDMMC 传输事件：记下事件，再给出完成信号量。
   * @param  event 在 ISR 上下文收到的 Platform 归一化传输结果。
-  * @param  context 向 Platform SD 注册的内部传输 Module 上下文。
-  * @note   此回调有意不访问 DMA buffer、FatFs 或 SDCard 状态机；等待中的任务离开
-  *         ISR 上下文后再执行这些操作。
+  * @param  context 向 Platform SD 注册的完成信号量句柄。
+  * @note   运行在 ISR 上下文，只用 FromISR 版本，并把“唤醒了更高优先级任务”交给
+  *         portYIELD_FROM_ISR。此回调有意不访问 DMA buffer、FatFs 或 SDCard 状态机；
+  *         等待中的任务离开 ISR 上下文后再执行这些操作。同一次等待内后到的事件覆盖先到的
+  *         （第二次 Give 对已满的二值信号量无效，但事件值已更新）。
   */
 static void filesystem_sd_transfer_irq_callback(
     Platform_SD_TransferEventTypeDef event,
@@ -46,36 +52,33 @@ static void filesystem_sd_transfer_irq_callback(
 {
     BaseType_t higher_priority_task_woken = pdFALSE;
 
-    if ((context != &filesystem_sd_transfer_owner_task) ||
-        (filesystem_sd_transfer_owner_task == NULL))
+    if ((context == NULL) || (context != (void *)filesystem_sd_done))
     {
         return;
     }
 
-    (void)xTaskNotifyIndexedFromISR(filesystem_sd_transfer_owner_task,
-                                    (UBaseType_t)filesystem_sd_notify_index,
-                                    (uint32_t)event,
-                                    eSetValueWithOverwrite,
-                                    &higher_priority_task_woken);
+    filesystem_sd_event = event;
+    (void)xSemaphoreGiveFromISR(filesystem_sd_done, &higher_priority_task_woken);
     portYIELD_FROM_ISR(higher_priority_task_woken);
 }
 
 /**
-  * @brief  校验调用者并清除残留的 DMA 事件通知。
-  * @retval true 当前任务持有传输 Module，可启动一次 DMA。
-  * @retval false 调用不在 Storage Task 上下文中。
+  * @brief  启动 DMA 之前丢弃遗留的完成信号。
+  * @retval true 执行器已初始化，可启动一次 DMA。
+  * @retval false InitSD 尚未建立完成信号量。
+  * @note   上一次传输超时后才到达的 DMA 完成中断会让信号量保持置位；若不清掉，下一次
+  *         传输会把它当成自己的完成。必须在 Platform_SD_Start*Blocks() 之前清：启动之后
+  *         到达的中断属于本次传输，清掉就丢了。清理不覆盖“旧 DMA 在清理之后、启动之前
+  *         才完成”的窗口，那由显式 Abort（#209）解决。
   */
 static bool filesystem_sd_transfer_prepare_wait(void)
 {
-    if ((filesystem_sd_transfer_owner_task == NULL) ||
-        (xTaskGetCurrentTaskHandle() != filesystem_sd_transfer_owner_task))
+    if (filesystem_sd_done == NULL)
     {
         return false;
     }
 
-    (void)xTaskNotifyStateClearIndexed(
-        filesystem_sd_transfer_owner_task,
-        (UBaseType_t)filesystem_sd_notify_index);
+    (void)xSemaphoreTake(filesystem_sd_done, 0U);
     return true;
 }
 
@@ -84,30 +87,22 @@ static bool filesystem_sd_transfer_prepare_wait(void)
   * @param  event 接收 ISR 发布的事件。
   * @param  timeout_ms 本 DMA 分块的最长等待时间，单位为毫秒。
   * @retval true 已收到完整传输事件。
-  * @retval false 调用者或输出参数无效，或等待超时。
+  * @retval false 输出参数无效、执行器未初始化，或等待超时。
   */
 static bool filesystem_sd_transfer_wait(Platform_SD_TransferEventTypeDef *event,
                                         uint32_t timeout_ms)
 {
-    uint32_t notification_value;
-
-    if ((event == NULL) ||
-        (filesystem_sd_transfer_owner_task == NULL) ||
-        (xTaskGetCurrentTaskHandle() != filesystem_sd_transfer_owner_task))
+    if ((event == NULL) || (filesystem_sd_done == NULL))
     {
         return false;
     }
 
-    if (xTaskNotifyWaitIndexed((UBaseType_t)filesystem_sd_notify_index,
-                               0U,
-                               UINT32_MAX,
-                               &notification_value,
-                               pdMS_TO_TICKS(timeout_ms)) != pdTRUE)
+    if (xSemaphoreTake(filesystem_sd_done, pdMS_TO_TICKS(timeout_ms)) != pdTRUE)
     {
         return false;
     }
 
-    *event = (Platform_SD_TransferEventTypeDef)notification_value;
+    *event = filesystem_sd_event;
     return true;
 }
 
@@ -140,59 +135,36 @@ static bool filesystem_sd_transfer_finish(
 }
 
 /**
-  * @brief  将 Filesystem Service DMA 执行器绑定到唯一的 Storage Task。
-  * @param  notify_index 本任务通知数组中的 SD DMA 完成槽，由 APP 枚举注入。
-  * @retval true 当前任务持有执行器并接收 DMA 事件。
-  * @retval false 调度器未运行、索引越界、已由其他任务持有，或 Platform SD 尚不能接收订阅者。
-  * @note   允许同一 Storage Task 重复初始化：挂载和卸载路径也会把
-  *         Service_Filesystem_InitSD() 用作幂等的就绪检查。首次绑定后忽略后续索引参数。
+  * @brief  建立完成信号量（第一次调用时）并向 Platform SD 订阅传输事件。
+  * @retval true 信号量就绪且 Platform SD 已保存订阅者。
+  * @retval false Platform SD 尚不能接收订阅者（例如还没初始化）。
+  * @note   信号量先于订阅创建：Platform 只在订阅之后才会调用 ISR 回调，所以 ISR 看到的
+  *         信号量总是已经存在的。重复调用（挂载和卸载路径把 Service_Filesystem_InitSD()
+  *         用作幂等的就绪检查）只重新订阅，不重建信号量，也不动其中的信号。第一次调用须在
+  *         任何任务使用文件接口之前完成，不与其他调用并发。
   */
-bool filesystem_sd_transfer_init(uint32_t notify_index)
+bool filesystem_sd_transfer_init(void)
 {
-    TaskHandle_t current_task = xTaskGetCurrentTaskHandle();
-
-    if (current_task == NULL)
+    if (filesystem_sd_done == NULL)
     {
-        return false;
-    }
-
-    if (notify_index >= (uint32_t)configTASK_NOTIFICATION_ARRAY_ENTRIES)
-    {
-        return false;
-    }
-
-    if (filesystem_sd_transfer_owner_task == NULL)
-    {
-        filesystem_sd_transfer_owner_task = current_task;
-        filesystem_sd_notify_index = notify_index;
-        filesystem_sd_notify_bound = true;
-    }
-
-    if (filesystem_sd_transfer_owner_task != current_task)
-    {
-        return false;
+        filesystem_sd_done = xSemaphoreCreateBinaryStatic(&filesystem_sd_done_storage);
+        if (filesystem_sd_done == NULL)
+        {
+            return false;
+        }
     }
 
     return Platform_SD_SetTransferCallback(filesystem_sd_transfer_irq_callback,
-                                           &filesystem_sd_transfer_owner_task) == PLATFORM_OK;
+                                           (void *)filesystem_sd_done) == PLATFORM_OK;
 }
 
 /**
-  * @brief  查询 DMA 执行器是否已绑定到某个 Storage Task。
-  * @retval true 已完成首次 InitSD 绑定。
+  * @brief  查询 DMA 执行器是否已经初始化（完成信号量已建立）。
+  * @retval true 已调用过 filesystem_sd_transfer_init()。
   */
-bool filesystem_sd_transfer_is_bound(void)
+bool filesystem_sd_transfer_is_ready(void)
 {
-    return filesystem_sd_notify_bound && (filesystem_sd_transfer_owner_task != NULL);
-}
-
-/**
-  * @brief  返回首次绑定保存的 SD DMA 完成通知槽。
-  * @return APP 注入的索引；未绑定时无意义。
-  */
-uint32_t filesystem_sd_transfer_notify_index(void)
-{
-    return filesystem_sd_notify_index;
+    return filesystem_sd_done != NULL;
 }
 
 /**
@@ -202,7 +174,7 @@ uint32_t filesystem_sd_transfer_notify_index(void)
   * @param  block_count 连续读取的逻辑块数量。
   * @param  timeout_ms 每个 DMA 分块的最长等待时间，单位为毫秒。
   * @retval true DMA 成功后，所有块均已复制到 destination。
-  * @retval false 输入、所有权、DMA 启动、完成或卡同步失败。
+  * @retval false 输入、执行器未初始化、DMA 启动、完成或卡同步失败。
   */
 bool filesystem_sd_transfer_read_blocks(uint8_t *destination,
                                         uint32_t start_block,
@@ -262,7 +234,7 @@ bool filesystem_sd_transfer_read_blocks(uint8_t *destination,
   * @param  block_count 连续写入的逻辑块数量。
   * @param  timeout_ms 每个 DMA 分块的最长等待时间，单位为毫秒。
   * @retval true 每个块均已到达卡，且卡已回到传输状态。
-  * @retval false 输入、所有权、DMA 启动、完成或卡同步失败。
+  * @retval false 输入、执行器未初始化、DMA 启动、完成或卡同步失败。
   */
 bool filesystem_sd_transfer_write_blocks(const uint8_t *source,
                                          uint32_t start_block,
@@ -288,12 +260,12 @@ bool filesystem_sd_transfer_write_blocks(const uint8_t *source,
         }
 
         byte_count = chunk_blocks * FILESYSTEM_SD_BLOCK_SIZE;
-        (void)memcpy(filesystem_sd_dma_buffer, source, byte_count);
         if (!filesystem_sd_transfer_prepare_wait())
         {
             return false;
         }
 
+        (void)memcpy(filesystem_sd_dma_buffer, source, byte_count);
         if (Platform_SD_StartWriteBlocks(filesystem_sd_dma_buffer,
                                          current_block,
                                          chunk_blocks) != PLATFORM_OK)

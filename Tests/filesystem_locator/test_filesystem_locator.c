@@ -41,49 +41,36 @@ static Service_Filesystem_FileLocatorTypeDef track_locators[TRACK_COUNT];
 
 /**
  * @brief SD 传输层替身：初始化恒成功。
- * @param[in] notify_index 通知槽（忽略）。
  * @return 恒为 true。
  */
-bool filesystem_sd_transfer_init(uint32_t notify_index)
-{
-    (void)notify_index;
-    return true;
-}
-
-/**
- * @brief SD 传输层替身：恒已绑定。
- * @return 恒为 true。
- */
-bool filesystem_sd_transfer_is_bound(void)
+bool filesystem_sd_transfer_init(void)
 {
     return true;
 }
 
 /**
- * @brief SD 传输层替身：固定通知槽。
- * @return 固定为 1。
+ * @brief SD 传输层替身：恒已就绪。
+ * @return 恒为 true。
  */
-uint32_t filesystem_sd_transfer_notify_index(void)
+bool filesystem_sd_transfer_is_ready(void)
 {
-    return 1U;
+    return true;
 }
 
 /**
  * @brief Flash 传输层替身：初始化恒成功；本测试不使用 Flash 卷。
- * @param[in] notify_index 通知槽（忽略）。
  * @return 恒为 true。
  */
-bool filesystem_flash_transfer_init(uint32_t notify_index)
+bool filesystem_flash_transfer_init(void)
 {
-    (void)notify_index;
     return true;
 }
 
 /**
- * @brief Flash 传输层替身：当前任务恒为所有者。
+ * @brief Flash 传输层替身：恒已就绪。
  * @return 恒为 true。
  */
-bool filesystem_flash_transfer_is_owner(void)
+bool filesystem_flash_transfer_is_ready(void)
 {
     return true;
 }
@@ -217,7 +204,7 @@ static void build_image(void)
     assert(FATFS_LinkDriverEx(&ram_disk_driver, SDPath, 0) == 0);
     assert(FATFS_LinkDriverEx(&ram_disk_driver, USERPath, 1) == 0);
     assert(SDPath[0] == '0');
-    assert(Service_Filesystem_InitSD(1U) == SERVICE_OK);
+    assert(Service_Filesystem_InitSD() == SERVICE_OK);
     assert(f_mkfs(sd_drive, FM_FAT32 | FM_SFD, CLUSTER_BYTES, work, sizeof(work)) == FR_OK);
     assert(Service_Filesystem_MountSD() == SERVICE_OK);
     assert(Service_Filesystem_CreateDirectory(SERVICE_FILESYSTEM_VOLUME_SD, "Music") == SERVICE_OK);

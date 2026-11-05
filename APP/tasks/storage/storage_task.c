@@ -239,9 +239,8 @@ bool storage_task_sd_is_mounted(void)
  *         仅就绪时接受窗口 request 并 load。名称槽任何状态下都接受 request，
  *         未就绪时按代次 0 应答，GUI 显示 `--`。
  *
- *         STORAGE_NOTIFY_SD_TRANSFER 与 STORAGE_NOTIFY_FLASH_OPERATION 由同一任务
- *         调用栈中的 Filesystem SD/Flash 私有执行器等待。
- *         它们完成后返回各自调用者，绝不在 IRQ 中提交下一笔传输。
+ *         Filesystem SD/Flash 私有执行器在同一任务调用栈中等待各自的完成信号量
+ *         （不占用本任务的通知槽）。它们完成后返回各自调用者，绝不在 IRQ 中提交下一笔传输。
  */
 void storage_task(void *handle)
 {

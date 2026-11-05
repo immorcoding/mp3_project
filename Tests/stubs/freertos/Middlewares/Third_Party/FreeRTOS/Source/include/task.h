@@ -19,6 +19,7 @@ typedef enum
 } eNotifyAction;
 
 TickType_t xTaskGetTickCount(void);
+void vTaskDelay(TickType_t ticks_to_delay);
 TaskHandle_t xTaskGetCurrentTaskHandle(void);
 
 BaseType_t xTaskNotifyIndexed(TaskHandle_t task, UBaseType_t index, uint32_t value, eNotifyAction action);

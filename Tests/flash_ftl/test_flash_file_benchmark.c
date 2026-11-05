@@ -20,36 +20,44 @@ uint8_t retUSER;
 uint8_t retSD = 1U;
 FATFS USERFatFS;
 FATFS SDFatFS;
-static bool owner = true;
 static const char *scenario;
 static unsigned removes, closes, writes;
 static bool passed, failed, cleanup_failed;
 
-bool filesystem_sd_transfer_init(uint32_t notify_index)
-{
-    (void)notify_index;
-    return false;
-}
-
-bool filesystem_sd_transfer_is_bound(void)
+/**
+ * @brief SD 传输层替身：初始化结果固定。
+ * @return 固定值，见函数体。
+ */
+bool filesystem_sd_transfer_init(void)
 {
     return false;
 }
 
-uint32_t filesystem_sd_transfer_notify_index(void)
+/**
+ * @brief SD 传输层替身：就绪状态固定。
+ * @return 固定值，见函数体。
+ */
+bool filesystem_sd_transfer_is_ready(void)
 {
-    return 0U;
+    return false;
 }
 
-bool filesystem_flash_transfer_init(uint32_t notify_index)
+/**
+ * @brief Flash 传输层替身：初始化恒成功。
+ * @return 恒为 true。
+ */
+bool filesystem_flash_transfer_init(void)
 {
-    (void)notify_index;
     return true;
 }
 
-bool filesystem_flash_transfer_is_owner(void)
+/**
+ * @brief Flash 传输层替身：恒已就绪。
+ * @return 恒为 true。
+ */
+bool filesystem_flash_transfer_is_ready(void)
 {
-    return owner;
+    return true;
 }
 
 Service_StatusTypeDef filesystem_flash_transfer_open(void)
@@ -172,7 +180,7 @@ Service_StatusTypeDef __wrap_Service_Filesystem_RemoveFile(Service_Filesystem_Vo
 }
 
 /**
- * @brief 核对所有者、路径、同名保护、文件槽和旧句柄失效。
+ * @brief 核对未初始化时的拒绝、路径、同名保护、文件槽和旧句柄失效；卷已挂载但还没 InitFlash 时先断言拒绝。
  */
 static void test_contract(void)
 {
@@ -180,12 +188,11 @@ static void test_contract(void)
     uint8_t data[16] = {1, 2, 3};
     uint32_t transferred;
 
-    owner = false;
     assert(Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_FLASH,
                                        "test.bin",
                                        SERVICE_FILESYSTEM_FILE_MODE_CREATE_NEW,
                                        &file) == SERVICE_NOT_READY);
-    owner = true;
+    assert(Service_Filesystem_InitFlash() == SERVICE_OK);
     assert(Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_FLASH,
                                        "../bad",
                                        SERVICE_FILESYSTEM_FILE_MODE_CREATE_NEW,
@@ -265,6 +272,11 @@ int test_flash_file_benchmark(void)
         test_contract();
         return 0;
     }
+    /* “未初始化”场景：卷已挂载但没有调用 InitFlash，文件接口拒绝，基准不得动任何东西。 */
+    if (strcmp(scenario, "not_initialized") != 0)
+    {
+        assert(Service_Filesystem_InitFlash() == SERVICE_OK);
+    }
     TCHAR path[40] = {(TCHAR)USERPath[0], ':', '/'};
     const char *name = STORAGE_FLASH_BENCHMARK_FILE_NAME;
     for (size_t i = 0; i <= strlen(name); i++)
@@ -285,12 +297,10 @@ int test_flash_file_benchmark(void)
     DWORD free_before;
     FATFS *free_fs;
     assert(f_getfree(drive, &free_before, &free_fs) == FR_OK);
-    owner = strcmp(scenario, "nonowner") != 0;
     storage_flash_benchmark_run_file();
     unsigned attempts = removes;
     storage_flash_benchmark_run_file();
     assert(removes == attempts);
-    owner = true;
     FILINFO info;
     FRESULT exists = f_stat(path, &info);
     if (!strcmp(scenario, "exists"))
@@ -319,7 +329,7 @@ int test_flash_file_benchmark(void)
     else
     {
         assert(exists == FR_NO_FILE);
-        assert(removes == (!strcmp(scenario, "nonowner") ? 0U : 1U));
+        assert(removes == (!strcmp(scenario, "not_initialized") ? 0U : 1U));
         assert(passed == !strcmp(scenario, "success"));
         assert(failed == (strcmp(scenario, "success") != 0));
     }
