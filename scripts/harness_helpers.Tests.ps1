@@ -262,17 +262,24 @@ $filesystemHostImpact = Get-HarnessImpact -ChangedPath @('Service/filesystem/fil
 Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $filesystemHostImpact.HostModules `
     -Message 'Filesystem Service 与 FatFs 变化必须同时选择文件定位符与 FTL 主机测试'
 
-# 共用 FreeRTOS 桩（Tests/stubs/freertos）被 flash_ftl 与 filesystem_locator 编译：改桩必须选中二者，且不落入未知路径。
+# 共用 FreeRTOS 桩（Tests/stubs/freertos）被 flash_ftl、filesystem_locator 与 ui_cell 编译：改桩必须选中它们，且不落入未知路径。
 $freertosStubImpact = Get-HarnessImpact -ChangedPath @(
     'Tests/stubs/freertos/freertos_stub.c'
     'Tests/stubs/freertos/freertos_stub.h'
     'Tests/stubs/freertos/Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h')
-Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $freertosStubImpact.HostModules `
-    -Message '共用 FreeRTOS 桩变化必须选择 filesystem_locator 与 flash_ftl 主机测试'
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'ui_cell') -Actual $freertosStubImpact.HostModules `
+    -Message '共用 FreeRTOS 桩变化必须选择 filesystem_locator、flash_ftl 与 ui_cell 主机测试'
 Assert-HarnessEqual -Expected 0 -Actual $freertosStubImpact.UnknownPaths.Count `
     -Message 'Tests/stubs/freertos 由主机模块规则覆盖，不应落入未知路径'
 Assert-HarnessEqual -Expected $false -Actual $freertosStubImpact.RequiresAllHostTests `
     -Message '共用 FreeRTOS 桩变化不应回退全部主机测试'
+
+# ui_cell（#217）是 APP 私有的界面数据短锁模块：生产路径与测试目录各自选中 ui_cell，不落入未知路径。
+$uiCellImpact = Get-HarnessImpact -ChangedPath @('APP/ui_cell/ui_cell.c', 'APP/ui_cell/ui_cell.h', 'Tests/ui_cell/test_ui_cell.c')
+Assert-HarnessSequence -Expected @('ui_cell') -Actual $uiCellImpact.HostModules `
+    -Message 'ui_cell 变化必须选择 ui_cell 主机测试'
+Assert-HarnessEqual -Expected 0 -Actual $uiCellImpact.UnknownPaths.Count `
+    -Message 'APP/ui_cell 由主机模块规则覆盖，不应落入未知生产路径'
 
 # 样本卡生成器的 Python 测试是主机模块 board_test_card（#183）：改该目录由 CHANGED 选中，不再落入未知路径。
 $boardCardImpact = Get-HarnessImpact -ChangedPath @('Tools/board_test_card/card_glyphs.py', 'Tools/board_test_card/test_card_names.py')
@@ -321,7 +328,7 @@ Assert-HarnessSequence -Expected @('board_test_card') -Actual (Get-HarnessSlowTe
     -Message '真实规则声明样本卡有慢用例'
 
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
-Assert-HarnessSequence -Expected @('board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $harnessImpact.HostModules `
+Assert-HarnessSequence -Expected @('board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'ui_cell', 'w25qxx') -Actual $harnessImpact.HostModules `
     -Message 'Harness 变化必须回退全部主机测试'
 Assert-HarnessEqual -Expected $true -Actual $harnessImpact.RequiresAllHostTests -Message 'Harness 变化应标记全部测试'
 
@@ -334,7 +341,7 @@ Assert-HarnessEqual -Expected $false -Actual $doxygenCheckImpact.RequiresHardwar
     -Message 'Doxygen 检查脚本不要求上板'
 
 $unknownImpact = Get-HarnessImpact -ChangedPath @('Service/unmapped/player.c')
-Assert-HarnessSequence -Expected @('board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'w25qxx') -Actual $unknownImpact.HostModules `
+Assert-HarnessSequence -Expected @('board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'ui_cell', 'w25qxx') -Actual $unknownImpact.HostModules `
     -Message '未知生产路径不得以零测试通过'
 Assert-HarnessSequence -Expected @('Service/unmapped/player.c') -Actual $unknownImpact.UnknownPaths `
     -Message '应保留触发保守回退的路径证据'

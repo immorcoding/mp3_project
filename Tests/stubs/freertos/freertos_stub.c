@@ -8,6 +8,8 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define STUB_SEMAPHORE_POOL_SIZE 16U
@@ -44,6 +46,7 @@ static uint32_t task_count;
 static TaskHandle_t current_task;
 static StaticSemaphore_t semaphore_pool[STUB_SEMAPHORE_POOL_SIZE];
 static bool semaphore_in_use[STUB_SEMAPHORE_POOL_SIZE];
+static SemaphoreHandle_t last_created_semaphore;
 static TickType_t current_tick;
 static TickType_t tick_step;
 static FreertosStub_BlockHook block_hook;
@@ -76,6 +79,7 @@ static SemaphoreHandle_t init_semaphore(StaticSemaphore_t *buffer, StubSemaphore
     memset(buffer, 0, sizeof(*buffer));
     state->kind = kind;
     state->count = initial_count;
+    last_created_semaphore = buffer;
     return buffer;
 }
 
@@ -99,12 +103,25 @@ static SemaphoreHandle_t create_from_pool(StubSemaphoreKind kind, uint32_t initi
 }
 
 /**
+ * @brief 产品 configASSERT 失败时的出口：打印文件和行号后 abort()。
+ * @param[in] file 断言所在文件。
+ * @param[in] line 断言所在行。
+ * @note  真实固件里这里是不可恢复的停机；主机测试用 SIGABRT 处理函数捕获以验证断言触发。
+ */
+void vAssertCalled(const char *file, uint32_t line)
+{
+    (void)fprintf(stderr, "configASSERT failed: %s:%lu\n", file, (unsigned long)line);
+    abort();
+}
+
+/**
  * @brief 丢弃所有对象与脚本：tick 与步长归零、钩子取消，并重建默认的主任务。
  */
 void freertos_stub_reset(void)
 {
     memset(semaphore_pool, 0, sizeof(semaphore_pool));
     memset(semaphore_in_use, 0, sizeof(semaphore_in_use));
+    last_created_semaphore = NULL;
     current_tick = 0U;
     tick_step = 0U;
     block_hook = NULL;
@@ -231,6 +248,15 @@ TickType_t xTaskGetTickCount(void)
 FreertosStub_SemaphoreStats freertos_stub_semaphore_stats(SemaphoreHandle_t semaphore)
 {
     return state_of(semaphore)->stats;
+}
+
+/**
+ * @brief 最近一次创建（动态或静态）的信号量。
+ * @return 句柄；reset 之后还没创建过则为 NULL。
+ */
+SemaphoreHandle_t freertos_stub_last_created_semaphore(void)
+{
+    return last_created_semaphore;
 }
 
 /**

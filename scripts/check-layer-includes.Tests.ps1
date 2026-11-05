@@ -106,6 +106,13 @@ Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'service' -Include
     -Message 'Service 禁止 HAL Adapter'
 Assert-NotNull -Actual (Get-LayerIncludeViolation -SourceKind 'service' -IncludePath 'APP/app.h') `
     -Message 'Service 禁止 APP'
+foreach ($uiCellInclude in @('APP/ui_cell/ui_cell.h', 'ui_cell/ui_cell.h', '../../APP/ui_cell/ui_cell.h', 'ui_cell.h')) {
+    $uiCellViolation = Get-LayerIncludeViolation -SourceKind 'service' -IncludePath $uiCellInclude
+    Assert-NotNull -Actual $uiCellViolation -Message "Service/gui 禁止包含 ui_cell：$uiCellInclude"
+    if ($uiCellViolation -notmatch 'ui_cell') { throw "ui_cell 违规说明应点名 ui_cell：$uiCellViolation" }
+}
+Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'service' -IncludePath 'Service/gui/gui_ui_cell_helper.h') `
+    -Message '名字里含 ui_cell 字样但不是 ui_cell 模块的头不误报'
 
 Assert-Null -Actual (Get-LayerIncludeViolation -SourceKind 'platform' -IncludePath 'main.h') `
     -Message 'Platform 允许 main.h'
@@ -224,6 +231,11 @@ Assert-FixtureViolation -RelativeFile 'Adapters/stm32_hal/foo/foo.c' `
     -IncludeLine '#include "APP/app.h"' `
     -ExpectedPattern 'APP/app\.h' `
     -FailureMessage 'HAL Adapter 夹具含 APP 头时分层检查应失败。'
+
+Assert-FixtureViolation -RelativeFile 'Service/gui/foo/foo.c' `
+    -IncludeLine '#include "APP/ui_cell/ui_cell.h"' `
+    -ExpectedPattern 'APP/ui_cell/ui_cell\.h' `
+    -FailureMessage 'Service/gui 夹具包含 ui_cell 时分层检查应失败。'
 
 Assert-FixtureViolation -RelativeFile 'APP/apps/music/gui/foo.c' `
     -IncludeLine '#include "APP/apps/books/gui/gui_books.h"' `

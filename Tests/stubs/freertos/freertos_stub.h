@@ -89,6 +89,13 @@ uint32_t freertos_stub_unsatisfied_infinite_waits(void);
 FreertosStub_SemaphoreStats freertos_stub_semaphore_stats(SemaphoreHandle_t semaphore);
 
 /**
+ * @brief 最近一次创建（动态或静态）的信号量；被测模块把锁藏在内部、不交出句柄时，
+ *        测试在调用模块的初始化后用它取得句柄，再配合 fail_next_takes 与统计。
+ * @return 句柄；reset 之后还没创建过则为 NULL。
+ */
+SemaphoreHandle_t freertos_stub_last_created_semaphore(void);
+
+/**
  * @brief 让某个信号量接下来的 N 次拿取失败（即使它空闲），用来模拟别的任务占着锁。
  * @param[in] semaphore 信号量句柄。
  * @param[in] count 失败次数；失败的拿取不改变持有状态，仍按超时前进 tick。
