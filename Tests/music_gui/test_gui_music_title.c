@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "APP/tasks/gui/music/gui_music_title.h"
+#include "APP/apps/music/gui/gui_music_title.h"
 
 /**
  * @brief 构造一个曲目身份。

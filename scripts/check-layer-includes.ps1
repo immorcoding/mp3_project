@@ -34,19 +34,70 @@ function Get-NormalizedIncludePath {
     return (($IncludePath -replace '\\', '/').Trim())
 }
 
-function Get-LayerIncludeViolation {
+# 把 `../x.h` 这类相对包含按源文件所在目录折成仓库相对路径；`..` 超出仓库根时原样保留余下部分。
+function Resolve-RelativeIncludePath {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('component', 'bridge', 'service', 'platform', 'stm32_hal', 'cortex')]
-        [string]$SourceKind,
+        [string]$Directory,
 
         [Parameter(Mandatory)]
         [string]$IncludePath
     )
 
+    $segments = New-Object System.Collections.Generic.List[string]
+    foreach ($part in ((Get-NormalizedIncludePath -IncludePath $Directory).Trim('/') -split '/')) {
+        if ($part.Length -gt 0) { [void]$segments.Add($part) }
+    }
+
+    foreach ($part in ((Get-NormalizedIncludePath -IncludePath $IncludePath) -split '/')) {
+        if ($part -eq '..') {
+            if ($segments.Count -gt 0) { $segments.RemoveAt($segments.Count - 1) }
+        }
+        elseif ($part -ne '.' -and $part.Length -gt 0) {
+            [void]$segments.Add($part)
+        }
+    }
+
+    return ($segments -join '/')
+}
+
+function Get-LayerIncludeViolation {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('component', 'bridge', 'service', 'platform', 'stm32_hal', 'cortex', 'app')]
+        [string]$SourceKind,
+
+        [Parameter(Mandatory)]
+        [string]$IncludePath,
+
+        # 仅 app：源文件所属的应用名（APP/apps/<app>/ 的 <app>）。
+        [string]$SourceApp = '',
+
+        # 仅 app：源文件所在目录（仓库相对），用来解析 `../` 起头的相对包含。
+        [string]$SourceDirectory = ''
+    )
+
     $normalized = Get-NormalizedIncludePath -IncludePath $IncludePath
     if ([string]::IsNullOrWhiteSpace($normalized)) {
+        return $null
+    }
+
+    if ($SourceKind -eq 'app') {
+        $target = $normalized
+        if ($target.StartsWith('.') -and -not [string]::IsNullOrWhiteSpace($SourceDirectory)) {
+            $target = Resolve-RelativeIncludePath -Directory $SourceDirectory -IncludePath $target
+        }
+
+        # 应用之间不互相包含；只拦 APP/apps/<别的应用>/ 下的头，注册表头 APP/apps/app_table.h 不受限。
+        if ($target -match '(?i)(^|/)apps/([^/]+)/') {
+            $targetApp = $Matches[2]
+            if ($targetApp -ne $SourceApp) {
+                return "禁止包含 '$normalized'。应用 '$SourceApp' 不得包含应用 '$targetApp'；应用之间不互相包含（ARC-23）。"
+            }
+        }
+
         return $null
     }
 
@@ -139,6 +190,7 @@ $script:LayerScanRootTable = @(
     @{ Prefix = 'Adapters/cortex/'; Kind = 'cortex' }
     @{ Prefix = 'Platform/'; Kind = 'platform' }
     @{ Prefix = 'Service/'; Kind = 'service' }
+    @{ Prefix = 'APP/apps/'; Kind = 'app' }
 )
 
 # 非 .c/.h 或不在扫描根内时返回 $null。
@@ -162,6 +214,51 @@ function Get-LayerSourceKind {
     }
 
     return $null
+}
+
+# APP/apps/<app>/... 取出 <app>；注册表 APP/apps/app_table.c 这类直接放在 apps 下的文件不属于任何应用，返回 $null。
+function Get-LayerSourceApp {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$RelativePath
+    )
+
+    $normalized = (Get-NormalizedIncludePath -IncludePath $RelativePath).TrimStart('/')
+    if ($normalized -match '(?i)^APP/apps/([^/]+)/') {
+        return $Matches[1]
+    }
+
+    return $null
+}
+
+# 按源文件路径补齐 app 种类需要的应用名与目录后判定；注册表本身（无应用名）不受应用互不包含限制。
+function Get-LayerIncludeViolationForFile {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Kind,
+
+        [Parameter(Mandatory)]
+        [string]$RelativePath,
+
+        [Parameter(Mandatory)]
+        [string]$IncludePath
+    )
+
+    if ($Kind -ne 'app') {
+        return Get-LayerIncludeViolation -SourceKind $Kind -IncludePath $IncludePath
+    }
+
+    $app = Get-LayerSourceApp -RelativePath $RelativePath
+    if ($null -eq $app) {
+        return $null
+    }
+
+    $directory = Split-Path -Path $RelativePath -Parent
+    return Get-LayerIncludeViolation -SourceKind 'app' -SourceApp $app `
+        -SourceDirectory (Get-NormalizedIncludePath -IncludePath $directory) -IncludePath $IncludePath
 }
 
 # 单文件越层检查，供编辑后 Agent Hook 调用；返回 `path:line: 原因` 数组。
@@ -191,7 +288,7 @@ function Get-LayerFileIncludeViolation {
             continue
         }
 
-        $violation = Get-LayerIncludeViolation -SourceKind $kind -IncludePath $includePath
+        $violation = Get-LayerIncludeViolationForFile -Kind $kind -RelativePath $normalized -IncludePath $includePath
         if (-not [string]::IsNullOrWhiteSpace($violation)) {
             [void]$violations.Add("${normalized}:${lineNumber}: $violation")
         }
@@ -264,7 +361,7 @@ function Invoke-LayerIncludeCheck {
                     continue
                 }
 
-                $violation = Get-LayerIncludeViolation -SourceKind $scanRoot.Kind -IncludePath $includePath
+                $violation = Get-LayerIncludeViolationForFile -Kind $scanRoot.Kind -RelativePath $relativePath -IncludePath $includePath
                 if ([string]::IsNullOrWhiteSpace($violation)) {
                     continue
                 }

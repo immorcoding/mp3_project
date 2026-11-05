@@ -17,7 +17,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "APP/tasks/gui/music/gui_music_queue_window.h"
+#include "APP/apps/music/gui/gui_music_queue_window.h"
 #include "APP/tasks/playback/playback_contract.h"
 
 /**

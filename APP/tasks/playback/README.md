@@ -6,7 +6,7 @@
 
 ## 公开 Interface
 
-- `playback_contract.h`：GUI 音乐分区与模拟器脚本化后端共用的唯一合同，只含类型（`Playback_CommandTypeDef`、`Playback_SnapshotTypeDef` 等）与 `playback_command_send()`、`playback_snapshot_read()` 两个声明，字段以 #71 K1 为基础，0.9.0 加入跳转（[#172](https://github.com/immorcoding/mp3_project/issues/172) C 节、[#176](https://github.com/immorcoding/mp3_project/issues/176)）：命令种类末尾新增 `PLAYBACK_COMMAND_SEEK`，`Generation`/`Index` 由“仅 SELECT”改为“SELECT 与 SEEK”的曲目身份，命令新增 `TargetMs`（毫秒，仅 SEEK），快照新增 `TrackStartCount`，不暴露 FreeRTOS 句柄。GUI 里只有音乐分区（`APP/tasks/gui/music`）可以包含它，`Service/gui` 不得包含。真实后端与模拟器的假后端实现同一个头，在链接时互换。
+- `playback_contract.h`：音乐应用 GUI 分区（`APP/apps/music/gui/`）与模拟器脚本化后端共用的唯一合同，只含类型（`Playback_CommandTypeDef`、`Playback_SnapshotTypeDef` 等）与 `playback_command_send()`、`playback_snapshot_read()` 两个声明，字段以 #71 K1 为基础，0.9.0 加入跳转（[#172](https://github.com/immorcoding/mp3_project/issues/172) C 节、[#176](https://github.com/immorcoding/mp3_project/issues/176)）：命令种类末尾新增 `PLAYBACK_COMMAND_SEEK`，`Generation`/`Index` 由“仅 SELECT”改为“SELECT 与 SEEK”的曲目身份，命令新增 `TargetMs`（毫秒，仅 SEEK），快照新增 `TrackStartCount`，不暴露 FreeRTOS 句柄。GUI 里只有音乐分区（`APP/tasks/gui/music`）可以包含它，`Service/gui` 不得包含。真实后端与模拟器的假后端实现同一个头，在链接时互换。
 - `playback_task.h`：任务入口 `playback_task()` 与私有通知槽 `Playback_NotifyIndexTypeDef`（`PLAYBACK_NOTIFY_EVENT`）；由 `app_tasks.c` 以 `xTaskCreateStatic` 创建，不是跨模块 Interface。`playback_command_send()` 与 `playback_snapshot_read()` 的实现在 `playback_task.c`。
 - `playback_task_config.h`：事件 FLAG、命令 FIFO 深度与等待节拍等固定配置。
 - `playback_machine.h`：状态机的 Ops 与两个入口，只服务播放任务外壳，不是跨模块 Interface。
