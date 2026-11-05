@@ -175,6 +175,11 @@
             Name = 'storage_audio_stream'
             PathPatterns = @(
                 '^APP/tasks/storage/stream/'
+                # storage_audio_result.c（卷不可用的分类，#211）经 storage_audio_stream.h 带入的头文件，类型取自共用桩的头。
+                '^APP/tasks/storage/storage_task(?:_config)?\.h$'
+                '^Service/filesystem/filesystem_types\.h$'
+                '^Service/service\.h$'
+                '^Tests/stubs/freertos/'
                 '^Tests/storage_audio_stream/'
             )
         }

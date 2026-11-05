@@ -8,6 +8,7 @@
 #include "storage_audio_stream.h"
 
 #include "storage_audio_range.h"
+#include "storage_audio_result.h"
 
 #include "APP/tasks/storage/catalog/storage_catalog.h"
 #include "APP/tasks/storage/catalog/storage_sheet.h"
@@ -19,7 +20,6 @@
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/queue.h"
 #include "Service/filesystem/filesystem_file.h"
-#include "Service/filesystem/filesystem_types.h"
 #include "Service/log/log_service.h"
 
 /* 音频块一次读完，不能超过文件接口单次读写的上限（超过会返回 SERVICE_INVALID_PARAM，不截短也不拆分）。 */
@@ -218,33 +218,6 @@ bool storage_audio_stream_has_work(Storage_AudioMediaTypeDef media)
 }
 
 /**
- * @brief 把 Service 状态收成开启结果。
- * @param[in] status 打开/seek/读取的 Service 状态。
- * @param[in] open_failure true 表示打开文件本身失败（无法区分缺失与损坏，按坏文件）。
- * @return 开启结果码。
- */
-static Storage_AudioOpenResultTypeDef storage_audio_map_open_status(Service_StatusTypeDef status,
-                                                                    bool open_failure)
-{
-    if (Service_Filesystem_StatusIsVolumeUnavailable(status))
-    {
-        return STORAGE_AUDIO_OPEN_NOT_READY; /* NO_MEDIA / NOT_READY / INVALID_HANDLE 不是文件错误（#195 第 9 条）。 */
-    }
-
-    switch (status)
-    {
-        case SERVICE_NO_FILESYSTEM:
-            return STORAGE_AUDIO_OPEN_NOT_READY;
-        case SERVICE_TIMEOUT:
-            return STORAGE_AUDIO_OPEN_IO_ERROR;
-        case SERVICE_INVALID_PARAM:
-            return STORAGE_AUDIO_OPEN_BAD_FILE;
-        default:
-            return open_failure ? STORAGE_AUDIO_OPEN_BAD_FILE : STORAGE_AUDIO_OPEN_IO_ERROR;
-    }
-}
-
-/**
  * @brief 在指定偏移读满 count 字节。
  * @param[in] offset 文件偏移。
  * @param[out] buffer 接收缓冲。
@@ -265,7 +238,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_read_exact(uint32_t offset,
     }
     if (status != SERVICE_OK)
     {
-        return storage_audio_map_open_status(status, false);
+        return storage_audio_classify_open_status(status, false);
     }
     return (got == count) ? STORAGE_AUDIO_OPEN_OK : STORAGE_AUDIO_OPEN_IO_ERROR;
 }
@@ -296,7 +269,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t audio_of
     status = Service_Filesystem_GetFileSize(storage_audio_file, &size64);
     if (status != SERVICE_OK)
     {
-        result = storage_audio_map_open_status(status, false);
+        result = storage_audio_classify_open_status(status, false);
     }
     else if ((size64 == 0U) || (size64 > UINT32_MAX))
     {
@@ -333,7 +306,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t audio_of
                 }
                 else
                 {
-                    result = storage_audio_map_open_status(status, false);
+                    result = storage_audio_classify_open_status(status, false);
                 }
             }
         }
@@ -403,7 +376,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
     status = storage_track_open(request->Position, catalog_index, storage_audio_path, &storage_audio_file, &open_us);
     if (status != SERVICE_OK)
     {
-        return storage_audio_map_open_status(status, true);
+        return storage_audio_classify_open_status(status, true);
     }
     storage_audio_file_open = true;
 
@@ -470,6 +443,7 @@ void storage_audio_stream_process_request(Storage_AudioMediaTypeDef media)
 void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media)
 {
     Storage_AudioBlockTypeDef *block;
+    Storage_AudioReadVerdictTypeDef verdict;
     Service_StatusTypeDef status;
     uint32_t want;
     uint32_t got = 0U;
@@ -493,7 +467,8 @@ void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media)
         (void)storage_audio_block_release(block);
         return;
     }
-    if (Service_Filesystem_StatusIsVolumeUnavailable(status))
+    verdict = storage_audio_classify_read(status, got);
+    if (verdict == STORAGE_AUDIO_READ_STALL)
     {
         /* 卡没了或正在对账：不是文件错误，不写 READ_ERROR、不重试这个句柄、不缓存。流停住，记录保持不变；
          * 卷任务卸载后发卷事件，序号变了由 storage_audio_stream_card_removed() 写 CARD_REMOVED（#195 第 9 条）。 */
@@ -504,7 +479,7 @@ void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media)
                                "Audio read interrupted: volume unavailable, waiting for volume event.");
         return;
     }
-    if ((status != SERVICE_OK) || (got == 0U))
+    if (verdict == STORAGE_AUDIO_READ_ERROR)
     {
         (void)storage_audio_block_release(block);
         storage_audio_close_file();
