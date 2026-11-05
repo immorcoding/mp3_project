@@ -16,7 +16,7 @@
 
 ## 任务外壳
 
-`playback_task()` 由 `app_tasks.c` 静态创建（优先级 `APP_PLAYBACK_TASK_PRIORITY` 3、栈 `APP_PLAYBACK_TASK_STACK_WORDS` 5120 word = 20480 B，TCB 与栈在 DTCM `.bss`），晚于 Storage Task 创建，以保证 Storage 已完成 `storage_audio_stream_init()`。
+`playback_task()` 由 `app_tasks.c` 静态创建（优先级 `APP_PLAYBACK_TASK_PRIORITY` 4（#211 起由 3 升到 4，高于卷任务 3；播放不碰文件、不拿任何文件锁，所以不受卷锁上的优先级反转影响）、栈 `APP_PLAYBACK_TASK_STACK_WORDS` 5120 word = 20480 B，TCB 与栈在 DTCM `.bss`），晚于 Storage Task 创建，以保证 Storage 已完成 `storage_audio_stream_init()`。
 
 - **启动**：创建命令 FIFO 与状态信箱 → `Service_Playback_Init()` → `playback_machine_init()` → 发布任务句柄并注册 `storage_audio_stream_set_wake_callback()` → `Platform_Audio_SetEventCallback()`。任一步失败则记日志并删除本任务，快照保持全零，`playback_command_send()` 返回 `PLAYBACK_QUEUE_FULL`。
 - **事件槽** `PLAYBACK_NOTIFY_EVENT` 的 FLAG：`PLAYBACK_NOTIFY_FLAG_COMMAND`（`playback_command_send()` 入队后置位）、`PLAYBACK_NOTIFY_FLAG_STREAM_RECORD` 与 `PLAYBACK_NOTIFY_FLAG_BLOCK_READY`（Storage 唤醒回调在 Storage Task 上下文置位）、`PLAYBACK_NOTIFY_FLAG_AUDIO`（Platform 音频事件回调在 ISR 中经 `xTaskNotifyIndexedFromISR` 置位，ARC-10）。FLAG 只用于唤醒，醒来后以信箱、队列与 `Platform_Audio_GetStatus()` 计数为准，所以通知被合并或迟到都不丢事实。
