@@ -3,7 +3,7 @@
 - 状态：已接受。取代 [ADR-0018](0018-playback-advance-ownership.md)。
 - 日期：2026-10-08
 - 修订：2026-10-09。与 GUI 之间改为命令、状态两条通道，跳过坏文件、进入停止等一次性事实以单调计数放在状态里，不再设独立的事件通道（见[播放后端公开合同](https://github.com/immorcoding/mp3_project/issues/53)）。
-- 修订：2026-11-04。第 5 条的“Storage Task”改指音频读取任务（[ADR-0023](0023-task-split-and-app-contract.md)），FIL 不离开 Filesystem Service（[ADR-0024](0024-file-interface-concurrency.md)）。其余决定仍有效。
+- 修订：2026-11-04。第 5 条的“Storage Task”改指音频读取任务（[ADR-0023](0023-task-split-and-app-contract.md)），FIL 不离开 Filesystem Service（ARC-12）。其余决定仍有效。
 - 相关 ticket：[0.6.0 真播放重规划](https://github.com/immorcoding/mp3_project/issues/44)、[播放状态机的唯一所有者与代码落点](https://github.com/immorcoding/mp3_project/issues/45)
 - 相关决定：[ADR-0002](0002-layering-and-interface-ownership.md)、[ADR-0005](0005-sd-filesystem-task-ownership.md)、[ADR-0017](0017-mp3-decoder-minimp3.md)、[ADR-0019](0019-freertos-static-task-stack.md)
 

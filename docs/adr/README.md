@@ -16,18 +16,18 @@ ADR 说明“为什么选择此方案、哪些替代方案未采用、改变后�
 - [0008-sdram-early-init-and-noload-ownership.md](0008-sdram-early-init-and-noload-ownership.md)：SDRAM 早期初始化、正式初始化与 NOLOAD 缓冲责任。
 - [0009-w25q256-firmware-slots-and-diagnostic-reservation.md](0009-w25q256-firmware-slots-and-diagnostic-reservation.md)：W25Q256 的 OTA 固件双槽、自检区、Resource Pack 与 FTL 物理边界。
 
-- [0010-fatfs-user-diskio-service-ownership.md](0010-fatfs-user-diskio-service-ownership.md)：USER DiskIO 自维护契约、弱默认/强接管及 Filesystem Service 的 Flash 执行所有权。
+- [0010-fatfs-user-diskio-service-ownership.md](0010-fatfs-user-diskio-service-ownership.md)：USER DiskIO 自维护契约、弱默认/强接管及 Filesystem Service 的 Flash 执行所有权；“唯一执行上下文”已由 ADR-0024 替代。
 - [0011-ftl-copy-on-write-and-recovery.md](0011-ftl-copy-on-write-and-recovery.md)：FTL 整组异地提交、扫描恢复、显式格式化及首版 GC/磨损边界。
 - [0012-filesystem-public-seams.md](0012-filesystem-public-seams.md)：Filesystem 公开接缝按卷/文件/诊断切开，`Maintain` 改名 `Reclaim`；其中 MSC 前瞻范围由 ADR-0013 取代，文件级卷选择由 ADR-0014 取代。
 - [0013-usb-msc-product-scope.md](0013-usb-msc-product-scope.md)：主线不支持 USB MSC，批量文件导入使用读卡器。
-- [0014-filesystem-volume-aware-file-interface.md](0014-filesystem-volume-aware-file-interface.md)：SD/Flash 统一为 Volume + UTF-8 相对路径；删除设备侧 FormatSD 与 Flash 单槽旧符号；Flash 格式化/恢复成功后已挂载；是否在无文件系统时格式化由 Storage 宏控制。
+- [0014-filesystem-volume-aware-file-interface.md](0014-filesystem-volume-aware-file-interface.md)：SD/Flash 统一为 Volume + UTF-8 相对路径；删除设备侧 FormatSD 与 Flash 单槽旧符号；Flash 格式化/恢复成功后已挂载；是否在无文件系统时格式化由配置宏控制；“唯一 Storage Task”已由 ADR-0024 替代。
 - [0015-volume-roles-and-resource-install.md](0015-volume-roles-and-resource-install.md)：SD 为唯一音乐库，曲库只存相对路径；曲库与播放列表分开且不向 GUI 交整表指针；Flash FTL 作机内盘与资源安装暂存；壁纸/模型经 FTL 校验后再写入 Resource Pack。
 - [0016-hand-written-gui-view-and-shared-theme-styles.md](0016-hand-written-gui-view-and-shared-theme-styles.md)：不再用 SquareLine 生成界面；`Service/gui/view/` 手写全部 Screen 并发布句柄；主题改为按角色引用的共享颜色 style；模拟器场景回归守住界面等价性。
 - [0017-mp3-decoder-minimp3.md](0017-mp3-decoder-minimp3.md)：MP3 解码库选用 minimp3（CC0）；解码器状态静态持有；解码接口与容器解析分离；0.6.0 只做 MP3。
 - [0018-playback-advance-ownership.md](0018-playback-advance-ownership.md)：播放推进归 APP 后台任务，播放模块不持游标、自行经 Service/filesystem 打开文件；GUI 只经队列与播放交互；已由 ADR-0020 取代。
 - [0019-freertos-static-task-stack.md](0019-freertos-static-task-stack.md)：播放任务静态分配，解码栈放 DTCM；堆大小不变。
-- [0020-playback-state-machine-ownership.md](0020-playback-state-machine-ownership.md)：播放状态机归 APP 播放任务（推进、开启交接、流身份、命令与状态两条通道，2026-10-09 修订），游标只由它写；播放模块只做解码与输出管线；FIL 归 Storage Task；对外只公开停止/播放/暂停三态。
-- [0021-seek-by-reopen-with-audio-offset.md](0021-seek-by-reopen-with-audio-offset.md)：跳转用带音频区间偏移的重开流，不在已打开的 FIL 内 seek；Storage 只钳偏移、不认识格式；毫秒到字节映射与落点归 Service/playback。
+- [0020-playback-state-machine-ownership.md](0020-playback-state-machine-ownership.md)：播放状态机归 APP 播放任务（推进、开启交接、流身份、命令与状态两条通道，2026-10-09 修订），游标只由它写；播放模块只做解码与输出管线；FIL 不离开 Filesystem Service（2026-11-04 修订）；对外只公开停止/播放/暂停三态。
+- [0021-seek-by-reopen-with-audio-offset.md](0021-seek-by-reopen-with-audio-offset.md)：跳转用带音频区间偏移的重开流，不在已打开的 FIL 内 seek；音频读取任务只钳偏移、不认识格式；毫秒到字节映射与落点归 Service/playback。
 - [0022-fatfs-open-by-locator-patch.md](0022-fatfs-open-by-locator-patch.md)：给 FatFs `ff.c` 加一个按目录项位置打开的函数（ARC-2 唯一例外）；文件定位符归 Filesystem Service；patch 文件、FAST 检查与重打脚本守护，Vendor 改动由用户提交。
 - [0023-task-split-and-app-contract.md](0023-task-split-and-app-contract.md)：任务直接调用阻塞的文件接口（选项 C），不再有中央 Storage 主循环；任务分工、`ui_cell` 交接、后台作业单步函数、应用是一个目录加注册表一行。
 - [0024-file-interface-concurrency.md](0024-file-interface-concurrency.md)：每卷一把锁只在 Service 入口拿，`Files[]` 用窄表锁，迟到 DMA 用有上界的 Abort；消抖等闸、对账、卷事件是叫醒加卷序号。

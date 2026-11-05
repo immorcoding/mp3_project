@@ -24,3 +24,4 @@ Next id: GUI-29
 - [appearance](gui.appearance.md): 颜色来源、外观与系统背景，离屏缓冲所有权、启动次序与局部玻璃。
 - [navigation](gui.navigation.md): 普通页面结构与横向手势，待机视觉层级与解锁提示。
 - [music](gui.music.md): 音乐页：窗口交接与播放列表行的稳定呈现，播放控制与唱盘呈现。
+- [runtime](gui.runtime.md): GUI Task 的循环节奏与让出。

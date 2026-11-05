@@ -9,7 +9,6 @@
 - **GUI-1** · provisional · 全部 Screen 在 `Service/gui/view/` 手写，不用图形化工具导出代码；boot/、main/*、theme/ 只经 `Service_GUI_ViewTypeDef` 句柄访问对象。_Why:_ 生成器与运行时补丁使同一界面出现多份事实源。_Source:_ [ADR-0016](../adr/0016-hand-written-gui-view-and-shared-theme-styles.md)、[基线对比模式](https://github.com/immorcoding/mp3_project/issues/184)
 - **GUI-3** · provisional · 新增或改动界面前先更新本 area 的受影响设计约束；未决设计先列 Open questions 或 Proposed，再修改手写界面。_Why:_ 设计意图须先于实现明确，避免事后补记与重复长文。_Source:_ [ADR-0016](../adr/0016-hand-written-gui-view-and-shared-theme-styles.md)、[spec #15](https://github.com/immorcoding/mp3_project/issues/15)
 - **GUI-4** · provisional · 模拟器帧哈希变化时先用 `run-scenarios.ps1 -BaselineRef <改动前提交>` 渲染对比、逐张看变化帧的“基线 | 当前 | 差异掩膜”拼图，确认是有意的，才用 run-scenarios.ps1 -Update 重写基线，并在提交说明写明原因；改变「是否有动画常驻」的改动会移动其他动画的采样相位（LVGL 在动画链表为空时暂停动画定时器），判「基线不变」前先跑 run-scenarios.ps1 核对。_Why:_ 自动像素证据依赖基线不被随手覆盖；#106 判「基线不变」后仍有 12 场景 50 帧因相位移动而变。_Source:_ [ADR-0016](../adr/0016-hand-written-gui-view-and-shared-theme-styles.md)
-- **GUI-28** · provisional · GUI Task 每圈结束后睡到下一个 LVGL 定时器到期（扣除本圈耗时），夹在 1 ms 与刷新周期之间；有待取走的输入时只睡下限；新结果到达不提前唤醒。_Why:_ 低优先级任务靠 GUI 让出 CPU；屏幕只按刷新周期更新，提前唤醒换不来更早的显示。_Source:_ [GUI 没活就睡的规则与接口](https://github.com/immorcoding/mp3_project/issues/190)、[ADR-0023](../adr/0023-task-split-and-app-contract.md)
 
 ### References
 

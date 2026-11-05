@@ -42,7 +42,6 @@ Next id: WF-16
 
 - 2026-10-19 · friction · WF-3 · Underruns 与回调计数无日志（固件版本已由启动日志 `BOOT: FW <提交号>[-dirty] <构建类型>` 输出），B/C/D 组多行只能听感或外部仪器；是否加固件侧诊断出口留给后续决定。
 - 2026-11-03 · friction · WF-12 · 板测要的数字多，Service Log 消息池只有 30 条，汇总类日志要注明节拍（#191，同时引 DIAG-3）。
-- 2026-11-03 · friction · WF-3 · `capture-serial.ps1` 用 `Add-Content` 写文件，边抓边读（如 `tail -F`）会让写入失败、静默丢日志，#191 第一遍因此丢了 P0、P1；`Tools/board_test_card/capture-shared.ps1` 允许边写边读。
 
 ## sessions
 

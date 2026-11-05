@@ -2,8 +2,8 @@
 
 - 状态：已接受，实施中（[0.10.0 spec](https://github.com/immorcoding/mp3_project/issues/202)）。
 - 日期：2026-11-04
-- 相关 ticket：[任务分工定稿与命名](https://github.com/immorcoding/mp3_project/issues/189)、[GUI 没活就睡](https://github.com/immorcoding/mp3_project/issues/190)、[界面数据与需求的交接形状](https://github.com/immorcoding/mp3_project/issues/193)、[后台任务的作业模型](https://github.com/immorcoding/mp3_project/issues/196)、[应用接入约定](https://github.com/immorcoding/mp3_project/issues/197)
-- 相关决定：[ADR-0020](0020-playback-state-machine-ownership.md)、[ADR-0024](0024-file-interface-concurrency.md)；规则 ARC-7、ARC-22、ARC-23、ARC-24、GUI-28
+- 相关 ticket：[任务分工定稿与命名](https://github.com/immorcoding/mp3_project/issues/189)、[GUI 没活就睡](https://github.com/immorcoding/mp3_project/issues/190)、[界面数据与需求的交接形状](https://github.com/immorcoding/mp3_project/issues/193)、[音频读取任务的迁移](https://github.com/immorcoding/mp3_project/issues/194)、[后台任务的作业模型](https://github.com/immorcoding/mp3_project/issues/196)、[应用接入约定](https://github.com/immorcoding/mp3_project/issues/197)
+- 相关决定：[ADR-0020](0020-playback-state-machine-ownership.md)、[ADR-0024](0024-file-interface-concurrency.md)；规则 ARC-7、ARC-22 至 ARC-28、GUI-28
 - 资料：[逻辑原型](https://github.com/immorcoding/mp3_project/blob/prototype/app-worker/APP/tasks/storage/PROTOTYPE-app-worker.html)（分支不合入）、[同类固件调研](https://github.com/immorcoding/mp3_project/blob/research/storage-app-model/docs/research/storage-app-model.md)
 
 ## 背景
@@ -30,25 +30,27 @@
 
 只建一个后台任务：翻页不被挡住靠的是重活和前台分开，第二个任务没有真实用户（ARC-15）。卷和曲库都留在 APP，Service 继续不认识曲目。
 
-**3. 启动是显式的三段。** 现状靠 Storage 优先级高于 Boot、先跑到第一次阻塞，这是隐藏依赖。改成：内存准备归 Boot，做完才创建用到它们的任务；卷启动由卷任务决定时机；Flash 挂载放进一次性的 Flash 启动任务，因为 `MountFlash` 实测 3.3–8.3 s，不能让插拔等它。
+**3. 启动是显式的三段。** 现状靠 Storage 优先级高于 Boot、先跑到第一次阻塞，这是隐藏依赖。改成：内存准备归 Boot，做完才创建用到它们的任务；卷启动由卷任务决定时机；Flash 的基准、挂载和无文件系统时按 `AUTO_FORMAT` 格式化放进一次性的 Flash 启动任务，因为 `MountFlash` 实测 3.3–8.3 s，不能让插拔等它。
 
-**4. GUI 与任务之间经 `ui_cell` 交接。** 一个小模块，存一份最新值，全模块一把互斥锁，锁不出模块，持锁时只拷贝内存。GUI 拿不到锁就下一帧再试。一格一个写者；需求是状态不是动作；约 8 KiB 以内进格子，更大的数据只传缓冲选择。结果过期就会显示错内容时才比需求序号：曲名和封面要比，列表窗口不比。只用于 GUI 与任务之间，任务之间的通知不走它。
+**4. 音频读取任务只读文件、填块池。** 播放侧合同不变，只改名字。一个等待点，到安全水位后每读一块让路，让的是 SD 锁：优先级 3 的读取任务放锁后马上又能拿到，优先级 2 的前台任务排不上。拔卡由它自己收尾，卷任务不等它。T_data 的依据从“Storage 单圈耗时”改成“≥ 2 × 最长非故障等待”，因为等锁也算在内：12000 首同文件夹、定位符失效时按路径打开要 2.05 s，所以 T_data 改 5 s。水位和让路的值是推算，由板级验收修正。
 
-**5. 后台作业是注册的单步函数。** 一步最多一次耗时文件调用或约 10 ms CPU，返回多少 ms 后再叫它。没有队列和取消接口：“提交作业”就是应用改自己的状态再叫醒后台任务，作业每步先看现状。曲库用一份表加模块内短锁，代次在发布时确定，读者一次读全。
+**5. GUI 与任务之间经 `ui_cell` 交接。** 一个小模块，存一份最新值，全模块一把互斥锁，锁不出模块，持锁时只拷贝内存。GUI 拿不到锁就下一帧再试。一格一个写者；需求是状态不是动作；约 8 KiB 以内进格子，更大的数据只传缓冲选择。结果过期就会显示错内容时才比需求序号：曲名和封面要比，列表窗口不比。只用于 GUI 与任务之间，任务之间的通知不走它。
 
-**6. 应用是一个目录加注册表一行。** 所有 step 一直被轮流调用，任务不知道谁在前台，离开前台由应用改自己的需求状态。前台 step 一步最多一次文件调用加约 1 ms CPU，不碰 Flash 卷，耗时由前台任务记录。应用内存全部静态，放一个带 ASSERT 的链接段，音频块池和曲库保持独立段。Service/gui 的内容页按应用分区，算应用的 LVGL 那一半，不算共用层。
+**6. 后台作业是注册的单步函数。** 一步最多一次耗时文件调用或约 10 ms CPU，返回多少 ms 后再叫它。没有队列和取消接口：“提交作业”就是应用改自己的状态再叫醒后台任务，作业每步先看现状。曲库用一份表加模块内短锁，代次在发布时确定，读者一次读全。
 
-**7. GUI 没活就睡。** 每圈结束后睡到下一个 LVGL 定时器到期，扣除本圈耗时，夹在 1 ms 与刷新周期之间。低优先级任务靠它拿到 CPU。
+**7. 应用是一个目录加注册表一行。** 所有 step 一直被轮流调用，任务不知道谁在前台，离开前台由应用改自己的需求状态。前台 step 一步最多一次文件调用加约 1 ms CPU，不碰 Flash 卷，耗时由前台任务记录。应用内存全部静态，放一个带 ASSERT 的链接段，音频块池和曲库保持独立段。Service/gui 的内容页按应用分区，算应用的 LVGL 那一半，不算共用层。
+
+**8. GUI 没活就睡。** 每圈结束后睡到下一个 LVGL 定时器到期，扣除本圈耗时，夹在 1 ms 与刷新周期之间。低优先级任务靠它拿到 CPU。
 
 ## 未采用的方案
 
 - **请求队列（选项 A）**：要定义请求层，优先级不跟随调用方。保留为退路：换在接口后面，应用代码不动，换不换由用户决定。
-- **GUI 拿锁直接读文件**：模拟里 Queue 最后一窗和插卡扫描时翻页都明显变慢，GUI 不能等。
+- **GUI 拿锁直接读文件**：模拟里 Queue 最后一窗 449 ms（C 是 102 ms），插卡扫描时翻页约 2 s（C 是 93 ms），GUI 不能等。
 - **`ui_cell` 用关调度**：播放任务会一起等。**用序号校验不加锁**：依赖内存屏障，难验证。
 - **放宽 `ui_cell` 到任务之间**：“拿不到锁就下一帧再试”不适合任务之间；快速拔插不能只留最新状态。
 - **通用作业队列**：要管存储、去重、排队上限和按 id 取消。**固定枚举加 `switch`**：每加一个应用都改共用层。**作业分优先级**：要定级别，低级别可能饿死。
 - **曲库两份表换指针**：多占约 4.2 MiB SDRAM，而扫描只在卷变化后发生，旧表本来就失效。
-- **前台任务保存当前应用，切换调 enter / leave**：要等旧应用收尾，曲名这类系统需求还得另开通道。
+- **前台任务记下谁是前台应用，切换时调 enter / leave**：要等旧应用收尾，曲名这类系统需求还得另开通道。
 - **共享前台内存，切换时交接**：换来的是省下目前并不缺的内存。这也避开了 Rockbox 插件取走音频缓冲就停播的问题。
 - **Service/gui 改成 LVGL 壳加应用注册页面**：应用要直接接触 LVGL，超出 0.10.0 范围。
 - **第二个后台任务放 CPU 重活**：没有真实用户。封面版本若需要，只改后台任务内部。
@@ -57,6 +59,6 @@
 
 - 加应用时共用层只多一行注册；Service/gui 多一个分区和它的接口。Books 版本要为“当前页”公开一个查询，这是一次性的。
 - 所有应用共用一个前台任务，一步太长会拖住别的应用，靠耗时记录发现，没有锁或断言能拦住。
-- 比 GUI 优先级低的后台任务在唱盘页只分得 7–13% 的 CPU（[板测](https://github.com/immorcoding/mp3_project/issues/191)），封面解码在那里会慢，封面版本再定。
+- 唱盘页的空闲只有 7–13%（[板测](https://github.com/immorcoding/mp3_project/issues/191)，这是空闲比例，没有测后台任务本身），封面解码在那里会慢，封面版本再定。
 - 模拟器的假后端只替换音乐前台流程，测不到“新需求覆盖旧需求”，由主机测试和上板负责。
 - 优先级、栈初值、步长都是纸面决定，由板级验收修正。

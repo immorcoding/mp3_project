@@ -1,9 +1,19 @@
 # Board serial log capture: append each line with a timestamp until stopped.
+# The log file stays readable while written, so it can be tailed during capture.
 param(
     [Parameter(Mandatory)][string]$Port,
     [Parameter(Mandatory)][string]$OutFile,
     [int]$Baud = 115200
 )
+
+# .NET resolves relative paths against the process directory, not the PowerShell location.
+$OutFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutFile)
+$stream = [System.IO.File]::Open($OutFile,
+    [System.IO.FileMode]::Append,
+    [System.IO.FileAccess]::Write,
+    [System.IO.FileShare]::ReadWrite)
+$writer = New-Object System.IO.StreamWriter($stream, (New-Object System.Text.UTF8Encoding($false)))
+$writer.AutoFlush = $true
 
 $serial = New-Object System.IO.Ports.SerialPort $Port, $Baud, 'None', 8, 'One'
 $serial.Encoding = [System.Text.Encoding]::UTF8
@@ -17,7 +27,7 @@ while ($true) {
         if (-not $serial.IsOpen) { $serial.Open() }
         $line = $serial.ReadLine().TrimEnd("`r")
         $stamp = (Get-Date).ToString('HH:mm:ss.fff')
-        Add-Content -Path $OutFile -Value "$stamp $line" -Encoding UTF8
+        $writer.WriteLine("$stamp $line")
     }
     catch [System.TimeoutException] { }
     catch {

@@ -34,9 +34,9 @@ Next id: DIAG-8
 
 ## evidence
 
-板测证据的固件出口与测试钩子。
+板测证据的总原则：时延怎么算、哪些常开、测试钩子。
 
 ### Rules
 
-- **DIAG-6** · exploring · 板测用的时延一律在固件里算好再输出，日志时间戳是输出时刻，不能相减；常开的出口是切歌到出声（曲目边界一行）、扫描结束一行、卷路径日志和 Monitor 5 s 一批（欠载、CPU 占比、日志丢失数）；持锁统计（每把锁的最长持有、最长等待和对应操作）和显示延迟汇总走同一个编译开关，Debug 开、Release 关，只出汇总。_Why:_ 验收项要有固件出口（WF-12）；消息池只有 30 条，逐次打点会挤掉别的日志。_Source:_ [0.10.0 板级验收](https://github.com/immorcoding/mp3_project/issues/198)、[迁移切片与分支顺序](https://github.com/immorcoding/mp3_project/issues/201)
+- **DIAG-6** · exploring · 板测用的时延一律在固件里算好再输出，日志时间戳是输出时刻，不能相减；边界上的结果常开（切歌到出声、扫描结束、卷路径、Abort 结果、写 `CARD_REMOVED` 的时延）；周期汇总进 Monitor 5 s 一批（欠载、CPU 占比、日志丢失数）；持锁统计（每把锁的最长持有、最长等待和对应操作，含 `ui_cell` 和曲库短锁）和显示延迟汇总走同一个编译开关，Debug 开、Release 关，只出汇总。_Why:_ 验收项要有固件出口（WF-12）；消息池只有 30 条，逐次打点会挤掉别的日志。_Source:_ [0.10.0 板级验收](https://github.com/immorcoding/mp3_project/issues/198)、[迁移切片与分支顺序](https://github.com/immorcoding/mp3_project/issues/201)、[0.10.0 spec](https://github.com/immorcoding/mp3_project/issues/202)
 - **DIAG-7** · exploring · 产品固件走不到的验收场景用测试钩子：合入主线，每个场景一个默认关闭的编译开关，写成 `if (开关)` 让默认构建也编译，发布构建不开；启动日志打印开了哪些钩子。_Why:_ 证据要留在最终提交上，不靠丢弃分支；默认也编译，钩子才不会烂掉，FULL 也不用多编一版。_Source:_ [0.10.0 板级验收](https://github.com/immorcoding/mp3_project/issues/198)、[迁移切片与分支顺序](https://github.com/immorcoding/mp3_project/issues/201)

@@ -2,6 +2,7 @@
 
 - 状态：已接受。
 - 日期：2026-10-31
+- 修订：2026-11-04。文中的“Storage”改指音频读取任务（[ADR-0023](0023-task-split-and-app-contract.md)），决定不变。
 - 相关 ticket：[seek 的合同与流机制](https://github.com/immorcoding/mp3_project/issues/166)、[MP3 时间到文件偏移的映射](https://github.com/immorcoding/mp3_project/issues/161)、[0.9.0 spec](https://github.com/immorcoding/mp3_project/issues/172)
 - 相关决定：[ADR-0017](0017-mp3-decoder-minimp3.md)、[ADR-0020](0020-playback-state-machine-ownership.md)；规则 ARC-20
 
