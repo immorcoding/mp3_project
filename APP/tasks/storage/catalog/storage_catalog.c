@@ -238,6 +238,15 @@ static Storage_StatusTypeDef storage_catalog_music_dfs(void)
         open_status = Service_Filesystem_OpenDirectory(SERVICE_FILESYSTEM_VOLUME_SD,
                                                        current,
                                                        &music_directory);
+        if (Service_Filesystem_StatusIsVolumeUnavailable(open_status))
+        {
+            /* 在途调用被拔卡打断时，这次失败发生在卷任务对账之前，卷序号还没变。路径打开没有句柄可借来等闸，
+             * 所以再开一次：它在 Filesystem 入口等闸，等到本轮对账结束，才有资格下结论——卡没了（卷已卸载，
+             * 再次得到卷不可用）或卡还在（照常打开）。 */
+            open_status = Service_Filesystem_OpenDirectory(SERVICE_FILESYSTEM_VOLUME_SD,
+                                                           current,
+                                                           &music_directory);
+        }
         if (open_status != SERVICE_OK)
         {
             storage_catalog_scan_clock_poll();
@@ -347,6 +356,23 @@ static Storage_StatusTypeDef storage_catalog_music_dfs(void)
     }
 
     return result;
+}
+
+/**
+ * @brief 最近一次扫描结束后，Storage Task 该怎么对待。
+ * @param[in] volume_unchanged 扫描结束时 SD 卷仍挂着且卷序号与 Storage 已处理的相同。
+ * @return 扫描没有因卷不可用而丢弃：`DONE`。丢弃了且卷变了（卡没了或换了）：`EVENT_PENDING`，等卷事件重扫，
+ *         不要就绪。丢弃了但卷没变：`UNREADABLE`——卡还在、设备出错，没有边沿就没有卷事件，等也等不来，
+ *         调用者要报错（卷任务对账之前的调用已在 Filesystem 入口等过闸，所以卷序号此时是结论）。
+ */
+StorageCatalog_ScanVerdictTypeDef storage_catalog_scan_verdict(bool volume_unchanged)
+{
+    if (!music_catalog_scan_aborted)
+    {
+        return STORAGE_CATALOG_SCAN_DONE;
+    }
+
+    return volume_unchanged ? STORAGE_CATALOG_SCAN_UNREADABLE : STORAGE_CATALOG_SCAN_EVENT_PENDING;
 }
 
 /**

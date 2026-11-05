@@ -82,7 +82,7 @@ Storage_StatusTypeDef storage_namebuffer_request(uint16_t index, uint32_t genera
 
 /**
  * @brief Storage Task 在 PENDING 时按 位置 → Sheet → Catalog 下标 读曲目标签，填曲目显示名与歌手并打 READY。
- * @param[in] sd_ready SD 是否处于就绪态；消抖中与未就绪均为假。
+ * @param[in] sd_ready SD 是否处于就绪态；曲库扫描中与未挂载均为假（消抖期间文件调用在 Filesystem 入口等闸，不体现在这里）。
  * @note 仅 Storage Task 主循环调用；槽位不是 PENDING 时无事可做。一次 load 只读一个文件，在当圈完成
  *       （storage_track_text_read()，最坏 按定位符打开（核对不符退回路径打开）+ 取长度 + 至多
  *       STORAGE_CATALOG_TEXT_MAX_READS 次读取）；INFO 的 `open=` 是打开耗时（DIAG-4）。
@@ -100,6 +100,7 @@ void storage_namebuffer_load(bool sd_ready)
     uint16_t index;
     uint16_t catalog_index;
     const StorageTrackText_ResultTypeDef *track = NULL;
+    bool volume_went_away = false;
     char text[48];
 
     if (storage_namebuffer.Status != STORAGE_NAMEBUFFER_PENDING)
@@ -135,8 +136,16 @@ void storage_namebuffer_load(bool sd_ready)
             const uint32_t start_cycles = storage_track_diag_begin();
 
             track = storage_track_text_read(index, catalog_index);
+            volume_went_away = (track == NULL) && storage_track_text_last_read_unavailable();
             storage_track_diag_name_done(index, start_cycles, track);
         }
+    }
+
+    if (volume_went_away)
+    {
+        /* 读标签时卷没了或正在对账（拔卡的正常竞态）：以空名收尾，不记 WARN；随后的卷事件会再收一次。 */
+        storage_namebuffer_complete_empty();
+        return;
     }
 
     if (track == NULL)
@@ -155,12 +164,14 @@ void storage_namebuffer_load(bool sd_ready)
 }
 
 /**
- * @brief 若槽位仍为 PENDING，则打成代次 0 空名 READY，避免未就绪后槽位卡死。
- * @note 拔卡或 SD 离开就绪时由 Storage Task 调用；已是 IDLE/READY 则不动。不记日志。
+ * @brief 卷序号变了（卸载、换卡）时收掉名字槽：PENDING 打成代次 0 空名 READY，避免未就绪后槽位卡死；
+ *        **已经 READY 但 GUI 还没取走的旧名字也收成代次 0 空名**，换卡后不会把旧卡的曲名贴出来。
+ * @note 由 Storage Task 调用；IDLE 不动。不记日志。READY 时槽归 GUI，这里只改 `Title[0]`、`Artist[0]` 和 `Generation`
+ *       三个字：GUI 即使被抢占时读到半个结果，也只是旧名字或空名，不会读到别的内容。
  */
 void storage_namebuffer_complete_unavailable(void)
 {
-    if (storage_namebuffer.Status != STORAGE_NAMEBUFFER_PENDING)
+    if (storage_namebuffer.Status == STORAGE_NAMEBUFFER_IDLE)
     {
         return;
     }

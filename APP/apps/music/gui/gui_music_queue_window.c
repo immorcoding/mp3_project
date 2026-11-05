@@ -144,8 +144,8 @@ uint16_t gui_music_queue_window_request_index(
 /**
  * @brief 按 SD 就绪、是否仍挂载与窗口槽位状态决定本轮动作。
  * @param[in,out] client 音乐分区持有的窗口客户状态。
- * @param[in] sd_ready 可发起新 request（消抖中为假）。
- * @param[in] sd_mounted FatFs 卷仍挂载；消抖中只要未卸载仍为真。
+ * @param[in] sd_ready 可发起新 request（曲库扫描中、卷消失后为假；消抖不再体现在这里）。
+ * @param[in] sd_mounted FatFs 卷仍挂载；扫描中仍为真。
  * @param[in] status 当前 `storage_listbuffer.Status`，取值须与 IDLE/PENDING/READY 宏一致。
  * @return 本轮应对窗口做的动作；READY 优先于卸载 CLEAR，避免槽位停在 READY。
  * @note 清空只看 sd_mounted，不把消抖当成拔卡。READY 不在此处清 need_window，

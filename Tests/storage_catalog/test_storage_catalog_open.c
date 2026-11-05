@@ -8,6 +8,8 @@
 
 #include "APP/tasks/playback/playback_task_config.h"
 #include "APP/tasks/storage/catalog/storage_catalog.h"
+#include "APP/tasks/storage/catalog/storage_listbuffer.h"
+#include "APP/tasks/storage/catalog/storage_namebuffer.h"
 #include "APP/tasks/storage/catalog/storage_sheet.h"
 #include "APP/tasks/storage/catalog/storage_track_diag.h"
 #include "APP/tasks/storage/catalog/storage_track_text.h"
@@ -17,6 +19,8 @@
 #include "Service/filesystem/filesystem_file.h"
 #include "Service/filesystem/filesystem_text.h"
 #include "Service/log/log_service.h"
+
+#include "freertos_stub.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -70,6 +74,15 @@ uint32_t CortexM7CycleCounter_Read(void)
 uint32_t CortexM7CycleCounter_GetFrequencyHz(void)
 {
     return 1000000U;
+}
+
+/**
+ * @brief Storage Task 的 SD 就绪查询的替身：恒为就绪（窗口槽的 request 只在就绪时接受）。
+ * @return 恒为 true。
+ */
+bool storage_task_sd_is_ready(void)
+{
+    return true;
 }
 
 /* ---- 假 Log：记录每一行 ---- */
@@ -160,7 +173,10 @@ static uint32_t g_dir_pos;
 static uint32_t g_dir_read_cost_us; /* 一次目录读取消耗的微秒（推进假 DWT），扫描耗时的来源 */
 static bool g_read_dir_fail;        /* 目录读取一律报错 */
 static Service_StatusTypeDef g_open_root_status; /* 非 SERVICE_OK 时，打开 Music/ 返回它（卷不可用等） */
+static uint32_t g_open_root_status_times;        /* 上面那个状态返回几次之后恢复正常；0 表示一直返回 */
+static uint32_t g_open_dir_calls;                /* 本次扫描里 OpenDirectory 被调用的次数 */
 static Service_StatusTypeDef g_open_sub_status;  /* 非 SERVICE_OK 时，打开 Music/Sub 返回它 */
+static uint32_t g_open_sub_status_times;         /* 同 g_open_root_status_times */
 static Service_StatusTypeDef g_read_dir_status;  /* 非 SERVICE_OK 时，读满 g_read_dir_status_after 条之后读目录返回它 */
 static uint32_t g_read_dir_status_after;
 static uint32_t g_dir_reads;                     /* 本次扫描里 ReadDirectory 被调用的次数 */
@@ -233,6 +249,27 @@ static bool id_exists(uint32_t id)
 }
 
 /**
+ * @brief 取脚本里的下一个状态：状态为 OK 时返回 OK；次数为 0 表示一直返回该状态；否则返回该状态 `*times` 次，用完恢复 OK。
+ * @param[in,out] status 脚本状态，次数用完后清成 SERVICE_OK。
+ * @param[in,out] times 剩余次数。
+ * @return 这一次该返回的状态。
+ */
+static Service_StatusTypeDef take_scripted_status(Service_StatusTypeDef *status, uint32_t *times)
+{
+    const Service_StatusTypeDef current = *status;
+
+    if ((current != SERVICE_OK) && (*times != 0U))
+    {
+        (*times)--;
+        if (*times == 0U)
+        {
+            *status = SERVICE_OK;
+        }
+    }
+    return current;
+}
+
+/**
  * @brief 假目录打开：只认 `Music` 与（有子文件夹时）`Music/Sub`。
  * @param[in] volume 卷，须为 SD。
  * @param[in] path 目录路径。
@@ -248,19 +285,24 @@ Service_StatusTypeDef Service_Filesystem_OpenDirectory(Service_Filesystem_Volume
     {
         return SERVICE_ERROR;
     }
+    g_open_dir_calls++;
     if (strcmp(path, "Music") == 0)
     {
-        if (g_open_root_status != SERVICE_OK)
+        const Service_StatusTypeDef scripted = take_scripted_status(&g_open_root_status, &g_open_root_status_times);
+
+        if (scripted != SERVICE_OK)
         {
-            return g_open_root_status;
+            return scripted;
         }
         g_dir_token = 1U;
     }
     else if ((strcmp(path, "Music/Sub") == 0) && (g_sub_count != 0U))
     {
-        if (g_open_sub_status != SERVICE_OK)
+        const Service_StatusTypeDef scripted = take_scripted_status(&g_open_sub_status, &g_open_sub_status_times);
+
+        if (scripted != SERVICE_OK)
         {
-            return g_open_sub_status;
+            return scripted;
         }
         g_dir_token = 2U;
     }
@@ -532,7 +574,10 @@ static void world_reset(void)
     g_dir_read_cost_us = 0U;
     g_read_dir_fail = false;
     g_open_root_status = SERVICE_OK;
+    g_open_root_status_times = 0U;
+    g_open_dir_calls = 0U;
     g_open_sub_status = SERVICE_OK;
+    g_open_sub_status_times = 0U;
     g_read_dir_status = SERVICE_OK;
     g_read_dir_status_after = 0U;
     g_dir_reads = 0U;
@@ -1007,6 +1052,150 @@ static void test_scan_end_info_for_directory_read_failure(void)
 }
 
 /**
+ * @brief 把窗口槽和名字槽绑到桩里的一个假任务上（request 要发通知）。
+ */
+static void bind_slots(void)
+{
+    TaskHandle_t task;
+
+    freertos_stub_reset();
+    task = freertos_stub_task_create();
+    storage_listbuffer_bind(task);
+    storage_namebuffer_bind(task);
+}
+
+/**
+ * @brief 填满一个窗口：request 之后逐圈 load，直到整窗 READY。
+ * @param[in] count 请求条数。
+ */
+static void fill_window(uint16_t count)
+{
+    uint32_t guard = 0U;
+
+    assert(storage_listbuffer_request(0U, count, 0U) == STORAGE_OK);
+    while (storage_listbuffer.Status == STORAGE_LISTBUFFER_PENDING)
+    {
+        assert(guard++ < 64U);
+        assert(storage_listbuffer_load() == STORAGE_OK);
+    }
+    assert(storage_listbuffer.Status == STORAGE_LISTBUFFER_READY);
+}
+
+/**
+ * @brief 卷序号变了（卸载、换卡）时收掉窗口槽：已经 READY 但 GUI 还没取走的窗口也要收掉（代次 0、长度 0），
+ *        否则换卡后 GUI 会把旧卡的行贴出来；正在填的窗口以空窗收尾；空闲的槽不动。
+ */
+static void test_unavailable_empties_a_ready_window_the_gui_has_not_taken_yet(void)
+{
+    world_reset();
+    bind_slots();
+    scan(3U, 0U);
+
+    /* 整窗刚填完（末行读完时卷还在，序号变化在下一圈才被看到）：READY，带着旧代次。 */
+    fill_window(3U);
+    assert(storage_listbuffer.Length == 3U);
+    assert(storage_listbuffer.Generation != 0U);
+
+    storage_listbuffer_complete_unavailable();
+
+    assert(storage_listbuffer.Status == STORAGE_LISTBUFFER_READY);
+    assert(storage_listbuffer.Length == 0U);
+    assert(storage_listbuffer.Generation == 0U);
+
+    /* 填到一半的窗口：以空窗收尾（原有行为）。 */
+    storage_listbuffer.Status = STORAGE_LISTBUFFER_IDLE;
+    assert(storage_listbuffer_request(0U, 3U, 0U) == STORAGE_OK);
+    assert(storage_listbuffer_load() == STORAGE_OK);
+    assert(storage_listbuffer.Status == STORAGE_LISTBUFFER_PENDING);
+    storage_listbuffer_complete_unavailable();
+    assert(storage_listbuffer.Status == STORAGE_LISTBUFFER_READY);
+    assert(storage_listbuffer.Length == 0U);
+    assert(storage_listbuffer.Generation == 0U);
+
+    /* 空闲的槽不动。 */
+    storage_listbuffer.Status = STORAGE_LISTBUFFER_IDLE;
+    storage_listbuffer_complete_unavailable();
+    assert(storage_listbuffer.Status == STORAGE_LISTBUFFER_IDLE);
+}
+
+/**
+ * @brief 名字槽同理：已经 READY 但 GUI 还没取走的名字也收掉（空名、代次 0）；空闲的槽不动。
+ */
+static void test_unavailable_empties_a_ready_name_the_gui_has_not_taken_yet(void)
+{
+    world_reset();
+    bind_slots();
+    scan(3U, 0U);
+
+    assert(storage_namebuffer_request(1U, 0U) == STORAGE_OK);
+    storage_namebuffer_load(true);
+    assert(storage_namebuffer.Status == STORAGE_NAMEBUFFER_READY);
+    assert(storage_namebuffer.Generation != 0U);
+    assert(storage_namebuffer.Title[0] != 0);
+
+    storage_namebuffer_complete_unavailable();
+
+    assert(storage_namebuffer.Status == STORAGE_NAMEBUFFER_READY);
+    assert(storage_namebuffer.Generation == 0U);
+    assert(storage_namebuffer.Title[0] == 0);
+    assert(storage_namebuffer.Artist[0] == 0);
+
+    storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
+    storage_namebuffer_complete_unavailable();
+    assert(storage_namebuffer.Status == STORAGE_NAMEBUFFER_IDLE);
+}
+
+/**
+ * @brief 读标签时卷不可用（拔卡的正常竞态）：名字槽以空名收尾，**不记 WARN**；`Name fail` 只留给真正的防御分支
+ *        （代次相符却越界）。曲目文本读取用 `storage_track_text_last_read_unavailable()` 告诉调用者这一次是卷不可用。
+ */
+static void test_name_slot_does_not_warn_when_the_volume_went_away_during_the_read(void)
+{
+    static const Service_StatusTypeDef unavailable[] = {SERVICE_NO_MEDIA, SERVICE_NOT_READY, SERVICE_INVALID_HANDLE};
+
+    for (unsigned index = 0U; index < sizeof(unavailable) / sizeof(unavailable[0]); index++)
+    {
+        world_reset();
+        bind_slots();
+        scan(3U, 0U);
+        g_log_count = 0U;
+        g_locator_failed = true;
+        g_locator_failed_status = unavailable[index];
+
+        assert(storage_namebuffer_request(1U, 0U) == STORAGE_OK);
+        storage_namebuffer_load(true);
+
+        assert(storage_namebuffer.Status == STORAGE_NAMEBUFFER_READY);
+        assert(storage_namebuffer.Generation == 0U);
+        assert(storage_namebuffer.Title[0] == 0);
+        assert(storage_track_text_last_read_unavailable());
+        assert(log_count_prefix("Name fail") == 0U);
+    }
+
+    /* 防御分支仍记 WARN：请求代次非 0 且相符，位置却越界。 */
+    world_reset();
+    bind_slots();
+    scan(3U, 0U);
+    g_log_count = 0U;
+    assert(storage_namebuffer_request(99U, storage_sheet_generation()) == STORAGE_OK);
+    storage_namebuffer_load(true);
+    assert(storage_namebuffer.Generation == 0U);
+    assert(log_count_prefix("Name fail") == 1U);
+
+    /* 正常读之后标志清掉。 */
+    world_reset();
+    bind_slots();
+    scan(3U, 0U);
+    g_locator_failed = true;
+    g_locator_failed_status = SERVICE_NO_MEDIA;
+    assert(storage_track_text_read(0U, 0U) == NULL);
+    assert(storage_track_text_last_read_unavailable());
+    g_locator_failed = false;
+    assert(storage_track_text_read(0U, 0U) != NULL);
+    assert(!storage_track_text_last_read_unavailable());
+}
+
+/**
  * @brief 日志里有没有 ERROR 级的行。
  * @return 有为真。
  */
@@ -1038,15 +1227,20 @@ static void test_scan_is_discarded_when_the_volume_is_unavailable_on_root_open(v
         assert(storage_sheet_generation() != 0U);
         assert(storage_catalog_invalidate() == STORAGE_OK);
         g_log_count = 0U;
+        g_open_dir_calls = 0U;
         g_open_root_status = unavailable[index];
 
         assert(storage_catalog_music_init() == STORAGE_OK);
 
+        assert(g_open_dir_calls == 2U); /* 第一次失败发生在对账之前，再开一次（在 Filesystem 入口等闸）才下结论 */
         assert(storage_sheet_generation() == 0U);
         assert(storage_catalog_index_num() == 0U);
         assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
         assert(log_count_prefix("Music Directory Open Failed") == 0U);
         assert(!log_has_error());
+        /* 序号变了：卡没了，等卷事件；序号没变且卷仍挂着：卡还在、读不了，没有卷事件可等。 */
+        assert(storage_catalog_scan_verdict(false) == STORAGE_CATALOG_SCAN_EVENT_PENDING);
+        assert(storage_catalog_scan_verdict(true) == STORAGE_CATALOG_SCAN_UNREADABLE);
     }
 
     world_reset();
@@ -1054,6 +1248,41 @@ static void test_scan_is_discarded_when_the_volume_is_unavailable_on_root_open(v
     scan(3U, 0U);
     assert(storage_sheet_generation() != 0U); /* 其他失败按空库发布。 */
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=0 us=0") == 0);
+}
+
+/**
+ * @brief 在途调用被拔卡打断时，第一次打开 Music/ 失败发生在对账之前；再开一次（它在 Filesystem 入口等闸，等到对账结束）
+ *        就恢复正常（例如只是一次没有重新初始化的假抖动）：扫描照常完成并发布，不当作丢弃。
+ */
+static void test_open_directory_that_fails_once_as_unavailable_is_retried_and_the_scan_goes_on(void)
+{
+    world_reset();
+    g_open_root_status = SERVICE_NO_MEDIA;
+    g_open_root_status_times = 1U;
+
+    scan(3U, 0U);
+
+    assert(g_open_dir_calls == 2U);
+    assert(storage_sheet_generation() != 0U);
+    assert(storage_catalog_index_num() == 3U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=3 us=0") == 0);
+    assert(storage_catalog_scan_verdict(true) == STORAGE_CATALOG_SCAN_DONE);
+    assert(storage_catalog_scan_verdict(false) == STORAGE_CATALOG_SCAN_DONE);
+}
+
+/**
+ * @brief 子目录同样：第一次打开得到卷不可用，再开一次恢复正常，子目录里的曲目照常收录。
+ */
+static void test_sub_directory_that_fails_once_as_unavailable_is_retried_too(void)
+{
+    world_reset();
+    g_open_sub_status = SERVICE_NOT_READY;
+    g_open_sub_status_times = 1U;
+
+    scan(2U, 3U);
+
+    assert(storage_catalog_index_num() == 5U);
+    assert(storage_catalog_scan_verdict(true) == STORAGE_CATALOG_SCAN_DONE);
 }
 
 /**
@@ -1078,6 +1307,8 @@ static void test_scan_is_discarded_when_the_volume_goes_away_mid_scan(void)
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
     assert(log_count_prefix("Music Directory Read Failed") == 0U);
     assert(!log_has_error());
+    assert(storage_catalog_scan_verdict(false) == STORAGE_CATALOG_SCAN_EVENT_PENDING);
+    assert(storage_catalog_scan_verdict(true) == STORAGE_CATALOG_SCAN_UNREADABLE);
 
     world_reset();
     scan(3U, 2U);
@@ -1091,6 +1322,8 @@ static void test_scan_is_discarded_when_the_volume_goes_away_mid_scan(void)
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
     assert(log_count_prefix("Sub Directory Open Failed") == 0U);
     assert(!log_has_error());
+    assert(storage_catalog_scan_verdict(false) == STORAGE_CATALOG_SCAN_EVENT_PENDING);
+    assert(storage_catalog_scan_verdict(true) == STORAGE_CATALOG_SCAN_UNREADABLE);
 }
 
 /**
@@ -1126,6 +1359,11 @@ int main(void)
     test_scan_end_info_for_directory_read_failure();
     test_scan_is_discarded_when_the_volume_is_unavailable_on_root_open();
     test_scan_is_discarded_when_the_volume_goes_away_mid_scan();
+    test_unavailable_empties_a_ready_window_the_gui_has_not_taken_yet();
+    test_unavailable_empties_a_ready_name_the_gui_has_not_taken_yet();
+    test_name_slot_does_not_warn_when_the_volume_went_away_during_the_read();
+    test_open_directory_that_fails_once_as_unavailable_is_retried_and_the_scan_goes_on();
+    test_sub_directory_that_fails_once_as_unavailable_is_retried_too();
     puts("storage_catalog_open: ok");
     return 0;
 }

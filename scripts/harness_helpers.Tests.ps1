@@ -286,13 +286,13 @@ $filesystemHostImpact = Get-HarnessImpact -ChangedPath @('Service/filesystem/fil
 Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $filesystemHostImpact.HostModules `
     -Message 'Filesystem Service 与 FatFs 变化必须同时选择文件定位符与 FTL 主机测试'
 
-# 共用 FreeRTOS 桩（Tests/stubs/freertos）被 flash_ftl、filesystem_locator、ui_cell、volume 与 storage_audio_stream（只取头）编译：改桩必须选中它们，且不落入未知路径。
+# 共用 FreeRTOS 桩（Tests/stubs/freertos）被 flash_ftl、filesystem_locator、ui_cell、volume、storage_catalog 与 storage_audio_stream（只取头）编译：改桩必须选中它们，且不落入未知路径。
 $freertosStubImpact = Get-HarnessImpact -ChangedPath @(
     'Tests/stubs/freertos/freertos_stub.c'
     'Tests/stubs/freertos/freertos_stub.h'
     'Tests/stubs/freertos/Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h')
-Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'storage_audio_stream', 'ui_cell', 'volume') -Actual $freertosStubImpact.HostModules `
-    -Message '共用 FreeRTOS 桩变化必须选择 filesystem_locator、flash_ftl、storage_audio_stream、ui_cell 与 volume 主机测试'
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'storage_audio_stream', 'storage_catalog', 'ui_cell', 'volume') -Actual $freertosStubImpact.HostModules `
+    -Message '共用 FreeRTOS 桩变化必须选择 filesystem_locator、flash_ftl、storage_audio_stream、storage_catalog、ui_cell 与 volume 主机测试'
 Assert-HarnessEqual -Expected 0 -Actual $freertosStubImpact.UnknownPaths.Count `
     -Message 'Tests/stubs/freertos 由主机模块规则覆盖，不应落入未知路径'
 Assert-HarnessEqual -Expected $false -Actual $freertosStubImpact.RequiresAllHostTests `

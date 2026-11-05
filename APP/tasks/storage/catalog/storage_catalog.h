@@ -14,7 +14,16 @@
 #include "APP/tasks/storage/catalog/storage_catalog_config.h"
 #include "Service/filesystem/filesystem_types.h"
 
+/** @brief 最近一次扫描结束后，Storage Task 该怎么对待（见 `storage_catalog_scan_verdict()`）。 */
+typedef enum
+{
+    STORAGE_CATALOG_SCAN_DONE = 0U,     /**< 扫描完成（含空库、截断、没有 Music/）或失败但不是卷不可用：照常就绪。 */
+    STORAGE_CATALOG_SCAN_EVENT_PENDING, /**< 卷不可用丢弃了扫描，且卷变了：等卷事件，不要就绪。 */
+    STORAGE_CATALOG_SCAN_UNREADABLE     /**< 卷不可用丢弃了扫描，但卷没变（卡还在、读不了）：没有卷事件可等，要报错。 */
+} StorageCatalog_ScanVerdictTypeDef;
+
 Storage_StatusTypeDef storage_catalog_music_init(void);
+StorageCatalog_ScanVerdictTypeDef storage_catalog_scan_verdict(bool volume_unchanged);
 Storage_StatusTypeDef storage_catalog_books_init(void);
 Storage_StatusTypeDef storage_catalog_init(void);
 Storage_StatusTypeDef storage_catalog_invalidate(void);

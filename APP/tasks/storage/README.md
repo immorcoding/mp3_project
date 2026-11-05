@@ -47,8 +47,8 @@ Storage Task 是**卷事件的订阅者**，继续做音频流、曲库扫描、
 ### 卷事件与失败约定
 
 - **订阅**：`storage_task()` 入口登记订阅，并先比对一次序号（`storage_task_apply_sd_volume()`），所以本任务比卷任务晚启动也不会漏。
-- **序号变了**（卸载、换卡的序号跳 2、被吞的拔出加重新挂载）：① `storage_audio_stream_card_removed()`：当前流仍被播放任务持有（含已读完的流）就写 `CARD_REMOVED`；② 作废曲库；③ 收掉 Queue 窗口槽和曲目显示名槽；④ 卷挂着就扫描曲库（`storage_catalog_init()`），扫描完成且序号未再变才置就绪。卷任务不等本任务：卸载已使旧令牌失效，晚一点收尾也碰不到旧卡。
-- **`NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 不是文件错误**（`Service_Filesystem_StatusIsVolumeUnavailable()`）：音频流读块得到它们时不写 `READ_ERROR`、不对同一个句柄重试，流“停住”（不空转），等卷事件写 `CARD_REMOVED`——这就是“在途读取被拔卡打断时显示 No SD card、游标重置”；开流或探测得到它们按 `NOT_READY` 应答；曲库扫描得到它们丢弃本次扫描、不发布、不记 ERROR（日志 `Scan done res=aborted`），等卷事件重扫；曲目标签读取打开时得到它们返回空结果，不回退文件主名、不计“打开失败”。其他错误表示卡还在，立刻按原来的方式报错。
+- **序号变了**（卸载、换卡的序号跳 2、被吞的拔出加重新挂载）：① `storage_audio_stream_card_removed()`：当前流仍被播放任务持有（含已读完的流）就写 `CARD_REMOVED`；② 作废曲库；③ 收掉 Queue 窗口槽和曲目显示名槽（PENDING 以空窗/空名收尾，**已经 READY 但 GUI 还没取走的也收成空窗/空名、代次 0**）；④ 卷挂着就扫描曲库（`storage_catalog_init()`），扫描完成且序号未再变才置就绪。卷任务不等本任务：卸载已使旧令牌失效，晚一点收尾也碰不到旧卡。
+- **`NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 不是文件错误**（`Service_Filesystem_StatusIsVolumeUnavailable()`）：音频流读块得到它们时，先对同一个句柄 `CloseFile`（它在 Filesystem 入口等闸，等到本轮对账结束），再看 SD 卷：序号变了或卷已不挂是卡没了，不写 `READ_ERROR`、不重试，流“停住”（FIL 已关，不空转），等卷事件写 `CARD_REMOVED`——这就是“在途读取被拔卡打断时显示 No SD card、游标重置”；**序号没变且卷仍挂着是卡还在、设备出错，没有卷事件可等，立刻按读错误报**（`storage_audio_classify_read()`）；开流或探测得到它们按 `NOT_READY` 应答；曲库扫描得到它们丢弃本次扫描、不发布、不记 ERROR（日志 `Scan done res=aborted`；打开目录先再开一次，等过本轮对账才下结论），卷变了就等卷事件重扫、不置就绪，卷没变（卡还在、读不了）则记 ERROR、置就绪、曲库为空，拔插卡后重扫；曲目标签读取打开时得到它们返回空结果，不回退文件主名、不计“打开失败”，名字槽也不为此记 `Name fail` WARN（`storage_track_text_last_read_unavailable()`）。其他错误表示卡还在，立刻按原来的方式报错。
 - **已知漏洞**（推断，板上没测到）：数据脚比检测脚先断时，第一次失败仍是 `ERROR`，显示读取错误而不是 No SD card，同样会停播。
 
 ## 音频流分区

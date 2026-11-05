@@ -21,5 +21,6 @@ typedef struct
 } StorageTrackText_ResultTypeDef;
 
 const StorageTrackText_ResultTypeDef *storage_track_text_read(uint16_t position, uint16_t catalog_index);
+bool storage_track_text_last_read_unavailable(void);
 
 #endif /* STORAGE_TRACK_TEXT_H */

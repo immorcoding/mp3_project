@@ -189,6 +189,9 @@
                 '^APP/tasks/storage/catalog/storage_catalog(?:_name|_text)?\.[ch]$'
                 '^APP/tasks/storage/catalog/storage_sheet\.[ch]$'
                 '^APP/tasks/storage/catalog/storage_track_(?:open|text|diag)\.[ch]$'
+                # 窗口槽与名字槽的 complete_unavailable 测试（卷事件收槽，#211）链接它们，并用共用 FreeRTOS 桩的任务通知。
+                '^APP/tasks/storage/catalog/storage_(?:list|name)buffer\.[ch]$'
+                '^Tests/stubs/freertos/'
                 '^APP/tasks/storage/catalog/storage_catalog_config\.h$'
                 # 按定位符打开的测试以假实现替换 Filesystem / Log Service 与周期计数器 Adapter，只依赖它们的公开头。
                 '^Service/filesystem/filesystem_(?:file|directory)\.h$'

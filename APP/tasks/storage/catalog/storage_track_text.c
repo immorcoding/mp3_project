@@ -27,6 +27,19 @@ static char storage_track_text_path[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
 /** @brief 最近一次读取的结果；下一次读取前有效。 */
 static StorageTrackText_ResultTypeDef storage_track_text_result;
 
+/** @brief 最近一次读取是因为打开时得到卷不可用（`NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`）而返回空结果。 */
+static bool storage_track_text_unavailable;
+
+/**
+ * @brief 最近一次 `storage_track_text_read()` 返回空结果，是不是因为打开时卷不可用（拔卡的正常竞态）。
+ * @return true 是：不是文件错误，也不是防御分支，调用者不必记 WARN，随后的卷事件会收掉窗口或名字槽。
+ * @note  每次 `storage_track_text_read()` 开头清零；只由 Storage Task 调用。
+ */
+bool storage_track_text_last_read_unavailable(void)
+{
+    return storage_track_text_unavailable;
+}
+
 /**
  * @brief 曲目文本纯函数的读回调：seek 到偏移后读至多 bytes 字节。
  * @param[in] context 指向已打开的文件句柄。
@@ -106,11 +119,13 @@ const StorageTrackText_ResultTypeDef *storage_track_text_read(uint16_t position,
     uint32_t path_bytes;
     bool extracted;
 
+    storage_track_text_unavailable = false;
     if (storage_catalog_copy_path(catalog_index, storage_track_text_path, sizeof(storage_track_text_path)) != STORAGE_OK)
     {
         return NULL;
     }
     path_bytes = (uint32_t)strlen(path);
+    storage_track_text_unavailable = false;
     result->OpenFailed = false;
     result->OpenUs = 0U;
 
@@ -118,6 +133,7 @@ const StorageTrackText_ResultTypeDef *storage_track_text_read(uint16_t position,
     if (Service_Filesystem_StatusIsVolumeUnavailable(open_status))
     {
         /* 卷没了或正在对账：不是文件错误，不回退文件主名、不算“打开失败”；调用者的窗口或名字槽随后被卷事件收掉。 */
+        storage_track_text_unavailable = true;
         return NULL;
     }
     if (open_status != SERVICE_OK)
