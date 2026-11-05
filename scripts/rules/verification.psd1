@@ -82,6 +82,8 @@
             PathPatterns = @(
                 '^APP/tasks/gui/'
                 '^Service/gui/gui_service_input'
+                '^Service/gui/gui_service_sleep'
+                '^Service/gui/gui_service_config\.h$'
                 '^Service/gui/gui_service\.(c|h)$'
                 # gui_service_input 的测试编译到的 Platform/Service 聚合头与配置头（由 check-test-paths.ps1 发现）。
                 '^Platform/platform\.h$'

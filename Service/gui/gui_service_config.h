@@ -11,6 +11,10 @@
 /* gui_service.c */
 #define SERVICE_GUI_DRAW_BUFFER_LINES      (320U)   /* 单个 LVGL 绘制缓冲包含的屏幕行数。当前为完整 320 行，两块 RGB565 缓冲均位于 SDRAM。 */
 
+/* gui_service.c、gui_service_sleep.c */
+#define SERVICE_GUI_SLEEP_MIN_MS           (1U)     /* GUI Task 每圈结束后至少睡的毫秒数；只睡到下一个 tick（实际 0 到 1 ms），保证每圈至少让出一次（GUI-28）。 */
+#define SERVICE_GUI_SLEEP_MAX_MS           (16U)    /* GUI Task 每圈结束后最多睡的毫秒数，等于 LV_DISP_DEF_REFR_PERIOD（lv_conf.h），gui_service.c 用 _Static_assert 守住。 */
+
 /* main/transport/gui_service_main_transport.c */
 #define SERVICE_GUI_MUSIC_SKIP_NOTICE_MS   (2000U)  /* 状态行 `Skipped k file(s)` 提示的保持时长；期间再跳过则累加并重新计时（GUI-19）。按 LVGL tick 计时。 */
 #define SERVICE_GUI_MUSIC_STATUS_FLASH_MS  (300U)   /* 状态行闪一次（text_opa 淡出再淡回）的总时长（GUI-19）。按 LVGL tick 计时。 */

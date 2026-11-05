@@ -5,8 +5,8 @@
   *
   * @details
   *          本任务是 LVGL 的唯一执行上下文。循环只做 Consume 输入、遍历应用注册表
-  *          调用各应用的 gui_step、再 Process()。音乐窗口与 playing 在
-  *          APP/apps/music/gui/，本文件不认识任何具体应用。
+  *          调用各应用的 gui_step、再 Process()，最后按 Process() 的返回值睡一段
+  *          （GUI-28）。音乐窗口与 playing 在 APP/apps/music/gui/，本文件不认识任何具体应用。
   ******************************************************************************
   */
 
@@ -63,6 +63,7 @@ void gui_task(void *handle)
     while (1)
     {
         Service_GUI_InputTypeDef input;
+        uint32_t wait_ms;
 
         input.command = SERVICE_GUI_INPUT_NONE;
         input.param = 0U;
@@ -81,12 +82,19 @@ void gui_task(void *handle)
             const uint32_t start_cycles = CortexM7CycleCounter_Read();
             uint32_t elapsed_cycles;
 
-            Service_GUI_Process();
+            wait_ms = Service_GUI_Process();
             elapsed_cycles = CortexM7CycleCounter_Read() - start_cycles;
             if (elapsed_cycles > gui_task_max_frame_cycles)
             {
                 gui_task_max_frame_cycles = elapsed_cycles;
             }
         }
+
+        /*
+         * 睡眠必须在上面的测量段之外，最长帧只含渲染，不含睡眠（WF-12）。
+         * 用 vTaskDelay 而不是带超时的通知等待：新结果到达不提前唤醒，GUI 不晚于下一次
+         * 刷新醒来，且先跑 gui_step 再刷新，到期前到达的结果都赶得上同一帧（GUI-28）。
+         */
+        vTaskDelay(pdMS_TO_TICKS(wait_ms));
     }
 }

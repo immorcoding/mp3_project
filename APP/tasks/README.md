@@ -26,16 +26,16 @@ Task 是 APP 创建后的运行时执行上下文：任务通过 Service/Platfor
 |---|---|---|---|---|
 | Playback Task | 3 | 5120 | `xTaskCreateStatic`，DTCM | 唯一的播放状态机；解码、PCM 半区补满与提交、快照发布 |
 | Storage Task | 2 | 1024 | `xTaskCreate` | SD 热插拔、曲库、FatFs、Flash 回收、音频流读块 |
-| GUI Task | 1 | 2048 | `xTaskCreate` | LVGL 唯一执行上下文 |
+| GUI Task | 1 | 2048 | `xTaskCreate` | LVGL 唯一执行上下文；每圈结束后 `vTaskDelay` 睡到下一个 LVGL 定时器到期 |
 | Log Task | 1 | 512 | `xTaskCreate` | 日志消费 |
 | Monitor Task | 1 | 256 | `xTaskCreate` | 结温与板级监控 |
 | Boot（Create Task） | 0 | 128 | `xTaskCreate` | 创建其余任务后自删 |
 
 排序依据（[#71](https://github.com/immorcoding/mp3_project/issues/71) A6、B1、B2；[#62](https://github.com/immorcoding/mp3_project/issues/62)）：
 
-- **播放最高**：PCM 半区只有约 24 ms（1152 帧，48 kHz）的补满期限，期限只允许受中断与播放任务自身工作（有上界的一次唤醒，不含 FatFs/LVGL、不同步等待 Storage、发送不阻塞）影响。Storage 的一次 FatFs 读取（含 SD DMA 与可能的单分块 500 ms 超时）和 GUI 的一帧 `lv_timer_handler` 都可能远长于期限，所以播放任务必须能抢占它们；与这些长任务的关系只靠优先级，GUI 和 Storage 不加让出点，播放任务也不与低优先级任务共用互斥锁。
+- **播放最高**：PCM 半区只有约 24 ms（1152 帧，48 kHz）的补满期限，期限只允许受中断与播放任务自身工作（有上界的一次唤醒，不含 FatFs/LVGL、不同步等待 Storage、发送不阻塞）影响。Storage 的一次 FatFs 读取（含 SD DMA 与可能的单分块 500 ms 超时）和 GUI 的一帧 `lv_timer_handler` 都可能远长于期限，所以播放任务必须能抢占它们。播放与这些长任务的关系只靠优先级：播放的期限不依赖 GUI 或文件读取中途让出，播放任务也不与低优先级任务共用互斥锁。GUI 一帧中途不加让出点；每圈结束后至少睡到下一个 tick，这是给同级和低优先级任务留时间，不是为了播放（睡多久见 [GUI Task](gui/README.md)）。
 - **Storage 高于 GUI/Log/Monitor**：块池缓冲有限，Storage 要在播放消耗完块之前及时补块；GUI 的帧循环不应拖慢读块。
-- **GUI、Log、Monitor 同级 1**：时间片轮转，互不依赖。
+- **GUI、Log、Monitor 同级 1**：时间片轮转，互不依赖。GUI 每圈睡眠，优先级低于它的任务（含 IDLE）才拿得到 CPU。
 - **Boot 最低**：只在启动时创建任务。
 - **定时器服务任务同为 3**：`configTIMER_TASK_PRIORITY` 为 3，应用目前没有软件定时器；引入软件定时器时回调须很短，否则复核两者优先级。`FreeRTOSConfig.h` 的优先级相关配置不改。
 

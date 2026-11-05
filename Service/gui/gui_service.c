@@ -13,6 +13,7 @@
 
 #include "Service/gui/gui_service.h"
 #include "Service/gui/gui_service_input.h"
+#include "Service/gui/gui_service_sleep.h"
 #include "Service/gui/boot/gui_service_boot.h"
 #include "Service/gui/font/gui_service_font.h"
 #include "Service/gui/gui_service_config.h"
@@ -34,6 +35,10 @@
 #include "Platform/touch/platform_touch.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
+
+/* 睡眠上限就是屏幕刷新周期：再睡久就会错过下一次刷新（GUI-28）。 */
+_Static_assert(SERVICE_GUI_SLEEP_MAX_MS == LV_DISP_DEF_REFR_PERIOD,
+               "SERVICE_GUI_SLEEP_MAX_MS must equal LV_DISP_DEF_REFR_PERIOD");
 
 /**
  * @brief LVGL v8 仅保存两块绘制缓冲的指针，故其存储期必须覆盖显示驱动的整个生命周期。
@@ -290,14 +295,23 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
 }
 
 /**
- * @brief  推进 GUI Task 的 LVGL Tick、输入、动画与刷新处理。
+ * @brief  推进 GUI Task 的 LVGL Tick、输入、动画与刷新处理，并给出本圈之后该睡多久。
+ * @return GUI Task 本圈结束后应睡的毫秒数，恒在 SERVICE_GUI_SLEEP_MIN_MS（1）到
+ *         SERVICE_GUI_SLEEP_MAX_MS（16，即 LV_DISP_DEF_REFR_PERIOD）之间。
+ *         等于 lv_timer_handler() 的返回值减本圈实际耗时再夹上下限；输入槽里有待取走的
+ *         命令时只给下限（GUI-28）。
  * @note   只能由完成 Service_GUI_Init() 的同一 GUI Task 周期调用。LCD DMA 传输
  *         期间，LVGL 通过本 Module 的 wait callback 阻塞等待最终 ISR 事件。
+ *         本函数自己不睡眠，睡眠由调用方在测量段之外完成；忽略返回值（如 GUI 模拟器）
+ *         只是不让出 CPU，LVGL 行为不变。本圈耗时只量本函数内部（lv_tick_inc 到
+ *         handler 返回）；下一圈 Process 之前的 gui_step 耗时不在其中，帧间隔会多出这么久。
  */
-void Service_GUI_Process(void)
+uint32_t Service_GUI_Process(void)
 {
     const TickType_t current_tick = xTaskGetTickCount();
     const TickType_t elapsed_ticks = current_tick - service_gui_last_tick;
+    uint32_t timer_ms;
+    uint32_t used_ms;
 
     if (elapsed_ticks != 0U)
     {
@@ -306,7 +320,15 @@ void Service_GUI_Process(void)
         service_gui_last_tick = current_tick;
     }
 
-    (void)lv_timer_handler();
+    timer_ms = lv_timer_handler();
+
+    /*
+     * lv_tick 只在上面推进，handler 运行期间时间不动，timer_ms 是按开头的冻结时间算的；
+     * 渲染与等 DMA 花掉的时间要用 FreeRTOS tick 另量，睡眠时扣掉，否则会叠到帧间隔上。
+     */
+    used_ms = (uint32_t)(xTaskGetTickCount() - current_tick) * (uint32_t)portTICK_PERIOD_MS;
+
+    return service_gui_sleep_ms(timer_ms, used_ms, service_gui_input_has_pending());
 }
 
 /**

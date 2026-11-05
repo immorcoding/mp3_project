@@ -76,6 +76,7 @@ GUI Task 循环
   -> Service_GUI_ConsumeInput()
   -> app_table 各应用 gui_step()（音乐为 gui_music_step()）/ 命令与窗口协议
   -> Service_GUI_Process()
+  -> vTaskDelay(Process() 的返回值，1 至 16 ms；GUI-28)
 Service_GUI_ThemeApply()
   -> service_gui_main_apply_theme() -> background 按新外观更新
 Service_GUI_VinylApply(playing, reset_angle)
