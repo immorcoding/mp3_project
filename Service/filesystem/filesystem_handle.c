@@ -1,6 +1,10 @@
 /**
  * @file filesystem_handle.c
- * @brief 静态文件/目录槽、代次 Token 以及按卷立即失效。
+ * @brief 静态文件/目录槽（按卷固定分配）、代次 Token 以及按卷立即失效。
+ *
+ * @details
+ *          本文件不拿锁：调用者（Service 公开函数）已持有所属卷的卷锁。槽按卷固定分配，
+ *          所以一个槽只会被一把卷锁保护，两卷的槽互不相干，也不需要保护槽表的第三把锁。
  */
 
 #include "Service/filesystem/filesystem_handle.h"
@@ -15,11 +19,20 @@
 #define FILESYSTEM_HANDLE_GENERATION_MAX 0x00FFFFFFU
 #define FILESYSTEM_HANDLE_VOLUME_COUNT 2U
 
+/* 每个打开的对象在 FatFs 锁表 Files[] 里占一项，锁表不能先于槽满：不然 f_open 会在槽用尽之前返回
+ * FR_TOO_MANY_OPEN_FILES，而且“找空位并占用”这一步会在跨卷时被窄表锁以外的情形挤到。 */
+_Static_assert(_FS_LOCK >= (FILESYSTEM_FILE_SLOT_COUNT + FILESYSTEM_DIRECTORY_SLOT_COUNT),
+               "FatFs _FS_LOCK must not be smaller than the total number of file and directory slots");
+/* 加锁靠 Service 自己的卷锁，不靠 FatFs 的 _FS_REENTRANT（它只保护同一卷，也保护不了 Files[]）。 */
+_Static_assert(_FS_REENTRANT == 0, "FatFs _FS_REENTRANT must stay 0; the Filesystem volume locks replace it");
+/* Token 的槽号只有 8 位。 */
+_Static_assert(FILESYSTEM_FILE_SLOT_COUNT <= FILESYSTEM_HANDLE_INDEX_MASK, "file slot index must fit the Token");
+_Static_assert(FILESYSTEM_DIRECTORY_SLOT_COUNT <= FILESYSTEM_HANDLE_INDEX_MASK, "directory slot index must fit the Token");
+
 typedef struct
 {
     FIL object;
     uint32_t generation;
-    Service_Filesystem_VolumeTypeDef volume;
     bool in_use;
 } filesystem_file_slot_t;
 
@@ -27,7 +40,6 @@ typedef struct
 {
     DIR object;
     uint32_t generation;
-    Service_Filesystem_VolumeTypeDef volume;
     bool in_use;
 } filesystem_directory_slot_t;
 
@@ -45,6 +57,50 @@ static bool filesystem_handle_volume_valid(Service_Filesystem_VolumeTypeDef volu
 {
     return (volume == SERVICE_FILESYSTEM_VOLUME_SD) ||
            (volume == SERVICE_FILESYSTEM_VOLUME_FLASH);
+}
+
+/**
+ * @brief 算出某一卷的文件槽区间。
+ * @param[in] volume 合法的卷。
+ * @param[out] first 区间第一个槽号。
+ * @param[out] count 区间槽数。
+ */
+static void filesystem_handle_file_range(Service_Filesystem_VolumeTypeDef volume,
+                                         uint32_t *first,
+                                         uint32_t *count)
+{
+    if (volume == SERVICE_FILESYSTEM_VOLUME_SD)
+    {
+        *first = 0U;
+        *count = FILESYSTEM_SD_FILE_SLOT_COUNT;
+    }
+    else
+    {
+        *first = FILESYSTEM_SD_FILE_SLOT_COUNT;
+        *count = FILESYSTEM_FLASH_FILE_SLOT_COUNT;
+    }
+}
+
+/**
+ * @brief 算出某一卷的目录槽区间。
+ * @param[in] volume 合法的卷。
+ * @param[out] first 区间第一个槽号。
+ * @param[out] count 区间槽数。
+ */
+static void filesystem_handle_directory_range(Service_Filesystem_VolumeTypeDef volume,
+                                              uint32_t *first,
+                                              uint32_t *count)
+{
+    if (volume == SERVICE_FILESYSTEM_VOLUME_SD)
+    {
+        *first = 0U;
+        *count = FILESYSTEM_SD_DIRECTORY_SLOT_COUNT;
+    }
+    else
+    {
+        *first = FILESYSTEM_SD_DIRECTORY_SLOT_COUNT;
+        *count = FILESYSTEM_FLASH_DIRECTORY_SLOT_COUNT;
+    }
 }
 
 /**
@@ -79,6 +135,67 @@ static bool filesystem_handle_parse_index(uint32_t token, uint32_t slot_count, u
 }
 
 /**
+ * @brief 槽号属于哪一卷：区间按卷固定，所以只看槽号。
+ * @param[in] index 合法的文件槽号。
+ * @return 所属卷。
+ */
+static Service_Filesystem_VolumeTypeDef filesystem_handle_file_slot_volume(uint32_t index)
+{
+    return (index < FILESYSTEM_SD_FILE_SLOT_COUNT) ? SERVICE_FILESYSTEM_VOLUME_SD
+                                                    : SERVICE_FILESYSTEM_VOLUME_FLASH;
+}
+
+/**
+ * @brief 槽号属于哪一卷。
+ * @param[in] index 合法的目录槽号。
+ * @return 所属卷。
+ */
+static Service_Filesystem_VolumeTypeDef filesystem_handle_directory_slot_volume(uint32_t index)
+{
+    return (index < FILESYSTEM_SD_DIRECTORY_SLOT_COUNT) ? SERVICE_FILESYSTEM_VOLUME_SD
+                                                         : SERVICE_FILESYSTEM_VOLUME_FLASH;
+}
+
+/**
+ * @brief 从文件 Token 的槽号算出所属卷，用来决定拿哪把卷锁。
+ * @param[in] file 调用者传入的句柄。
+ * @param[out] volume 成功时写入所属卷。
+ * @return true 槽号在范围内；false 表示 Token 不可能有效（含全零 Token）。
+ * @note  纯计算，不读槽内容，不要求持锁；槽号合法不代表句柄有效，有效性要拿锁后用 lookup 核对。
+ */
+bool filesystem_handle_file_volume(Service_Filesystem_FileHandleTypeDef file,
+                                   Service_Filesystem_VolumeTypeDef *volume)
+{
+    uint32_t index;
+
+    if (!filesystem_handle_parse_index(file.Token, FILESYSTEM_FILE_SLOT_COUNT, &index))
+    {
+        return false;
+    }
+    *volume = filesystem_handle_file_slot_volume(index);
+    return true;
+}
+
+/**
+ * @brief 从目录 Token 的槽号算出所属卷，用来决定拿哪把卷锁。
+ * @param[in] directory 调用者传入的句柄。
+ * @param[out] volume 成功时写入所属卷。
+ * @return true 槽号在范围内；false 表示 Token 不可能有效。
+ */
+bool filesystem_handle_directory_volume(Service_Filesystem_DirectoryHandleTypeDef directory,
+                                        Service_Filesystem_VolumeTypeDef *volume)
+{
+    uint32_t index;
+
+    if (!filesystem_handle_parse_index(directory.Token, FILESYSTEM_DIRECTORY_SLOT_COUNT, &index))
+    {
+        return false;
+    }
+    *volume = filesystem_handle_directory_slot_volume(index);
+    return true;
+}
+
+/**
  * @brief 递增槽代次；耗尽后不再复用该槽。
  * @param[in,out] generation 槽内代次。
  * @return true 仍可分配新 Token。
@@ -100,24 +217,21 @@ static bool filesystem_handle_bump_generation(uint32_t *generation)
  */
 static void filesystem_handle_invalidate_volume(Service_Filesystem_VolumeTypeDef volume)
 {
-    uint32_t index;
+    uint32_t first;
+    uint32_t count;
 
-    for (index = 0U; index < FILESYSTEM_FILE_SLOT_COUNT; index++)
+    filesystem_handle_file_range(volume, &first, &count);
+    for (uint32_t index = first; index < (first + count); index++)
     {
-        if (filesystem_file_slots[index].volume == volume)
-        {
-            filesystem_file_slots[index].in_use = false;
-            memset(&filesystem_file_slots[index].object, 0, sizeof(FIL));
-        }
+        filesystem_file_slots[index].in_use = false;
+        memset(&filesystem_file_slots[index].object, 0, sizeof(FIL));
     }
 
-    for (index = 0U; index < FILESYSTEM_DIRECTORY_SLOT_COUNT; index++)
+    filesystem_handle_directory_range(volume, &first, &count);
+    for (uint32_t index = first; index < (first + count); index++)
     {
-        if (filesystem_directory_slots[index].volume == volume)
-        {
-            filesystem_directory_slots[index].in_use = false;
-            memset(&filesystem_directory_slots[index].object, 0, sizeof(DIR));
-        }
+        filesystem_directory_slots[index].in_use = false;
+        memset(&filesystem_directory_slots[index].object, 0, sizeof(DIR));
     }
 }
 
@@ -148,28 +262,35 @@ bool filesystem_handle_is_mounted(Service_Filesystem_VolumeTypeDef volume)
     return filesystem_handle_volume_valid(volume) && filesystem_volume_mounted[volume];
 }
 
+/**
+ * @brief 该卷是否还有打开的文件或目录槽。
+ * @param[in] volume 目标卷。
+ * @return true 该卷至少有一个槽在用；卷非法为 false。
+ * @note  调用者已持该卷的卷锁。
+ */
 bool filesystem_handle_volume_has_open(Service_Filesystem_VolumeTypeDef volume)
 {
-    uint32_t index;
+    uint32_t first;
+    uint32_t count;
 
     if (!filesystem_handle_volume_valid(volume))
     {
         return false;
     }
 
-    for (index = 0U; index < FILESYSTEM_FILE_SLOT_COUNT; index++)
+    filesystem_handle_file_range(volume, &first, &count);
+    for (uint32_t index = first; index < (first + count); index++)
     {
-        if (filesystem_file_slots[index].in_use &&
-            (filesystem_file_slots[index].volume == volume))
+        if (filesystem_file_slots[index].in_use)
         {
             return true;
         }
     }
 
-    for (index = 0U; index < FILESYSTEM_DIRECTORY_SLOT_COUNT; index++)
+    filesystem_handle_directory_range(volume, &first, &count);
+    for (uint32_t index = first; index < (first + count); index++)
     {
-        if (filesystem_directory_slots[index].in_use &&
-            (filesystem_directory_slots[index].volume == volume))
+        if (filesystem_directory_slots[index].in_use)
         {
             return true;
         }
@@ -206,11 +327,24 @@ Service_StatusTypeDef filesystem_handle_volume_ready(Service_Filesystem_VolumeTy
     return SERVICE_OK;
 }
 
+/**
+ * @brief 在该卷的文件槽区间里占一个空槽。
+ * @param[in] volume 目标卷。
+ * @param[out] object 成功时写入槽内的 FIL（已清零）。
+ * @param[out] file 成功时写入新 Token。
+ * @retval SERVICE_OK 已占槽。
+ * @retval SERVICE_BUSY 该卷的文件槽用尽。
+ * @retval SERVICE_NOT_READY 卷未初始化或未挂载。
+ * @retval SERVICE_INVALID_PARAM 卷非法或输出参数为空。
+ * @retval SERVICE_ERROR 槽的代次耗尽。
+ * @note  调用者已持该卷的卷锁。
+ */
 Service_StatusTypeDef filesystem_handle_acquire_file(Service_Filesystem_VolumeTypeDef volume,
                                                      FIL **object,
                                                      Service_Filesystem_FileHandleTypeDef *file)
 {
-    uint32_t index;
+    uint32_t first;
+    uint32_t count;
     Service_StatusTypeDef status = filesystem_handle_volume_ready(volume);
 
     if (status != SERVICE_OK)
@@ -222,7 +356,8 @@ Service_StatusTypeDef filesystem_handle_acquire_file(Service_Filesystem_VolumeTy
         return SERVICE_INVALID_PARAM;
     }
 
-    for (index = 0U; index < FILESYSTEM_FILE_SLOT_COUNT; index++)
+    filesystem_handle_file_range(volume, &first, &count);
+    for (uint32_t index = first; index < (first + count); index++)
     {
         filesystem_file_slot_t *slot = &filesystem_file_slots[index];
 
@@ -233,7 +368,6 @@ Service_StatusTypeDef filesystem_handle_acquire_file(Service_Filesystem_VolumeTy
                 return SERVICE_ERROR;
             }
             memset(&slot->object, 0, sizeof(slot->object));
-            slot->volume = volume;
             slot->in_use = true;
             *object = &slot->object;
             file->Token = filesystem_handle_make_token(index, slot->generation);
@@ -244,11 +378,21 @@ Service_StatusTypeDef filesystem_handle_acquire_file(Service_Filesystem_VolumeTy
     return SERVICE_BUSY;
 }
 
+/**
+ * @brief 核对文件 Token 并取出槽内的 FIL。
+ * @param[in] file 调用者传入的句柄。
+ * @param[out] object 成功时写入 FIL，否则为 NULL。
+ * @retval SERVICE_OK 句柄有效。
+ * @retval SERVICE_INVALID_HANDLE 槽号、占用或代次不符。
+ * @retval SERVICE_NOT_READY 所属卷未就绪。
+ * @note  调用者已持所属卷的卷锁，所以这里的核对不会被别的任务打断。
+ */
 Service_StatusTypeDef filesystem_handle_lookup_file(Service_Filesystem_FileHandleTypeDef file,
                                                     FIL **object)
 {
     uint32_t index;
     filesystem_file_slot_t *slot;
+    Service_StatusTypeDef status;
 
     if (object == NULL)
     {
@@ -267,7 +411,7 @@ Service_StatusTypeDef filesystem_handle_lookup_file(Service_Filesystem_FileHandl
         return SERVICE_INVALID_HANDLE;
     }
 
-    Service_StatusTypeDef status = filesystem_handle_volume_ready(slot->volume);
+    status = filesystem_handle_volume_ready(filesystem_handle_file_slot_volume(index));
     if (status != SERVICE_OK)
     {
         return status;
@@ -295,12 +439,25 @@ void filesystem_handle_release_file(Service_Filesystem_FileHandleTypeDef file)
     }
 }
 
+/**
+ * @brief 在该卷的目录槽区间里占一个空槽。
+ * @param[in] volume 目标卷。
+ * @param[out] object 成功时写入槽内的 DIR（已清零）。
+ * @param[out] directory 成功时写入新 Token。
+ * @retval SERVICE_OK 已占槽。
+ * @retval SERVICE_BUSY 该卷的目录槽用尽。
+ * @retval SERVICE_NOT_READY 卷未初始化或未挂载。
+ * @retval SERVICE_INVALID_PARAM 卷非法或输出参数为空。
+ * @retval SERVICE_ERROR 槽的代次耗尽。
+ * @note  调用者已持该卷的卷锁。
+ */
 Service_StatusTypeDef filesystem_handle_acquire_directory(
     Service_Filesystem_VolumeTypeDef volume,
     DIR **object,
     Service_Filesystem_DirectoryHandleTypeDef *directory)
 {
-    uint32_t index;
+    uint32_t first;
+    uint32_t count;
     Service_StatusTypeDef status = filesystem_handle_volume_ready(volume);
 
     if (status != SERVICE_OK)
@@ -312,7 +469,8 @@ Service_StatusTypeDef filesystem_handle_acquire_directory(
         return SERVICE_INVALID_PARAM;
     }
 
-    for (index = 0U; index < FILESYSTEM_DIRECTORY_SLOT_COUNT; index++)
+    filesystem_handle_directory_range(volume, &first, &count);
+    for (uint32_t index = first; index < (first + count); index++)
     {
         filesystem_directory_slot_t *slot = &filesystem_directory_slots[index];
 
@@ -323,7 +481,6 @@ Service_StatusTypeDef filesystem_handle_acquire_directory(
                 return SERVICE_ERROR;
             }
             memset(&slot->object, 0, sizeof(slot->object));
-            slot->volume = volume;
             slot->in_use = true;
             *object = &slot->object;
             directory->Token = filesystem_handle_make_token(index, slot->generation);
@@ -334,12 +491,22 @@ Service_StatusTypeDef filesystem_handle_acquire_directory(
     return SERVICE_BUSY;
 }
 
+/**
+ * @brief 核对目录 Token 并取出槽内的 DIR。
+ * @param[in] directory 调用者传入的句柄。
+ * @param[out] object 成功时写入 DIR，否则为 NULL。
+ * @retval SERVICE_OK 句柄有效。
+ * @retval SERVICE_INVALID_HANDLE 槽号、占用或代次不符。
+ * @retval SERVICE_NOT_READY 所属卷未就绪。
+ * @note  调用者已持所属卷的卷锁。
+ */
 Service_StatusTypeDef filesystem_handle_lookup_directory(
     Service_Filesystem_DirectoryHandleTypeDef directory,
     DIR **object)
 {
     uint32_t index;
     filesystem_directory_slot_t *slot;
+    Service_StatusTypeDef status;
 
     if (object == NULL)
     {
@@ -359,7 +526,7 @@ Service_StatusTypeDef filesystem_handle_lookup_directory(
         return SERVICE_INVALID_HANDLE;
     }
 
-    Service_StatusTypeDef status = filesystem_handle_volume_ready(slot->volume);
+    status = filesystem_handle_volume_ready(filesystem_handle_directory_slot_volume(index));
     if (status != SERVICE_OK)
     {
         return status;

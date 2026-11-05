@@ -58,11 +58,13 @@ add_executable(flash_file_benchmark_tests
     ${FILE_BENCH_SOURCES}
     test_flash_file_benchmark.c
     ../stubs/freertos/freertos_stub.c
+    ../stubs/lock_env/lock_env_cycle_counter.c
     ../../Service/filesystem/filesystem_service.c
     ../../Service/filesystem/filesystem_file.c
     ../../Service/filesystem/filesystem_directory.c
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_lock.c
     ../../Service/filesystem/filesystem_status.c
     ../../APP/tasks/storage/benchmark/storage_flash_file_benchmark.c)
 target_include_directories(flash_file_benchmark_tests BEFORE PRIVATE
@@ -84,18 +86,22 @@ endforeach()
 
 add_executable(filesystem_service_tests
     test_filesystem_service.c
+    ../stubs/freertos/freertos_stub.c
+    ../stubs/lock_env/lock_env_cycle_counter.c
+    ../stubs/lock_env/lock_env_log.c
     ../../Service/filesystem/filesystem_service.c
     ../../Service/filesystem/filesystem_file.c
     ../../Service/filesystem/filesystem_directory.c
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_lock.c
     ../../Service/filesystem/filesystem_status.c
     ../../Middlewares/Third_Party/FatFs/src/ff.c
     ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
     ../../Middlewares/Third_Party/FatFs/src/diskio.c
     ../../Middlewares/Third_Party/FatFs/src/option/cc936.c)
 target_include_directories(filesystem_service_tests BEFORE PRIVATE
-    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../..
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../stubs/lock_env ../..
     ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
 target_compile_options(filesystem_service_tests PRIVATE -UNDEBUG)
 add_test(NAME filesystem_service_volume_aware COMMAND filesystem_service_tests)
@@ -105,11 +111,14 @@ add_test(NAME filesystem_service_volume_aware COMMAND filesystem_service_tests)
 add_executable(filesystem_completion_tests
     test_filesystem_completion.c
     ../stubs/freertos/freertos_stub.c
+    ../stubs/lock_env/lock_env_cycle_counter.c
+    ../stubs/lock_env/lock_env_log.c
     ../../Service/filesystem/filesystem_service.c
     ../../Service/filesystem/filesystem_file.c
     ../../Service/filesystem/filesystem_directory.c
     ../../Service/filesystem/filesystem_path.c
     ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_lock.c
     ../../Service/filesystem/filesystem_status.c
     ../../Service/filesystem/sd/filesystem_sd_transfer.c
     ../../Service/filesystem/flash/filesystem_flash_transfer.c
@@ -135,6 +144,48 @@ set_source_files_properties(
     PROPERTIES COMPILE_OPTIONS "-w")
 add_test(NAME filesystem_completion_wait COMMAND filesystem_completion_tests)
 
+
+# Release 构建的 Service（带 -DNDEBUG，与固件 Release 一致）：同一套用例，另加“不投统计日志”。
+# Service 源码编进 OBJECT 库单独带 -DNDEBUG；测试文件仍用 -UNDEBUG，免得它自己的 assert 被编掉。
+add_library(filesystem_service_release_objects OBJECT
+    ../../Service/filesystem/filesystem_service.c
+    ../../Service/filesystem/filesystem_file.c
+    ../../Service/filesystem/filesystem_directory.c
+    ../../Service/filesystem/filesystem_path.c
+    ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_lock.c
+    ../../Service/filesystem/filesystem_status.c
+    ../../Service/filesystem/filesystem_text.c
+    ../../Service/filesystem/flash/filesystem_flash_access.c)
+target_include_directories(filesystem_service_release_objects BEFORE PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../..
+    ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
+target_compile_features(filesystem_service_release_objects PRIVATE c_std_11)
+target_compile_options(filesystem_service_release_objects PRIVATE -Wall -Wextra -Werror -O2 -DNDEBUG)
+add_executable(filesystem_lock_release_tests
+    test_filesystem_lock.c
+    $<TARGET_OBJECTS:filesystem_service_release_objects>
+    ../stubs/freertos/freertos_stub.c
+    ../stubs/lock_env/lock_env_cycle_counter.c
+    ../stubs/lock_env/lock_env_log.c
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c)
+target_include_directories(filesystem_lock_release_tests BEFORE PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../stubs/lock_env ../..
+    ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
+target_compile_features(filesystem_lock_release_tests PRIVATE c_std_11)
+target_compile_definitions(filesystem_lock_release_tests PRIVATE LOCK_TEST_SERVICE_RELEASE)
+target_compile_options(filesystem_lock_release_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+add_test(NAME filesystem_lock_release_behavior COMMAND filesystem_lock_release_tests)
+# 断言在 Release 里也保留：独立进程里验证（统计用例只在 Debug 构建里有意义，不在此列）。
+foreach(SCENARIO reenter_same_volume hold_one_volume_enter_other hold_table_enter_volume deny_list_overflow)
+    add_test(NAME filesystem_lock_release_${SCENARIO} COMMAND filesystem_lock_release_tests)
+    set_tests_properties(filesystem_lock_release_${SCENARIO} PROPERTIES
+        ENVIRONMENT "FILESYSTEM_LOCK_SCENARIO=${SCENARIO}")
+endforeach()
+
 # 共用 FreeRTOS 桩（Tests/stubs/freertos）自身的行为：互斥锁、信号量、任务通知与脚本化钩子。
 add_executable(freertos_stub_tests
     test_freertos_stub.c
@@ -143,3 +194,43 @@ target_include_directories(freertos_stub_tests BEFORE PRIVATE ../stubs/freertos 
 target_compile_features(freertos_stub_tests PRIVATE c_std_11)
 target_compile_options(freertos_stub_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 add_test(NAME freertos_stub_behavior COMMAND freertos_stub_tests)
+
+# 入口加锁：真实的 Service 与 FatFs，加共用 FreeRTOS 桩、周期计数器与 Service Log 的替身；RAM 盘与传输层替身替代硬件。
+# 一个用例组（不设环境变量）跑所有不会 abort 的用例；会让进程 abort 的断言用例各在独立进程里跑（见下面的循环）。
+add_executable(filesystem_lock_tests
+    test_filesystem_lock.c
+    ../stubs/freertos/freertos_stub.c
+    ../stubs/lock_env/lock_env_cycle_counter.c
+    ../stubs/lock_env/lock_env_log.c
+    ../../Service/filesystem/filesystem_service.c
+    ../../Service/filesystem/filesystem_file.c
+    ../../Service/filesystem/filesystem_directory.c
+    ../../Service/filesystem/filesystem_path.c
+    ../../Service/filesystem/filesystem_handle.c
+    ../../Service/filesystem/filesystem_lock.c
+    ../../Service/filesystem/filesystem_status.c
+    ../../Service/filesystem/filesystem_text.c
+    ../../Service/filesystem/flash/filesystem_flash_access.c
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c)
+target_include_directories(filesystem_lock_tests BEFORE PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../stubs/lock_env ../..
+    ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
+target_compile_features(filesystem_lock_tests PRIVATE c_std_11)
+target_compile_options(filesystem_lock_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+set_source_files_properties(
+    ../../Middlewares/Third_Party/FatFs/src/ff.c
+    ../../Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+    ../../Middlewares/Third_Party/FatFs/src/diskio.c
+    ../../Middlewares/Third_Party/FatFs/src/option/cc936.c
+    PROPERTIES COMPILE_OPTIONS "-w")
+add_test(NAME filesystem_lock_behavior COMMAND filesystem_lock_tests)
+# 会让进程 abort 的断言各在独立进程里跑，环境变量选用例。
+foreach(SCENARIO reenter_same_volume hold_one_volume_enter_other hold_table_enter_volume deny_list_overflow
+        stats_report stats_long_hold stats_no_counter)
+    add_test(NAME filesystem_lock_${SCENARIO} COMMAND filesystem_lock_tests)
+    set_tests_properties(filesystem_lock_${SCENARIO} PROPERTIES
+        ENVIRONMENT "FILESYSTEM_LOCK_SCENARIO=${SCENARIO}")
+endforeach()

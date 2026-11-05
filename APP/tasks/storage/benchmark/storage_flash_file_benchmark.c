@@ -15,6 +15,10 @@
 
 #include <stdio.h>
 
+/* 基准的一次读写（默认 4 KiB）不超过文件接口单次读写的上限。 */
+_Static_assert(STORAGE_FLASH_BENCHMARK_FILE_CHUNK_BYTES <= SERVICE_FILESYSTEM_IO_MAX_BYTES,
+               "Flash file benchmark chunk must fit one Filesystem transfer");
+
 /** @brief 应用层缓冲不直接用于 DMA；静态持有，避免占用 Storage Task 栈。 */
 static uint8_t storage_flash_file_buffer[STORAGE_FLASH_BENCHMARK_FILE_CHUNK_BYTES];
 /** @brief 一次启动只尝试一次，包括失败，防止反复写入造成磨损。 */

@@ -14,6 +14,10 @@
 #include "Service/filesystem/filesystem_file.h"
 #include "Service/filesystem/filesystem_text.h"
 
+/* 曲目标签的每次读取不超过文件接口单次读写的上限。 */
+_Static_assert(STORAGE_CATALOG_TEXT_BLOCK_BYTES <= SERVICE_FILESYSTEM_IO_MAX_BYTES,
+               "tag read block must fit one Filesystem transfer");
+
 /** @brief 标签读取工作缓冲；只由 Storage Task 使用，放静态区以免占任务栈。 */
 static uint8_t storage_track_text_block[STORAGE_CATALOG_TEXT_BLOCK_BYTES];
 

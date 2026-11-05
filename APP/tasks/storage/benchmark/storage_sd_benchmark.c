@@ -24,6 +24,10 @@
 #include "Service/filesystem/filesystem_file.h"
 #include "Service/log/log_service.h"
 
+/* 基准的一次读写是 32 KiB，正好等于文件接口单次读写的上限；调大会被拒。 */
+_Static_assert(STORAGE_SD_BENCHMARK_CHUNK_BYTES <= SERVICE_FILESYSTEM_IO_MAX_BYTES,
+               "SD benchmark chunk must fit one Filesystem transfer");
+
 /** @brief 测试使用的相对路径；完整性校验通过后会删除该文件。 */
 static const char storage_sd_benchmark_path[] = "__sd_rw_bench.bin";
 

@@ -13,6 +13,9 @@
 #include <string.h>
 
 #define STUB_SEMAPHORE_POOL_SIZE 16U
+#define STUB_CREATED_LOG_SIZE 32U
+/* 同一串无限等待连续这么多次都没人放行，就当作死锁：被测模块的“等到拿到为止”重试循环否则会空转到测试超时。 */
+#define STUB_DEADLOCK_GUARD_WAITS 100000U
 #define STUB_TASK_POOL_SIZE 8U
 #define STUB_NOTIFY_SLOTS ((UBaseType_t)configTASK_NOTIFICATION_ARRAY_ENTRIES)
 
@@ -47,6 +50,9 @@ static TaskHandle_t current_task;
 static StaticSemaphore_t semaphore_pool[STUB_SEMAPHORE_POOL_SIZE];
 static bool semaphore_in_use[STUB_SEMAPHORE_POOL_SIZE];
 static SemaphoreHandle_t last_created_semaphore;
+static SemaphoreHandle_t created_semaphores[STUB_CREATED_LOG_SIZE];
+static uint32_t created_semaphore_count;
+static uint32_t consecutive_unsatisfied_infinite_waits;
 static TickType_t current_tick;
 static TickType_t tick_step;
 static FreertosStub_BlockHook block_hook;
@@ -82,6 +88,10 @@ static SemaphoreHandle_t init_semaphore(StaticSemaphore_t *buffer, StubSemaphore
     state->kind = kind;
     state->count = initial_count;
     last_created_semaphore = buffer;
+    if (created_semaphore_count < STUB_CREATED_LOG_SIZE)
+    {
+        created_semaphores[created_semaphore_count++] = buffer;
+    }
     return buffer;
 }
 
@@ -124,6 +134,9 @@ void freertos_stub_reset(void)
     memset(semaphore_pool, 0, sizeof(semaphore_pool));
     memset(semaphore_in_use, 0, sizeof(semaphore_in_use));
     last_created_semaphore = NULL;
+    memset(created_semaphores, 0, sizeof(created_semaphores));
+    created_semaphore_count = 0U;
+    consecutive_unsatisfied_infinite_waits = 0U;
     current_tick = 0U;
     tick_step = 0U;
     block_hook = NULL;
@@ -197,6 +210,11 @@ static void expire_wait(TickType_t ticks)
     if (ticks == portMAX_DELAY)
     {
         infinite_waits_unsatisfied++;
+        if (++consecutive_unsatisfied_infinite_waits >= STUB_DEADLOCK_GUARD_WAITS)
+        {
+            (void)fprintf(stderr, "freertos_stub: infinite wait never released (deadlock in the code under test)\n");
+            abort();
+        }
     }
     else
     {
@@ -303,6 +321,25 @@ SemaphoreHandle_t freertos_stub_last_created_semaphore(void)
 }
 
 /**
+ * @brief 自 reset 以来创建的信号量个数。
+ * @return 个数。
+ */
+uint32_t freertos_stub_created_semaphore_count(void)
+{
+    return created_semaphore_count;
+}
+
+/**
+ * @brief 按创建顺序取信号量。
+ * @param[in] index 从 0 起的序号。
+ * @return 句柄；超出个数为 NULL。
+ */
+SemaphoreHandle_t freertos_stub_created_semaphore(uint32_t index)
+{
+    return (index < created_semaphore_count) ? created_semaphores[index] : NULL;
+}
+
+/**
  * @brief 让信号量接下来 N 次拿取失败。
  * @param[in] semaphore 信号量句柄。
  * @param[in] count 失败次数。
@@ -395,6 +432,7 @@ BaseType_t xSemaphoreTake(SemaphoreHandle_t semaphore, TickType_t ticks_to_wait)
     {
         state->count--;
         state->stats.take_successes++;
+        consecutive_unsatisfied_infinite_waits = 0U;
         return pdTRUE;
     }
     if (scripted_failure && ticks_to_wait != 0U)
@@ -426,6 +464,7 @@ BaseType_t xSemaphoreGive(SemaphoreHandle_t semaphore)
     }
     state->count = 1U;
     state->stats.give_successes++;
+    consecutive_unsatisfied_infinite_waits = 0U;
     return pdTRUE;
 }
 

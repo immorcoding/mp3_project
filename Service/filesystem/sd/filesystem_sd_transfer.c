@@ -139,9 +139,9 @@ static bool filesystem_sd_transfer_finish(
   * @retval true 信号量就绪且 Platform SD 已保存订阅者。
   * @retval false Platform SD 尚不能接收订阅者（例如还没初始化）。
   * @note   信号量先于订阅创建：Platform 只在订阅之后才会调用 ISR 回调，所以 ISR 看到的
-  *         信号量总是已经存在的。重复调用（挂载和卸载路径把 Service_Filesystem_InitSD()
-  *         用作幂等的就绪检查）只重新订阅，不重建信号量，也不动其中的信号。第一次调用须在
-  *         任何任务使用文件接口之前完成，不与其他调用并发。
+  *         信号量总是已经存在的。重复调用（挂载和卸载路径把 InitSD 的内部版本
+  *         用作幂等的就绪检查）只重新订阅，不重建信号量，也不动其中的信号。调用者总是已持
+  *         SD 卷锁，所以不会与其他调用并发。
   */
 bool filesystem_sd_transfer_init(void)
 {
