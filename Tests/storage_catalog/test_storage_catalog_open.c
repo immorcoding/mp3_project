@@ -155,6 +155,9 @@ static uint32_t g_last_opened_id;
 static uint32_t g_open_handles;
 static uint32_t g_dir_token;
 static uint32_t g_dir_pos;
+static uint32_t g_dir_read_cost_us; /* 一次目录读取消耗的微秒（推进假 DWT），扫描耗时的来源 */
+static bool g_read_dir_fail;        /* 目录读取一律报错 */
+static bool g_music_missing;        /* 没有 Music/ 目录 */
 
 static uint8_t g_file_bytes[512];
 static uint32_t g_file_length;
@@ -234,6 +237,10 @@ Service_StatusTypeDef Service_Filesystem_OpenDirectory(Service_Filesystem_Volume
                                                        Service_Filesystem_DirectoryHandleTypeDef *directory)
 {
     assert(volume == SERVICE_FILESYSTEM_VOLUME_SD);
+    if (g_music_missing)
+    {
+        return SERVICE_ERROR;
+    }
     if (strcmp(path, "Music") == 0)
     {
         g_dir_token = 1U;
@@ -262,6 +269,12 @@ Service_StatusTypeDef Service_Filesystem_ReadDirectory(Service_Filesystem_Direct
 {
     uint32_t files = (directory.Token == 1U) ? g_root_count : g_sub_count;
     uint32_t base = (directory.Token == 1U) ? ROOT_ID_BASE : SUB_ID_BASE;
+
+    g_cycles += g_dir_read_cost_us;
+    if (g_read_dir_fail)
+    {
+        return SERVICE_ERROR;
+    }
 
     memset(entry, 0, sizeof(*entry));
     if (g_dir_pos < files)
@@ -495,6 +508,9 @@ static void world_reset(void)
     g_path_calls = 0U;
     g_last_opened_id = UINT32_MAX;
     g_open_handles = 0U;
+    g_dir_read_cost_us = 0U;
+    g_read_dir_fail = false;
+    g_music_missing = false;
     g_cycles = 1000U;
     g_log_count = 0U;
     build_file_bytes();
@@ -871,6 +887,77 @@ static void test_stream_info_line(void)
     assert(strcmp(line->text, "Stream pos=12 off=345678 open=2100 lseek=870") == 0);
 }
 
+/** @brief 扫描结束一行 INFO：结果、条数、耗时（微秒）；耗时是目录读取等花掉的假 DWT 时间（DIAG-6）。 */
+static void test_scan_end_info_reports_result_count_and_time(void)
+{
+    const log_line_t *line;
+
+    world_reset();
+    g_dir_read_cost_us = 100U;
+    scan(3U, 2U); /* 根目录 3 个文件 + Sub + 结束 = 5 次读取，Sub 里 2 个文件 + 结束 = 3 次读取 */
+
+    assert(log_count_prefix("Scan done") == 1U);
+    line = log_last_prefix("Scan done");
+    assert(line->level == SERVICE_LOG_LEVEL_INFO);
+    assert(strcmp(line->tag, "Catalog") == 0);
+    assert(strcmp(line->text, "Scan done res=ok n=5 us=800") == 0);
+}
+
+/** @brief 每次重扫各记一行，条数与耗时按本轮算，不带上轮的值。 */
+static void test_each_rescan_logs_its_own_scan_end_line(void)
+{
+    world_reset();
+    g_dir_read_cost_us = 100U;
+    scan(3U, 0U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=3 us=400") == 0);
+
+    scan(1U, 0U);
+    assert(log_count_prefix("Scan done") == 2U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=1 us=200") == 0);
+}
+
+/** @brief 周期计数器在扫描中途回绕，耗时仍是真实差值。 */
+static void test_scan_time_survives_cycle_counter_wrap(void)
+{
+    world_reset();
+    g_dir_read_cost_us = 100U;
+    g_cycles = UINT32_MAX - 250U;
+    scan(3U, 2U);
+
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=5 us=800") == 0);
+}
+
+/** @brief 没有 Music/ 是成功的空表：res=ok n=0。 */
+static void test_scan_end_info_for_missing_music_directory(void)
+{
+    world_reset();
+    g_music_missing = true;
+    scan(0U, 0U);
+
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=0 us=0") == 0);
+}
+
+/** @brief 表满截断仍是 ok，条数是收录的 12000。 */
+static void test_scan_end_info_for_truncated_catalog(void)
+{
+    world_reset();
+    scan(12500U, 0U);
+
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=12000 us=0") == 0);
+}
+
+/** @brief 目录读取失败：扫描返回错误，结束行写 res=dfs_error 与已收录的条数。 */
+static void test_scan_end_info_for_directory_read_failure(void)
+{
+    world_reset();
+    g_root_count = 3U;
+    g_read_dir_fail = true;
+
+    assert(storage_catalog_music_init() == STORAGE_ERROR);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=dfs_error n=0 us=0") == 0);
+    assert(log_count_prefix("Scan done") == 1U);
+}
+
 /**
  * @brief 运行全部用例。
  * @return 0 表示全部通过（失败由 assert 中止）。
@@ -895,6 +982,12 @@ int main(void)
     test_window_summary_defensive_threshold_is_kept();
     test_window_summary_fits_log_capacity();
     test_stream_info_line();
+    test_scan_end_info_reports_result_count_and_time();
+    test_each_rescan_logs_its_own_scan_end_line();
+    test_scan_time_survives_cycle_counter_wrap();
+    test_scan_end_info_for_missing_music_directory();
+    test_scan_end_info_for_truncated_catalog();
+    test_scan_end_info_for_directory_read_failure();
     puts("storage_catalog_open: ok");
     return 0;
 }

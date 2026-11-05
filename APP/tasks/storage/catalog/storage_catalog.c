@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
 #include "Service/filesystem/filesystem_directory.h"
 #include "Service/filesystem/filesystem_types.h"
 #include "Service/log/log_service.h"
@@ -53,6 +54,68 @@ static Service_Filesystem_FileLocatorTypeDef MusicCatalogLocator[STORAGE_CATALOG
 static char storage_catalog_dir_stack[STORAGE_CATALOG_DIR_STACK_MAX]
                                      [SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U]
     __attribute__((section(".storage_catalog"), aligned(32)));
+
+/** @brief 本轮扫描开始时的周期计数器读数；与 music_catalog_scan_cycles 一起只在 Storage Task 访问。 */
+static uint32_t music_catalog_scan_last_cycles;
+
+/** @brief 本轮扫描累计的周期数（64 位）：DWT 为 32 位，480 MHz 下约 9 s 回绕，扫描可能更长，所以边走边累加。 */
+static uint64_t music_catalog_scan_cycles;
+
+/**
+ * @brief 开始计本轮扫描耗时。
+ */
+static void storage_catalog_scan_clock_start(void)
+{
+    music_catalog_scan_last_cycles = CortexM7CycleCounter_Read();
+    music_catalog_scan_cycles = 0U;
+}
+
+/**
+ * @brief 把距上次读数过去的周期数累加进本轮扫描耗时。
+ * @note  扫描里每次目录打开与读取之后调用；相邻两次调用相隔一次目录操作（毫秒级），远小于 32 位计数器的回绕周期，
+ *        所以无符号减法取差值总是对的。
+ */
+static void storage_catalog_scan_clock_poll(void)
+{
+    const uint32_t now = CortexM7CycleCounter_Read();
+
+    music_catalog_scan_cycles += (uint32_t)(now - music_catalog_scan_last_cycles);
+    music_catalog_scan_last_cycles = now;
+}
+
+/**
+ * @brief 本轮扫描耗时，微秒。
+ * @return 微秒数（饱和在 32 位）；核心频率不可用时为 0。
+ */
+static uint32_t storage_catalog_scan_clock_us(void)
+{
+    const uint32_t frequency_hz = CortexM7CycleCounter_GetFrequencyHz();
+    uint64_t us;
+
+    if (frequency_hz == 0U)
+    {
+        return 0U;
+    }
+
+    us = (music_catalog_scan_cycles * 1000000ULL) / frequency_hz;
+    return (us > UINT32_MAX) ? UINT32_MAX : (uint32_t)us;
+}
+
+/**
+ * @brief 记扫描结束一行 INFO：结果、条数、耗时（DIAG-6）。
+ * @param[in] result 结果名，静态字符串：ok、dfs_error、sheet_error。
+ * @note  常开，每次扫描一行；文本只含结果名与数值。耗时单位微秒，含目录读取、打开与扫描中的任务切换，不含建播放列表。
+ */
+static void storage_catalog_scan_log_end(const char *result)
+{
+    char text[64];
+
+    (void)snprintf(text, sizeof(text), "Scan done res=%s n=%lu us=%lu",
+                   result,
+                   (unsigned long)MusicCatalogPool.IndexNum,
+                   (unsigned long)storage_catalog_scan_clock_us());
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, storage_catalog_log_tag, text);
+}
 
 /**
  * @brief 作废当前 Music Catalog，不把整池清零。
@@ -170,6 +233,7 @@ static Storage_StatusTypeDef storage_catalog_music_dfs(void)
                                              current,
                                              &music_directory) != SERVICE_OK)
         {
+            storage_catalog_scan_clock_poll();
             if ((stack_top == 0U) && (strcmp(current, "Music") == 0))
             {
                 (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
@@ -184,12 +248,15 @@ static Storage_StatusTypeDef storage_catalog_music_dfs(void)
             continue;
         }
 
+        storage_catalog_scan_clock_poll();
+
         for (;;)
         {
             Service_Filesystem_DirectoryEntryTypeDef entry;
             char child[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
 
             read_status = Service_Filesystem_ReadDirectory(music_directory, &entry);
+            storage_catalog_scan_clock_poll();
             if (read_status != SERVICE_OK)
             {
                 (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
@@ -265,11 +332,13 @@ static Storage_StatusTypeDef storage_catalog_music_dfs(void)
 Storage_StatusTypeDef storage_catalog_music_init(void)
 {
     storage_catalog_music_reset();
+    storage_catalog_scan_clock_start();
     if (storage_catalog_music_dfs() != STORAGE_OK)
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_catalog_log_tag,
                                "Music catalog dfs failed.");
+        storage_catalog_scan_log_end("dfs_error");
         return STORAGE_ERROR;
     }
 
@@ -278,8 +347,11 @@ Storage_StatusTypeDef storage_catalog_music_init(void)
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                storage_catalog_log_tag,
                                "Music sheet initialization failed.");
+        storage_catalog_scan_log_end("sheet_error");
         return STORAGE_ERROR;
     }
+
+    storage_catalog_scan_log_end("ok");
 
     return STORAGE_OK;
 }
