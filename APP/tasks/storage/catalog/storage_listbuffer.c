@@ -131,7 +131,8 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
     }
 
     /* 每圈先把这一行的代次、条数、路径和定位符一次读全；位置越界时也带回代次和条数，用来判断列表末尾。 */
-    list_index = (uint32_t)storage_listbuffer.Index + storage_listbuffer_fill.Filled;
+    /* 新一窗的首圈（Started 为假）Filled 还是上一窗留下的值，行号从 0 起算。 */
+    list_index = (uint32_t)storage_listbuffer.Index + (storage_listbuffer_fill.Started ? storage_listbuffer_fill.Filled : 0U);
     found = catalog_read_track((uint16_t)((list_index > UINT16_MAX) ? UINT16_MAX : list_index),
                                &storage_listbuffer_track);
 
@@ -203,12 +204,15 @@ Storage_StatusTypeDef storage_listbuffer_load(void)
 }
 
 /**
- * @brief 若窗口仍为 PENDING（含填到一半），则打成空窗 READY，避免未就绪后槽位卡死。
- * @note 拔卡或 SD 离开就绪时由 Storage Task 调用。Length 与 Generation 置 0；已是 IDLE/READY 则不动。
+ * @brief 卷序号变了（卸载、换卡）时收掉窗口槽：PENDING（含填到一半）打成空窗 READY，避免未就绪后槽位卡死；
+ *        **已经 READY 但 GUI 还没取走的窗口也收成空窗**（末行刚读完、序号变化在下一圈才被看到的路径），
+ *        换卡后 GUI 不会把旧卡的行贴出来。
+ * @note 由 Storage Task 调用。Length 与 Generation 置 0；IDLE 不动。READY 时槽归 GUI，这里只改 `Length` 和
+ *       `Generation` 两个字，不动 `Rows`：GUI 即使被抢占时读到旧值，也只是多显示一两帧旧行，随后空窗覆盖。
  */
 void storage_listbuffer_complete_unavailable(void)
 {
-    if (storage_listbuffer.Status != STORAGE_LISTBUFFER_PENDING)
+    if (storage_listbuffer.Status == STORAGE_LISTBUFFER_IDLE)
     {
         return;
     }

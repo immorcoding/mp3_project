@@ -11,7 +11,7 @@
   *          SD 检测边沿会在 ISR 上下文调用初始化时注入的回调；SDMMC DMA 事件会调用
   *          后续由唯一订阅者通过 Platform_SD_SetTransferCallback() 设置的回调。
   *          Platform 不依赖 FreeRTOS；调用者负责把轻量事件转换为所属运行时的
-  *          调度机制。当前 Storage Task 使用自己的通知槽处理卡检测消抖；
+  *          调度机制。当前 Volume Task 使用自己的通知槽处理卡检测消抖（回调经 Filesystem Service 的 `StartSD` 注册）；
   *          Filesystem Service 用自己的完成信号量接收 DMA 事件，由正在执行传输的任务
   *          等待后调用 Platform_SD_CompleteTransfer()。
   ******************************************************************************

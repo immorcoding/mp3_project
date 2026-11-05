@@ -274,7 +274,7 @@ R2.1 用钩子关闭的 Debug 构建量（探测会给被探测的那次读加�
 |---|---|---|---|---|---|---|
 | R3.1 | 读取中拔卡：不再吞掉拔出 | | `Stop reason=CARD_REMOVED` + 卷路径日志 | 通过；收尾时刻记录（参考 +34–35 ms） | | |
 | R3.2 | 只收到 INSERTED 的换卡路径 | | 卷路径日志 | 卸载、发卷消失、挂载、发卷就绪 | | |
-| R3.3 | 消抖内快速拔插、插卡初始化中途再拔（各 10 次） | | 卷路径日志 | 至少命中一次；状态正确 | | |
+| R3.3 | 消抖内快速拔插、插卡初始化中途再拔（各 10 次）；暂停状态下快速抽插（5 次，记录实际行为） | | 卷路径日志 | 至少命中一次；状态正确 | | |
 | R3.4 | 假抖动（钩子，加一次手动轻触卡槽） | | 卷路径日志 + 听感 | 只开闸，流和窗口不受影响 | | |
 | R3.5 | `MountFlash` 期间插拔卡 | | 卷路径日志 | SD 不受影响 | | |
 | R3.6 | 卷任务和 Flash 启动任务的栈 | | Monitor 栈行；Flash 启动任务自打一行 | ≥ 256 B | | |
@@ -289,7 +289,7 @@ R2.1 用钩子关闭的 Debug 构建量（探测会给被探测的那次读加�
 |---|---|---|
 | R3.1 | 播放中拔卡，做 10 次，每次拔卡后等 3 s 再插回，等出现 `Scan done` 后再点播放（约 10 s 一轮）。至少一次落在读取中（日志有 `Audio: Audio read interrupted: …`） | `sd edge` → `sd settle path=unmount … seq=a->a+1 … end=<ms>ms` → `SD: Card removed.` → 播放侧 `Stop reason=CARD_REMOVED`；屏幕 “No SD card”、Queue 清空、游标重置；`end` 记录（参考 34 至 35 ms） |
 | R3.2 | 播放中把卡快速抽出再按回（约 20 ms 内，一半抽出的手法），做到见到一次为止，最多 10 次 | `path=remount card=pri … seq=a->a+2`，随后 `Card inserted`、`Filesystem mounted.`、曲库重新扫描；播放侧 `CARD_REMOVED`（旧流作废） |
-| R3.3 | ① 消抖内快速拔插：抽出再按回，10 次。② 插卡初始化中途再拔：卡推到位后**不到 0.15 s** 就拔出（插卡初始化约 186 ms），10 次 | ① `edges=` 大于 1，或 `path=gate_only`/`remount`；② `gate=kept` 或 `sd edge during settle`。至少命中一次；最终状态都正确：卡在位有 `Filesystem mounted.` 且能播放，卡不在位 `Card removed.` 之后没有新的 `mount`。一次都没命中记“部分” |
+| R3.3 | ① 消抖内快速拔插：抽出再按回，10 次。② 插卡初始化中途再拔：卡推到位后**不到 0.15 s** 就拔出（插卡初始化约 186 ms），10 次。③ **暂停状态下**快速抽插：先暂停播放，再把卡抽出按回（约 20 ms 内），5 次，恢复播放后看实际行为（有没有出声、有没有读错误提示、日志是 `path=gate_only` 还是 `remount`），记录，不判通过与否（#195 “只开闸”的取舍：设备仍 READY 时走 `gate_only`，卡如果掉过电，要到下一次读才报错，需要再拔一次） | ① `edges=` 大于 1，或 `path=gate_only`/`remount`；② `gate=kept` 或 `sd edge during settle`。至少命中一次；最终状态都正确：卡在位有 `Filesystem mounted.` 且能播放，卡不在位 `Card removed.` 之后没有新的 `mount`。一次都没命中记“部分” |
 | R3.4 | 钩子构建，播放 3 分钟（180 s，36 次人造边沿），其间手动轻触卡槽 3 次 | 连续 ≥ 20 次 `path=gate_only`，`seq=N->N` 不变；没有 `Stop reason`、没有 `CARD_REMOVED`；听感不断音，Queue 不闪；Monitor `Health` 的 `underrun` 增量 0；手动轻触的 `src=irq` 同样多数是 `gate_only` |
 | R3.5 | 复位后看到 `VOLUME: flash boot start` 就开始计时：**第 2 s 拔卡、第 3 s 插回；第 5 s 拔卡、第 6 s 插回**（在 `flash ready` 之前做完才算数，`flash ready` 晚于第 6 s 时都在窗口里；`flash ready` 早于第 2 s 时改为复位后立刻拔卡、插卡） | 这些操作的 `sd settle` 行在 `flash boot start` 与 `flash ready` 之间出现，`end` 与平时同量级（约 35 ms，不被拖到秒级），状态正确；记录 `flash ready` 的 `ms=`（R6.5） |
 | R3.6 | 做完上面所有插拔之后再读：Monitor 栈行 `Volume Task: total=4096 B, min free=…`；Flash 启动任务在 `flash ready` 之后自己打一行 `VOLUME: Flash Boot Task: total=4096 B, min free=… B, peak=…%` | 两者 `min free` 都 ≥ 256 B；更新 Monitor 栈行要等下一批（5 s 一批，插拔之后至少等 10 s） |

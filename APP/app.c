@@ -7,13 +7,14 @@
   *          本文件是 CubeMX 生成代码与自维护模块之间的入口：main.c 负责
   *          MCU 基础设施初始化；app_init() 负责初始化日志、整机强依赖
   *          Platform Module 并启动 FreeRTOS 任务。可移除 SD 卡的初始化、
-  *          热插拔消抖和后续文件系统工作由 Storage Task 独占处理。
+  *          热插拔消抖和挂载由 Volume Task 处理，曲库扫描和音频流读取等文件访问由 Storage Task 处理
+  *          （Flash 的启动在 Volume Task 创建的一次性 Flash 启动任务里）。
   *
  *          当前初始化依赖顺序为：
   *          Platform_Log_Init() -> 启动日志入队 -> Platform_Init() ->
   *          CortexM7CycleCounter_Start() -> Service_Resource_Init() -> app_task_start()。
    *          Platform_Init() 内部初始化 GPIO EXTI Adapter、PMIC、W25Q256 Flash、
-   *          音频、LCD、LED 和 Touch；Storage Task 在 Log Service 就绪后处理
+   *          音频、LCD、LED 和 Touch；Volume Task 在 Log Service 就绪后处理
    *          可选 SD 卡。
   *          启动日志先保存在 Components/log 环形队列，调度器启动后由 Log Task
   *          与 Log Service 逐步排空。

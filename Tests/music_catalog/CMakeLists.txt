@@ -55,6 +55,8 @@ add_executable(music_catalog_open_tests
     ../../APP/apps/music/catalog/catalog_track_diag.c
     ../../APP/apps/music/catalog/catalog_text.c
     ../../APP/apps/music/catalog/catalog_name.c
+    ../../APP/tasks/storage/catalog/storage_listbuffer.c
+    ../../APP/tasks/storage/catalog/storage_namebuffer.c
     ../../Components/id3_reader/id3_reader.c
 )
 

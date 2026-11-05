@@ -77,11 +77,14 @@ static TickType_t storage_task_ticks_until(TickType_t now,
  *         作废的顺序沿用原来的拔卡路径：先写 `CARD_REMOVED`（当前流仍被播放任务持有就写，已读完的流也算），
  *         再作废曲库，收掉两个槽。卷任务不等本任务：卸载已使旧令牌失效，晚一点收尾也碰不到旧卡。
  *         换卡时序号跳 2，同样走这里：旧卡的流和曲库作废，再对新卡扫描。
- *         扫描期间 `storage_task_sd_is_ready()` 为假；扫描完成后若序号又变了，不置就绪，留给下一圈处理。
+ *         扫描期间 `storage_task_sd_is_ready()` 为假；扫描完成后若序号又变了（含扫描被卷不可用丢弃、卡已拔走），
+ *         不置就绪，留给下一圈处理，不会把空库置就绪等事件；扫描被丢弃但序号没变（卡还在、读不了）则记 ERROR，
+ *         置就绪、曲库为空。
  */
 static void storage_task_apply_sd_volume(void)
 {
     Volume_StatusTypeDef volume = volume_status(VOLUME_ID_SD);
+    bool unchanged;
 
     if (volume.Sequence == storage_task_sd_sequence_seen)
     {
@@ -109,7 +112,16 @@ static void storage_task_apply_sd_volume(void)
     }
 
     volume = volume_status(VOLUME_ID_SD);
-    if (volume.Mounted && (volume.Sequence == storage_task_sd_sequence_seen))
+    unchanged = volume.Mounted && (volume.Sequence == storage_task_sd_sequence_seen);
+    if (catalog_scan_verdict(unchanged) == CATALOG_SCAN_UNREADABLE)
+    {
+        /* 扫描被卷不可用丢弃，但卷没变：卡还在、读不了（设备出错），没有边沿就没有卷事件，不能等。
+         * 沿用原来扫描失败的做法：卷挂着就绪、曲库为空；拔插卡（边沿）后重新对账和重扫。 */
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                               "STORAGE",
+                               "Catalog scan aborted but the card is still there; reinsert the card.");
+    }
+    if (unchanged)
     {
         storage_task_sd_state = STORAGE_TASK_SD_READY;
     }
@@ -136,7 +148,7 @@ static Storage_AudioMediaTypeDef storage_task_audio_media(void)
  */
 static TickType_t storage_task_next_wait_ticks(TickType_t now, TickType_t reclaim_start)
 {
-    if (storage_audio_stream_has_work(storage_task_audio_media()))
+    if (storage_audio_stream_has_work())
     {
         return 0U;
     }
@@ -270,7 +282,7 @@ void storage_task(void *handle)
         storage_audio_stream_process_request(storage_task_audio_media());
         storage_task_load_listbuffer_if_allowed();
         storage_namebuffer_load(storage_task_sd_state == STORAGE_TASK_SD_READY);
-        storage_audio_stream_read_block(storage_task_audio_media());
+        storage_audio_stream_read_block(storage_task_audio_media(), storage_task_sd_sequence_seen);
 
         now = xTaskGetTickCount();
         if (!volume_status(VOLUME_ID_FLASH).Mounted)

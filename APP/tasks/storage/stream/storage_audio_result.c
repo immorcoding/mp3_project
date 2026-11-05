@@ -13,13 +13,17 @@
  * @brief  把一次读块的结果分类。
  * @param[in] status `Service_Filesystem_ReadFile` 的返回值。
  * @param[in] got 实际读到的字节数。
- * @return 继续（块照常入队）、停住（卷不可用，等卷事件）或读错误（文件错误，或成功但读到 0 字节）。
+ * @param[in] volume_unchanged SD 卷仍挂着且卷序号与 Storage 已处理的相同。调用者须在读失败之后、先等过本轮对账
+ *            （例如对同一个句柄 `CloseFile`，它在 Filesystem 入口等闸）再取这个值，否则卡刚拔、消抖还没结束时会误判。
+ * @return 继续（块照常入队）、停住（卷变了，卷不可用，等卷事件）或读错误（文件错误，卷没变时的卷不可用，
+ *         或成功但读到 0 字节）。
  */
-Storage_AudioReadVerdictTypeDef storage_audio_classify_read(Service_StatusTypeDef status, uint32_t got)
+Storage_AudioReadVerdictTypeDef storage_audio_classify_read(Service_StatusTypeDef status, uint32_t got, bool volume_unchanged)
 {
     if (Service_Filesystem_StatusIsVolumeUnavailable(status))
     {
-        return STORAGE_AUDIO_READ_STALL;
+        /* 卷变了：卡没了或正在对账，等卷事件。卷没变：卡还在、设备出错，没有边沿就没有卷事件，不能等。 */
+        return volume_unchanged ? STORAGE_AUDIO_READ_ERROR : STORAGE_AUDIO_READ_STALL;
     }
 
     return ((status == SERVICE_OK) && (got != 0U)) ? STORAGE_AUDIO_READ_CONTINUE : STORAGE_AUDIO_READ_ERROR;

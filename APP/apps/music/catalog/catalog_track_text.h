@@ -22,5 +22,6 @@ typedef struct
 } CatalogTrackText_ResultTypeDef;
 
 const CatalogTrackText_ResultTypeDef *catalog_track_text_read(uint16_t position, const Catalog_TrackTypeDef *track);
+bool catalog_track_text_last_read_unavailable(void);
 
 #endif /* CATALOG_TRACK_TEXT_H */

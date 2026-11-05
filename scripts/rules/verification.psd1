@@ -186,6 +186,10 @@
             Name = 'music_catalog'
             PathPatterns = @(
                 '^APP/apps/music/catalog/'
+                # 窗口槽与名字槽的 complete_unavailable 测试（卷事件收槽，#211）链接它们。
+                # 它们的头文件带入 Storage 的状态类型与配置。
+                '^APP/tasks/storage/storage_task(?:_config)?\.h$'
+                '^APP/tasks/storage/catalog/storage_(?:list|name)buffer\.[ch]$'
                 # 按定位符打开的测试以假实现替换 Filesystem / Log Service 与周期计数器 Adapter，只依赖它们的公开头。
                 '^Service/filesystem/filesystem_(?:file|directory)\.h$'
                 '^Service/log/log_service(?:_config)?\.h$'

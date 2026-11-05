@@ -56,6 +56,10 @@
 | 读或关目录时的其他错误 | 不发布，记 ERROR，等下一次插卡 | `Music Directory Read Failed.`（读）与 `Music catalog dfs failed.`，结束行 `res=dfs_error` |
 | 条目满、池满 | 发布截断结果 | `Music Catalog Full.` / `Music Catalog Pool Full.` WARN；池按 4 MiB 与 12000 条的平均 350 B 设计，路径不超过 255 B 时条数先到上限，池满只是防御，主机测试到不了 |
 
+**打开目录得到卷不可用时再开一次**（#211）：在途调用被拔卡打断时，第一次失败发生在卷任务对账之前、卷序号还没变；路径打开没有句柄可借来等闸，所以再开一次，它在 Filesystem 入口等闸，等到对账结束才下结论——卡没了（再次得到卷不可用，丢弃）或卡还在（照常打开，扫描继续）。根目录和子目录都一样。
+
+**扫描结束后的判决** `catalog_scan_verdict(volume_unchanged)`：`CATALOG_SCAN_DONE`（没有被丢弃，照常就绪）、`CATALOG_SCAN_EVENT_PENDING`（被丢弃且卷变了，等卷事件重扫、不置就绪）、`CATALOG_SCAN_UNREADABLE`（被丢弃但卷没变：卡还在、读不了，没有边沿就没有卷事件，Storage Task 记 ERROR、置就绪、曲库为空）。扫描中途或发布前卷序号变了而丢弃，同样走这个判决。
+
 目前的 `SERVICE_BUSY` 重试用任务延时（扫描还是同步调用，会占着 Storage Task）；改成单步函数后由返回值告诉后台任务多久后再叫它，卷序号比对和错误表不变。
 
 ## 持锁统计（DIAG-6，与 Filesystem 持锁统计同一个开关）
@@ -72,7 +76,7 @@ CATLOCK: n=1204 hold=96us
 
 ### 日志消息池核算（DIAG-3，汇总类日志注明节拍）
 
-Service Log 消息池 30 块，Log Task 每 5 ms 转交一条。本票新增 1 行（每 10 s 一次，Debug 才有，不超过 36 个字符）。最坏同时到达：Monitor 5 s 一批 13 行，加 Filesystem 持锁统计 3 行，加曲库短锁 1 行，加一次拔卡对账 5 行，共 22 行，留 8 块给同一时刻的其他任务（卷任务票核算的 21 行再加 1）；排空约 110 ms。Release 不投本行。
+Service Log 消息池 30 块，Log Task 每 5 ms 转交一条。本票新增 1 行（每 10 s 一次，Debug 才有，不超过 36 个字符）。最坏同时到达：Monitor 5 s 一批（稳态 8 个任务 13 行，开机后 `MountFlash` 期间 9 个任务 14 行，取 14），加 Filesystem 持锁统计 3 行，加曲库短锁 1 行，加一次拔卡对账 5 行，共 23 行，留 7 块给同一时刻的其他任务（卷任务票核算的 22 行再加 1）；排空约 115 ms。Release 不投本行。
 
 ## 公开 Interface
 

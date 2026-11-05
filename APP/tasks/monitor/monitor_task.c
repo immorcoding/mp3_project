@@ -34,7 +34,8 @@
 
 /* 一批最多的日志行数：每个任务一行栈占用，加 Heap、温度、GUI 最长帧、CPU 占比、Health 五行（DIAG-6）。
  * 一批在 5 s 内一次投完，不分散；它自己必须放得进 Service Log 的 30 块消息池，余量留给同时到来的其他任务日志。
- * 实际任务数 8（含开机后几秒内还没自删的 Flash 启动任务），一批 13 行；稳态 7 个任务、12 行。 */
+ * 稳态 8 个任务（IDLE、Tmr Svc、Log、Storage、Volume、Playback、Monitor、GUI），一批 13 行；开机后 MountFlash 期间多一个
+ * Flash 启动任务，9 个任务、14 行。 */
 #define MONITOR_BATCH_FIXED_LINES 5U
 _Static_assert((MONITOR_CPU_TASK_MAX + MONITOR_BATCH_FIXED_LINES) <= LOG_SERVICE_QUEUE_LENGTH,
                "one Monitor batch must fit the Service Log message pool");

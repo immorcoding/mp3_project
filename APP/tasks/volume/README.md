@@ -44,7 +44,7 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
 
 **卷任务入口**（`volume_task()`）：先创建 Flash 启动任务（优先级 2，低于本任务，所以只是进入就绪；本任务一旦阻塞在 SD 初始化的 DMA 等待上，它就开始运行），**再**初始化 SD，不等 Flash。`volume_sd_start()`：`Service_Filesystem_StartSD()`（注册卡检测回调、初始化设备）→ 卡在就 `InitSD()` + `MountSD()` → **SD 基准（默认关闭）在发卷就绪之前跑**（别的任务还不会碰这个卷，独占条件成立）→ `volume_publish_ready(SD)`。无卡不发事件、序号保持 0；卡在但没就绪、挂载失败、卡上没有 FAT：不发事件，只记日志，SD 等下一次边沿再试。
 
-**Flash 启动任务**（`volume_flash_boot()`）：`InitFlash()` → 可选物理基准 → `MountFlash()`（持 Flash 卷锁 3.3 至 8.3 s）→ 成功则可选文件基准、发 Flash 卷就绪；`SERVICE_NO_FILESYSTEM` 时按 `VOLUME_FLASH_AUTO_FORMAT`（1）格式化并挂载；**其他失败（损坏、不兼容、忙、超时）不格式化**，保留可诊断状态；挂载或格式化失败**不发事件，只记日志**。结束后任务自己打一行栈水位再 `vTaskDelete(NULL)`。`FormatAndMountFlash`、`RecoverAndMountFlash` 只有这条启动路径用到，运行中的恢复这次不加。
+**Flash 启动任务**（`volume_flash_boot()`）：`InitFlash()` → 可选物理基准 → `MountFlash()`（持 Flash 卷锁 3.3 至 8.3 s）→ 成功则可选文件基准、发 Flash 卷就绪；`SERVICE_NO_FILESYSTEM` 时按 `VOLUME_FLASH_AUTO_FORMAT`（1）格式化并挂载；**其他失败（损坏、不兼容、忙、超时）不格式化**，保留可诊断状态；挂载或格式化失败**不发事件，只记日志**。结束后任务自己打一行栈水位再 `vTaskDelete(NULL)`。`FormatAndMountFlash` 只有这条启动路径用到；`RecoverAndMountFlash` 目前 APP 没有调用者；运行中的恢复这次不加。
 
 **Flash 启动任务和 SD 初始化的先后**：Flash 启动任务是被卷任务创建的、优先级更低，所以 SD 初始化（约 186 ms 的卡初始化加挂载）先占着 CPU 和 SD 卷锁，Flash 启动任务在卷任务第一次阻塞（等 DMA 完成信号量）时才开始 `InitFlash`。两者用两把不同的卷锁，互不等待：SD 在 Flash 的 3.3 至 8.3 s 里照常对账（R3.5）。
 
@@ -72,7 +72,7 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
    | 没挂 | 在且就绪 | `mount` | 挂载 → 发卷就绪 |
    | 没挂 | 不在 | `idle` | 无 |
 
-   刷新失败时卡状态不可信，**卷挂着一律卸载，卷没挂一律无动作**（不会因为结构里写着“就绪”就去挂载）。挂载失败**不发卷就绪**，只记日志，等下一次边沿再试；卸载返回错误时 Service 也已使句柄失效，照常发卷消失。
+   刷新失败时卡状态不可信，**卷挂着一律卸载，卷没挂一律无动作**（不会因为结构里写着“就绪”就去挂载）。**取舍（#195 “只开闸”）**：暂停状态下 30 ms 内快速抽插，设备仍是 READY、没有重新初始化，对账走 `gate_only`；卡如果真的掉过电，要到下一次读才报错，需要再拔一次才恢复。这条先不改，R3.3 加了一步记录实际行为。挂载失败**不发卷就绪**，只记日志，等下一次边沿再试；卸载返回错误时 Service 也已使句柄失效，照常发卷消失。
 5. 更新卷状态字、序号加 1、**逐个叫醒订阅者**（先更新，再叫醒）。
 6. **开闸**（`ResumeSD`），等在闸前的调用被放行：卡还在的返回正常结果，卡已拔的得到 `NOT_READY` 或 `INVALID_HANDLE`。
 
@@ -99,9 +99,13 @@ Storage Task 是单线程的，每圈**先比对 SD 卷序号**，再处理请�
 
 - 调用在**闸前**等（消抖中）：闸开后返回，卡还在就返回正常结果（慢约 30 ms），卡已拔返回 `NOT_READY`（按路径/卷）或 `INVALID_HANDLE`（按句柄）。
 - 调用已经**持锁在途**（读 32 KiB，正常 3 至 7 ms）：卷任务的 `RefreshSD` 等它放锁；真拔卡时它很快失败返回 `NO_MEDIA`（Service 在锁内看到卡检测脚显示卡不在，把 `ERROR` 改成 `NO_MEDIA`）。
-- 调用返回 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`：**不是文件错误**——音频流读块不写 `READ_ERROR`、不对同一个句柄重试、流停住（不空转），回到主循环顶部比对序号；序号变了就写 `CARD_REMOVED`（已读完、仍被播放任务持有的流也算）、作废曲库、收掉两个槽、卷挂着就重新扫描。**这就是用户可见的唯一变化：在途读取被拔卡打断时显示 “No SD card”，游标重置**（原来是读取错误，游标保留）。
+- 调用返回 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`：**卷变了时不是文件错误**——读块得到 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`：先对同一个句柄 `CloseFile`（结果不看；它在 Filesystem 入口等闸，卡刚拔、边沿已到而 30 ms 消抖或对账还没结束时会一直等到本轮对账结束才返回，闸开着时立刻返回），再看 SD 卷：**序号和 Storage 已处理的不同，或卷已不挂**，是卡没了，不写 `READ_ERROR`、不对这个句柄重试，FIL 已关、流停住（不空转），等卷事件写 `CARD_REMOVED`；**序号没变且卷仍挂着**，是卡还在、设备出了错（例如标签读取传输出错使设备进 ERROR，FatFs 的下一次读得到 `NOT_READY`），没有边沿就没有卷事件，立刻按读错误报，不等 T_data。流停住之后回到主循环顶部比对序号，序号变了就写 `CARD_REMOVED`（已读完、仍被播放任务持有的流也算）、作废曲库、收掉两个槽（含已经 READY 但 GUI 还没取走的旧窗口和旧名字，换卡后不会贴出旧卡的行）、卷挂着就重新扫描。**这就是用户可见的唯一变化：在途读取被拔卡打断时显示 “No SD card”，游标重置**（原来是读取错误，游标保留）。判断“卷变没变”的纯函数是 `storage_audio_classify_read()`（`Tests/storage_audio_stream`）。
 - 其他错误（`ERROR` 且卡检测脚显示卡还在，`BUSY`，`TIMEOUT`…）表示卡还在，立刻按原来的方式报错。已知漏洞（推断，板上没测到）：数据脚比检测脚先断时，第一次失败仍是 `ERROR`，显示读取错误，同样停播。
-- 曲库扫描进行中卷消失：打开/读/关目录得到卷不可用，丢弃本次扫描，不发布（日志 `Scan done res=aborted`），等卷事件重扫；其余失败仍按 STOR-7 处理。
+- 曲库扫描进行中卷消失：打开/读/关目录得到卷不可用，丢弃本次扫描，不发布（日志 `Scan done res=aborted`）。打开目录的第一次失败发生在卷任务对账之前，所以**再开一次**（它在 Filesystem 入口等闸，等到本轮对账结束）才下结论；读目录失败后紧跟的 `CloseDirectory` 同样在闸前等。扫描结束后 Storage 看 `catalog_scan_verdict()`：卷变了（卡没了或换了）不置就绪，留给下一圈的卷事件重扫，空库不会因此“就绪”约 30 ms；**卷没变**（卡还在、读不了，例如设备进了 ERROR）则没有卷事件可等，记一条 ERROR `Catalog scan aborted but the card is still there; reinsert the card.`，卷挂着就绪、曲库为空（与原来扫描失败的做法一致），拔插卡（边沿）后重新对账、重扫。其余失败仍按 STOR-7 处理。
+
+## 开机曲库比以前提前出现
+
+以前 Storage Task 先挂 Flash（`MountFlash` 3.3 至 8.3 s）才初始化 SD、扫描曲库；现在 Flash 在 Flash 启动任务里并行，SD 的挂载和曲库扫描开机后约 0.3 至 0.6 s 就开始。**插着卡开机时，曲库（`Scan done`）比以前早 3 至 8 s 出现**，点播放也更早能响。这是异步 Flash 的必然结果，不是 bug；上板时确认（`Scan done` 的 tick，和 R6.1 的扫描耗时口径一致）。
 
 ## 优先级反转在卷锁上的表现
 
@@ -169,12 +173,13 @@ Boot 任务只有 `APP_BOOT_TASK_STACK_WORDS = 128` word（512 B）。SDRAM 自�
 - 新链接段 `.app_axi_ram`（AXI SRAM，用户在 #206 手改，NOLOAD、不清零、只经 CPU 读写、不作 DMA，所以不需要 Cache 维护）放两个任务栈：卷任务 4096 B + Flash 启动任务 4096 B，共 8 KiB（map：`0x2404b600` 起 `0x2000`）；TCB 在 DTCM `.bss`（和播放任务一样）。链接脚本一个字没改；`.storage_benchmark` 已匹配 `APP/tasks/volume/benchmark/`，基准代码不会悄悄落回 FLASH 第一片。
 - **NOLOAD 不清零，HWD-2 要求首次使用前完整写入**：静态任务栈由 `xTaskCreateStatic` 在创建时整块填成已知值（`tskSET_NEW_STACKS_TO_KNOWN_VALUE`，当前配置 `configCHECK_FOR_STACK_OVERFLOW` 为 2、`configUSE_TRACE_FACILITY` 为 1，任一个就打开），所以栈首次使用前已完整写入。`app_tasks.c` 和 `volume_flash_task.c` 各有一个 `_Static_assert`：配置让这个前提失效时在编译期报错。这个段里**只有这两个栈**，没有别的状态；以后往里放任务间数据（`ui_cell` 格子等）时，由拥有者在首次使用前完整写入。
 - 卷事件的状态字和订阅表放 DTCM `.bss`（约 8 + 48 B）。
+- **HWD-2 对新段的审查结论**：① 启动：栈在 `xTaskCreateStatic` 里整块填成已知值（上一条）；任务在调度器启动后才创建，晚于 `Platform_Init()` 的 MPU 与 Cache 配置。② MPU 与 Cache：`Core/Src/main.c` 只配了 SDRAM 一个 MPU 区域（Region 2，0xC0000000 起 32 MB），AXI SRAM（0x24000000 起）走默认内存映射；`.app_axi_ram` 只由单核 CPU 读写栈，没有 DMA 与 Cache 一致性问题，不需要 Cache 维护，也没有为这个段新增或修改 MPU 区域。③ DMA：栈不是 DMA 源或目标，SD/QSPI 的 DMA 缓冲仍在 `.sd_dma_buffer`、`.flash_write_buffer`。
 
 ## Monitor 登记与 CPU 行
 
 每张新任务票都要在 Monitor 的任务登记表加一行，漏了会出 `Task not registered in monitor` WARN。本票加了 `Volume Task`（1024 word）和 `Flash Boot Task`（1024 word）。Flash 启动任务只在开机后 `MountFlash` 期间存在，自删之后 Monitor 读不到它的栈，所以它自删前自己打一行水位（见日志表）。
 
-**CPU 占比行不能超过 127 字符**（`monitor_cpu_format` 写满会打 `~`）：任务短键取名字第一个词的前 4 个小写字符，新增的是 `volu` 和 `flas`，与已有的 `crea`、`log`、`stor`、`moni`、`gui`、`play`、`idle`、`tmr` 互不相同。`Tests/monitor_warn` 的 `test_every_registered_task_fits_one_cpu_line` 用全部 10 个任务核对：最坏（10 个任务各占 10.0 %）和一个任务占 100.0 % 两种情形都不超过 127 字符、没有 `~`；实际最长 111 字符。Monitor 一批的行数：开机后几秒内 8 个任务加 5 行共 13 行（含 Flash 启动任务），稳态 7 个任务共 12 行，都放得进 30 条的消息池。
+**CPU 占比行不能超过 127 字符**（`monitor_cpu_format` 写满会打 `~`）：任务短键取名字第一个词的前 4 个小写字符，新增的是 `volu` 和 `flas`，与已有的 `crea`、`log`、`stor`、`moni`、`gui`、`play`、`idle`、`tmr` 互不相同。`Tests/monitor_warn` 的 `test_every_registered_task_fits_one_cpu_line` 用全部 10 个任务核对：最坏（10 个任务各占 10.0 %）和一个任务占 100.0 % 两种情形都不超过 127 字符、没有 `~`；实际最长 111 字符。Monitor 一批的行数：稳态 8 个任务（`IDLE`、`Tmr Svc`、`Log Task`、`Storage Task`、`Volume Task`、`Playback Task`、`Monitor Task`、`GUI Task`）加 5 行固定行共 13 行；开机后 `MountFlash` 期间多一个 `Flash Boot Task`，9 个任务共 14 行。都放得进 30 条的消息池。
 
 ## 日志消息池核算（DIAG-3，汇总类日志注明节拍）
 
@@ -183,7 +188,7 @@ Service Log 消息池 30 条，Log Task 每 5 ms 转交一条（约 75 ms 排空
 - 一次消抖过程：`sd edge`（1 行）加 `sd settle`（1 行）加人读日志（`Card removed.`；或 `Card inserted`、`Filesystem mounted.`；刷新失败再加 `Hotplug refresh failed`）共 2 至 5 行，**事件驱动，不是周期的**；抖动只记第一个边沿，所以不会刷屏。读取被拔卡打断时再加 1 行 `Audio read interrupted`（每个流最多一行，之后读取停住）。
 - 开机：`flash boot start`、`Filesystem mounted.`（FLASH）、`flash ready`、`Flash Boot Task: …` 栈水位共 4 行（Flash，间隔 3.3 至 8.3 s 的两头）；SD 的 `Card ready`、`Filesystem mounted.`、`sd boot` 共 3 行。
 - 假抖动钩子（仅钩子构建）：**每 5 s 两行**（`sd edge src=hook` 加 `sd settle … gate_only`）。
-- 最坏的同时到达：Monitor 5 s 一批 13 行，加持锁统计（Debug 每 10 s 3 行），加一次拔卡对账 5 行，共 21 行，留 9 块给同一时刻的其他任务；与 #208 核算的 15 行相比多了 6 行，仍小于 30。每行正文都不超过 127 字符：`sd settle` 行把 `edges`、`ref`、`end` 截在 9999，序号取 31 位最大值、又恰好是刷新失败加挂载失败时最长，也正好 127 字符（序号要发布 2^31 次才会到那么大，实际不到 100 字符）；主机测试用极端取值核对。
+- 最坏的同时到达：Monitor 5 s 一批（稳态 13 行，开机后 `MountFlash` 期间 14 行），加持锁统计（Debug 每 10 s 3 行），加一次拔卡对账 5 行，最坏共 22 行，留 8 块给同一时刻的其他任务；与 #208 核算的 15 行相比多了 7 行，仍小于 30；排空约 110 ms。每行正文都不超过 127 字符：`sd settle` 行把 `edges`、`ref`、`end` 截在 9999，序号取 31 位最大值、又恰好是刷新失败加挂载失败时最长，也正好 127 字符（序号要发布 2^31 次才会到那么大，实际不到 100 字符）；主机测试用极端取值核对。
 
 ## 主机测试证明什么、不证明什么（HAR-5）
 

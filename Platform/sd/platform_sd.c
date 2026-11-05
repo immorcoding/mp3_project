@@ -297,8 +297,9 @@ Platform_StatusTypeDef Platform_SD_DeInit(void)
   * @brief  根据当前稳定的 SD_CD 电平刷新介质生命周期。
   * @retval PLATFORM_OK 检测状态与 Device 生命周期刷新成功。
   * @retval PLATFORM_SD_ERROR Device 刷新失败。
-  * @note   本函数不实现机械触点消抖，且不得从 EXTI ISR 调用。当前 Storage
-  *         Task 在最后一个检测通知后的 30 ms 静默期结束后调用本函数。
+  * @note   本函数不实现机械触点消抖，且不得从 EXTI ISR 调用。当前 Volume
+  *         Task 在最后一个检测通知后的 30 ms 静默期结束后，经 `Service_Filesystem_RefreshSD`
+  *         （在 SD 卷锁内）调用 `Platform_SD_Process`，由它调用本函数。
   */
 Platform_StatusTypeDef Platform_SD_Refresh(void)
 {
@@ -387,7 +388,7 @@ Platform_StatusTypeDef Platform_SD_ClearTransferCallback(void)
   * @retval PLATFORM_OK 刷新成功；无状态变化时 *event 为 EVENT_NONE。
   * @retval PLATFORM_SD_ERROR 参数无效、Platform 尚未初始化或刷新失败。
   * @note   本函数不等待也不消抖。调用者必须确保其在普通执行上下文调用，并且
-  *         SD_CD 输入已稳定；Storage Task 的任务通知循环负责这一时序。
+  *         SD_CD 输入已稳定；Volume Task 的等通知带超时循环负责这一时序。
   *
   *         拔出事件按“最近一次告诉上层的状态”判断，而不是按本函数入口时 Device 的状态：读写中途拔卡时，
   *         `SDCard_FailTransfer`、`SDCard_AbortTransfer` 或启动被拒会在本函数之前就把 Device 写成 NOT_PRESENT，

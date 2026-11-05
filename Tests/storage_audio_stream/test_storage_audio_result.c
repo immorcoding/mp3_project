@@ -4,8 +4,9 @@
  * @brief   音频流对文件调用结果的分类（纯函数）：读块结果映射为继续、停住或读错误，开流结果映射为开启结果码（#211）。
  *
  * @details
- *          核心是 #195 第 9 条的失败约定：`NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 不是文件错误——读块得到它们时
- *          流“停住”（不写 `READ_ERROR`、不对同一个句柄重试），等卷事件写 `CARD_REMOVED`；开流得到它们按 `NOT_READY`
+ *          核心是 #195 第 9 条的失败约定：卷变了（卡没了或正在对账）时 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`
+ *          不是文件错误——读块得到它们时流“停住”（不写 `READ_ERROR`、不对同一个句柄重试），等卷事件写 `CARD_REMOVED`；
+ *          卷没变而读块得到它们（卡还在、设备出错）则没有卷事件可等，立刻按读错误报；开流得到它们按 `NOT_READY`
  *          应答。其他错误表示卡还在，立刻按原来的方式报错。期望值来自 #195 与 #202 D 节，不用代码里的表达式重算。
  ******************************************************************************
  */
@@ -17,31 +18,49 @@
 #include "APP/tasks/storage/stream/storage_audio_result.h"
 
 /**
- * @brief 读块成功且读到了字节：继续。读到 0 字节（文件在预期长度前结束）仍是读错误，与原行为一致。
+ * @brief 读块成功且读到了字节：继续，卷有没有变都一样。读到 0 字节（文件在预期长度前结束）仍是读错误，与原行为一致。
  */
 static void test_successful_read_continues_and_empty_read_is_an_error(void)
 {
-    assert(storage_audio_classify_read(SERVICE_OK, 32768U) == STORAGE_AUDIO_READ_CONTINUE);
-    assert(storage_audio_classify_read(SERVICE_OK, 1U) == STORAGE_AUDIO_READ_CONTINUE);
-    assert(storage_audio_classify_read(SERVICE_OK, 0U) == STORAGE_AUDIO_READ_ERROR);
+    assert(storage_audio_classify_read(SERVICE_OK, 32768U, true) == STORAGE_AUDIO_READ_CONTINUE);
+    assert(storage_audio_classify_read(SERVICE_OK, 32768U, false) == STORAGE_AUDIO_READ_CONTINUE);
+    assert(storage_audio_classify_read(SERVICE_OK, 1U, true) == STORAGE_AUDIO_READ_CONTINUE);
+    assert(storage_audio_classify_read(SERVICE_OK, 0U, true) == STORAGE_AUDIO_READ_ERROR);
+    assert(storage_audio_classify_read(SERVICE_OK, 0U, false) == STORAGE_AUDIO_READ_ERROR);
 }
 
 /**
- * @brief 卷不可用的三种返回值不是文件错误：流停住，不管读到了几个字节。
+ * @brief 卷不可用的三种返回值不是文件错误，**前提是卷确实变了**（序号和 Storage 已处理的不同，或卷已不挂）：
+ *        流停住，等卷事件写 CARD_REMOVED，不管读到了几个字节。
  */
-static void test_volume_unavailable_statuses_stall_the_stream_instead_of_failing_it(void)
+static void test_volume_unavailable_statuses_stall_the_stream_while_the_volume_has_changed(void)
 {
     static const Service_StatusTypeDef unavailable[] = {SERVICE_NO_MEDIA, SERVICE_NOT_READY, SERVICE_INVALID_HANDLE};
 
     for (unsigned index = 0U; index < sizeof(unavailable) / sizeof(unavailable[0]); index++)
     {
-        assert(storage_audio_classify_read(unavailable[index], 0U) == STORAGE_AUDIO_READ_STALL);
-        assert(storage_audio_classify_read(unavailable[index], 4096U) == STORAGE_AUDIO_READ_STALL);
+        assert(storage_audio_classify_read(unavailable[index], 0U, false) == STORAGE_AUDIO_READ_STALL);
+        assert(storage_audio_classify_read(unavailable[index], 4096U, false) == STORAGE_AUDIO_READ_STALL);
     }
 }
 
 /**
- * @brief 其他错误表示卡还在：立刻报读错误，不等卷事件（卡还在且没有边沿时不会有卷事件，一直等会悬空）。
+ * @brief 卷没变（序号相同且卷仍挂着）时，同样的三种返回值说明卡还在、设备出了错（例如标签读取传输出错使设备进 ERROR，
+ *        FatFs 的下一次读得到 NOT_READY）：没有边沿就不会有卷事件，一直等会静音到 T_data，所以立刻按读错误报。
+ */
+static void test_volume_unavailable_statuses_with_an_unchanged_volume_are_read_errors(void)
+{
+    static const Service_StatusTypeDef unavailable[] = {SERVICE_NO_MEDIA, SERVICE_NOT_READY, SERVICE_INVALID_HANDLE};
+
+    for (unsigned index = 0U; index < sizeof(unavailable) / sizeof(unavailable[0]); index++)
+    {
+        assert(storage_audio_classify_read(unavailable[index], 0U, true) == STORAGE_AUDIO_READ_ERROR);
+        assert(storage_audio_classify_read(unavailable[index], 4096U, true) == STORAGE_AUDIO_READ_ERROR);
+    }
+}
+
+/**
+ * @brief 其他错误表示卡还在：立刻报读错误，卷有没有变都一样。
  */
 static void test_other_errors_are_read_errors_because_the_card_is_still_there(void)
 {
@@ -50,8 +69,8 @@ static void test_other_errors_are_read_errors_because_the_card_is_still_there(vo
 
     for (unsigned index = 0U; index < sizeof(errors) / sizeof(errors[0]); index++)
     {
-        assert(storage_audio_classify_read(errors[index], 0U) == STORAGE_AUDIO_READ_ERROR);
-        assert(storage_audio_classify_read(errors[index], 100U) == STORAGE_AUDIO_READ_ERROR);
+        assert(storage_audio_classify_read(errors[index], 0U, true) == STORAGE_AUDIO_READ_ERROR);
+        assert(storage_audio_classify_read(errors[index], 100U, false) == STORAGE_AUDIO_READ_ERROR);
     }
 }
 
@@ -92,7 +111,8 @@ static void test_other_open_statuses_keep_their_existing_mapping(void)
 int main(void)
 {
     test_successful_read_continues_and_empty_read_is_an_error();
-    test_volume_unavailable_statuses_stall_the_stream_instead_of_failing_it();
+    test_volume_unavailable_statuses_stall_the_stream_while_the_volume_has_changed();
+    test_volume_unavailable_statuses_with_an_unchanged_volume_are_read_errors();
     test_other_errors_are_read_errors_because_the_card_is_still_there();
     test_volume_unavailable_statuses_answer_not_ready_when_opening();
     test_other_open_statuses_keep_their_existing_mapping();

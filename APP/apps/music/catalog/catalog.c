@@ -509,13 +509,13 @@ static bool catalog_music_join_path(char *destination,
 }
 
 /**
- * @brief 打开一个目录；`SERVICE_BUSY`（槽用尽）等约 10 ms 重试，不算失败。
+ * @brief 打开一个目录（单次）；`SERVICE_BUSY`（槽用尽）等约 10 ms 重试，不算失败。
  * @param[in] path 目录路径。
  * @param[out] directory 目录句柄。
  * @return 最后一次调用的状态；重试途中卷序号变了时返回 `SERVICE_BUSY` 且 `music_catalog_scan_aborted` 已置位。
  */
-static Service_StatusTypeDef catalog_scan_open_directory(const char *path,
-                                                         Service_Filesystem_DirectoryHandleTypeDef *directory)
+static Service_StatusTypeDef catalog_scan_open_directory_once(const char *path,
+                                                              Service_Filesystem_DirectoryHandleTypeDef *directory)
 {
     Service_StatusTypeDef status;
 
@@ -527,6 +527,27 @@ static Service_StatusTypeDef catalog_scan_open_directory(const char *path,
             return status;
         }
     }
+}
+
+/**
+ * @brief 打开一个目录；`SERVICE_BUSY` 重试，卷不可用时再开一次。
+ * @param[in] path 目录路径。
+ * @param[out] directory 目录句柄。
+ * @return 最后一次调用的状态；重试途中卷序号变了时返回 `SERVICE_BUSY` 且 `music_catalog_scan_aborted` 已置位。
+ * @note  在途调用被拔卡打断时，第一次失败发生在卷任务对账之前，卷序号还没变。路径打开没有句柄可借来等闸，
+ *        所以再开一次：它在 Filesystem 入口等闸，等到本轮对账结束，才有资格下结论——卡没了（卷已卸载，
+ *        再次得到卷不可用）或卡还在（照常打开，扫描继续）（#211）。
+ */
+static Service_StatusTypeDef catalog_scan_open_directory(const char *path,
+                                                         Service_Filesystem_DirectoryHandleTypeDef *directory)
+{
+    Service_StatusTypeDef status = catalog_scan_open_directory_once(path, directory);
+
+    if (!music_catalog_scan_aborted && Service_Filesystem_StatusIsVolumeUnavailable(status))
+    {
+        status = catalog_scan_open_directory_once(path, directory);
+    }
+    return status;
 }
 
 /**
@@ -718,6 +739,23 @@ static Catalog_StatusTypeDef catalog_music_dfs(void)
 }
 
 /**
+ * @brief 最近一次扫描结束后，Storage Task 该怎么对待。
+ * @param[in] volume_unchanged 扫描结束时 SD 卷仍挂着且卷序号与 Storage 已处理的相同。
+ * @return 扫描没有被丢弃：`CATALOG_SCAN_DONE`。丢弃了且卷变了（卡没了或换了）：`CATALOG_SCAN_EVENT_PENDING`，
+ *         等卷事件重扫，不要就绪。丢弃了但卷没变：`CATALOG_SCAN_UNREADABLE`——卡还在、设备出错，没有边沿就没有卷事件，
+ *         等也等不来，调用者要报错（卷任务对账之前的调用已在 Filesystem 入口等过闸，所以卷序号此时是结论）。
+ */
+Catalog_ScanVerdictTypeDef catalog_scan_verdict(bool volume_unchanged)
+{
+    if (!music_catalog_scan_aborted)
+    {
+        return CATALOG_SCAN_DONE;
+    }
+
+    return volume_unchanged ? CATALOG_SCAN_UNREADABLE : CATALOG_SCAN_EVENT_PENDING;
+}
+
+/**
  * @brief 扫描已挂载 SD 的 `Music/`，建播放列表，再按发布规则发布。
  * @return CATALOG_OK 扫描完成并发布（含空目录或表满截断），或本轮扫描被丢弃（卷不可用、卷序号变了，曲库保持代次 0）；
  *         CATALOG_ERROR 读取或关闭目录失败（不发布）。
@@ -749,6 +787,7 @@ Catalog_StatusTypeDef catalog_music_init(void)
     if (!catalog_scan_publish())
     {
         /* 扫描做完时卷序号已经变了（或卷已不在）：这份结果属于旧卡，不发布。 */
+        music_catalog_scan_aborted = true;
         music_catalog_index = 0U;
         catalog_scan_log_end("aborted");
         return CATALOG_OK;

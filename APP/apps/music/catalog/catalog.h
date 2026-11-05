@@ -38,8 +38,17 @@ typedef struct
     Service_Filesystem_FileLocatorTypeDef Locator;       /**< 位置有效时的文件定位符，可能全零。 */
 } Catalog_TrackTypeDef;
 
+/** @brief 最近一次扫描结束后，Storage Task 该怎么对待（见 `catalog_scan_verdict()`）。 */
+typedef enum
+{
+    CATALOG_SCAN_DONE = 0U,     /**< 扫描完成（含空库、截断、没有 Music/）或失败但不是卷不可用：照常就绪。 */
+    CATALOG_SCAN_EVENT_PENDING, /**< 卷不可用或卷序号变了而丢弃了扫描，且卷变了：等卷事件，不要就绪。 */
+    CATALOG_SCAN_UNREADABLE     /**< 丢弃了扫描，但卷没变（卡还在、读不了）：没有卷事件可等，要报错。 */
+} Catalog_ScanVerdictTypeDef;
+
 void catalog_boot_init(void);
 Catalog_StatusTypeDef catalog_music_init(void);
+Catalog_ScanVerdictTypeDef catalog_scan_verdict(bool volume_unchanged);
 Catalog_StatusTypeDef catalog_books_init(void);
 Catalog_StatusTypeDef catalog_init(void);
 Catalog_StatusTypeDef catalog_invalidate(void);

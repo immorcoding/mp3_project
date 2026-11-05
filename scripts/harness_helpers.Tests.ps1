@@ -201,6 +201,10 @@ $catalogConfigImpact = Get-HarnessImpact -ChangedPath @('APP/apps/music/catalog/
 Assert-HarnessSequence -Expected @('music_catalog') -Actual $catalogConfigImpact.HostModules `
     -Message '曲库配置头（含曲目标签读取常量与持锁统计开关）变化必须选择音乐曲库主机测试'
 
+$storageTaskHeaderImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/storage_task.h')
+Assert-HarnessEqual -Expected $true -Actual (@($storageTaskHeaderImpact.HostModules) -contains 'music_catalog') `
+    -Message 'Storage 任务头变化必须选中音乐曲库主机测试（窗口槽与名字槽经它带入状态类型）'
+
 $sdComponentImpact = Get-HarnessImpact -ChangedPath @('Components/sd/sd.c')
 Assert-HarnessSequence -Expected @('flash_ftl') -Actual $sdComponentImpact.HostModules `
     -Message 'SD Card Component 变化必须选择 flash_ftl 主机测试（显式中止的状态机测试在其中）'
@@ -291,7 +295,7 @@ $filesystemHostImpact = Get-HarnessImpact -ChangedPath @('Service/filesystem/fil
 Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $filesystemHostImpact.HostModules `
     -Message 'Filesystem Service 与 FatFs 变化必须同时选择文件定位符与 FTL 主机测试'
 
-# 共用 FreeRTOS 桩（Tests/stubs/freertos）被 flash_ftl、filesystem_locator、ui_cell、volume 与 storage_audio_stream（只取头）编译：改桩必须选中它们，且不落入未知路径。
+# 共用 FreeRTOS 桩（Tests/stubs/freertos）被 flash_ftl、filesystem_locator、ui_cell、volume、music_catalog 与 storage_audio_stream（只取头）编译：改桩必须选中它们，且不落入未知路径。
 $freertosStubImpact = Get-HarnessImpact -ChangedPath @(
     'Tests/stubs/freertos/freertos_stub.c'
     'Tests/stubs/freertos/freertos_stub.h'

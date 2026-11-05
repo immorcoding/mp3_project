@@ -77,8 +77,8 @@ typedef void (*Storage_AudioWake_Callback_t)(Storage_AudioWakeTypeDef reason);
 /* Storage Task 内部。 */
 void storage_audio_stream_init(TaskHandle_t storage_task);
 void storage_audio_stream_process_request(Storage_AudioMediaTypeDef media);
-void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media);
-bool storage_audio_stream_has_work(Storage_AudioMediaTypeDef media);
+void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media, uint32_t handled_volume_sequence);
+bool storage_audio_stream_has_work(void);
 bool storage_audio_stream_is_open(void);
 void storage_audio_stream_card_removed(void);
 
