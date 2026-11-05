@@ -57,6 +57,7 @@ get_target_property(FILE_BENCH_SOURCES flash_ftl_fatfs_tests SOURCES)
 add_executable(flash_file_benchmark_tests
     ${FILE_BENCH_SOURCES}
     test_flash_file_benchmark.c
+    ../stubs/freertos/freertos_stub.c
     ../../Service/filesystem/filesystem_service.c
     ../../Service/filesystem/filesystem_file.c
     ../../Service/filesystem/filesystem_directory.c
@@ -65,7 +66,7 @@ add_executable(flash_file_benchmark_tests
     ../../Service/filesystem/filesystem_status.c
     ../../APP/tasks/storage/benchmark/storage_flash_file_benchmark.c)
 target_include_directories(flash_file_benchmark_tests BEFORE PRIVATE
-    "${CMAKE_CURRENT_BINARY_DIR}/host_config" stubs ../..
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../..
     ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
 target_compile_definitions(flash_file_benchmark_tests PRIVATE FTL_TEST_FATFS
     FTL_TEST_FILE_BENCHMARK STORAGE_FLASH_BENCHMARK_ENABLE=1
@@ -94,9 +95,16 @@ add_executable(filesystem_service_tests
     ../../Middlewares/Third_Party/FatFs/src/diskio.c
     ../../Middlewares/Third_Party/FatFs/src/option/cc936.c)
 target_include_directories(filesystem_service_tests BEFORE PRIVATE
-    "${CMAKE_CURRENT_BINARY_DIR}/host_config" stubs ../..
+    "${CMAKE_CURRENT_BINARY_DIR}/host_config" ../stubs/freertos ../..
     ../../FATFS/Target ../../Middlewares/Third_Party/FatFs/src)
 target_compile_options(filesystem_service_tests PRIVATE -UNDEBUG)
 add_test(NAME filesystem_service_volume_aware COMMAND filesystem_service_tests)
 
-
+# 共用 FreeRTOS 桩（Tests/stubs/freertos）自身的行为：互斥锁、信号量、任务通知与脚本化钩子。
+add_executable(freertos_stub_tests
+    test_freertos_stub.c
+    ../stubs/freertos/freertos_stub.c)
+target_include_directories(freertos_stub_tests BEFORE PRIVATE ../stubs/freertos ../..)
+target_compile_features(freertos_stub_tests PRIVATE c_std_11)
+target_compile_options(freertos_stub_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+add_test(NAME freertos_stub_behavior COMMAND freertos_stub_tests)

@@ -44,6 +44,8 @@
                 '^Service/log/log_service(?:_config)?\.h$'
                 '^APP/app_config\.h$'
                 '^Tests/flash_ftl/'
+                # 共用 FreeRTOS 桩：flash_ftl 的文件基准用它的假 tick，freertos_stub_tests 测它自己。
+                '^Tests/stubs/freertos/'
             )
         }
         @{
@@ -54,8 +56,8 @@
                 # 测试把 patches/fatfs 的补丁应用到 ff.c 副本后编译，并复制 ffconf.h 与 fatfs.h。
                 '^patches/fatfs/'
                 '^FATFS/'
-                # 沿用 flash_ftl 的 FreeRTOS 头替身，以及主机测试编译的 Platform/Service/APP 头（由 check-test-paths.ps1 发现）。
-                '^Tests/flash_ftl/stubs/'
+                # 共用 FreeRTOS 桩，以及主机测试编译的 Platform/Service/APP 头（由 check-test-paths.ps1 发现）。
+                '^Tests/stubs/freertos/'
                 '^Platform/platform\.h$'
                 '^Platform/flash/platform_flash\.h$'
                 '^Platform/sd/platform_sd\.h$'
