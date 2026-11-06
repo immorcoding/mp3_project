@@ -5,10 +5,9 @@
 
 #include "storage_namebuffer.h"
 
-#include "storage_catalog.h"
-#include "storage_sheet.h"
-#include "storage_track_diag.h"
-#include "storage_track_text.h"
+#include "APP/apps/music/catalog/catalog.h"
+#include "APP/apps/music/catalog/catalog_track_diag.h"
+#include "APP/apps/music/catalog/catalog_track_text.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -22,6 +21,9 @@
 static TaskHandle_t volatile storage_namebuffer_task;
 
 Storage_NameBufferTypeDef storage_namebuffer;
+
+/** @brief 本次 load 一次读全的曲库内容（路径约 256 B），放静态区以免占任务栈；只由 Storage Task 使用。 */
+static Catalog_TrackTypeDef storage_namebuffer_track;
 
 /**
  * @brief 把槽位打成“取不到”：代次 0、空名、READY。
@@ -81,11 +83,11 @@ Storage_StatusTypeDef storage_namebuffer_request(uint16_t index, uint32_t genera
 }
 
 /**
- * @brief Storage Task 在 PENDING 时按 位置 → Sheet → Catalog 下标 读曲目标签，填曲目显示名与歌手并打 READY。
- * @param[in] sd_ready SD 是否处于就绪态；曲库扫描中与未挂载均为假（消抖期间文件调用在 Filesystem 入口等闸，不体现在这里）。
+ * @brief Storage Task 在 PENDING 时按 位置 → 曲库（一次读全）读曲目标签，填曲目显示名与歌手并打 READY。
+ * @param[in] sd_ready SD 是否处于就绪态；消抖中与未就绪均为假。
  * @note 仅 Storage Task 主循环调用；槽位不是 PENDING 时无事可做。一次 load 只读一个文件，在当圈完成
- *       （storage_track_text_read()，最坏 按定位符打开（核对不符退回路径打开）+ 取长度 + 至多
- *       STORAGE_CATALOG_TEXT_MAX_READS 次读取）；INFO 的 `open=` 是打开耗时（DIAG-4）。
+ *       （catalog_track_text_read()，最坏 按定位符打开（核对不符退回路径打开）+ 取长度 + 至多
+ *       CATALOG_TEXT_MAX_READS 次读取）；INFO 的 `open=` 是打开耗时（DIAG-4）。
  * @note 标签侧失败（打开失败、读取错误、超读取上限、无 ID3v2、帧缺失、解码失败）不是槽失败：
  *       照常带实际代次 READY，曲目显示名回退文件主名、歌手为空串（STOR-15）。
  * @note SD 未就绪、Sheet 无效或与 Catalog 不一致、请求代次非 0 且与当前不符，都是重扫与
@@ -95,11 +97,9 @@ Storage_StatusTypeDef storage_namebuffer_request(uint16_t index, uint32_t genera
  */
 void storage_namebuffer_load(bool sd_ready)
 {
-    uint32_t sheet_generation;
     uint32_t requested_generation;
     uint16_t index;
-    uint16_t catalog_index;
-    const StorageTrackText_ResultTypeDef *track = NULL;
+    const CatalogTrackText_ResultTypeDef *track = NULL;
     bool volume_went_away = false;
     char text[48];
 
@@ -110,17 +110,18 @@ void storage_namebuffer_load(bool sd_ready)
 
     requested_generation = storage_namebuffer.Generation;
     index = storage_namebuffer.Index;
-    sheet_generation = storage_sheet_generation();
 
-    if (!sd_ready || (sheet_generation == 0U) ||
-        (sheet_generation != storage_catalog_generation()) ||
-        ((requested_generation != 0U) && (requested_generation != sheet_generation)))
+    /* 代次、条数、路径和定位符一次读全：中途重扫或拔卡不会让下面的核对与读标签用到不同代次的内容。 */
+    (void)catalog_read_track(index, &storage_namebuffer_track);
+
+    if (!sd_ready || (storage_namebuffer_track.Generation == 0U) ||
+        ((requested_generation != 0U) && (requested_generation != storage_namebuffer_track.Generation)))
     {
         storage_namebuffer_complete_empty();
         return;
     }
 
-    if (index >= storage_catalog_index_num())
+    if (index >= storage_namebuffer_track.Count)
     {
         if (requested_generation == 0U)
         {
@@ -128,17 +129,13 @@ void storage_namebuffer_load(bool sd_ready)
             return;
         }
     }
-    else
+    else if (storage_namebuffer_track.Path[0] != '\0')
     {
-        catalog_index = storage_sheet_catalog_index(index);
-        if (catalog_index != UINT16_MAX)
-        {
-            const uint32_t start_cycles = storage_track_diag_begin();
+        const uint32_t start_cycles = catalog_track_diag_begin();
 
-            track = storage_track_text_read(index, catalog_index);
-            volume_went_away = (track == NULL) && storage_track_text_last_read_unavailable();
-            storage_track_diag_name_done(index, start_cycles, track);
-        }
+        track = catalog_track_text_read(index, &storage_namebuffer_track);
+        volume_went_away = (track == NULL) && catalog_track_text_last_read_unavailable();
+        catalog_track_diag_name_done(index, start_cycles, track);
     }
 
     if (volume_went_away)
@@ -159,7 +156,7 @@ void storage_namebuffer_load(bool sd_ready)
 
     (void)memcpy(storage_namebuffer.Title, track->Text.Title, sizeof(storage_namebuffer.Title));
     (void)memcpy(storage_namebuffer.Artist, track->Text.Artist, sizeof(storage_namebuffer.Artist));
-    storage_namebuffer.Generation = sheet_generation;
+    storage_namebuffer.Generation = storage_namebuffer_track.Generation;
     storage_namebuffer.Status = STORAGE_NAMEBUFFER_READY;
 }
 

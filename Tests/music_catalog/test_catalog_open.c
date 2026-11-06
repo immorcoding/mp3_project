@@ -1,18 +1,21 @@
 /**
- * @file test_storage_catalog_open.c
- * @brief 曲库按文件定位符打开的主机测试（STOR-17、ARC-19、DIAG-4、DIAG-5）。
- * @note  链接真实的 storage_catalog.c、storage_sheet.c、storage_track_open.c、storage_track_text.c 与
- *        storage_track_diag.c；Filesystem Service、Log Service 与 DWT Adapter 由本文件的假实现替换，
- *        只实现既有公开函数。经曲库扫描、按曲库下标读曲目文本、诊断出口观察行为。
+ * @file test_catalog_open.c
+ * @brief 曲库的主机测试：扫描、错误分类、发布规则与卷序号、一次读全、曲库短锁，以及按文件定位符打开
+ *        （STOR-1、STOR-7、STOR-17、ARC-19、DIAG-4、DIAG-5、DIAG-6）。
+ * @note  链接真实的 catalog.c、catalog_sheet.c、catalog_track_open.c、catalog_track_text.c 与
+ *        catalog_track_diag.c；Filesystem Service、Log Service、DWT Adapter 与卷状态函数由本文件的假实现替换，
+ *        只实现既有公开函数；曲库短锁走共用 FreeRTOS 桩。经曲库扫描、一次读全、诊断出口观察行为。
  */
 
-#include "APP/tasks/playback/playback_task_config.h"
-#include "APP/tasks/storage/catalog/storage_catalog.h"
+#include "APP/apps/music/catalog/catalog.h"
+#include "APP/apps/music/catalog/catalog_sheet.h"
+#include "APP/apps/music/catalog/catalog_track_diag.h"
+#include "APP/apps/music/catalog/catalog_track_text.h"
 #include "APP/tasks/storage/catalog/storage_listbuffer.h"
 #include "APP/tasks/storage/catalog/storage_namebuffer.h"
-#include "APP/tasks/storage/catalog/storage_sheet.h"
-#include "APP/tasks/storage/catalog/storage_track_diag.h"
-#include "APP/tasks/storage/catalog/storage_track_text.h"
+#include "APP/tasks/volume/volume_event.h"
+
+#include "freertos_stub.h"
 
 #include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
 #include "Service/filesystem/filesystem_directory.h"
@@ -20,26 +23,22 @@
 #include "Service/filesystem/filesystem_text.h"
 #include "Service/log/log_service.h"
 
-#include "freertos_stub.h"
-
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
 /* ---- 常量核对（STOR-17、DIAG-4） ---- */
-_Static_assert(STORAGE_CATALOG_MUSIC_MAX_NUM == 12000U, "catalog holds 12000 tracks (STOR-17)");
-_Static_assert(STORAGE_CATALOG_MUSIC_MAX_NUM <= UINT16_MAX, "catalog index must fit uint16_t");
-_Static_assert(STORAGE_CATALOG_MUSIC_POOL_SIZE == (4U * 1024U * 1024U), "path pool stays 4 MiB (#172 G)");
-_Static_assert((STORAGE_CATALOG_MUSIC_POOL_SIZE / STORAGE_CATALOG_MUSIC_MAX_NUM) >= 300U,
+_Static_assert(CATALOG_MUSIC_MAX_NUM == 12000U, "catalog holds 12000 tracks (STOR-17)");
+_Static_assert(CATALOG_MUSIC_MAX_NUM <= UINT16_MAX, "catalog index must fit uint16_t");
+_Static_assert(CATALOG_MUSIC_POOL_SIZE == (4U * 1024U * 1024U), "path pool stays 4 MiB (#172 G)");
+_Static_assert((CATALOG_MUSIC_POOL_SIZE / CATALOG_MUSIC_MAX_NUM) >= 300U,
                "pool leaves about 350 B of path per track");
-_Static_assert(STORAGE_CATALOG_OPEN_BUDGET_US == 30000U, "single open budget is 30 ms (DIAG-4)");
-_Static_assert(STORAGE_CATALOG_WINDOW_BUDGET_US == 500000U, "window budget is 0.5 s (DIAG-4)");
-_Static_assert(STORAGE_CATALOG_OPEN_BUDGET_US < STORAGE_CATALOG_TRACK_BUDGET_US,
-               "single open budget is tighter than the T_data/2 defensive threshold");
-_Static_assert(STORAGE_CATALOG_WINDOW_BUDGET_US < STORAGE_CATALOG_TRACK_BUDGET_US,
-               "window budget is tighter than the T_data/2 defensive threshold");
-_Static_assert(STORAGE_CATALOG_TRACK_BUDGET_US == ((PLAYBACK_MACHINE_DATA_TIMEOUT_MS * 1000U) / 2U),
-               "T_data/2 defensive threshold is kept (DIAG-4)");
+_Static_assert(CATALOG_OPEN_BUDGET_US == 30000U, "single open budget is 30 ms (DIAG-4)");
+_Static_assert(CATALOG_WINDOW_BUDGET_US == 500000U, "window budget is 0.5 s (DIAG-4)");
+_Static_assert(CATALOG_OPEN_BUDGET_US < CATALOG_TRACK_BUDGET_US,
+               "single open budget is tighter than the 1 s single-row log threshold");
+_Static_assert(CATALOG_WINDOW_BUDGET_US < CATALOG_TRACK_BUDGET_US,
+               "window budget is tighter than the 1 s single-row log threshold");
 
 #define ROOT_ID_BASE 0U
 #define SUB_ID_BASE  100000U
@@ -48,6 +47,7 @@ _Static_assert(STORAGE_CATALOG_TRACK_BUDGET_US == ((PLAYBACK_MACHINE_DATA_TIMEOU
 
 /* ---- 假 DWT：1 MHz，一个周期即 1 µs ---- */
 static uint32_t g_cycles;
+static bool catalog_lock_is_held(void);
 
 /**
  * @brief 假周期计数器启动：恒成功。
@@ -106,6 +106,7 @@ static uint32_t g_log_cost_us; /* 一次日志投递消耗的微秒（假 DWT �
  */
 Service_StatusTypeDef Service_Log_Post(Service_Log_LevelTypeDef level, const char *tag, const char *text)
 {
+    assert(!catalog_lock_is_held()); /* 持锁只拷内存：不投日志 */
     if (g_log_count < LOG_MAX)
     {
         g_log[g_log_count].level = level;
@@ -116,6 +117,34 @@ Service_StatusTypeDef Service_Log_Post(Service_Log_LevelTypeDef level, const cha
     }
     g_cycles += g_log_cost_us;
     return SERVICE_OK;
+}
+
+/* ---- 假卷状态与曲库锁观察 ---- */
+static Volume_StatusTypeDef g_volume;     /* 假 SD 卷状态；测试直接改它来模拟换卡、拔卡 */
+static uint32_t g_volume_status_cost_us;  /* 一次 volume_status 消耗的微秒（假 DWT）；曲库在锁内调它，用来造出可测的持锁时间 */
+static SemaphoreHandle_t g_lock;          /* 曲库锁（catalog_boot_init 创建的那把） */
+
+/**
+ * @brief 假卷状态函数（真实的在 volume_event.c，读一个字、不拿锁）。
+ * @param[in] volume 卷，须为 SD。
+ * @return 测试设定的状态。
+ */
+Volume_StatusTypeDef volume_status(Volume_IdTypeDef volume)
+{
+    assert(volume == VOLUME_ID_SD);
+    g_cycles += g_volume_status_cost_us;
+    return g_volume;
+}
+
+/**
+ * @brief 曲库锁此刻是否被持有（拿成功次数不等于放成功次数）。
+ * @return true 被持有。
+ */
+static bool catalog_lock_is_held(void)
+{
+    const FreertosStub_SemaphoreStats stats = freertos_stub_semaphore_stats(g_lock);
+
+    return stats.take_successes != stats.give_successes;
 }
 
 /**
@@ -181,6 +210,15 @@ static Service_StatusTypeDef g_read_dir_status;  /* 非 SERVICE_OK 时，读满 
 static uint32_t g_read_dir_status_after;
 static uint32_t g_dir_reads;                     /* 本次扫描里 ReadDirectory 被调用的次数 */
 static bool g_music_missing;        /* 没有 Music/ 目录 */
+static uint32_t g_open_root_busy;   /* 打开 Music/ 先报这么多次 SERVICE_BUSY（槽用尽） */
+static uint32_t g_read_busy;        /* 读目录先报这么多次 SERVICE_BUSY */
+static uint32_t g_close_busy;       /* 关目录先报这么多次 SERVICE_BUSY */
+static Service_StatusTypeDef g_close_status;  /* 非 SERVICE_OK 时，关目录返回它 */
+static uint32_t g_close_calls;      /* CloseDirectory 被调用的次数（含失败） */
+static uint32_t g_swap_after_reads; /* 非 0：第 N 次读目录时卷序号加 2（换卡） */
+static bool g_swap_on_close;        /* 关目录时卷序号加 2（扫描做完、发布之前换卡） */
+static bool g_busy_swaps_volume;    /* 报 SERVICE_BUSY 的同时卷序号加 2 */
+static void (*g_read_hook)(void);   /* 每次读目录开头调用，用来在扫描途中以读者身份调用曲库 */
 
 static uint8_t g_file_bytes[512];
 static uint32_t g_file_length;
@@ -281,11 +319,21 @@ Service_StatusTypeDef Service_Filesystem_OpenDirectory(Service_Filesystem_Volume
                                                        Service_Filesystem_DirectoryHandleTypeDef *directory)
 {
     assert(volume == SERVICE_FILESYSTEM_VOLUME_SD);
+    assert(!catalog_lock_is_held()); /* 持锁只拷内存：不调文件接口 */
     if (g_music_missing)
     {
         return SERVICE_ERROR;
     }
     g_open_dir_calls++;
+    if ((strcmp(path, "Music") == 0) && (g_open_root_busy != 0U))
+    {
+        g_open_root_busy--;
+        if (g_busy_swaps_volume)
+        {
+            g_volume.Sequence += 2U;
+        }
+        return SERVICE_BUSY;
+    }
     if (strcmp(path, "Music") == 0)
     {
         const Service_StatusTypeDef scripted = take_scripted_status(&g_open_root_status, &g_open_root_status_times);
@@ -327,8 +375,22 @@ Service_StatusTypeDef Service_Filesystem_ReadDirectory(Service_Filesystem_Direct
     uint32_t files = (directory.Token == 1U) ? g_root_count : g_sub_count;
     uint32_t base = (directory.Token == 1U) ? ROOT_ID_BASE : SUB_ID_BASE;
 
+    assert(!catalog_lock_is_held());
     g_cycles += g_dir_read_cost_us;
     g_dir_reads++;
+    if (g_read_hook != NULL)
+    {
+        g_read_hook();
+    }
+    if ((g_swap_after_reads != 0U) && (g_dir_reads == g_swap_after_reads))
+    {
+        g_volume.Sequence += 2U;
+    }
+    if (g_read_busy != 0U)
+    {
+        g_read_busy--;
+        return SERVICE_BUSY;
+    }
     if ((g_read_dir_status != SERVICE_OK) && (g_dir_reads > g_read_dir_status_after))
     {
         return g_read_dir_status;
@@ -370,12 +432,23 @@ Service_StatusTypeDef Service_Filesystem_ReadDirectory(Service_Filesystem_Direct
 /**
  * @brief 假目录关闭。
  * @param[in] directory 目录句柄。
- * @return 恒为 SERVICE_OK。
+ * @return 默认 SERVICE_OK；可注入 SERVICE_BUSY 或其他失败。
  */
 Service_StatusTypeDef Service_Filesystem_CloseDirectory(Service_Filesystem_DirectoryHandleTypeDef directory)
 {
     (void)directory;
-    return SERVICE_OK;
+    assert(!catalog_lock_is_held());
+    g_close_calls++;
+    if (g_swap_on_close)
+    {
+        g_volume.Sequence += 2U;
+    }
+    if (g_close_busy != 0U)
+    {
+        g_close_busy--;
+        return SERVICE_BUSY;
+    }
+    return g_close_status;
 }
 
 /**
@@ -582,6 +655,21 @@ static void world_reset(void)
     g_read_dir_status_after = 0U;
     g_dir_reads = 0U;
     g_music_missing = false;
+    g_open_root_busy = 0U;
+    g_read_busy = 0U;
+    g_close_busy = 0U;
+    g_close_status = SERVICE_OK;
+    g_close_calls = 0U;
+    g_swap_after_reads = 0U;
+    g_swap_on_close = false;
+    g_busy_swaps_volume = false;
+    g_read_hook = NULL;
+    g_volume_status_cost_us = 0U;
+    g_volume.Mounted = true;
+    g_volume.Sequence = 7U;
+    freertos_stub_reset();
+    catalog_boot_init();
+    g_lock = freertos_stub_last_created_semaphore();
     g_cycles = 1000U;
     g_log_count = 0U;
     build_file_bytes();
@@ -596,22 +684,65 @@ static void scan(uint32_t root, uint32_t sub)
 {
     g_root_count = root;
     g_sub_count = sub;
-    assert(storage_catalog_music_init() == STORAGE_OK);
+    assert(catalog_music_init() == CATALOG_OK);
 }
 
 /**
- * @brief 找出路径等于 path 的曲库下标。
+ * @brief 当前已发布的曲库条数（代次为 0 时为 0）。
+ * @return 条数。
+ */
+static uint16_t count_now(void)
+{
+    Catalog_TrackTypeDef track;
+
+    (void)catalog_read_track(0U, &track);
+    return track.Count;
+}
+
+/**
+ * @brief 取指定位置的文件定位符。
+ * @param[in] position 播放列表位置。
+ * @param[out] locator 定位符。
+ * @return true 位置有效；false 曲库不可用或位置越界。
+ */
+static bool locator_at(uint16_t position, Service_Filesystem_FileLocatorTypeDef *locator)
+{
+    Catalog_TrackTypeDef track;
+    const bool found = catalog_read_track(position, &track);
+
+    *locator = track.Locator;
+    return found;
+}
+
+/**
+ * @brief 读指定位置的曲目文本：先一次读全，再按它的路径和定位符读标签。
+ * @param[in] position 播放列表位置。
+ * @return 读取结果；位置无效（曲库不可用或越界）或卷不可用时为 NULL。
+ */
+static const CatalogTrackText_ResultTypeDef *read_text(uint16_t position)
+{
+    static Catalog_TrackTypeDef track;
+
+    if (!catalog_read_track(position, &track))
+    {
+        return NULL;
+    }
+    return catalog_track_text_read(position, &track);
+}
+
+/**
+ * @brief 找出路径等于 path 的播放列表位置。
  * @param[in] path 曲库相对路径。
- * @return 下标；没有则中止。
+ * @return 位置；没有则中止。
  */
 static uint16_t catalog_index_of(const char *path)
 {
-    char buffer[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
+    Catalog_TrackTypeDef track;
 
-    for (uint16_t i = 0U; i < storage_catalog_index_num(); i++)
+    for (uint16_t i = 0U; i < count_now(); i++)
     {
-        assert(storage_catalog_copy_path(i, buffer, sizeof(buffer)) == STORAGE_OK);
-        if (strcmp(buffer, path) == 0)
+        assert(catalog_read_track(i, &track));
+        if (strcmp(track.Path, path) == 0)
         {
             return i;
         }
@@ -628,12 +759,12 @@ static void test_catalog_limit_12000(void)
     world_reset();
     scan(12500U, 0U);
 
-    assert(storage_catalog_index_num() == 12000U);
-    assert(storage_catalog_copy_locator(0U, &locator));
+    assert(count_now() == 12000U);
+    assert(locator_at(0U, &locator));
     assert(locator_is(&locator, 0U));
-    assert(storage_catalog_copy_locator(11999U, &locator));
+    assert(locator_at(11999U, &locator));
     assert(locator_is(&locator, 11999U));
-    assert(!storage_catalog_copy_locator(12000U, &locator));
+    assert(!locator_at(12000U, &locator));
     assert(log_count_prefix("Music Catalog Full.") == 1U);
 }
 
@@ -646,17 +777,17 @@ static void test_scan_attaches_locator_to_each_entry(void)
     world_reset();
     scan(3U, 2U);
 
-    assert(storage_catalog_index_num() == 5U);
+    assert(count_now() == 5U);
     for (unsigned i = 0U; i < 3U; i++)
     {
         snprintf(path, sizeof(path), "Music/t%05u.mp3", i);
-        assert(storage_catalog_copy_locator(catalog_index_of(path), &locator));
+        assert(locator_at(catalog_index_of(path), &locator));
         assert(locator_is(&locator, ROOT_ID_BASE + i));
     }
     for (unsigned i = 0U; i < 2U; i++)
     {
         snprintf(path, sizeof(path), "Music/Sub/s%03u.mp3", i);
-        assert(storage_catalog_copy_locator(catalog_index_of(path), &locator));
+        assert(locator_at(catalog_index_of(path), &locator));
         assert(locator_is(&locator, SUB_ID_BASE + i));
     }
 }
@@ -669,29 +800,29 @@ static void test_locator_is_valid_only_within_one_generation(void)
 
     world_reset();
     scan(4U, 0U);
-    first_generation = storage_catalog_generation();
-    assert(storage_catalog_copy_locator(3U, &locator));
+    first_generation = catalog_generation();
+    assert(locator_at(3U, &locator));
 
-    assert(storage_catalog_invalidate() == STORAGE_OK);
-    assert(!storage_catalog_copy_locator(3U, &locator));
+    assert(catalog_invalidate() == CATALOG_OK);
+    assert(!locator_at(3U, &locator));
 
     scan(2U, 0U);
-    assert(storage_catalog_generation() != first_generation);
-    assert(!storage_catalog_copy_locator(3U, &locator)); /* 新代次只有 2 条 */
-    assert(storage_catalog_copy_locator(1U, &locator));
+    assert(catalog_generation() != first_generation);
+    assert(!locator_at(3U, &locator)); /* 新代次只有 2 条 */
+    assert(locator_at(1U, &locator));
 }
 
 /** @brief 读曲目文本按定位符打开：不走路径，打开耗时单独给出。 */
 static void test_text_read_opens_by_locator(void)
 {
-    const StorageTrackText_ResultTypeDef *track;
+    const CatalogTrackText_ResultTypeDef *track;
 
     world_reset();
     scan(8U, 0U);
     g_locator_cost_us = 1234U;
     g_path_cost_us = 99999U;
 
-    track = storage_track_text_read(7U, 5U);
+    track = read_text(5U);
 
     assert(track != NULL);
     assert(strcmp(track->Text.Title, "Fake Title") == 0);
@@ -707,7 +838,7 @@ static void test_text_read_opens_by_locator(void)
 /** @brief 核对失败（介质上的目录项已变）退回按路径打开，记 WARN 并带播放列表位置。 */
 static void test_locator_mismatch_falls_back_to_path_open(void)
 {
-    const StorageTrackText_ResultTypeDef *track;
+    const CatalogTrackText_ResultTypeDef *track;
     const log_line_t *line;
 
     world_reset();
@@ -717,7 +848,7 @@ static void test_locator_mismatch_falls_back_to_path_open(void)
     g_path_cost_us = 2000U;
     g_log_cost_us = 700U; /* Locator miss 的日志投递耗时不属于打开 */
 
-    track = storage_track_text_read(7U, 5U);
+    track = read_text(5U);
 
     assert(track != NULL);
     assert(strcmp(track->Text.Title, "Fake Title") == 0);
@@ -730,19 +861,19 @@ static void test_locator_mismatch_falls_back_to_path_open(void)
     assert(log_count_prefix("Locator miss") == 1U);
     line = log_last_prefix("Locator miss");
     assert(line->level == SERVICE_LOG_LEVEL_WARN);
-    assert(strcmp(line->text, "Locator miss pos=7") == 0);
+    assert(strcmp(line->text, "Locator miss pos=5") == 0);
 }
 
 /** @brief 扫描时没取到定位符（全零）与核对不符同样处理。 */
 static void test_missing_locator_falls_back_to_path_open(void)
 {
-    const StorageTrackText_ResultTypeDef *track;
+    const CatalogTrackText_ResultTypeDef *track;
 
     world_reset();
     g_zero_locator_id = 2U;
     scan(4U, 0U);
 
-    track = storage_track_text_read(2U, 2U);
+    track = read_text(2U);
 
     assert(track != NULL);
     assert(strcmp(track->Text.Title, "Fake Title") == 0);
@@ -758,24 +889,24 @@ static void test_each_locator_miss_is_logged(void)
     scan(8U, 0U);
     g_stale_id = 1U;
 
-    (void)storage_track_text_read(10U, 1U);
-    (void)storage_track_text_read(11U, 1U);
-    (void)storage_track_text_read(12U, 3U); /* 3 号核对通过，不记 */
+    (void)read_text(1U);
+    (void)read_text(1U);
+    (void)read_text(3U); /* 3 号核对通过，不记 */
 
     assert(log_count_prefix("Locator miss") == 2U);
-    assert(strcmp(log_last_prefix("Locator miss")->text, "Locator miss pos=11") == 0);
+    assert(strcmp(log_last_prefix("Locator miss")->text, "Locator miss pos=1") == 0);
 }
 
 /** @brief 其他失败（槽用尽等）不是核对不符：不退回路径打开，也不记 Locator miss。 */
 static void test_locator_open_failure_is_not_retried_by_path(void)
 {
-    const StorageTrackText_ResultTypeDef *track;
+    const CatalogTrackText_ResultTypeDef *track;
 
     world_reset();
     scan(4U, 0U);
     g_locator_failed = true;
 
-    track = storage_track_text_read(1U, 1U);
+    track = read_text(1U);
 
     assert(track != NULL);
     assert(track->OpenFailed);
@@ -800,7 +931,7 @@ static void test_text_read_treats_a_volume_unavailable_open_as_no_result(void)
         g_locator_failed = true;
         g_locator_failed_status = unavailable[index];
 
-        assert(storage_track_text_read(1U, 1U) == NULL);
+        assert(read_text(1U) == NULL);
         assert(g_path_calls == 0U);
         assert(g_open_handles == 0U);
         assert(log_count_prefix("Locator miss") == 0U);
@@ -813,7 +944,7 @@ static void test_text_read_with_unknown_catalog_index_returns_null(void)
     world_reset();
     scan(2U, 0U);
 
-    assert(storage_track_text_read(5U, 5U) == NULL);
+    assert(read_text(5U) == NULL);
     assert(g_locator_calls == 0U);
     assert(g_path_calls == 0U);
 }
@@ -826,34 +957,34 @@ static void test_text_read_with_unknown_catalog_index_returns_null(void)
  */
 static void window_row(uint32_t open_us, uint32_t total_us, bool open_failed)
 {
-    StorageTrackText_ResultTypeDef track;
-    const uint32_t start = storage_track_diag_begin();
+    CatalogTrackText_ResultTypeDef track;
+    const uint32_t start = catalog_track_diag_begin();
 
     memset(&track, 0, sizeof(track));
     track.OpenUs = open_us;
     track.OpenFailed = open_failed;
-    track.Text.Result = STORAGE_CATALOG_TEXT_TAGGED;
+    track.Text.Result = CATALOG_TEXT_TAGGED;
     track.Text.Reads = 1U;
     g_cycles += total_us;
-    storage_track_diag_row_done(start, &track);
+    catalog_track_diag_row_done(start, &track);
 }
 
 /** @brief 名称槽 INFO 带 open=，标签读取耗时 us= 不含打开。 */
 static void test_name_slot_info_separates_open_from_tag_read(void)
 {
-    StorageTrackText_ResultTypeDef track;
+    CatalogTrackText_ResultTypeDef track;
     const log_line_t *line;
     uint32_t start;
 
     world_reset();
     memset(&track, 0, sizeof(track));
     track.OpenUs = 1234U;
-    track.Text.Result = STORAGE_CATALOG_TEXT_TAGGED;
+    track.Text.Result = CATALOG_TEXT_TAGGED;
     track.Text.Reads = 2U;
-    start = storage_track_diag_begin();
+    start = catalog_track_diag_begin();
     g_cycles += 5000U;
 
-    storage_track_diag_name_done(7U, start, &track);
+    catalog_track_diag_name_done(7U, start, &track);
 
     line = log_last_prefix("Tag idx=");
     assert(line->level == SERVICE_LOG_LEVEL_INFO);
@@ -863,18 +994,18 @@ static void test_name_slot_info_separates_open_from_tag_read(void)
 /** @brief 回退行同样带 open=。 */
 static void test_name_slot_fallback_info_has_open(void)
 {
-    StorageTrackText_ResultTypeDef track;
+    CatalogTrackText_ResultTypeDef track;
     uint32_t start;
 
     world_reset();
     memset(&track, 0, sizeof(track));
     track.OpenUs = 800U;
-    track.Text.Result = STORAGE_CATALOG_TEXT_NO_ID3V2;
+    track.Text.Result = CATALOG_TEXT_NO_ID3V2;
     track.Text.Reads = 1U;
-    start = storage_track_diag_begin();
+    start = catalog_track_diag_begin();
     g_cycles += 1000U;
 
-    storage_track_diag_name_done(3U, start, &track);
+    catalog_track_diag_name_done(3U, start, &track);
 
     assert(strcmp(log_last_prefix("Tag idx=")->text, "Tag idx=3 src=file why=no_id3v2 reads=1 open=800 us=200") == 0);
 }
@@ -883,12 +1014,12 @@ static void test_name_slot_fallback_info_has_open(void)
 static void test_window_summary_silent_at_the_budgets(void)
 {
     world_reset();
-    storage_track_diag_window_begin();
+    catalog_track_diag_window_begin();
     for (unsigned i = 0U; i < 12U; i++)
     {
-        window_row(STORAGE_CATALOG_OPEN_BUDGET_US, 41666U, false);
+        window_row(CATALOG_OPEN_BUDGET_US, 41666U, false);
     }
-    storage_track_diag_window_end(); /* 12 × 41666 = 499992 µs */
+    catalog_track_diag_window_end(); /* 12 × 41666 = 499992 µs */
 
     assert(log_count_prefix("Tag win") == 0U);
 }
@@ -899,13 +1030,13 @@ static void test_window_summary_fires_on_slow_single_open(void)
     const log_line_t *line;
 
     world_reset();
-    storage_track_diag_window_begin();
+    catalog_track_diag_window_begin();
     for (unsigned i = 0U; i < 11U; i++)
     {
         window_row(2000U, 5000U, false);
     }
-    window_row(STORAGE_CATALOG_OPEN_BUDGET_US + 1U, 40000U, false);
-    storage_track_diag_window_end();
+    window_row(CATALOG_OPEN_BUDGET_US + 1U, 40000U, false);
+    catalog_track_diag_window_end();
 
     assert(log_count_prefix("Tag win") == 1U);
     line = log_last_prefix("Tag win");
@@ -917,12 +1048,12 @@ static void test_window_summary_fires_on_slow_single_open(void)
 static void test_window_summary_fires_on_slow_window(void)
 {
     world_reset();
-    storage_track_diag_window_begin();
+    catalog_track_diag_window_begin();
     for (unsigned i = 0U; i < 12U; i++)
     {
         window_row(5000U, 41667U, false);
     }
-    storage_track_diag_window_end(); /* 12 × 41667 = 500004 µs */
+    catalog_track_diag_window_end(); /* 12 × 41667 = 500004 µs */
 
     assert(log_count_prefix("Tag win") == 1U);
     assert(log_last_prefix("Tag win")->level == SERVICE_LOG_LEVEL_INFO);
@@ -932,22 +1063,22 @@ static void test_window_summary_fires_on_slow_window(void)
 static void test_window_summary_still_fires_on_warn_reason(void)
 {
     world_reset();
-    storage_track_diag_window_begin();
+    catalog_track_diag_window_begin();
     window_row(1000U, 2000U, false);
     window_row(0U, 500U, true);
-    storage_track_diag_window_end();
+    catalog_track_diag_window_end();
 
     assert(log_count_prefix("Tag win") == 1U);
     assert(log_last_prefix("Tag win")->level == SERVICE_LOG_LEVEL_WARN);
 }
 
-/** @brief 窗口汇总：T_data/2 仍是单行防御阈值（此处用单行总耗时超限，打开很快）。 */
+/** @brief 窗口汇总：1 s 是单行日志阈值（此处用单行总耗时超限，打开很快）。 */
 static void test_window_summary_defensive_threshold_is_kept(void)
 {
     world_reset();
-    storage_track_diag_window_begin();
-    window_row(1000U, STORAGE_CATALOG_TRACK_BUDGET_US + 1U, false);
-    storage_track_diag_window_end();
+    catalog_track_diag_window_begin();
+    window_row(1000U, CATALOG_TRACK_BUDGET_US + 1U, false);
+    catalog_track_diag_window_end();
 
     assert(log_count_prefix("Tag win") == 1U);
 }
@@ -956,12 +1087,12 @@ static void test_window_summary_defensive_threshold_is_kept(void)
 static void test_window_summary_fits_log_capacity(void)
 {
     world_reset();
-    storage_track_diag_window_begin();
+    catalog_track_diag_window_begin();
     for (unsigned i = 0U; i < 12U; i++)
     {
         window_row(250000U, 300000U, true);
     }
-    storage_track_diag_window_end();
+    catalog_track_diag_window_end();
 
     assert(strstr(log_last_prefix("Tag win")->text, "rerr=") != NULL);
 }
@@ -972,7 +1103,7 @@ static void test_stream_info_line(void)
     const log_line_t *line;
 
     world_reset();
-    storage_track_diag_stream_done(12U, 345678U, 2100U, 870U);
+    catalog_track_diag_stream_done(12U, 345678U, 2100U, 870U);
 
     line = log_last_prefix("Stream");
     assert(line->level == SERVICE_LOG_LEVEL_INFO);
@@ -1046,20 +1177,19 @@ static void test_scan_end_info_for_directory_read_failure(void)
     g_root_count = 3U;
     g_read_dir_fail = true;
 
-    assert(storage_catalog_music_init() == STORAGE_ERROR);
+    assert(catalog_music_init() == CATALOG_ERROR);
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=dfs_error n=0 us=0") == 0);
     assert(log_count_prefix("Scan done") == 1U);
 }
 
 /**
- * @brief 把窗口槽和名字槽绑到桩里的一个假任务上（request 要发通知）。
+ * @brief 把窗口槽和名字槽绑到桩里的一个假任务上（request 要发通知）。world_reset 已重置桩，这里不再重置
+ *        （重置会丢掉曲库锁的桩状态）。
  */
 static void bind_slots(void)
 {
-    TaskHandle_t task;
+    TaskHandle_t task = freertos_stub_task_create();
 
-    freertos_stub_reset();
-    task = freertos_stub_task_create();
     storage_listbuffer_bind(task);
     storage_namebuffer_bind(task);
 }
@@ -1147,7 +1277,7 @@ static void test_unavailable_empties_a_ready_name_the_gui_has_not_taken_yet(void
 
 /**
  * @brief 读标签时卷不可用（拔卡的正常竞态）：名字槽以空名收尾，**不记 WARN**；`Name fail` 只留给真正的防御分支
- *        （代次相符却越界）。曲目文本读取用 `storage_track_text_last_read_unavailable()` 告诉调用者这一次是卷不可用。
+ *        （代次相符却越界）。曲目文本读取用 `catalog_track_text_last_read_unavailable()` 告诉调用者这一次是卷不可用。
  */
 static void test_name_slot_does_not_warn_when_the_volume_went_away_during_the_read(void)
 {
@@ -1168,7 +1298,7 @@ static void test_name_slot_does_not_warn_when_the_volume_went_away_during_the_re
         assert(storage_namebuffer.Status == STORAGE_NAMEBUFFER_READY);
         assert(storage_namebuffer.Generation == 0U);
         assert(storage_namebuffer.Title[0] == 0);
-        assert(storage_track_text_last_read_unavailable());
+        assert(catalog_track_text_last_read_unavailable());
         assert(log_count_prefix("Name fail") == 0U);
     }
 
@@ -1177,7 +1307,7 @@ static void test_name_slot_does_not_warn_when_the_volume_went_away_during_the_re
     bind_slots();
     scan(3U, 0U);
     g_log_count = 0U;
-    assert(storage_namebuffer_request(99U, storage_sheet_generation()) == STORAGE_OK);
+    assert(storage_namebuffer_request(99U, catalog_generation()) == STORAGE_OK);
     storage_namebuffer_load(true);
     assert(storage_namebuffer.Generation == 0U);
     assert(log_count_prefix("Name fail") == 1U);
@@ -1188,11 +1318,11 @@ static void test_name_slot_does_not_warn_when_the_volume_went_away_during_the_re
     scan(3U, 0U);
     g_locator_failed = true;
     g_locator_failed_status = SERVICE_NO_MEDIA;
-    assert(storage_track_text_read(0U, 0U) == NULL);
-    assert(storage_track_text_last_read_unavailable());
+    assert(read_text(0U) == NULL);
+    assert(catalog_track_text_last_read_unavailable());
     g_locator_failed = false;
-    assert(storage_track_text_read(0U, 0U) != NULL);
-    assert(!storage_track_text_last_read_unavailable());
+    assert(read_text(0U) != NULL);
+    assert(!catalog_track_text_last_read_unavailable());
 }
 
 /**
@@ -1224,29 +1354,30 @@ static void test_scan_is_discarded_when_the_volume_is_unavailable_on_root_open(v
     {
         world_reset();
         scan(3U, 0U);
-        assert(storage_sheet_generation() != 0U);
-        assert(storage_catalog_invalidate() == STORAGE_OK);
+        assert(catalog_generation() != 0U);
+        assert(catalog_invalidate() == CATALOG_OK);
         g_log_count = 0U;
         g_open_dir_calls = 0U;
         g_open_root_status = unavailable[index];
 
-        assert(storage_catalog_music_init() == STORAGE_OK);
+        assert(catalog_music_init() == CATALOG_OK);
 
         assert(g_open_dir_calls == 2U); /* 第一次失败发生在对账之前，再开一次（在 Filesystem 入口等闸）才下结论 */
-        assert(storage_sheet_generation() == 0U);
-        assert(storage_catalog_index_num() == 0U);
+
+        assert(catalog_generation() == 0U);
+        assert(count_now() == 0U);
         assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
         assert(log_count_prefix("Music Directory Open Failed") == 0U);
         assert(!log_has_error());
         /* 序号变了：卡没了，等卷事件；序号没变且卷仍挂着：卡还在、读不了，没有卷事件可等。 */
-        assert(storage_catalog_scan_verdict(false) == STORAGE_CATALOG_SCAN_EVENT_PENDING);
-        assert(storage_catalog_scan_verdict(true) == STORAGE_CATALOG_SCAN_UNREADABLE);
+        assert(catalog_scan_verdict(false) == CATALOG_SCAN_EVENT_PENDING);
+        assert(catalog_scan_verdict(true) == CATALOG_SCAN_UNREADABLE);
     }
 
     world_reset();
     g_open_root_status = SERVICE_ERROR;
     scan(3U, 0U);
-    assert(storage_sheet_generation() != 0U); /* 其他失败按空库发布。 */
+    assert(catalog_generation() != 0U); /* 其他失败按空库发布。 */
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=0 us=0") == 0);
 }
 
@@ -1263,11 +1394,11 @@ static void test_open_directory_that_fails_once_as_unavailable_is_retried_and_th
     scan(3U, 0U);
 
     assert(g_open_dir_calls == 2U);
-    assert(storage_sheet_generation() != 0U);
-    assert(storage_catalog_index_num() == 3U);
+    assert(catalog_generation() != 0U);
+    assert(count_now() == 3U);
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=3 us=0") == 0);
-    assert(storage_catalog_scan_verdict(true) == STORAGE_CATALOG_SCAN_DONE);
-    assert(storage_catalog_scan_verdict(false) == STORAGE_CATALOG_SCAN_DONE);
+    assert(catalog_scan_verdict(true) == CATALOG_SCAN_DONE);
+    assert(catalog_scan_verdict(false) == CATALOG_SCAN_DONE);
 }
 
 /**
@@ -1281,8 +1412,8 @@ static void test_sub_directory_that_fails_once_as_unavailable_is_retried_too(voi
 
     scan(2U, 3U);
 
-    assert(storage_catalog_index_num() == 5U);
-    assert(storage_catalog_scan_verdict(true) == STORAGE_CATALOG_SCAN_DONE);
+    assert(count_now() == 5U);
+    assert(catalog_scan_verdict(true) == CATALOG_SCAN_DONE);
 }
 
 /**
@@ -1293,37 +1424,452 @@ static void test_scan_is_discarded_when_the_volume_goes_away_mid_scan(void)
 {
     world_reset();
     scan(3U, 0U);
-    assert(storage_catalog_invalidate() == STORAGE_OK);
+    assert(catalog_invalidate() == CATALOG_OK);
     g_log_count = 0U;
     g_root_count = 5U;
     g_read_dir_status = SERVICE_NO_MEDIA;
     g_read_dir_status_after = 2U;
     g_dir_reads = 0U;
 
-    assert(storage_catalog_music_init() == STORAGE_OK);
+    assert(catalog_music_init() == CATALOG_OK);
 
-    assert(storage_sheet_generation() == 0U);
-    assert(storage_catalog_index_num() == 0U);
+    assert(catalog_generation() == 0U);
+    assert(count_now() == 0U);
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
     assert(log_count_prefix("Music Directory Read Failed") == 0U);
     assert(!log_has_error());
-    assert(storage_catalog_scan_verdict(false) == STORAGE_CATALOG_SCAN_EVENT_PENDING);
-    assert(storage_catalog_scan_verdict(true) == STORAGE_CATALOG_SCAN_UNREADABLE);
+    assert(catalog_scan_verdict(false) == CATALOG_SCAN_EVENT_PENDING);
+    assert(catalog_scan_verdict(true) == CATALOG_SCAN_UNREADABLE);
 
     world_reset();
     scan(3U, 2U);
-    assert(storage_catalog_invalidate() == STORAGE_OK);
+    assert(catalog_invalidate() == CATALOG_OK);
     g_log_count = 0U;
     g_open_sub_status = SERVICE_NOT_READY;
 
-    assert(storage_catalog_music_init() == STORAGE_OK);
+    assert(catalog_music_init() == CATALOG_OK);
 
-    assert(storage_sheet_generation() == 0U);
+    assert(catalog_generation() == 0U);
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
     assert(log_count_prefix("Sub Directory Open Failed") == 0U);
     assert(!log_has_error());
-    assert(storage_catalog_scan_verdict(false) == STORAGE_CATALOG_SCAN_EVENT_PENDING);
-    assert(storage_catalog_scan_verdict(true) == STORAGE_CATALOG_SCAN_UNREADABLE);
+    assert(catalog_scan_verdict(false) == CATALOG_SCAN_EVENT_PENDING);
+    assert(catalog_scan_verdict(true) == CATALOG_SCAN_UNREADABLE);
+}
+
+/* ---- 发布规则、卷序号、一次读全、曲库短锁（STOR-1、#196） ---- */
+
+static uint32_t g_hook_generation;   /* 读目录钩子里看到的代次 */
+static bool g_hook_found;            /* 读目录钩子里看到的“位置 0 有效” */
+static char g_hook_path[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
+static uint32_t g_hook_calls;
+
+/** @brief 扫描途中以读者身份调一次一次读全，记下看到的东西。 */
+static void reader_during_scan_hook(void)
+{
+    Catalog_TrackTypeDef track;
+
+    g_hook_found = catalog_read_track(0U, &track);
+    g_hook_generation = track.Generation;
+    snprintf(g_hook_path, sizeof(g_hook_path), "%s", track.Path);
+    g_hook_calls++;
+}
+
+/** @brief 开始扫描就把代次置 0：重扫期间读者看到 0，不碰表，上一份曲库的路径也不会漏出来。 */
+static void test_generation_is_zero_while_rescanning(void)
+{
+    uint32_t old_generation;
+
+    world_reset();
+    scan(3U, 0U);
+    old_generation = catalog_generation();
+    assert(old_generation != 0U);
+
+    g_root_count = 5U;
+    g_read_hook = reader_during_scan_hook;
+    g_hook_calls = 0U;
+    assert(catalog_music_init() == CATALOG_OK);
+    g_read_hook = NULL;
+
+    assert(g_hook_calls > 0U);
+    assert(g_hook_generation == 0U);
+    assert(!g_hook_found);
+    assert(g_hook_path[0] == '\0');
+    assert(count_now() == 5U);
+    assert(catalog_generation() == old_generation + 1U);
+}
+
+/** @brief 代次只在发布时加 1：重扫、作废都不重复，作废不把计数拨回去。 */
+static void test_generation_only_increases_on_publish_and_never_repeats(void)
+{
+    uint32_t previous = 0U;
+
+    world_reset();
+    for (unsigned round = 0U; round < 4U; round++)
+    {
+        scan(2U + round, 0U);
+        assert(catalog_generation() > previous);
+        previous = catalog_generation();
+        assert(catalog_invalidate() == CATALOG_OK);
+        assert(catalog_generation() == 0U);
+    }
+    assert(previous == 4U);
+
+    scan(1U, 0U);
+    assert(catalog_generation() == 5U);
+}
+
+/** @brief 取代次时卷序号不符就算 0：没有任何作废调用，换卡或拔卡后读者也看到 0。 */
+static void test_generation_reads_zero_when_the_volume_sequence_differs(void)
+{
+    Catalog_TrackTypeDef track;
+
+    world_reset();
+    scan(3U, 0U);
+    assert(catalog_generation() != 0U);
+    assert(catalog_read_track(1U, &track));
+
+    g_volume.Sequence += 2U; /* 换卡：序号跳 2，没有调用 catalog_invalidate */
+    assert(catalog_generation() == 0U);
+    assert(!catalog_read_track(1U, &track));
+    assert(track.Generation == 0U);
+    assert(track.Count == 0U);
+    assert(track.Path[0] == '\0');
+
+    g_volume.Sequence -= 2U;
+    g_volume.Mounted = false; /* 拔卡：卷不在 */
+    assert(catalog_generation() == 0U);
+}
+
+/** @brief 一次读全：代次、条数、路径、定位符来自同一次拷贝；越界位置带回代次和条数，路径为空。 */
+static void test_one_shot_read_returns_generation_count_path_and_locator(void)
+{
+    Catalog_TrackTypeDef track;
+    char expected[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
+
+    world_reset();
+    scan(3U, 2U);
+
+    assert(catalog_read_track(1U, &track));
+    assert(track.Generation == catalog_generation());
+    assert(track.Count == 5U);
+    snprintf(expected, sizeof(expected), "Music/t%05u.mp3", 1U);
+    assert(strcmp(track.Path, expected) == 0);
+    assert(locator_is(&track.Locator, ROOT_ID_BASE + 1U));
+
+    assert(catalog_read_track(4U, &track)); /* 子文件夹里的最后一条 */
+    assert(strcmp(track.Path, "Music/Sub/s001.mp3") == 0);
+    assert(locator_is(&track.Locator, SUB_ID_BASE + 1U));
+
+    assert(!catalog_read_track(5U, &track)); /* 越界：不是有效位置，但代次和条数仍然有效 */
+    assert(track.Generation == catalog_generation());
+    assert(track.Count == 5U);
+    assert(track.Path[0] == '\0');
+
+    assert(!catalog_read_track(0U, NULL));
+}
+
+/** @brief 每个读写曲库的调用对曲库锁拿放各一次；锁在扫描里只在开始和发布两处拿，文件调用与日志都不在锁内。 */
+static void test_every_call_takes_and_releases_the_lock_exactly_once(void)
+{
+    Catalog_TrackTypeDef track;
+    FreertosStub_SemaphoreStats before;
+    FreertosStub_SemaphoreStats after;
+
+    world_reset();
+    before = freertos_stub_semaphore_stats(g_lock);
+    scan(3U, 0U); /* 假文件接口和假日志里断言了锁没被持有 */
+    after = freertos_stub_semaphore_stats(g_lock);
+    assert(after.take_successes - before.take_successes == 2U); /* 开始扫描一次，发布一次 */
+    assert(after.give_successes - before.give_successes == 2U);
+
+    before = after;
+    (void)catalog_read_track(1U, &track);
+    (void)catalog_generation();
+    (void)catalog_invalidate();
+    after = freertos_stub_semaphore_stats(g_lock);
+    assert(after.take_successes - before.take_successes == 3U);
+    assert(after.give_successes - before.give_successes == 3U);
+    assert(!catalog_lock_is_held());
+}
+
+/** @brief 拿不到锁就等：读者不会在没有锁的情况下读已发布的状态，等到拿到后数据完整。 */
+static void test_reader_waits_for_the_lock_instead_of_reading_without_it(void)
+{
+    Catalog_TrackTypeDef track;
+    FreertosStub_SemaphoreStats before;
+    FreertosStub_SemaphoreStats after;
+
+    world_reset();
+    scan(3U, 0U);
+
+    before = freertos_stub_semaphore_stats(g_lock);
+    freertos_stub_semaphore_fail_next_takes(g_lock, 2U);
+    assert(catalog_read_track(2U, &track));
+    after = freertos_stub_semaphore_stats(g_lock);
+
+    assert(track.Count == 3U);
+    assert(locator_is(&track.Locator, 2U));
+    assert(after.take_calls - before.take_calls == 3U);
+    assert(after.take_successes - before.take_successes == 1U);
+    assert(after.give_successes - before.give_successes == 1U);
+    assert(after.last_timeout_ticks == portMAX_DELAY);
+}
+
+/** @brief 扫描途中换卡（读目录时卷序号变了）：关目录、丢弃，不发布，不记 ERROR；卡还在就由调用者重新开始。 */
+static void test_card_swapped_mid_scan_discards_without_publishing(void)
+{
+    world_reset();
+    g_swap_after_reads = 3U;
+    g_close_status = SERVICE_ERROR; /* 关目录的返回值不看 */
+    g_root_count = 6U;
+
+    assert(catalog_music_init() == CATALOG_OK);
+
+    assert(g_close_calls == 1U);
+    assert(catalog_generation() == 0U);
+    assert(count_now() == 0U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+    assert(!log_has_error());
+
+    /* 调用者看到新的卷序号，卡还在：重新开始，这次发布。 */
+    g_swap_after_reads = 0U;
+    g_close_status = SERVICE_OK;
+    g_dir_reads = 0U;
+    assert(catalog_music_init() == CATALOG_OK);
+    assert(catalog_generation() != 0U);
+    assert(count_now() == 6U);
+}
+
+/** @brief 扫描做完、发布之前换卡：发布时比对卷序号不一致，旧卡的结果不发布。 */
+static void test_card_swapped_just_before_publish_does_not_publish(void)
+{
+    world_reset();
+    g_swap_on_close = true;
+    g_root_count = 3U;
+
+    assert(catalog_music_init() == CATALOG_OK);
+
+    assert(catalog_generation() == 0U);
+    assert(count_now() == 0U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+    assert(!log_has_error());
+
+    g_swap_on_close = false; /* 新卡：同样的扫描，序号与开始时一致，发布 */
+    assert(catalog_music_init() == CATALOG_OK);
+    assert(catalog_generation() != 0U);
+    assert(count_now() == 3U);
+}
+
+/** @brief 卷在扫描开始时就不在：不发布。 */
+static void test_unmounted_volume_is_never_published(void)
+{
+    world_reset();
+    g_volume.Mounted = false;
+    g_root_count = 3U;
+
+    assert(catalog_music_init() == CATALOG_OK);
+
+    assert(catalog_generation() == 0U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+}
+
+/** @brief 错误表：SERVICE_BUSY 过约 10 ms 重试，不算失败（打开根目录、读目录、关目录各一处）。 */
+static void test_busy_is_retried_after_about_10_ms_and_is_not_a_failure(void)
+{
+    TickType_t start;
+
+    world_reset();
+    g_open_root_busy = 2U;
+    g_read_busy = 1U;
+    g_close_busy = 1U;
+    start = xTaskGetTickCount();
+
+    scan(3U, 0U);
+
+    assert(catalog_generation() != 0U);
+    assert(count_now() == 3U);
+    assert((TickType_t)(xTaskGetTickCount() - start) >= (4U * pdMS_TO_TICKS(CATALOG_BUSY_RETRY_MS)));
+    assert(log_count_prefix("Music Directory Open Failed") == 0U);
+    assert(log_count_prefix("Music Directory Read Failed") == 0U);
+    assert(!log_has_error());
+    assert(strncmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=3", 20U) == 0);
+}
+
+/** @brief 重试等的时候卷序号变了：作废这一轮，不再继续试。 */
+static void test_busy_retry_stops_when_the_volume_changes(void)
+{
+    world_reset();
+    g_open_root_busy = 1000U;
+    g_busy_swaps_volume = true;
+    g_root_count = 3U;
+
+    assert(catalog_music_init() == CATALOG_OK);
+
+    assert(g_open_root_busy == 999U); /* 只试了一次 */
+    assert(catalog_generation() == 0U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+    assert(log_count_prefix("Music Directory Open Failed") == 0U);
+}
+
+/** @brief 错误表：关目录时卷不可用同样丢弃，不记 ERROR。 */
+static void test_volume_unavailable_on_close_discards_the_scan(void)
+{
+    static const Service_StatusTypeDef unavailable[] = {SERVICE_NO_MEDIA, SERVICE_NOT_READY, SERVICE_INVALID_HANDLE};
+
+    for (size_t index = 0U; index < sizeof(unavailable) / sizeof(unavailable[0]); index++)
+    {
+        world_reset();
+        g_close_status = unavailable[index];
+        g_root_count = 3U;
+
+        assert(catalog_music_init() == CATALOG_OK);
+
+        assert(catalog_generation() == 0U);
+        assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+        assert(!log_has_error());
+    }
+}
+
+/** @brief 错误表：打开根目录的其他错误按空库发布并记 WARN（沿用 STOR-7）。 */
+static void test_other_root_open_error_publishes_an_empty_library_with_warn(void)
+{
+    world_reset();
+    g_open_root_status = SERVICE_ERROR;
+    g_root_count = 3U;
+
+    assert(catalog_music_init() == CATALOG_OK);
+
+    assert(catalog_generation() != 0U);
+    assert(count_now() == 0U);
+    assert(log_count_prefix("Music Directory Open Failed.") == 1U);
+    assert(log_last_prefix("Music Directory Open Failed.")->level == SERVICE_LOG_LEVEL_WARN);
+    assert(!log_has_error());
+}
+
+/** @brief 错误表：打开子目录的其他错误跳过这个子目录，记 WARN，其余照常发布。 */
+static void test_other_sub_open_error_skips_that_directory_with_warn(void)
+{
+    world_reset();
+    g_open_sub_status = SERVICE_ERROR;
+
+    scan(3U, 2U);
+
+    assert(catalog_generation() != 0U);
+    assert(count_now() == 3U);
+    assert(log_count_prefix("Sub Directory Open Failed.") == 1U);
+    assert(log_last_prefix("Sub Directory Open Failed.")->level == SERVICE_LOG_LEVEL_WARN);
+    assert(!log_has_error());
+}
+
+/** @brief 错误表：读目录的其他错误不发布，记 ERROR。 */
+static void test_other_read_error_does_not_publish_and_logs_error(void)
+{
+    world_reset();
+    g_root_count = 3U;
+    g_read_dir_fail = true;
+
+    assert(catalog_music_init() == CATALOG_ERROR);
+
+    assert(catalog_generation() == 0U);
+    assert(log_count_prefix("Music Directory Read Failed.") == 1U);
+    assert(log_last_prefix("Music Directory Read Failed.")->level == SERVICE_LOG_LEVEL_ERROR);
+}
+
+/** @brief 错误表：关目录的其他错误不发布，记 ERROR。 */
+static void test_other_close_error_does_not_publish_and_logs_error(void)
+{
+    world_reset();
+    g_root_count = 3U;
+    g_close_status = SERVICE_ERROR;
+
+    assert(catalog_music_init() == CATALOG_ERROR);
+
+    assert(catalog_generation() == 0U);
+    assert(log_has_error());
+    assert(strncmp(log_last_prefix("Scan done")->text, "Scan done res=dfs_error", 23U) == 0);
+}
+
+/** @brief 错误表：条目满发布截断结果（代次非 0，条数 12000）。 */
+static void test_full_catalog_publishes_the_truncated_result(void)
+{
+    world_reset();
+    scan(12500U, 0U);
+
+    assert(catalog_generation() != 0U);
+    assert(count_now() == 12000U);
+}
+
+/* ---- 曲库短锁的持锁统计（Debug 构建，DIAG-6） ---- */
+
+/** @brief 节拍没到不投；到了在放锁之后投一行，格式 `n=<拿取次数> hold=<最长持有>us`，标签 CATLOCK。 */
+static void test_lock_stats_report_one_line_per_period_after_the_lock_is_released(void)
+{
+    Catalog_TrackTypeDef track;
+    const log_line_t *line;
+    char expected[48];
+    uint32_t takes;
+
+    world_reset();
+    g_volume_status_cost_us = 40U; /* 曲库在锁内读一次卷状态，所以每次读者调用持锁 40 µs */
+
+    freertos_stub_set_tick(pdMS_TO_TICKS(CATALOG_LOCK_STATS_PERIOD_MS) - 1U);
+    scan(3U, 0U);
+    (void)catalog_read_track(0U, &track);
+    assert(log_count_prefix("n=") == 0U); /* 节拍没到 */
+
+    freertos_stub_set_tick(pdMS_TO_TICKS(CATALOG_LOCK_STATS_PERIOD_MS));
+    (void)catalog_read_track(1U, &track); /* 这次放锁后发现节拍已到 */
+    takes = freertos_stub_semaphore_stats(g_lock).take_successes;
+
+    assert(log_count_prefix("n=") == 1U);
+    line = log_last_prefix("n=");
+    assert(line->level == SERVICE_LOG_LEVEL_INFO);
+    assert(strcmp(line->tag, "CATLOCK") == 0);
+    snprintf(expected, sizeof(expected), "n=%lu hold=40us", (unsigned long)takes);
+    assert(strcmp(line->text, expected) == 0);
+
+    (void)catalog_read_track(1U, &track); /* 同一节拍内不再投 */
+    assert(log_count_prefix("n=") == 1U);
+
+    freertos_stub_set_tick(2U * pdMS_TO_TICKS(CATALOG_LOCK_STATS_PERIOD_MS));
+    (void)catalog_generation();
+    assert(log_count_prefix("n=") == 2U); /* 下一个节拍再投一行，数值是开机以来的最大值，不清零 */
+    assert(strstr(log_last_prefix("n=")->text, "hold=40us") != NULL);
+}
+
+/** @brief 最长持有取开机以来的最大值，且只量持锁区间：锁外的耗时（扫描读目录）不计入。 */
+static void test_lock_stats_hold_is_the_longest_locked_interval_only(void)
+{
+    Catalog_TrackTypeDef track;
+
+    world_reset();
+    g_dir_read_cost_us = 5000U; /* 文件调用慢，但不在锁内 */
+    scan(3U, 0U);
+    g_volume_status_cost_us = 25U;
+    (void)catalog_read_track(0U, &track);
+    g_volume_status_cost_us = 90U;
+    (void)catalog_generation();
+    g_volume_status_cost_us = 10U;
+    (void)catalog_read_track(0U, &track);
+
+    freertos_stub_set_tick(pdMS_TO_TICKS(CATALOG_LOCK_STATS_PERIOD_MS));
+    (void)catalog_invalidate();
+
+    assert(strstr(log_last_prefix("n=")->text, "hold=90us") != NULL);
+}
+
+/** @brief 汇总行放得进 Service Log 的 128 B。 */
+static void test_lock_stats_line_fits_the_log_capacity(void)
+{
+    Catalog_TrackTypeDef track;
+
+    world_reset();
+    g_volume_status_cost_us = 3999999U; /* 4 s 以内量周期，数很大也要放得下 */
+    freertos_stub_set_tick(pdMS_TO_TICKS(CATALOG_LOCK_STATS_PERIOD_MS));
+    (void)catalog_read_track(0U, &track);
+
+    assert(strlen(log_last_prefix("n=")->text) < CATALOG_LOCK_STATS_LINE_BYTES);
 }
 
 /**
@@ -1364,6 +1910,26 @@ int main(void)
     test_name_slot_does_not_warn_when_the_volume_went_away_during_the_read();
     test_open_directory_that_fails_once_as_unavailable_is_retried_and_the_scan_goes_on();
     test_sub_directory_that_fails_once_as_unavailable_is_retried_too();
-    puts("storage_catalog_open: ok");
+    test_generation_is_zero_while_rescanning();
+    test_generation_only_increases_on_publish_and_never_repeats();
+    test_generation_reads_zero_when_the_volume_sequence_differs();
+    test_one_shot_read_returns_generation_count_path_and_locator();
+    test_every_call_takes_and_releases_the_lock_exactly_once();
+    test_reader_waits_for_the_lock_instead_of_reading_without_it();
+    test_card_swapped_mid_scan_discards_without_publishing();
+    test_card_swapped_just_before_publish_does_not_publish();
+    test_unmounted_volume_is_never_published();
+    test_busy_is_retried_after_about_10_ms_and_is_not_a_failure();
+    test_busy_retry_stops_when_the_volume_changes();
+    test_volume_unavailable_on_close_discards_the_scan();
+    test_other_root_open_error_publishes_an_empty_library_with_warn();
+    test_other_sub_open_error_skips_that_directory_with_warn();
+    test_other_read_error_does_not_publish_and_logs_error();
+    test_other_close_error_does_not_publish_and_logs_error();
+    test_full_catalog_publishes_the_truncated_result();
+    test_lock_stats_report_one_line_per_period_after_the_lock_is_released();
+    test_lock_stats_hold_is_the_longest_locked_interval_only();
+    test_lock_stats_line_fits_the_log_capacity();
+    puts("catalog_open: ok");
     return 0;
 }

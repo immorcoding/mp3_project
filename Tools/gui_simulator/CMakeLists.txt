@@ -78,7 +78,7 @@ file(GLOB APP_GUI_MUSIC_SOURCES CONFIGURE_DEPENDS
 )
 # 假 Storage 的曲目显示名经真实的提取纯函数产生（与 Storage 名称槽同一实现）。
 list(APPEND APP_GUI_MUSIC_SOURCES
-    "${REPO_ROOT}/APP/tasks/storage/catalog/storage_catalog_name.c"
+    "${REPO_ROOT}/APP/apps/music/catalog/catalog_name.c"
 )
 
 # 字体资源：把板上同一份 lv_font_conv bin 在构建期原样生成为字节数组（不入库），

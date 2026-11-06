@@ -9,9 +9,9 @@
 #include <stdint.h>
 
 #include "APP/tasks/storage/storage_task.h"
-#include "APP/tasks/storage/catalog/storage_catalog_config.h"
-#include "APP/tasks/storage/catalog/storage_catalog_name.h"
+#include "APP/apps/music/catalog/catalog_name.h"
 
+#define STORAGE_LISTBUFFER_MAX_ENTRIES 12U  /* 窗口槽位数上限；GUI 按 Length 构造行，不超过此值。 */
 #define STORAGE_LISTBUFFER_IDLE    0U  /* 可接受下一次 request。 */
 #define STORAGE_LISTBUFFER_PENDING 1U  /* GUI 已提交，等待 Storage load。 */
 #define STORAGE_LISTBUFFER_READY   2U  /* 整窗已填完或已作废为空窗，待 GUI 读完后写回 IDLE。 */
@@ -19,8 +19,8 @@
 /** @brief 窗口一行的显示文本；不含路径（STOR-16）。 */
 typedef struct
 {
-    char Title[STORAGE_CATALOG_NAME_BYTES];  /* 曲目显示名：可用标题，否则文件主名；可直接显示的 UTF-8。 */
-    char Artist[STORAGE_CATALOG_NAME_BYTES]; /* 歌手；取不到为空串。 */
+    char Title[CATALOG_NAME_BYTES];  /* 曲目显示名：可用标题，否则文件主名；可直接显示的 UTF-8。 */
+    char Artist[CATALOG_NAME_BYTES]; /* 歌手；取不到为空串。 */
 } Storage_ListBufferRowTypeDef;
 
 typedef struct

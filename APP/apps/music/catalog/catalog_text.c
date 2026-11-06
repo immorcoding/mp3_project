@@ -1,9 +1,9 @@
 /**
- * @file storage_catalog_text.c
+ * @file catalog_text.c
  * @brief 曲目文本纯函数的实现：读首块、定位 TIT2/TPE1、解码清理，取不到时回退文件主名。
  */
 
-#include "storage_catalog_text.h"
+#include "catalog_text.h"
 
 #include <string.h>
 
@@ -34,8 +34,8 @@ typedef enum
  * @param[out] got 实际字节数。
  * @return false 表示读取错误。
  */
-static bool track_read(const StorageCatalog_TextRequestTypeDef *request,
-                       StorageCatalog_TextTypeDef *text,
+static bool track_read(const Catalog_TextRequestTypeDef *request,
+                       Catalog_TextTypeDef *text,
                        uint32_t offset,
                        uint32_t bytes,
                        uint32_t *got)
@@ -52,7 +52,7 @@ static bool track_read(const StorageCatalog_TextRequestTypeDef *request,
  * @param[in,out] state 该种帧的状态。
  * @param[out] out 输出缓冲。
  */
-static void track_take_frame(const StorageCatalog_TextRequestTypeDef *request,
+static void track_take_frame(const Catalog_TextRequestTypeDef *request,
                              const Id3Reader_FrameTypeDef *frame,
                              text_state_t *state,
                              char *out)
@@ -70,7 +70,7 @@ static void track_take_frame(const StorageCatalog_TextRequestTypeDef *request,
         return;
     }
     status = Id3Reader_DecodeField(frame->Encoding, frame->Text, frame->TextLength, request->GbkLookup,
-                                   request->GbkContext, out, STORAGE_CATALOG_NAME_BYTES);
+                                   request->GbkContext, out, CATALOG_NAME_BYTES);
     *state = (status == ID3_READER_TEXT_OK) ? CATALOG_TEXT_OK : ((status == ID3_READER_TEXT_EMPTY) ? CATALOG_TEXT_EMPTY : CATALOG_TEXT_INVALID);
 }
 
@@ -80,24 +80,24 @@ static void track_take_frame(const StorageCatalog_TextRequestTypeDef *request,
  * @param[in] stop 未取到标题时的终止原因。
  * @return 结果分类。
  */
-static StorageCatalog_TextResultTypeDef track_classify(text_state_t title, stop_reason_t stop)
+static Catalog_TextResultTypeDef track_classify(text_state_t title, stop_reason_t stop)
 {
     switch (title)
     {
     case CATALOG_TEXT_OK:
-        return STORAGE_CATALOG_TEXT_TAGGED;
+        return CATALOG_TEXT_TAGGED;
     case CATALOG_TEXT_INVALID:
-        return STORAGE_CATALOG_TEXT_DECODE_FAILED;
+        return CATALOG_TEXT_DECODE_FAILED;
     case CATALOG_TEXT_EMPTY:
-        return STORAGE_CATALOG_TEXT_FRAME_MISSING;
+        return CATALOG_TEXT_FRAME_MISSING;
     default:
         break;
     }
     if (stop == CATALOG_STOP_LIMIT)
     {
-        return STORAGE_CATALOG_TEXT_READ_LIMIT;
+        return CATALOG_TEXT_READ_LIMIT;
     }
-    return (stop == CATALOG_STOP_ERROR) ? STORAGE_CATALOG_TEXT_READ_ERROR : STORAGE_CATALOG_TEXT_FRAME_MISSING;
+    return (stop == CATALOG_STOP_ERROR) ? CATALOG_TEXT_READ_ERROR : CATALOG_TEXT_FRAME_MISSING;
 }
 
 /**
@@ -107,14 +107,14 @@ static StorageCatalog_TextResultTypeDef track_classify(text_state_t title, stop_
  * @return false 表示参数无效或文件主名提取失败（STOR-15 的防御分支，输出标题与歌手为空串）；
  *         标签读不出时仍返回 true，标题回退文件主名、歌手为空。
  * @note  读取计划：先读首块（文件更短则读到文件尾），逐帧定位 TIT2/TPE1；所需帧头或负载在块外时 seek 到该帧头再读一块，
- *        不读其他帧的负载；含首块最多 STORAGE_CATALOG_TEXT_MAX_READS 次，后续读取不越过标签总长。
+ *        不读其他帧的负载；含首块最多 CATALOG_TEXT_MAX_READS 次，后续读取不越过标签总长。
  *        带标签级去同步的标签只解析首块。结果分类以标题为准：标题可用即为“取到”，此后歌手缺失、解码失败或读不到
  *        只令歌手为空。不访问 FatFs、RTOS 或日志。
  */
-bool storage_catalog_track_text(const StorageCatalog_TextRequestTypeDef *request,
-                                StorageCatalog_TextTypeDef *text)
+bool catalog_track_text(const Catalog_TextRequestTypeDef *request,
+                                Catalog_TextTypeDef *text)
 {
-    char title[STORAGE_CATALOG_NAME_BYTES];
+    char title[CATALOG_NAME_BYTES];
     text_state_t title_state = CATALOG_TEXT_UNSEEN;
     text_state_t artist_state = CATALOG_TEXT_UNSEEN;
     stop_reason_t stop = CATALOG_STOP_END;
@@ -131,10 +131,10 @@ bool storage_catalog_track_text(const StorageCatalog_TextRequestTypeDef *request
     }
     text->Title[0] = '\0';
     text->Artist[0] = '\0';
-    text->Result = STORAGE_CATALOG_TEXT_NO_ID3V2;
+    text->Result = CATALOG_TEXT_NO_ID3V2;
     text->Reads = 0U;
     if ((request->Read == NULL) || (request->Block == NULL) ||
-        !storage_catalog_display_name(request->Path, request->PathBytes, text->Title, sizeof(text->Title)))
+        !catalog_display_name(request->Path, request->PathBytes, text->Title, sizeof(text->Title)))
     {
         text->Title[0] = '\0';
         return false;
@@ -144,10 +144,10 @@ bool storage_catalog_track_text(const StorageCatalog_TextRequestTypeDef *request
         return true;
     }
 
-    want = (request->FileBytes < STORAGE_CATALOG_TEXT_BLOCK_BYTES) ? request->FileBytes : STORAGE_CATALOG_TEXT_BLOCK_BYTES;
+    want = (request->FileBytes < CATALOG_TEXT_BLOCK_BYTES) ? request->FileBytes : CATALOG_TEXT_BLOCK_BYTES;
     if (!track_read(request, text, 0U, want, &block_length))
     {
-        text->Result = STORAGE_CATALOG_TEXT_READ_ERROR;
+        text->Result = CATALOG_TEXT_READ_ERROR;
         return true;
     }
     switch (Id3Reader_Open(&reader, request->Block, &block_length, request->FileBytes))
@@ -155,7 +155,7 @@ bool storage_catalog_track_text(const StorageCatalog_TextRequestTypeDef *request
     case ID3_READER_OPEN_OK:
         break;
     case ID3_READER_OPEN_INVALID:
-        text->Result = STORAGE_CATALOG_TEXT_DECODE_FAILED;
+        text->Result = CATALOG_TEXT_DECODE_FAILED;
         return true;
     default:
         return true;
@@ -188,15 +188,15 @@ bool storage_catalog_track_text(const StorageCatalog_TextRequestTypeDef *request
             stop = CATALOG_STOP_END;
             break;
         }
-        if (reader.SingleBlock || (text->Reads >= STORAGE_CATALOG_TEXT_MAX_READS))
+        if (reader.SingleBlock || (text->Reads >= CATALOG_TEXT_MAX_READS))
         {
             stop = CATALOG_STOP_LIMIT;
             break;
         }
         want = reader.TagEnd - next_offset;
-        if (want > STORAGE_CATALOG_TEXT_BLOCK_BYTES)
+        if (want > CATALOG_TEXT_BLOCK_BYTES)
         {
-            want = STORAGE_CATALOG_TEXT_BLOCK_BYTES;
+            want = CATALOG_TEXT_BLOCK_BYTES;
         }
         if (!track_read(request, text, next_offset, want, &block_length))
         {

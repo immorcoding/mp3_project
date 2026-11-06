@@ -1,22 +1,16 @@
 /**
- * @file test_storage_catalog_text.c
- * @brief 曲目文本纯函数的主机测试：只经 storage_catalog_track_text 观察输出。
+ * @file test_catalog_text.c
+ * @brief 曲目文本纯函数的主机测试：只经 catalog_track_text 观察输出。
  * @note  假文件由字节数组构造，GBK 查表链接真实 cc936.c；id3_reader 只经此接缝被测。
  */
 
-#include "APP/tasks/playback/playback_task_config.h"
-#include "APP/tasks/storage/catalog/storage_catalog_text.h"
+#include "APP/apps/music/catalog/catalog_text.h"
 
 #include "ff.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-
-/* 标签读取超预算阈值须等于 T_data/2（#135 I 节）。Storage 的 config 不 include Playback 的 config（STY-3），
- * 两者只在这里同时可见，由编译期断言核对。 */
-_Static_assert(STORAGE_CATALOG_TRACK_BUDGET_US == ((PLAYBACK_MACHINE_DATA_TIMEOUT_MS * 1000U) / 2U),
-               "STORAGE_CATALOG_TRACK_BUDGET_US must equal PLAYBACK_MACHINE_DATA_TIMEOUT_MS * 1000 / 2");
 
 #define FAKE_FILE_MAX 65536U
 #define FAKE_READ_LOG_MAX 16U
@@ -33,7 +27,7 @@ typedef struct
 } fake_file_t;
 
 static fake_file_t g_file;
-static uint8_t g_block[STORAGE_CATALOG_TEXT_BLOCK_BYTES];
+static uint8_t g_block[CATALOG_TEXT_BLOCK_BYTES];
 
 /**
  * @brief 假文件读回调：按偏移拷贝，越过文件尾则短读。
@@ -195,15 +189,15 @@ static void audio(uint32_t n)
  * @brief 对当前假文件运行曲目文本函数。
  * @param[out] text 输出。
  */
-static void run(StorageCatalog_TextTypeDef *text)
+static void run(Catalog_TextTypeDef *text)
 {
     static const char path[] = "Music/Dir/stem name.mp3";
-    StorageCatalog_TextRequestTypeDef request = {
+    Catalog_TextRequestTypeDef request = {
         path, (uint32_t)(sizeof(path) - 1U), g_file.length, fake_read, &g_file, gbk_lookup, NULL, g_block};
 
     g_file.reads = 0U;
     memset(text, 0x5A, sizeof(*text));
-    assert(storage_catalog_track_text(&request, text));
+    assert(catalog_track_text(&request, text));
 }
 
 /**
@@ -213,8 +207,8 @@ static void run(StorageCatalog_TextTypeDef *text)
  * @param[in] title 期望标题。
  * @param[in] artist 期望歌手。
  */
-static void expect(const StorageCatalog_TextTypeDef *text,
-                   StorageCatalog_TextResultTypeDef result,
+static void expect(const Catalog_TextTypeDef *text,
+                   Catalog_TextResultTypeDef result,
                    const char *title,
                    const char *artist)
 {
@@ -230,7 +224,7 @@ static void expect(const StorageCatalog_TextTypeDef *text,
 /** @brief 取到：v2.3 UTF-16LE 带 BOM 的标题与歌手；首块一次读完。 */
 static void test_v23_utf16le_title_and_artist(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     /* "Hi" 与 "Bob"，编码 1，FF FE 开头。 */
     const uint8_t tit2[] = {1, 0xFF, 0xFE, 'H', 0, 'i', 0};
     const uint8_t tpe1[] = {1, 0xFF, 0xFE, 'B', 0, 'o', 0, 'b', 0};
@@ -242,7 +236,7 @@ static void test_v23_utf16le_title_and_artist(void)
     tag_end(0U);
     audio(100U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "Hi", "Bob");
+    expect(&text, CATALOG_TEXT_TAGGED, "Hi", "Bob");
     assert(text.Reads == 1U);
 }
 
@@ -305,7 +299,7 @@ static uint32_t enc_text(uint8_t *out, uint8_t enc, bom_t bom, bool big_endian, 
  * @param[in] n 负载字节数。
  * @param[out] text 输出。
  */
-static void run_title_payload(const void *payload, uint32_t n, StorageCatalog_TextTypeDef *text)
+static void run_title_payload(const void *payload, uint32_t n, Catalog_TextTypeDef *text)
 {
     file_reset();
     tag_begin(3U, 0U);
@@ -323,10 +317,10 @@ static void run_title_payload(const void *payload, uint32_t n, StorageCatalog_Te
  */
 static void expect_title(const void *payload, uint32_t n, const char *title)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
 
     run_title_payload(payload, n, &text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, title, "");
+    expect(&text, CATALOG_TEXT_TAGGED, title, "");
 }
 
 /**
@@ -336,10 +330,10 @@ static void expect_title(const void *payload, uint32_t n, const char *title)
  */
 static void expect_title_failure(const void *payload, uint32_t n)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
 
     run_title_payload(payload, n, &text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "");
 }
 
 /**
@@ -349,16 +343,16 @@ static void expect_title_failure(const void *payload, uint32_t n)
  */
 static void expect_title_empty(const void *payload, uint32_t n)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
 
     run_title_payload(payload, n, &text);
-    expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
+    expect(&text, CATALOG_TEXT_FRAME_MISSING, STEM, "");
 }
 
 /** @brief v2.2 的 TT2/TP1 三字符帧与 Latin-1。 */
 static void test_v22_frames(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t tt2[] = {0, 'S', 'o', 'n', 'g'};
     const uint8_t tp1[] = {0, 'A', 'r', 't'};
 
@@ -369,13 +363,13 @@ static void test_v22_frames(void)
     tag_end(0U);
     audio(32U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "Song", "Art");
+    expect(&text, CATALOG_TEXT_TAGGED, "Song", "Art");
 }
 
 /** @brief v2.4：syncsafe 帧大小与 UTF-8，开头 BOM 被去掉。 */
 static void test_v24_utf8(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     uint8_t tit2[200];
     uint8_t tpe1[] = {3, 0xEF, 0xBB, 0xBF, 'A', 'B'};
     uint32_t n;
@@ -390,7 +384,7 @@ static void test_v24_utf8(void)
     tag_end(0U);
     audio(32U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, QING_TIAN, "AB");
+    expect(&text, CATALOG_TEXT_TAGGED, QING_TIAN, "AB");
 }
 
 /** @brief 编码 0：真 Latin-1 按 Latin-1 解，声明 Latin-1 实为 GBK 按 GBK 解。 */
@@ -414,8 +408,8 @@ static void test_gbk_needs_lookup(void)
 {
     static const char path[] = "Music/a.mp3";
     const uint8_t gbk[] = {0, 0xC7, 0xE7};
-    StorageCatalog_TextTypeDef text;
-    StorageCatalog_TextRequestTypeDef request = {
+    Catalog_TextTypeDef text;
+    Catalog_TextRequestTypeDef request = {
         path, (uint32_t)(sizeof(path) - 1U), 0U, fake_read, &g_file, NULL, NULL, g_block};
 
     file_reset();
@@ -423,8 +417,8 @@ static void test_gbk_needs_lookup(void)
     frame(3U, "TIT2", 0U, gbk, sizeof(gbk));
     tag_end(0U);
     request.FileBytes = g_file.length;
-    assert(storage_catalog_track_text(&request, &text));
-    assert(text.Result == STORAGE_CATALOG_TEXT_TAGGED);
+    assert(catalog_track_text(&request, &text));
+    assert(text.Result == CATALOG_TEXT_TAGGED);
     assert(strcmp(text.Title, "\xC3\x87\xC3\xA7") == 0);
 }
 
@@ -493,7 +487,7 @@ static void test_control_characters(void)
     const uint8_t trailing_crlf[] = {3, 'a', 'b', '\r', '\n'};
     const uint8_t only_control[] = {3, 0x07};
     const uint8_t on_artist[] = {3, 'x', 0x1F};
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t title[] = {3, 'T'};
 
     expect_title_failure(c0, sizeof(c0));
@@ -510,7 +504,7 @@ static void test_control_characters(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "T", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "T", "");
 }
 
 /** @brief 多值按 NUL 拆开、丢空项、以 " / " 连写；原文里的 '/' 保留；NUL 填充被去掉。 */
@@ -549,9 +543,9 @@ static void test_whitespace_trimming(void)
 static void test_truncation(void)
 {
     static uint8_t buf[2048];
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     uint32_t n;
-    char expected[STORAGE_CATALOG_NAME_BYTES];
+    char expected[CATALOG_NAME_BYTES];
 
     buf[0] = 3U;
     n = 1U;
@@ -571,7 +565,7 @@ static void test_truncation(void)
         n += 3U;
     }
     run_title_payload(buf, n, &text);
-    assert(text.Result == STORAGE_CATALOG_TEXT_TAGGED);
+    assert(text.Result == CATALOG_TEXT_TAGGED);
     assert(strlen(text.Title) == 249U);
     assert(memcmp(text.Title, "\xE6\x99\xB4\xE6\x99\xB4", 6U) == 0);
 
@@ -600,7 +594,7 @@ static void test_truncation(void)
 /** @brief 压缩或加密的帧、负载为空的帧按解码失败处理。 */
 static void test_unreadable_frames(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t plain[] = {3, 'T'};
     const uint8_t only_group[] = {3};
 
@@ -610,7 +604,7 @@ static void test_unreadable_frames(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "");
 
     file_reset();
     tag_begin(3U, 0U);
@@ -618,7 +612,7 @@ static void test_unreadable_frames(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "");
 
     file_reset();
     tag_begin(4U, 0U);
@@ -626,7 +620,7 @@ static void test_unreadable_frames(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "");
 
     file_reset();
     tag_begin(4U, 0U);
@@ -634,7 +628,7 @@ static void test_unreadable_frames(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "");
 
     file_reset();
     tag_begin(3U, 0U);
@@ -642,7 +636,7 @@ static void test_unreadable_frames(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "");
 
     file_reset();
     tag_begin(4U, 0U);
@@ -650,13 +644,13 @@ static void test_unreadable_frames(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "");
 }
 
 /** @brief v2.4 帧级去同步、数据长度指示与分组字节在帧完整位于块内时还原。 */
 static void test_v24_frame_flags(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     /* UTF-16LE "Hi"：编码 1，BOM FF FE。去同步后 FF 后插入 00。 */
     const uint8_t unsynced[] = {1, 0xFF, 0x00, 0xFE, 'H', 0, 'i', 0};
     const uint8_t with_dli[] = {0, 0, 0, 7, 3, 'O', 'K'};   /* 数据长度指示 syncsafe 7，其后 UTF-8 "OK"。 */
@@ -669,7 +663,7 @@ static void test_v24_frame_flags(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "Hi", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "Hi", "");
 
     file_reset();
     tag_begin(4U, 0U);
@@ -677,7 +671,7 @@ static void test_v24_frame_flags(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "OK", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "OK", "");
 
     file_reset();
     tag_begin(4U, 0U);
@@ -685,7 +679,7 @@ static void test_v24_frame_flags(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "GP", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "GP", "");
 
     file_reset();
     tag_begin(4U, 0U);
@@ -693,13 +687,13 @@ static void test_v24_frame_flags(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "Z", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "Z", "");
 }
 
 /** @brief v2.3 的分组标志（0x20）跳过一个字节。 */
 static void test_v23_grouping_flag(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t with_group[] = {0x07, 3, 'G', 'P'};
 
     file_reset();
@@ -708,13 +702,13 @@ static void test_v23_grouping_flag(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "GP", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "GP", "");
 }
 
 /** @brief 扩展头被跳过：v2.3 大小不含自身，v2.4 syncsafe 且含自身。 */
 static void test_extended_header_skipped(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t title[] = {3, 'E', 'X'};
     const uint8_t ext23[] = {0, 0, 0, 6, 0, 0, 0xAA, 0xAA, 0xAA, 0xAA};
     const uint8_t ext24[] = {0, 0, 0, 6, 1, 0};
@@ -726,7 +720,7 @@ static void test_extended_header_skipped(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "EX", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "EX", "");
 
     file_reset();
     tag_begin(4U, 0x40U);
@@ -735,13 +729,13 @@ static void test_extended_header_skipped(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "EX", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "EX", "");
 }
 
 /** @brief 帧顺序不固定；同种帧只认第一个；其他帧被跳过。 */
 static void test_frame_order_and_duplicates(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t album[] = {3, 'A', 'l', 'b'};
     const uint8_t first[] = {3, 'F'};
     const uint8_t second[] = {3, 'S'};
@@ -756,36 +750,36 @@ static void test_frame_order_and_duplicates(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "F", "P");
+    expect(&text, CATALOG_TEXT_TAGGED, "F", "P");
 }
 
 /** @brief 无 ID3v2：没有标签头、文件过短、读到文件尾前不足标签头。 */
 static void test_no_id3v2(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
 
     file_reset();
     audio(500U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_NO_ID3V2, STEM, "");
+    expect(&text, CATALOG_TEXT_NO_ID3V2, STEM, "");
     assert(text.Reads == 1U);
 
     file_reset();
     audio(5U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_NO_ID3V2, STEM, "");
+    expect(&text, CATALOG_TEXT_NO_ID3V2, STEM, "");
     assert(text.Reads == 0U);
 
     file_reset();
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_NO_ID3V2, STEM, "");
+    expect(&text, CATALOG_TEXT_NO_ID3V2, STEM, "");
     assert(text.Reads == 0U);
 }
 
 /** @brief 帧缺失：只有无关帧、直接是填充、非法帧 ID、帧越过标签末尾、v2.4 非 syncsafe 帧大小。 */
 static void test_frame_missing(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t album[] = {3, 'A'};
     const uint8_t title[] = {3, 'T'};
     const uint8_t bad_syncsafe_header[10] = {'T', 'I', 'T', '2', 0x00, 0x00, 0x00, 0x81, 0, 0};
@@ -796,14 +790,14 @@ static void test_frame_missing(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
+    expect(&text, CATALOG_TEXT_FRAME_MISSING, STEM, "");
 
     file_reset();
     tag_begin(3U, 0U);
     tag_end(200U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
+    expect(&text, CATALOG_TEXT_FRAME_MISSING, STEM, "");
 
     /* 非法帧 ID（含填充）视为序列结束：其后的 TIT2 不再可见。 */
     file_reset();
@@ -820,7 +814,7 @@ static void test_frame_missing(void)
         g_file.data[9] = (uint8_t)(size & 0x7FU);
     }
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
+    expect(&text, CATALOG_TEXT_FRAME_MISSING, STEM, "");
 
     /* 帧大小越过标签末尾：标签损坏，不读。 */
     file_reset();
@@ -830,7 +824,7 @@ static void test_frame_missing(void)
     g_file.data[10 + 7] = 200U;
     audio(300U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
+    expect(&text, CATALOG_TEXT_FRAME_MISSING, STEM, "");
 
     /* v2.4 帧大小字节最高位置位（非 syncsafe）：按非法帧结束。 */
     file_reset();
@@ -840,13 +834,13 @@ static void test_frame_missing(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
+    expect(&text, CATALOG_TEXT_FRAME_MISSING, STEM, "");
 }
 
 /** @brief 首块按 min(文件长, 4096) 读入，标签之后的音频字节哪怕形似 TIT2/TPE1 帧也不解析（#135 B：不越过标签总长）。 */
 static void test_first_block_does_not_parse_past_tag_end(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t album[] = {3, 'A'};
     const uint8_t fake_title[] = {3, 'X'};
     const uint8_t fake_artist[] = {3, 'Y'};
@@ -865,7 +859,7 @@ static void test_first_block_does_not_parse_past_tag_end(void)
         frame(versions[i], artist_ids[i], 0U, fake_artist, sizeof(fake_artist));
         audio(64U);
         run(&text);
-        expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
+        expect(&text, CATALOG_TEXT_FRAME_MISSING, STEM, "");
         assert(text.Reads == 1U);
     }
 
@@ -877,20 +871,20 @@ static void test_first_block_does_not_parse_past_tag_end(void)
     frame(3U, "TIT2", 0U, fake_title, sizeof(fake_title));
     audio(64U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
+    expect(&text, CATALOG_TEXT_FRAME_MISSING, STEM, "");
 }
 
 /** @brief 标签头不可读（版本不支持、大小字段非法、v2.2 压缩）按解码失败。 */
 static void test_unreadable_tag_header(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
 
     file_reset();
     tag_begin(5U, 0U);
     tag_end(50U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "");
 
     file_reset();
     tag_begin(3U, 0U);
@@ -898,20 +892,20 @@ static void test_unreadable_tag_header(void)
     g_file.data[8] = 0x80U;
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "");
 
     file_reset();
     tag_begin(2U, 0x40U);
     tag_end(50U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "");
 }
 
 /** @brief TIT2 可用而 TPE1 坏：歌手为空，分类仍是取到；反之标题坏时歌手仍可用。 */
 static void test_title_and_artist_independent(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t good[] = {3, 'T'};
     const uint8_t bad[] = {4, 'x'};
     const uint8_t artist[] = {3, 'A'};
@@ -923,7 +917,7 @@ static void test_title_and_artist_independent(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "T", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "T", "");
 
     file_reset();
     tag_begin(3U, 0U);
@@ -932,7 +926,7 @@ static void test_title_and_artist_independent(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "A");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "A");
 
     file_reset();
     tag_begin(3U, 0U);
@@ -940,7 +934,7 @@ static void test_title_and_artist_independent(void)
     tag_end(0U);
     audio(8U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "A");
+    expect(&text, CATALOG_TEXT_FRAME_MISSING, STEM, "A");
 }
 
 /**
@@ -960,7 +954,7 @@ static void big_frame(uint8_t major, uint32_t bytes)
 /** @brief 首块一次读完：偏移 0、请求一整块；文件短于一块时只读到文件尾。 */
 static void test_first_block_read(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t title[] = {3, 'T'};
 
     file_reset();
@@ -969,10 +963,10 @@ static void test_first_block_read(void)
     tag_end(0U);
     audio(8000U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "T", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "T", "");
     assert(text.Reads == 1U);
     assert(g_file.read_offset[0] == 0U);
-    assert(g_file.read_bytes[0] == STORAGE_CATALOG_TEXT_BLOCK_BYTES);
+    assert(g_file.read_bytes[0] == CATALOG_TEXT_BLOCK_BYTES);
 
     file_reset();
     tag_begin(3U, 0U);
@@ -989,7 +983,7 @@ static void test_first_block_read(void)
     frame(3U, "TIT2", 0U, title, sizeof(title));
     tag_end(0U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "T", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "T", "");
     assert(text.Reads == 1U);
     assert(g_file.read_bytes[0] == g_file.length);
 }
@@ -997,7 +991,7 @@ static void test_first_block_read(void)
 /** @brief APIC 前置且跨首块：seek 到 TIT2 帧头再读一块，不读 APIC 负载，不越过标签总长。 */
 static void test_apic_first_seeks_past_cover(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t title[] = {3, 'T'};
     const uint8_t artist[] = {3, 'A'};
     uint32_t title_header_offset;
@@ -1013,32 +1007,32 @@ static void test_apic_first_seeks_past_cover(void)
     tag_end(0U);
     audio(6000U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "T", "A");
+    expect(&text, CATALOG_TEXT_TAGGED, "T", "A");
     assert(text.Reads == 2U);
     assert(g_file.read_offset[1] == title_header_offset);
     assert(g_file.read_bytes[1] == (tag_total - title_header_offset));
-    assert(g_file.read_bytes[1] <= STORAGE_CATALOG_TEXT_BLOCK_BYTES);
+    assert(g_file.read_bytes[1] <= CATALOG_TEXT_BLOCK_BYTES);
 }
 
 /** @brief 目标帧头在块内但负载跨出块边界：从帧头重读一块。 */
 static void test_frame_straddling_block_boundary(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     uint8_t title[40];
     uint32_t header_offset;
     uint32_t n;
 
     file_reset();
     tag_begin(3U, 0U);
-    big_frame(3U, STORAGE_CATALOG_TEXT_BLOCK_BYTES - 10U - 10U - 4U - 2U); /* 让 TIT2 帧头距块尾只剩 6 字节。 */
+    big_frame(3U, CATALOG_TEXT_BLOCK_BYTES - 10U - 10U - 4U - 2U); /* 让 TIT2 帧头距块尾只剩 6 字节。 */
     header_offset = g_file.length;
     n = enc_text(title, 3U, BOM_NONE, false, "straddle");
     frame(3U, "TIT2", 0U, title, n);
     tag_end(0U);
     audio(100U);
-    assert(header_offset == (STORAGE_CATALOG_TEXT_BLOCK_BYTES - 4U - 2U));
+    assert(header_offset == (CATALOG_TEXT_BLOCK_BYTES - 4U - 2U));
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "straddle", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "straddle", "");
     assert(text.Reads == 2U);
     assert(g_file.read_offset[1] == header_offset);
 }
@@ -1046,7 +1040,7 @@ static void test_frame_straddling_block_boundary(void)
 /** @brief 含首块恰好 4 次读取可以取到；第 5 次需要时记超读取上限。 */
 static void test_read_limit(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t title[] = {3, 'T'};
     const uint8_t artist[] = {3, 'A'};
 
@@ -1059,8 +1053,8 @@ static void test_read_limit(void)
     tag_end(0U);
     audio(100U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "T", "");
-    assert(text.Reads == STORAGE_CATALOG_TEXT_MAX_READS);
+    expect(&text, CATALOG_TEXT_TAGGED, "T", "");
+    assert(text.Reads == CATALOG_TEXT_MAX_READS);
 
     file_reset();
     tag_begin(3U, 0U);
@@ -1072,8 +1066,8 @@ static void test_read_limit(void)
     tag_end(0U);
     audio(100U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_READ_LIMIT, STEM, "");
-    assert(text.Reads == STORAGE_CATALOG_TEXT_MAX_READS);
+    expect(&text, CATALOG_TEXT_READ_LIMIT, STEM, "");
+    assert(text.Reads == CATALOG_TEXT_MAX_READS);
 
     /* 标题已取到后歌手超限：分类仍是取到，歌手为空。 */
     file_reset();
@@ -1087,15 +1081,15 @@ static void test_read_limit(void)
     tag_end(0U);
     audio(100U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "T", "");
-    assert(text.Reads == STORAGE_CATALOG_TEXT_MAX_READS);
+    expect(&text, CATALOG_TEXT_TAGGED, "T", "");
+    assert(text.Reads == CATALOG_TEXT_MAX_READS);
 }
 
 /** @brief 目标帧负载大于一块：视为解码失败。 */
 static void test_oversized_target_frame(void)
 {
     static uint8_t huge[5000];
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
 
     memset(huge, 'a', sizeof(huge));
     huge[0] = 3U;
@@ -1105,13 +1099,13 @@ static void test_oversized_target_frame(void)
     tag_end(0U);
     audio(100U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_DECODE_FAILED, STEM, "");
+    expect(&text, CATALOG_TEXT_DECODE_FAILED, STEM, "");
 }
 
 /** @brief 读取错误注入：首块失败、seek 后失败；标题已取到后的失败不改变分类。 */
 static void test_read_errors(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t title[] = {3, 'T'};
     const uint8_t artist[] = {3, 'A'};
 
@@ -1122,7 +1116,7 @@ static void test_read_errors(void)
     audio(100U);
     g_file.fail_at = 1U;
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_READ_ERROR, STEM, "");
+    expect(&text, CATALOG_TEXT_READ_ERROR, STEM, "");
     assert(text.Reads == 1U);
 
     file_reset();
@@ -1133,7 +1127,7 @@ static void test_read_errors(void)
     audio(100U);
     g_file.fail_at = 2U;
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_READ_ERROR, STEM, "");
+    expect(&text, CATALOG_TEXT_READ_ERROR, STEM, "");
     assert(text.Reads == 2U);
 
     file_reset();
@@ -1145,7 +1139,7 @@ static void test_read_errors(void)
     audio(100U);
     g_file.fail_at = 2U;
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "T", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "T", "");
     assert(text.Reads == 2U);
 }
 
@@ -1179,7 +1173,7 @@ static void unsync_whole_tag(void)
 /** @brief 标签级去同步的 v2.3：首块内还原后正常解析；标签超出首块时只解析首块。 */
 static void test_v23_tag_level_unsync(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t title[] = {1, 0xFF, 0xFE, 'H', 0, 'i', 0};
     const uint8_t artist[] = {1, 0xFF, 0xFE, 'B', 0};
 
@@ -1192,7 +1186,7 @@ static void test_v23_tag_level_unsync(void)
     audio(100U);
     assert(memchr(g_file.data + 10, 0xFF, 40U) != NULL);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "Hi", "B");
+    expect(&text, CATALOG_TEXT_TAGGED, "Hi", "B");
     assert(text.Reads == 1U);
 
     /* 标题在首块之外：不 seek，记超读取上限。 */
@@ -1204,7 +1198,7 @@ static void test_v23_tag_level_unsync(void)
     unsync_whole_tag();
     audio(100U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_READ_LIMIT, STEM, "");
+    expect(&text, CATALOG_TEXT_READ_LIMIT, STEM, "");
     assert(text.Reads == 1U);
 
     /* 标签在首块内且没有目标帧：正常结束为帧缺失。 */
@@ -1215,13 +1209,13 @@ static void test_v23_tag_level_unsync(void)
     unsync_whole_tag();
     audio(100U);
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_FRAME_MISSING, STEM, "");
+    expect(&text, CATALOG_TEXT_FRAME_MISSING, STEM, "");
 }
 
 /** @brief 标签大于文件长度时夹到文件尾，不越界。 */
 static void test_tag_size_beyond_file(void)
 {
-    StorageCatalog_TextTypeDef text;
+    Catalog_TextTypeDef text;
     const uint8_t title[] = {3, 'T'};
 
     file_reset();
@@ -1230,7 +1224,7 @@ static void test_tag_size_beyond_file(void)
     tag_end(0U);
     g_file.data[8] = 0x7FU; /* 声明的标签远大于文件。 */
     run(&text);
-    expect(&text, STORAGE_CATALOG_TEXT_TAGGED, "T", "");
+    expect(&text, CATALOG_TEXT_TAGGED, "T", "");
     assert(text.Reads == 1U);
 }
 
@@ -1238,13 +1232,13 @@ static void test_tag_size_beyond_file(void)
 static void test_stem_failure_is_defensive_branch(void)
 {
     static const char path[] = "Music/";
-    StorageCatalog_TextTypeDef text;
-    StorageCatalog_TextRequestTypeDef request = {
+    Catalog_TextTypeDef text;
+    Catalog_TextRequestTypeDef request = {
         path, (uint32_t)(sizeof(path) - 1U), 0U, fake_read, &g_file, gbk_lookup, NULL, g_block};
 
     file_reset();
     memset(&text, 0x5A, sizeof(text));
-    assert(!storage_catalog_track_text(&request, &text));
+    assert(!catalog_track_text(&request, &text));
     assert(text.Title[0] == '\0');
     assert(text.Artist[0] == '\0');
     assert(text.Reads == 0U);
@@ -1288,6 +1282,6 @@ int main(void)
     RUN_TEST(test_v23_tag_level_unsync);
     RUN_TEST(test_tag_size_beyond_file);
     RUN_TEST(test_stem_failure_is_defensive_branch);
-    puts("storage_catalog_text: all tests passed");
+    puts("catalog_text: all tests passed");
     return 0;
 }

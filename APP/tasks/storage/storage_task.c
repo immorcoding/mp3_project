@@ -11,8 +11,8 @@
 #include "APP/tasks/storage/storage_task.h"
 #include "APP/tasks/storage/storage_task_config.h"
 #include "APP/tasks/storage/flash/storage_flash.h"
+#include "APP/apps/music/catalog/catalog.h"
 #include "APP/tasks/volume/volume_event.h"
-#include "catalog/storage_catalog.h"
 #include "catalog/storage_listbuffer.h"
 #include "catalog/storage_namebuffer.h"
 #include "stream/storage_audio_block.h"
@@ -95,7 +95,7 @@ static void storage_task_apply_sd_volume(void)
     storage_task_sd_state = STORAGE_TASK_SD_NOT_READY;
 
     storage_audio_stream_card_removed();
-    (void)storage_catalog_invalidate();
+    (void)catalog_invalidate();
     storage_listbuffer_complete_unavailable();
     storage_namebuffer_complete_unavailable();
 
@@ -104,7 +104,7 @@ static void storage_task_apply_sd_volume(void)
         return;
     }
 
-    if (storage_catalog_init() != STORAGE_OK)
+    if (catalog_init() != CATALOG_OK)
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                "STORAGE",
@@ -113,7 +113,7 @@ static void storage_task_apply_sd_volume(void)
 
     volume = volume_status(VOLUME_ID_SD);
     unchanged = volume.Mounted && (volume.Sequence == storage_task_sd_sequence_seen);
-    if (storage_catalog_scan_verdict(unchanged) == STORAGE_CATALOG_SCAN_UNREADABLE)
+    if (catalog_scan_verdict(unchanged) == CATALOG_SCAN_UNREADABLE)
     {
         /* 扫描被卷不可用丢弃，但卷没变：卡还在、读不了（设备出错），没有边沿就没有卷事件，不能等。
          * 沿用原来扫描失败的做法：卷挂着就绪、曲库为空；拔插卡（边沿）后重新对账和重扫。 */

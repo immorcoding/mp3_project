@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 #include "APP/tasks/storage/storage_task.h"
-#include "APP/tasks/storage/catalog/storage_catalog_name.h"
+#include "APP/apps/music/catalog/catalog_name.h"
 
 #define STORAGE_NAMEBUFFER_IDLE    0U  /* 可接受下一次 request。 */
 #define STORAGE_NAMEBUFFER_PENDING 1U  /* GUI 已提交，等待 Storage load。 */
@@ -21,8 +21,8 @@ typedef struct
     volatile uint32_t Status;     /* IDLE → PENDING → READY；GUI 读完必须写回 IDLE。 */
     uint32_t Generation;          /* request 时为请求代次（0 = 当前）；READY 后为实际应答代次，0 表示取不到。 */
     uint16_t Index;               /* 请求的播放列表位置。 */
-    char Title[STORAGE_CATALOG_NAME_BYTES];  /* READY 且代次非 0 时为曲目显示名（可用标题，否则文件主名），可直接显示的 UTF-8；否则空串。 */
-    char Artist[STORAGE_CATALOG_NAME_BYTES]; /* READY 且代次非 0 时为歌手（取不到为空串）；否则空串。 */
+    char Title[CATALOG_NAME_BYTES];  /* READY 且代次非 0 时为曲目显示名（可用标题，否则文件主名），可直接显示的 UTF-8；否则空串。 */
+    char Artist[CATALOG_NAME_BYTES]; /* READY 且代次非 0 时为歌手（取不到为空串）；否则空串。 */
 } Storage_NameBufferTypeDef;
 
 extern Storage_NameBufferTypeDef storage_namebuffer;
