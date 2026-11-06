@@ -113,7 +113,7 @@
 
 ## 编译期依赖
 
-- 状态机（`playback_machine.*`）：`playback_contract.h`、`playback_task_config.h`、`Service/playback/playback_service.h`（只取 `Service_Playback_PumpReportTypeDef` 与 `Service_StatusTypeDef`）。不依赖 FreeRTOS、HAL、`APP/tasks/storage/`。
+- 状态机（`playback_machine.*`）：`playback_contract.h`、`playback_task_config.h`、`Service/playback/playback_service.h`（只取 `Service_Playback_PumpReportTypeDef` 与 `Service_StatusTypeDef`）。不依赖 FreeRTOS、HAL、`APP/tasks/audio_reader/`。
 - 任务外壳（`playback_task.c`）：状态机、`APP/tasks/audio_reader/` 的 `audio_reader_stream.h` 与 `audio_reader_block.h`、`Service/playback/`、`Service/log/`、`Platform/audio/` 的公开 Interface，以及 FreeRTOS 任务、队列与通知 Interface。不依赖 HAL、FatFs、LVGL。
 
 ## 主机测试

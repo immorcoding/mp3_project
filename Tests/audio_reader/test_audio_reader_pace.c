@@ -128,6 +128,47 @@ static void test_a_busy_retry_waits_until_it_is_due(void)
 }
 
 /**
+ * @brief 卷宽限在等（读块或开流遇到卷不可用而卷没变）：只等到宽限结束（初值约 100 ms），哪怕没有打开的流；
+ *        到时间了不等，让这一圈去判超时；新请求仍然优先；开流宽限时有空闲块也不去读。
+ */
+static void test_a_volume_grace_waits_until_it_ends(void)
+{
+    AudioReader_PaceInputTypeDef input = open_stream(0U, 32U);
+
+    input.StreamOpen = false;                        /* 读块宽限：句柄已经关了。 */
+    input.GraceActive = true;
+    input.GraceRemainingTicks = 63U;
+    assert(audio_reader_wait_ticks(&input) == 63U);
+
+    input.GraceRemainingTicks = 0U;                  /* 到时间：不等，立刻判超时。 */
+    assert(audio_reader_wait_ticks(&input) == 0U);
+
+    input.GraceRemainingTicks = 63U;
+    input.RequestPending = true;                     /* 等待中来了新请求：不等，不会变成死等。 */
+    assert(audio_reader_wait_ticks(&input) == 0U);
+
+    input.RequestPending = false;
+    input.StreamOpen = true;                         /* 开流宽限同样：有空闲块也不去读。 */
+    input.ReadyBlocks = 0U;
+    assert(audio_reader_wait_ticks(&input) == 63U);
+}
+
+/**
+ * @brief 距截止时刻还有多少 tick：没到返回差值，到了或过了返回 0；tick 计数 32 位回绕时照样对。
+ */
+static void test_ticks_until_a_deadline_is_zero_once_it_is_reached(void)
+{
+    assert(audio_reader_ticks_until(1000U, 1100U) == 100U);
+    assert(audio_reader_ticks_until(1099U, 1100U) == 1U);
+    assert(audio_reader_ticks_until(1100U, 1100U) == 0U);
+    assert(audio_reader_ticks_until(1101U, 1100U) == 0U);
+    assert(audio_reader_ticks_until(5000U, 1100U) == 0U);
+    assert(audio_reader_ticks_until(0xFFFFFFF0U, 0x00000010U) == 32U);   /* 回绕：截止时刻在 0 之后。 */
+    assert(audio_reader_ticks_until(0x00000020U, 0x00000010U) == 0U);
+    assert(audio_reader_ticks_until(0xFFFFFFF0U, 0xFFFFFFF8U) == 8U);
+}
+
+/**
  * @brief 运行全部用例。
  * @return 0 表示全部通过（失败由 assert 中止）。
  */
@@ -139,6 +180,8 @@ int main(void)
     test_at_or_above_the_watermark_yields_one_tick();
     test_a_pending_request_never_waits();
     test_a_busy_retry_waits_until_it_is_due();
+    test_a_volume_grace_waits_until_it_ends();
+    test_ticks_until_a_deadline_is_zero_once_it_is_reached();
     puts("audio_reader_pace: all passed");
     return 0;
 }

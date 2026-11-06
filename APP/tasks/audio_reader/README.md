@@ -38,7 +38,7 @@
 | Storage、Flash 启动 | 2 | 不变 | 不变 |
 | GUI、Log、Monitor、后台 | 1 | 不变 | 不变 |
 
-`.app_axi_ram` 现在 `0x4800` = 18432 B（Debug map：`0x2404b600` 至 `0x2404fe00`）：卷 4096、读取任务 4096、后台 6144、Flash 启动 4096，没有别的贡献者。链接脚本、`FreeRTOSConfig.h` 一个字没改。HWD-2：NOLOAD 不清零，栈由 `xTaskCreateStatic` 整块填成已知值后才首次使用，`audio_reader_task.c` 有和卷任务、后台任务相同的 `_Static_assert`。栈只经 CPU 读写，不作 DMA，不需要 Cache 维护。栈 4 KiB 是初值，由 R4.11 修正：Storage 单任务做全部工作时板测最低剩余 1480 B / 4096 B；读取任务的函数栈帧都很小（Debug 最大的 `audio_reader_stream_apply_volume` 152 B，含 96 B 日志缓冲），最深的调用链（开流 → 按定位符打开 → 探测）与拆分前相同，所以预期余量不比 1480 B 差。
+`.app_axi_ram` 现在 `0x4800` = 18432 B（Debug map：`0x2404b600` 至 `0x2404fe00`）：卷 4096、读取任务 4096、后台 6144、Flash 启动 4096，没有别的贡献者。链接脚本、`FreeRTOSConfig.h` 一个字没改。HWD-2：NOLOAD 不清零，栈由 `xTaskCreateStatic` 整块填成已知值后才首次使用，`audio_reader_task.c` 有和卷任务、后台任务相同的 `_Static_assert`。栈只经 CPU 读写，不作 DMA，不需要 Cache 维护。**MPU**：`Core/Src/main.c` 只配了 SDRAM 一个 MPU 区域（Region 2，0xC0000000 起 32 MB），AXI SRAM（0x24000000 起）走默认内存映射；`.app_axi_ram` 只由单核 CPU 读写栈，没有 DMA 与 Cache 一致性问题，没有为这个段新增或修改 MPU 区域（与卷任务、Flash 启动任务、后台任务同一结论）。栈 4 KiB 是初值，由 R4.11 修正：Storage 单任务做全部工作时板测最低剩余 1480 B / 4096 B；读取任务的函数栈帧都很小（Debug 最大的 `audio_reader_end_stream_card_removed` 144 B，含 96 B 日志缓冲），最深的调用链（开流 → 按定位符打开 → 探测）与拆分前相同，所以预期余量不比 1480 B 差。
 
 **启动**（`app_tasks.c` 的 `create_task`，即 Boot 任务）：Log Task → 可选的 SDRAM 自检 → `catalog_boot_init()` → **`audio_reader_boot_init()`（块池和两个信箱）** → Storage Task → **Audio Read Task** → Volume Task → Playback Task → Monitor、GUI、后台。块池 NOLOAD 段此后才有主（SDRAM 自检是破坏性的，必须在它之前独占运行，HWD-2），做完才创建用到块池和信箱的任务。读取任务入口：记下自己的句柄、登记卷事件订阅、（钩子打开时投一行 `HOOK:`）、进循环；第一圈**不等**，先比对一次卷序号、看一次请求信箱，所以它比第一条请求启动得晚、比卷任务启动得早或晚，都不会漏。
 
@@ -66,20 +66,21 @@
 
 1. **卷事件**（`audio_reader_stream_apply_volume()`）：比对 SD 卷序号；变了就按“旧的全部作废，再看现状”处理，当前流仍被播放任务持有就写 `CARD_REMOVED`；
 2. **请求信箱**（`audio_reader_stream_process_request()`）：有新请求就关旧流、开新流并应答；到点的 `SERVICE_BUSY` 开流重试也在这里重跑；
-3. **读一块**（`audio_reader_stream_read_block()`）：最多一块；
+3. **读一块**（`audio_reader_stream_read_block()`）：最多一块；先处理在等的卷宽限（等到卷事件、超时，见下“失败约定”）；
 4. **决定等多久**（`audio_reader_wait_ticks()`，纯函数）：
 
 | 当前情况（按优先级从高到低） | 等多久 |
 |---|---|
 | 请求信箱里已有新请求 | 不等 |
 | `SERVICE_BUSY` 重试在等 | 只等到重试时刻（约 10 ms），到了不等 |
+| 卷宽限在等（卷不可用而卷没变） | 只等到宽限结束（初值约 100 ms），到了不等，让这一圈判超时 |
 | 没有打开的流，或没有空闲块 | 一直等（暂停时块池满了就不再读，流保持打开） |
 | 就绪块不到安全水位（4 块） | 不等，连续补块 |
 | 够水位且还有空闲块 | 1 tick（让路） |
 
 **进入循环时先看一次**：任务入口之后的第一圈等待 0 tick，直接走一遍 1、2、3，不依赖通知。播放任务在读取任务绑定句柄之前写的请求没有通知（句柄为空时通知被跳过），靠这一圈补上；启动顺序也让读取任务早于播放任务创建，这是两层保险。
 
-**让路用等待点，不用 `vTaskDelay`**：水位以上每读一块等 1 tick，这 1 tick 就是通知等待的超时，让路期间新请求、块归还、卷事件能立刻叫醒。让的是 SD 锁：读取任务（3）放锁后马上又能拿到，优先级 2 的 Storage（以及以后的前台）排不上，所以必须真的睡一下。水位按就绪队列里的块数算，不含播放任务手里那块。水位 4 块（`AUDIO_READER_WATERMARK_BLOCKS`）、让路 1 tick（`AUDIO_READER_YIELD_TICKS`）、重试间隔 10 ms（`AUDIO_READER_BUSY_RETRY_MS`）都是配置常量，标“初值，由板级验收修正”；让路改 0 即可做对比（R5.4），不算钩子。320 kbps 下 4 块约 3.3 s，够撑过最坏的非故障等锁 2.05 s（目前按 MP3 算，加高码率格式要重新核算）。切歌后补满 32 块的推算约 140 ms，前台最多等 14 至 27 ms（推算，未测）。
+**让路用等待点，不用 `vTaskDelay`**：水位以上每读一块等 1 tick，这 1 tick 就是通知等待的超时，让路期间新请求、块归还、卷事件能立刻叫醒。让的是 SD 锁：读取任务（3）放锁后马上又能拿到，优先级 2 的 Storage（以及以后的前台）排不上，所以必须真的睡一下。水位按就绪队列里的块数算，不含播放任务手里那块。水位 4 块（`AUDIO_READER_WATERMARK_BLOCKS`）、让路 1 tick（`AUDIO_READER_YIELD_TICKS`）、重试间隔 10 ms（`AUDIO_READER_BUSY_RETRY_MS`）、卷宽限 100 ms（`AUDIO_READER_VOLUME_GRACE_MS`）都是配置常量，标“初值，由板级验收修正”；让路改 0 即可做对比（R5.4），不算钩子。320 kbps 下 4 块约 3.3 s，够撑过最坏的非故障等锁 2.05 s（目前按 MP3 算，加高码率格式要重新核算）。切歌后补满 32 块的推算约 140 ms，前台最多等 14 至 27 ms（推算，未测）。
 
 ## 和别的任务怎么交错
 
@@ -89,18 +90,25 @@
 - **和后台（1）**：后台任务现在只有默认关闭的 Flash 压力钩子，只拿 Flash 卷锁，与 SD 卷锁互不相干。读取任务（3）会在补块期占满 CPU 的空隙之外让出，后台（1）和 GUI（1）拿剩下的；补块期是短脉冲（约 140 ms），不是常态。
 - **读取任务持 SD 锁时卷任务要刷新会怎样**：见上面“和卷任务”。关键是读取任务在 Service 调用里持锁，卷任务的 `RefreshSD` 排在它后面；真拔卡时那一次读取 +1 ms 左右就失败返回，持锁 2.0 至 4.2 ms（#191 实测），不会等 500 ms 超时。
 
-## 失败约定：读块遇到 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`
+## 失败约定：读块和开流遇到 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`
 
-按 #211 的版本做，**这和票面“回到等待点等卷事件”字面上不一样，原因如下**：
+沿用 #211 的判断，再加一道有上界的卷宽限。**这和票面“回到等待点等卷事件”字面上不一样，原因如下**。
 
-读块得到这三种返回值时，先对**同一个句柄 `CloseFile`**（结果不看）。它在 Filesystem 入口等闸，所以卡刚拔、边沿已到而 30 ms 消抖或对账还没结束时，会一直等到本轮对账结束才返回，不会把拔卡误报成读错误；闸开着时立刻返回。然后看 SD 卷（`audio_reader_classify_read()`）：
+读块得到这三种返回值时，先对**同一个句柄 `CloseFile`**（结果不看）。它在 Filesystem 入口等闸，所以卡刚拔、边沿已到而 30 ms 消抖或对账还没结束时（卷任务已经关了闸），会一直等到本轮对账结束才返回，不会把拔卡误报成读错误；闸开着时立刻返回。然后看 SD 卷（`audio_reader_classify_read()`）：
 
 - **序号和已处理的不同，或卷已不挂**：卡没了或换了。不写 `READ_ERROR`、不重试，FIL 已关，流“停住”（`StreamOpen` 为假，等待点一直等），**回到等待点等卷事件**，序号变了由第 1 步写 `CARD_REMOVED`。这就是用户看到 “No SD card”、游标重置的路径。
-- **序号没变且卷仍挂着**：卡还在，是设备出了错（例如标签读取传输出错使设备进 ERROR，FatFs 的下一次读得到 `NOT_READY`；`FR_NOT_READY` 也映射成 `NO_MEDIA`，所以 `NO_MEDIA` 不等于卡真的不在）。**没有边沿就没有卷事件**，等下去会静音到 T_data（5 s）才显示 “Read timeout”，所以立刻报 `READ_ERROR`。
+- **序号没变且卷仍挂着**：有两种可能，分不出来。① **卡刚拔、边沿已到而卷任务还没轮到**：读取任务和卷任务同为优先级 3，卡检测中断（`volume_sd.c` 的回调，`portYIELD_FROM_ISR`）只在被叫醒的任务优先级**高于**当前任务时才切换，同级不会立刻抢占。读取任务正在 CPU 上收尾（DMA 出错后的返回、`CloseFile`）时边沿到了，卷任务要等下一个时间片，闸还没关、序号还没变，`CloseFile` 直接通过。还有一个更窄的点：卷任务卸载之后、发布 `gone` 之前，调用在入口先看到“卷没挂”就直接返回 `INVALID_HANDLE`，不经过闸。原来 Storage 是 2，会被卷任务立刻抢占，所以没有这条交错。② **卡还在，设备出了错**（例如标签读取传输出错使设备进 ERROR，FatFs 的下一次读得到 `NOT_READY`；`FR_NOT_READY` 也映射成 `NO_MEDIA`，所以 `NO_MEDIA` 不等于卡真的不在），没有边沿就没有卷事件，一直等会静音到 T_data（5 s）才显示 “Read timeout”。
+  - 所以既不能立刻报 `READ_ERROR`（①会把拔卡误报成 “Read error”，之后也不再写 `CARD_REMOVED`），也不能让 `NO_MEDIA` 一律等卷事件（②会把 #211 修掉的“静音到 T_data”带回来）。
+  - 规则：进**卷宽限**（`AUDIO_READER_READ_GRACE`），在**唯一的等待点**上等最多 `AUDIO_READER_VOLUME_GRACE_MS`（初值 100 ms，覆盖消抖 30 ms 加刷新与卸载，卷任务卸载完成在边沿后 +34 至 35 ms，标“初值，由板级验收修正”）。期间来了卷事件（序号变了或卷不挂），按拔卡处理，写 `CARD_REMOVED`；超时仍没变，才写 `READ_ERROR` 并记 `Audio stream read failed.`。
+  - 等待期间新请求、块归还、卷事件照常叫醒，**不是死等**：新请求取代旧流，宽限让位（`AUDIO_READER_GRACE_SUPERSEDED`，处理新请求的那一步清掉宽限）；每圈开头仍先比对卷序号。宽限期间流已经没有打开的句柄，所以不会再读。
+  - 纯函数（`Tests/audio_reader`，`audio_reader_result`、`audio_reader_pace`）：`audio_reader_classify_read()` 给出 `GRACE`；`audio_reader_grace_step(request_pending, volume_changed, remaining_ticks)` 的优先级是 新请求 > 卷事件 > 超时 > 继续等；`audio_reader_wait_ticks()` 在宽限期间返回剩余 tick；`audio_reader_ticks_until()` 处理 tick 回绕。
+  - 代价：#211 的“卡在、设备出错、没有边沿”的情形读取错误晚 100 ms 出现，不再是立刻，仍远小于 T_data。
 
-票面的“三种返回值都回到等待点等卷事件”只对前一种成立；#195 在 2026-11-04 的细化已经写明“卡还在且没有边沿时不会有结论，立刻报错”，#211 把它落成了上面的判断，本票把这套判断原样搬过来（主机测试在 `Tests/audio_reader`，期望值逐条来自 #195）。开流和探测得到这三种返回值一律按 `NOT_READY` 应答。其他错误（卡还在）立刻报 `READ_ERROR` 或 `IO_ERROR`，不重试。
+**开流和探测**用同一规则（`audio_reader_open_follow_up()`）：打开、取长度、读头尾、定位这些调用得到这三种返回值，而曲库代次非 0、卷挂着且序号没变，就不立刻应答 `NOT_READY`，进开流宽限；等到卷事件应答 `NOT_READY`（卡没了，播放侧 “SD card not ready”、游标重置），超时应答 `IO_ERROR`（卡还在、设备出错，播放侧停止 READ_ERROR、游标保留）。曲库没好（代次 0）仍然立刻应答 `NOT_READY`，卷已经变了也立刻应答 `NOT_READY`，没有变化。`SERVICE_BUSY` 优先于宽限（先重试）。其他错误（卡还在）立刻报 `READ_ERROR` 或 `IO_ERROR`，不重试。
 
-**残余窗口（板测观察项）**：卷任务与读取任务同级，卡检测中断不能让卷任务立刻抢占读取任务，`PauseSD` 最晚可能比边沿晚一个时间片（≤ 1 ms）。如果读取任务恰好在这段窗口里发起一次不阻塞就失败的读，随后 `CloseFile` 也没遇到闸，卷序号还没变，就会报 `READ_ERROR` 而不是等 `CARD_REMOVED`（用户看到读取错误而不是 “No SD card”，游标保留）。读取几乎每次都先在 DMA 完成信号量上阻塞，卷任务就能先跑，所以预期很罕见；R4.5、R4.6 的 10 次拔卡里若出现 `Audio stream read failed.` 而不是 `Audio read interrupted`，就是撞上了这个窗口，请记录次数。
+**记录失败种类的方式**：开流、探测、读头尾三处都经同一个函数 `audio_reader_open_failure(attempt, status, open_failure)` 记下“文件槽用尽”和“卷不可用”，再分类；`attempt` 是开流调用链上的局部变量，不用全局变量带话。
+
+**拔卡和切歌同时发生（已知取舍，不改代码）**：每圈先处理卷事件、再处理请求信箱。若卷序号在本圈开头还没变，而新请求已经在信箱里，旧流不会写 `CARD_REMOVED`（它被新请求取代），新流的开启因卷变了或曲库代次 0 应答 `NOT_READY`，屏幕显示 “SD card not ready”（游标重置、播放停止）而不是 “No SD card”。播放仍然停止，只是提示不同；用户同时拔卡和点歌的概率低，且这种提示更接近“现在没有可播的东西”，所以保持现状。R4.5 若出现这种提示，记次数即可。
 
 ## 拔卡收尾与 `CARD_REMOVED` 时延
 
@@ -183,7 +191,7 @@ SD 只有 4 个文件槽、2 个目录槽（`_FS_LOCK` 9，Flash 2 加 1，共 9
 
 ## 主机测试证明什么、不证明什么（HAR-5）
 
-`Tests/audio_reader`（3 个 CTest：`audio_reader_range_locate` 越过标签与跳转偏移、`audio_reader_result` 失败结果加卷序号的分类和日志格式、`audio_reader_pace` 决定等多久）证明：每种失败结果在卷变了和没变时写什么、哪些流在卷序号变了时写 `CARD_REMOVED`（含读尽的流、序号回绕）、`SERVICE_BUSY` 的重试和日志节拍（5 s 内 6 行）、水位和让路和一直等和重试时刻的优先关系、两行日志的格式和长度不超过 127 字符。期望值来自 #194、#195 和 #202，不用代码里的表达式重算。主机测试是单线程的，**不证明**：真实任务抢占与优先级继承、通知的真实唤醒时序、读取任务与卷任务同级时间片的真实交错、`CloseFile` 在闸前等多久、`SERVICE_BUSY` 重试的真实时刻、块池和信箱、`audio_reader_stream.c` 里的调用顺序（读失败后先 `CloseFile` 再取卷状态）、栈余量、水位 4 块和让路 1 tick 在真实负载下够不够——这些靠第 4 次上板（R4.1 至 R4.12 和回归行）。读取任务没有主机测试程序，`for(;;)` 与 FatFs 调用不做主机测试。
+`Tests/audio_reader`（3 个 CTest：`audio_reader_range_locate` 越过标签与跳转偏移、`audio_reader_result` 失败结果加卷序号的分类和日志格式、`audio_reader_pace` 决定等多久）证明：每种失败结果在卷变了和没变时写什么（卷没变进宽限）、卷宽限里每圈的判断（等到卷事件、超时、等待中来了新请求，优先级 新请求 > 卷事件 > 超时 > 继续等）、开流遇到卷不可用而卷没变时进宽限（等到事件应答 `NOT_READY`，超时应答 `IO_ERROR`）、哪些流在卷序号变了时写 `CARD_REMOVED`（含读尽的流、序号回绕）、`SERVICE_BUSY` 的重试和日志节拍（5 s 内 6 行）、水位和让路和一直等和重试时刻和宽限剩余时间的优先关系、距截止时刻的剩余 tick（含 32 位回绕）、两行日志的格式和长度不超过 127 字符。期望值来自 #194、#195 和 #202，不用代码里的表达式重算。主机测试是单线程的，**不证明**：真实任务抢占与优先级继承、通知的真实唤醒时序、读取任务与卷任务同级时间片的真实交错、`CloseFile` 在闸前等多久、`SERVICE_BUSY` 重试的真实时刻、块池和信箱、`audio_reader_stream.c` 里的调用顺序（读失败后先 `CloseFile` 再取卷状态、宽限开始与结束时写什么）、宽限的 100 ms 盖不盖得住真实的消抖加对账、栈余量、水位 4 块和让路 1 tick 在真实负载下够不够——这些靠第 4 次上板（R4.1 至 R4.12 和回归行）。读取任务没有主机测试程序，`for(;;)` 与 FatFs 调用不做主机测试。
 
 ## 约束
 

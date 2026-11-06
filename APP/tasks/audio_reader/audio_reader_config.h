@@ -35,6 +35,12 @@
 #define AUDIO_READER_WATERMARK_BLOCKS 4U  /* 安全水位：就绪队列里不到这么多块就连续补块，不让路。按就绪队列算，不含播放任务手里那块；320 kbps 下 4 块约 3.3 s，够撑过最坏的非故障等锁 2.05 s。初值，由板级验收修正。 */
 #define AUDIO_READER_YIELD_TICKS      1U  /* 水位以上每读一块让路多少 tick；让的是 SD 锁。让路用唯一的等待点，不用 vTaskDelay，新请求、块归还、卷事件能立刻叫醒。改 0 即“不让路”做对比（R5.4），不算钩子。初值，由板级验收修正。 */
 
+/* audio_reader_stream.c：卷宽限。读块或开流得到 NO_MEDIA、NOT_READY、INVALID_HANDLE 而卷挂着、序号没变时，
+ * 可能是卡刚拔、边沿已到而卷任务还没轮到（与读取任务同级，卡检测中断不会让它立刻抢占，闸还没关、序号还没变），
+ * 也可能是卡还在、设备出错（没有边沿就没有卷事件）。先在唯一的等待点上等一个有上界的时间看卷事件，
+ * 期间来了卷事件按拔卡处理，超时仍没变才报读错误。 */
+#define AUDIO_READER_VOLUME_GRACE_MS  100U  /* 宽限上界，单位为毫秒；要盖住消抖 30 ms 加刷新与卸载（卷任务的卸载完成在边沿后 +34 至 35 ms，spike 实测）并留余量。等待期间新请求、块归还、卷事件仍能立刻叫醒。初值，由板级验收修正（R4.5、R4.6）。 */
+
 /* audio_reader_stream.c：SERVICE_BUSY（文件槽用尽）过约 10 ms 重试，不算文件错误（#194 修正的第 13 条）。 */
 #define AUDIO_READER_BUSY_RETRY_MS    10U   /* 两次重试之间至少隔多久，单位为毫秒；等的是唯一的等待点，不是 vTaskDelay。 */
 #define AUDIO_READER_BUSY_LOG_EVERY   100U  /* 日志节拍：同一次开流或读块遇到 SERVICE_BUSY，第 1 次记一行，之后每满这么多次再记一行（约 1 s 一行），不刷屏（DIAG-3）。 */

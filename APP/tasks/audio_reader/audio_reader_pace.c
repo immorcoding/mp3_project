@@ -24,6 +24,10 @@ uint32_t audio_reader_wait_ticks(const AudioReader_PaceInputTypeDef *input)
     {
         return input->RetryRemainingTicks;
     }
+    if (input->GraceActive)
+    {
+        return input->GraceRemainingTicks;
+    }
     if (!input->StreamOpen || (input->FreeBlocks == 0U))
     {
         return AUDIO_READER_WAIT_FOREVER;
@@ -33,4 +37,18 @@ uint32_t audio_reader_wait_ticks(const AudioReader_PaceInputTypeDef *input)
         return 0U;
     }
     return AUDIO_READER_YIELD_TICKS;
+}
+
+/**
+ * @brief  距截止时刻还有多少 tick。
+ * @param[in] now 当前 tick 计数。
+ * @param[in] deadline 截止时刻（tick 计数）。
+ * @return 没到截止时刻返回差值；到了或过了返回 0。差值按有符号 32 位比较，tick 计数回绕时照样对
+ *         （截止时刻与当前相差不超过 2^31 tick）。
+ */
+uint32_t audio_reader_ticks_until(uint32_t now, uint32_t deadline)
+{
+    const int32_t remaining = (int32_t)(deadline - now);
+
+    return (remaining > 0) ? (uint32_t)remaining : 0U;
 }

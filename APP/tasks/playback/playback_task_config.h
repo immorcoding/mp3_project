@@ -7,7 +7,7 @@
 #define PLAYBACK_TASK_CONFIG_H
 
 /* playback_machine.h */
-#define PLAYBACK_MACHINE_STALE_BLOCK_LIMIT  32U  /* 每次唤醒归还就绪队列队首旧序号块的上限（B1）；与块池块数 AUDIO_READER_BLOCK_COUNT 同值（不引用以免本头依赖 Storage，由 playback_task.c 的 _Static_assert 核对）。 */
+#define PLAYBACK_MACHINE_STALE_BLOCK_LIMIT  32U  /* 每次唤醒归还就绪队列队首旧序号块的上限（B1）；与块池块数 AUDIO_READER_BLOCK_COUNT 同值（不引用以免本头依赖音频读取任务，由 playback_task.c 的 _Static_assert 核对）。 */
 #define PLAYBACK_MACHINE_FEED_BLOCK_LIMIT   32U  /* 一轮交字节最多处理的块数（手中块加队列），与块池块数同值（同上由 _Static_assert 核对）。 */
 #define PLAYBACK_MACHINE_FEED_ROUND_LIMIT   16U  /* 每次唤醒内“交字节 → 推进”的最大轮数；输入不够时本次结束去等块（B1）。 */
 #define PLAYBACK_MACHINE_LOG_TEXT_SIZE      96U  /* 单条 INFO 日志文本的格式化缓冲区字节数（含结尾 0）；放不下时末字符为 ~ 标记截断。Seek 行最长约 88 字节，须小于 Service_Log 单块正文 128 B。 */

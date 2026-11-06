@@ -39,7 +39,9 @@
 _Static_assert((configCHECK_FOR_STACK_OVERFLOW > 1) || (configUSE_TRACE_FACILITY == 1),
                "static task stacks in NOLOAD .app_axi_ram rely on the kernel filling them at creation (HWD-2)");
 _Static_assert((unsigned)AUDIO_READER_NOTIFY_COUNT <= (unsigned)configTASK_NOTIFICATION_ARRAY_ENTRIES,
-               "Audio Reader Task notify slots exceed FreeRTOS array length");
+               "Audio Read Task notify slots exceed FreeRTOS array length");
+_Static_assert(sizeof(APP_AUDIO_READER_TASK_NAME) <= (size_t)configMAX_TASK_NAME_LEN,
+               "the task name must fit configMAX_TASK_NAME_LEN or the Monitor registration will not match");
 _Static_assert((unsigned)AUDIO_READER_NOTIFY_EVENT_INDEX < (unsigned)AUDIO_READER_NOTIFY_COUNT,
                "the single wait point must be one of the task's notify slots");
 
@@ -115,7 +117,7 @@ void audio_reader_task(void *handle)
 TaskHandle_t audio_reader_task_create(void)
 {
     return xTaskCreateStatic(audio_reader_task,
-                             "Audio Read Task",
+                             APP_AUDIO_READER_TASK_NAME,
                              APP_AUDIO_READER_TASK_STACK_WORDS,
                              NULL,
                              APP_AUDIO_READER_TASK_PRIORITY,

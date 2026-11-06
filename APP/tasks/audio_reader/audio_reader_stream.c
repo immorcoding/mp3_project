@@ -1,6 +1,7 @@
 /**
  * @file audio_reader_stream.c
- * @brief 音频流：卷事件 → 请求信箱（开启、越过标签）→ 每圈最多读一块 → 终止记录；SERVICE_BUSY 过约 10 ms 重试。
+ * @brief 音频流：卷事件 → 请求信箱（开启、越过标签）→ 每圈最多读一块 → 终止记录；SERVICE_BUSY 过约 10 ms 重试；
+ *        卷不可用而卷没变时在等待点上有上界地等卷事件（卷宽限）。
  * @note  本文件不做主机测试（FatFs、信箱、盖章、任务通知），进板级验收；每个“失败结果加卷序号 → 写什么”的判断
  *        都抽成了纯函数（audio_reader_result、audio_reader_pace、audio_reader_diag、audio_reader_range），主机测它们。
  *        除标注“播放任务调用”的接口外，全部只在音频读取任务上下文调用。
@@ -43,6 +44,21 @@ typedef enum
     AUDIO_READER_RETRY_READ
 } AudioReader_RetryKindTypeDef;
 
+/** @brief 卷宽限的种类：读块（流已打开过，句柄已关）或开流（还没应答）。 */
+typedef enum
+{
+    AUDIO_READER_GRACE_NONE = 0U,
+    AUDIO_READER_GRACE_READ,
+    AUDIO_READER_GRACE_OPEN
+} AudioReader_GraceKindTypeDef;
+
+/** @brief 一次开流尝试里各步骤得到的失败种类；由调用链上的局部变量带着走，不用全局变量。 */
+typedef struct
+{
+    bool Busy;              /**< 有一步得到 SERVICE_BUSY（文件槽用尽）。 */
+    bool VolumeUnavailable; /**< 有一步得到 NO_MEDIA、NOT_READY 或 INVALID_HANDLE。 */
+} AudioReader_OpenAttemptTypeDef;
+
 /* 两个长度 1 的覆盖队列做“最新值”信箱：整份原子可见，后写覆盖先写。存储静态放 DTCM。由 Boot 任务创建。 */
 static uint8_t audio_reader_request_storage[sizeof(AudioReader_RequestTypeDef)];
 static uint8_t audio_reader_record_storage[sizeof(AudioReader_RecordTypeDef)];
@@ -71,7 +87,11 @@ static AudioReader_RetryKindTypeDef audio_reader_retry_kind;
 static TickType_t audio_reader_retry_due;                  /* 重试时刻（tick）。 */
 static uint32_t audio_reader_retry_count;                  /* 同一次开流或读块遇到 SERVICE_BUSY 的次数。 */
 static AudioReader_RequestTypeDef audio_reader_retry_request; /* 开流重试时要重新跑的请求。 */
-static bool audio_reader_open_busy;                        /* 本次开流尝试里有一步遇到了 SERVICE_BUSY。 */
+
+/* 卷宽限状态：读块或开流得到卷不可用而卷没变时，在等待点上有上界地等卷事件；一次只会有一个在等，与重试互斥。 */
+static AudioReader_GraceKindTypeDef audio_reader_grace_kind;
+static TickType_t audio_reader_grace_deadline;             /* 宽限结束时刻（tick）。 */
+static uint32_t audio_reader_grace_sequence;               /* 宽限开始时已处理的卷序号；之后序号变了或卷不挂就是等到了卷事件。 */
 
 /**
  * @brief 创建请求信箱和流记录信箱（静态）并复位流状态。
@@ -94,6 +114,7 @@ void audio_reader_stream_boot_init(void)
     audio_reader_handled_sequence = 0U;
     audio_reader_retry_kind = AUDIO_READER_RETRY_NONE;
     audio_reader_retry_count = 0U;
+    audio_reader_grace_kind = AUDIO_READER_GRACE_NONE;
 }
 
 /**
@@ -226,6 +247,27 @@ static bool audio_reader_retry_is_due(TickType_t now)
 }
 
 /**
+ * @brief 取消正在等待的卷宽限。
+ */
+static void audio_reader_grace_clear(void)
+{
+    audio_reader_grace_kind = AUDIO_READER_GRACE_NONE;
+}
+
+/**
+ * @brief 进入卷宽限：定结束时刻，记下此刻已处理的卷序号。
+ * @param[in] kind 读块或开流。
+ * @note  等待用唯一的等待点（audio_reader_wait_ticks 返回距结束时刻的 tick），不用 vTaskDelay，
+ *        所以宽限期间新请求、块归还、卷事件仍能立刻叫醒任务，不会变成死等。
+ */
+static void audio_reader_grace_start(AudioReader_GraceKindTypeDef kind)
+{
+    audio_reader_grace_kind = kind;
+    audio_reader_grace_deadline = xTaskGetTickCount() + pdMS_TO_TICKS(AUDIO_READER_VOLUME_GRACE_MS);
+    audio_reader_grace_sequence = audio_reader_handled_sequence;
+}
+
+/**
  * @brief 安排一次 SERVICE_BUSY 重试：记数、定时刻、按节拍记一行 WARN。
  * @param[in] kind 开流或读块。
  * @param[in] operation 日志里的操作名（"open" 或 "read"）。
@@ -294,9 +336,30 @@ void audio_reader_stream_pace_input(AudioReader_PaceInputTypeDef *input)
     input->RetryRemainingTicks = (input->RetryActive && !audio_reader_retry_is_due(now))
                                      ? (uint32_t)(audio_reader_retry_due - now)
                                      : 0U;
+    input->GraceActive = (audio_reader_grace_kind != AUDIO_READER_GRACE_NONE);
+    input->GraceRemainingTicks = input->GraceActive
+                                     ? audio_reader_ticks_until((uint32_t)now, (uint32_t)audio_reader_grace_deadline)
+                                     : 0U;
     input->StreamOpen = audio_reader_file_open;
     input->FreeBlocks = audio_reader_block_free_count();
     input->ReadyBlocks = audio_reader_block_ready_count();
+}
+
+/**
+ * @brief 记下一步失败的种类（文件槽用尽、卷不可用），再把状态收成开启结果。开流、探测、读头尾共用这一个入口。
+ * @param[in,out] attempt 本次开流尝试的失败种类，只增不减。
+ * @param[in] status 失败的 Service 状态。
+ * @param[in] open_failure true 表示打开文件本身失败（无法区分缺失与损坏，按坏文件）。
+ * @return 开启结果码，规则见 audio_reader_classify_open_status()。是否重试、是否进宽限由调用者按 attempt
+ *         再用 audio_reader_open_follow_up() 决定，返回值在那两种情形下作废。
+ */
+static AudioReader_OpenResultTypeDef audio_reader_open_failure(AudioReader_OpenAttemptTypeDef *attempt,
+                                                               Service_StatusTypeDef status,
+                                                               bool open_failure)
+{
+    attempt->Busy = attempt->Busy || audio_reader_status_is_busy(status);
+    attempt->VolumeUnavailable = attempt->VolumeUnavailable || Service_Filesystem_StatusIsVolumeUnavailable(status);
+    return audio_reader_classify_open_status(status, open_failure);
 }
 
 /**
@@ -304,9 +367,13 @@ void audio_reader_stream_pace_input(AudioReader_PaceInputTypeDef *input)
  * @param[in] offset 文件偏移。
  * @param[out] buffer 接收缓冲。
  * @param[in] count 要读的字节数。
- * @return OK 表示读满；否则为对应开启结果码（短读按 IO_ERROR）。遇到 SERVICE_BUSY 时置 audio_reader_open_busy。
+ * @param[in,out] attempt 本次开流尝试的失败种类，失败时记下。
+ * @return OK 表示读满；否则为对应开启结果码（短读按 IO_ERROR）。
  */
-static AudioReader_OpenResultTypeDef audio_reader_read_exact(uint32_t offset, uint8_t *buffer, uint32_t count)
+static AudioReader_OpenResultTypeDef audio_reader_read_exact(AudioReader_OpenAttemptTypeDef *attempt,
+                                                             uint32_t offset,
+                                                             uint8_t *buffer,
+                                                             uint32_t count)
 {
     uint32_t got = 0U;
     Service_StatusTypeDef status;
@@ -318,23 +385,24 @@ static AudioReader_OpenResultTypeDef audio_reader_read_exact(uint32_t offset, ui
     }
     if (status != SERVICE_OK)
     {
-        audio_reader_open_busy = audio_reader_open_busy || audio_reader_status_is_busy(status);
-        return audio_reader_classify_open_status(status, false);
+        return audio_reader_open_failure(attempt, status, false);
     }
     return (got == count) ? AUDIO_READER_OPEN_OK : AUDIO_READER_OPEN_IO_ERROR;
 }
 
 /**
  * @brief 读文件头尾字节、越过标签、seek 到音频区间起点加偏移。
+ * @param[in,out] attempt 本次开流尝试的失败种类，失败时记下。
  * @param[in] audio_offset 相对音频区间起点的字节数；越过区间时钳在区间末端。
  * @param[out] audio_bytes 音频区间长度（整段，不随偏移变化）。
  * @param[out] remaining 从落点到区间末端尚未读出的字节数；偏移被钳到末端时为 0。
  * @param[out] lseek_us 最后一次定位（到区间起点加偏移）的耗时，单位 µs；失败时无意义。
  * @return 开启结果；OK 时 FIL 已打开并定位。
  * @note  失败时 FIL 已关闭。探测是几次独立的文件调用，每次单独拿放 SD 锁，别的任务可以插进来。
- *        遇到 SERVICE_BUSY 时置 audio_reader_open_busy，由调用者决定重试。
+ *        遇到 SERVICE_BUSY 或卷不可用时记在 attempt 里，由调用者决定重试或进宽限。
  */
-static AudioReader_OpenResultTypeDef audio_reader_probe_file(uint32_t audio_offset,
+static AudioReader_OpenResultTypeDef audio_reader_probe_file(AudioReader_OpenAttemptTypeDef *attempt,
+                                                             uint32_t audio_offset,
                                                              uint32_t *audio_bytes,
                                                              uint32_t *remaining,
                                                              uint32_t *lseek_us)
@@ -351,8 +419,7 @@ static AudioReader_OpenResultTypeDef audio_reader_probe_file(uint32_t audio_offs
     status = Service_Filesystem_GetFileSize(audio_reader_file, &size64);
     if (status != SERVICE_OK)
     {
-        audio_reader_open_busy = audio_reader_open_busy || audio_reader_status_is_busy(status);
-        result = audio_reader_classify_open_status(status, false);
+        result = audio_reader_open_failure(attempt, status, false);
     }
     else if ((size64 == 0U) || (size64 > UINT32_MAX))
     {
@@ -364,10 +431,10 @@ static AudioReader_OpenResultTypeDef audio_reader_probe_file(uint32_t audio_offs
         head_bytes = (size < AUDIO_READER_RANGE_HEAD_BYTES) ? size : AUDIO_READER_RANGE_HEAD_BYTES;
         tail_bytes = (size < AUDIO_READER_RANGE_TAIL_BYTES) ? size : AUDIO_READER_RANGE_TAIL_BYTES;
 
-        result = audio_reader_read_exact(0U, audio_reader_head, head_bytes);
+        result = audio_reader_read_exact(attempt, 0U, audio_reader_head, head_bytes);
         if (result == AUDIO_READER_OPEN_OK)
         {
-            result = audio_reader_read_exact(size - tail_bytes, audio_reader_tail, tail_bytes);
+            result = audio_reader_read_exact(attempt, size - tail_bytes, audio_reader_tail, tail_bytes);
         }
         if (result == AUDIO_READER_OPEN_OK)
         {
@@ -389,8 +456,7 @@ static AudioReader_OpenResultTypeDef audio_reader_probe_file(uint32_t audio_offs
                 }
                 else
                 {
-                    audio_reader_open_busy = audio_reader_open_busy || audio_reader_status_is_busy(status);
-                    result = audio_reader_classify_open_status(status, false);
+                    result = audio_reader_open_failure(attempt, status, false);
                 }
             }
         }
@@ -406,15 +472,17 @@ static AudioReader_OpenResultTypeDef audio_reader_probe_file(uint32_t audio_offs
 /**
  * @brief 按请求打开曲目，填写流记录的开启部分。
  * @param[in] request 非“无流”的请求。
- * @return 开启结果；OK 时 FIL 已打开，audio_reader_record 的参数已填。本次尝试遇到 SERVICE_BUSY 时
- *         audio_reader_open_busy 为真，返回值作废（调用者重试，不应答）。
+ * @param[out] attempt 本次尝试的失败种类（文件槽用尽、卷不可用）；调用者据此用 audio_reader_open_follow_up() 决定
+ *             重试、进宽限还是照返回值应答，前两种情形下返回值作废。
+ * @return 开启结果；OK 时 FIL 已打开，audio_reader_record 的参数已填。
  * @note  曲库没好（代次 0：扫描中、卷变了、没发布）立刻应答 NOT_READY，不等“曲库就绪”（#194 第 15 条）。
  *        先按曲库里的文件定位符打开，核对不符退回按路径打开（STOR-17）；打开成功后记一行 `Stream` INFO。
  *        请求的 AudioOffset 钳到音频区间内后定位（0 为区间起点）；钳到末端时流记录同时带 ENDED。代次 0 表示“当前”。
  *        位置超出列表按 STALE。无法区分“文件不存在”与“打开时 I/O 错误”，打开失败一律 BAD_FILE（C3 的“打不开”）。
  *        BAD_FILE 时仍填写 Generation 与 TrackCount（位置已通过 STALE 校验），供播放任务跳过坏文件；其余失败二者为 0。
  */
-static AudioReader_OpenResultTypeDef audio_reader_open(const AudioReader_RequestTypeDef *request)
+static AudioReader_OpenResultTypeDef audio_reader_open(const AudioReader_RequestTypeDef *request,
+                                                       AudioReader_OpenAttemptTypeDef *attempt)
 {
     uint16_t track_count;
     bool found;
@@ -425,7 +493,8 @@ static AudioReader_OpenResultTypeDef audio_reader_open(const AudioReader_Request
     Service_StatusTypeDef status;
     AudioReader_OpenResultTypeDef result;
 
-    audio_reader_open_busy = false;
+    attempt->Busy = false;
+    attempt->VolumeUnavailable = false;
     audio_reader_position = request->Position;
 
     /* 代次、条数、路径和定位符一次读全（同一把锁内）：中途重扫或拔卡不会读到半新半旧的内容。 */
@@ -458,12 +527,11 @@ static AudioReader_OpenResultTypeDef audio_reader_open(const AudioReader_Request
     status = catalog_track_open(request->Position, &audio_reader_track, &audio_reader_file, &open_us);
     if (status != SERVICE_OK)
     {
-        audio_reader_open_busy = audio_reader_status_is_busy(status);
-        return audio_reader_classify_open_status(status, true);
+        return audio_reader_open_failure(attempt, status, true);
     }
     audio_reader_file_open = true;
 
-    result = audio_reader_probe_file(request->AudioOffset, &audio_bytes, &remaining, &lseek_us);
+    result = audio_reader_probe_file(attempt, request->AudioOffset, &audio_bytes, &remaining, &lseek_us);
     if (result == AUDIO_READER_OPEN_OK)
     {
         /* 曲目或跳转边界上记一行（DIAG-5）；off= 取请求里的 AudioOffset，不是钳位后的落点。 */
@@ -481,31 +549,30 @@ static AudioReader_OpenResultTypeDef audio_reader_open(const AudioReader_Request
 }
 
 /**
- * @brief 跑一次开流并应答；遇到 SERVICE_BUSY 就安排重试、先不应答。
- * @param[in] request 非“无流”的请求；记录里的 StreamSeq 已填。
+ * @brief 把流记录里的开启部分清回“尚无应答”，开流重试或进宽限时用。
  */
-static void audio_reader_start_stream(const AudioReader_RequestTypeDef *request)
+static void audio_reader_record_set_pending(void)
 {
-    audio_reader_record.OpenResult = audio_reader_open(request);
+    audio_reader_close_file();
+    audio_reader_record.OpenResult = AUDIO_READER_OPEN_PENDING;
+    audio_reader_record.Generation = 0U;
+    audio_reader_record.TrackCount = 0U;
+    audio_reader_record.AudioBytes = 0U;
+    audio_reader_record.End = AUDIO_READER_END_NONE;
+}
 
-    if (audio_reader_open_busy)
+/**
+ * @brief 应答开流：写开启结果、整理其余字段并覆盖写流记录信箱、唤醒播放任务。
+ * @param[in] result 开启结果。
+ * @note  非 OK 时 AudioBytes 为 0；除 BAD_FILE 外 Generation 与 TrackCount 也为 0（BAD_FILE 保留它们，
+ *        供播放任务跳过坏文件）。
+ */
+static void audio_reader_finish_open(AudioReader_OpenResultTypeDef result)
+{
+    audio_reader_record.OpenResult = result;
+    if (result != AUDIO_READER_OPEN_OK)
     {
-        /* 文件槽暂时用尽：不是文件错误，不应答、不当坏文件跳过；过约 10 ms 重来，T_data 兜底。 */
-        audio_reader_close_file();
-        audio_reader_record.OpenResult = AUDIO_READER_OPEN_PENDING;
-        audio_reader_record.Generation = 0U;
-        audio_reader_record.TrackCount = 0U;
-        audio_reader_record.AudioBytes = 0U;
-        audio_reader_record.End = AUDIO_READER_END_NONE;
-        audio_reader_retry_request = *request;
-        audio_reader_retry_schedule(AUDIO_READER_RETRY_OPEN, "open");
-        return;
-    }
-
-    audio_reader_retry_clear();
-    if (audio_reader_record.OpenResult != AUDIO_READER_OPEN_OK)
-    {
-        if (audio_reader_record.OpenResult != AUDIO_READER_OPEN_BAD_FILE)
+        if (result != AUDIO_READER_OPEN_BAD_FILE)
         {
             audio_reader_record.Generation = 0U;
             audio_reader_record.TrackCount = 0U;
@@ -516,10 +583,51 @@ static void audio_reader_start_stream(const AudioReader_RequestTypeDef *request)
 }
 
 /**
+ * @brief 跑一次开流，按失败种类应答、重试或进卷宽限。
+ * @param[in] request 非“无流”的请求；记录里的 StreamSeq 已填。
+ * @note  跟进的判断在 audio_reader_open_follow_up()（主机测试）：
+ *        - SERVICE_BUSY（文件槽暂时用尽）：不是文件错误，不应答、不当坏文件跳过，过约 10 ms 重跑整个开流，T_data 兜底；
+ *        - 卷不可用（NO_MEDIA、NOT_READY、INVALID_HANDLE）而卷挂着、序号没变：卡刚拔而卷任务还没轮到，或卡还在设备出错，
+ *          分不出来，不应答，进卷宽限，等卷事件（NOT_READY）或超时（IO_ERROR）；
+ *        - 其余照分类结果立刻应答（卷变了应答 NOT_READY；曲库没好在 audio_reader_open() 里就应答了）。
+ */
+static void audio_reader_start_stream(const AudioReader_RequestTypeDef *request)
+{
+    AudioReader_OpenAttemptTypeDef attempt;
+    AudioReader_OpenResultTypeDef result;
+    Volume_StatusTypeDef volume;
+
+    result = audio_reader_open(request, &attempt);
+    volume = volume_status(VOLUME_ID_SD);
+
+    switch (audio_reader_open_follow_up(attempt.Busy,
+                                        attempt.VolumeUnavailable,
+                                        !audio_reader_volume_changed(volume.Mounted, volume.Sequence, audio_reader_handled_sequence)))
+    {
+        case AUDIO_READER_OPEN_FOLLOW_RETRY:
+            audio_reader_record_set_pending();
+            audio_reader_retry_request = *request;
+            audio_reader_retry_schedule(AUDIO_READER_RETRY_OPEN, "open");
+            return;
+        case AUDIO_READER_OPEN_FOLLOW_GRACE:
+            audio_reader_record_set_pending();
+            audio_reader_retry_clear();
+            audio_reader_grace_start(AUDIO_READER_GRACE_OPEN);
+            return;
+        case AUDIO_READER_OPEN_FOLLOW_ANSWER:
+        default:
+            break;
+    }
+
+    audio_reader_retry_clear();
+    audio_reader_finish_open(result);
+}
+
+/**
  * @brief 处理请求信箱：关闭旧流，开启新流并应答；到点的开流重试也在这里重跑（每圈第二步）。
  * @note  开启 ≤ 等 SD 锁 + 按定位符打开 + 标签探测（读头、读尾），目标约 ≤ 30 ms。消抖中不暂缓：文件调用在
  *        Filesystem 入口等闸，开流的调用慢约 30 ms 后正常返回，或卸载后返回失败（按 NOT_READY 应答）。
- *        新请求取代任何在等的重试。
+ *        新请求取代任何在等的重试和卷宽限。
  */
 void audio_reader_stream_process_request(void)
 {
@@ -528,6 +636,7 @@ void audio_reader_stream_process_request(void)
     if (xQueueReceive(audio_reader_request_queue, &request, 0U) == pdTRUE)
     {
         audio_reader_retry_clear();
+        audio_reader_grace_clear();
         audio_reader_close_file();
         (void)memset(&audio_reader_record, 0, sizeof(audio_reader_record));
 
@@ -551,6 +660,87 @@ void audio_reader_stream_process_request(void)
 }
 
 /**
+ * @brief 以拔卡收尾当前流：关句柄、取消重试和宽限、写 CARD_REMOVED、唤醒播放任务、记时延行。
+ * @param[in] previous 读取任务此前已处理的卷序号。
+ * @param[in] current 现在的卷序号。
+ * @note  由 audio_reader_stream_apply_volume() 和卷宽限等到卷事件时共用。时延行（常开，R4.10）：
+ *        `CARD_REMOVED lat=<ms>ms seq=<前>-><后> stream=<流序号>`，时延相对卷任务记下的卡检测第一个边沿，在固件里算好。
+ */
+static void audio_reader_end_stream_card_removed(uint32_t previous, uint32_t current)
+{
+    uint32_t edge_tick = 0U;
+    uint32_t now_tick;
+    bool edge_known;
+    char text[96];
+
+    audio_reader_close_file();
+    audio_reader_retry_clear();
+    audio_reader_grace_clear();
+    audio_reader_record.End = AUDIO_READER_END_CARD_REMOVED;
+    audio_reader_publish_record(true);
+
+    now_tick = (uint32_t)xTaskGetTickCount();
+    edge_known = volume_event_published_edge(VOLUME_ID_SD, &edge_tick);
+    (void)audio_reader_format_removed(text,
+                                      sizeof(text),
+                                      edge_known,
+                                      (now_tick - edge_tick) * (uint32_t)portTICK_PERIOD_MS,
+                                      previous,
+                                      current,
+                                      audio_reader_record.StreamSeq);
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, audio_reader_log_tag, text);
+}
+
+/**
+ * @brief 卷宽限里每圈的处理（读一块之前调用）：等到卷事件、超时、被新请求取代，或继续等。
+ * @note  判断在 `audio_reader_grace_step()`（主机测试），优先级 新请求 > 卷事件 > 超时 > 继续等：
+ *        - 读块宽限：等到卷事件按拔卡写 `CARD_REMOVED`（流仍被播放任务持有）；超时写 `READ_ERROR`
+ *          并记 `Audio stream read failed.`（卡还在、设备出错）；
+ *        - 开流宽限：等到卷事件应答 `NOT_READY`；超时应答 `IO_ERROR`（播放侧停止 READ_ERROR）；
+ *        - 新请求：什么都不写，处理新请求的那一步会清掉宽限。
+ *        等待用唯一的等待点，新请求、块归还、卷事件都能叫醒，不是死等。
+ */
+static void audio_reader_grace_poll(void)
+{
+    const AudioReader_GraceKindTypeDef kind = audio_reader_grace_kind;
+    const Volume_StatusTypeDef volume = volume_status(VOLUME_ID_SD);
+    AudioReader_GraceActionTypeDef action;
+
+    if (kind == AUDIO_READER_GRACE_NONE)
+    {
+        return;
+    }
+
+    action = audio_reader_grace_step(audio_reader_request_pending(),
+                                     audio_reader_volume_changed(volume.Mounted, volume.Sequence, audio_reader_grace_sequence),
+                                     audio_reader_ticks_until((uint32_t)xTaskGetTickCount(), (uint32_t)audio_reader_grace_deadline));
+    if ((action == AUDIO_READER_GRACE_WAIT) || (action == AUDIO_READER_GRACE_SUPERSEDED))
+    {
+        return;
+    }
+
+    audio_reader_grace_clear();
+    if (kind == AUDIO_READER_GRACE_OPEN)
+    {
+        audio_reader_finish_open(audio_reader_open_grace_result(action));
+    }
+    else if (action == AUDIO_READER_GRACE_VOLUME_CHANGED)
+    {
+        const uint32_t previous = audio_reader_handled_sequence;
+
+        audio_reader_handled_sequence = volume.Sequence;
+        audio_reader_end_stream_card_removed(previous, volume.Sequence);
+    }
+    else
+    {
+        audio_reader_close_file();
+        audio_reader_record.End = AUDIO_READER_END_READ_ERROR;
+        audio_reader_publish_record(true);
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, audio_reader_log_tag, "Audio stream read failed.");
+    }
+}
+
+/**
  * @brief 最多读一块并交给播放任务（每圈第三步）。
  * @note  一块对应一次 SDMMC DMA，也是取消的上界之一（取消 ≤ 等 SD 锁 + 一次块读取）。读完后若请求信箱已有
  *        新请求，说明流被取代，这个半读的块不入就绪队列，直接放回空闲队列。ENDED 只在最后一块入队之后才写。
@@ -559,9 +749,11 @@ void audio_reader_stream_process_request(void)
  *        Filesystem 入口等闸，所以卡刚拔、边沿已到而 30 ms 消抖或对账还没结束时，会一直等到本轮对账结束才返回，
  *        不会把拔卡误报成读错误；闸开着时立刻返回。然后看 SD 卷：序号变了或卷已不挂，是卡没了，流停住（FIL 已关，
  *        不空转），等卷事件写 `CARD_REMOVED`；序号没变且卷仍挂着，是卡还在、设备出错（例如标签读取传输出错使设备
- *        进 ERROR），没有边沿就没有卷事件，立刻按读错误报，不等 T_data（#195 第 9 条、#211）。回到等待点等卷事件
- *        （#194 第 11 条的字面）只适用于前一种；后一种没有事件可等，会静音到 T_data，所以按 #211 的版本做。
- *        判断在 `audio_reader_classify_read()`（主机测试）。
+ *        进 ERROR），没有边沿就没有卷事件，不能一直等，会静音到 T_data（#195 第 9 条、#211）。但**卷没变并不说明卡还在**：
+ *        读取任务与卷任务同为优先级 3，卡检测中断不会让同级的卷任务立刻抢占，读取任务正在 CPU 上收尾时边沿到了，
+ *        闸还没关、序号还没变，`CloseFile` 直接通过，这时报读错误会把拔卡误报成 “Read error”，之后也不再写 `CARD_REMOVED`。
+ *        所以卷没变时进**卷宽限**（`audio_reader_grace_poll()`）：在等待点上等最多 `AUDIO_READER_VOLUME_GRACE_MS`，期间来了
+ *        卷事件按拔卡写 `CARD_REMOVED`，超时仍没变才写 `READ_ERROR`。判断在 `audio_reader_classify_read()`（主机测试）。
  *
  *        读到 `SERVICE_BUSY`（文件槽暂时用尽）不是文件错误：放回这个块，过约 10 ms 在同一个文件位置重读。
  */
@@ -573,6 +765,8 @@ void audio_reader_stream_read_block(void)
     Service_StatusTypeDef status;
     uint32_t want;
     uint32_t got = 0U;
+
+    audio_reader_grace_poll();
 
     if (!audio_reader_file_open)
     {
@@ -610,6 +804,16 @@ void audio_reader_stream_read_block(void)
     {
         (void)audio_reader_block_release(block);
         audio_reader_retry_schedule(AUDIO_READER_RETRY_READ, "read");
+        return;
+    }
+    if (verdict == AUDIO_READER_READ_GRACE)
+    {
+        /* 卷不可用而卷没变：句柄已关（上面的 CloseFile）。不立刻报读错误，也不无限等：在等待点上有上界地等卷事件，
+         * 期间来了卷事件按拔卡写 CARD_REMOVED，超时仍没变才写 READ_ERROR（audio_reader_grace_poll）。 */
+        (void)audio_reader_block_release(block);
+        audio_reader_remaining = 0U;
+        audio_reader_retry_clear();
+        audio_reader_grace_start(AUDIO_READER_GRACE_READ);
         return;
     }
     if (verdict == AUDIO_READER_READ_STALL)
@@ -666,10 +870,6 @@ void audio_reader_stream_apply_volume(void)
 {
     const Volume_StatusTypeDef volume = volume_status(VOLUME_ID_SD);
     const uint32_t previous = audio_reader_handled_sequence;
-    uint32_t edge_tick = 0U;
-    uint32_t now_tick;
-    bool edge_known;
-    char text[96];
 
     if (volume.Sequence == previous)
     {
@@ -682,19 +882,5 @@ void audio_reader_stream_apply_volume(void)
         return;
     }
 
-    audio_reader_close_file();
-    audio_reader_retry_clear();
-    audio_reader_record.End = AUDIO_READER_END_CARD_REMOVED;
-    audio_reader_publish_record(true);
-
-    now_tick = (uint32_t)xTaskGetTickCount();
-    edge_known = volume_event_published_edge(VOLUME_ID_SD, &edge_tick);
-    (void)audio_reader_format_removed(text,
-                                      sizeof(text),
-                                      edge_known,
-                                      (now_tick - edge_tick) * (uint32_t)portTICK_PERIOD_MS,
-                                      previous,
-                                      volume.Sequence,
-                                      audio_reader_record.StreamSeq);
-    (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, audio_reader_log_tag, text);
+    audio_reader_end_stream_card_removed(previous, volume.Sequence);
 }

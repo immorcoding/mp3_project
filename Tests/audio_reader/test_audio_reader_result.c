@@ -8,7 +8,10 @@
  * @details
  *          核心是失败约定：卷变了（卡没了或正在对账）时 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 不是文件错误——
  *          读块得到它们时流“停住”（不写 `READ_ERROR`、不对同一个句柄重试），等卷事件写 `CARD_REMOVED`；
- *          卷没变而读块得到它们（卡还在、设备出错）则没有卷事件可等，立刻按读错误报；开流得到它们按 `NOT_READY` 应答。
+ *          卷没变而读块得到它们，可能是卡刚拔、边沿已到而卷任务还没轮到（与读取任务同级，卡检测中断不会让它立刻抢占，
+ *          闸还没关、卷序号还没变），也可能是卡还在、设备出错（没有边沿就没有卷事件）：先在等待点等一个有上界的时间
+ *          （`AUDIO_READER_VOLUME_GRACE_MS`）看卷事件，期间来了卷事件按拔卡写 `CARD_REMOVED`，超时仍没变才报读错误；
+ *          开流得到它们：卷变了或曲库没好按 `NOT_READY` 应答，卷没变同样先等，超时应答 `IO_ERROR`。
  *          其他错误表示卡还在，立刻按原来的方式报错。`SERVICE_BUSY` 不算文件错误，过约 10 ms 重试。
  *          期望值来自 #195、#194 与 #202 D 节，不用代码里的表达式重算。
  ******************************************************************************
@@ -56,17 +59,19 @@ static void test_volume_unavailable_statuses_stall_the_stream_while_the_volume_h
 }
 
 /**
- * @brief 卷没变（挂着且序号相同）时，同样的三种返回值说明卡还在、设备出了错：没有边沿就不会有卷事件，
- *        一直等会静音到 T_data（5 s），所以立刻按读错误报。
+ * @brief 卷没变（挂着且序号相同）时，同样的三种返回值有两种可能：卡刚拔、边沿已到而卷任务还没轮到（读取任务与卷任务
+ *        同级，中断不会让卷任务立刻抢占，闸还没关、序号还没变），或卡还在、设备出了错（例如标签读取传输出错使设备进
+ *        ERROR，FatFs 的下一次读得到 NOT_READY；FR_NOT_READY 也映射成 NO_MEDIA）。分不出来，所以不立刻报读错误，
+ *        也不无限等：进入有上界的宽限，等卷事件。
  */
-static void test_volume_unavailable_statuses_with_an_unchanged_volume_are_read_errors(void)
+static void test_volume_unavailable_statuses_with_an_unchanged_volume_get_a_bounded_grace(void)
 {
     static const Service_StatusTypeDef unavailable[] = {SERVICE_NO_MEDIA, SERVICE_NOT_READY, SERVICE_INVALID_HANDLE};
 
     for (unsigned index = 0U; index < sizeof(unavailable) / sizeof(unavailable[0]); index++)
     {
-        assert(audio_reader_classify_read(unavailable[index], 0U, UNCHANGED) == AUDIO_READER_READ_ERROR);
-        assert(audio_reader_classify_read(unavailable[index], 4096U, UNCHANGED) == AUDIO_READER_READ_ERROR);
+        assert(audio_reader_classify_read(unavailable[index], 0U, UNCHANGED) == AUDIO_READER_READ_GRACE);
+        assert(audio_reader_classify_read(unavailable[index], 4096U, UNCHANGED) == AUDIO_READER_READ_GRACE);
     }
 }
 
@@ -76,7 +81,7 @@ static void test_volume_unavailable_statuses_with_an_unchanged_volume_are_read_e
 static void test_sequence_comparison_is_equality_not_ordering(void)
 {
     assert(audio_reader_classify_read(SERVICE_NO_MEDIA, 0U, true, 0U, 0x7FFFFFFFU) == AUDIO_READER_READ_STALL);
-    assert(audio_reader_classify_read(SERVICE_NO_MEDIA, 0U, true, 0x7FFFFFFFU, 0x7FFFFFFFU) == AUDIO_READER_READ_ERROR);
+    assert(audio_reader_classify_read(SERVICE_NO_MEDIA, 0U, true, 0x7FFFFFFFU, 0x7FFFFFFFU) == AUDIO_READER_READ_GRACE);
 }
 
 /**
@@ -202,6 +207,76 @@ static void test_card_removed_is_written_only_when_the_sequence_changed_and_the_
 }
 
 /**
+ * @brief “卷变了”只看是否挂着和序号是否相同：不挂就是变了；挂着而序号不同就是变了（换卡跳 2、31 位回绕都算）；
+ *        挂着且序号相同才是没变。
+ */
+static void test_volume_changed_means_unmounted_or_a_different_sequence(void)
+{
+    assert(!audio_reader_volume_changed(true, 7U, 7U));
+    assert(audio_reader_volume_changed(true, 8U, 7U));
+    assert(audio_reader_volume_changed(true, 9U, 7U));
+    assert(audio_reader_volume_changed(true, 0U, 0x7FFFFFFFU));
+    assert(audio_reader_volume_changed(false, 7U, 7U));
+    assert(audio_reader_volume_changed(false, 8U, 7U));
+}
+
+/**
+ * @brief 宽限里每圈的判断（读块和开流共用）：来了新请求就让位；卷事件到了（序号变了或卷不挂）就是“等到事件”；
+ *        时间到了仍没变就是“超时”；都没有就继续等。优先级是 新请求 > 卷事件 > 超时 > 继续等：
+ *        新请求取代旧流，卷事件到了就不再按超时处理。
+ */
+static void test_grace_waits_then_ends_with_the_event_or_the_timeout(void)
+{
+    /* 继续等：没有新请求、卷没变、还剩时间。 */
+    assert(audio_reader_grace_step(false, false, 100U) == AUDIO_READER_GRACE_WAIT);
+    assert(audio_reader_grace_step(false, false, 1U) == AUDIO_READER_GRACE_WAIT);
+    /* 等到事件：期间卷变了，哪怕还剩很多时间，或者时间正好也到了。 */
+    assert(audio_reader_grace_step(false, true, 100U) == AUDIO_READER_GRACE_VOLUME_CHANGED);
+    assert(audio_reader_grace_step(false, true, 0U) == AUDIO_READER_GRACE_VOLUME_CHANGED);
+    /* 超时：时间到了卷仍没变。 */
+    assert(audio_reader_grace_step(false, false, 0U) == AUDIO_READER_GRACE_EXPIRED);
+}
+
+/**
+ * @brief 等待中来了新请求：新请求取代旧流，宽限让位（不写任何终止原因，由处理新请求的那一步清掉宽限），
+ *        不管剩多少时间、卷变没变都一样；等待点因此不会变成死等（新请求的叫醒与让位同时成立）。
+ */
+static void test_a_new_request_during_the_grace_supersedes_it(void)
+{
+    assert(audio_reader_grace_step(true, false, 100U) == AUDIO_READER_GRACE_SUPERSEDED);
+    assert(audio_reader_grace_step(true, false, 0U) == AUDIO_READER_GRACE_SUPERSEDED);
+    assert(audio_reader_grace_step(true, true, 100U) == AUDIO_READER_GRACE_SUPERSEDED);
+    assert(audio_reader_grace_step(true, true, 0U) == AUDIO_READER_GRACE_SUPERSEDED);
+}
+
+/**
+ * @brief 开流和探测遇到卷不可用的跟进：曲库没好或卷变了照旧立刻应答（NOT_READY）；卷挂着、序号没变而开流得到
+ *        NO_MEDIA、NOT_READY、INVALID_HANDLE，要进宽限；SERVICE_BUSY 过约 10 ms 重试，优先于宽限；其他失败照旧立刻应答。
+ */
+static void test_open_follow_up_chooses_answer_retry_or_grace(void)
+{
+    assert(audio_reader_open_follow_up(false, false, true) == AUDIO_READER_OPEN_FOLLOW_ANSWER);   /* 别的失败（坏文件等）。 */
+    assert(audio_reader_open_follow_up(false, false, false) == AUDIO_READER_OPEN_FOLLOW_ANSWER);
+    assert(audio_reader_open_follow_up(false, true, false) == AUDIO_READER_OPEN_FOLLOW_ANSWER);   /* 卷变了：NOT_READY。 */
+    assert(audio_reader_open_follow_up(false, true, true) == AUDIO_READER_OPEN_FOLLOW_GRACE);     /* 卷没变：等卷事件。 */
+    assert(audio_reader_open_follow_up(true, false, true) == AUDIO_READER_OPEN_FOLLOW_RETRY);     /* 文件槽用尽。 */
+    assert(audio_reader_open_follow_up(true, true, true) == AUDIO_READER_OPEN_FOLLOW_RETRY);
+    assert(audio_reader_open_follow_up(true, true, false) == AUDIO_READER_OPEN_FOLLOW_RETRY);
+}
+
+/**
+ * @brief 开流宽限的结果：等到卷事件应答 NOT_READY（卡没了，播放侧显示 “SD card not ready”，游标重置）；
+ *        超时仍没变应答 IO_ERROR（卡还在、设备出错，播放侧停止 READ_ERROR、游标保留）；还在等或被新请求取代不应答。
+ */
+static void test_open_grace_answers_not_ready_on_the_event_and_io_error_on_the_timeout(void)
+{
+    assert(audio_reader_open_grace_result(AUDIO_READER_GRACE_VOLUME_CHANGED) == AUDIO_READER_OPEN_NOT_READY);
+    assert(audio_reader_open_grace_result(AUDIO_READER_GRACE_EXPIRED) == AUDIO_READER_OPEN_IO_ERROR);
+    assert(audio_reader_open_grace_result(AUDIO_READER_GRACE_WAIT) == AUDIO_READER_OPEN_PENDING);
+    assert(audio_reader_open_grace_result(AUDIO_READER_GRACE_SUPERSEDED) == AUDIO_READER_OPEN_PENDING);
+}
+
+/**
  * @brief 日志节拍：同一次开流或读块遇到 SERVICE_BUSY，第 1 次记一行，之后每满 100 次再记一行（约 1 s），其余不记。
  *        T_data 5 s 内最多 6 行，不刷屏（DIAG-3）。
  */
@@ -294,7 +369,7 @@ int main(void)
 {
     test_successful_read_continues_and_empty_read_is_an_error();
     test_volume_unavailable_statuses_stall_the_stream_while_the_volume_has_changed();
-    test_volume_unavailable_statuses_with_an_unchanged_volume_are_read_errors();
+    test_volume_unavailable_statuses_with_an_unchanged_volume_get_a_bounded_grace();
     test_sequence_comparison_is_equality_not_ordering();
     test_other_errors_are_read_errors_but_busy_is_retried();
     test_volume_unavailable_statuses_answer_not_ready_when_opening();
@@ -302,6 +377,11 @@ int main(void)
     test_only_busy_is_retried();
     test_a_stream_is_held_until_it_ends_in_error_or_card_removal();
     test_card_removed_is_written_only_when_the_sequence_changed_and_the_stream_is_held();
+    test_volume_changed_means_unmounted_or_a_different_sequence();
+    test_grace_waits_then_ends_with_the_event_or_the_timeout();
+    test_a_new_request_during_the_grace_supersedes_it();
+    test_open_follow_up_chooses_answer_retry_or_grace();
+    test_open_grace_answers_not_ready_on_the_event_and_io_error_on_the_timeout();
     test_busy_log_is_rate_limited();
     test_card_removed_line_has_the_documented_format();
     test_busy_line_has_the_documented_format();

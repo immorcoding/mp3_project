@@ -77,8 +77,8 @@ static UBaseType_t monitor_get_task_stack_words(const char *task_name)
         return APP_VOLUME_TASK_STACK_WORDS;
     }
 
-    /* 任务名最长 15 个字符（configMAX_TASK_NAME_LEN 为 16），“Audio Reader Task”放不下，会被截断成登记不上的名字。 */
-    if (strcmp(task_name, "Audio Read Task") == 0)
+    /* 任务名只在 app_config.h 定义一次（APP_AUDIO_READER_TASK_NAME，最长 15 个字符），创建处和这里都引用它。 */
+    if (strcmp(task_name, APP_AUDIO_READER_TASK_NAME) == 0)
     {
         return APP_AUDIO_READER_TASK_STACK_WORDS;
     }
