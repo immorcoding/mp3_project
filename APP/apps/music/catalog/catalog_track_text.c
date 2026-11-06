@@ -17,7 +17,7 @@
 _Static_assert(CATALOG_TEXT_BLOCK_BYTES <= SERVICE_FILESYSTEM_IO_MAX_BYTES,
                "tag read block must fit one Filesystem transfer");
 
-/** @brief 标签读取工作缓冲；只由 Storage Task 使用，放静态区以免占任务栈。 */
+/** @brief 标签读取工作缓冲；只由前台任务使用，放静态区以免占任务栈。 */
 static uint8_t catalog_track_text_block[CATALOG_TEXT_BLOCK_BYTES];
 
 /** @brief 最近一次读取的结果；下一次读取前有效。 */
@@ -28,8 +28,8 @@ static bool catalog_track_text_unavailable;
 
 /**
  * @brief 最近一次 `catalog_track_text_read()` 返回空结果，是不是因为打开时卷不可用（拔卡的正常竞态）。
- * @return true 是：不是文件错误，也不是防御分支，调用者不必记 WARN，随后的卷事件会收掉窗口或名字槽。
- * @note  每次 `catalog_track_text_read()` 开头清零；只由 Storage Task 调用。
+ * @return true 是：不是文件错误，也不是防御分支，调用者不必记 WARN；曲库代次随后会变成 0，前台流程以空窗收尾。
+ * @note  每次 `catalog_track_text_read()` 开头清零；只由前台任务调用。
  */
 bool catalog_track_text_last_read_unavailable(void)
 {
@@ -99,7 +99,7 @@ static const CatalogTrackText_ResultTypeDef *catalog_track_text_fallback(Catalog
  * @return 本 Module 持有的结果，下一次调用前有效；NULL 表示文件主名提取失败（STOR-15 的防御分支），
  *         或打开时得到 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`（卷不可用，
  *         不是文件错误，不回退、不计数）。
- * @note  只由 Storage Task 调用。先按曲库里的文件定位符打开，核对不符退回按路径打开（STOR-17、ARC-19）；
+ * @note  只由前台任务调用。先按曲库里的文件定位符打开，核对不符退回按路径打开（STOR-17、ARC-19）；
  *        打开失败按“打开失败”回退文件主名；取文件长度失败按“读取错误”回退；
  *        其余标签侧结果由 catalog_track_text() 判定。标签读取 FIL 用完即关，与音频流 FIL 合计
  *        不超过 FatFs `_FS_LOCK`（2）。一次调用最坏为 f_open + 取长度 + CATALOG_TEXT_MAX_READS 次读取 + f_close。
@@ -124,6 +124,7 @@ const CatalogTrackText_ResultTypeDef *catalog_track_text_read(uint16_t position,
     path_bytes = (uint32_t)strlen(path);
     catalog_track_text_unavailable = false;
     result->OpenFailed = false;
+    result->OpenBusy = false;
     result->OpenUs = 0U;
 
     open_status = catalog_track_open(position, track, &file, &result->OpenUs);
@@ -136,6 +137,7 @@ const CatalogTrackText_ResultTypeDef *catalog_track_text_read(uint16_t position,
     if (open_status != SERVICE_OK)
     {
         result->OpenFailed = true;
+        result->OpenBusy = (open_status == SERVICE_BUSY); /* 文件槽用尽是瞬时的：调用者过约 10 ms 重试，不把好歌当坏文件。 */
         return catalog_track_text_fallback(result, path, path_bytes, CATALOG_TEXT_NO_ID3V2);
     }
 

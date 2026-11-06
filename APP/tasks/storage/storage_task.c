@@ -1,11 +1,13 @@
 /**
  * @file storage_task.c
- * @brief Storage Task 入口：卷事件的订阅者，继续做曲库扫描、两个槽和 Flash 回收（音频流已搬到音频读取任务，#215）。
+ * @brief Storage Task 入口：卷事件的订阅者，只剩曲库扫描和 Flash 回收（音频流在音频读取任务，曲名与 Queue 窗口在前台任务，#215、#218）。
  *
  * @details
  *          热插拔、挂载和卸载已经归卷任务（`APP/tasks/volume/`）：本任务不再碰 Platform SD，也不消抖。
- *          它在入口登记成卷事件的订阅者，被叫醒后比对 SD 卷序号：序号变了，旧的全部作废（曲库、两个槽），
- *          再看现状，卷挂着就扫描曲库。音频流的 `CARD_REMOVED` 由音频读取任务自己写，不在这里。
+ *          它在入口登记成卷事件的订阅者，被叫醒后比对 SD 卷序号：序号变了，旧的全部作废（曲库），
+ *          再看现状，卷挂着就扫描曲库；扫描发布后曲库叫醒前台任务一次（`catalog.c`）。音频流的 `CARD_REMOVED` 由音频读取任务
+ *          自己写，曲名与窗口行由前台任务读，不在这里。优先级 1（#218：GUI、Log、Monitor、前台任务都升到 2）：扫描只拿空隙，
+ *          不抢前台；扫描和回收随后台任务票（#220）搬进后台任务。
  */
 
 #include "APP/tasks/storage/storage_task.h"
@@ -13,8 +15,6 @@
 #include "APP/tasks/storage/flash/storage_flash.h"
 #include "APP/apps/music/catalog/catalog.h"
 #include "APP/tasks/volume/volume_event.h"
-#include "catalog/storage_listbuffer.h"
-#include "catalog/storage_namebuffer.h"
 
 #include <stdint.h>
 
@@ -22,16 +22,6 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
 #include "Service/log/log_service.h"
-
-typedef enum
-{
-    STORAGE_TASK_SD_NOT_READY = 0U,
-    STORAGE_TASK_SD_READY
-} Storage_TaskSdStateTypeDef;
-
-/** @brief 本任务对 SD 的看法：卷挂着且曲库扫描完成才是就绪。扫描期间、卷消失后都是未就绪。 */
-static volatile Storage_TaskSdStateTypeDef storage_task_sd_state =
-    STORAGE_TASK_SD_NOT_READY;
 
 /** @brief 已经处理过的 SD 卷序号；只由 Storage Task 访问。 */
 static uint32_t storage_task_sd_sequence_seen;
@@ -72,13 +62,12 @@ static TickType_t storage_task_ticks_until(TickType_t now,
 /**
  * @brief  处理 SD 卷事件：序号变了，旧的全部作废，再看现状；卷挂着就扫描曲库。
  * @note   每圈都调用（比对一个字，没变就立刻返回），所以丢叫醒、合并叫醒、晚订阅都不会漏。
- *         作废曲库，收掉两个槽。音频流的 `CARD_REMOVED` 由音频读取任务自己收尾（它也订阅了卷事件），与本任务不分先后：
- *         曲库代次在卷序号变了之后就读作 0（`catalog_read_track()`），所以不会有人按旧曲库开新流。
- *         卷任务不等本任务：卸载已使旧令牌失效，晚一点收尾也碰不到旧卡。
- *         换卡时序号跳 2，同样走这里：旧卡的流和曲库作废，再对新卡扫描。
- *         扫描期间 `storage_task_sd_is_ready()` 为假；扫描完成后若序号又变了（含扫描被卷不可用丢弃、卡已拔走），
- *         不置就绪，留给下一圈处理，不会把空库置就绪等事件；扫描被丢弃但序号没变（卡还在、读不了）则记 ERROR，
- *         置就绪、曲库为空。
+ *         作废曲库。音频流的 `CARD_REMOVED` 由音频读取任务自己收尾（它也订阅了卷事件），与本任务不分先后：
+ *         曲库代次在卷序号变了之后就读作 0（`catalog_read_track()`），所以不会有人按旧曲库开新流；前台任务也订阅了卷事件，
+ *         代次读作 0 时发布代次 0 的空窗，曲名答代次 0。卷任务不等本任务：卸载已使旧令牌失效，晚一点收尾也碰不到旧卡。
+ *         换卡时序号跳 2，同样走这里：旧卡的流和曲库作废，再对新卡扫描。扫描完成发布（代次非 0）后曲库叫醒前台任务一次。
+ *         扫描被丢弃（卷不可用、扫描途中卷序号又变了）：卷变了就等下一个卷事件，不会把空库当成已就绪；
+ *         扫描被丢弃但序号没变（卡还在、读不了）则记 ERROR，曲库保持代次 0，拔插卡后重扫。
  */
 static void storage_task_apply_sd_volume(void)
 {
@@ -91,11 +80,8 @@ static void storage_task_apply_sd_volume(void)
     }
 
     storage_task_sd_sequence_seen = volume.Sequence;
-    storage_task_sd_state = STORAGE_TASK_SD_NOT_READY;
 
     (void)catalog_invalidate();
-    storage_listbuffer_complete_unavailable();
-    storage_namebuffer_complete_unavailable();
 
     if (!volume.Mounted)
     {
@@ -114,14 +100,10 @@ static void storage_task_apply_sd_volume(void)
     if (catalog_scan_verdict(unchanged) == CATALOG_SCAN_UNREADABLE)
     {
         /* 扫描被卷不可用丢弃，但卷没变：卡还在、读不了（设备出错），没有边沿就没有卷事件，不能等。
-         * 沿用原来扫描失败的做法：卷挂着就绪、曲库为空；拔插卡（边沿）后重新对账和重扫。 */
+         * 曲库保持代次 0（前台任务据此发空窗）；拔插卡（边沿）后重新对账和重扫。 */
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                "STORAGE",
                                "Catalog scan aborted but the card is still there; reinsert the card.");
-    }
-    if (unchanged)
-    {
-        storage_task_sd_state = STORAGE_TASK_SD_READY;
     }
 }
 
@@ -130,19 +112,12 @@ static void storage_task_apply_sd_volume(void)
  * @param[in] now 当前 tick。
  * @param[in] reclaim_start 回收起点。
  * @return 传给通知等待的超时。
- * @note   就绪时 Queue 窗口仍在逐行填写时不阻塞。Flash 卷还没挂载（Flash 启动任务的 `MountFlash` 在持锁）时不回收，
+ * @note   Flash 卷还没挂载（Flash 启动任务的 `MountFlash` 在持锁）时不回收，
  *         回收剩余不参与计时，只靠通知（含 Flash 卷就绪的卷事件）唤醒。打开的音频流不再影响回收机会（STOR-12：
  *         音频读取和回收分到两个任务、SD 与 Flash 各一把锁之后，擦除不再挡补块）。
  */
 static TickType_t storage_task_next_wait_ticks(TickType_t now, TickType_t reclaim_start)
 {
-    /* 窗口逐圈读一行标签（STOR-16）：填到一半时下一圈接着读，不阻塞等事件。 */
-    if ((storage_task_sd_state == STORAGE_TASK_SD_READY) &&
-        (storage_listbuffer.Status == STORAGE_LISTBUFFER_PENDING))
-    {
-        return 0U;
-    }
-
     if (!volume_status(VOLUME_ID_FLASH).Mounted)
     {
         return portMAX_DELAY;
@@ -176,54 +151,12 @@ static uint32_t storage_task_wait_event(TickType_t ticks)
 }
 
 /**
- * @brief  仅 SD 就绪时若有 PENDING 则为 Queue 窗口读一行曲目标签，整窗填完才 READY。
- * @note   仅 Storage Task 普通上下文可调用，每圈一次。未就绪时不填窗：已填的行保留、恢复就绪后按代次续填
- *         或以空窗收尾；卷事件处理时由 complete_unavailable() 收掉。
- */
-static void storage_task_load_listbuffer_if_allowed(void)
-{
-    if (storage_task_sd_state != STORAGE_TASK_SD_READY)
-    {
-        return;
-    }
-
-    if (storage_listbuffer_load() != STORAGE_OK)
-    {
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                               "STORAGE",
-                               "List buffer load failed.");
-    }
-}
-
-/**
- * @brief  GUI 是否可发起 Queue 窗口请求。
- * @return true SD 卷已挂载且本任务已处理完这次挂载（曲库扫描完成）。
- * @note   GUI Task 可调用；ISR 不可调用。扫描中与未挂载均为 false。不表示曲库非空。
- *         消抖不再体现在这里：消抖期间调用在 Filesystem 入口等闸（#195），所以这里不再有“消抖中”。
- */
-bool storage_task_sd_is_ready(void)
-{
-    return storage_task_sd_state == STORAGE_TASK_SD_READY;
-}
-
-/**
- * @brief  SD FatFs 卷是否仍挂载（卷事件的挂载位，读一个字，不拿锁）。
- * @return true 卷挂着；扫描中也为 true。
- * @note   GUI Task 可调用；ISR 不可调用。与 `storage_task_sd_is_ready()` 不同：
- *         后者在扫描中为 false，只表示此时不能 request，不表示卡已拔走。
- */
-bool storage_task_sd_is_mounted(void)
-{
-    return volume_status(VOLUME_ID_SD).Mounted;
-}
-
-/**
- * @brief  运行 Storage Task：卷事件的订阅者，加曲库扫描、两个槽和 Flash 回收。
+ * @brief  运行 Storage Task：卷事件的订阅者，加曲库扫描和 Flash 回收。
  * @param  handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
  * @note   块池和音频信箱已由 Boot 任务初始化、归音频读取任务（#215）；SDRAM 破坏性自检也在 Boot 任务里、
  *         创建本任务之前运行完毕（HWD-2）。入口登记卷事件订阅并先比对一次序号：本任务比卷任务晚启动也不会漏。
  *
- *         每圈顺序：卷事件 → 列表窗口（至多一行标签）→ 曲目显示名 → 回收。
+ *         每圈顺序：卷事件（扫描）→ 回收。曲名与 Queue 窗口行归前台任务（#218），本任务不再有窗口槽和名称槽。
  *         文件调用在 Filesystem 入口等闸（消抖期间）或等 SD 卷锁，所以本任务不知道也不需要知道消抖。
  */
 void storage_task(void *handle)
@@ -233,8 +166,6 @@ void storage_task(void *handle)
 
     (void)handle;
     task_handle = xTaskGetCurrentTaskHandle();
-    storage_listbuffer_bind(task_handle);
-    storage_namebuffer_bind(task_handle);
 
     _Static_assert((unsigned)STORAGE_NOTIFY_COUNT <=
                        (unsigned)configTASK_NOTIFICATION_ARRAY_ENTRIES,
@@ -257,9 +188,6 @@ void storage_task(void *handle)
         (void)storage_task_wait_event(storage_task_next_wait_ticks(now, reclaim_start));
 
         storage_task_apply_sd_volume();
-
-        storage_task_load_listbuffer_if_allowed();
-        storage_namebuffer_load(storage_task_sd_state == STORAGE_TASK_SD_READY);
 
         now = xTaskGetTickCount();
         if (!volume_status(VOLUME_ID_FLASH).Mounted)

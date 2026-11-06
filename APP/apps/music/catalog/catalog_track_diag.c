@@ -19,19 +19,19 @@ typedef enum
     CATALOG_TRACK_DIAG_TAGGED = 0U, /**< 取到：TIT2 可用。 */
     CATALOG_TRACK_DIAG_NO_ID3V2,    /**< 无 ID3v2：正常情形，只计数。 */
     CATALOG_TRACK_DIAG_NO_FRAME,    /**< 帧缺失：正常情形，只计数。 */
-    CATALOG_TRACK_DIAG_DECODE,      /**< 解码失败：名称槽 WARN。 */
-    CATALOG_TRACK_DIAG_LIMIT,       /**< 超读取上限：名称槽 WARN。 */
-    CATALOG_TRACK_DIAG_OPEN,        /**< 打开失败：名称槽 WARN。 */
-    CATALOG_TRACK_DIAG_READ,        /**< 读取错误：名称槽 WARN。 */
+    CATALOG_TRACK_DIAG_DECODE,      /**< 解码失败：曲名 WARN。 */
+    CATALOG_TRACK_DIAG_LIMIT,       /**< 超读取上限：曲名 WARN。 */
+    CATALOG_TRACK_DIAG_OPEN,        /**< 打开失败：曲名 WARN。 */
+    CATALOG_TRACK_DIAG_READ,        /**< 读取错误：曲名 WARN。 */
     CATALOG_TRACK_DIAG_COUNT
 } CatalogTrackDiag_ReasonTypeDef;
 
-/** @brief 自启动累加的计数器；只由名称槽与窗口槽所在的任务（Storage Task，前台一次切之后是前台任务）读写，供调试器与日志汇总使用。
- *         文件定位符核对不符的次数不在这里：它由音频读取任务（开流）和上述任务（名称槽、窗口行）经 `catalog_track_open()`
+/** @brief 自启动累加的计数器；只由前台任务（曲名与窗口行）读写，供调试器与日志汇总使用。
+ *         文件定位符核对不符的次数不在这里：它由音频读取任务（开流）和上述任务（曲名、窗口行）经 `catalog_track_open()`
  *         同时累加，单独放在 `catalog_track_diag_locator_misses`，用短临界区保护（#215）。 */
 typedef struct
 {
-    uint32_t Reads;                                     /**< 读回调调用次数合计（含首块，打开失败为 0），与名称槽日志 reads= 同口径。 */
+    uint32_t Reads;                                     /**< 读回调调用次数合计（含首块，打开失败为 0），与曲名日志 reads= 同口径。 */
     uint32_t ByReason[CATALOG_TRACK_DIAG_COUNT];        /**< 按结果归类的次数；[TAGGED] 为取到数，其余为六类回退数。 */
     uint32_t MaxUs;                                     /**< 单行耗时（含打开）最长值，单位 µs。 */
     uint64_t TotalUs;                                   /**< 单行耗时（含打开）累计值，单位 µs。 */
@@ -150,7 +150,7 @@ uint32_t catalog_track_diag_begin(void)
 }
 
 /**
- * @brief 名称槽一次 load 读完标签后：累加计数器，记一行 INFO，WARN 级原因另记一行 WARN。
+ * @brief 曲名需求读完一首标签后：累加计数器，记一行 INFO，WARN 级原因另记一行 WARN。
  * @param[in] index 播放列表位置。
  * @param[in] start_cycles catalog_track_diag_begin() 的返回值。
  * @param[in] track 读取结果；NULL（文件主名提取失败，防御分支）不计数，由调用方记原有 WARN。

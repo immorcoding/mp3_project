@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    gui_music_queue_rows.h
-  * @brief   音乐分区私有：把 READY 窗口槽的两列文本按行整理成 QueueApply 的平行数组。
+  * @brief   音乐分区私有：把窗口结果的两列文本按行整理成 QueueApply 的平行数组。
   ******************************************************************************
   */
 
@@ -10,9 +10,9 @@
 
 #include <stdint.h>
 
-#include "APP/tasks/storage/catalog/storage_listbuffer.h"
+#include "APP/apps/music/music_cells.h"
 
-uint16_t gui_music_queue_rows(const Storage_ListBufferTypeDef *window,
+uint16_t gui_music_queue_rows(const MusicCells_WindowTypeDef *window,
                               const char **titles,
                               const char **artists);
 

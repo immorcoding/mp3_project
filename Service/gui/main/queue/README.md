@@ -4,7 +4,7 @@
 行距 2 px）；本 Module 的行工厂按 `Service_GUI_QueueApply()` 的 `Length` 在其中构造行。
 窗口滑动时在已有 panel 上转 head 改字，不按整表无限 `create`。
 
-本 Module 不包含 `storage_listbuffer.h`，也不向 APP 公开 Interface。曲名与歌手由 GUI Task
+本 Module 不包含 APP 的任何头（音乐的 `music_cells.h`、`ui_cell.h` 等），也不向 APP 公开 Interface。曲名与歌手由 GUI Task
 把窗口行的 {曲目显示名, 歌手} 原样传入（GUI-25），见 `docs/shape/storage.catalog.md`。
 `Length` 为 0 则没有可见行。
 
@@ -41,7 +41,7 @@ Long mode 和右侧符号 Opa。不改 Border Width，以免文字漂移。点�
 - `QueueTab` 的 `LV_EVENT_SCROLL`（prepare 时注册）：本窗边沿之外还有曲目时，把越过该边沿的
   滚动拉回边沿，不露空白，换窗后从扣好的 `scroll_y` 带着惯性接着滑（#157）；列表真正的首尾照常
   弹性回弹。LVGL 8.3 的弹性只有一个开关，上下沿不能分开设，所以按边沿在事件里拉回。
-  窗口槽不带曲目总数，满上限行的窗口按“下沿之外可能还有”处理：曲库恰为上限行、或末尾所在窗口
+  窗口格不带曲目总数，满上限行的窗口按“下沿之外可能还有”处理：曲库恰为上限行、或末尾所在窗口
   恰好满上限时，快速滑到末尾的那一下停在末行不回弹，等不满上限的末窗 READY 后才回弹。
 
 ## 运行时路径

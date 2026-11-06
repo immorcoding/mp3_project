@@ -5,18 +5,20 @@
   *
   * @details
   *          循环结构与 APP/tasks/gui/gui_task.c 一致：ConsumeInput -> 遍历真实的
-  *          APP/apps/app_table.c 调用各应用的 gui_step -> Service_GUI_Process()。
-  *          应用是真实的 APP 音乐分区；它依赖的 Storage 窗口槽与 SD 状态由
-  *          fakes/storage_sim.c 代替，播放合同由 fakes/playback_sim.c 代替，
-  *          两者每圈先于各应用的 gui_step 推进一次。
+  *          APP/apps/app_table.c 调用各应用的 gui_step -> Service_GUI_Process()；启动时同样先调各应用的
+  *          boot_init（格子等内存准备），再在 Service_GUI_Init() 之后调 gui_init。
+  *          应用是真实的 APP 音乐分区、真实的 ui_cell 与格子定义；只有音乐前台流程由
+  *          fakes/music_sim.c 代替（注册表里的 foreground_step 与 boot_init），播放合同由 fakes/playback_sim.c 代替，
+  *          两者每圈先于各应用的 gui_step 推进一次：前台替身 -> 假播放 -> GUI step。
   *
   *          键盘：T 切换 Default/Solid 主题；C 拔卡/重新挂载（代次 +1，拔卡时假
-  *          后端按拔卡停止）；G 模拟重扫（代次 +1，已显示窗口保留到下一次
-  *          request）；S 挂起/恢复假后端的命令处理；B 让假后端之后一次开启为坏
+  *          后端按拔卡停止，当圈发代次 0 的空窗）；G 模拟重扫（代次 +1，不重发窗口，
+  *          已显示窗口保留到下一次要窗）；E 重扫得到空库/恢复；S 挂起/恢复假后端的命令处理；B 让假后端之后一次开启为坏
   *          文件；R 让假后端以下一个非 NONE 停止原因停止；A 打印 LVGL 运行中动画数
   *          （核对唱盘与状态行闪烁不叠加）；L 淡出回到 Lock（核对 Lock 呼吸随屏幕
-  *          重启）；Esc 退出。脚本参数见 sim_script.h；名称槽开关（某首名字取不到、
-  *          应答延迟若干圈）只有脚本参数 --name-fail / --name-delay。
+  *          重启）；Esc 退出。脚本参数见 sim_script.h；曲名与窗口应答的开关（某首名字取不到、
+  *          应答延迟若干圈）只有脚本参数 --name-fail / --name-delay / --window-delay。
+  *          模拟器测不到“新需求覆盖旧需求”（假后端保持一次答一个的节奏），那由 Tests/music_foreground 和上板负责。
   ******************************************************************************
   */
 
@@ -33,7 +35,7 @@
 #include "Service/gui/view/gui_service_view.h"
 #include "fakes/playback_sim.h"
 #include "fakes/resource_sim.h"
-#include "fakes/storage_sim.h"
+#include "fakes/music_sim.h"
 #include "sim_clock.h"
 #include "sim_display.h"
 #include "sim_script.h"
@@ -51,9 +53,9 @@ static void sim_handle_key(char key)
 {
     if ((key == 'c') || (key == 'C'))
     {
-        /* 拔卡/重新挂载：真实音乐分区下一圈按窗口协议 CLEAR 或重新 request；
+        /* 拔卡/重新挂载：假前台当圈发代次 0 的空窗，真实音乐分区当圈 CLEAR，重新挂载后隔一圈按最新需求发窗；
            拔卡时假后端同时按 K5 停止，三态、唱盘与时间由快照驱动。 */
-        if (!storage_sim_toggle_mount())
+        if (!music_sim_toggle_mount())
         {
             playback_sim_card_removed();
         }
@@ -66,13 +68,13 @@ static void sim_handle_key(char key)
     }
     if ((key == 'g') || (key == 'G'))
     {
-        storage_sim_rescan();
+        music_sim_rescan();
         return;
     }
     if ((key == 'e') || (key == 'E'))
     {
         /* 空库：模拟重扫得到 0 首，代次 +1；再按一次恢复固定曲库。 */
-        storage_sim_toggle_empty();
+        music_sim_toggle_empty();
         return;
     }
     if ((key == 'b') || (key == 'B'))
@@ -113,7 +115,7 @@ static void sim_handle_key(char key)
 }
 
 /**
- * @brief 处理脚本的替身开关：名称槽与窗口槽转给假 Storage，跳转回显延迟转给假播放后端。
+ * @brief 处理脚本的替身开关：曲名与窗口应答转给假音乐前台流程，跳转回显延迟转给假播放后端。
  * @param[in] control 开关种类。
  * @param[in] value   --name-fail 为播放列表位置，--name-delay / --window-delay 为额外等待圈数，
  *                    --seek-echo-delay 为毫秒数。
@@ -123,15 +125,15 @@ static void sim_handle_slot(sim_script_slot_control_t control, unsigned value)
     switch (control)
     {
         case SIM_SCRIPT_NAME_FAIL:
-            storage_sim_toggle_name_fail((uint16_t)value);
+            music_sim_toggle_name_fail((uint16_t)value);
             break;
 
         case SIM_SCRIPT_NAME_DELAY:
-            storage_sim_set_name_delay((uint32_t)value);
+            music_sim_set_name_delay((uint32_t)value);
             break;
 
         case SIM_SCRIPT_WINDOW_DELAY:
-            storage_sim_set_window_delay((uint32_t)value);
+            music_sim_set_window_delay((uint32_t)value);
             break;
 
         case SIM_SCRIPT_SEEK_ECHO_DELAY:
@@ -232,7 +234,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    storage_sim_init();
+    app_table_boot_init();
     playback_sim_init();
     for (size_t i = 0U; i < app_table_count; i++)
     {
@@ -259,7 +261,13 @@ int main(int argc, char *argv[])
         input.param = 0U;
         (void)Service_GUI_ConsumeInput(&input);
 
-        storage_sim_step();
+        for (size_t i = 0U; i < app_table_count; i++)
+        {
+            if (app_table[i].foreground_step != NULL)
+            {
+                (void)app_table[i].foreground_step();
+            }
+        }
         playback_sim_step(sim_clock_now());
         for (size_t i = 0U; i < app_table_count; i++)
         {

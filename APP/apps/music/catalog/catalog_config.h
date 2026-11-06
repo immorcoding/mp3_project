@@ -38,7 +38,7 @@
 #define CATALOG_TRACK_BUDGET_US  1000000U  /* 单行读取（含打开）耗时超过 1 s（初值，单位为微秒）就触发窗口汇总，是窗口汇总的第三个触发条件。 */
 
 /* catalog_track_diag.c：各类日志行的缓冲容量（含结尾 NUL；超出由 snprintf 截断） */
-#define CATALOG_DIAG_TAG_LINE_BYTES     112U  /* 名称槽 Tag 行（INFO 与 WARN）。 */
+#define CATALOG_DIAG_TAG_LINE_BYTES     112U  /* 曲名 Tag 行（INFO 与 WARN）。 */
 #define CATALOG_DIAG_WINDOW_LINE_BYTES  128U  /* 窗口汇总行；与 Service_Log 单条文本容量相同，12 行窗口的最长一行约 117 字符，放得下。 */
 #define CATALOG_DIAG_LOCATOR_LINE_BYTES 32U   /* Locator miss 行。 */
 #define CATALOG_DIAG_STREAM_LINE_BYTES  64U   /* Stream 行。 */

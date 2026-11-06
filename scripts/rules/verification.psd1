@@ -13,6 +13,8 @@
         'audio_reader'
         'music_catalog'
         'ui_cell'
+        'foreground_task'
+        'music_foreground'
         'volume'
         'background_task'
         'playback_service'
@@ -118,14 +120,10 @@
                 '^Service/gui/main/transport/'
                 # gui_music_transport 的 reducer 测试依赖播放合同。
                 '^APP/tasks/playback/playback_contract\.h$'
-                # gui_music_queue_rows 的测试按窗口槽头构造 READY 窗口（#140）。
-                '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
+                # 曲名客户与窗口行测试按界面数据格子的类型构造结果（music_cells.h，带 music_config.h、ui_cell.h 与曲目显示名容量，#218）。
+                '^APP/apps/music/music_(?:cells|config)\.h$'
                 '^APP/apps/music/catalog/catalog_name\.h$'
-                '^APP/tasks/storage/storage_task\.h$'
-                '^APP/tasks/storage/storage_task_config\.h$'
-                '^Service/filesystem/filesystem_types\.h$'
-                # filesystem_types.h 的失败分类函数需要 Service_StatusTypeDef（#210）。
-                '^Service/service\.h$'
+                '^APP/ui_cell/ui_cell\.h$'
                 '^Tests/music_gui/'
             )
         }
@@ -188,10 +186,8 @@
             Name = 'music_catalog'
             PathPatterns = @(
                 '^APP/apps/music/catalog/'
-                # 窗口槽与名字槽的 complete_unavailable 测试（卷事件收槽，#211）链接它们。
-                # 它们的头文件带入 Storage 的状态类型与配置。
-                '^APP/tasks/storage/storage_task(?:_config)?\.h$'
-                '^APP/tasks/storage/catalog/storage_(?:list|name)buffer\.[ch]$'
+                # 曲库发布成功后叫醒前台任务一次（#218）：catalog.c 包含前台任务头，测试里用假的叫醒函数。
+                '^APP/tasks/foreground/foreground_task(?:_config)?\.h$'
                 # 按定位符打开的测试以假实现替换 Filesystem / Log Service 与周期计数器 Adapter，只依赖它们的公开头。
                 '^Service/filesystem/filesystem_(?:file|directory)\.h$'
                 '^Service/log/log_service(?:_config)?\.h$'
@@ -215,7 +211,55 @@
                 '^APP/ui_cell/'
                 # 真实 ui_cell.c 链接共用 FreeRTOS 桩（互斥锁、任务句柄）。
                 '^Tests/stubs/freertos/'
+                # 持锁统计（#218）依赖的周期计数器与 Service Log 的主机替身，以及编进测试的周期计数器头与 Service Log 头。
+                '^Tests/stubs/lock_env/'
+                '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
+                '^Service/service\.h$'
+                '^Service/log/log_service(?:_config)?\.h$'
                 '^Tests/ui_cell/'
+            )
+        }
+        @{
+            # 前台任务（#218）：一圈的判断（foreground_loop，各应用 step 轮流调用、耗时记录与告警）与注册表的 boot_init 遍历，
+            # 真实的 foreground_loop.c、app_table_boot.c；链接共用 FreeRTOS 桩与周期计数器、Service Log 替身。
+            # 任务创建与入口（foreground_task.c）不进主机测试，由固件构建和上板核对。
+            Name = 'foreground_task'
+            PathPatterns = @(
+                '^APP/tasks/foreground/'
+                '^APP/apps/app_table(?:_boot)?\.[ch]$'
+                '^Service/gui/gui_service\.h$'
+                '^Platform/platform\.h$'
+                '^Platform/lcd/platform_lcd\.h$'
+                '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+                '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
+                '^Service/service\.h$'
+                '^Service/log/log_service(?:_config)?\.h$'
+                '^Tests/stubs/freertos/'
+                '^Tests/stubs/lock_env/'
+                '^Tests/foreground_task/'
+            )
+        }
+        @{
+            # 音乐前台流程（#218）：覆盖、已读的行不重读、缓存命中不读文件、凑齐才发布、代次变化发空窗、失败不缓存、发布后重新发窗；
+            # 真实的前台流程、行缓存、格子定义、ui_cell、显示延迟汇总和翻页钩子；曲库读者、曲目文本读取、读标签诊断、卷边沿、块池就绪数和
+            # 前台叫醒函数在测试里用假实现，只依赖它们的公开头。窗口与曲名的真实并发、与音频读取争 SD 锁靠板级验收。
+            Name = 'music_foreground'
+            PathPatterns = @(
+                '^APP/apps/music/foreground/'
+                '^APP/apps/music/music_(?:cells|config|display_stats|hook_pageturn)\.[ch]$'
+                '^APP/apps/music/catalog/catalog(?:_config|_name|_text|_track_text|_track_diag)?\.h$'
+                '^APP/ui_cell/'
+                '^APP/tasks/foreground/foreground_task(?:_config)?\.h$'
+                '^APP/tasks/volume/volume_event\.h$'
+                '^APP/tasks/audio_reader/audio_reader_(?:block|config)\.h$'
+                '^Components/id3_reader/id3_reader\.h$'
+                '^Service/filesystem/filesystem_types\.h$'
+                '^Service/service\.h$'
+                '^Service/log/log_service(?:_config)?\.h$'
+                '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
+                '^Tests/stubs/freertos/'
+                '^Tests/stubs/lock_env/'
+                '^Tests/music_foreground/'
             )
         }
         @{
@@ -325,21 +369,24 @@
         '^Platform/lcd/platform_lcd\.h$'
         '^Platform/touch/platform_touch\.h$'
         '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
-        # 模拟器编译真实 APP 注册表与音乐 GUI 分区；fakes/storage_sim.c 实现 Storage 窗口槽与 SD 状态头，
+        # 模拟器编译真实 APP 注册表（含 boot_init 遍历）、音乐 GUI 分区、音乐界面数据格子定义与 ui_cell（含持锁统计）、显示延迟汇总和
+        # 翻页钩子；fakes/music_sim.c 实现音乐前台流程（注册表的 foreground_step 与 boot_init）和前台叫醒函数，
         # fakes/playback_sim.c 实现播放合同头（FIFO 深度取播放任务配置），fakes/log_sim.c 实现 Service Log 头。
         '^APP/apps/music/gui/'
-        '^APP/apps/app_table\.[ch]$'
+        '^APP/apps/music/music_(?:app|cells|config|display_stats|hook_pageturn)\.[ch]$'
+        '^APP/apps/music/foreground/music_foreground\.h$'
+        '^APP/apps/app_table(?:_boot)?\.[ch]$'
+        '^APP/ui_cell/'
+        '^APP/tasks/foreground/foreground_task(?:_config)?\.h$'
+        '^APP/tasks/audio_reader/audio_reader_(?:block|config)\.h$'
         '^APP/tasks/playback/playback_(?:contract|task_config)\.h$'
         '^Service/log/log_service(?:_config)?\.h$'
-        '^APP/tasks/storage/catalog/storage_listbuffer\.h$'
-        '^APP/tasks/storage/catalog/storage_namebuffer\.h$'
-        # 假 Storage 的曲目显示名经真实的提取纯函数产生（模拟器编译 catalog_name.c）。
+        # 假音乐前台流程的曲目显示名经真实的提取纯函数产生（模拟器编译 catalog_name.c）。
         '^APP/apps/music/catalog/catalog_name\.[ch]$'
         # 模拟器嵌入同一份字体 bin，fakes/resource_sim.c 实现字体查询头，fakes/cycle_counter_sim.c 实现周期计数器头。
         '^Resources/fonts/'
         '^Service/resource/resource_service\.h$'
         '^Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter\.h$'
-        '^APP/tasks/storage/storage_task(?:_config)?\.h$'
         '^Service/filesystem/filesystem_types\.h$'
     )
 

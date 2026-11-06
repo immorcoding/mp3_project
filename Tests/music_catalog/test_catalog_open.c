@@ -11,8 +11,6 @@
 #include "APP/apps/music/catalog/catalog_sheet.h"
 #include "APP/apps/music/catalog/catalog_track_diag.h"
 #include "APP/apps/music/catalog/catalog_track_text.h"
-#include "APP/tasks/storage/catalog/storage_listbuffer.h"
-#include "APP/tasks/storage/catalog/storage_namebuffer.h"
 #include "APP/tasks/volume/volume_event.h"
 
 #include "freertos_stub.h"
@@ -47,6 +45,7 @@ _Static_assert(CATALOG_WINDOW_BUDGET_US < CATALOG_TRACK_BUDGET_US,
 
 /* ---- 假 DWT：1 MHz，一个周期即 1 µs ---- */
 static uint32_t g_cycles;
+static uint32_t g_foreground_wakes; /* foreground_task_wake 被调用的次数。 */
 static bool catalog_lock_is_held(void);
 
 /**
@@ -77,12 +76,11 @@ uint32_t CortexM7CycleCounter_GetFrequencyHz(void)
 }
 
 /**
- * @brief Storage Task 的 SD 就绪查询的替身：恒为就绪（窗口槽的 request 只在就绪时接受）。
- * @return 恒为 true。
+ * @brief 前台任务叫醒函数的替身：计次。曲库发布后叫醒前台一次（`catalog_music_init()` 的发布成功路径），用来核对发布规则的这一句。
  */
-bool storage_task_sd_is_ready(void)
+void foreground_task_wake(void)
 {
-    return true;
+    g_foreground_wakes++;
 }
 
 /* ---- 假 Log：记录每一行 ---- */
@@ -969,8 +967,8 @@ static void window_row(uint32_t open_us, uint32_t total_us, bool open_failed)
     catalog_track_diag_row_done(start, &track);
 }
 
-/** @brief 名称槽 INFO 带 open=，标签读取耗时 us= 不含打开。 */
-static void test_name_slot_info_separates_open_from_tag_read(void)
+/** @brief 曲名 INFO 带 open=，标签读取耗时 us= 不含打开。 */
+static void test_name_info_separates_open_from_tag_read(void)
 {
     CatalogTrackText_ResultTypeDef track;
     const log_line_t *line;
@@ -992,7 +990,7 @@ static void test_name_slot_info_separates_open_from_tag_read(void)
 }
 
 /** @brief 回退行同样带 open=。 */
-static void test_name_slot_fallback_info_has_open(void)
+static void test_name_fallback_info_has_open(void)
 {
     CatalogTrackText_ResultTypeDef track;
     uint32_t start;
@@ -1183,138 +1181,28 @@ static void test_scan_end_info_for_directory_read_failure(void)
 }
 
 /**
- * @brief 把窗口槽和名字槽绑到桩里的一个假任务上（request 要发通知）。world_reset 已重置桩，这里不再重置
- *        （重置会丢掉曲库锁的桩状态）。
+ * @brief 打开时得到 NO_MEDIA / NOT_READY / INVALID_HANDLE（卷没了或正在对账，拔卡的正常竞态）：返回空结果，
+ *        `catalog_track_text_last_read_unavailable()` 告诉调用者这一次是卷不可用（前台流程据此不记 WARN、不缓存）；
+ *        随后一次正常读取把标志清掉。
  */
-static void bind_slots(void)
-{
-    TaskHandle_t task = freertos_stub_task_create();
-
-    storage_listbuffer_bind(task);
-    storage_namebuffer_bind(task);
-}
-
-/**
- * @brief 填满一个窗口：request 之后逐圈 load，直到整窗 READY。
- * @param[in] count 请求条数。
- */
-static void fill_window(uint16_t count)
-{
-    uint32_t guard = 0U;
-
-    assert(storage_listbuffer_request(0U, count, 0U) == STORAGE_OK);
-    while (storage_listbuffer.Status == STORAGE_LISTBUFFER_PENDING)
-    {
-        assert(guard++ < 64U);
-        assert(storage_listbuffer_load() == STORAGE_OK);
-    }
-    assert(storage_listbuffer.Status == STORAGE_LISTBUFFER_READY);
-}
-
-/**
- * @brief 卷序号变了（卸载、换卡）时收掉窗口槽：已经 READY 但 GUI 还没取走的窗口也要收掉（代次 0、长度 0），
- *        否则换卡后 GUI 会把旧卡的行贴出来；正在填的窗口以空窗收尾；空闲的槽不动。
- */
-static void test_unavailable_empties_a_ready_window_the_gui_has_not_taken_yet(void)
-{
-    world_reset();
-    bind_slots();
-    scan(3U, 0U);
-
-    /* 整窗刚填完（末行读完时卷还在，序号变化在下一圈才被看到）：READY，带着旧代次。 */
-    fill_window(3U);
-    assert(storage_listbuffer.Length == 3U);
-    assert(storage_listbuffer.Generation != 0U);
-
-    storage_listbuffer_complete_unavailable();
-
-    assert(storage_listbuffer.Status == STORAGE_LISTBUFFER_READY);
-    assert(storage_listbuffer.Length == 0U);
-    assert(storage_listbuffer.Generation == 0U);
-
-    /* 填到一半的窗口：以空窗收尾（原有行为）。 */
-    storage_listbuffer.Status = STORAGE_LISTBUFFER_IDLE;
-    assert(storage_listbuffer_request(0U, 3U, 0U) == STORAGE_OK);
-    assert(storage_listbuffer_load() == STORAGE_OK);
-    assert(storage_listbuffer.Status == STORAGE_LISTBUFFER_PENDING);
-    storage_listbuffer_complete_unavailable();
-    assert(storage_listbuffer.Status == STORAGE_LISTBUFFER_READY);
-    assert(storage_listbuffer.Length == 0U);
-    assert(storage_listbuffer.Generation == 0U);
-
-    /* 空闲的槽不动。 */
-    storage_listbuffer.Status = STORAGE_LISTBUFFER_IDLE;
-    storage_listbuffer_complete_unavailable();
-    assert(storage_listbuffer.Status == STORAGE_LISTBUFFER_IDLE);
-}
-
-/**
- * @brief 名字槽同理：已经 READY 但 GUI 还没取走的名字也收掉（空名、代次 0）；空闲的槽不动。
- */
-static void test_unavailable_empties_a_ready_name_the_gui_has_not_taken_yet(void)
-{
-    world_reset();
-    bind_slots();
-    scan(3U, 0U);
-
-    assert(storage_namebuffer_request(1U, 0U) == STORAGE_OK);
-    storage_namebuffer_load(true);
-    assert(storage_namebuffer.Status == STORAGE_NAMEBUFFER_READY);
-    assert(storage_namebuffer.Generation != 0U);
-    assert(storage_namebuffer.Title[0] != 0);
-
-    storage_namebuffer_complete_unavailable();
-
-    assert(storage_namebuffer.Status == STORAGE_NAMEBUFFER_READY);
-    assert(storage_namebuffer.Generation == 0U);
-    assert(storage_namebuffer.Title[0] == 0);
-    assert(storage_namebuffer.Artist[0] == 0);
-
-    storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
-    storage_namebuffer_complete_unavailable();
-    assert(storage_namebuffer.Status == STORAGE_NAMEBUFFER_IDLE);
-}
-
-/**
- * @brief 读标签时卷不可用（拔卡的正常竞态）：名字槽以空名收尾，**不记 WARN**；`Name fail` 只留给真正的防御分支
- *        （代次相符却越界）。曲目文本读取用 `catalog_track_text_last_read_unavailable()` 告诉调用者这一次是卷不可用。
- */
-static void test_name_slot_does_not_warn_when_the_volume_went_away_during_the_read(void)
+static void test_text_read_reports_a_volume_unavailable_open_to_the_caller_and_the_flag_is_cleared_by_the_next_read(void)
 {
     static const Service_StatusTypeDef unavailable[] = {SERVICE_NO_MEDIA, SERVICE_NOT_READY, SERVICE_INVALID_HANDLE};
 
     for (unsigned index = 0U; index < sizeof(unavailable) / sizeof(unavailable[0]); index++)
     {
         world_reset();
-        bind_slots();
         scan(3U, 0U);
         g_log_count = 0U;
         g_locator_failed = true;
         g_locator_failed_status = unavailable[index];
 
-        assert(storage_namebuffer_request(1U, 0U) == STORAGE_OK);
-        storage_namebuffer_load(true);
-
-        assert(storage_namebuffer.Status == STORAGE_NAMEBUFFER_READY);
-        assert(storage_namebuffer.Generation == 0U);
-        assert(storage_namebuffer.Title[0] == 0);
+        assert(read_text(1U) == NULL);
         assert(catalog_track_text_last_read_unavailable());
         assert(log_count_prefix("Name fail") == 0U);
     }
 
-    /* 防御分支仍记 WARN：请求代次非 0 且相符，位置却越界。 */
     world_reset();
-    bind_slots();
-    scan(3U, 0U);
-    g_log_count = 0U;
-    assert(storage_namebuffer_request(99U, catalog_generation()) == STORAGE_OK);
-    storage_namebuffer_load(true);
-    assert(storage_namebuffer.Generation == 0U);
-    assert(log_count_prefix("Name fail") == 1U);
-
-    /* 正常读之后标志清掉。 */
-    world_reset();
-    bind_slots();
     scan(3U, 0U);
     g_locator_failed = true;
     g_locator_failed_status = SERVICE_NO_MEDIA;
@@ -1323,6 +1211,67 @@ static void test_name_slot_does_not_warn_when_the_volume_went_away_during_the_re
     g_locator_failed = false;
     assert(read_text(0U) != NULL);
     assert(!catalog_track_text_last_read_unavailable());
+}
+
+/**
+ * @brief 打开得到 SERVICE_BUSY（文件槽用尽，瞬时的）：结果标明 `OpenBusy`，调用者过约 10 ms 重试、不缓存（ARC-27）；
+ *        其他打开失败（如介质错误）不是 BUSY，同样标明打开失败，但调用者不重试。
+ */
+static void test_text_read_marks_a_busy_open_so_the_caller_can_retry_and_not_cache(void)
+{
+    const CatalogTrackText_ResultTypeDef *result;
+
+    world_reset();
+    scan(3U, 0U);
+    g_locator_failed = true;
+    g_locator_failed_status = SERVICE_BUSY;
+    result = read_text(1U);
+    assert(result != NULL);
+    assert(result->OpenFailed);
+    assert(result->OpenBusy);
+
+    g_locator_failed_status = SERVICE_ERROR;
+    result = read_text(1U);
+    assert(result != NULL);
+    assert(result->OpenFailed);
+    assert(!result->OpenBusy);
+
+    g_locator_failed = false;
+    result = read_text(1U);
+    assert(result != NULL);
+    assert(!result->OpenFailed);
+    assert(!result->OpenBusy);
+}
+
+/**
+ * @brief 曲库发布后叫醒前台任务一次：GUI 不会重写没变的需求，前台要主动重新处理最新需求（#202 E 节）。
+ *        被丢弃的扫描（卷变了）和失败的扫描不发布，也不叫醒；每次成功发布各叫醒一次。
+ */
+static void test_publishing_wakes_the_foreground_exactly_once_and_a_discarded_scan_does_not(void)
+{
+    world_reset();
+    g_foreground_wakes = 0U;
+    scan(3U, 0U);
+    assert(catalog_generation() != 0U);
+    assert(g_foreground_wakes == 1U);
+
+    scan(4U, 0U); /* 重扫再发布一次：再叫醒一次。 */
+    assert(g_foreground_wakes == 2U);
+
+    world_reset();
+    g_foreground_wakes = 0U;
+    g_root_count = 3U;
+    g_swap_after_reads = 2U; /* 扫描途中换卡：丢弃，不发布。 */
+    assert(catalog_music_init() == CATALOG_OK);
+    assert(catalog_generation() == 0U);
+    assert(g_foreground_wakes == 0U);
+
+    world_reset();
+    g_foreground_wakes = 0U;
+    g_root_count = 3U;
+    g_read_dir_fail = true; /* 读目录失败：不发布。 */
+    assert(catalog_music_init() == CATALOG_ERROR);
+    assert(g_foreground_wakes == 0U);
 }
 
 /**
@@ -1888,8 +1837,8 @@ int main(void)
     test_locator_open_failure_is_not_retried_by_path();
     test_text_read_treats_a_volume_unavailable_open_as_no_result();
     test_text_read_with_unknown_catalog_index_returns_null();
-    test_name_slot_info_separates_open_from_tag_read();
-    test_name_slot_fallback_info_has_open();
+    test_name_info_separates_open_from_tag_read();
+    test_name_fallback_info_has_open();
     test_window_summary_silent_at_the_budgets();
     test_window_summary_fires_on_slow_single_open();
     test_window_summary_fires_on_slow_window();
@@ -1905,9 +1854,9 @@ int main(void)
     test_scan_end_info_for_directory_read_failure();
     test_scan_is_discarded_when_the_volume_is_unavailable_on_root_open();
     test_scan_is_discarded_when_the_volume_goes_away_mid_scan();
-    test_unavailable_empties_a_ready_window_the_gui_has_not_taken_yet();
-    test_unavailable_empties_a_ready_name_the_gui_has_not_taken_yet();
-    test_name_slot_does_not_warn_when_the_volume_went_away_during_the_read();
+    test_text_read_reports_a_volume_unavailable_open_to_the_caller_and_the_flag_is_cleared_by_the_next_read();
+    test_text_read_marks_a_busy_open_so_the_caller_can_retry_and_not_cache();
+    test_publishing_wakes_the_foreground_exactly_once_and_a_discarded_scan_does_not();
     test_open_directory_that_fails_once_as_unavailable_is_retried_and_the_scan_goes_on();
     test_sub_directory_that_fails_once_as_unavailable_is_retried_too();
     test_generation_is_zero_while_rescanning();

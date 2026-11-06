@@ -10,11 +10,7 @@
 
 /* storage_task.h */
 #define STORAGE_NOTIFY_FLAG_VOLUME       (1UL << 0) /* 主循环事件槽：卷事件（卷任务或 Flash 启动任务发布了卷就绪或卷消失；任务入口登记订阅）。 */
-#define STORAGE_NOTIFY_FLAG_LISTBUFFER   (1UL << 1) /* 主循环事件槽：Queue 窗口 PENDING。 */
-#define STORAGE_NOTIFY_FLAG_NAMEBUFFER   (1UL << 4) /* 主循环事件槽：曲目显示名槽 PENDING。 */
-#define STORAGE_NOTIFY_FLAG_EVENT_MASK   (STORAGE_NOTIFY_FLAG_VOLUME | \
-                                          STORAGE_NOTIFY_FLAG_LISTBUFFER | \
-                                          STORAGE_NOTIFY_FLAG_NAMEBUFFER) /* 主循环一次收取并清除的事件位。 */
+#define STORAGE_NOTIFY_FLAG_EVENT_MASK   (STORAGE_NOTIFY_FLAG_VOLUME) /* 主循环一次收取并清除的事件位。 */
 
 /* storage_task.c */
 #define STORAGE_FLASH_RECLAIM_PERIOD_MS  100U  /* 空闲时回收机会周期；不代表每次都会擦除。 */

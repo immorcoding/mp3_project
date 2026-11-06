@@ -46,4 +46,4 @@ Service_GUI_ThemeApply(id)
 
 `gui_service_theme_config.h` 保存 Default/Solid 各角色 RGB 和 Solid Tab Wash Opa。
 `gui_service_theme.c` 不包含 LVGL；`gui_service_theme_style.c` 依赖 LVGL 与 `view/` 句柄类型。
-不得包含 `storage_listbuffer.h`。新增角色或颜色属性时同步枚举、调色板表与主机测试。
+不得包含 APP 的任何头（`music_cells.h`、`ui_cell.h` 等）。新增角色或颜色属性时同步枚举、调色板表与主机测试。

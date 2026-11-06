@@ -11,7 +11,8 @@
  *          - 开始扫描：锁内把代次置 0。发布：锁内比对卷序号，一致才写代次和条数。
  *            代次只在发布时加 1，一次开机内不重复。取代次时卷序号不符就算 0。
  *
- *          扫描这时仍由 Storage Task 同步调用，改成单步函数留给后台任务票。
+ *          扫描这时仍由 Storage Task 同步调用，改成单步函数留给后台任务票。发布成功后叫醒前台任务一次（`foreground_task_wake()`，
+ *          APP 内部接口），前台流程据此重新处理最新需求。
  */
 
 #include "catalog.h"
@@ -24,6 +25,7 @@
 #include <string.h>
 
 #include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
+#include "APP/tasks/foreground/foreground_task.h"
 #include "APP/tasks/volume/volume_event.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h"
@@ -795,6 +797,10 @@ Catalog_StatusTypeDef catalog_music_init(void)
 
     catalog_scan_log_end("ok");
 
+    /* 发布之后叫醒前台任务一次：GUI 不会重写没变的需求，前台要主动重新处理最新需求（曲名答过代次 0 的、窗口格里还是空窗的）。
+     * 在放锁之后叫醒，不在持锁时（持锁只拷内存）。被丢弃或失败的扫描不发布，也不叫醒。 */
+    foreground_task_wake();
+
     return CATALOG_OK;
 }
 
@@ -885,7 +891,7 @@ uint32_t catalog_generation(void)
  * @param[out] out 结果，不得为空。代次为 0 时条数为 0、路径为空串、定位符全零；位置越界时代次和条数有效、路径为空串。
  * @return true 位置有效，路径和定位符已拷出；false 曲库不可用（`out->Generation` 为 0）或位置越界。
  * @note  持锁只拷内存（路径约几十字节到 256 B，加 16 B 定位符），不调文件接口、不投日志。代次 0 时不碰表。
- *        所有读曲库的调用者（音频流开流、名称槽、窗口槽）用它代替分开取代次、条数、路径、定位符的做法，
+ *        所有读曲库的调用者（音频流开流、前台流程的曲名与窗口行）用它代替分开取代次、条数、路径、定位符的做法，
  *        中途重扫或拔卡不会让它们读到半新半旧的内容。
  */
 bool catalog_read_track(uint16_t position, Catalog_TrackTypeDef *out)

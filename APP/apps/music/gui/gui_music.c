@@ -1,15 +1,16 @@
 /**
   ******************************************************************************
   * @file    gui_music.c
-  * @brief   音乐分区：把本分区输入翻译成播放命令、推进窗口协议、按播放快照刷新显示。
+  * @brief   音乐分区：把本分区输入翻译成播放命令、写最新需求并读前台任务的结果、按播放快照刷新显示。
   *
   * @details
   *          只经 #71 公开合同的 playback_command_send() 与 playback_snapshot_read()
   *          与播放任务交互（#72 A1）；不读写播放游标、不持 playing 真值（A2）。
   *          每圈先处理输入，再读一次快照交给 gui_music_transport 归约，与上次显示
   *          的结果比较后只对变化的部分调用 Service_GUI_*（#72 C 节）。曲名按归约
-  *          已追上的曲目身份经名称槽向 Storage 请求（gui_music_title）。不打开文件、
-  *          不解码，不使用 LVGL。listbuffer 与 namebuffer 头只出现在本分区。
+  *          已追上的曲目身份写曲名需求（gui_music_title）；Queue 窗口按滚动算出的起点写窗口需求
+  *          （gui_music_queue_window）。需求和结果都经 ui_cell 的格子交接（`music_cells.h`）：GUI 不等文件、不查询卷状态，
+  *          只写最新需求、读结果；结果在锁外套用，GUI 自己留一份窗口副本。不打开文件、不解码，不使用 LVGL。
   ******************************************************************************
   */
 
@@ -22,19 +23,46 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
+#include "APP/apps/music/music_cells.h"
+#include "APP/apps/music/music_display_stats.h"
+#include "APP/apps/music/music_hook_pageturn.h"
 #include "APP/tasks/playback/playback_contract.h"
-#include "APP/tasks/storage/catalog/storage_listbuffer.h"
-#include "APP/tasks/storage/catalog/storage_namebuffer.h"
 #include "Service/log/log_service.h"
+
+#include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
+#include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
 /** @brief 本分区日志 tag。 */
 static const char gui_music_log_tag[] = "gui_music";
 
 static GUI_MusicQueueWindowClientTypeDef gui_music_queue_window_client;
 
-/** @brief 曲名客户：身份采信与名称槽握手。 */
+/** @brief 曲名客户：身份采信与曲名需求、结果的序号握手。 */
 static GUI_MusicTitleClientTypeDef gui_music_title_client;
+
+/*
+ * GUI 一侧的两份结果副本（窗口约 6 KiB、曲名约 0.5 KiB），放 AXI SRAM 新段 `.app_axi_ram`（NOLOAD，不自动清零，
+ * `gui_music_init()` 整块写入）。GUI 在锁外套用副本，ui_cell 持锁只拷内存；重套高亮、套用失败重试都直接用副本，
+ * 不再受“槽为 IDLE”限制。
+ */
+static MusicCells_WindowTypeDef gui_music_window_copy __attribute__((section(MUSIC_AXI_SECTION), aligned(4)));
+static MusicCells_TitleResultTypeDef gui_music_title_copy __attribute__((section(MUSIC_AXI_SECTION), aligned(4)));
+
+/** @brief 读者持有的已见序号：先不拿锁比较序号，变了才拿锁拷贝。 */
+static uint32_t gui_music_window_seen;
+static uint32_t gui_music_title_seen;
+
+/** @brief 显示延迟汇总用（Debug）：最近一次写出的窗口需求、曲名需求的 tick（毫秒）和窗口起点；只记一个时刻，不拿锁、不投日志。 */
+static uint32_t gui_music_window_request_tick;
+static uint16_t gui_music_window_request_index;
+static bool gui_music_window_request_open;
+static uint32_t gui_music_title_request_tick;
+
+/** @brief 翻页注入钩子（默认关闭）：上一次看到的 `TrackStartCount`，以及是否已经有基准。 */
+static uint32_t gui_music_hook_track_start_count;
+static bool gui_music_hook_has_baseline;
 
 /** @brief 快照归约状态：命令序号、最后一份已追上的快照与各规则的历史基准。 */
 static GUI_MusicTransportTypeDef gui_music_transport;
@@ -59,38 +87,29 @@ typedef struct
 static GUI_MusicShownTypeDef gui_music_shown;
 
 /**
- * @brief 判断已显示窗口能否立即重套：仍显示、槽位 IDLE 且卷仍挂载。
- * @return 为真时可以读 storage_listbuffer 的 Rows 重新 QueueApply。
- * @note  槽位不是 IDLE 时 Rows 可能正被 Storage 改写，不能读。
+ * @brief 判断已显示窗口能否立即重套：Queue 仍显示着一窗。
+ * @return 为真时可以读 GUI 的窗口副本重新 QueueApply（副本是 GUI 自己的，不受前台任务写入的影响）。
  */
 static bool gui_music_displayed_window_idle(void)
 {
-    return gui_music_queue_window_client.displayed &&
-           (storage_listbuffer.Status == STORAGE_LISTBUFFER_IDLE) &&
-           storage_task_sd_is_mounted();
+    return gui_music_queue_window_client.displayed;
 }
 
 /**
- * @brief 把窗口槽 Rows 里的曲目显示名与歌手按行填进 Queue，并记下交给 Service 的高亮。
+ * @brief 把窗口副本里的曲目显示名与歌手按行填进 Queue，并记下交给 Service 的高亮。
  * @param[in] highlight_index 应高亮的播放列表位置；无高亮为 GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT。
  * @return QueueApply 的返回值。
- * @note  卷已卸载时不读 Rows，填空窗以免画出已拔卡曲目。
  */
 static Service_StatusTypeDef gui_music_apply_window(uint16_t highlight_index)
 {
-    const char *titles[STORAGE_LISTBUFFER_MAX_ENTRIES];
-    const char *artists[STORAGE_LISTBUFFER_MAX_ENTRIES];
+    const char *titles[MUSIC_WINDOW_MAX_ENTRIES];
+    const char *artists[MUSIC_WINDOW_MAX_ENTRIES];
     uint16_t length;
 
     gui_music_shown.highlight = highlight_index;
     gui_music_shown.highlight_stale = false;
 
-    if (!storage_task_sd_is_mounted())
-    {
-        return Service_GUI_QueueApply(NULL, NULL, 0U, 0U, SERVICE_GUI_QUEUE_NO_CURRENT);
-    }
-
-    length = gui_music_queue_rows(&storage_listbuffer, titles, artists);
+    length = gui_music_queue_rows(&gui_music_window_copy, titles, artists);
     if (length == 0U)
     {
         return Service_GUI_QueueApply(NULL, NULL, 0U, 0U, highlight_index);
@@ -100,7 +119,7 @@ static Service_StatusTypeDef gui_music_apply_window(uint16_t highlight_index)
         titles,
         artists,
         length,
-        storage_listbuffer.Index,
+        gui_music_window_copy.Index,
         highlight_index);
 }
 
@@ -228,127 +247,145 @@ static bool gui_music_dispatch_input_seek_settled(const Service_GUI_InputTypeDef
 }
 
 /**
- * @brief 推进窗口协议一步：REQUEST / APPLY / CLEAR。
- * @return 本圈的窗口动作。
- * @note  APPLY 的高亮按最后一份已追上的快照与新窗口代次计算（C3 后三条），与
- *        B6 撤回同一规则；CLEAR 只清空 Queue，三态、唱盘与时间由快照驱动（C10）。
+ * @brief 推进窗口一帧：读窗口结果（变了才读）、套用或清空，再按滚动算出的起点写最新窗口需求。
+ * @return 本帧对窗口结果的动作。
+ * @note  APPLY 的高亮按最后一份已追上的快照与新窗口代次计算（C3 后三条），与 B6 撤回同一规则；CLEAR 只清空 Queue，
+ *        三态、唱盘与时间由快照驱动（C10）。窗口不比需求序号：晚到的旧窗口也照常套用（#200）。拿不到锁时读写都下一帧再试。
+ *        套用失败从自己的窗口副本重试，不用重新要。
  */
 static GUI_MusicQueueWindowActionTypeDef gui_music_window_step(void)
 {
     GUI_MusicQueueWindowActionTypeDef action;
+    bool new_result;
 
     gui_music_queue_window_note_lead(
         &gui_music_queue_window_client,
         Service_GUI_QueueScrollLead(),
-        STORAGE_LISTBUFFER_MAX_ENTRIES);
+        MUSIC_WINDOW_MAX_ENTRIES);
+
+    new_result = ui_cell_read_if_changed(&music_cell_window_result, &gui_music_window_copy, &gui_music_window_seen) &&
+                 gui_music_window_copy.Published;
 
     action = gui_music_queue_window_poll(
         &gui_music_queue_window_client,
-        storage_task_sd_is_ready(),
-        storage_task_sd_is_mounted(),
-        storage_listbuffer.Status);
+        new_result,
+        gui_music_window_copy.Generation);
 
     switch (action)
     {
         case GUI_MUSIC_QUEUE_WINDOW_ACTION_NONE:
             break;
 
-        case GUI_MUSIC_QUEUE_WINDOW_ACTION_REQUEST:
-            (void)storage_listbuffer_request(
-                gui_music_queue_window_request_index(&gui_music_queue_window_client),
-                STORAGE_LISTBUFFER_MAX_ENTRIES,
-                0U);
-            break;
-
         case GUI_MUSIC_QUEUE_WINDOW_ACTION_APPLY:
-            if ((gui_music_apply_window(gui_music_transport_withdraw_highlight(
-                     &gui_music_transport,
-                     storage_listbuffer.Generation)) == SERVICE_OK) &&
-                storage_task_sd_is_mounted())
+            if (gui_music_apply_window(gui_music_transport_withdraw_highlight(
+                    &gui_music_transport,
+                    gui_music_window_copy.Generation)) == SERVICE_OK)
             {
                 uint16_t applied_index;
                 uint16_t applied_length;
 
-                applied_length = storage_listbuffer.Length;
-                applied_index = storage_listbuffer.Index;
+                applied_length = gui_music_window_copy.Length;
+                applied_index = gui_music_window_copy.Index;
                 if (applied_length == 0U)
                 {
                     applied_index = 0U;
                 }
-                else if (applied_length > STORAGE_LISTBUFFER_MAX_ENTRIES)
+                else if (applied_length > MUSIC_WINDOW_MAX_ENTRIES)
                 {
-                    applied_length = STORAGE_LISTBUFFER_MAX_ENTRIES;
+                    applied_length = MUSIC_WINDOW_MAX_ENTRIES;
                 }
 
                 gui_music_queue_window_mark_applied(
                     &gui_music_queue_window_client,
                     applied_index,
                     applied_length,
-                    storage_listbuffer.Generation);
-            }
+                    gui_music_window_copy.Generation);
 
-            storage_listbuffer.Status = STORAGE_LISTBUFFER_IDLE;
+                /* 显示延迟：套用的窗口起点正是最近一次写出的需求时，量写需求到套用的时间。 */
+                if (gui_music_window_request_open && (gui_music_window_copy.Index == gui_music_window_request_index))
+                {
+                    gui_music_window_request_open = false;
+                    music_display_stats_note_window((uint32_t)((uint32_t)xTaskGetTickCount() - gui_music_window_request_tick));
+                }
+            }
+            else
+            {
+                gui_music_queue_window_apply_failed(&gui_music_queue_window_client);
+            }
             break;
 
         case GUI_MUSIC_QUEUE_WINDOW_ACTION_CLEAR:
             (void)Service_GUI_QueueApply(NULL, NULL, 0U, 0U, SERVICE_GUI_QUEUE_NO_CURRENT);
             gui_music_shown.highlight = GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT;
             gui_music_shown.highlight_stale = false;
+            music_display_stats_note_clear((uint32_t)xTaskGetTickCount());
             break;
 
         default:
             break;
     }
 
+    if (gui_music_queue_window_request_due(&gui_music_queue_window_client))
+    {
+        MusicCells_WindowRequestTypeDef request;
+
+        request.Index = gui_music_queue_window_request_index(&gui_music_queue_window_client);
+        request.Valid = true;
+        if (ui_cell_try_write(&music_cell_window_request, &request))
+        {
+            gui_music_queue_window_request_sent(&gui_music_queue_window_client);
+            gui_music_window_request_index = request.Index;
+            gui_music_window_request_tick = (uint32_t)xTaskGetTickCount();
+            gui_music_window_request_open = true;
+        }
+    }
+
     return action;
 }
 
 /**
- * @brief 推进曲名一步：按已追上的曲目身份推进名称槽握手，只在显示变化时调 TitleApply。
+ * @brief 推进曲名一帧：按已追上的曲目身份决定要不要写曲名需求，读结果（变了才读）按需求序号采信，只在显示变化时调 TitleApply。
  * @param[in] decision 本圈归约结果，提供采信的曲目身份。
- * @note  先读槽状态，READY 时再读应答代次与两列：READY 期间 Storage 不再写槽。
- *        曲名与歌手由曲名客户一起给出、同一次 TitleApply 写入（GUI-26），Service 拷完
- *        文本后才把槽写回 IDLE；空白与 `--` 只在与上一次不同时写。
+ * @note  需求写不进去（拿不到锁）时下一帧再试。曲名与歌手由曲名客户一起给出、同一次 TitleApply 写入（GUI-26），
+ *        空白与 `--` 只在与上一次不同时写。指向结果副本的文本在调 Apply 的这一帧内有效，Service 会拷走。
  */
 static void gui_music_title_step(const GUI_MusicTransportDecisionTypeDef *decision)
 {
     GUI_MusicTitleIdentityTypeDef identity;
-    GUI_MusicTitleIdentityTypeDef requested;
     GUI_MusicTitleActionTypeDef action;
     GUI_MusicTitleTextTypeDef text;
-    uint32_t status;
-    uint32_t reply_generation;
+    bool new_reply;
 
     identity.has_track = decision->has_track;
     identity.generation = decision->generation;
     identity.index = decision->index;
 
-    status = storage_namebuffer.Status;
-    reply_generation = (status == STORAGE_NAMEBUFFER_READY) ? storage_namebuffer.Generation : 0U;
-    action = gui_music_title_poll(&gui_music_title_client, &identity, status, reply_generation);
+    new_reply = ui_cell_read_if_changed(&music_cell_title_result, &gui_music_title_copy, &gui_music_title_seen);
+    action = gui_music_title_poll(&gui_music_title_client, &identity, new_reply ? &gui_music_title_copy : NULL);
 
-    if (action == GUI_MUSIC_TITLE_ACTION_REQUEST)
+    if (gui_music_title_request_due(&gui_music_title_client))
     {
-        requested = gui_music_title_request_identity(&gui_music_title_client);
-        if (storage_namebuffer_request(requested.index, requested.generation) != STORAGE_OK)
+        const MusicCells_TitleRequestTypeDef request = gui_music_title_request(&gui_music_title_client);
+
+        if (ui_cell_try_write(&music_cell_title_request, &request))
         {
-            gui_music_title_request_failed(&gui_music_title_client);
+            gui_music_title_request_sent(&gui_music_title_client);
+            gui_music_title_request_tick = (uint32_t)xTaskGetTickCount();
         }
     }
 
-    /* 只有 ACCEPT 读槽内两列；READY 期间 Storage 不写槽，Service 拷完文本后才写回 IDLE。 */
     if (gui_music_title_text(&gui_music_title_client,
                              action,
-                             storage_namebuffer.Title,
-                             storage_namebuffer.Artist,
+                             gui_music_title_copy.Title,
+                             gui_music_title_copy.Artist,
                              &text))
     {
         (void)Service_GUI_TitleApply(text.title, text.artist);
     }
 
-    if ((action == GUI_MUSIC_TITLE_ACTION_ACCEPT) || (action == GUI_MUSIC_TITLE_ACTION_DISCARD))
+    if (action == GUI_MUSIC_TITLE_ACTION_ACCEPT)
     {
-        storage_namebuffer.Status = STORAGE_NAMEBUFFER_IDLE;
+        music_display_stats_note_title((uint32_t)((uint32_t)xTaskGetTickCount() - gui_music_title_request_tick));
     }
 }
 
@@ -429,29 +466,24 @@ static void gui_music_show(const GUI_MusicTransportDecisionTypeDef *decision, bo
 /**
  * @brief 复位窗口客户、曲名客户与快照归约，并把播放键画成 PLAY、进度条为 0、唱盘归零。
  * @note  时间 Label 的初始 `0:00/--:--` 与曲名的初始 `--` 由 Service 在 Init 时写入。首圈 step 按
- *        快照把各部分全部写一次。
+ *        快照把各部分全部写一次。GUI 副本在 NOLOAD 的 AXI 段，这里整块写入；已见序号归零，第一次读拿到格子的初值
+ *        （窗口结果的 `Published` 为假，GUI 忽略）。GUI 侧留下 3 个静态断言（BACK_ROWS、NO_CURRENT、SEEK_SCALE）。
  */
 void gui_music_init(void)
 {
-    _Static_assert(GUI_MUSIC_QUEUE_WINDOW_IDLE == STORAGE_LISTBUFFER_IDLE,
-                   "music queue window IDLE must match listbuffer");
-    _Static_assert(GUI_MUSIC_QUEUE_WINDOW_PENDING == STORAGE_LISTBUFFER_PENDING,
-                   "music queue window PENDING must match listbuffer");
-    _Static_assert(GUI_MUSIC_QUEUE_WINDOW_READY == STORAGE_LISTBUFFER_READY,
-                   "music queue window READY must match listbuffer");
-    _Static_assert(GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS < STORAGE_LISTBUFFER_MAX_ENTRIES,
+    _Static_assert(GUI_MUSIC_QUEUE_WINDOW_BACK_ROWS < MUSIC_WINDOW_MAX_ENTRIES,
                    "music queue back rows must leave room for visible rows in one window");
     _Static_assert(GUI_MUSIC_QUEUE_WINDOW_NO_CURRENT == SERVICE_GUI_QUEUE_NO_CURRENT,
                    "music queue window no-current must match QueueApply sentinel");
-    _Static_assert(GUI_MUSIC_TITLE_IDLE == STORAGE_NAMEBUFFER_IDLE,
-                   "music title IDLE must match namebuffer");
-    _Static_assert(GUI_MUSIC_TITLE_PENDING == STORAGE_NAMEBUFFER_PENDING,
-                   "music title PENDING must match namebuffer");
-    _Static_assert(GUI_MUSIC_TITLE_READY == STORAGE_NAMEBUFFER_READY,
-                   "music title READY must match namebuffer");
     _Static_assert(GUI_MUSIC_TRANSPORT_SEEK_SCALE == SERVICE_GUI_SEEK_SCALE,
                    "music transport seek scale must match Service_GUI seek event scale");
 
+    (void)memset(&gui_music_window_copy, 0, sizeof(gui_music_window_copy));
+    (void)memset(&gui_music_title_copy, 0, sizeof(gui_music_title_copy));
+    gui_music_window_seen = 0U;
+    gui_music_title_seen = 0U;
+    gui_music_window_request_open = false;
+    gui_music_hook_has_baseline = false;
     gui_music_queue_window_client_init(&gui_music_queue_window_client);
     gui_music_transport_init(&gui_music_transport);
     gui_music_title_client_init(&gui_music_title_client);
@@ -464,10 +496,45 @@ void gui_music_init(void)
 }
 
 /**
+ * @brief 翻页注入测试钩子（DIAG-7、R5.4，默认关闭）：每次看到新一首开始播放（`TrackStartCount` 变化），自动写一次翻页需求
+ *        （窗口起点前进一窗，到列表末尾回到 0），并记下注入时刻供前台任务量块池补满的耗时。
+ * @param[in] snapshot 本圈读到的播放快照。
+ * @note  只写需求，不改窗口客户的记账：前台任务发布那一窗，GUI 照常套用（窗口不比序号）。第一次读到快照只记基准，不注入。
+ *        钩子关闭时调用点写成 `if (MUSIC_HOOK_PAGE_TURN != 0U)`，默认构建也编译本函数。
+ */
+static void gui_music_page_turn_hook(const Playback_SnapshotTypeDef *snapshot)
+{
+    MusicCells_WindowRequestTypeDef request;
+    const GUI_MusicQueueWindowClientTypeDef *client = &gui_music_queue_window_client;
+
+    if (!gui_music_hook_has_baseline)
+    {
+        gui_music_hook_has_baseline = true;
+        gui_music_hook_track_start_count = snapshot->TrackStartCount;
+        return;
+    }
+
+    if (snapshot->TrackStartCount == gui_music_hook_track_start_count)
+    {
+        return;
+    }
+    gui_music_hook_track_start_count = snapshot->TrackStartCount;
+
+    request.Valid = true;
+    request.Index = (client->displayed && (client->applied_length >= MUSIC_WINDOW_MAX_ENTRIES))
+                        ? (uint16_t)(client->applied_index + client->applied_length)
+                        : 0U;
+    if (ui_cell_try_write(&music_cell_window_request, &request))
+    {
+        music_hook_pageturn_note_injection((uint32_t)xTaskGetTickCount());
+    }
+}
+
+/**
  * @brief 推进音乐分区一步：输入发命令、读快照归约、窗口协议、曲名、按需刷新显示。
  * @param[in] input 本圈已 Consume 的输入；NULL 视为 NONE。
- * @note  只由 GUI Task 调用。每圈只读一次快照；高亮在窗口仍显示且槽位 IDLE 时
- *        才重套（C3），Queue 不随当前曲自动滚动。
+ * @note  只由 GUI Task 调用。每圈只读一次快照；高亮在窗口仍显示时才重套（C3，用 GUI 自己的窗口副本，不再受槽状态限制），
+ *        Queue 不随当前曲自动滚动。
  */
 void gui_music_step(const Service_GUI_InputTypeDef *input)
 {
@@ -487,6 +554,10 @@ void gui_music_step(const Service_GUI_InputTypeDef *input)
 
     action = gui_music_window_step();
     gui_music_title_step(&decision);
+    if (MUSIC_HOOK_PAGE_TURN != 0U)
+    {
+        gui_music_page_turn_hook(&snapshot);
+    }
 
     /* APPLY 已按快照重套本窗；其余情况在高亮变化或 Service 即时高亮待覆盖时重套。 */
     if (decision.highlight_apply &&

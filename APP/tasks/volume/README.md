@@ -2,7 +2,7 @@
 
 卷任务（Volume Task）接管 SD 的热插拔和挂载：消抖、关闸、对账、卸载与挂载、发布卷事件。用户任何时候拔卡都马上停止，读取中拔卡不再被吞，换卡、轻触卡槽、快速拔插都停在正确状态。Flash 的启动（基准、挂载、无文件系统时格式化）放在一次性的 Flash 启动任务里，所以 `MountFlash`（实测 3.3 至 8.3 s）期间插拔卡照常响应。依据 [ADR-0024](../../../docs/adr/0024-file-interface-concurrency.md) 的“卷生命周期”一节和 [ADR-0023](../../../docs/adr/0023-task-split-and-app-contract.md)；规则 STOR-8、STOR-9、ARC-21；决定来源 [#195](https://github.com/immorcoding/mp3_project/issues/195)、[#189](https://github.com/immorcoding/mp3_project/issues/189)。
 
-卷任务只管“卷在不在”，不碰具体的文件读写，也不碰曲库、音频流、窗口槽：这些是订阅者的事（目前是音频读取任务，见 [音频读取任务](../audio_reader/README.md)，和 Storage Task，见 [存储任务](../storage/README.md)）。加应用时卷任务和卷事件都不改。
+卷任务只管“卷在不在”，不碰具体的文件读写，也不碰曲库、音频流、界面数据：这些是订阅者的事（目前是音频读取任务、前台任务，见 [音频读取任务](../audio_reader/README.md)，和 Storage Task，见 [存储任务](../storage/README.md)）。加应用时卷任务和卷事件都不改。
 
 ## 目录
 
@@ -19,7 +19,7 @@
 
 ## 公开 Interface
 
-- `volume_status(volume)`（`volume_event.h`）：返回 `{Mounted, Sequence}`，读一个 32 位字，**不拿锁**，任何任务可调用。它只回答“卷变过没有”，不用来判断现在能不能调文件接口（调用者看文件接口的返回值，`NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 不是文件错误，先看卷序号）。取代 `storage_task_sd_is_ready/mounted()`，后两者留到前台一次切才删。
+- `volume_status(volume)`（`volume_event.h`）：返回 `{Mounted, Sequence}`，读一个 32 位字，**不拿锁**，任何任务可调用。它只回答“卷变过没有”，不用来判断现在能不能调文件接口（调用者看文件接口的返回值，`NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 不是文件错误，先看卷序号）。取代了已在前台一次切（#218）删除的 `storage_task_sd_is_ready/mounted()`。
 - `volume_subscribe(task, notify_index, flag)`：订阅者在**自己任务入口**调用一行；`VOLUME_SUBSCRIBER_MAX`（4，配置常量）个以内，完全相同的登记幂等，超出返回假。登记后**先比对一次序号**。
 - `volume_publish_ready/gone(volume)`：只给发布者：SD 只有卷任务，Flash 只有 Flash 启动任务。不属于公开 Interface，订阅者不调用。
 - `volume_task()`：由 `app_tasks.c` 静态创建的任务入口。
@@ -33,9 +33,9 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
 | 播放 | 4（由 3 升） | 5120 word，DTCM | 静态，不变 |
 | **卷** | **3** | **1024 word，AXI `.app_axi_ram`** | 静态，TCB 在 DTCM `.bss` |
 | 定时器服务 | 3（`configTIMER_TASK_PRIORITY`，不改） | 128 word | 内核创建；应用没有软件定时器，它一直阻塞 |
-| Storage | 2 | 1024 word | 动态，不变 |
+| 前台、GUI、Log、Monitor（#218：GUI、Log、Monitor 由 1 升到 2） | 2 | 前台 1536 word（AXI），其余不变 | 见 [前台任务](../foreground/README.md) |
 | **Flash 启动（一次性）** | **2** | **1024 word（约 4 KiB），AXI `.app_axi_ram`** | 静态，跑完自删 |
-| GUI、Log、Monitor | 1 | 不变 | 不变 |
+| Storage（#218：由 2 降到 1） | 1 | 1024 word | 动态，不变 |
 | Boot、IDLE | 0 | Boot 128 word | 不变 |
 
 `configMAX_PRIORITIES` 是 5（优先级 0 至 4），`FreeRTOSConfig.h` 一个字没改。**定时器服务任务和卷任务同为 3**：它与播放（4）的关系是播放抢占它，与卷任务同级（`configUSE_TIME_SLICING` 为 1，轮转）；因为应用没有软件定时器，它永远阻塞在队列上，不占 CPU，所以同级没有影响。引入软件定时器时回调须很短，并复核这三个优先级（本任务的消抖因此也**不用软件定时器**，用等通知带超时）。
@@ -92,11 +92,11 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
 - **跳 2 的含义**：换卡是“卸载 → 发卷消失（序号 n+1）→ 挂载 → 发卷就绪（序号 n+2）”，挂载位前后都是真，序号跳 2。订阅者上次见到 n、现在见到 n+2：序号变了就按“**旧的全部作废，再看现状**”处理，不需要知道中间发生了几次；叫醒是两次，但通知位合并，订阅者醒一次就看到最终状态。只留最新状态不会丢掉中间一次，因为序号告诉它“变过”。
 - **订阅者晚登记怎么不漏**：登记（`volume_subscribe`）之前发布的事件不会补叫醒，但状态字已经是最新的；订阅者在入口**登记后先比对一次序号**（Storage Task 的 `storage_task_apply_sd_volume()`）。发布与登记的任何交错都安全：事件在登记前，比对就看到新序号；事件在登记后，通知会到；两者之间的窗口里既有通知又有新序号，只是多醒一次。
 - **边沿时刻（#215，诊断）**：卷任务在每次对账的第一个卡检测边沿调 `volume_event_note_edge(VOLUME_ID_SD, tick)`，之后这次对账里的每个卷事件发布时先把它抄进“已发布的边沿”、再写状态字、再叫醒；订阅者用 `volume_event_published_edge()` 读，读状态字、读边沿、再读一次状态字，两次状态字不同（读的时候又发布了新事件）或没有边沿（开机挂载）就返回假。音频读取任务写 `CARD_REMOVED` 之后用它算 `CARD_REMOVED lat=<ms>ms` 一行（相对第一个边沿，1 ms 分辨率）。换卡的卸载与挂载两个事件共用同一个边沿。APP 内部接口，不是 Service 接口。
-- **订阅表**：登记在临界区里先填表项再加计数，发布者读到计数时表项一定写完；只增不减，上限 `VOLUME_SUBSCRIBER_MAX`。订阅者最终是三个（音频读取、前台、后台），Storage Task 现在占一个。
+- **订阅表**：登记在临界区里先填表项再加计数，发布者读到计数时表项一定写完；只增不减，上限 `VOLUME_SUBSCRIBER_MAX`。订阅者最终是三个（音频读取、前台、后台），Storage Task 现在占一个，#218 后前台任务也登记了（Storage、读取、前台 3 个，后台再加 1 个正好 4）。
 
 ## 订阅者与正在进行的文件调用如何交错
 
-下面以音频读取任务为例（#215 起读块在它那里；Storage Task 的窗口、名字、扫描调用的交错与此相同）：它每圈**先比对 SD 卷序号**，再处理请求、读块。事件到达时它可能正在一次文件调用里：
+下面以音频读取任务为例（#215 起读块在它那里；Storage Task 的扫描调用和前台任务的标签读取调用的交错与此相同）：它每圈**先比对 SD 卷序号**，再处理请求、读块。事件到达时它可能正在一次文件调用里：
 
 - 调用在**闸前**等（消抖中）：闸开后返回，卡还在就返回正常结果（慢约 30 ms），卡已拔返回 `NOT_READY`（按路径/卷）或 `INVALID_HANDLE`（按句柄）。
 - 调用已经**持锁在途**（读 32 KiB，正常 3 至 7 ms）：卷任务的 `RefreshSD` 等它放锁；真拔卡时它很快失败返回 `NO_MEDIA`（Service 在锁内看到卡检测脚显示卡不在，把 `ERROR` 改成 `NO_MEDIA`）。
@@ -110,9 +110,9 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
 
 ## 优先级反转在卷锁上的表现
 
-卷任务（3）要 SD 卷锁做刷新、卸载、挂载；锁可能被 Storage Task（2）或音频读取任务（3）持有。音频读取任务与卷任务同级，没有优先级继承可言，卷任务等它那一次调用做完（正常 3 至 7 ms，拔卡 +1 ms 失败返回，故障路径约 0.6 s），放锁后读取任务的下一次调用在入口等闸。Storage Task（2）持锁时：
+卷任务（3）要 SD 卷锁做刷新、卸载、挂载；锁可能被 Storage Task（1，#218 起；扫描时）、前台任务（2，读标签）或音频读取任务（3）持有。音频读取任务与卷任务同级，没有优先级继承可言，卷任务等它那一次调用做完（正常 3 至 7 ms，拔卡 +1 ms 失败返回，故障路径约 0.6 s），放锁后读取任务的下一次调用在入口等闸。Storage Task（2）持锁时：
 
-- 互斥锁带**优先级继承**：卷任务等锁时，持锁的 Storage Task 临时升到 3，所以优先级 2 和 3 之间没有能抢走它的任务（Flash 启动任务也是 2，但它只持 Flash 卷锁）。反转的上界就是那一次调用的持锁时间：正常读 3 至 7 ms，拔卡时 +1 ms 失败返回，故障路径（卡不响应）500 ms 等待加 100 ms Abort，约 0.6 s。
+- 互斥锁带**优先级继承**：卷任务等锁时，持锁的 Storage Task 或前台任务临时升到 3，所以优先级 1、2 和 3 之间没有能抢走它的任务（Flash 启动任务也是 2，但它只持 Flash 卷锁）。反转的上界就是那一次调用的持锁时间：正常读 3 至 7 ms，拔卡时 +1 ms 失败返回，故障路径（卡不响应）500 ms 等待加 100 ms Abort，约 0.6 s。
 - 播放任务（4）**不碰文件、不拿任何文件锁**（调用者拒绝名单，入口断言停机），所以它不会被卷锁拖住；这也是播放升到 4 的原因，卷任务（3）做对账时播放仍能抢占。
 - **Flash 启动任务持 Flash 卷锁 3.3 至 8.3 s 时插拔卡不受影响**（R3.5）：卷任务从不拿 Flash 卷锁（Flash 不归它挂载，也没有拔插）；SD 与 Flash 各一把卷锁，互不影响。唯一可能陪 `MountFlash` 等锁的是 Storage Task 的回收，已按“Flash 卷已挂载才回收”挡住。文件和目录入口在拿锁之前先看一次“卷没挂”，没挂立刻返回 `NOT_READY`，不陪等。
 - 闸上的等待是睡眠，不占 CPU，也不持锁；持锁等闸被断言禁止（卷任务要这把锁才能开闸）。
@@ -180,11 +180,11 @@ Boot 任务只有 `APP_BOOT_TASK_STACK_WORDS = 128` word（512 B）。SDRAM 自�
 
 每张新任务票都要在 Monitor 的任务登记表加一行，漏了会出 `Task not registered in monitor` WARN。本票加了 `Volume Task`（1024 word）和 `Flash Boot Task`（1024 word）。Flash 启动任务只在开机后 `MountFlash` 期间存在，自删之后 Monitor 读不到它的栈，所以它自删前自己打一行水位（见日志表）。
 
-**CPU 占比行不能超过 127 字符**（`monitor_cpu_format` 写满会打 `~`）：任务短键取名字第一个词的前 4 个小写字符，新增的是 `volu` 和 `flas`（#213 又加了 `back`，11 个任务时最长 120 字符，见 [后台任务](../background/README.md)），与已有的 `crea`、`log`、`stor`、`moni`、`gui`、`play`、`idle`、`tmr` 互不相同。`Tests/monitor_warn` 的 `test_every_registered_task_fits_one_cpu_line` 用全部 10 个任务核对：最坏（10 个任务各占 10.0 %）和一个任务占 100.0 % 两种情形都不超过 127 字符、没有 `~`；实际最长 111 字符。Monitor 一批的行数：稳态 8 个任务（`IDLE`、`Tmr Svc`、`Log Task`、`Storage Task`、`Volume Task`、`Playback Task`、`Monitor Task`、`GUI Task`）加 5 行固定行共 13 行；开机后 `MountFlash` 期间多一个 `Flash Boot Task`，9 个任务共 14 行。都放得进 30 条的消息池。
+**CPU 占比行不能超过 127 字符**（`monitor_cpu_format` 写满会打 `~`；#218 起 12 个任务同批时一位小数放不下，改整数百分比，见 [Monitor](../monitor/README.md)）：任务短键取名字第一个词的前 4 个小写字符，新增的是 `volu` 和 `flas`（#213 又加了 `back`，11 个任务时最长 120 字符，见 [后台任务](../background/README.md)），与已有的 `crea`、`log`、`stor`、`moni`、`gui`、`play`、`idle`、`tmr` 互不相同。`Tests/monitor_warn` 的 `test_every_registered_task_fits_one_cpu_line` 用全部 10 个任务核对：最坏（10 个任务各占 10.0 %）和一个任务占 100.0 % 两种情形都不超过 127 字符、没有 `~`；实际最长 111 字符。Monitor 一批的行数：稳态 8 个任务（`IDLE`、`Tmr Svc`、`Log Task`、`Storage Task`、`Volume Task`、`Playback Task`、`Monitor Task`、`GUI Task`）加 5 行固定行共 13 行；开机后 `MountFlash` 期间多一个 `Flash Boot Task`，9 个任务共 14 行。都放得进 30 条的消息池。
 
 ## 日志消息池核算（DIAG-3，汇总类日志注明节拍）
 
-Service Log 消息池 30 条，Log Task 每 5 ms 转交一条（约 75 ms 排空 15 行）。本票新增的日志：
+Service Log 消息池当时 30 条（#218 加大到 44 块，最新核算见 [前台任务](../foreground/README.md)“日志与消息池核算”），Log Task 每 5 ms 转交一条（约 75 ms 排空 15 行）。本票新增的日志：
 
 - 一次消抖过程：`sd edge`（1 行）加 `sd settle`（1 行）加人读日志（`Card removed.`；或 `Card inserted`、`Filesystem mounted.`；刷新失败再加 `Hotplug refresh failed`）共 2 至 5 行，**事件驱动，不是周期的**；抖动只记第一个边沿，所以不会刷屏。读取被拔卡打断时再加 1 行 `Audio read interrupted`（每个流最多一行，之后读取停住）。
 - 开机：`flash boot start`、`Filesystem mounted.`（FLASH）、`flash ready`、`Flash Boot Task: …` 栈水位共 4 行（Flash，间隔 3.3 至 8.3 s 的两头）；SD 的 `Card ready`、`Filesystem mounted.`、`sd boot` 共 3 行。
@@ -205,7 +205,7 @@ Service Log 消息池 30 条，Log Task 每 5 ms 转交一条（约 75 ms 排空
 
 ## 约束
 
-- 卷任务不做具体的文件读写，不碰曲库、音频流、窗口槽，不等订阅者，不拿 Flash 卷锁。
+- 卷任务不做具体的文件读写，不碰曲库、音频流、界面数据，不等订阅者，不拿 Flash 卷锁。
 - 持 Filesystem 的任何锁时不得等闸（断言停机）；卷任务自己的挂载、卸载、刷新不受闸挡。
 - 新增订阅者只调 `volume_subscribe()` 一行加入口比对，卷任务和卷事件不改；订阅者上限是配置常量。
 - 往 `.app_axi_ram` 放东西须由拥有者在首次使用前完整写入（HWD-2）。

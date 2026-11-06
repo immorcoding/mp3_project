@@ -29,6 +29,10 @@
  *
  *          存储由调用者提供，大小由调用者的缓冲决定；本模块不在栈上放整份数据拷贝，
  *          也不认识应用和内容。
+ *
+ *          持锁统计（R5.3，DIAG-6）：Debug 开、Release 关。记持锁最长（微秒）、GUI 一侧不等入口的尝试和拿不到锁的次数；
+ *          GUI 一侧指 `ui_cell_try_write()` 和叫醒函数为空的格子（结果格，读者是 GUI）的 `ui_cell_read_if_changed()`。
+ *          汇总行由前台任务每圈调 `ui_cell_stats_poll()` 投，GUI 帧路径上不投日志。
  ******************************************************************************
  */
 
@@ -59,6 +63,18 @@ typedef struct
 #endif
 } UiCellTypeDef;
 
+/** @brief 持锁统计的累计值（开机以来，最大值不清零）；发布构建里恒为 0。 */
+typedef struct
+{
+    uint32_t HoldMaxUs;    /**< 持锁最长的一次，单位为微秒（只含锁内的拷贝与序号推进）。 */
+    uint32_t Acquisitions; /**< 拿到锁的总次数（所有入口）。 */
+    uint32_t GuiTries;     /**< GUI 一侧不等入口的尝试次数。 */
+    uint32_t GuiBusy;      /**< 其中没拿到锁的次数；占比 = GuiBusy / GuiTries。 */
+} UiCell_StatsTypeDef;
+
+/* Boot 任务直接调用一次：先创建全模块的互斥锁（调用链深，让它在最浅的位置发生，见 ui_cell.c）；不调用也行，ui_cell_init 会补。 */
+void ui_cell_boot_init(void);
+
 /* 初始化：传存储、大小与叫醒函数（结果格传 NULL）；只在 Boot Task 或单线程环境调用。 */
 void ui_cell_init(UiCellTypeDef *cell, void *storage, size_t size, UiCell_WakeCallback_t wake);
 
@@ -70,5 +86,14 @@ bool ui_cell_try_write(UiCellTypeDef *cell, const void *src);
 
 /* 不等的“变了才读”：序号与 *seen 相同不碰锁；拿不到锁返回 false，dst 和 *seen 不变。 */
 bool ui_cell_read_if_changed(const UiCellTypeDef *cell, void *dst, uint32_t *seen);
+
+/* 不拿锁地问“有没有新的一份”：序号与 seen 不同为真。读者的 `ui_cell_read_if_changed()` 返回假时用它区分“没变”和“锁被占着没读到”。 */
+bool ui_cell_changed(const UiCellTypeDef *cell, uint32_t seen);
+
+/* 读持锁统计的累计值；发布构建里恒为全 0。 */
+void ui_cell_stats_get(UiCell_StatsTypeDef *out);
+
+/* 前台任务每圈调一次：距上一行已满 10 s 且有新数据时投一行汇总（标签 UICELL）；发布构建里什么都不做。now_ms 是 FreeRTOS tick。 */
+void ui_cell_stats_poll(uint32_t now_ms);
 
 #endif /* UI_CELL_H */

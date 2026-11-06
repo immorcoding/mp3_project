@@ -35,12 +35,12 @@
 | 播放 | 4 | 5120 word，DTCM | 静态，不变 |
 | **音频读取** | **3** | **1024 word（4 KiB），AXI `.app_axi_ram`** | 静态，TCB 在 DTCM `.bss`，名字 `Audio Read Task`（15 个字符，`configMAX_TASK_NAME_LEN` 为 16） |
 | 卷、定时器服务 | 3 | 1024 word / 128 word | 不变 |
-| Storage、Flash 启动 | 2 | 不变 | 不变 |
-| GUI、Log、Monitor、后台 | 1 | 不变 | 不变 |
+| 前台、GUI、Log、Monitor、Flash 启动 | 2 | 前台 1536 word（AXI），其余不变 | 前台见 [前台任务](../foreground/README.md)（#218：GUI、Log、Monitor 从 1 升到 2，Storage 从 2 降到 1） |
+| Storage、后台 | 1 | 不变 | 不变 |
 
-`.app_axi_ram` 现在 `0x4800` = 18432 B（Debug map：`0x2404b600` 至 `0x2404fe00`）：卷 4096、读取任务 4096、后台 6144、Flash 启动 4096，没有别的贡献者。链接脚本、`FreeRTOSConfig.h` 一个字没改。HWD-2：NOLOAD 不清零，栈由 `xTaskCreateStatic` 整块填成已知值后才首次使用，`audio_reader_task.c` 有和卷任务、后台任务相同的 `_Static_assert`。栈只经 CPU 读写，不作 DMA，不需要 Cache 维护。**MPU**：`Core/Src/main.c` 只配了 SDRAM 一个 MPU 区域（Region 2，0xC0000000 起 32 MB），AXI SRAM（0x24000000 起）走默认内存映射；`.app_axi_ram` 只由单核 CPU 读写栈，没有 DMA 与 Cache 一致性问题，没有为这个段新增或修改 MPU 区域（与卷任务、Flash 启动任务、后台任务同一结论）。栈 4 KiB 是初值，由 R4.11 修正：Storage 单任务做全部工作时板测最低剩余 1480 B / 4096 B；读取任务的函数栈帧都很小（Debug 最大的 `audio_reader_end_stream_card_removed` 144 B，含 96 B 日志缓冲），最深的调用链（开流 → 按定位符打开 → 探测）与拆分前相同，所以预期余量不比 1480 B 差。
+`.app_axi_ram` 在本票时是 `0x4800` = 18432 B（Debug map：`0x2404b600` 至 `0x2404fe00`）：卷 4096、读取任务 4096、后台 6144、Flash 启动 4096，没有别的贡献者；#218 加前台任务栈 6144 和音乐的格子与 GUI 副本后是 0x9380 = 37760 B，见 [前台任务](../foreground/README.md)“栈、内存与段”。链接脚本、`FreeRTOSConfig.h` 一个字没改。HWD-2：NOLOAD 不清零，栈由 `xTaskCreateStatic` 整块填成已知值后才首次使用，`audio_reader_task.c` 有和卷任务、后台任务相同的 `_Static_assert`。栈只经 CPU 读写，不作 DMA，不需要 Cache 维护。**MPU**：`Core/Src/main.c` 只配了 SDRAM 一个 MPU 区域（Region 2，0xC0000000 起 32 MB），AXI SRAM（0x24000000 起）走默认内存映射；`.app_axi_ram` 只由单核 CPU 读写栈，没有 DMA 与 Cache 一致性问题，没有为这个段新增或修改 MPU 区域（与卷任务、Flash 启动任务、后台任务同一结论）。栈 4 KiB 是初值，由 R4.11 修正：Storage 单任务做全部工作时板测最低剩余 1480 B / 4096 B；读取任务的函数栈帧都很小（Debug 最大的 `audio_reader_end_stream_card_removed` 144 B，含 96 B 日志缓冲），最深的调用链（开流 → 按定位符打开 → 探测）与拆分前相同，所以预期余量不比 1480 B 差。
 
-**启动**（`app_tasks.c` 的 `create_task`，即 Boot 任务）：Log Task → 可选的 SDRAM 自检 → `catalog_boot_init()` → **`audio_reader_boot_init()`（块池和两个信箱）** → Storage Task → **Audio Read Task** → Volume Task → Playback Task → Monitor、GUI、后台。块池 NOLOAD 段此后才有主（SDRAM 自检是破坏性的，必须在它之前独占运行，HWD-2），做完才创建用到块池和信箱的任务。读取任务入口：记下自己的句柄、登记卷事件订阅、（钩子打开时投一行 `HOOK:`）、进循环；第一圈**不等**，先比对一次卷序号、看一次请求信箱，所以它比第一条请求启动得晚、比卷任务启动得早或晚，都不会漏。
+**启动**（`app_tasks.c` 的 `create_task`，即 Boot 任务）：Log Task → 可选的 SDRAM 自检 → `catalog_boot_init()` → **`audio_reader_boot_init()`（块池和两个信箱）** → `ui_cell_boot_init()`、`app_table_boot_init()`（#218，界面数据锁与各应用的内存准备）→ Storage Task → **Audio Read Task** → Volume Task → Playback Task → 前台任务（#218）→ Monitor、GUI、后台。块池 NOLOAD 段此后才有主（SDRAM 自检是破坏性的，必须在它之前独占运行，HWD-2），做完才创建用到块池和信箱的任务。读取任务入口：记下自己的句柄、登记卷事件订阅、（钩子打开时投一行 `HOOK:`）、进循环；第一圈**不等**，先比对一次卷序号、看一次请求信箱，所以它比第一条请求启动得晚、比卷任务启动得早或晚，都不会漏。
 
 ### Boot 栈核算（128 word = 512 B）
 
@@ -80,12 +80,13 @@
 
 **进入循环时先看一次**：任务入口之后的第一圈等待 0 tick，直接走一遍 1、2、3，不依赖通知。播放任务在读取任务绑定句柄之前写的请求没有通知（句柄为空时通知被跳过），靠这一圈补上；启动顺序也让读取任务早于播放任务创建，这是两层保险。
 
-**让路用等待点，不用 `vTaskDelay`**：水位以上每读一块等 1 tick，这 1 tick 就是通知等待的超时，让路期间新请求、块归还、卷事件能立刻叫醒。让的是 SD 锁：读取任务（3）放锁后马上又能拿到，优先级 2 的 Storage（以及以后的前台）排不上，所以必须真的睡一下。水位按就绪队列里的块数算，不含播放任务手里那块。水位 4 块（`AUDIO_READER_WATERMARK_BLOCKS`）、让路 1 tick（`AUDIO_READER_YIELD_TICKS`）、重试间隔 10 ms（`AUDIO_READER_BUSY_RETRY_MS`）、卷宽限 100 ms（`AUDIO_READER_VOLUME_GRACE_MS`）都是配置常量，标“初值，由板级验收修正”；让路改 0 即可做对比（R5.4），不算钩子。320 kbps 下 4 块约 3.3 s，够撑过最坏的非故障等锁 2.05 s（目前按 MP3 算，加高码率格式要重新核算）。切歌后补满 32 块的推算约 140 ms，前台最多等 14 至 27 ms（推算，未测）。
+**让路用等待点，不用 `vTaskDelay`**：水位以上每读一块等 1 tick，这 1 tick 就是通知等待的超时，让路期间新请求、块归还、卷事件能立刻叫醒。让的是 SD 锁：读取任务（3）放锁后马上又能拿到，优先级 2 的前台（以及优先级 1 的 Storage）排不上，所以必须真的睡一下。水位按就绪队列里的块数算，不含播放任务手里那块。水位 4 块（`AUDIO_READER_WATERMARK_BLOCKS`）、让路 1 tick（`AUDIO_READER_YIELD_TICKS`）、重试间隔 10 ms（`AUDIO_READER_BUSY_RETRY_MS`）、卷宽限 100 ms（`AUDIO_READER_VOLUME_GRACE_MS`）都是配置常量，标“初值，由板级验收修正”；让路改 0 即可做对比（R5.4），不算钩子。320 kbps 下 4 块约 3.3 s，够撑过最坏的非故障等锁 2.05 s（目前按 MP3 算，加高码率格式要重新核算）。切歌后补满 32 块的推算约 140 ms，前台最多等 14 至 27 ms（推算，未测）。
 
 ## 和别的任务怎么交错
 
 - **和卷任务（3）**：同级，`configUSE_TIME_SLICING` 为 1，时间片轮转。卡检测中断只叫醒卷任务，读取任务正在跑时卷任务要等下一个时间片或读取任务阻塞才能运行（≤ 1 ms；读取任务几乎每次读都会在 DMA 完成信号量上阻塞，所以通常立刻轮到）。卷任务 `RefreshSD` 要拿 SD 卷锁：读取任务正持锁时，卷任务等它那一次调用做完（正常 3 至 7 ms，故障路径约 0.6 s），同级所以没有优先级继承可言；放锁后读取任务的下一次文件调用在 Filesystem 入口**等闸**（卷任务在检测边沿关了闸），卷任务拿到锁。闸开之后读取任务拿到失败返回（卡已拔）或正常结果（卡还在），再看卷序号。
-- **和 Storage（2）**：读取任务持 SD 锁时，Storage 的文件调用等锁；Storage 持锁时读取任务要锁，Storage 经优先级继承临时升到 3 做完那一次调用。FreeRTOS 互斥量放锁时只是把等待者放进就绪表，不把锁交给它：读取任务放锁后立刻再拿，Storage 排不上，直到读取任务进等待点睡 1 tick。所以水位以下（刚切歌补块期）Storage 的名字、窗口读取会被挡到补块完成，水位以上每读一块让一次。
+- **和前台（2，#218）**：前台读标签时在 Filesystem 入口等 SD 锁。读取任务持锁时前台等它那一次调用做完；放锁后读取任务立刻再拿，前台排不上，直到读取任务进等待点睡 1 tick。所以水位以下（刚切歌补块期，约 140 ms）前台的名字、窗口行读取会被挡到补块完成，水位以上每读一块让一次，前台一次标签读取（至多 4 次读）推算等 14 至 27 ms；这是第 5 次上板 R5.4 要量的数（翻页注入钩子在切歌后立刻翻页，读 `FSLOCK` 行的 `wait=` 最长值）。前台持锁时读取任务要锁，前台经优先级继承临时升到 3 做完那一次调用。
+- **和 Storage（1，#218 起降到 1）**：同样的互斥规则，读取任务（3）、前台（2）都比它高，Storage 只在目录读取（曲库扫描）时持 SD 锁；它被挡住的时间不影响用户可见的延迟，扫描只是慢一点。
 - **和播放（4）**：播放抢占读取任务；播放不拿任何文件锁（调用者拒绝名单，入口断言停机），所以读取任务持锁时被播放抢占不会让播放等锁。播放归还块和写请求都只是不阻塞地置通知位。
 - **和后台（1）**：后台任务现在只有默认关闭的 Flash 压力钩子，只拿 Flash 卷锁，与 SD 卷锁互不相干。读取任务（3）会在补块期占满 CPU 的空隙之外让出，后台（1）和 GUI（1）拿剩下的；补块期是短脉冲（约 140 ms），不是常态。
 - **读取任务持 SD 锁时卷任务要刷新会怎样**：见上面“和卷任务”。关键是读取任务在 Service 调用里持锁，卷任务的 `RefreshSD` 排在它后面；真拔卡时那一次读取 +1 ms 左右就失败返回，持锁 2.0 至 4.2 ms（#191 实测），不会等 500 ms 超时。
@@ -130,7 +131,7 @@ SD 只有 4 个文件槽、2 个目录槽（`_FS_LOCK` 9，Flash 2 加 1，共 9
 - **读块**：`SERVICE_BUSY` 放回这个块，约 10 ms 后在同一个文件位置重读（读取不会返回它，保险用）。
 - **日志不刷屏**：同一次开流或读块遇到 `SERVICE_BUSY`，第 1 次记一行 WARN，之后每满 100 次（约 1 s）再记一行，5 s 内最多 6 行：`W (…) Audio: SERVICE_BUSY op=open pos=12 n=1`，不含文件名。R4.12、R6.10 搜 `SERVICE_BUSY`。
 
-**R4.12：这张票上板时音频流和 Storage 会不会同时把 SD 的 4 个文件槽用尽？** 按代码核对，不会。同时持有的文件：音频流 1 个（开流到读完或关闭，探测也在同一个句柄上）；Storage Task 是单线程，名称槽一次开 1 个文件、窗口槽每圈一行也是开 1 个文件、用完就关，两者不会同时；曲库扫描开的是**目录**（用目录槽，扫描由 Storage 同步做，期间名称槽和窗口槽不服务），且不开文件。所以 SD 上最多同时 2 个文件，加扫描时 1 个文件加 2 个目录，都在 4 + 2 以内。前台、后台把这个数字推高之后（R5、R6.10）要重算；每个任务同时持有的文件数要写进应用接入约定（现在还没有那张表，记在 inbox）。
+**R4.12：这张票上板时音频流和 Storage 会不会同时把 SD 的 4 个文件槽用尽？** 按代码核对，不会（前台一次切后的最新核算在文末加了一段，名称槽与窗口槽已被前台任务取代，同一时刻仍只开一个文件）。同时持有的文件：音频流 1 个（开流到读完或关闭，探测也在同一个句柄上）；Storage Task 是单线程，名称槽一次开 1 个文件、窗口槽每圈一行也是开 1 个文件、用完就关，两者不会同时；曲库扫描开的是**目录**（用目录槽，扫描由 Storage 同步做，期间名称槽和窗口槽不服务），且不开文件。所以 SD 上最多同时 2 个文件，加扫描时 1 个文件加 2 个目录，都在 4 + 2 以内。**#218 重算**：前台任务取代了 Storage 的两个槽，前台一步最多开 1 个文件（读完即关，不跨步持有），所以 SD 上最多同时 2 个文件（音频流 1、前台 1），曲库扫描仍开目录、不开文件（Storage 现在只剩扫描，仍是 1 个任务）；加扫描时 2 个文件加 2 个目录，仍在 4 + 2 以内，不会 `SERVICE_BUSY`。后台任务（#220）搬扫描之后也只有这些，要再核对（R6.10）。每个任务同时持有的文件数的约定见 [前台任务](../foreground/README.md)“一步最多一次文件调用”，写进 inbox。
 
 ## `RefreshSD` 与 `UnmountSD` 之间的空隙
 
@@ -160,7 +161,7 @@ SD 只有 4 个文件槽、2 个目录槽（`_FS_LOCK` 9，Flash 2 加 1，共 9
 
 ## 曲目诊断计数器的并发
 
-`catalog_track_open()` 现在被两个任务调用（读取任务开流，Storage Task 读名称和窗口行），其中的 `catalog_track_diag_locator_miss()` 对计数器做读-改-写。逐个核对 `catalog_track_diag.c` 的静态变量：**只有定位符核对不符计数器被两个任务同时更新**，其余计数器（`Reads`、`ByReason`、`MaxUs`……和窗口累加）只由名称槽、窗口槽所在的任务写；计时函数和 `Stream` 行没有状态。处理：把 `LocatorMisses` 从计数器结构里**分开**成独立的 `volatile` 变量，自增放在 `taskENTER_CRITICAL()` / `taskEXIT_CRITICAL()` 之间（两条指令的短临界区），日志在临界区之外投。主机测试是单线程的，这条只能靠读代码和 Release 反汇编；不加测试专用的访问函数。前台一次切之后窗口累加改由前台任务写，仍然只有一个写者。
+`catalog_track_open()` 现在被两个任务调用（读取任务开流，前台任务读曲名和窗口行，#218；原来是 Storage Task 的名称槽、窗口槽），其中的 `catalog_track_diag_locator_miss()` 对计数器做读-改-写。逐个核对 `catalog_track_diag.c` 的静态变量：**只有定位符核对不符计数器被两个任务同时更新**，其余计数器（`Reads`、`ByReason`、`MaxUs`……和窗口累加）只由曲名与窗口行所在的任务（前台任务）写；计时函数和 `Stream` 行没有状态。处理：把 `LocatorMisses` 从计数器结构里**分开**成独立的 `volatile` 变量，自增放在 `taskENTER_CRITICAL()` / `taskEXIT_CRITICAL()` 之间（两条指令的短临界区），日志在临界区之外投。主机测试是单线程的，这条只能靠读代码和 Release 反汇编；不加测试专用的访问函数。前台一次切之后窗口累加由前台任务写，仍然只有一个写者。
 
 ## 日志与消息池（DIAG-3）
 
@@ -179,13 +180,15 @@ SD 只有 4 个文件槽、2 个目录槽（`_FS_LOCK` 9，Flash 2 加 1，共 9
 
 **消息池核算**（Service Log 30 块，Log Task 每 5 ms 转交一条，排空约 5 ms/行）：Monitor 稳态现在 10 个任务共 15 行（`Audio Read Task` 多一行），开机后 `MountFlash` 期间 11 个任务共 16 行；最坏同时到达 = Monitor 16 + Filesystem 持锁统计 3 + 曲库短锁 1 + 一次拔卡 6 = **26 行，留 4 块**。拔卡的 6 行沿用上一票的口径（卷路径日志按上界 5 行：`sd edge`、`sd settle`、人读日志，刷新失败时再加诊断），加本任务新增的 `CARD_REMOVED lat=` 1 行；上一票的口径没有计入读取被打断时的 `Audio read interrupted` 和播放侧的 `Stop reason=CARD_REMOVED`（各 1 行，一次正常的播放中拔卡实际是 `sd edge`、`sd settle`、`Card removed.`、`Audio read interrupted`、`Stop reason`、`CARD_REMOVED lat` 共 6 行，刷新失败的罕见路径才到 8 行），更保守的口径是 Monitor 16 + 3 + 1 + 8 = 28 行，留 2 块。`SERVICE_BUSY` 是异常路径，同一时刻最多再加 1 行（26 行变 27 行，留 3 块；保守口径 29 行，留 1 块）。Flash 压力钩子打开的构建再加统计行 1 行；它的“卷满”和“停下”两条偶发行同时撞上整套最坏情形是 30 行以上，没有余量，实际上这几条同时到达的概率很低，真有丢失会在 Monitor 的 `Health log_svc=` 里数出来，丢了要注明、受影响的行不算通过（R1.3）。定位符失效钩子打开的构建每次开流多一行 `Locator miss`（WARN），只在用户点播放时出现，不与 Monitor 的批次叠加成新的最坏情形。
 
-**Monitor 登记**：`monitor_task.c` 的任务登记表加了 `Audio Read Task`（栈 1024 word），漏了会出 `Task not registered in monitor` WARN。任务名不能叫 `Audio Reader Task`（17 个字符，`configMAX_TASK_NAME_LEN` 16 会截断，登记对不上）。CPU 行的短键是 `audi`，与已有的 `crea`、`log`、`stor`、`volu`、`flas`、`moni`、`gui`、`play`、`idle`、`tmr`、`back` 互不相同。可能同时出现在一批里的任务是 11 个（`Create Task` 创建完就自删，早于 Monitor 的第一批，不会和 `Flash Boot Task` 同批），最坏（10 个各占 10.0 %）仍是 120 字符，不超过 127，`Tests/monitor_warn` 核对；如果 `Create Task` 将来不自删，12 个任务各占两位数会到 129 字符，要缩键或拆行。
+**#218 重算（用户 2026-11-06 的决定，池加大）**：保守口径下最坏同时到达从 29 行（含 `SERVICE_BUSY`）变成 33 行：Monitor 17 行（开机后 `MountFlash` 期间 12 个任务加 5 行固定行）+ Filesystem 持锁统计 3 + 曲库短锁 1 + `ui_cell` 持锁统计 1 + 显示延迟汇总 1 + 前台 step 耗时 1 + 拔卡 8 + `SERVICE_BUSY` 1。池从 30 块加大到 **44 块**（`LOG_SERVICE_QUEUE_LENGTH`，多 1904 B DTCM），**留 11 块**（Flash 压力钩子构建 36 行留 8 块，翻页注入钩子构建 34 行留 10 块），`monitor_task.c` 的 `_Static_assert` 核对 `12 + 5 + 16 + 8 = 41 ≤ 44`。明细见 [前台任务](../foreground/README.md)“日志与消息池核算”。上一票的数字（26 行留 4 块，保守口径 28 行留 2 块）作废。
+
+**Monitor 登记**：`monitor_task.c` 的任务登记表加了 `Audio Read Task`（栈 1024 word），漏了会出 `Task not registered in monitor` WARN。任务名不能叫 `Audio Reader Task`（17 个字符，`configMAX_TASK_NAME_LEN` 16 会截断，登记对不上）。CPU 行的短键是 `audi`，与已有的 `crea`、`log`、`stor`、`volu`、`flas`、`moni`、`gui`、`play`、`idle`、`tmr`、`back` 互不相同。可能同时出现在一批里的任务是 11 个（`Create Task` 创建完就自删，早于 Monitor 的第一批，不会和 `Flash Boot Task` 同批），最坏（10 个各占 10.0 %）仍是 120 字符，不超过 127，`Tests/monitor_warn` 核对；如果 `Create Task` 将来不自删，12 个任务各占两位数会到 129 字符，要缩键或拆行。**#218 加前台任务后，同批任务数是 12 个，这个情形成了现实：`monitor_cpu_format()` 在放不下时整行退化成整数百分比，保证 127 字符以内**（见 [Monitor](../monitor/README.md)）。
 
 ## 定位符失效测试钩子（默认关闭，DIAG-7）
 
 用于 R4.4：定位符核对失败时，回退按路径打开最后一首，T_data 内要能出声。写法照前几个钩子：`audio_reader_config.h` 里 `AUDIO_READER_HOOK_LOCATOR_MISS`（默认 `0U`），代码是 `if (AUDIO_READER_HOOK_LOCATOR_MISS != 0U)`，默认构建也编译；根 `CMakeLists.txt` 的缓存变量 `MP3_HOOK_LOCATOR_MISS`，**只允许 Debug**（非 Debug 构建开会在 configure 时报错）；启动日志一行 WARN `HOOK: locator_miss ON`（串口里标签后有冒号，搜 `HOOK: locator_miss ON`）。
 
-做法：每次开流和重开流前，读取任务把曲库读出的文件定位符清零（全零是“无定位符”），Filesystem 一定判核对不符，走真实的“退回按路径打开”路径，并带出 `Locator miss pos=` WARN 和计数器；只影响音频流，名称槽和窗口槽照常按定位符打开（前台那一半是第 5 次上板 R5.5 的事）。大目录卡（`--set bigdir`，12000 首同文件夹）上开最后一首，按路径打开 1.43 至 2.05 s，期间读取任务自己持 SD 锁，Storage 的调用等它；T_data 5 s 之内应能出声，屏幕不显示 “Read timeout”。
+做法：每次开流和重开流前，读取任务把曲库读出的文件定位符清零（全零是“无定位符”），Filesystem 一定判核对不符，走真实的“退回按路径打开”路径，并带出 `Locator miss pos=` WARN 和计数器；音频流照常用它。#218 起前台任务读曲名和窗口行前也走同一个开关（`music_foreground_apply_locator_hook`），所以按路径打开的是整条链路（R5.5：切歌不显示 `Read timeout`，前台回退按路径打开不挡音频流）。大目录卡（`--set bigdir`，12000 首同文件夹）上开最后一首，按路径打开 1.43 至 2.05 s，期间读取任务自己持 SD 锁，前台的调用等它；T_data 5 s 之内应能出声，屏幕不显示 “Read timeout”。
 
 开：`cmake --preset firmware-debug -DMP3_HOOK_LOCATOR_MISS=1`；关：`-DMP3_HOOK_LOCATOR_MISS=0`（缓存变量会留在构建目录里，开过要显式关）。
 
@@ -197,5 +200,5 @@ SD 只有 4 个文件槽、2 个目录槽（`_FS_LOCK` 9，Flash 2 加 1，共 9
 
 - 读取任务不解码、不碰播放状态机；播放任务不碰文件、不拿文件锁。
 - 读取任务绝不同时持两把卷锁，不在持文件锁时调用会阻塞的接口（`Service_Log_Post` 不阻塞，可以调用）；它不在调用者拒绝名单里。
-- 订阅者上限 `VOLUME_SUBSCRIBER_MAX` 为 4：现在 Storage 和读取任务占 2，前台、后台加入后正好 4。
+- 订阅者上限 `VOLUME_SUBSCRIBER_MAX` 为 4：现在 Storage、读取任务和前台任务（#218）占 3，后台加入后正好 4。
 - 命名：任务内部使用 `audio_reader_*`；跨层调用使用 `Service_Filesystem_*` 与 `Service_Log_*`；不再有 `Storage_AudioMediaTypeDef`。

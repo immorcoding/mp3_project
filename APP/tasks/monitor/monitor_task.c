@@ -33,12 +33,21 @@
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
 /* 一批最多的日志行数：每个任务一行栈占用，加 Heap、温度、GUI 最长帧、CPU 占比、Health 五行（DIAG-6）。
- * 一批在 5 s 内一次投完，不分散；它自己必须放得进 Service Log 的 30 块消息池，余量留给同时到来的其他任务日志。
- * 稳态 10 个任务（IDLE、Tmr Svc、Log、Storage、Audio Read、Volume、Playback、Monitor、GUI、Background），一批 15 行；开机后 MountFlash 期间多一个
- * Flash 启动任务，11 个任务、16 行。 */
+ * 一批在 5 s 内一次投完，不分散；它自己必须放得进 Service Log 的消息池，余量留给同时到来的其他任务日志。
+ * 稳态 11 个任务（IDLE、Tmr Svc、Log、Storage、Audio Read、Volume、Playback、Monitor、GUI、Background、Foreground），一批 16 行；
+ * 开机后 MountFlash 期间多一个 Flash 启动任务，12 个任务、17 行。 */
 #define MONITOR_BATCH_FIXED_LINES 5U
 _Static_assert((MONITOR_CPU_TASK_MAX + MONITOR_BATCH_FIXED_LINES) <= LOG_SERVICE_QUEUE_LENGTH,
                "one Monitor batch must fit the Service Log message pool");
+
+/* 最坏同时到达的行数（保守口径，#218 重算）：Monitor 一批（开机后 12 个任务、17 行）加其他任务的最坏 16 行，池里还要至少留 8 块。
+ * 每加一个任务或一种常开日志行就要重算这条（改 MONITOR_TASK_CONCURRENT_MAX、MONITOR_POOL_OTHER_WORST_LINES 或池深），
+ * 编译期拦住，而不是等板测发现 `Health log_svc` 在涨。 */
+_Static_assert((MONITOR_TASK_CONCURRENT_MAX + MONITOR_BATCH_FIXED_LINES + MONITOR_POOL_OTHER_WORST_LINES + MONITOR_POOL_SPARE_MIN)
+                   <= LOG_SERVICE_QUEUE_LENGTH,
+               "the worst simultaneous Service Log burst must leave at least MONITOR_POOL_SPARE_MIN blocks free");
+_Static_assert(MONITOR_TASK_CONCURRENT_MAX <= MONITOR_CPU_TASK_MAX,
+               "the Monitor CPU table must hold every task that can exist at the same time");
 
 /* 已告警的未登记任务名；静态零初始化即为空记录，仅 Monitor Task 访问。 */
 static monitor_warn_record_t monitor_warned_tasks;
@@ -86,6 +95,12 @@ static UBaseType_t monitor_get_task_stack_words(const char *task_name)
     if (strcmp(task_name, "Background Task") == 0)
     {
         return APP_BACKGROUND_TASK_STACK_WORDS;
+    }
+
+    /* 任务名只在 app_config.h 定义一次（APP_FOREGROUND_TASK_NAME，15 个字符），创建处和这里都引用它。 */
+    if (strcmp(task_name, APP_FOREGROUND_TASK_NAME) == 0)
+    {
+        return APP_FOREGROUND_TASK_STACK_WORDS;
     }
 
     /* 一次性任务：只在开机后 MountFlash 期间存在（3.3 至 8.3 s），自删之后 Monitor 读不到它的栈，

@@ -59,6 +59,11 @@ Service_StatusTypeDef Service_Log_Post(Service_Log_LevelTypeDef level, const cha
     return SERVICE_OK;
 }
 
+/** @brief 前台任务叫醒函数的替身：发布成功路径会调用它；本文件只关心持锁统计，所以什么都不记。 */
+void foreground_task_wake(void)
+{
+}
+
 /**
  * @brief 假卷状态函数。
  * @param[in] volume 卷，须为 SD。
