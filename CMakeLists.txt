@@ -152,10 +152,19 @@ if(MP3_HOOK_FAKE_BOUNCE AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_FAKE_BOUNCE 只能在 Debug 构建里打开（当前 ${CMAKE_BUILD_TYPE}）。")
 endif()
 
+# Flash 压力钩子（#213，APP/tasks/background）：打开后后台任务里多一个作业，在 Flash 卷上循环写满 4 MiB 的文件、
+# 每块之后回收一次、写满删除，把空闲块压到回收水位以下（清单 1 C2/C3、R6.2 至 R6.4）；同样只允许 Debug。
+# configure 时 cmake --preset firmware-debug -DMP3_HOOK_FLASH_PRESSURE=1，关掉要显式 -DMP3_HOOK_FLASH_PRESSURE=0。
+set(MP3_HOOK_FLASH_PRESSURE 0 CACHE STRING "Flash 压力测试钩子（#213，APP/tasks/background）：1 打开，0 关闭（默认）")
+if(MP3_HOOK_FLASH_PRESSURE AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_FLASH_PRESSURE 只能在 Debug 构建里打开（当前 ${CMAKE_BUILD_TYPE}）。")
+endif()
+
 # 添加工程级编译宏
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     FILESYSTEM_HOOK_SD_LATE_DMA=${MP3_HOOK_SD_LATE_DMA}
     VOLUME_HOOK_FAKE_BOUNCE=${MP3_HOOK_FAKE_BOUNCE}
+    BACKGROUND_HOOK_FLASH_PRESSURE=${MP3_HOOK_FLASH_PRESSURE}
     # 在此添加用户自定义的编译宏
 )
 

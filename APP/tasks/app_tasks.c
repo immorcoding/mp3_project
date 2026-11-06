@@ -7,14 +7,17 @@
   *          Create Task（Boot）先建立 Log Service 的静态消息池与 FreeRTOS 队列，再创建
   *          消费日志的 Log Task，做内存准备（可选的 SDRAM 自检），然后创建卷事件的订阅者
   *          Storage Task、负责 SD 热插拔与挂载并发布卷事件的 Volume Task（静态创建）、
-  *          持有播放状态机的 Playback Task（静态创建）、监控 Task 以及独占
-  *          LVGL 执行上下文的 GUI Task。所有任务创建成功后 Create Task 自删。
+  *          持有播放状态机的 Playback Task（静态创建）、监控 Task、独占
+  *          LVGL 执行上下文的 GUI Task 以及轮流调后台作业的 Background Task（静态创建）。
+  *          所有任务创建成功后 Create Task 自删。
   ******************************************************************************
   */
 
 #include "APP/tasks/app_tasks.h"
 
 #include "APP/apps/music/catalog/catalog.h"
+#include "APP/tasks/background/background_task.h"
+#include "APP/tasks/background/background_task.h"
 #include "APP/tasks/log/log_task.h"
 #include "APP/tasks/monitor/monitor_task.h"
 #include "APP/tasks/playback/playback_task.h"
@@ -175,6 +178,13 @@ static void create_task(void *handle)
         Error_Handler();
     }
     Service_Filesystem_DenyCaller(gui_task_handle);
+
+    /* 后台任务（优先级 1）：栈在 AXI 新段，静态创建。可以调文件接口，不进拒绝名单。默认构建里没有作业，
+     * 它跑到第一次阻塞就一直等通知；钩子打开时它在入口投 HOOK 启动日志（Log Task 此时已创建）。 */
+    if (background_task_create() == NULL)
+    {
+        Error_Handler();
+    }
 
     vTaskDelete(NULL);
 }
