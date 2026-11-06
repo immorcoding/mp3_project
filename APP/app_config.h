@@ -33,6 +33,7 @@
 #define APP_STORAGE_TASK_STACK_WORDS    1024U   /* Storage Task 栈深度，单位为 word。 */
 #define APP_VOLUME_TASK_STACK_WORDS     1024U  /* Volume Task 栈深度，单位为 word（4 KiB）；静态创建，栈位于 AXI SRAM 新段 .app_axi_ram。初值，由板级验收修正。 */
 #define APP_FLASH_BOOT_TASK_STACK_WORDS 1024U  /* Flash 启动任务栈深度，单位为 word（约 4 KiB）；一次性，静态创建，栈位于 AXI SRAM 新段 .app_axi_ram。初值，由板级验收修正。 */
+#define APP_BACKGROUND_TASK_STACK_WORDS 1536U  /* Background Task 栈深度，单位为 word（6 KiB）；静态创建，栈位于 AXI SRAM 新段 .app_axi_ram。初值，由板级验收修正。 */
 #define APP_MONITOR_TASK_STACK_WORDS    256U   /* Monitor Task 栈深度，单位为 word。 */
 #define APP_GUI_TASK_STACK_WORDS        2048U  /* GUI Task 栈深度，单位为 word。768 word 会在 Default 解锁 Fade 时溢出。 */
 #define APP_PLAYBACK_TASK_STACK_WORDS   5120U  /* Playback Task 栈深度，单位为 word（20480 B）；静态创建，栈与 TCB 位于 DTCM .bss。 */
@@ -42,6 +43,7 @@
 #define APP_STORAGE_TASK_PRIORITY       2U     /* Storage Task 优先级。 */
 #define APP_VOLUME_TASK_PRIORITY        3U     /* Volume Task 优先级：消抖、挂载卸载、发布卷事件；与定时器服务任务（configTIMER_TASK_PRIORITY = 3）同级。 */
 #define APP_FLASH_BOOT_TASK_PRIORITY    2U     /* Flash 启动任务优先级：低于卷任务，MountFlash 期间插拔卡照常响应。 */
+#define APP_BACKGROUND_TASK_PRIORITY    1U     /* Background Task 优先级：与 GUI、Log、Monitor 同级；GUI 每圈睡眠，它拿空隙；低于 Storage 与 Flash 启动任务（2），不抢前台。 */
 #define APP_MONITOR_TASK_PRIORITY       1U     /* Monitor Task 优先级。 */
 #define APP_GUI_TASK_PRIORITY           1U     /* GUI Task 优先级。 */
 #define APP_PLAYBACK_TASK_PRIORITY      4U     /* Playback Task 优先级：播放 4 > 卷 3（= 定时器服务 3）> Storage、Flash 启动 2 > GUI/Log/Monitor 1 > Boot 0。 */

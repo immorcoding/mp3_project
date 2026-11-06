@@ -179,7 +179,7 @@ Boot 任务只有 `APP_BOOT_TASK_STACK_WORDS = 128` word（512 B）。SDRAM 自�
 
 每张新任务票都要在 Monitor 的任务登记表加一行，漏了会出 `Task not registered in monitor` WARN。本票加了 `Volume Task`（1024 word）和 `Flash Boot Task`（1024 word）。Flash 启动任务只在开机后 `MountFlash` 期间存在，自删之后 Monitor 读不到它的栈，所以它自删前自己打一行水位（见日志表）。
 
-**CPU 占比行不能超过 127 字符**（`monitor_cpu_format` 写满会打 `~`）：任务短键取名字第一个词的前 4 个小写字符，新增的是 `volu` 和 `flas`，与已有的 `crea`、`log`、`stor`、`moni`、`gui`、`play`、`idle`、`tmr` 互不相同。`Tests/monitor_warn` 的 `test_every_registered_task_fits_one_cpu_line` 用全部 10 个任务核对：最坏（10 个任务各占 10.0 %）和一个任务占 100.0 % 两种情形都不超过 127 字符、没有 `~`；实际最长 111 字符。Monitor 一批的行数：稳态 8 个任务（`IDLE`、`Tmr Svc`、`Log Task`、`Storage Task`、`Volume Task`、`Playback Task`、`Monitor Task`、`GUI Task`）加 5 行固定行共 13 行；开机后 `MountFlash` 期间多一个 `Flash Boot Task`，9 个任务共 14 行。都放得进 30 条的消息池。
+**CPU 占比行不能超过 127 字符**（`monitor_cpu_format` 写满会打 `~`）：任务短键取名字第一个词的前 4 个小写字符，新增的是 `volu` 和 `flas`（#213 又加了 `back`，11 个任务时最长 120 字符，见 [后台任务](../background/README.md)），与已有的 `crea`、`log`、`stor`、`moni`、`gui`、`play`、`idle`、`tmr` 互不相同。`Tests/monitor_warn` 的 `test_every_registered_task_fits_one_cpu_line` 用全部 10 个任务核对：最坏（10 个任务各占 10.0 %）和一个任务占 100.0 % 两种情形都不超过 127 字符、没有 `~`；实际最长 111 字符。Monitor 一批的行数：稳态 8 个任务（`IDLE`、`Tmr Svc`、`Log Task`、`Storage Task`、`Volume Task`、`Playback Task`、`Monitor Task`、`GUI Task`）加 5 行固定行共 13 行；开机后 `MountFlash` 期间多一个 `Flash Boot Task`，9 个任务共 14 行。都放得进 30 条的消息池。
 
 ## 日志消息池核算（DIAG-3，汇总类日志注明节拍）
 
@@ -188,7 +188,7 @@ Service Log 消息池 30 条，Log Task 每 5 ms 转交一条（约 75 ms 排空
 - 一次消抖过程：`sd edge`（1 行）加 `sd settle`（1 行）加人读日志（`Card removed.`；或 `Card inserted`、`Filesystem mounted.`；刷新失败再加 `Hotplug refresh failed`）共 2 至 5 行，**事件驱动，不是周期的**；抖动只记第一个边沿，所以不会刷屏。读取被拔卡打断时再加 1 行 `Audio read interrupted`（每个流最多一行，之后读取停住）。
 - 开机：`flash boot start`、`Filesystem mounted.`（FLASH）、`flash ready`、`Flash Boot Task: …` 栈水位共 4 行（Flash，间隔 3.3 至 8.3 s 的两头）；SD 的 `Card ready`、`Filesystem mounted.`、`sd boot` 共 3 行。
 - 假抖动钩子（仅钩子构建）：**每 5 s 两行**（`sd edge src=hook` 加 `sd settle … gate_only`）。
-- 最坏的同时到达：Monitor 5 s 一批（稳态 13 行，开机后 `MountFlash` 期间 14 行），加持锁统计（Debug 每 10 s 3 行），加一次拔卡对账 5 行，最坏共 22 行，留 8 块给同一时刻的其他任务；与 #208 核算的 15 行相比多了 7 行，仍小于 30；排空约 110 ms。每行正文都不超过 127 字符：`sd settle` 行把 `edges`、`ref`、`end` 截在 9999，序号取 31 位最大值、又恰好是刷新失败加挂载失败时最长，也正好 127 字符（序号要发布 2^31 次才会到那么大，实际不到 100 字符）；主机测试用极端取值核对。
+- 最坏的同时到达（卷任务票当时的核算；#213 加后台任务之后 Monitor 稳态 14 行、开机后 15 行，最新数字见 [后台任务](../background/README.md)“消息池”）：Monitor 5 s 一批（稳态 13 行，开机后 `MountFlash` 期间 14 行），加持锁统计（Debug 每 10 s 3 行），加一次拔卡对账 5 行，最坏共 22 行，留 8 块给同一时刻的其他任务；与 #208 核算的 15 行相比多了 7 行，仍小于 30；排空约 110 ms。每行正文都不超过 127 字符：`sd settle` 行把 `edges`、`ref`、`end` 截在 9999，序号取 31 位最大值、又恰好是刷新失败加挂载失败时最长，也正好 127 字符（序号要发布 2^31 次才会到那么大，实际不到 100 字符）；主机测试用极端取值核对。
 
 ## 主机测试证明什么、不证明什么（HAR-5）
 

@@ -14,6 +14,7 @@
         'music_catalog'
         'ui_cell'
         'volume'
+        'background_task'
         'playback_service'
         'playback_task'
         'monitor_warn'
@@ -230,6 +231,26 @@
                 '^Tests/stubs/freertos/'
                 '^Tests/stubs/lock_env/'
                 '^Tests/volume/'
+            )
+        }
+        @{
+            # 后台任务（#213）：一圈的判断（background_loop）与 Flash 压力钩子作业，Filesystem Service 的文件入口和
+            # Platform_Flash_GetVolumeDiagnostics 在测试里用假实现，只依赖它们的公开头；链接真实卷事件、共用 FreeRTOS 桩
+            # 与 Service Log 替身。任务创建与入口（background_task.c）不进主机测试，由固件构建和上板核对。
+            Name = 'background_task'
+            PathPatterns = @(
+                '^APP/tasks/background/'
+                '^APP/tasks/volume/volume_(?:event\.(?:c|h)|task_config\.h)$'
+                '^APP/app_config\.h$'
+                '^Platform/platform\.h$'
+                '^Platform/flash/platform_flash\.h$'
+                '^Adapters/cortex/cache/cortex_m7_dcache_adapter_config\.h$'
+                '^Service/filesystem/filesystem_(?:file|service|types)\.h$'
+                '^Service/service\.h$'
+                '^Service/log/log_service(?:_config)?\.h$'
+                '^Tests/stubs/freertos/'
+                '^Tests/stubs/lock_env/'
+                '^Tests/background_task/'
             )
         }
         @{

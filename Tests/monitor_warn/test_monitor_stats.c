@@ -193,31 +193,33 @@ static void test_health_worst_case_fits_service_log_text(void)
 }
 
 /**
- * @brief 0.10.0 卷任务票之后的全部任务（含只在开机后几秒存在的 Flash 启动任务）同时出现在一批里：
+ * @brief 0.10.0 后台任务票（#213）之后的全部任务（含只在开机后几秒存在的 Flash 启动任务）同时出现在一批里：
  *        每个任务的短键互不相同（同键会让两列无法区分），CPU 行放得进 127 个字符，不出现截断标记 `~`。
- *        最坏情形是 10 个任务各占 10.0 %（每项两位整数），再测一个任务占 100.0 % 的情形。
+ *        最坏情形是 10 个任务各占 10.0 %（每项两位整数）、第 11 个占 0.0 %，实际最长 120 字符；再测一个任务占 100.0 % 的情形。
  */
 static void test_every_registered_task_fits_one_cpu_line(void)
 {
     static monitor_cpu_baseline_t baseline;
     static const char *const names[] = {"Create Task", "Log Task",      "Storage Task", "Volume Task", "Flash Boot Task",
-                                        "Monitor Task", "GUI Task",     "Playback Task", "IDLE",        "Tmr Svc"};
-    static const char *const keys[] = {"crea=", "log=", "stor=", "volu=", "flas=", "moni=", "gui=", "play=", "idle=", "tmr="};
-    monitor_cpu_sample_t samples[10];
+                                        "Monitor Task", "GUI Task",     "Playback Task", "IDLE",        "Tmr Svc",
+                                        "Background Task"};
+    static const char *const keys[] = {"crea=", "log=", "stor=", "volu=", "flas=", "moni=", "gui=", "play=", "idle=", "tmr=", "back="};
+    enum { TASK_COUNT = 11, IDLE_INDEX = 8 };
+    monitor_cpu_sample_t samples[TASK_COUNT];
     char line[MONITOR_LOG_LINE_LENGTH];
     size_t length;
 
-    for (size_t index = 0U; index < 10U; index++)
+    for (size_t index = 0U; index < (size_t)TASK_COUNT; index++)
     {
         samples[index].name = names[index];
-        samples[index].run_time = 100U;
+        samples[index].run_time = (index == 10U) ? 0U : 100U;
     }
 
     memset(&baseline, 0, sizeof(baseline));
-    length = monitor_cpu_format(line, sizeof(line), &baseline, samples, 10U, 1000U, 5000U);
+    length = monitor_cpu_format(line, sizeof(line), &baseline, samples, (uint8_t)TASK_COUNT, 1000U, 5000U);
     assert(length <= 127U);
     assert(strchr(line, '~') == NULL);
-    for (size_t index = 0U; index < 10U; index++)
+    for (size_t index = 0U; index < (size_t)TASK_COUNT; index++)
     {
         const char *first = strstr(line, keys[index]);
 
@@ -225,12 +227,12 @@ static void test_every_registered_task_fits_one_cpu_line(void)
         assert(strstr(first + 1, keys[index]) == NULL); /* 每个键只出现一次。 */
     }
 
-    for (size_t index = 0U; index < 10U; index++)
+    for (size_t index = 0U; index < (size_t)TASK_COUNT; index++)
     {
-        samples[index].run_time = (index == 8U) ? 1000U : 0U;
+        samples[index].run_time = (index == (size_t)IDLE_INDEX) ? 1000U : 0U;
     }
     memset(&baseline, 0, sizeof(baseline));
-    length = monitor_cpu_format(line, sizeof(line), &baseline, samples, 10U, 1000U, 5000U);
+    length = monitor_cpu_format(line, sizeof(line), &baseline, samples, (uint8_t)TASK_COUNT, 1000U, 5000U);
     assert(length <= 127U);
     assert(strchr(line, '~') == NULL);
     assert(strstr(line, "idle=100.0") != NULL);
