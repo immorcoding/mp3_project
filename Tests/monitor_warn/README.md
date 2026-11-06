@@ -11,7 +11,7 @@
 
 期望值都是手算的字面量（例如 9600 个计数里 IDLE 占 8630 为 `89.8`），不用被测代码的公式重算。
 
-保真边界：PASS 只证明算术与格式。`monitor_task.c` 外壳（取 `uxTaskGetSystemState` 快照、取欠载与日志丢失累计、投递、静态缓冲）无主机测试，靠固件构建与板上日志；`Service_Log_GetDropStats()` 的计数也无主机测试（它依赖 FreeRTOS 队列与临界区）；5 s 一批是否放得进消息池（#218 起 44 块）靠 `monitor_task.c` 的 `_Static_assert`（含最坏同时到达与最少余量）与 README 的核算，实际有无丢失看板上 `Health` 行。
+保真边界：PASS 只证明算术与格式。`monitor_task.c` 外壳（取 `uxTaskGetSystemState` 快照、取欠载与日志丢失累计、投递、静态缓冲）无主机测试，靠固件构建与板上日志；`Service_Log_GetDropStats()` 的计数也无主机测试（它依赖 FreeRTOS 队列与临界区）；5 s 一批是否放得进消息池（#218 起 45 块）靠 `monitor_task.c` 的 `_Static_assert`（含最坏同时到达与最少余量）与 README 的核算，实际有无丢失看板上 `Health` 行。
 
 从仓库根目录运行：
 

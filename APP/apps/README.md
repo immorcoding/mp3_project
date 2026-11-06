@@ -45,7 +45,7 @@
 应用的大块缓冲与跨任务交接数据按用途放段（HWD-2，链接脚本一个字没改）：
 
 - `.app_axi_ram`（AXI SRAM，NOLOAD）：静态创建的任务栈和 GUI 与前台任务共享的数据（界面数据格子、GUI 一侧的结果副本）。NOLOAD 不清零：格子由 `boot_init` 整块写入，栈由 `xTaskCreateStatic` 填充。
-- `.apps_sdram`（SDRAM，NOLOAD，由链接脚本的 `ASSERT` 卡在 8 MiB 以内）：应用的大缓冲，现在只有音乐的行缓存行内容和窗口组装缓冲（`MUSIC_SDRAM_SECTION`，38848 B，不放 DMA 缓冲，只经 CPU 读写）。启动自检之后才有主，`boot_init` 在 SDRAM 自检之后整块写入。
+- `.apps_sdram`（SDRAM，NOLOAD，由链接脚本的 `ASSERT` 卡在 8 MiB 以内）：应用的缓冲和状态，现在只有音乐前台流程的：行缓存的行内容与键表、窗口组装缓冲、曲名组装区与临时一行、曲库读全结果、流程状态变量（`MUSIC_SDRAM_SECTION`，40224 B，不放 DMA 缓冲，只经 CPU 读写）。ARC-28：应用内存默认放这里，DTCM 留给任务栈与内核；step 里不放大局部变量（临时的大对象也放这里）。启动自检之后才有主，`boot_init` 在 SDRAM 自检之后整块写入。
 - DTCM `.bss`：小的状态（缓存键表要求启动时清零，所以放这里）。
 
 分配与总量见 [前台任务](../tasks/foreground/README.md)“栈、内存与段”。

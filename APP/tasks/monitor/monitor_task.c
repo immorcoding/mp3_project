@@ -40,7 +40,7 @@
 _Static_assert((MONITOR_CPU_TASK_MAX + MONITOR_BATCH_FIXED_LINES) <= LOG_SERVICE_QUEUE_LENGTH,
                "one Monitor batch must fit the Service Log message pool");
 
-/* 最坏同时到达的行数（保守口径，#218 重算）：Monitor 一批（开机后 12 个任务、17 行）加其他任务的最坏 16 行，池里还要至少留 8 块。
+/* 最坏同时到达的行数（保守口径，#218 重算）：Monitor 一批（开机后 12 个任务、17 行）加其他任务的最坏 17 行，池里还要至少留 8 块。
  * 每加一个任务或一种常开日志行就要重算这条（改 MONITOR_TASK_CONCURRENT_MAX、MONITOR_POOL_OTHER_WORST_LINES 或池深），
  * 编译期拦住，而不是等板测发现 `Health log_svc` 在涨。 */
 _Static_assert((MONITOR_TASK_CONCURRENT_MAX + MONITOR_BATCH_FIXED_LINES + MONITOR_POOL_OTHER_WORST_LINES + MONITOR_POOL_SPARE_MIN)

@@ -88,7 +88,7 @@
 - **和前台（2，#218）**：前台读标签时在 Filesystem 入口等 SD 锁。读取任务持锁时前台等它那一次调用做完；放锁后读取任务立刻再拿，前台排不上，直到读取任务进等待点睡 1 tick。所以水位以下（刚切歌补块期，约 140 ms）前台的名字、窗口行读取会被挡到补块完成，水位以上每读一块让一次，前台一次标签读取（至多 4 次读）推算等 14 至 27 ms；这是第 5 次上板 R5.4 要量的数（翻页注入钩子在切歌后立刻翻页，读 `FSLOCK` 行的 `wait=` 最长值）。前台持锁时读取任务要锁，前台经优先级继承临时升到 3 做完那一次调用。
 - **和 Storage（1，#218 起降到 1）**：同样的互斥规则，读取任务（3）、前台（2）都比它高，Storage 只在目录读取（曲库扫描）时持 SD 锁；它被挡住的时间不影响用户可见的延迟，扫描只是慢一点。
 - **和播放（4）**：播放抢占读取任务；播放不拿任何文件锁（调用者拒绝名单，入口断言停机），所以读取任务持锁时被播放抢占不会让播放等锁。播放归还块和写请求都只是不阻塞地置通知位。
-- **和后台（1）**：后台任务现在只有默认关闭的 Flash 压力钩子，只拿 Flash 卷锁，与 SD 卷锁互不相干。读取任务（3）会在补块期占满 CPU 的空隙之外让出，后台（1）和 GUI（1）拿剩下的；补块期是短脉冲（约 140 ms），不是常态。
+- **和后台（1）**：后台任务现在只有默认关闭的 Flash 压力钩子，只拿 Flash 卷锁，与 SD 卷锁互不相干。读取任务（3）会在补块期占满 CPU 的空隙之外让出，前台、GUI、Log、Monitor（2）先拿剩下的，后台（1）和 Storage（1）再拿它们睡着时的空隙（#218：GUI 由 1 升到 2）；补块期是短脉冲（约 140 ms），不是常态。
 - **读取任务持 SD 锁时卷任务要刷新会怎样**：见上面“和卷任务”。关键是读取任务在 Service 调用里持锁，卷任务的 `RefreshSD` 排在它后面；真拔卡时那一次读取 +1 ms 左右就失败返回，持锁 2.0 至 4.2 ms（#191 实测），不会等 500 ms 超时。
 
 ## 失败约定：读块和开流遇到 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`
@@ -180,7 +180,7 @@ SD 只有 4 个文件槽、2 个目录槽（`_FS_LOCK` 9，Flash 2 加 1，共 9
 
 **消息池核算**（Service Log 30 块，Log Task 每 5 ms 转交一条，排空约 5 ms/行）：Monitor 稳态现在 10 个任务共 15 行（`Audio Read Task` 多一行），开机后 `MountFlash` 期间 11 个任务共 16 行；最坏同时到达 = Monitor 16 + Filesystem 持锁统计 3 + 曲库短锁 1 + 一次拔卡 6 = **26 行，留 4 块**。拔卡的 6 行沿用上一票的口径（卷路径日志按上界 5 行：`sd edge`、`sd settle`、人读日志，刷新失败时再加诊断），加本任务新增的 `CARD_REMOVED lat=` 1 行；上一票的口径没有计入读取被打断时的 `Audio read interrupted` 和播放侧的 `Stop reason=CARD_REMOVED`（各 1 行，一次正常的播放中拔卡实际是 `sd edge`、`sd settle`、`Card removed.`、`Audio read interrupted`、`Stop reason`、`CARD_REMOVED lat` 共 6 行，刷新失败的罕见路径才到 8 行），更保守的口径是 Monitor 16 + 3 + 1 + 8 = 28 行，留 2 块。`SERVICE_BUSY` 是异常路径，同一时刻最多再加 1 行（26 行变 27 行，留 3 块；保守口径 29 行，留 1 块）。Flash 压力钩子打开的构建再加统计行 1 行；它的“卷满”和“停下”两条偶发行同时撞上整套最坏情形是 30 行以上，没有余量，实际上这几条同时到达的概率很低，真有丢失会在 Monitor 的 `Health log_svc=` 里数出来，丢了要注明、受影响的行不算通过（R1.3）。定位符失效钩子打开的构建每次开流多一行 `Locator miss`（WARN），只在用户点播放时出现，不与 Monitor 的批次叠加成新的最坏情形。
 
-**#218 重算（用户 2026-11-06 的决定，池加大）**：保守口径下最坏同时到达从 29 行（含 `SERVICE_BUSY`）变成 33 行：Monitor 17 行（开机后 `MountFlash` 期间 12 个任务加 5 行固定行）+ Filesystem 持锁统计 3 + 曲库短锁 1 + `ui_cell` 持锁统计 1 + 显示延迟汇总 1 + 前台 step 耗时 1 + 拔卡 8 + `SERVICE_BUSY` 1。池从 30 块加大到 **44 块**（`LOG_SERVICE_QUEUE_LENGTH`，多 1904 B DTCM），**留 11 块**（Flash 压力钩子构建 36 行留 8 块，翻页注入钩子构建 34 行留 10 块），`monitor_task.c` 的 `_Static_assert` 核对 `12 + 5 + 16 + 8 = 41 ≤ 44`。明细见 [前台任务](../foreground/README.md)“日志与消息池核算”。上一票的数字（26 行留 4 块，保守口径 28 行留 2 块）作废。
+**#218 重算（用户 2026-11-06 的决定，池加大）**：保守口径下最坏同时到达从 29 行（含 `SERVICE_BUSY`）变成 34 行：Monitor 17 行（开机后 `MountFlash` 期间 12 个任务加 5 行固定行）+ Filesystem 持锁统计 3 + 曲库短锁 1 + `ui_cell` 持锁统计 1 + 显示延迟汇总 1 + 前台 step 耗时 1 + 拔卡 8 + `SERVICE_BUSY` 2（本任务与前台任务各 1 行，文件槽用尽时会同时到）。池从 30 块加大到 **45 块**（`LOG_SERVICE_QUEUE_LENGTH`，多 2 KiB DTCM），**留 11 块**（Flash 压力钩子构建 37 行留 8 块，翻页注入钩子构建 35 行留 10 块），`monitor_task.c` 的 `_Static_assert` 核对 `12 + 5 + 17 + 8 = 42 ≤ 45`。明细见 [前台任务](../foreground/README.md)“日志与消息池核算”。上一票的数字（26 行留 4 块，保守口径 28 行留 2 块）作废。
 
 **Monitor 登记**：`monitor_task.c` 的任务登记表加了 `Audio Read Task`（栈 1024 word），漏了会出 `Task not registered in monitor` WARN。任务名不能叫 `Audio Reader Task`（17 个字符，`configMAX_TASK_NAME_LEN` 16 会截断，登记对不上）。CPU 行的短键是 `audi`，与已有的 `crea`、`log`、`stor`、`volu`、`flas`、`moni`、`gui`、`play`、`idle`、`tmr`、`back` 互不相同。可能同时出现在一批里的任务是 11 个（`Create Task` 创建完就自删，早于 Monitor 的第一批，不会和 `Flash Boot Task` 同批），最坏（10 个各占 10.0 %）仍是 120 字符，不超过 127，`Tests/monitor_warn` 核对；如果 `Create Task` 将来不自删，12 个任务各占两位数会到 129 字符，要缩键或拆行。**#218 加前台任务后，同批任务数是 12 个，这个情形成了现实：`monitor_cpu_format()` 在放不下时整行退化成整数百分比，保证 127 字符以内**（见 [Monitor](../monitor/README.md)）。
 

@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #include "APP/tasks/audio_reader/audio_reader_block.h"
-#include "APP/tasks/audio_reader/audio_reader_config.h"
+#include "APP/tasks/foreground/foreground_task.h"
 #include "Service/log/log_service.h"
 
 static const char music_hook_pageturn_tag[] = "HOOK";
@@ -51,8 +51,8 @@ void music_hook_pageturn_note_injection(uint32_t tick_ms)
 /**
  * @brief 前台任务每圈调一次：有测量在进行时量块池，补满就记一行 INFO，超时记一行 WARN 放弃。
  * @param[in] now_ms 当前时刻（FreeRTOS tick，毫秒）。
- * @return 测量进行时是 `MUSIC_HOOK_PAGE_TURN_POLL_MS`；否则 `UINT32_MAX`（等通知）。
- * @note  “补满”指就绪块数不少于音频读取任务的安全水位（`AUDIO_READER_WATERMARK_BLOCKS`）。行格式（串口里标签后有冒号）：
+ * @return 测量进行时是 `MUSIC_HOOK_PAGE_TURN_POLL_MS`；否则 `FOREGROUND_WAIT_FOREVER`（等通知）。
+ * @note  “补满”指就绪块数不少于音频读取任务的安全水位（`AUDIO_READER_WATERMARK_BLOCKS`，经音频读取任务的公开头 `audio_reader_block.h` 取得，STY-3）。行格式（串口里标签后有冒号）：
  *        `I (<tick>) HOOK: page_turn refilled after=<ms>ms ready=<块数> free=<块数>`，超时 `W (<tick>) HOOK: page_turn timeout after=<ms>ms ready=… free=…`。
  *        测量粒度是 1 ms（前台任务每个 tick 回头量一次）。
  */
@@ -65,7 +65,7 @@ uint32_t music_hook_pageturn_poll(uint32_t now_ms)
 
     if ((MUSIC_HOOK_PAGE_TURN == 0U) || !music_hook_pageturn_active)
     {
-        return UINT32_MAX;
+        return FOREGROUND_WAIT_FOREVER;
     }
 
     elapsed_ms = (uint32_t)(now_ms - music_hook_pageturn_start_ms);
@@ -78,7 +78,7 @@ uint32_t music_hook_pageturn_poll(uint32_t now_ms)
         (void)snprintf(line, sizeof(line), "page_turn refilled after=%lums ready=%lu free=%lu",
                        (unsigned long)elapsed_ms, (unsigned long)ready, (unsigned long)free_blocks);
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, music_hook_pageturn_tag, line);
-        return UINT32_MAX;
+        return FOREGROUND_WAIT_FOREVER;
     }
 
     if (elapsed_ms >= (uint32_t)MUSIC_HOOK_PAGE_TURN_TIMEOUT_MS)
@@ -87,7 +87,7 @@ uint32_t music_hook_pageturn_poll(uint32_t now_ms)
         (void)snprintf(line, sizeof(line), "page_turn timeout after=%lums ready=%lu free=%lu",
                        (unsigned long)elapsed_ms, (unsigned long)ready, (unsigned long)free_blocks);
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN, music_hook_pageturn_tag, line);
-        return UINT32_MAX;
+        return FOREGROUND_WAIT_FOREVER;
     }
 
     return (uint32_t)MUSIC_HOOK_PAGE_TURN_POLL_MS;

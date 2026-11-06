@@ -198,7 +198,7 @@ bool ui_cell_read_if_changed(const UiCellTypeDef *cell, void *dst, uint32_t *see
     {
         return false;
     }
-    gui_side = (cell->wake == NULL); /* 结果格（叫醒函数为空）的读者是 GUI；需求格的读者是前台任务。 */
+    gui_side = (cell->wake == NULL); /* 约定（见 ui_cell.h）：结果格（叫醒函数为空）的读者是 GUI，需求格的读者是前台任务；只决定统计口径。 */
     if (xSemaphoreTake(lock_handle, 0U) != pdTRUE)
     {
         if (gui_side)

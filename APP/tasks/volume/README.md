@@ -82,7 +82,7 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
 
 **每次 `PauseSD` 都配 `ResumeSD`**（Service 的闸没有超时放行，也没有看门狗，漏配会让所有 SD 调用者一直等）：不变量是“`volume_sd_step()` 返回 `portMAX_DELAY` 时闸一定是开的”；消抖中返回的一定是有限等待，最终必然再走到对账之后的开闸。主机测试 `test_every_path_pairs_pause_with_resume` 穷举 384 种组合（卷挂没挂 × 卡的四种现状 × 刷新成败 × 挂载三种结果 × 卸载成败 × 在刷新/卸载/挂载处来不来新边沿）逐条核对：闸收尾时开着，`PauseSD`、`ResumeSD` 各一次，卷状态字与假 Service 眼里的挂载状态一致，卷序号的变化与上表一致，订阅者被叫醒时闸始终关着。
 
-**已知窗口**（#210 的 `RefreshSD` 和 `UnmountSD` 是两个独立的持锁入口）：刷新放锁到卸载拿锁之间，已经通过闸、正在等锁的调用可能抢到 SD 卷锁。Storage Task（优先级 2，低于卷任务 3）挤不进来：卷任务从刷新返回到调用卸载中间不阻塞，放锁只是把等待者放进就绪表。音频读取任务（#215）升到 3 之后与卷任务同级、时间片轮转，空隙理论上可以被插进去；**#215 评估过**（[音频读取任务 README](../audio_reader/README.md)“`RefreshSD` 与 `UnmountSD` 之间的空隙”）：要在空隙里拿到锁，调用者必须过闸之后、拿锁之前被挂起超过整个静默期，实际不成立；早就排在锁上的等待者排在卷任务前面，在 `RefreshSD` 之前拿锁。即使发生，后果是读 1 块新卡上按旧文件系统解释的垃圾字节，随旧流作废，读取任务只读不写，没有数据错乱和死锁。要彻底关掉需要 Service 提供“刷新加卸载”的合并入口，超出 spec M 节的授权，没有加，选项写在音频读取任务 README 与交付汇报里。
+**已知窗口**（#210 的 `RefreshSD` 和 `UnmountSD` 是两个独立的持锁入口）：刷新放锁到卸载拿锁之间，已经通过闸、正在等锁的调用可能抢到 SD 卷锁。Storage Task（优先级 1，#218 起；原来是 2，都低于卷任务 3）和前台任务（2）挤不进来：卷任务从刷新返回到调用卸载中间不阻塞，放锁只是把等待者放进就绪表。音频读取任务（#215）升到 3 之后与卷任务同级、时间片轮转，空隙理论上可以被插进去；**#215 评估过**（[音频读取任务 README](../audio_reader/README.md)“`RefreshSD` 与 `UnmountSD` 之间的空隙”）：要在空隙里拿到锁，调用者必须过闸之后、拿锁之前被挂起超过整个静默期，实际不成立；早就排在锁上的等待者排在卷任务前面，在 `RefreshSD` 之前拿锁。即使发生，后果是读 1 块新卡上按旧文件系统解释的垃圾字节，随旧流作废，读取任务只读不写，没有数据错乱和死锁。要彻底关掉需要 Service 提供“刷新加卸载”的合并入口，超出 spec M 节的授权，没有加，选项写在音频读取任务 README 与交付汇报里。
 
 ## 卷事件
 
@@ -184,7 +184,7 @@ Boot 任务只有 `APP_BOOT_TASK_STACK_WORDS = 128` word（512 B）。SDRAM 自�
 
 ## 日志消息池核算（DIAG-3，汇总类日志注明节拍）
 
-Service Log 消息池当时 30 条（#218 加大到 44 块，最新核算见 [前台任务](../foreground/README.md)“日志与消息池核算”），Log Task 每 5 ms 转交一条（约 75 ms 排空 15 行）。本票新增的日志：
+Service Log 消息池当时 30 条（#218 加大到 45 块，最新核算见 [前台任务](../foreground/README.md)“日志与消息池核算”），Log Task 每 5 ms 转交一条（约 75 ms 排空 15 行）。本票新增的日志：
 
 - 一次消抖过程：`sd edge`（1 行）加 `sd settle`（1 行）加人读日志（`Card removed.`；或 `Card inserted`、`Filesystem mounted.`；刷新失败再加 `Hotplug refresh failed`）共 2 至 5 行，**事件驱动，不是周期的**；抖动只记第一个边沿，所以不会刷屏。读取被拔卡打断时再加 1 行 `Audio read interrupted`（每个流最多一行，之后读取停住）。
 - 开机：`flash boot start`、`Filesystem mounted.`（FLASH）、`flash ready`、`Flash Boot Task: …` 栈水位共 4 行（Flash，间隔 3.3 至 8.3 s 的两头）；SD 的 `Card ready`、`Filesystem mounted.`、`sd boot` 共 3 行。

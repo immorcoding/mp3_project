@@ -926,20 +926,93 @@ static void test_a_read_error_is_not_cached(void)
     assert(strcmp(second.Rows[4].Title, "Title 5 g5") == 0);
 }
 
-/** @brief 失败不缓存：卡不在类（卷不可用）的行是空串，不缓存，不记 WARN；窗口照常拼完。 */
-static void test_a_volume_unavailable_row_is_blank_and_is_not_cached(void)
+/**
+ * @brief 卷不可用（spec E“暂时不能读时窗口不变”）：第 12 行读到卷不可用时，不填这一行、不发布带空行的整窗，已发布的窗口保持不变；
+ *        这一窗挂起，睡下等卷事件，不空转、不再调文件接口；卷没了（曲库代次 0）才发一份空窗，卷回来（新代次）再发真窗口。
+ */
+static void test_the_volume_going_unavailable_on_the_twelfth_row_publishes_nothing_and_keeps_the_window(void)
 {
-    MusicCells_WindowTypeDef first;
-    MusicCells_WindowTypeDef second;
+    MusicCells_WindowTypeDef window;
 
-    read_window_twice_with_row_five(BEHAVIOR_UNAVAILABLE, &first, &second);
+    begin_scenario();
+    gui_write_window_request(0U);
+    (void)run_until_idle();
+    assert(gui_read_window(&window)); /* 先正常发布窗口 0：代次 5，起点 0，12 行。 */
+    assert(window.Generation == 5U);
+    assert(window.Index == 0U);
+    assert(g_text_calls == 12U);
 
-    assert(first.Rows[5].Title[0] == '\0');
-    assert(first.Rows[5].Artist[0] == '\0');
-    assert(strcmp(first.Rows[6].Title, "Title 6 g5") == 0);
-    assert(g_text_calls == 12U + 2U);
-    assert(strcmp(second.Rows[4].Title, "Title 5 g5") == 0);
-    assert(lock_env_log_count() == 0U);
+    g_behavior[12] = BEHAVIOR_UNAVAILABLE; /* 窗口 1 的位置 1 至 11 来自缓存，第 12 行（位置 12）要读文件。 */
+    gui_write_window_request(1U);
+    (void)run_until_idle();
+
+    assert(g_text_calls == 13U);        /* 只试读了位置 12 一次。 */
+    assert(g_text_positions[12] == 12U);
+    assert(!gui_read_window(&window));  /* 没有发布：不发带空行的整窗。 */
+    assert(lock_env_log_count() == 0U); /* 卷不可用不是文件错误，不记日志。 */
+
+    /* 挂起期间：睡下等通知，不空转、不再碰文件接口。 */
+    assert(step_checked() == FOREGROUND_WAIT_FOREVER);
+    assert(step_checked() == FOREGROUND_WAIT_FOREVER);
+    assert(g_text_calls == 13U);
+    assert(!gui_read_window(&window));
+
+    /* 卷消失（卷事件，曲库代次读作 0）：发一份代次 0 的空窗收尾，只发一次。 */
+    g_generation = 0U;
+    (void)run_until_idle();
+    assert(gui_read_window(&window));
+    assert(window.Generation == 0U);
+    assert(window.Length == 0U);
+    assert(!gui_read_window(&window));
+    assert(g_text_calls == 13U);
+
+    /* 卡回来、曲库重新发布（新代次）：按最新需求重拼窗口 1，12 行都是新代次的真内容。 */
+    g_generation = 6U;
+    g_behavior[12] = BEHAVIOR_TAGGED;
+    (void)run_until_idle();
+    assert(gui_read_window(&window));
+    assert(window.Generation == 6U);
+    assert(window.Index == 1U);
+    assert(window.Length == 12U);
+    assert(strcmp(window.Rows[0].Title, "Title 1 g6") == 0);
+    assert(strcmp(window.Rows[11].Title, "Title 12 g6") == 0);
+}
+
+/**
+ * @brief 卷不可用发生在窗口中间：已拼好的行留在组装缓冲里，不发半窗；卷不可用的行不缓存；新需求（同一代次）从新起点重拼，
+ *        这一行恢复可读后读到正确的标签。
+ */
+static void test_a_volume_unavailable_row_in_the_middle_waits_and_is_not_cached(void)
+{
+    MusicCells_WindowTypeDef window;
+
+    begin_scenario();
+    g_behavior[5] = BEHAVIOR_UNAVAILABLE;
+    gui_write_window_request(0U);
+    (void)run_until_idle();
+
+    assert(g_text_calls == 6U);        /* 位置 0 至 5，位置 5 卷不可用。 */
+    assert(!gui_read_window(&window)); /* 没有半窗。 */
+    assert(step_checked() == FOREGROUND_WAIT_FOREVER);
+    assert(g_text_calls == 6U);
+
+    /* 同一代次、新需求：挂起的一窗作废，从新起点重拼；位置 3、4 来自缓存，位置 5 仍卷不可用：再挂起一次。 */
+    gui_write_window_request(3U);
+    (void)run_until_idle();
+    assert(g_text_calls == 7U);
+    assert(g_text_positions[6] == 5U);
+    assert(!gui_read_window(&window));
+
+    /* 位置 5 恢复可读；再来一个新需求：位置 5 重新读文件（上一次卷不可用没有缓存），读到正确标签后整窗发布。 */
+    g_behavior[5] = BEHAVIOR_TAGGED;
+    gui_write_window_request(4U);
+    (void)run_until_idle();
+    assert(gui_read_window(&window));
+    assert(window.Generation == 5U);
+    assert(window.Index == 4U);
+    assert(window.Length == 12U);
+    assert(strcmp(window.Rows[1].Title, "Title 5 g5") == 0); /* 窗口起点 4：位置 5 在下标 1。 */
+    assert(g_text_positions[7] == 5U);
 }
 
 /** @brief 稳定结果缓存：取到标签、无 ID3v2 的行都进缓存，第二次不重读。 */
@@ -996,7 +1069,9 @@ static void test_a_busy_open_is_retried_after_about_10_ms_and_never_shows_the_fa
     assert(g_text_positions[4] == 3U);
     assert(g_text_positions[5] == 3U);
     assert(g_text_positions[6] == 4U);
-    assert(lock_env_log_count() == 0U);   /* BUSY 不是文件错误，不记日志。 */
+    assert(lock_env_log_count() == 1U);   /* 连续 BUSY 只在第 1 次记一行 WARN，之后不刷屏；BUSY 不是文件错误。 */
+    assert(lock_env_log_level(0U) == (uint32_t)SERVICE_LOG_LEVEL_WARN);
+    assert(strcmp(lock_env_log_text(0U), "SERVICE_BUSY pos=3 n=1") == 0);
 }
 
 /** @brief BUSY 之后读到的好结果会进缓存（BUSY 本身不缓存，成功才缓存）。 */
@@ -1037,8 +1112,63 @@ static void test_a_busy_title_is_retried_and_only_the_good_answer_is_published(v
     assert(g_text_calls == 3U);
 }
 
-/** @brief BUSY 重试有上界（约 1 s）：用尽后按打开失败回退文件主名，不缓存，不卡住后面的行。 */
-static void test_busy_retries_are_bounded(void)
+/**
+ * @brief BUSY 一律重试，没有上限（ARC-27、spec“过约 10 ms 重试，不算失败”）：同一行连续 BUSY 250 次，每次都只返回 10 ms，
+ *        从不显示回退名，槽空出来后读到正确的标签；日志只在第 1、100、200 次各一行，不刷屏。
+ */
+static void test_busy_is_retried_without_an_upper_bound_and_the_log_is_throttled(void)
+{
+    MusicCells_WindowTypeDef window;
+
+    begin_scenario();
+    g_behavior[2] = BEHAVIOR_BUSY;
+    g_busy_times[2] = 250U;
+    gui_write_window_request(0U);
+
+    (void)step_checked();
+    (void)step_checked();
+    for (uint32_t retry = 0U; retry < 250U; retry++)
+    {
+        assert(step_checked() == 10U); /* 第 2 行：每次都是 BUSY，过约 10 ms 重试。 */
+        assert(!gui_read_window(&window));
+    }
+    assert(g_text_calls == 2U + 250U);
+    assert(lock_env_log_count() == 3U);
+    assert(strcmp(lock_env_log_text(0U), "SERVICE_BUSY pos=2 n=1") == 0);
+    assert(strcmp(lock_env_log_text(1U), "SERVICE_BUSY pos=2 n=100") == 0);
+    assert(strcmp(lock_env_log_text(2U), "SERVICE_BUSY pos=2 n=200") == 0);
+
+    (void)run_until_idle();               /* 槽空出来：读到正确的标签，其余行读完。 */
+    assert(gui_read_window(&window));
+    assert(window.Length == 12U);
+    assert(strcmp(window.Rows[2].Title, "Title 2 g5") == 0); /* 没有回退成文件主名 track00002。 */
+    assert(lock_env_log_count() == 3U);   /* 恢复之后不再记。 */
+}
+
+/** @brief 曲名同样一律重试：BUSY 150 次之后读到的仍是正确的标签，不显示回退名。 */
+static void test_a_title_busy_is_also_retried_without_an_upper_bound(void)
+{
+    MusicCells_TitleResultTypeDef title;
+
+    begin_scenario();
+    g_behavior[7] = BEHAVIOR_BUSY;
+    g_busy_times[7] = 150U;
+    (void)gui_write_title_request(0U, 7U, true);
+
+    for (uint32_t retry = 0U; retry < 150U; retry++)
+    {
+        assert(step_checked() == 10U);
+        assert(!gui_read_title(&title));
+    }
+    assert(step_checked() == FOREGROUND_WAIT_FOREVER);
+    assert(gui_read_title(&title));
+    assert(strcmp(title.Title, "Title 7 g5") == 0);
+    assert(lock_env_log_count() == 2U); /* 第 1 次与第 100 次。 */
+    assert(strcmp(lock_env_log_text(1U), "SERVICE_BUSY pos=7 n=100") == 0);
+}
+
+/** @brief 一直 BUSY 也会终止：曲库代次变了（卷事件）就以空窗收尾，不再重试，也不会空转。 */
+static void test_a_persistent_busy_ends_when_the_catalog_generation_changes(void)
 {
     MusicCells_WindowTypeDef window;
 
@@ -1046,13 +1176,18 @@ static void test_busy_retries_are_bounded(void)
     g_behavior[2] = BEHAVIOR_BUSY;
     g_busy_times[2] = 100000U;
     gui_write_window_request(0U);
-    (void)run_until_idle();
 
+    (void)step_checked();
+    (void)step_checked();
+    assert(step_checked() == 10U);
+    assert(step_checked() == 10U);
+
+    g_generation = 0U; /* 卷消失：曲库读作代次 0。 */
+    (void)run_until_idle();
     assert(gui_read_window(&window));
-    assert(window.Length == 12U);
-    assert(strcmp(window.Rows[2].Title, "track00002") == 0);
-    assert(strcmp(window.Rows[3].Title, "Title 3 g5") == 0);
-    assert(g_text_calls == 2U + 101U + 9U); /* 第 0、1 行，第 2 行 1 次加 100 次重试，第 3 至 11 行。 */
+    assert(window.Generation == 0U);
+    assert(window.Length == 0U);
+    assert(g_text_calls == 4U); /* 之后不再碰文件接口。 */
 }
 
 /** @brief 曲库不可用时曲名答代次 0；曲库发布后前台主动再答一次，GUI 不用重写需求，结果带回同一个序号。 */
@@ -1215,13 +1350,16 @@ int main(void)
     test_the_empty_window_notes_the_volume_edge_for_the_clear_latency();
     test_an_open_failure_shows_the_fallback_name_but_is_not_cached();
     test_a_read_error_is_not_cached();
-    test_a_volume_unavailable_row_is_blank_and_is_not_cached();
+    test_the_volume_going_unavailable_on_the_twelfth_row_publishes_nothing_and_keeps_the_window();
+    test_a_volume_unavailable_row_in_the_middle_waits_and_is_not_cached();
     test_stable_results_are_cached();
     test_a_defensive_failure_leaves_the_row_blank_without_stopping_the_window();
     test_a_busy_open_is_retried_after_about_10_ms_and_never_shows_the_fallback_name();
     test_the_result_after_a_busy_retry_is_cached();
     test_a_busy_title_is_retried_and_only_the_good_answer_is_published();
-    test_busy_retries_are_bounded();
+    test_busy_is_retried_without_an_upper_bound_and_the_log_is_throttled();
+    test_a_title_busy_is_also_retried_without_an_upper_bound();
+    test_a_persistent_busy_ends_when_the_catalog_generation_changes();
     test_a_title_asked_before_the_catalog_was_ready_is_answered_again_when_it_is_published();
     test_a_title_read_with_the_volume_gone_answers_zero_without_a_warning();
     test_a_defensive_title_failure_warns();

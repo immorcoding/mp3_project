@@ -130,7 +130,7 @@ const CatalogTrackText_ResultTypeDef *catalog_track_text_read(uint16_t position,
     open_status = catalog_track_open(position, track, &file, &result->OpenUs);
     if (Service_Filesystem_StatusIsVolumeUnavailable(open_status))
     {
-        /* 卷没了或正在对账：不是文件错误，不回退文件主名、不算“打开失败”；调用者的窗口或名字槽随后被卷事件收掉。 */
+        /* 卷没了或正在对账：不是文件错误，不回退文件主名、不算“打开失败”；前台任务随后按卷事件（代次 0）收尾，窗口行不发半窗。 */
         catalog_track_text_unavailable = true;
         return NULL;
     }

@@ -72,7 +72,8 @@ target_compile_options(music_display_stats_release_tests PRIVATE -Wall -Wextra -
 
 add_test(NAME music_display_stats_release_is_empty COMMAND music_display_stats_release_tests)
 
-# 翻页注入钩子：真实 music_hook_pageturn.c 加脚本化的 Service Log 替身；同一份测试源编两个配置：默认（钩子关）和钩子打开。
+# 翻页注入钩子：真实 music_hook_pageturn.c 加脚本化的 Service Log 替身（它包含前台任务的公开头取 FOREGROUND_WAIT_FOREVER，
+# 所以带共用 FreeRTOS 桩的头目录）；同一份测试源编两个配置：默认（钩子关）和钩子打开。
 # 注入时刻与测量状态是模块静态的，每个用例一个进程。
 foreach(HOOK_VARIANT default hook)
     set(HOOK_TARGET music_hook_pageturn_${HOOK_VARIANT}_tests)
@@ -81,7 +82,7 @@ foreach(HOOK_VARIANT default hook)
         ../../APP/apps/music/music_hook_pageturn.c
         ../stubs/lock_env/lock_env_log.c
     )
-    target_include_directories(${HOOK_TARGET} BEFORE PRIVATE ../stubs/lock_env ../..)
+    target_include_directories(${HOOK_TARGET} BEFORE PRIVATE ../stubs/freertos ../stubs/lock_env ../..)
     target_compile_features(${HOOK_TARGET} PRIVATE c_std_11)
     target_compile_options(${HOOK_TARGET} PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 endforeach()

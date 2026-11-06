@@ -1,6 +1,6 @@
 /**
  * @file music_row_cache.c
- * @brief 行缓存：键表在 .bss 里启动清零，行内容放 `.apps_sdram`（NOLOAD，靠键判断有效）。
+ * @brief 行缓存：键表与行内容都放 `.apps_sdram`（ARC-28；NOLOAD），键表在 boot_init 里清零，行内容靠键判断有效。
  */
 
 #include "APP/apps/music/foreground/music_row_cache.h"
@@ -14,8 +14,9 @@ typedef struct
     uint16_t Position;
 } MusicRowCache_KeyTypeDef;
 
-/* 键表：每个取位一个键，启动时清零；只由前台任务访问。 */
-static MusicRowCache_KeyTypeDef music_row_cache_keys[MUSIC_ROW_CACHE_LINES];
+/* 键表：每个取位一个键（约 0.5 KiB），放 SDRAM 应用段，NOLOAD 不清零，由 `music_row_cache_boot_init()` 启动时清零；只由前台任务访问。 */
+static MusicRowCache_KeyTypeDef music_row_cache_keys[MUSIC_ROW_CACHE_LINES]
+    __attribute__((section(MUSIC_SDRAM_SECTION)));
 
 /* 行内容：放 SDRAM 应用段（约 32 KiB），NOLOAD 不清零，开机时内容无效，键表说了才算；只由前台任务访问。 */
 static MusicCells_RowTypeDef music_row_cache_rows[MUSIC_ROW_CACHE_LINES]

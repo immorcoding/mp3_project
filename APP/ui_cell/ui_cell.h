@@ -55,7 +55,7 @@ typedef struct
 {
     void *storage;                 /**< 数据存放处，由调用者提供，大小固定。 */
     size_t size;                   /**< 数据大小（字节）。 */
-    UiCell_WakeCallback_t wake;    /**< 写入成功后调用；NULL 表示不叫醒（结果格）。 */
+    UiCell_WakeCallback_t wake;    /**< 写入成功后调用；NULL 表示不叫醒（结果格，读者是 GUI）。见下面“GUI 一侧”的约定。 */
     volatile uint32_t sequence;    /**< 写入序号，起点 1；读者可不拿锁读取。 */
 #ifndef NDEBUG
     bool writer_known;             /**< 调试版：是否已记下写者。 */
@@ -75,7 +75,12 @@ typedef struct
 /* Boot 任务直接调用一次：先创建全模块的互斥锁（调用链深，让它在最浅的位置发生，见 ui_cell.c）；不调用也行，ui_cell_init 会补。 */
 void ui_cell_boot_init(void);
 
-/* 初始化：传存储、大小与叫醒函数（结果格传 NULL）；只在 Boot Task 或单线程环境调用。 */
+/* 初始化：传存储、大小与叫醒函数（结果格传 NULL）；只在 Boot Task 或单线程环境调用。
+ *
+ * “GUI 一侧”的约定（只影响持锁统计的口径，不影响任何行为）：叫醒函数为 NULL 的格子是结果格，它的读者是 GUI，所以它的
+ * `ui_cell_read_if_changed()` 计入 GUI 一侧的不等入口（`GuiTries`、`GuiBusy`）；叫醒函数非空的格子是需求格，读者是前台任务，不计。
+ * `ui_cell_try_write()` 只有 GUI 用，一律计入。显式传“读者角色”参数会改动 #202 M 节授权的 `ui_cell_init` 签名，需要用户同意，
+ * 所以暂用这条约定；新增格子时按它传叫醒函数。 */
 void ui_cell_init(UiCellTypeDef *cell, void *storage, size_t size, UiCell_WakeCallback_t wake);
 
 /* 等到拿到锁的写（前台、后台任务用）：整份拷入、序号加一、锁外叫醒。 */

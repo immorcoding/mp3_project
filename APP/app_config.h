@@ -45,7 +45,7 @@
 #define APP_BOOT_TASK_PRIORITY          0U     /* Boot Task 优先级。 */
 #define APP_LOG_TASK_PRIORITY           2U     /* Log Task 优先级（#218：1 → 2）：与 GUI、前台、Monitor 同级，日志不被它们饿着。 */
 #define APP_STORAGE_TASK_PRIORITY       1U     /* Storage Task 优先级（#218：2 → 1）：只剩曲库扫描和 Flash 回收，只拿空隙，不抢前台；随后台任务票搬进后台任务。 */
-#define APP_AUDIO_READER_TASK_PRIORITY  3U     /* Audio Read Task 优先级：读文件填块池；与卷任务、定时器服务任务同级（时间片轮转），低于播放（4）、高于 Storage（2）。到安全水位后每读一块用等待点让 1 tick，让的是 SD 锁。 */
+#define APP_AUDIO_READER_TASK_PRIORITY  3U     /* Audio Read Task 优先级：读文件填块池；与卷任务、定时器服务任务同级（时间片轮转），低于播放（4）、高于前台、GUI、Log、Monitor（2）与 Storage、后台（1）。到安全水位后每读一块用等待点让 1 tick，让的是 SD 锁。 */
 #define APP_VOLUME_TASK_PRIORITY        3U     /* Volume Task 优先级：消抖、挂载卸载、发布卷事件；与定时器服务任务（configTIMER_TASK_PRIORITY = 3）同级。 */
 #define APP_FLASH_BOOT_TASK_PRIORITY    2U     /* Flash 启动任务优先级：低于卷任务，MountFlash 期间插拔卡照常响应。 */
 #define APP_FOREGROUND_TASK_PRIORITY    2U     /* Foreground Task 优先级：轮流调各应用的前台 step；与 GUI、Log、Monitor、Flash 启动任务同级（时间片轮转），低于音频读取与卷（3），高于 Storage 与后台（1）。 */

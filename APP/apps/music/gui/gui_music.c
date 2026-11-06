@@ -54,11 +54,17 @@ static MusicCells_TitleResultTypeDef gui_music_title_copy __attribute__((section
 static uint32_t gui_music_window_seen;
 static uint32_t gui_music_title_seen;
 
-/** @brief 显示延迟汇总用（Debug）：最近一次写出的窗口需求、曲名需求的 tick（毫秒）和窗口起点；只记一个时刻，不拿锁、不投日志。 */
+/**
+ * @brief 显示延迟汇总用（Debug）：最近一次写出的窗口需求、曲名需求的 tick（毫秒）、窗口起点和曲名需求序号；只记一个时刻，不拿锁、不投日志。
+ * @note  每个需求只在**第一次**显示其结果时计一次延迟（`*_open` 在计过之后清掉）：曲库发布后前台对同一需求序号的重答不再计入，
+ *        避免把扫描时间算进曲名延迟。
+ */
 static uint32_t gui_music_window_request_tick;
 static uint16_t gui_music_window_request_index;
 static bool gui_music_window_request_open;
 static uint32_t gui_music_title_request_tick;
+static uint32_t gui_music_title_request_sequence;
+static bool gui_music_title_latency_open;
 
 /** @brief 翻页注入钩子（默认关闭）：上一次看到的 `TrackStartCount`，以及是否已经有基准。 */
 static uint32_t gui_music_hook_track_start_count;
@@ -363,6 +369,13 @@ static void gui_music_title_step(const GUI_MusicTransportDecisionTypeDef *decisi
     new_reply = ui_cell_read_if_changed(&music_cell_title_result, &gui_music_title_copy, &gui_music_title_seen);
     action = gui_music_title_poll(&gui_music_title_client, &identity, new_reply ? &gui_music_title_copy : NULL);
 
+    /* 显示延迟：结果带回的需求序号等于最近写出的需求，且这个需求还没计过，就量写需求到现在的时间（先于下面写新需求判断）。 */
+    if (new_reply && gui_music_title_latency_open && (gui_music_title_copy.RequestSequence == gui_music_title_request_sequence))
+    {
+        gui_music_title_latency_open = false;
+        music_display_stats_note_title((uint32_t)((uint32_t)xTaskGetTickCount() - gui_music_title_request_tick));
+    }
+
     if (gui_music_title_request_due(&gui_music_title_client))
     {
         const MusicCells_TitleRequestTypeDef request = gui_music_title_request(&gui_music_title_client);
@@ -371,6 +384,8 @@ static void gui_music_title_step(const GUI_MusicTransportDecisionTypeDef *decisi
         {
             gui_music_title_request_sent(&gui_music_title_client);
             gui_music_title_request_tick = (uint32_t)xTaskGetTickCount();
+            gui_music_title_request_sequence = request.Sequence;
+            gui_music_title_latency_open = true;
         }
     }
 
@@ -381,11 +396,6 @@ static void gui_music_title_step(const GUI_MusicTransportDecisionTypeDef *decisi
                              &text))
     {
         (void)Service_GUI_TitleApply(text.title, text.artist);
-    }
-
-    if (action == GUI_MUSIC_TITLE_ACTION_ACCEPT)
-    {
-        music_display_stats_note_title((uint32_t)((uint32_t)xTaskGetTickCount() - gui_music_title_request_tick));
     }
 }
 
@@ -483,6 +493,7 @@ void gui_music_init(void)
     gui_music_window_seen = 0U;
     gui_music_title_seen = 0U;
     gui_music_window_request_open = false;
+    gui_music_title_latency_open = false;
     gui_music_hook_has_baseline = false;
     gui_music_queue_window_client_init(&gui_music_queue_window_client);
     gui_music_transport_init(&gui_music_transport);

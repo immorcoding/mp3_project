@@ -28,7 +28,7 @@
 |---|---|
 | 名字 | `Background Task`（Monitor 的栈登记表里有这一行，CPU 行的短键是 `back`） |
 | 栈 | 1536 word（6 KiB），`xTaskCreateStatic`，栈在 AXI SRAM 新段 `.app_axi_ram`，TCB 在 DTCM `.bss` |
-| 优先级 | 1（`APP_BACKGROUND_TASK_PRIORITY`），与 GUI、Log、Monitor 同级，低于 Storage 与 Flash 启动任务（2） |
+| 优先级 | 1（`APP_BACKGROUND_TASK_PRIORITY`），与 Storage 同级，低于前台、GUI、Log、Monitor 与 Flash 启动任务（2，#218：GUI、Log、Monitor 由 1 升到 2，Storage 由 2 降到 1） |
 | 创建 | Boot 任务在 GUI 任务之后创建，不进文件接口的拒绝名单（后台作业要调文件接口） |
 
 - **栈用 `.app_axi_ram`（NOLOAD，不清零）**：栈由 `xTaskCreateStatic` 整块填成已知值，首次使用前因此完整写入（HWD-2）。`background_task.c` 里的 `_Static_assert((configCHECK_FOR_STACK_OVERFLOW > 1) || (configUSE_TRACE_FACILITY == 1))` 在配置让这个前提失效时编译期报错（与卷任务、Flash 启动任务同一做法）。
@@ -106,9 +106,9 @@ cmake --build --preset firmware-debug
 
 Storage Task 会为 Flash 回收等这把锁（#215 起不再因为有打开的音频流而暂停回收），音频读取任务只碰 SD 卷、不碰 Flash 卷。钩子构建里 Storage 的回收会在 Flash 卷锁上等钩子的写（最长约 1.5 至 3 s），这段时间 Storage 的名称和窗口读取被挡住，只在钩子构建里出现。**对 SD 卷与音频读取的影响应为零**——主机测试只能证明作业不调 SD 的接口，真实的“互不影响”靠第 4 次上板（R4.1、R4.2）。
 
-### 消息池（DIAG-3；Service Log 当时 30 块，#218 加大到 44 块，Log Task 每 5 ms 转交一条）
+### 消息池（DIAG-3；Service Log 当时 30 块，#218 加大到 45 块，Log Task 每 5 ms 转交一条）
 
-**#218 重算（用户 2026-11-06 的决定）**：加前台任务、前台 step 耗时、`ui_cell` 持锁统计和显示延迟汇总之后，保守口径最坏同时到达是 33 行，池加大到 44 块，留 11 块；打开 Flash 压力钩子的构建再加本钩子的统计行等 3 行（36 行，留 8 块）。下面是当时（30 块）的核算，数字作废，明细见 [前台任务](../foreground/README.md)“日志与消息池核算”。
+**#218 重算（用户 2026-11-06 的决定）**：加前台任务、前台 step 耗时、`ui_cell` 持锁统计和显示延迟汇总之后，保守口径最坏同时到达是 34 行，池加大到 45 块，留 11 块；打开 Flash 压力钩子的构建再加本钩子的统计行等 3 行（37 行，留 8 块）。下面是当时（30 块）的核算，数字作废，明细见 [前台任务](../foreground/README.md)“日志与消息池核算”。
 
 稳态任务从 8 个变 9 个（加 `Background Task`），#215 又加了 `Audio Read Task` 变 10 个：Monitor 一批稳态 15 行，开机后 `MountFlash` 期间多一个 Flash 启动任务 16 行（`MONITOR_CPU_TASK_MAX` 16 个任务加 5 行固定行共 21 行的上界不变，`monitor_task.c` 的 `_Static_assert` 照旧）。**默认构建最坏同时到达**（#215 核算，口径同上一票：拔卡对账 5 行是卷路径日志的上界，另加音频读取任务新增的 `CARD_REMOVED lat=` 1 行）：Monitor 16 + Filesystem 持锁统计 3 + 曲库短锁 1 + 拔卡 6 = **26 行，留 4 块**（原来的 24 行，加 Monitor 的 1 行、拔卡的 1 行）。**钩子打开的构建**再加统计行 1 行 = 27 行，留 3 块；停下（ERROR）和卷满（WARN）各偶发一条，同时到达最坏 29 行，留 1 块。排空约 130 至 145 ms。钩子的统计行节拍 10 s，不是每步一条；每行正文不超过 127 字符（主机测试在极端取值下核对）。
 

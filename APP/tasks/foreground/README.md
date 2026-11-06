@@ -24,9 +24,9 @@ for(;;)
 
 ## 前台的一小步（ARC-26）
 
-- **一步最多一次文件调用加约 1 ms CPU**（初值），step 里不放大局部变量，不碰 Flash 卷（Flash 卷只有一把锁，后台写 32 KiB 约 1.5 s，前台一等所有应用的 step 都停）。
+- **一步最多一次文件调用加约 1 ms CPU**（初值），step 里不放大局部变量（大对象放 `.apps_sdram`，栈上只有几十字节的局部变量），不碰 Flash 卷（Flash 卷只有一把锁，后台写 32 KiB 约 1.5 s，前台一等所有应用的 step 都停）。**音乐现在的实现一步读一整行标签（5 至 11 次 Service 调用），与“一次文件调用”字面不符，见下文“已知偏差”，留给用户决定。**
 - 任务量每个 step 的耗时（DWT 周期计数器，32 位无符号差，回绕不影响），记下**每个应用的最长值**；**超过 50 ms（`FOREGROUND_STEP_WARN_US`，初值，R5.6 核对）且刷新了该应用的最长值时记一行 WARN**，只记录不停机（所以一个持续偏慢的应用不会刷屏，SD 单块 500 ms 超时这类故障路径也不会误伤：它只刷新一次最长值）。
-- 没超阈值的最长值刷新**不立刻记**，汇总成一行 INFO，至多每 10 s 一行（`FOREGROUND_MAX_LOG_PERIOD_MS`），没有新刷新就不记，供板级验收读各应用的最长耗时（R5.6）。
+- 没超阈值的最长值刷新**不立刻记**，汇总成一行 INFO，至多每 10 s 一行（`FOREGROUND_MAX_LOG_PERIOD_MS`），没有新刷新就不记，供板级验收读各应用的最长耗时（R5.6）。两种行里的应用名取自注册表的 `name` 字段（这就是 `name` 字段的用途），消息池核算里计 1 行。
 - 计数器没启动（频率 0）时耗时记 0，不会误报。
 
 ## 日志（串口里每行是 `<时间> <I|W|E> (<tick>) <标签>: <正文>`，标签后面有冒号；常开）
@@ -70,12 +70,11 @@ for(;;)
 | 前台任务 TCB | DTCM `.bss` | 约 100 B |
 | 音乐的四个界面数据格子本体（曲名需求、曲名结果、窗口需求、窗口结果） | `.app_axi_ram` | 6588 B（`music_cells.c`） |
 | GUI 一侧的结果副本（窗口、曲名） | `.app_axi_ram` | 6572 B（`gui_music.c`） |
-| 行缓存的行内容（64 行）、窗口组装缓冲、曲名结果组装区 | `.apps_sdram`（SDRAM，NOLOAD，`ASSERT` 卡 8 MiB） | 38848 B（`music_row_cache.c`、`music_foreground.c`） |
-| 行缓存键表（64 个 `{代次, 位置}`）、流程状态、曲库一次读全的结果（约 300 B） | DTCM `.bss` | 约 1 KiB |
+| 行缓存的行内容（64 行）与键表（64 个 `{代次, 位置}`）、窗口组装缓冲、曲名结果组装区、曲名读取用的临时一行（504 B）、曲库一次读全的结果（约 300 B）、前台流程的状态变量 | `.apps_sdram`（SDRAM，NOLOAD，`ASSERT` 卡 8 MiB；ARC-28：应用内存默认放这里，DTCM 留给任务栈与内核） | 40224 B（`music_row_cache.c`、`music_foreground.c`） |
 
-**段总量**（Debug 构建 map，`mp3_project.map`）：`.app_axi_ram` 0x9380 = **37760 B**（五个任务栈 24576 B：卷 4096、音频读取 4096、Flash 启动 4096、后台 6144、前台 6144；加格子本体 6588、GUI 副本 6572、没有别的贡献者；起点 `0x2404b600`），比上一票多 19328 B；`.apps_sdram` 0x97c0 = **38848 B**（上限 8 MiB）。内存区余量：AXI RAM 区 346496 / 524288 B（66.09 %，余 177792 B）；DTCM 108224 / 131072 B（82.57 %，余 22848 B，比上一票的 113912 B 少用 5688 B：窗口槽、名称槽迁出约 6.5 KiB，日志消息池加大 14 块加约 1.9 KiB，其余是新状态）；SDRAM 8596192 B（25.62 %）；内部 Flash 474512 / 524288 B（90.51 %，余 49776 B，上一票 468760 B，多 5752 B，Release 381304 B）。链接脚本、`FreeRTOSConfig.h`、CubeMX 生成文件、Vendor、`ffconf.h`、`lv_conf.h` 一个字没改。
+**段总量**（Debug 构建 map，`mp3_project.map`）：`.app_axi_ram` 0x9380 = **37760 B**（五个任务栈 24576 B：卷 4096、音频读取 4096、Flash 启动 4096、后台 6144、前台 6144；加格子本体 6588、GUI 副本 6572、没有别的贡献者；起点 `0x2404b600`），比上一票多 19328 B；`.apps_sdram` 0x9d20 = **40224 B**（上限 8 MiB；审阅修复里把前台流程的状态、曲库读全结果、行缓存键表和曲名临时一行从 DTCM 与任务栈挪进来，比第一版的 0x97c0 = 38848 B 多 1376 B）。内存区（Debug，`build/firmware-debug`，五个钩子都显式关）：AXI RAM 区 346496 / 524288 B（66.09 %，余 177792 B）；DTCM 109408 / 131072 B（83.47 %，余 21664 B；比上一票 3eac3e6 的 113912 B 少用 4504 B：窗口槽、名称槽迁出约 6.5 KiB，日志消息池加大 15 块加约 2 KiB，其余是新状态；审阅修复把 864 B 的前台状态与缓存键表挪到 `.apps_sdram`，池多一块加 136 B，净少 720 B）；SDRAM 8597568 B（25.62 %）；内部 Flash 474404 / 524288 B（90.49 %，余 49884 B）。Release：DTCM 108936 B（83.11 %），Flash 381040 B（72.68 %）。曲名读取用的 504 B 临时行原来是 `process_title` 的局部变量，在前台任务栈上（AXI 段，不占 DTCM），现在挪走后栈上没有大局部变量。链接脚本、`FreeRTOSConfig.h`、CubeMX 生成文件、Vendor、`ffconf.h`、`lv_conf.h` 一个字没改。
 
-NOLOAD 段不清零：栈靠 `xTaskCreateStatic` 填充（`app_tasks.c`、`foreground_task.c` 各有一个 `_Static_assert` 核对这个前提），格子和组装缓冲由 Boot 里的 `boot_init` 在第一次使用前整块写入，行缓存的行内容靠键表判断有效（键表启动时清零）。格子、副本只经 CPU 读写，不作 DMA，不需要 Cache 维护。
+NOLOAD 段不清零：栈靠 `xTaskCreateStatic` 填充（`app_tasks.c`、`foreground_task.c` 各有一个 `_Static_assert` 核对这个前提），格子和 `.apps_sdram` 里的缓冲与状态由 Boot 里的 `boot_init` 在第一次使用前整块写入，行缓存的行内容靠键表判断有效（键表在 `boot_init` 里清零）。格子、副本和 SDRAM 状态只经 CPU 读写，不作 DMA，不需要 Cache 维护。
 
 ### Boot 栈核算（128 word = 512 B）
 
@@ -94,7 +93,7 @@ NOLOAD 段不清零：栈靠 `xTaskCreateStatic` 填充（`app_tasks.c`、`foreg
 
 ## 日志与消息池核算（DIAG-3）
 
-加前台任务之后新增的常开或 Debug 行：Monitor 一批多一行栈占用；前台 step 耗时的 WARN 或最长值汇总（二选一，1 行）；`ui_cell` 持锁统计（Debug，每 10 s 1 行）；显示延迟汇总（Debug，每 10 s 1 行）。最坏同时到达行数（按 [音频读取任务](../audio_reader/README.md)“日志与消息池”的保守口径）从 29 行变成 33 行，Service Log 消息池从 30 块加大到 **44 块**：
+加前台任务之后新增的常开或 Debug 行：Monitor 一批多一行栈占用；前台 step 耗时的 WARN 或最长值汇总（二选一，1 行；注册表的 `name` 字段就是这两种行里的应用名，没有它日志里分不出是哪个应用的 step 慢）；`ui_cell` 持锁统计（Debug，每 10 s 1 行）；显示延迟汇总（Debug，每 10 s 1 行）；前台遇到 `SERVICE_BUSY` 的 WARN（异常路径，第 1 次和之后每满 100 次各 1 行，约 1 s 一行，见下）。最坏同时到达行数（按 [音频读取任务](../audio_reader/README.md)“日志与消息池”的保守口径）从 29 行变成 34 行，Service Log 消息池从 30 块加大到 **45 块**：
 
 | 项 | 行数 |
 |---|---|
@@ -105,10 +104,12 @@ NOLOAD 段不清零：栈靠 `xTaskCreateStatic` 填充（`app_tasks.c`、`foreg
 | 显示延迟汇总（本票） | 1 |
 | 前台 step 耗时（WARN 或汇总，本票） | 1 |
 | 一次拔卡（保守口径：卷路径日志 5、读取被打断、`Stop reason`、`CARD_REMOVED lat`） | 8 |
-| `SERVICE_BUSY`（异常路径） | 1 |
-| **最坏同时到达** | **33，留 11 块**（池 44） |
+| `SERVICE_BUSY`（异常路径：音频读取任务与前台任务各 1 行，文件槽用尽时会同时到） | 2 |
+| **最坏同时到达** | **34，留 11 块**（池 45） |
 
-Flash 压力钩子构建再加统计行 1、卷满 1、停下 1 共 3 行，36 行，留 8 块；翻页注入钩子构建再加补满耗时 1 行，34 行，留 10 块。池深在 `Service/log/log_service_config.h`，`monitor_task.c` 的 `_Static_assert` 核对 `MONITOR_TASK_CONCURRENT_MAX + 5 + MONITOR_POOL_OTHER_WORST_LINES + MONITOR_POOL_SPARE_MIN <= LOG_SERVICE_QUEUE_LENGTH`（12 + 5 + 16 + 8 = 41 ≤ 44），每加一个任务或一种常开日志行就要重算。排空按每 5 ms 一行，33 行约 165 ms。
+Flash 压力钩子构建再加统计行 1、卷满 1、停下 1 共 3 行，37 行，留 8 块；翻页注入钩子构建再加补满耗时 1 行，35 行，留 10 块。池深在 `Service/log/log_service_config.h`，`monitor_task.c` 的 `_Static_assert` 核对 `MONITOR_TASK_CONCURRENT_MAX + 5 + MONITOR_POOL_OTHER_WORST_LINES + MONITOR_POOL_SPARE_MIN <= LOG_SERVICE_QUEUE_LENGTH`（12 + 5 + 17 + 8 = 42 ≤ 45），每加一个任务或一种常开日志行就要重算。排空按每 5 ms 一行，34 行约 170 ms。
+
+**前台的 `SERVICE_BUSY` 日志**（WARN，标签 `MUSIC`，`SERVICE_BUSY pos=<位置> n=<连续第几次>`）：BUSY 是瞬时的，前台一律过约 10 ms 重试，不设次数上限、不显示回退名（ARC-27），所以日志必须节制：连续 BUSY 只在第 1 次和之后每满 `MUSIC_BUSY_LOG_EVERY`（100）次各记一行，读到非 BUSY 的结果后计数清零。BUSY 的终止靠卷事件、曲库代次变化或新需求（窗口以空窗收尾、曲名答代次 0）。正常情况下这一行不应出现（SD 同时最多 2 个文件，见 [音频读取任务](../audio_reader/README.md) R4.12），出现了就是文件槽被别处占着，R5、R6.10 核对日志里没有它。
 
 ## 翻页注入测试钩子（DIAG-7，R5.4，默认关闭，只允许 Debug）
 
@@ -123,6 +124,35 @@ Flash 压力钩子构建再加统计行 1、卷满 1、停下 1 共 3 行，36 �
 ## 主机测试证明什么、不证明什么（HAR-5）
 
 `Tests/foreground_task`（1 个 CTest `foreground_loop`，14 个用例）：证明每圈每个 step 各一次、按表里的顺序、返回 0 也不短路、空字段跳过；睡眠时长取最小返回值、没有 step 时等通知；毫秒换 tick（非零不变成 0）；一圈是“调 step、调每圈回调、再等通知”，回调先于等待；睡眠期间和 step 运行期间的叫醒都不丢；句柄未绑定时叫醒是空操作；每个应用各记最长值、只升不降；超过 50 ms 且刷新最长值才记 WARN（恰好等于阈值、相等、更短都不记，再刷新再记，返回值照常）；WARN 行和汇总行不超过 127 字符，放不下时末尾 `~`；汇总至多每 10 s 一行且没有新刷新不记；计数器没启动和 32 位回绕不误报；注册表 `boot_init` 按表的顺序逐行调用、空字段跳过。**不证明**：真实任务切换与优先级继承、通知唤醒延迟、与 GUI 同级时的 CPU 份额、step 的真实耗时、Boot 栈余量（静态核算）、`foreground_task.c` 的静态创建和入口（没有主机测试，由固件构建和上板覆盖）。音乐前台流程见 [Tests/music_foreground](../../../Tests/music_foreground/README.md)。
+
+## 已知偏差：一步读一整行，不是一步一次文件调用（审阅意见，留给用户决定）
+
+ARC-26 / spec G 写“前台一步最多一次文件调用加约 1 ms CPU”。现在的实现一步读**一整行标签**：`catalog_track_text_read()` 在一步里连续做完“打开、取长度、至多 4 次读取、关闭”，行与行之间才是步边界（检查点）。这是按“一行标签读取”作为最小单位的取舍（#135 I 节的一行标签读取判定），不是一次 Service 调用。
+
+**一行读取实际的 Service 调用次数**（每次调用各拿一次 SD 卷锁、各过一次 Filesystem 入口闸）：
+
+| 调用 | 次数 |
+|---|---|
+| `Service_Filesystem_OpenFileByLocator`（核对不符时再多一次 `OpenFile` 按路径） | 1（核对不符 2） |
+| `Service_Filesystem_GetFileSize` | 1 |
+| 读回调：`SeekFile` 加 `ReadFile`，每次读取各一次（含首块最多 `CATALOG_TEXT_MAX_READS` = 4 次读取） | 2 至 8 |
+| `Service_Filesystem_CloseFile` | 1 |
+| **合计** | **5 至 11**（带 TIT2/TPE1 的常见文件在首块里一次读完，5 次；核对不符再加 1） |
+
+**推算的 step 最长耗时**（没有实测，R5.4、R5.6 取证；Debug 单步含 DWT 计时的开销可以忽略）：
+
+- 无竞争：打开约几 ms（O1 的阈值是 30 ms）、每次 4 KiB 读取约 1 至 3 ms，整行约 10 至 20 ms，慢卡的上界约 45 ms。
+- 水位以上与音频读取任务争 SD 锁：读取任务每读一块让 1 tick，前台每次调用最多多等一次让路加一块读（1 至 7 ms），整行推算 14 至 27 ms，上界约 50 ms 量级（超过 50 ms 就出 `Foreground step slow` WARN）。
+- 水位以下（切歌后约 140 ms 的补块期）：读取任务连续补块，前台第一次调用要等到补块间隙，一步可能超过 100 ms（R5.4 的翻页注入钩子就是为了量它）。
+- 定位符失效退回按路径打开（大目录末尾）：一次打开 1.4 至 2.1 s，一步就是 2 s（R5.5，C 版预期 WARN）。
+
+**如果严格改成“每步一次调用、跨步持有文件”（ARC-27 允许前台应用跨步持有，最多 2 个）要改的地方**：
+
+1. `catalog_track_text_read()`（`APP/apps/music/catalog/catalog_track_text.c`）要从“一次读完”拆成可恢复的小步状态机：打开、取长度、读第 N 块、解析、关闭各是一步；纯函数 `catalog_track_text()`（`catalog_text.c`）现在靠“按偏移读”回调同步取数据，要改成“先给出读取计划（下一次读哪个偏移、多少字节），由调用者读完再喂回来”的可恢复形式，工作缓冲和进度放静态存储（`.apps_sdram`）。
+2. 前台流程（`music_foreground.c`）要持有“正在读的那一行”的状态（打开的 `Service_Filesystem_FileHandleTypeDef`、当前读到第几块、曲名还是窗口行、位置与代次），`music_file_call_used` 的含义改成“本步已做一次 Service 调用”，命中缓存的行仍可连拼；曲名需求优先时要决定是否打断正在读的窗口行（要么关掉重来，要么跨步等它读完）。
+3. 失败与终止路径：跨步持有的文件在卷事件、代次变化、新需求覆盖、读取错误时必须关闭（现在“读完即关”所以不需要这套清理），`SERVICE_BUSY` 和卷不可用要落到状态机的每一步；ARC-27 的“最多 2 个”和 SD 4 个文件槽核算（音频流 1 + 前台 1）要重新核对，持有期间读取任务的让路与卷任务的对账会和前台交错得更细。
+4. 诊断与计时：`catalog_track_diag_*()` 的单行耗时、`OpenUs`、窗口汇总现在在一步内算完，改成跨步要累加；`Tests/music_catalog`、`Tests/music_foreground`（假 `catalog_track_text_read()` 要变成多步）和模拟器的 `fakes/music_sim.c` 都要跟着改。
+5. 代价：同一行的总耗时变长（每步之间多一次调度与别的任务插入），但每步更短、GUI 与前台的时间片更均匀；是否值得由 R5.6 的 step 最长值和 R5.1 的显示延迟决定。
 
 ## 给后面的票
 

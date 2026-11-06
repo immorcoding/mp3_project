@@ -27,7 +27,7 @@ void music_hook_pageturn_announce(void);
 void music_hook_pageturn_note_injection(uint32_t tick_ms);
 
 /* 前台任务每圈调一次：有测量在进行时量块池，补满（就绪块数不少于安全水位）记一行 INFO，超时记一行 WARN；
- * 返回多少毫秒后再叫它：测量进行时是 MUSIC_HOOK_PAGE_TURN_POLL_MS，否则 UINT32_MAX（等通知）。 */
+ * 返回多少毫秒后再叫它：测量进行时是 MUSIC_HOOK_PAGE_TURN_POLL_MS，否则 FOREGROUND_WAIT_FOREVER（等通知）。 */
 uint32_t music_hook_pageturn_poll(uint32_t now_ms);
 
 #endif /* MUSIC_HOOK_PAGETURN_H */
