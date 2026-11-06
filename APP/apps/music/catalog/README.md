@@ -28,7 +28,7 @@
 - **取代次时卷序号不符就算 0**：`catalog_generation()` 和 `catalog_read_track()` 在锁内用 `volume_status(VOLUME_ID_SD)` 比对，卷不在或序号不符都得 0，不需要任何任务调用作废。`catalog_invalidate()` 因此不是正确性必需，只是让状态尽快归零。
 - **读者一次读全**：`catalog_read_track(position, &out)` 在同一把锁内完成“播放列表位置 → 曲库下标”，并拷出代次、条数、路径和文件定位符（`Catalog_TrackTypeDef`，约 300 B，调用者放静态存储）。代次为 0 时条数为 0、路径空串、定位符全零，表一个字节都不碰；位置越界时代次和条数有效、路径空串，返回 `false`。取代了原来分开取代次、条数、路径、定位符（四次之间可能被重扫插进来）的写法。
 
-读者现在有三处，都已改成一次读全：音频流开流（`storage_audio_open()`，经 `catalog_track_open()` 用同一次读到的定位符）、曲目显示名槽（`storage_namebuffer_load()`）、Queue 窗口槽（`storage_listbuffer_load()`，每圈一行）。名称槽和窗口槽的回复代次取自这一次读全，不再另取。
+读者现在有三处，都已改成一次读全：音频流开流（音频读取任务的 `audio_reader_open()`，经 `catalog_track_open()` 用同一次读到的定位符）、曲目显示名槽（`storage_namebuffer_load()`）、Queue 窗口槽（`storage_listbuffer_load()`，每圈一行）。名称槽和窗口槽的回复代次取自这一次读全，不再另取。
 
 ### 各情形
 
@@ -43,7 +43,7 @@
 
 ### 锁的创建时机
 
-锁是静态互斥量（不占堆），由 `catalog_boot_init()` 创建；它在 `APP/tasks/app_tasks.c` 的 Create Task（Boot）里、SDRAM 自检之后、创建 Storage Task **之前**调用一次，所以早于任何会读写曲库的任务的第一次使用。漏调用会在第一次拿锁时 `configASSERT` 停机。它同时复位已发布的状态和代次计数，整个开机只调一次，“一次开机内不重复”因此成立。以后创建音频读取、前台、后台任务的票沿用同一位置（或改为注册表的 `boot_init`）。
+锁是静态互斥量（不占堆），由 `catalog_boot_init()` 创建；它在 `APP/tasks/app_tasks.c` 的 Create Task（Boot）里、SDRAM 自检之后、创建 Storage Task 和音频读取任务**之前**调用一次，所以早于任何会读写曲库的任务的第一次使用（音频块池与信箱的 `audio_reader_boot_init()` 紧跟其后）。漏调用会在第一次拿锁时 `configASSERT` 停机。它同时复位已发布的状态和代次计数，整个开机只调一次，“一次开机内不重复”因此成立。以后创建音频读取、前台、后台任务的票沿用同一位置（或改为注册表的 `boot_init`）。
 
 ## 扫描与错误分类（#196，沿用 STOR-7）
 
@@ -76,7 +76,7 @@ CATLOCK: n=1204 hold=96us
 
 ### 日志消息池核算（DIAG-3，汇总类日志注明节拍）
 
-Service Log 消息池 30 块，Log Task 每 5 ms 转交一条。本票新增 1 行（每 10 s 一次，Debug 才有，不超过 36 个字符）。最坏同时到达：Monitor 5 s 一批（#213 加了后台任务之后：稳态 9 个任务 14 行，开机后 `MountFlash` 期间 10 个任务 15 行，取 15），加 Filesystem 持锁统计 3 行，加曲库短锁 1 行，加一次拔卡对账 5 行，共 24 行，留 6 块给同一时刻的其他任务（#212 核算的 23 行再加后台任务的 1 行）；排空约 120 ms。Release 不投本行。
+Service Log 消息池 30 块，Log Task 每 5 ms 转交一条。本票新增 1 行（每 10 s 一次，Debug 才有，不超过 36 个字符）。最坏同时到达：Monitor 5 s 一批（#213 加了后台任务之后：稳态 9 个任务 14 行，开机后 `MountFlash` 期间 10 个任务 15 行，取 15），加 Filesystem 持锁统计 3 行，加曲库短锁 1 行，加一次拔卡对账 5 行，共 24 行，留 6 块给同一时刻的其他任务（#212 核算的 23 行再加后台任务的 1 行）；排空约 120 ms。#215 加音频读取任务之后 Monitor 多 1 行、拔卡多 1 行（`CARD_REMOVED lat=`），共 26 行，留 4 块，最新数字见 [音频读取任务](../../../tasks/audio_reader/README.md)“日志与消息池”。Release 不投本行。
 
 ## 公开 Interface
 
@@ -92,8 +92,8 @@ Service Log 消息池 30 块，Log Task 每 5 ms 转交一条。本票新增 1 �
 - `catalog_display_name()`：曲目显示名纯函数（`catalog_name.h`），由曲库 UTF-8 相对路径取最后一个 `/` 之后的文件主名并去掉末尾 `.mp3`（大小写同扫描），主名超过 251 B 或非法 UTF-8 返回 `false`，不截断。无 RTOS 依赖，主机测试见 `Tests/music_catalog`；由曲目文本函数在回退时调用。
 - `catalog_track_text()`：曲目文本纯函数（`catalog_text.h`），输入曲库相对路径、文件长度、按偏移读文件回调、GBK 查表回调和 4 KiB 工作缓冲，输出曲目显示名（可用 TIT2，否则文件主名）、歌手（TPE1，取不到为空串）、结果分类（取到、无 ID3v2、帧缺失、解码失败、超读取上限、读取错误，以标题为准）和读取次数。首块 4 KiB、按需 seek、含首块最多 4 次读取（`CATALOG_TEXT_BLOCK_BYTES`、`CATALOG_TEXT_MAX_READS`，在 `catalog_config.h`，初值，由板测修正）、不越过标签总长；带标签级去同步的标签只解析首块。帧定位与文本解码在 `Components/id3_reader`。不访问 FatFs、RTOS 或日志，计时、日志、`f_open` 失败判定与槽接入由调用方做；名称槽与窗口槽都经 `catalog_track_text_read()` 接入。返回 `false` 只表示文件主名提取失败（STOR-15 的防御分支）。主机测试见 `Tests/music_catalog`。
 - `catalog_track_text_read()`：曲目文本的文件读取封装（`catalog_track_text.h`），名称槽与窗口槽的 `load` 共用这一份（同一 4 KiB 工作缓冲与结果，不另设第二份），只在 Storage Task 调用。入参是播放列表位置（只用于核对不符的日志）与调用者先做的 `catalog_read_track()` 一次读全的结果（路径与定位符），本函数不再自己取路径；经 `catalog_track_open()` 打开 SD 文件（见下一条）、取长度，以“seek + 读”作为按偏移读回调、以 `Service_Filesystem_GbkToUnicode()` 作为 GBK 查表回调调用 `catalog_track_text()`，用完即关 FIL；与音频流 FIL 合计不超过 FatFs `_FS_LOCK`（2）。打开失败置 `OpenFailed`、取长度失败按“读取错误”，都回退文件主名、歌手为空；结果的 `OpenUs` 是打开耗时（与标签读取耗时分开）。路径为空（位置无效）返回 `NULL`。返回本 Module 持有的结果（下一次调用前有效），`NULL` 只表示文件主名提取失败。4 KiB 工作缓冲与结果放 DTCM `.bss`（约 4.6 KiB），不占任务栈；一次读全的结果（约 300 B）由各调用者放自己的静态存储。**DTCM 放置的审查结论（HWD-2、HWD-6）**：缓冲只由 CPU 读写（id3_reader 解析、catalog_text 解码与清理），不是 DMA 缓冲；SD 读取经 Filesystem Service 的 AXI SRAM bounce buffer（32 KiB，`filesystem_config.h`）由 CPU 拷入，DMA 不直接访问 DTCM，也无需 Cache 维护（DTCM 不经 D-Cache）；放 DTCM 不免启动与 MPU 审查，两者不变（静态 `.bss`，由启动代码清零，无 NOLOAD 填充需求，不涉及 MPU 区域）；占用余量：本分支固件构建（`build-firmware.ps1`，debug）DTCMRAM 已用 109096 B / 128 KB（83.23%），剩余约 21.5 KiB，缓冲 4096 B + 结果 507 B 在其中，另无新增堆或任务栈。计时、计数与日志不在此，由两个槽的调用点经 `catalog_track_diag_*()` 做（见下一条）。
-- `catalog_track_open()`：曲目文件的统一打开入口（`catalog_track_open.h`，STOR-17、ARC-19、DIAG-5），**名称槽、Queue 窗口行（二者经 `catalog_track_text_read()`）、开启音频流与跳转重开流四条路径都经它打开**，只在 Storage Task 调用。先用一次读全结果里的定位符调 `Service_Filesystem_OpenFileByLocator()`：`OPENED` 即成功；`MISMATCH`（无定位符、条目已变、是目录、起始簇或长度不同）退回 `Service_Filesystem_OpenFile()` 按路径打开，并记 `Locator miss pos=N` WARN、累加计数器；`FAILED`（槽用尽、卷未就绪、介质错误等）不退回，把 Service 状态原样交给调用者。输出的打开耗时（DWT，µs）含核对不符后退回路径打开的那一次，失败时同样给出。四条路径各自仍用原有的失败映射（名称槽/窗口行回退文件主名，开流按 `BAD_FILE`/`NOT_READY` 等）。主机测试见 `Tests/music_catalog`（`catalog_open`）。
-- `catalog_track_diag_*()`：标签读取与打开诊断（`catalog_track_diag.h`，#141、#179，DIAG-4、DIAG-5），由名称槽与窗口槽的 `load`、`catalog_track_open()` 与音频流开启使用，不改读取行为、不进 ISR 与每帧路径。依赖 Cortex-M7 周期计数器 Adapter（DWT，只 `Read()`，不复位）与 Log Service。**计时**：单行耗时 = 打开（按定位符，核对不符时含退回路径的那次）+ 读取 + 解析 + 关闭，换算为 µs；其中打开耗时另作 `OpenUs` 单独记录。**计数器**（Storage 私有，自启动累加，不对外公开）：读取次数（读回调调用次数合计，含首块与后续 seek 读，打开失败计 0；与日志里的 `reads=`、`rd=` 同一口径）、取到数、六类回退数（无 ID3v2 / 帧缺失 / 解码失败 / 超读取上限 / 打开失败 / 读取错误；各类之和即标签读取的文件数）、单行耗时最长值与累计值、单次打开耗时最长值、`Locator miss` 次数（板上预期为 0）。**窗口汇总阈值（STOR-17、DIAG-4，初值，由板测修正）**：单行打开 > `CATALOG_OPEN_BUDGET_US`（30000 µs）或整窗总耗时 > `CATALOG_WINDOW_BUDGET_US`（500000 µs），均为 `catalog_config.h` 的配置常量，`Tests/music_catalog` 的编译期断言核对其值。**单行日志阈值**：`CATALOG_TRACK_BUDGET_US`（`catalog_config.h`）= 1 s（1000000 µs，初值）。单行读取（含打开）超过它是窗口汇总的第三个触发条件。它原先等于 T_data/2 并有编译期断言钉住；它不再与播放任务的配置比较（T_data 会随音频读取票改动），只是一个日志阈值，`Tests/music_catalog` 保留它大于另外两个预算的两条编译期断言。**日志**（tag `STORAGE`，文本只含播放列表位置与原因名，不含文件名、标题或歌手）：
+- `catalog_track_open()`：曲目文件的统一打开入口（`catalog_track_open.h`，STOR-17、ARC-19、DIAG-5），**名称槽、Queue 窗口行（二者经 `catalog_track_text_read()`）、开启音频流与跳转重开流四条路径都经它打开**，由 Storage Task（名称槽、窗口行）和音频读取任务（开流、重开流，#215）调用，函数本身没有静态状态，可以被两个任务同时调用；唯一被它们同时累加的是 `catalog_track_diag_locator_miss()` 的核对不符计数器，在短临界区里加（见 [音频读取任务](../../../tasks/audio_reader/README.md)“曲目诊断计数器的并发”）。先用一次读全结果里的定位符调 `Service_Filesystem_OpenFileByLocator()`：`OPENED` 即成功；`MISMATCH`（无定位符、条目已变、是目录、起始簇或长度不同）退回 `Service_Filesystem_OpenFile()` 按路径打开，并记 `Locator miss pos=N` WARN、累加计数器；`FAILED`（槽用尽、卷未就绪、介质错误等）不退回，把 Service 状态原样交给调用者。输出的打开耗时（DWT，µs）含核对不符后退回路径打开的那一次，失败时同样给出。四条路径各自仍用原有的失败映射（名称槽/窗口行回退文件主名，开流按 `BAD_FILE`/`NOT_READY` 等）。主机测试见 `Tests/music_catalog`（`catalog_open`）。
+- `catalog_track_diag_*()`：标签读取与打开诊断（`catalog_track_diag.h`，#141、#179，DIAG-4、DIAG-5），由名称槽与窗口槽的 `load`、`catalog_track_open()` 与音频流开启使用（后两者也在音频读取任务里调用），不改读取行为、不进 ISR 与每帧路径。依赖 Cortex-M7 周期计数器 Adapter（DWT，只 `Read()`，不复位）与 Log Service。**计时**：单行耗时 = 打开（按定位符，核对不符时含退回路径的那次）+ 读取 + 解析 + 关闭，换算为 µs；其中打开耗时另作 `OpenUs` 单独记录。**计数器**（Storage 私有，自启动累加，不对外公开）：读取次数（读回调调用次数合计，含首块与后续 seek 读，打开失败计 0；与日志里的 `reads=`、`rd=` 同一口径）、取到数、六类回退数（无 ID3v2 / 帧缺失 / 解码失败 / 超读取上限 / 打开失败 / 读取错误；各类之和即标签读取的文件数）、单行耗时最长值与累计值、单次打开耗时最长值、`Locator miss` 次数（板上预期为 0）。**窗口汇总阈值（STOR-17、DIAG-4，初值，由板测修正）**：单行打开 > `CATALOG_OPEN_BUDGET_US`（30000 µs）或整窗总耗时 > `CATALOG_WINDOW_BUDGET_US`（500000 µs），均为 `catalog_config.h` 的配置常量，`Tests/music_catalog` 的编译期断言核对其值。**单行日志阈值**：`CATALOG_TRACK_BUDGET_US`（`catalog_config.h`）= 1 s（1000000 µs，初值）。单行读取（含打开）超过它是窗口汇总的第三个触发条件。它原先等于 T_data/2 并有编译期断言钉住；它不再与播放任务的配置比较（T_data 会随音频读取票改动），只是一个日志阈值，`Tests/music_catalog` 保留它大于另外两个预算的两条编译期断言。**日志**（tag `STORAGE`，文本只含播放列表位置与原因名，不含文件名、标题或歌手）：
   - 名称槽每次 `load` 一行 INFO：`Tag idx=N src=title reads=R open=O us=U`，或回退时 `Tag idx=N src=file why=<原因> reads=R open=O us=U`；`open` 是打开耗时，`us` 是标签读取耗时（整行耗时减去打开耗时），两者分开；`why` 取 `no_id3v2`、`frame_missing`、`decode_failed`、`read_limit`、`open_failed`、`read_error`。
   - 原因为 `decode_failed`、`read_limit`、`open_failed`、`read_error` 时另记一行 WARN：`Tag warn idx=N why=<原因>`。`no_id3v2` 与 `frame_missing` 是正常情形，不记 WARN。文件主名提取失败的防御分支沿用原有 `Name fail` WARN，不计数。
   - Queue 窗口逐行不记。窗口加载完成（打 `READY` 前）时，若本窗有上述四类 WARN 级原因、或本窗最长单次打开 > 30 ms、或整窗总耗时 > 0.5 s、或最长单行 > 1 s（`CATALOG_TRACK_BUDGET_US`），记一行汇总：`Tag win rows=行数 max=本窗最长单行（含打开） omax=本窗最长单次打开 top=自启动最长单行 us=总耗时（含打开） rd=读取次数合计 ok=取到数 nid3=无ID3v2 nofr=帧缺失 dec=解码失败 lim=超读取上限 open=打开失败 rerr=读取错误`（耗时单位 µs；耗时字段排在原因计数之前，万一撞上 Service Log 单条 128 B 上限被截断，丢的是尾部计数而不是 `max`/`top`；加入 `omax` 后十位数的极端取值会超出 128 B 并丢尾部计数，现实取值（耗时 < 10^7 µs）约 120 字符，不截断）；有 WARN 级原因为 WARN，否则 INFO。其余窗口只累加计数器。以空窗收尾的窗口不记汇总。
@@ -108,7 +108,7 @@ Service Log 消息池 30 块，Log Task 每 5 ms 转交一条。本票新增 1 �
 - 卷事件的 `volume_status()`（`APP/tasks/volume/volume_event.h`，应用可以包含任务的公开合同，ARC-23）。
 - Filesystem Service 的目录与文件 Interface、失败分类函数；Log Service；Cortex-M7 周期计数器 Adapter；原生 FreeRTOS 的静态互斥量、tick 与延时。
 - `Components/id3_reader`（曲目文本函数）。
-- 不包含别的应用，也不包含 `APP/tasks/storage/`。反方向：Storage Task、音频流、两个槽和 `app_tasks.c` 包含本目录的头；`scripts/check-layer-includes.ps1` 的 `app` 种类只拦“应用包含别的应用”，任务包含应用不受限，ARC-23 也只禁应用之间互相包含。
+- 不包含别的应用，也不包含 `APP/tasks/storage/`。反方向：Storage Task、音频读取任务（`APP/tasks/audio_reader/`，直接包含，不做注入）、两个槽和 `app_tasks.c` 包含本目录的头；`scripts/check-layer-includes.ps1` 的 `app` 种类只拦“应用包含别的应用”，任务包含应用不受限，ARC-23 也只禁应用之间互相包含。
 
 ## 保真边界
 

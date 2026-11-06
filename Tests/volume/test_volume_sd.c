@@ -548,6 +548,7 @@ static void test_sd_benchmark_runs_after_mount_and_before_ready(void)
 static void test_removal_unmounts_publishes_gone_then_opens_the_gate(void)
 {
     uint32_t before;
+    uint32_t edge_tick = 0U;
 
     begin_scenario(true);
     before = volume_status(VOLUME_ID_SD).Sequence;
@@ -567,6 +568,9 @@ static void test_removal_unmounts_publishes_gone_then_opens_the_gate(void)
     assert(fake.gate_closed_at_refresh && fake.gate_closed_at_unmount);
     assert(has_log("VOLUME", "sd settle path=unmount refresh=ok card=--- mount=-"));
     assert(has_log("SD", "Card removed."));
+
+    /* 第一个边沿的时刻随这次的卷事件发布，音频读取任务写 CARD_REMOVED 的时延行用它（#215）。 */
+    assert(volume_event_published_edge(VOLUME_ID_SD, &edge_tick) && (edge_tick == 2000U));
 }
 
 /**
@@ -575,6 +579,7 @@ static void test_removal_unmounts_publishes_gone_then_opens_the_gate(void)
 static void test_swap_unmounts_then_mounts_and_jumps_the_sequence_by_two(void)
 {
     uint32_t before;
+    uint32_t edge_tick = 0U;
 
     begin_scenario(true);
     before = volume_status(VOLUME_ID_SD).Sequence;
@@ -593,6 +598,7 @@ static void test_swap_unmounts_then_mounts_and_jumps_the_sequence_by_two(void)
     assert(fake.gate_closed_at_mount);
     assert(has_log("VOLUME", "sd settle path=remount refresh=ok card=pri mount=ok"));
     assert(has_log("VOLUME", "seq="));
+    assert(volume_event_published_edge(VOLUME_ID_SD, &edge_tick) && (edge_tick == 2000U)); /* 卸载与挂载两个事件共用同一个边沿。 */
 }
 
 /**

@@ -16,6 +16,11 @@
  *          - 卷任务不等订阅者：叫醒是 `xTaskNotifyIndexed(eSetBits)`，不阻塞、不等回话。
  *          - 订阅者上限是配置常量 `VOLUME_SUBSCRIBER_MAX`。
  *
+ *          - 边沿时刻只是诊断：发布者（卷任务）在一次对账的第一个边沿调 `volume_event_note_edge()`，
+ *            之后每个事件发布时先把它抄进“已发布的边沿”，再写状态字，再叫醒；订阅者用 `volume_event_published_edge()`
+ *            读（读状态字、读边沿、再读一次状态字，两次不同就放弃，所以不会拿到下一个事件的边沿配上这一个事件的序号）。
+ *            一次换卡的卸载与挂载两个事件共用同一个边沿；开机挂载没有边沿，读不到。
+ *
  *          卷序号只回答“卷变过没有”，不用来判断现在能不能调文件接口（调用者看文件接口的返回值，
  *          `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 不是文件错误，先看卷序号）。
  ******************************************************************************
@@ -50,6 +55,12 @@ Volume_StatusTypeDef volume_status(Volume_IdTypeDef volume);
 
 /* 订阅者在自己任务入口调用一次。 */
 bool volume_subscribe(TaskHandle_t task, UBaseType_t notify_index, uint32_t flag);
+
+/* 边沿时刻（#215，写 CARD_REMOVED 的时延行用，只是诊断）：发布者在一次对账的第一个卡检测边沿记下 tick，
+ * 之后随这次对账里的卷事件一起发布；订阅者读最近一次发布所属的边沿 tick，读不到（没有边沿、读取时又发布了新事件、
+ * 卷号越界）返回假且不改 *tick。 */
+void volume_event_note_edge(Volume_IdTypeDef volume, uint32_t tick);
+bool volume_event_published_edge(Volume_IdTypeDef volume, uint32_t *tick);
 
 /* 发布者调用：SD 只有卷任务，Flash 只有 Flash 启动任务。不得从 ISR 调用。 */
 uint32_t volume_publish_ready(Volume_IdTypeDef volume);

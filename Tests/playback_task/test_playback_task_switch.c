@@ -65,7 +65,7 @@ static const char *last_switch_log(void)
 }
 
 /**
- * @brief 新流跑到输出起播：Storage 应答开启 OK，放入首块，播放模块回报 OutputStarted。
+ * @brief 新流跑到输出起播：音频读取任务应答开启 OK，放入首块，播放模块回报 OutputStarted。
  */
 static void complete_switch(void)
 {
@@ -202,7 +202,7 @@ static void test_switch_while_paused_logs_nothing(void)
  */
 static void finish_track_and_advance(void)
 {
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
     for (uint32_t i = 0U; i < 4U; i++)
     {
         world_wake();

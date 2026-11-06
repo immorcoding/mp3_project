@@ -10,7 +10,7 @@
         'gui_font'
         'w25qxx'
         'resource_pack'
-        'storage_audio_stream'
+        'audio_reader'
         'music_catalog'
         'ui_cell'
         'volume'
@@ -172,15 +172,16 @@
             )
         }
         @{
-            Name = 'storage_audio_stream'
+            Name = 'audio_reader'
             PathPatterns = @(
-                '^APP/tasks/storage/stream/'
-                # storage_audio_result.c（卷不可用的分类，#211）经 storage_audio_stream.h 带入的头文件，类型取自共用桩的头。
-                '^APP/tasks/storage/storage_task(?:_config)?\.h$'
+                # 只有纯函数部分进主机测试（越过标签、失败结果加卷序号的分类、决定等多久、两行新日志的格式，#215）；
+                # audio_reader_stream.c、audio_reader_task.c 与块池靠板级验收。
+                '^APP/tasks/audio_reader/'
+                # audio_reader_result.c 经 audio_reader_stream.h 带入的头文件，类型取自共用桩的头。
                 '^Service/filesystem/filesystem_types\.h$'
                 '^Service/service\.h$'
                 '^Tests/stubs/freertos/'
-                '^Tests/storage_audio_stream/'
+                '^Tests/audio_reader/'
             )
         }
         @{

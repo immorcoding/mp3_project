@@ -9,6 +9,8 @@
 #include <stdio.h>
 
 #include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
+#include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
+#include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 #include "Service/log/log_service.h"
 
 /** @brief 一次标签读取的结果归类：取到加六类回退原因（#134 更正）。 */
@@ -24,7 +26,9 @@ typedef enum
     CATALOG_TRACK_DIAG_COUNT
 } CatalogTrackDiag_ReasonTypeDef;
 
-/** @brief 自启动累加的计数器；只由 Storage Task 读写，供调试器与日志汇总使用。 */
+/** @brief 自启动累加的计数器；只由名称槽与窗口槽所在的任务（Storage Task，前台一次切之后是前台任务）读写，供调试器与日志汇总使用。
+ *         文件定位符核对不符的次数不在这里：它由音频读取任务（开流）和上述任务（名称槽、窗口行）经 `catalog_track_open()`
+ *         同时累加，单独放在 `catalog_track_diag_locator_misses`，用短临界区保护（#215）。 */
 typedef struct
 {
     uint32_t Reads;                                     /**< 读回调调用次数合计（含首块，打开失败为 0），与名称槽日志 reads= 同口径。 */
@@ -32,7 +36,6 @@ typedef struct
     uint32_t MaxUs;                                     /**< 单行耗时（含打开）最长值，单位 µs。 */
     uint64_t TotalUs;                                   /**< 单行耗时（含打开）累计值，单位 µs。 */
     uint32_t MaxOpenUs;                                 /**< 单次打开耗时最长值，单位 µs。 */
-    uint32_t LocatorMisses;                             /**< 文件定位符核对不符、退回按路径打开的次数（板上预期为 0）。 */
 } CatalogTrackDiag_CountersTypeDef;
 
 /** @brief 一个 Queue 窗口的累加，窗口开始时清零。 */
@@ -54,6 +57,10 @@ static const char *const catalog_track_diag_reason_name[CATALOG_TRACK_DIAG_COUNT
 };
 
 static CatalogTrackDiag_CountersTypeDef catalog_track_diag_counters;
+
+/** @brief 文件定位符核对不符、退回按路径打开的次数（板上预期为 0；定位符失效钩子打开时每次开流加 1）。
+ *         多个任务同时累加（音频读取任务、Storage Task），读-改-写不是原子的，所以在短临界区里加，日志在临界区之外投。 */
+static volatile uint32_t catalog_track_diag_locator_misses;
 static CatalogTrackDiag_WindowTypeDef catalog_track_diag_window;
 
 /**
@@ -277,13 +284,16 @@ void catalog_track_diag_window_end(void)
 /**
  * @brief 文件定位符核对不符、退回按路径打开：累加计数器，记一行 WARN（DIAG-5）。
  * @param[in] position 播放列表位置。
- * @note  文本只含位置，不含文件名；板上预期为 0。
+ * @note  文本只含位置，不含文件名；板上预期为 0。计数器由多个任务同时累加（音频读取任务开流、Storage Task 读名称与窗口行），
+ *        所以自增放在一个只含两条指令的短临界区里；`Service_Log_Post` 不阻塞，但仍放在临界区之外。
  */
 void catalog_track_diag_locator_miss(uint16_t position)
 {
     char text[CATALOG_DIAG_LOCATOR_LINE_BYTES];
 
-    catalog_track_diag_counters.LocatorMisses++;
+    taskENTER_CRITICAL();
+    catalog_track_diag_locator_misses++;
+    taskEXIT_CRITICAL();
     (void)snprintf(text, sizeof(text), "Locator miss pos=%u", (unsigned)position);
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN, catalog_track_diag_tag, text);
 }

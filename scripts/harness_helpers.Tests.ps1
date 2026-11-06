@@ -169,13 +169,25 @@ $minimp3Impact = Get-HarnessImpact -ChangedPath @('Middlewares/Third_Party/minim
 Assert-HarnessSequence -Expected @('playback_service') -Actual $minimp3Impact.HostModules `
     -Message 'minimp3 升级必须选择播放模块主机测试'
 
-$audioRangeImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_range.c')
-Assert-HarnessSequence -Expected @('storage_audio_stream') -Actual $audioRangeImpact.HostModules `
-    -Message '越过标签纯函数变化必须选择 Storage 音频流主机测试'
+$audioRangeImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/audio_reader/audio_reader_range.c')
+Assert-HarnessSequence -Expected @('audio_reader') -Actual $audioRangeImpact.HostModules `
+    -Message '越过标签纯函数变化必须选择音频读取任务主机测试'
 
-$audioStreamImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_stream.c')
-Assert-HarnessSequence -Expected @('storage_audio_stream') -Actual $audioStreamImpact.HostModules `
-    -Message 'Storage 音频流分区变化必须选择 Storage 音频流主机测试'
+$audioStreamImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/audio_reader/audio_reader_stream.c')
+Assert-HarnessSequence -Expected @('audio_reader') -Actual $audioStreamImpact.HostModules `
+    -Message '音频读取任务目录变化必须选择音频读取任务主机测试'
+
+# 音频读取任务（#215）：纯函数（决定等多久、失败结果加卷序号、日志格式）、任务入口和测试用断言头都选中 audio_reader，不落入未知路径。
+$audioReaderImpact = Get-HarnessImpact -ChangedPath @(
+    'APP/tasks/audio_reader/audio_reader_pace.c'
+    'APP/tasks/audio_reader/audio_reader_diag.c'
+    'APP/tasks/audio_reader/audio_reader_task.c'
+    'APP/tasks/audio_reader/audio_reader_config.h'
+    'Tests/audio_reader/host_test_assert.h')
+Assert-HarnessSequence -Expected @('audio_reader') -Actual $audioReaderImpact.HostModules `
+    -Message '音频读取任务的纯函数、任务入口、配置头和测试用断言头变化只选择音频读取任务主机测试'
+Assert-HarnessEqual -Expected 0 -Actual $audioReaderImpact.UnknownPaths.Count `
+    -Message 'APP/tasks/audio_reader 与 Tests/audio_reader 由主机模块规则覆盖，不应落入未知路径'
 
 $catalogNameImpact = Get-HarnessImpact -ChangedPath @('APP/apps/music/catalog/catalog_name.c')
 Assert-HarnessSequence -Expected @('music_catalog') -Actual $catalogNameImpact.HostModules `
@@ -274,7 +286,7 @@ Assert-HarnessSequence -Expected @('playback_service', 'playback_task') -Actual 
 
 # 主机测试编译的跨层聚合头与配置头：由 check-test-paths.ps1 按真实依赖发现，路由必须与之一致。
 $serviceHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Service/service.h')
-Assert-HarnessSequence -Expected @('background_task', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'music_catalog', 'music_gui', 'playback_service', 'playback_task', 'storage_audio_stream', 'volume') `
+Assert-HarnessSequence -Expected @('audio_reader', 'background_task', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'music_catalog', 'music_gui', 'playback_service', 'playback_task', 'volume') `
     -Actual $serviceHeaderHostImpact.HostModules -Message 'Service 聚合头变化必须选择所有编译它的主机测试'
 
 $platformHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Platform/platform.h')
@@ -311,13 +323,13 @@ $filesystemHostImpact = Get-HarnessImpact -ChangedPath @('Service/filesystem/fil
 Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $filesystemHostImpact.HostModules `
     -Message 'Filesystem Service 与 FatFs 变化必须同时选择文件定位符与 FTL 主机测试'
 
-# 共用 FreeRTOS 桩（Tests/stubs/freertos）被 flash_ftl、filesystem_locator、ui_cell、volume、music_catalog 与 storage_audio_stream（只取头）编译：改桩必须选中它们，且不落入未知路径。
+# 共用 FreeRTOS 桩（Tests/stubs/freertos）被 flash_ftl、filesystem_locator、ui_cell、volume、music_catalog 与 audio_reader（只取头）编译：改桩必须选中它们，且不落入未知路径。
 $freertosStubImpact = Get-HarnessImpact -ChangedPath @(
     'Tests/stubs/freertos/freertos_stub.c'
     'Tests/stubs/freertos/freertos_stub.h'
     'Tests/stubs/freertos/Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h')
-Assert-HarnessSequence -Expected @('background_task', 'filesystem_locator', 'flash_ftl', 'music_catalog', 'storage_audio_stream', 'ui_cell', 'volume') -Actual $freertosStubImpact.HostModules `
-    -Message '共用 FreeRTOS 桩变化必须选择 background_task、filesystem_locator、flash_ftl、music_catalog、storage_audio_stream、ui_cell 与 volume 主机测试'
+Assert-HarnessSequence -Expected @('audio_reader', 'background_task', 'filesystem_locator', 'flash_ftl', 'music_catalog', 'ui_cell', 'volume') -Actual $freertosStubImpact.HostModules `
+    -Message '共用 FreeRTOS 桩变化必须选择 audio_reader、background_task、filesystem_locator、flash_ftl、music_catalog、ui_cell 与 volume 主机测试'
 Assert-HarnessEqual -Expected 0 -Actual $freertosStubImpact.UnknownPaths.Count `
     -Message 'Tests/stubs/freertos 由主机模块规则覆盖，不应落入未知路径'
 Assert-HarnessEqual -Expected $false -Actual $freertosStubImpact.RequiresAllHostTests `
@@ -339,12 +351,12 @@ $filesystemLockImpact = Get-HarnessImpact -ChangedPath @('Service/filesystem/fil
 Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $filesystemLockImpact.HostModules `
     -Message 'Filesystem 入口锁变化必须同时选择文件定位符与 FTL 主机测试'
 
-# 音频流对卷不可用的分类（#211，storage_audio_result）：生产路径、其头文件依赖与共用桩的头选中 storage_audio_stream。
-$audioResultImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_result.c', 'Service/filesystem/filesystem_types.h')
-Assert-HarnessEqual -Expected $true -Actual (@($audioResultImpact.HostModules) -contains 'storage_audio_stream') `
-    -Message '音频流结果分类及其依赖的 Filesystem 类型头变化必须选择 storage_audio_stream 主机测试'
+# 音频读取任务对失败结果加卷序号的分类（#211 的 storage_audio_result，#215 改名 audio_reader_result）：生产路径、其头文件依赖与共用桩的头选中 audio_reader。
+$audioResultImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/audio_reader/audio_reader_result.c', 'Service/filesystem/filesystem_types.h')
+Assert-HarnessEqual -Expected $true -Actual (@($audioResultImpact.HostModules) -contains 'audio_reader') `
+    -Message '音频读取结果分类及其依赖的 Filesystem 类型头变化必须选择 audio_reader 主机测试'
 Assert-HarnessEqual -Expected 0 -Actual $audioResultImpact.UnknownPaths.Count `
-    -Message 'APP/tasks/storage/stream 由主机模块规则覆盖，不应落入未知生产路径'
+    -Message 'APP/tasks/audio_reader 由主机模块规则覆盖，不应落入未知生产路径'
 
 # ui_cell（#217）是 APP 私有的界面数据短锁模块：生产路径与测试目录各自选中 ui_cell，不落入未知路径。
 $uiCellImpact = Get-HarnessImpact -ChangedPath @('APP/ui_cell/ui_cell.c', 'APP/ui_cell/ui_cell.h', 'Tests/ui_cell/test_ui_cell.c')
@@ -400,7 +412,7 @@ Assert-HarnessSequence -Expected @('board_test_card') -Actual (Get-HarnessSlowTe
     -Message '真实规则声明样本卡有慢用例'
 
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
-Assert-HarnessSequence -Expected @('background_task', 'board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_catalog', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'ui_cell', 'volume', 'w25qxx') -Actual $harnessImpact.HostModules `
+Assert-HarnessSequence -Expected @('audio_reader', 'background_task', 'board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_catalog', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'ui_cell', 'volume', 'w25qxx') -Actual $harnessImpact.HostModules `
     -Message 'Harness 变化必须回退全部主机测试'
 Assert-HarnessEqual -Expected $true -Actual $harnessImpact.RequiresAllHostTests -Message 'Harness 变化应标记全部测试'
 
@@ -413,7 +425,7 @@ Assert-HarnessEqual -Expected $false -Actual $doxygenCheckImpact.RequiresHardwar
     -Message 'Doxygen 检查脚本不要求上板'
 
 $unknownImpact = Get-HarnessImpact -ChangedPath @('Service/unmapped/player.c')
-Assert-HarnessSequence -Expected @('background_task', 'board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_catalog', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'ui_cell', 'volume', 'w25qxx') -Actual $unknownImpact.HostModules `
+Assert-HarnessSequence -Expected @('audio_reader', 'background_task', 'board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_catalog', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'ui_cell', 'volume', 'w25qxx') -Actual $unknownImpact.HostModules `
     -Message '未知生产路径不得以零测试通过'
 Assert-HarnessSequence -Expected @('Service/unmapped/player.c') -Actual $unknownImpact.UnknownPaths `
     -Message '应保留触发保守回退的路径证据'

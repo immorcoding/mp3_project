@@ -24,6 +24,12 @@ typedef struct
 /** @brief 每卷一个状态字；每个字只有一个写者（SD：卷任务，Flash：Flash 启动任务），读写都不拿锁。 */
 static volatile uint32_t volume_event_words[VOLUME_ID_COUNT];
 
+/** @brief 边沿时刻（诊断）：发布者记下的“这次对账的第一个边沿”，以及随上一次发布抄出去的那一份。只有发布者写，读不拿锁。 */
+static volatile uint32_t volume_event_pending_edge[VOLUME_ID_COUNT];
+static volatile bool volume_event_pending_edge_valid[VOLUME_ID_COUNT];
+static volatile uint32_t volume_event_published_edge_tick[VOLUME_ID_COUNT];
+static volatile bool volume_event_published_edge_valid[VOLUME_ID_COUNT];
+
 /** @brief 订阅表。登记在临界区里先填表项再加计数，发布者读到计数时表项一定已写完；登记只增不减。 */
 static Volume_SubscriberTypeDef volume_event_subscribers[VOLUME_SUBSCRIBER_MAX];
 static volatile uint32_t volume_event_subscriber_count;
@@ -95,6 +101,53 @@ bool volume_subscribe(TaskHandle_t task, UBaseType_t notify_index, uint32_t flag
 }
 
 /**
+ * @brief  记下一次对账的第一个卡检测边沿的 tick（诊断，随之后的卷事件发布）。
+ * @param[in] volume 卷；越界什么都不做。
+ * @param[in] tick 边沿时刻（tick）。
+ * @note   只由该卷的发布者调用（SD：卷任务），在这次对账的第一个边沿；之后每个事件都带着它，直到下一次对账记新的。
+ */
+void volume_event_note_edge(Volume_IdTypeDef volume, uint32_t tick)
+{
+    if ((unsigned)volume >= (unsigned)VOLUME_ID_COUNT)
+    {
+        return;
+    }
+
+    volume_event_pending_edge[volume] = tick;
+    volume_event_pending_edge_valid[volume] = true;
+}
+
+/**
+ * @brief  读最近一次发布所属的边沿 tick。
+ * @param[in] volume 卷。
+ * @param[out] tick 接收边沿 tick；返回假时不改。
+ * @return 读到为真。没有边沿（开机挂载、从未记过）、读取期间又发布了新事件、卷号越界或 tick 为空为假。
+ * @note   任何任务可调用，不拿锁：先读状态字，再读边沿，再读一次状态字，两次状态字不同说明读的时候发布了新事件，放弃。
+ */
+bool volume_event_published_edge(Volume_IdTypeDef volume, uint32_t *tick)
+{
+    uint32_t before;
+    uint32_t value;
+    bool valid;
+
+    if (((unsigned)volume >= (unsigned)VOLUME_ID_COUNT) || (tick == NULL))
+    {
+        return false;
+    }
+
+    before = volume_event_words[volume];
+    value = volume_event_published_edge_tick[volume];
+    valid = volume_event_published_edge_valid[volume];
+    if (!valid || (volume_event_words[volume] != before))
+    {
+        return false;
+    }
+
+    *tick = value;
+    return true;
+}
+
+/**
  * @brief  逐个叫醒订阅者：对其登记的槽置标志位，不阻塞、不等回话。
  */
 static void volume_event_wake_subscribers(void)
@@ -122,6 +175,9 @@ static uint32_t volume_event_publish(Volume_IdTypeDef volume, bool mounted)
     const uint32_t sequence = ((volume_event_words[volume] >> VOLUME_EVENT_SEQUENCE_SHIFT) + 1U) &
                               VOLUME_EVENT_SEQUENCE_MASK;
 
+    /* 先抄边沿再写状态字：叫醒之后订阅者读到的边沿一定属于这次事件。 */
+    volume_event_published_edge_tick[volume] = volume_event_pending_edge[volume];
+    volume_event_published_edge_valid[volume] = volume_event_pending_edge_valid[volume];
     volume_event_words[volume] = (sequence << VOLUME_EVENT_SEQUENCE_SHIFT) |
                                  (mounted ? VOLUME_EVENT_MOUNTED_BIT : 0U);
     volume_event_wake_subscribers();

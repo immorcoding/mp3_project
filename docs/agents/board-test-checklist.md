@@ -314,6 +314,26 @@ R2.1 用钩子关闭的 Debug 构建量（探测会给被探测的那次读加�
 | R4.11 | 音频读取任务的栈 | | Monitor 栈行 | ≥ 256 B | | |
 | R4.12 | 文件槽：音频流和 Storage Task 的读取同时打开文件（中间状态，这次上板时前台还没切） | | `SERVICE_BUSY` 日志 | 不出现 | | |
 
+第 4 次上板的构建与读法（#215；日志格式见 [音频读取任务 README](../../APP/tasks/audio_reader/README.md)“日志与消息池”，串口里每行前缀是 `<时间> <I|W|E> (<tick>) <标签>: `，标签后面有冒号）：
+
+- **三个构建**（缓存变量会留在构建目录里，开过的钩子要显式关）：
+  - **A 无钩子**：`cmake --preset firmware-debug -DMP3_HOOK_FLASH_PRESSURE=0 -DMP3_HOOK_LOCATOR_MISS=0 -DMP3_HOOK_FAKE_BOUNCE=0 -DMP3_HOOK_SD_LATE_DMA=0` 后构建。用于 R4.1（无负载）、R4.2、R4.3、R4.5 至 R4.8、R4.10 至 R4.12 和回归行。
+  - **B Flash 压力钩子**：`-DMP3_HOOK_FLASH_PRESSURE=1`（其余同上）。串口出现 `W (…) HOOK: flash_pressure ON …`；约 4 分钟内 `FLASHHOOK: run free=…` 的 `free` 降到 462 以下且 `erases` > 0 才算压到位。用于 R4.1 的“Flash 写入中”。这一版里 Storage 和钩子都在回收（见音频读取任务 README“与 Flash 回收”），负载比产品重。
+  - **C 定位符失效钩子**：`-DMP3_HOOK_LOCATOR_MISS=1`（其余同 A）。串口出现 `W (…) HOOK: locator_miss ON`，每次开流多一行 `STORAGE: Locator miss pos=…`。用于 R4.4、R4.9，卡用大目录（`--set bigdir`）。
+- **R4.1（秒表）**：A 版，开机后点播放，从第 10 s 起每 5 s 点一次“下一首”，共 10 次（约 1 分钟）；B 版，等 `free` 压到位后，从秒表 0:10 起每 10 s 点一次“下一首”，共 10 次（约 100 s；`FLASHHOOK` 每 10 s 一行，切歌时钩子在写，块池余量会掩盖等锁，所以必须切歌）。读每次切歌的 `PLAYBACK: Switch idx=N lat=<µs>`（不带 `auto`）：A 版 ≤ 50000，B 版 ≤ 100000。
+- **R4.2**：读最后一批 `FSLOCK: sd n=… hold=…us:<操作> wait=<µs>:<操作>` 的 `wait=`（开机以来的最大值，不清零；A 版和 B 版各自重启后读）。**测的时候屏幕停在唱盘页、不要滚 Queue**，这样 Storage 不读文件，最大等待就是音频读取任务的；每次切歌块池都是刚空的，所以 R4.1 的 10 次切歌就覆盖了“块池刚空”。阈值 ≤ 1000000 µs，超过就报告。
+- **R4.3**：`I (…) STORAGE: Stream pos=<位置> off=<字节> open=<µs> lseek=<µs>`。开流：在第 1、3000、12000 首各点一次播放，`open` ≤ 30000。大文件跳转到末尾：播放一首约 7 MB 的长曲（`--set soak`），把进度条拖到 100% 一次，读那行 `off≠0` 的 `lseek=`，只记录。
+- **R4.4（C 版，大目录卡）**：等 `Scan done` 出现（约 2.3 s）。秒表 0:00 在 Queue 里滑到最后一首（第 12000 首，在末尾子目录）点它，**0:03 前**应出声（按路径打开约 1.4 至 2.05 s）；日志有 `Locator miss pos=11999` 和 `Stream pos=11999 … open=<约 2000000>`；屏幕全程不出现 “Read timeout”。
+- **R4.5（A 版）**：点“下一首”，**0.1 至 0.3 s 内**拔卡（先练手，凭手感），重复 10 次；每次拔卡后等 3 s 再插回，等 `Scan done` 再点播放。命中窗口的标志：新曲的 `Stream pos=` 行之后约 150 ms 内就有 `Audio: Audio read interrupted: volume unavailable, waiting for volume event.` 或 `Audio: CARD_REMOVED lat=…`，屏幕 “No SD card”、游标重置。至少命中一次算通过，一次都没命中记“部分”。**如果看到 `Audio: Audio stream read failed.` 和屏幕 “Read error”**，是撞上了卷任务与读取任务同级时 `PauseSD` 晚一个时间片的残余窗口（音频读取任务 README“失败约定”），把次数记在备注里。
+- **R4.6（A 版）**：用一首能在 1 MiB 内读完的短曲（`--set seek` 的刻度音，或自备 ≤ 20 s 的 320 kbps 文件）。秒表 0:00 点播放，**0:03 拔卡**（文件早已读完、播放还在放内存里的数据）：立即停（屏幕 “No SD card”，`Stop reason=CARD_REMOVED`，日志有 `Audio: CARD_REMOVED lat=`）。做 3 次。
+- **R4.7（A 版）**：播放中用手指轻触卡槽，间隔 3 s，共 5 次。通过：`VOLUME: sd settle path=gate_only … seq=N->N`，不出现 `Stop reason`、`Audio stream read failed.`，听感不断音。也可以另编假抖动钩子的构建（`-DMP3_HOOK_FAKE_BOUNCE=1`）连听 180 s，同 R3.4 的读法。
+- **R4.8（A 版，大目录卡）**：秒表 0:00 把卡插进去，**0:01 点播放**（扫描约 2.3 s，还没完）：立刻（< 0.2 s）显示 “SD card not ready”，不出现 “Read timeout”；等到 `Scan done` 之后再点一次播放，能出声。
+- **R4.9（C 版，大目录卡）**：秒表 0:00 点最后一首（按路径打开约 1.4 至 2.05 s，期间持 SD 锁），**0:00.5 拔卡**。读 `FSLOCK: sd … hold=<µs>:Open`（开机以来的最大持有，开机后第一次先重启，免得被别的最大值盖住）：确认远小于 2000000，即拔卡后很快失败；同时 `VOLUME: sd settle path=unmount` 的 `ref=` 记录。屏幕 “No SD card”。
+- **R4.10**：把 R3.1、R4.5、R4.6 里所有 `Audio: CARD_REMOVED lat=<ms>ms seq=<前>-><后> stream=<n>` 的 `lat` 列出来，记录最小、最大（参考：卷任务卸载完成在边沿后 +34 至 35 ms，`lat` 是边沿到写 `CARD_REMOVED`）。`lat=-` 表示读不到边沿时刻。
+- **R4.11**：全部做完后读 Monitor 栈行 `Audio Read Task: total=4096 B, min free=<B> B, peak=<…>%`（5 s 一批，插拔之后至少等 10 s），≥ 256 B。
+- **R4.12**：全程（上面所有项）搜日志里的 `SERVICE_BUSY`，**不应出现**。另做一段专门的并发：秒表 0:00 起 60 s，一边播放一边每 5 s 点一次“下一首”、一边在 Queue 里连续滑动（让 Storage 读窗口和曲名）；做完再搜一次 `SERVICE_BUSY`。出现了就记下 `op=`、`pos=`、`n=` 并报告（SD 只有 4 个文件槽，音频流 1 个、Storage 1 个，按代码核对不该用尽）。
+- **回归行**（A 版，在 R4.x 之间顺带做，不单独占时间）：清单 1 A4（切歌、上一首、点行）、A5（切到别的页面音乐继续）、A6（播完自动下一首，用 `--set soak` 或短曲）、A8（MPEG-2 22.05 kHz 被跳过）、A9（1 MB ID3 标签文件能播）、A10（短于 1 s 文件不卡死）、E1 至 E3（拔卡立即停止、拔后再插不续播、轻触不误判）、F3（首文件是坏文件仍跳到下一首，用 `--set first-bad`）、F4（整库不可播最终 `No playable files`，不无限轮转，用 `--set all-unsupported`）、O3（在第 1、12000 首开播，`Stream` 的 `open` ≤ 30 ms）、O4（在第 1、12000 首跳转，`Seek` INFO 的 `lat` ≤ 100 ms）；清单 2 C（C1 播放中拔卡 “No SD card”，**游标重置**；C2 无卡时按播放 “SD card not ready”，**另测插卡后曲库没好时点播放也是它**；C3 空库 “No tracks”；C6 的 5 s 超时不用特意触发；C9 整库不可播 “No playable files”）、S（S1 至 S8 的跳转，`--set seek`；S4 越尾和 S2 的 `lat` 重点看）。**本次回归多看一件事**：C1、E1 在途读取被拔卡打断时屏幕应是 “No SD card” 且游标重置，日志有 `Audio read interrupted`，没有 `Audio stream read failed.`（用户确认过的第三处可见变化）。
+
 **第 5 次：前台一次切**
 
 | # | 项与方法 | 固件提交 | 证据来源 | 阈值 | 实测 | 结果 |

@@ -43,7 +43,7 @@ static void expect_timed_out_with(Playback_StopReasonTypeDef reason, uint16_t in
     assert(snapshot.Index == index);
     assert(snapshot.PositionMs == 0U);
     assert(snapshot.DurationMs == 0U);
-    assert(fake_storage_last_request().StreamSeq == 0U);
+    assert(fake_audio_reader_last_request().StreamSeq == 0U);
     assert(!fake_player_stream_active());
 }
 
@@ -80,7 +80,7 @@ static void test_open_reply_wait_expires_after_t_data(void)
     assert(world_snapshot().StopReason == PLAYBACK_STOP_REASON_NO_DATA);
     assert(world_snapshot().StopCount == 1U);
     assert(world_snapshot().HasTrack);   /* 游标保留（代次 0 尚未确认） */
-    assert(fake_storage_last_request().StreamSeq == 0U);
+    assert(fake_audio_reader_last_request().StreamSeq == 0U);
 }
 
 /**
@@ -126,7 +126,7 @@ static void test_block_arrival_restarts_the_clock(void)
     uint32_t ts = start_starved_playing();
     uint32_t tb = ts + T_DATA - 10U;
 
-    fake_storage_enqueue_block(world_current_seq(), 30U, 1U);
+    fake_audio_reader_enqueue_block(world_current_seq(), 30U, 1U);
     world_wake_at(tb);
     world_wake_at(tb);   /* 吃完这块，再次断流，从 tb 起算 */
     expect_still_playing();
@@ -145,7 +145,7 @@ static void test_block_arriving_at_the_expiry_wake_prevents_timeout(void)
     world_reset();
     uint32_t ts = start_starved_playing();
 
-    fake_storage_enqueue_block(world_current_seq(), 30U, 1U);
+    fake_audio_reader_enqueue_block(world_current_seq(), 30U, 1U);
     world_wake_at(ts + T_DATA);
 
     expect_still_playing();
@@ -259,7 +259,7 @@ static void test_draining_after_ended_is_not_timed(void)
 {
     world_reset();
     world_start_playing(GENERATION, TRACKS);
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
     world_wake();
 
     world_wake_at(world_now() + (10U * T_DATA));
@@ -274,7 +274,7 @@ static void test_auto_advance_open_wait_is_timed(void)
 {
     world_reset();
     world_start_playing(GENERATION, TRACKS);
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
     world_wake();
     fake_player_release_tail();
     world_wake();
@@ -372,12 +372,12 @@ static void test_t_out_does_not_run_before_output_starts(void)
 {
     world_reset();
     world_start_playing(GENERATION, TRACKS);
-    fake_storage_enqueue_block(world_current_seq(), 30U, 1U);   /* 一直有数据，只是没有 Start */
+    fake_audio_reader_enqueue_block(world_current_seq(), 30U, 1U);   /* 一直有数据，只是没有 Start */
     world_wake();
 
     for (uint32_t i = 1U; i <= 3U; i++)
     {
-        fake_storage_enqueue_block(world_current_seq(), 30U, 1U);
+        fake_audio_reader_enqueue_block(world_current_seq(), 30U, 1U);
         world_wake_at(world_now() + T_OUT);
         expect_still_playing();
     }

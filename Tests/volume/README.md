@@ -1,11 +1,11 @@
 # 卷任务主机测试
 
-本目录验证 `APP/tasks/volume/` 里能在主机上跑的部分（#211，STOR-8、STOR-9，ADR-0024 的“卷生命周期”）。四个测试程序，13 个 CTest：
+本目录验证 `APP/tasks/volume/` 里能在主机上跑的部分（#211，STOR-8、STOR-9，ADR-0024 的“卷生命周期”）。四个测试程序，14 个 CTest：
 
 | 程序 | CTest | 链接的生产代码 | 替身 |
 |---|---|---|---|
 | `volume_reconcile_tests` | `volume_reconcile` | `volume_reconcile.c`（纯 C） | 只借共用桩的头取 `TickType_t` |
-| `volume_event_tests` | `volume_event_<用例>` ×8 | `volume_event.c` | 共用 FreeRTOS 桩（假任务与通知计数、通知钩子） |
+| `volume_event_tests` | `volume_event_<用例>` ×9 | `volume_event.c` | 共用 FreeRTOS 桩（假任务与通知计数、通知钩子） |
 | `volume_sd_default_tests`、`volume_sd_benchmark_tests`、`volume_sd_hook_tests` | `volume_sd`、`volume_sd_benchmark_order`、`volume_sd_fake_bounce_hook` | `volume_sd.c`、`volume_reconcile.c`、`volume_event.c` | 共用 FreeRTOS 桩、Service Log 替身（`Tests/stubs/lock_env`）、**Filesystem Service 的七个入口在测试文件里用脚本化的假实现**（StartSD、RefreshSD、PauseSD、ResumeSD、InitSD、MountSD、UnmountSD） |
 | `volume_flash_tests` | `volume_flash` | `volume_flash.c`、`volume_event.c` | 共用桩、Service Log 替身、Filesystem 的 InitFlash、MountFlash、FormatAndMountFlash 假实现 |
 
@@ -14,7 +14,7 @@
 ## 覆盖
 
 - **对账表**（`volume_reconcile`）：#195 的 5 行表每行一例；刷新失败时卷挂着一律卸载、卷没挂一律无动作（不会因为结构里写着“就绪”就去挂载）；路径名（日志 `path=` 的取值，R3.1 至 R3.5 判读依据）；静默时间的剩余随 tick 递减、新边沿重新计时、tick 回绕时仍对。期望值来自 #195 的表，不用代码里的表达式重算。
-- **卷事件**（`volume_event`，每个用例一个进程，因为模块状态是静态的、没有也不该有测试用的复位入口）：开机状态；序号逐次加 1、两个卷互相独立；通知落在订阅者登记的槽和标志位上；**先更新再叫醒**（桩的通知钩子在叫醒那一刻读卷状态字，序号和挂载位已是新值）；换卡序号跳 2、挂载位保持、订阅者收到三次通知（初次就绪、消失、再就绪）；**晚登记不漏**（登记前发布了三个事件，登记不补叫醒，但登记后比对序号看得到“变过、现在挂着”）；订阅者上限（恰好上限个成功，再多一个返回假，已登记的各被叫醒一次，被拒的一次都没有）；重复登记幂等、空任务被拒。
+- **卷事件**（`volume_event`，每个用例一个进程，因为模块状态是静态的、没有也不该有测试用的复位入口）：（#215 新增 `published_edge`：边沿时刻随它所属的事件发布，叫醒的那一刻读得到，换卡的卸载与挂载共用同一个边沿，开机挂载没有边沿读不到，tick 0 是合法时刻，另一个卷和越界读不到；`volume_sd` 的拔卡和换卡用例也核对它等于第一个边沿的 tick。读两次状态字夹边沿的防撕裂只能靠读代码，单线程测不到。）开机状态；序号逐次加 1、两个卷互相独立；通知落在订阅者登记的槽和标志位上；**先更新再叫醒**（桩的通知钩子在叫醒那一刻读卷状态字，序号和挂载位已是新值）；换卡序号跳 2、挂载位保持、订阅者收到三次通知（初次就绪、消失、再就绪）；**晚登记不漏**（登记前发布了三个事件，登记不补叫醒，但登记后比对序号看得到“变过、现在挂着”）；订阅者上限（恰好上限个成功，再多一个返回假，已登记的各被叫醒一次，被拒的一次都没有）；重复登记幂等、空任务被拒。
 - **SD 部分**（`volume_sd`）：
   - 启动：有卡则 StartSD → InitSD → MountSD → 发卷就绪（序号 0 到 1，启动路径没有闸）；无卡不发事件；挂载失败（无 FAT、出错、忙）、驱动没就绪、卡在但没就绪、Platform 启动失败都不发事件。
   - 5 行表的每条路径（`unmount`、`remount`、`mount`、`idle`、`gate_only`），断言**调用顺序**（`PRUO`、`PRUIMO`、`PRIMO`、`PRO`：关闸 → 刷新 → 卸载 → 初始化 → 挂载 → 开闸）与每一步那一刻的卷状态字：卸载时卷状态字还没改（先卸载后发），挂载时卷消失已发布，开闸时卷就绪已发布，订阅者被叫醒时闸始终关着（最后才开闸，也不等订阅者）。

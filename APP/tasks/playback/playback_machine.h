@@ -2,9 +2,9 @@
   ******************************************************************************
   * @file    playback_machine.h
   * @brief   播放任务的纯 C 状态机：命令、流交接、切歌、暂停、播完，以及坏文件、超时、故障与停止原因（#71 B1–B17、K3–K5）。
-  * @note    不依赖 FreeRTOS、HAL 或 Storage 的头：存储窗口（请求信箱、流记录、块队列）与播放模块经
+  * @note    不依赖 FreeRTOS、HAL 或音频读取任务的头：存储窗口（请求信箱、流记录、块队列）与播放模块经
   *          Ops 注入，时刻由调用方传入（B9）。任务外壳负责等待通知、取空命令 FIFO、读单调毫秒时刻、
-  *          把 Ops 接到 storage_audio_stream_* 与 Service_Playback_*，并保证单线程调用本模块。
+  *          把 Ops 接到 audio_reader_stream_* 与 Service_Playback_*，并保证单线程调用本模块。
   *          游标即快照中的 {HasTrack, Generation, Index}，只由本状态机写（ADR-0020 第 4 条）。
   ******************************************************************************
   */
@@ -19,7 +19,7 @@
 #include "APP/tasks/playback/playback_task_config.h"
 #include "Service/playback/playback_service.h"
 
-/** @brief 请求信箱内容（播放任务 → Storage）；StreamSeq 为 0 表示“无流”。与 Storage_AudioRequestTypeDef 一一对应。 */
+/** @brief 请求信箱内容（播放任务 → 音频读取任务）；StreamSeq 为 0 表示“无流”。与 AudioReader_RequestTypeDef 一一对应。 */
 typedef struct
 {
     uint32_t StreamSeq;    /**< 播放任务分配的单调流序号；0 = 无流。 */
@@ -28,7 +28,7 @@ typedef struct
     uint32_t AudioOffset;  /**< 相对音频区间起点的字节数；切歌与普通开流为 0，跳转为映射给出的偏移。 */
 } Playback_MachineRequestTypeDef;
 
-/** @brief 开启结果。与 Storage_AudioOpenResultTypeDef 一一对应。 */
+/** @brief 开启结果。与 AudioReader_OpenResultTypeDef 一一对应。 */
 typedef enum
 {
     PLAYBACK_MACHINE_OPEN_PENDING = 0U,
@@ -40,7 +40,7 @@ typedef enum
     PLAYBACK_MACHINE_OPEN_IO_ERROR
 } Playback_MachineOpenResultTypeDef;
 
-/** @brief 终止状态。与 Storage_AudioEndTypeDef 一一对应。 */
+/** @brief 终止状态。与 AudioReader_EndTypeDef 一一对应。 */
 typedef enum
 {
     PLAYBACK_MACHINE_END_NONE = 0U,
@@ -49,7 +49,7 @@ typedef enum
     PLAYBACK_MACHINE_END_CARD_REMOVED
 } Playback_MachineEndTypeDef;
 
-/** @brief 流记录信箱内容（Storage → 播放任务）。与 Storage_AudioRecordTypeDef 一一对应。 */
+/** @brief 流记录信箱内容（音频读取任务 → 播放任务）。与 AudioReader_RecordTypeDef 一一对应。 */
 typedef struct
 {
     uint32_t StreamSeq;                          /**< 这份记录属于哪个流。 */
@@ -69,7 +69,7 @@ typedef struct
     const uint8_t *Data;       /**< 块数据，仅在归还之前有效。 */
 } Playback_MachineBlockTypeDef;
 
-/** @brief 存储窗口 Ops：请求信箱、流记录信箱、就绪队列；对应 storage_audio_stream_*（外壳适配）。 */
+/** @brief 存储窗口 Ops：请求信箱、流记录信箱、就绪队列；对应 audio_reader_stream_*（外壳适配）。 */
 typedef struct
 {
     bool (*WriteRequest)(const Playback_MachineRequestTypeDef *request);  /**< 覆盖写请求信箱；不阻塞。 */
