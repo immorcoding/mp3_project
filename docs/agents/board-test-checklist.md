@@ -328,7 +328,7 @@ R2.1 用钩子关闭的 Debug 构建量（探测会给被探测的那次读加�
 - **R4.6（A 版）**：用一首能在 1 MiB 内读完的短曲（`--set seek` 的刻度音，或自备 ≤ 20 s 的 320 kbps 文件）。秒表 0:00 点播放，**0:03 拔卡**（文件早已读完、播放还在放内存里的数据）：立即停（屏幕 “No SD card”，`Stop reason=CARD_REMOVED`，日志有 `Audio: CARD_REMOVED lat=`）。做 3 次。
 - **R4.7（A 版）**：播放中用手指轻触卡槽，间隔 3 s，共 5 次。通过：`VOLUME: sd settle path=gate_only … seq=N->N`，不出现 `Stop reason`、`Audio stream read failed.`，听感不断音。也可以另编假抖动钩子的构建（`-DMP3_HOOK_FAKE_BOUNCE=1`）连听 180 s，同 R3.4 的读法。
 - **R4.8（A 版，大目录卡）**：秒表 0:00 把卡插进去，**0:01 点播放**（扫描约 2.3 s，还没完）：立刻（< 0.2 s）显示 “SD card not ready”，不出现 “Read timeout”；等到 `Scan done` 之后再点一次播放，能出声。
-- **R4.9（C 版，大目录卡）**：秒表 0:00 点最后一首（按路径打开约 1.4 至 2.05 s，期间持 SD 锁），**0:00.5 拔卡**。读 `FSLOCK: sd … hold=<µs>:Open`（开机以来的最大持有，开机后第一次先重启，免得被别的最大值盖住）：确认远小于 2000000，即拔卡后很快失败；同时 `VOLUME: sd settle path=unmount` 的 `ref=` 记录。屏幕 “No SD card”。
+- **R4.9（C 版，大目录卡）**：秒表 0:00 点最后一首（按路径打开约 1.4 至 2.05 s，期间持 SD 锁），**0:00.5 拔卡**。读 `FSLOCK: sd … hold=<µs>:Open`（开机以来的最大持有，开机后第一次先重启，免得被别的最大值盖住）：确认远小于 2000000，即拔卡后很快失败；同时 `VOLUME: sd settle path=unmount` 的 `ref=` 记录。屏幕 “SD card not ready”：文件还没打开就没了卡，开流应答 `NOT_READY`（`Stop reason=NOT_READY`）；“No SD card” 只用于已打开的流被拔卡打断（第 4 次上板实测）。
 - **R4.10**：把 R3.1、R4.5、R4.6 里所有 `Audio: CARD_REMOVED lat=<ms>ms seq=<前>-><后> stream=<n>` 的 `lat` 列出来，记录最小、最大（参考：卷任务卸载完成在边沿后 +34 至 35 ms，`lat` 是边沿到写 `CARD_REMOVED`）。`lat=-` 表示读不到边沿时刻。
 - **R4.11**：全部做完后读 Monitor 栈行 `Audio Read Task: total=4096 B, min free=<B> B, peak=<…>%`（5 s 一批，插拔之后至少等 10 s），≥ 256 B。
 - **R4.12**：全程（上面所有项）搜日志里的 `SERVICE_BUSY`，**不应出现**。另做一段专门的并发：秒表 0:00 起 60 s，一边播放一边每 5 s 点一次“下一首”、一边在 Queue 里连续滑动（让 Storage 读窗口和曲名）；做完再搜一次 `SERVICE_BUSY`。出现了就记下 `op=`、`pos=`、`n=` 并报告（SD 只有 4 个文件槽，音频流 1 个、Storage 1 个，按代码核对不该用尽）。
