@@ -1,11 +1,11 @@
 /**
- * @file test_storage_audio_range.c
- * @brief 越过标签纯函数的主机测试：只经 storage_audio_range_locate 观察音频区间。
+ * @file test_audio_reader_range.c
+ * @brief 越过标签纯函数的主机测试：只经 audio_reader_range_locate 观察音频区间。
  */
 
-#include "APP/tasks/storage/stream/storage_audio_range.h"
+#include "APP/tasks/audio_reader/audio_reader_range.h"
 
-#include <assert.h>
+#include "host_test_assert.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -70,12 +70,12 @@ static void put_ape_footer(uint32_t offset, uint32_t tag_size, bool has_header)
  * @param[out] range 接收区间。
  * @return 被测函数结果。
  */
-static bool locate(Storage_AudioRangeTypeDef *range)
+static bool locate(AudioReader_RangeTypeDef *range)
 {
-    uint32_t head_bytes = file_size < STORAGE_AUDIO_RANGE_HEAD_BYTES ? file_size : STORAGE_AUDIO_RANGE_HEAD_BYTES;
-    uint32_t tail_bytes = file_size < STORAGE_AUDIO_RANGE_TAIL_BYTES ? file_size : STORAGE_AUDIO_RANGE_TAIL_BYTES;
+    uint32_t head_bytes = file_size < AUDIO_READER_RANGE_HEAD_BYTES ? file_size : AUDIO_READER_RANGE_HEAD_BYTES;
+    uint32_t tail_bytes = file_size < AUDIO_READER_RANGE_TAIL_BYTES ? file_size : AUDIO_READER_RANGE_TAIL_BYTES;
 
-    return storage_audio_range_locate(file_bytes,
+    return audio_reader_range_locate(file_bytes,
                                     head_bytes,
                                     &file_bytes[file_size - tail_bytes],
                                     tail_bytes,
@@ -96,7 +96,7 @@ static void reset_file(uint32_t size)
 /** @brief 无标签的文件整个都是音频。 */
 static void plain_file_is_whole_range(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(1000U);
     assert(locate(&r));
@@ -106,7 +106,7 @@ static void plain_file_is_whole_range(void)
 /** @brief ID3v2 头被越过。 */
 static void id3v2_header_is_skipped(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(1000U);
     put_id3v2(0U, 300U, 0U);
@@ -117,7 +117,7 @@ static void id3v2_header_is_skipped(void)
 /** @brief 超过 127 的 synchsafe 长度按 7 位分组解码。 */
 static void id3v2_synchsafe_length_over_127_is_decoded(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(2000U);
     put_id3v2(0U, 1000U, 0U);
@@ -128,7 +128,7 @@ static void id3v2_synchsafe_length_over_127_is_decoded(void)
 /** @brief 扩展头在声明的体长度内，不额外加长。 */
 static void id3v2_extended_header_is_inside_declared_size(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(1000U);
     put_id3v2(0U, 200U, 0x40U);
@@ -139,7 +139,7 @@ static void id3v2_extended_header_is_inside_declared_size(void)
 /** @brief footer 标志使起点多 10 字节。 */
 static void id3v2_footer_adds_ten_bytes(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(1000U);
     put_id3v2(0U, 200U, 0x10U);
@@ -150,7 +150,7 @@ static void id3v2_footer_adds_ten_bytes(void)
 /** @brief synchsafe 字节最高位非零视为坏文件。 */
 static void id3v2_with_invalid_synchsafe_byte_is_bad(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(1000U);
     put_id3v2(0U, 100U, 0U);
@@ -161,7 +161,7 @@ static void id3v2_with_invalid_synchsafe_byte_is_bad(void)
 /** @brief ID3v2 声明长度超出文件为坏文件。 */
 static void id3v2_length_beyond_file_is_bad(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(500U);
     put_id3v2(0U, 600U, 0U);
@@ -171,7 +171,7 @@ static void id3v2_length_beyond_file_is_bad(void)
 /** @brief 尾部 ID3v1 被切掉。 */
 static void id3v1_trailer_is_cut(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(1000U);
     put_id3v1(1000U - 128U);
@@ -182,7 +182,7 @@ static void id3v1_trailer_is_cut(void)
 /** @brief 无 header 的 APEv2 只切 tag_size 字节。 */
 static void ape_without_header_is_cut(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(1000U);
     put_ape_footer(1000U - 32U, 100U, false);
@@ -193,7 +193,7 @@ static void ape_without_header_is_cut(void)
 /** @brief 带 header 的 APEv2 额外切 32 字节 header。 */
 static void ape_with_header_cuts_header_too(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(1000U);
     put_ape_footer(1000U - 32U, 100U, true);
@@ -204,7 +204,7 @@ static void ape_with_header_cuts_header_too(void)
 /** @brief APE 位于 ID3v1 之前时两者都被切掉。 */
 static void ape_before_id3v1_both_cut(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(1000U);
     put_id3v1(1000U - 128U);
@@ -216,7 +216,7 @@ static void ape_before_id3v1_both_cut(void)
 /** @brief 头尾标签组合。 */
 static void all_tags_combined(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(2000U);
     put_id3v2(0U, 90U, 0U);
@@ -229,7 +229,7 @@ static void all_tags_combined(void)
 /** @brief APE 长度超出文件为坏文件。 */
 static void ape_length_beyond_file_is_bad(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(1000U);
     put_ape_footer(1000U - 32U, 5000U, false);
@@ -239,7 +239,7 @@ static void ape_length_beyond_file_is_bad(void)
 /** @brief APE 长度小于脚本身为坏文件。 */
 static void ape_length_smaller_than_footer_is_bad(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(1000U);
     put_ape_footer(1000U - 32U, 10U, false);
@@ -249,7 +249,7 @@ static void ape_length_smaller_than_footer_is_bad(void)
 /** @brief 标签占满全文件，音频区间为空，为坏文件。 */
 static void tags_covering_whole_file_leave_empty_range_and_are_bad(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(138U);
     put_id3v2(0U, 0U, 0U);
@@ -260,7 +260,7 @@ static void tags_covering_whole_file_leave_empty_range_and_are_bad(void)
 /** @brief 头部标签与尾部标签相交，区间为空，为坏文件。 */
 static void id3v2_overlapping_trailer_is_bad(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(400U);
     put_id3v2(0U, 300U, 0U);
@@ -271,15 +271,15 @@ static void id3v2_overlapping_trailer_is_bad(void)
 /** @brief 空文件为坏文件。 */
 static void empty_file_is_bad(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
-    assert(!storage_audio_range_locate(file_bytes, 0U, file_bytes, 0U, 0U, &r));
+    assert(!audio_reader_range_locate(file_bytes, 0U, file_bytes, 0U, 0U, &r));
 }
 
 /** @brief 短于标签头的文件按无标签处理。 */
 static void short_file_without_tags_is_whole_range(void)
 {
-    Storage_AudioRangeTypeDef r;
+    AudioReader_RangeTypeDef r;
 
     reset_file(5U);
     assert(locate(&r));
@@ -291,9 +291,9 @@ static void short_file_without_tags_is_whole_range(void)
  */
 static void seek_offset_zero_is_the_range_start(void)
 {
-    Storage_AudioRangeTypeDef r = {1000U, 5000U};
+    AudioReader_RangeTypeDef r = {1000U, 5000U};
 
-    assert(storage_audio_range_seek_position(&r, 0U) == 1000U);
+    assert(audio_reader_range_seek_position(&r, 0U) == 1000U);
 }
 
 /**
@@ -301,11 +301,11 @@ static void seek_offset_zero_is_the_range_start(void)
  */
 static void seek_offset_inside_the_range_is_relative_to_the_start(void)
 {
-    Storage_AudioRangeTypeDef r = {1000U, 5000U};
+    AudioReader_RangeTypeDef r = {1000U, 5000U};
 
-    assert(storage_audio_range_seek_position(&r, 1U) == 1001U);
-    assert(storage_audio_range_seek_position(&r, 2048U) == 3048U);
-    assert(storage_audio_range_seek_position(&r, 3999U) == 4999U);
+    assert(audio_reader_range_seek_position(&r, 1U) == 1001U);
+    assert(audio_reader_range_seek_position(&r, 2048U) == 3048U);
+    assert(audio_reader_range_seek_position(&r, 3999U) == 4999U);
 }
 
 /**
@@ -313,14 +313,14 @@ static void seek_offset_inside_the_range_is_relative_to_the_start(void)
  */
 static void seek_offset_beyond_the_range_is_clamped_to_the_end(void)
 {
-    Storage_AudioRangeTypeDef r = {1000U, 5000U};
+    AudioReader_RangeTypeDef r = {1000U, 5000U};
 
-    assert(storage_audio_range_seek_position(&r, 4000U) == 5000U);
-    assert(storage_audio_range_seek_position(&r, 4001U) == 5000U);
-    assert(storage_audio_range_seek_position(&r, 0xFFFFFFFFU) == 5000U);
+    assert(audio_reader_range_seek_position(&r, 4000U) == 5000U);
+    assert(audio_reader_range_seek_position(&r, 4001U) == 5000U);
+    assert(audio_reader_range_seek_position(&r, 0xFFFFFFFFU) == 5000U);
 
-    Storage_AudioRangeTypeDef high = {0xFFFFF000U, 0xFFFFFFF0U};
-    assert(storage_audio_range_seek_position(&high, 0xFFFFFFFFU) == 0xFFFFFFF0U);
+    AudioReader_RangeTypeDef high = {0xFFFFF000U, 0xFFFFFFF0U};
+    assert(audio_reader_range_seek_position(&high, 0xFFFFFFFFU) == 0xFFFFFFF0U);
 }
 
 /**
@@ -328,13 +328,13 @@ static void seek_offset_beyond_the_range_is_clamped_to_the_end(void)
  */
 static void seek_offset_in_an_empty_range_stays_at_the_start(void)
 {
-    Storage_AudioRangeTypeDef empty = {3000U, 3000U};
-    Storage_AudioRangeTypeDef inverted = {3000U, 2000U};
+    AudioReader_RangeTypeDef empty = {3000U, 3000U};
+    AudioReader_RangeTypeDef inverted = {3000U, 2000U};
 
-    assert(storage_audio_range_seek_position(&empty, 0U) == 3000U);
-    assert(storage_audio_range_seek_position(&empty, 77U) == 3000U);
-    assert(storage_audio_range_seek_position(&inverted, 77U) == 3000U);
-    assert(storage_audio_range_seek_position(NULL, 77U) == 0U);
+    assert(audio_reader_range_seek_position(&empty, 0U) == 3000U);
+    assert(audio_reader_range_seek_position(&empty, 77U) == 3000U);
+    assert(audio_reader_range_seek_position(&inverted, 77U) == 3000U);
+    assert(audio_reader_range_seek_position(NULL, 77U) == 0U);
 }
 
 /**
@@ -365,6 +365,6 @@ int main(void)
     seek_offset_inside_the_range_is_relative_to_the_start();
     seek_offset_beyond_the_range_is_clamped_to_the_end();
     seek_offset_in_an_empty_range_stays_at_the_start();
-    puts("storage_audio_range tests passed");
+    puts("audio_reader_range tests passed");
     return 0;
 }

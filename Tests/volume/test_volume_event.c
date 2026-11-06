@@ -257,6 +257,80 @@ static void test_duplicate_subscription_is_idempotent_and_null_task_is_rejected(
     assert(freertos_stub_notify_calls(subscriber, 0U) == 1U);
 }
 
+/** @brief 叫醒那一刻读到的“已发布的边沿时刻”。 */
+typedef struct
+{
+    uint32_t calls;
+    bool known;
+    uint32_t tick;
+} EdgeWakeRecord;
+
+/**
+ * @brief 通知钩子：记下叫醒那一刻读到的已发布边沿时刻。
+ * @param[in] task 目标任务（未使用）。
+ * @param[in] index 槽号（未使用）。
+ * @param[in] value 通知值（未使用）。
+ * @param[in,out] context 指向 EdgeWakeRecord。
+ */
+static void record_edge_at_wake(TaskHandle_t task, UBaseType_t index, uint32_t value, void *context)
+{
+    EdgeWakeRecord *record = (EdgeWakeRecord *)context;
+
+    (void)task;
+    (void)index;
+    (void)value;
+    record->calls++;
+    record->known = volume_event_published_edge(VOLUME_ID_SD, &record->tick);
+}
+
+/**
+ * @brief 已发布的边沿时刻（#215，写 CARD_REMOVED 的时延行用）：卷任务在一次对账的第一个边沿记下时刻，
+ *        随这次对账里的卷事件一起发布；订阅者被叫醒时已经读得到（先发布边沿再改状态字再叫醒）；
+ *        换卡的卸载加挂载两个事件共用同一个边沿；没有边沿的事件（开机挂载）读不到；
+ *        时刻 0 是合法的 tick；另一个卷互不相干；卷号越界或指针为空读不到。
+ */
+static void test_published_edge_belongs_to_the_event_that_carries_it(void)
+{
+    EdgeWakeRecord record = {0};
+    TaskHandle_t task;
+    uint32_t tick = 12345U;
+
+    freertos_stub_reset();
+    task = freertos_stub_task_create();
+    assert(volume_subscribe(task, TEST_NOTIFY_INDEX, TEST_FLAG_A));
+    freertos_stub_set_notify_hook(record_edge_at_wake, &record);
+
+    assert(!volume_event_published_edge(VOLUME_ID_SD, &tick));     /* 开机：没有发布过。 */
+    assert(tick == 12345U);                                         /* 读不到时不改调用者的变量。 */
+
+    (void)volume_publish_ready(VOLUME_ID_SD);                       /* 开机挂载：没有边沿。 */
+    assert(!record.known);
+    assert(!volume_event_published_edge(VOLUME_ID_SD, &tick));
+
+    volume_event_note_edge(VOLUME_ID_SD, 1000U);                    /* 拔卡：第一个边沿在 tick 1000。 */
+    (void)volume_publish_gone(VOLUME_ID_SD);
+    assert(record.known && (record.tick == 1000U));                 /* 叫醒的那一刻已经读得到。 */
+    assert(volume_event_published_edge(VOLUME_ID_SD, &tick) && (tick == 1000U));
+
+    (void)volume_publish_ready(VOLUME_ID_SD);                       /* 换卡的挂载：同一个边沿。 */
+    assert(record.known && (record.tick == 1000U));
+    assert(volume_event_published_edge(VOLUME_ID_SD, &tick) && (tick == 1000U));
+
+    volume_event_note_edge(VOLUME_ID_SD, 5000U);                    /* 下一次对账的边沿已记下，但还没有随事件发布。 */
+    assert(volume_event_published_edge(VOLUME_ID_SD, &tick) && (tick == 1000U));
+    (void)volume_publish_gone(VOLUME_ID_SD);
+    assert(volume_event_published_edge(VOLUME_ID_SD, &tick) && (tick == 5000U));
+
+    volume_event_note_edge(VOLUME_ID_SD, 0U);                       /* tick 0 也是合法时刻，不能当“没有”。 */
+    (void)volume_publish_ready(VOLUME_ID_SD);
+    assert(volume_event_published_edge(VOLUME_ID_SD, &tick) && (tick == 0U));
+
+    assert(!volume_event_published_edge(VOLUME_ID_FLASH, &tick));   /* Flash 的字没有边沿。 */
+    assert(!volume_event_published_edge((Volume_IdTypeDef)VOLUME_ID_COUNT, &tick));
+    assert(!volume_event_published_edge(VOLUME_ID_SD, NULL));
+    volume_event_note_edge((Volume_IdTypeDef)VOLUME_ID_COUNT, 1U);  /* 越界什么都不做，不越界写。 */
+}
+
 /**
  * @brief 按命令行参数运行一个用例。
  * @param[in] argc 参数个数。
@@ -298,6 +372,10 @@ int main(int argc, char **argv)
     else if (strcmp(name, "duplicate_subscription") == 0)
     {
         test_duplicate_subscription_is_idempotent_and_null_task_is_rejected();
+    }
+    else if (strcmp(name, "published_edge") == 0)
+    {
+        test_published_edge_belongs_to_the_event_that_carries_it();
     }
     else
     {

@@ -349,6 +349,7 @@ static void volume_sd_note_edge(TickType_t now, bool from_hook)
         volume_sd_debouncing = true;
         volume_sd_first_edge = now;
         volume_sd_edges = 0U;
+        volume_event_note_edge(VOLUME_ID_SD, (uint32_t)now); /* 随这次对账的卷事件发布，音频读取任务写 CARD_REMOVED 的时延行用（#215）。 */
         Service_Filesystem_PauseSD(); /* 先关闸再记日志：从这一刻起新的文件调用在 Filesystem 入口等着。 */
         (void)snprintf(text, sizeof(text), "sd edge src=%s", from_hook ? "hook" : "irq");
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, volume_sd_path_tag, text);

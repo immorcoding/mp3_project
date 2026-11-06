@@ -74,7 +74,7 @@ static const char *last_seek_log(void)
 }
 
 /**
- * @brief 把跳转后的流跑到输出起播：Storage 应答开启 OK，放入首块，播放模块回报 OutputStarted。
+ * @brief 把跳转后的流跑到输出起播：音频读取任务应答开启 OK，放入首块，播放模块回报 OutputStarted。
  */
 static void complete_playing_seek(void)
 {
@@ -89,7 +89,7 @@ static void complete_playing_seek(void)
  */
 static void finish_track_and_advance(void)
 {
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
     for (uint32_t i = 0U; i < 4U; i++)
     {
         world_wake();
@@ -105,7 +105,7 @@ static void test_seek_while_playing_sets_landing_and_reopens_stream_with_offset(
 {
     start_playing();
     const uint32_t old_seq = world_current_seq();
-    const uint32_t requests = fake_storage_request_count();
+    const uint32_t requests = fake_audio_reader_request_count();
 
     world_send_seek(GEN, 0U, 90000U);
 
@@ -118,15 +118,15 @@ static void test_seek_while_playing_sets_landing_and_reopens_stream_with_offset(
     assert(snap.TrackStartCount == 1U);
     assert(snap.HasTrack && (snap.Generation == GEN) && (snap.Index == 0U));
 
-    assert(fake_storage_request_count() == requests + 1U);
-    Playback_MachineRequestTypeDef request = fake_storage_last_request();
+    assert(fake_audio_reader_request_count() == requests + 1U);
+    Playback_MachineRequestTypeDef request = fake_audio_reader_last_request();
     assert(request.StreamSeq == old_seq + 1U);
     assert(request.AudioOffset == 2048U);
     assert(request.Generation == GEN);
     assert(request.Position == 0U);
 
     /* B11：写请求在放弃旧流之前；新流还没开始，播放模块此刻不重开。 */
-    assert(call_log_index_of(CALL_WRITE_REQUEST, fake_storage_request_count() - 1U) <
+    assert(call_log_index_of(CALL_WRITE_REQUEST, fake_audio_reader_request_count() - 1U) <
            call_log_index_of(CALL_ABANDON, 0U));
     assert(fake_player_begin_count() == 1U);
     assert(fake_player_reopen_count() == 0U);
@@ -196,14 +196,14 @@ static void test_ignored_seeks_only_debug_log_and_advance_the_echo(void)
     assert(world_snapshot().HandledCommandSeq == 1U);
     assert(world_snapshot().State == PLAYBACK_STATE_STOPPED);
     assert(world_snapshot().StopCount == 0U);
-    assert(fake_storage_request_count() == 0U);
+    assert(fake_audio_reader_request_count() == 0U);
     assert(fake_debug_count() == 1U);
     assert(fake_log_count() == 0U);
     assert(fake_player_map_count() == 0U);
 
     /* (b) 曲目不符：代次不符，位置不符。 */
     start_playing();
-    uint32_t requests = fake_storage_request_count();
+    uint32_t requests = fake_audio_reader_request_count();
     fake_log_clear();
     world_send_seek(GEN + 1U, 0U, 90000U);
     world_send_seek(GEN, 3U, 90000U);
@@ -211,7 +211,7 @@ static void test_ignored_seeks_only_debug_log_and_advance_the_echo(void)
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
     assert(world_snapshot().PositionMs < 1000U);   /* 没有跳到目标（旧流仍在自然推进）。 */
     assert(world_snapshot().StopCount == 0U);
-    assert(fake_storage_request_count() == requests);
+    assert(fake_audio_reader_request_count() == requests);
     assert(fake_debug_count() == 2U);
     assert(fake_log_count() == 0U);
 
@@ -220,11 +220,11 @@ static void test_ignored_seeks_only_debug_log_and_advance_the_echo(void)
     world_send(PLAYBACK_COMMAND_TOGGLE);
     world_open_ok(GEN, TRACKS);
     assert(world_snapshot().DurationMs == 0U);
-    requests = fake_storage_request_count();
+    requests = fake_audio_reader_request_count();
     fake_log_clear();
     world_send_seek(GEN, 0U, 90000U);
     assert(world_snapshot().HandledCommandSeq == world_last_command_seq());
-    assert(fake_storage_request_count() == requests);
+    assert(fake_audio_reader_request_count() == requests);
     assert(fake_debug_count() == 1U);
     assert(fake_log_count() == 0U);
 
@@ -235,13 +235,13 @@ static void test_ignored_seeks_only_debug_log_and_advance_the_echo(void)
     assert(world_snapshot().State == PLAYBACK_STATE_STOPPED);
     assert(world_snapshot().HasTrack);
     const uint32_t stops = world_snapshot().StopCount;
-    requests = fake_storage_request_count();
+    requests = fake_audio_reader_request_count();
     fake_log_clear();
     world_send_seek(GEN, 1U, 90000U);
     assert(world_snapshot().HandledCommandSeq == world_last_command_seq());
     assert(world_snapshot().State == PLAYBACK_STATE_STOPPED);
     assert(world_snapshot().StopCount == stops);
-    assert(fake_storage_request_count() == requests);
+    assert(fake_audio_reader_request_count() == requests);
     assert(fake_debug_count() == 1U);
     assert(fake_log_count() == 0U);
 }
@@ -252,14 +252,14 @@ static void test_ignored_seeks_only_debug_log_and_advance_the_echo(void)
 static void test_seek_is_ignored_when_the_service_cannot_map(void)
 {
     start_playing();
-    const uint32_t requests = fake_storage_request_count();
+    const uint32_t requests = fake_audio_reader_request_count();
 
     fake_player_fail_next_map();
     world_send_seek(GEN, 0U, 90000U);
 
     assert(world_snapshot().HandledCommandSeq == world_last_command_seq());
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
-    assert(fake_storage_request_count() == requests);
+    assert(fake_audio_reader_request_count() == requests);
     assert(fake_debug_count() == 1U);
     assert(fake_player_stream_active());   /* 旧流原样继续。 */
 }
@@ -270,7 +270,7 @@ static void test_seek_is_ignored_when_the_service_cannot_map(void)
 static void test_consecutive_seeks_in_one_batch_execute_only_the_last(void)
 {
     start_playing();
-    const uint32_t requests = fake_storage_request_count();
+    const uint32_t requests = fake_audio_reader_request_count();
     const uint32_t old_seq = world_current_seq();
     Playback_CommandTypeDef commands[3];
 
@@ -282,9 +282,9 @@ static void test_consecutive_seeks_in_one_batch_execute_only_the_last(void)
 
     assert(world_snapshot().HandledCommandSeq == commands[2].Seq);
     assert(fake_player_map_count() == 1U);
-    assert(fake_storage_request_count() == requests + 1U);
-    assert(fake_storage_last_request().StreamSeq == old_seq + 1U);
-    assert(fake_storage_last_request().AudioOffset == 3072U);
+    assert(fake_audio_reader_request_count() == requests + 1U);
+    assert(fake_audio_reader_last_request().StreamSeq == old_seq + 1U);
+    assert(fake_audio_reader_last_request().AudioOffset == 3072U);
     assert(world_snapshot().PositionMs == 135000U);
     assert(fake_debug_count() == 0U);
     assert(fake_log_count() == 0U);
@@ -300,7 +300,7 @@ static void test_consecutive_seeks_in_one_batch_execute_only_the_last(void)
 static void test_seeks_separated_by_another_command_are_not_merged(void)
 {
     start_playing();
-    const uint32_t requests = fake_storage_request_count();
+    const uint32_t requests = fake_audio_reader_request_count();
     Playback_CommandTypeDef commands[3];
 
     commands[0] = world_make_seek(GEN, 0U, 45000U);
@@ -309,8 +309,8 @@ static void test_seeks_separated_by_another_command_are_not_merged(void)
     world_step_commands(commands, 3U);
 
     assert(fake_player_map_count() == 2U);
-    assert(fake_storage_request_count() == requests + 2U);
-    assert(fake_storage_last_request().AudioOffset == 2048U);
+    assert(fake_audio_reader_request_count() == requests + 2U);
+    assert(fake_audio_reader_last_request().AudioOffset == 2048U);
     assert(world_snapshot().State == PLAYBACK_STATE_PAUSED);
     assert(world_snapshot().PositionMs == 90000U);
     assert(world_snapshot().HandledCommandSeq == commands[2].Seq);
@@ -325,16 +325,16 @@ static void test_a_newer_seek_in_a_later_wake_voids_the_pending_one(void)
     world_send_seek(GEN, 0U, 45000U);
     const uint32_t first_seq = world_current_seq();
 
-    fake_storage_enqueue_block(first_seq, 20U, 1U);
+    fake_audio_reader_enqueue_block(first_seq, 20U, 1U);
     world_send_seek(GEN, 0U, 135000U);
     const uint32_t second_seq = world_current_seq();
 
     assert(second_seq == first_seq + 1U);
-    assert(fake_storage_last_request().AudioOffset == 3072U);
-    assert(fake_storage_ready_count() == 0U);        /* 旧跳转流的块取出即归还。 */
-    assert(fake_storage_outstanding() == 0U);
+    assert(fake_audio_reader_last_request().AudioOffset == 3072U);
+    assert(fake_audio_reader_ready_count() == 0U);        /* 旧跳转流的块取出即归还。 */
+    assert(fake_audio_reader_outstanding() == 0U);
 
-    fake_storage_open_ok(first_seq, GEN, TRACKS, WORLD_AUDIO_BYTES);   /* 迟到的旧应答。 */
+    fake_audio_reader_open_ok(first_seq, GEN, TRACKS, WORLD_AUDIO_BYTES);   /* 迟到的旧应答。 */
     world_wake();
     assert(fake_player_reopen_count() == 0U);
 
@@ -351,13 +351,13 @@ static void test_a_newer_seek_in_a_later_wake_voids_the_pending_one(void)
 static void test_seek_discards_blocks_of_the_old_stream(void)
 {
     start_playing();
-    fake_storage_enqueue_block(world_current_seq(), 20U, 1U);
+    fake_audio_reader_enqueue_block(world_current_seq(), 20U, 1U);
 
     world_send_seek(GEN, 0U, 90000U);
 
-    assert(fake_storage_ready_count() == 0U);
-    assert(fake_storage_outstanding() == 0U);
-    assert(fake_storage_returned_count() >= 1U);
+    assert(fake_audio_reader_ready_count() == 0U);
+    assert(fake_audio_reader_outstanding() == 0U);
+    assert(fake_audio_reader_returned_count() >= 1U);
 }
 
 /**
@@ -430,7 +430,7 @@ static void test_seek_past_the_end_plays_out_and_advances(void)
 {
     start_playing();
     world_send_seek(GEN, 0U, 180000U);
-    assert(fake_storage_last_request().AudioOffset == 4076U);
+    assert(fake_audio_reader_last_request().AudioOffset == 4076U);
     assert(world_snapshot().PositionMs == 179121U);
     complete_playing_seek();
 
@@ -520,8 +520,8 @@ static void test_next_after_seek_voids_the_pending_seek(void)
     world_send_seek(GEN, 0U, 90000U);
     world_send(PLAYBACK_COMMAND_NEXT);
 
-    assert(fake_storage_last_request().AudioOffset == 0U);
-    assert(fake_storage_last_request().Position == 1U);
+    assert(fake_audio_reader_last_request().AudioOffset == 0U);
+    assert(fake_audio_reader_last_request().Position == 1U);
     assert(world_snapshot().PositionMs == 0U);
     assert(world_snapshot().DurationMs == 0U);
 
@@ -577,18 +577,18 @@ static void test_stop_voids_the_pending_seek(void)
 static void test_ordinary_opens_request_zero_offset(void)
 {
     start_playing();
-    assert(fake_storage_last_request().AudioOffset == 0U);
+    assert(fake_audio_reader_last_request().AudioOffset == 0U);
 
     world_send_seek(GEN, 0U, 90000U);
-    assert(fake_storage_last_request().AudioOffset == 2048U);
+    assert(fake_audio_reader_last_request().AudioOffset == 2048U);
     world_send(PLAYBACK_COMMAND_NEXT);
-    assert(fake_storage_last_request().AudioOffset == 0U);
+    assert(fake_audio_reader_last_request().AudioOffset == 0U);
 
     world_send_seek(GEN, 1U, 90000U);   /* 切歌后总时长未知：被忽略，信箱不变。 */
-    assert(fake_storage_last_request().AudioOffset == 0U);
+    assert(fake_audio_reader_last_request().AudioOffset == 0U);
 
     world_send_select(GEN, 2U);
-    assert(fake_storage_last_request().AudioOffset == 0U);
+    assert(fake_audio_reader_last_request().AudioOffset == 0U);
 }
 
 /**
@@ -605,9 +605,9 @@ static void test_timeouts_behave_like_a_track_switch(void)
 
     world_wake_at(t_seek + 600U);               /* 超过 T_out，但放弃旧流时 T_out 已停。 */
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
-    world_wake_at(t_seek + 1990U);
+    world_wake_at(t_seek + 4990U);              /* T_data 是 5000 ms（#194 第 7 条）：差 10 ms 仍在等。 */
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
-    world_wake_at(t_seek + 2000U);
+    world_wake_at(t_seek + 5000U);
     assert(world_snapshot().State == PLAYBACK_STATE_STOPPED);
     assert(world_snapshot().StopReason == PLAYBACK_STOP_REASON_NO_DATA);
     assert(world_snapshot().StopCount == 1U);
@@ -674,7 +674,7 @@ static void test_zero_frame_tail_while_paused_holds_until_resumed(void)
     world_send(PLAYBACK_COMMAND_TOGGLE);
     world_send_seek(GEN, 0U, 180000U);
     world_open_ok(GEN, TRACKS);
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);   /* 区间末端没有字节可读。 */
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);   /* 区间末端没有字节可读。 */
     for (uint32_t i = 0U; i < 5U; i++)
     {
         world_wake();
@@ -687,14 +687,14 @@ static void test_zero_frame_tail_while_paused_holds_until_resumed(void)
     assert(world_snapshot().StopCount == 0U);
     assert(count_seek_logs() == 1U);   /* 跳转已执行，暂停中没有预填可等，保持时记一次。 */
 
-    const uint32_t requests = fake_storage_request_count();
+    const uint32_t requests = fake_audio_reader_request_count();
 
     world_send(PLAYBACK_COMMAND_TOGGLE);
     world_wake();
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
     assert(world_snapshot().Index == 1U);
     assert(world_snapshot().TrackStartCount == 2U);
-    assert(fake_storage_request_count() == requests + 1U);
+    assert(fake_audio_reader_request_count() == requests + 1U);
     assert(strcmp(last_log(), "Auto idx=1") == 0);
 }
 
@@ -706,7 +706,7 @@ static void test_zero_frame_tail_while_playing_advances_immediately(void)
     start_playing();
     world_send_seek(GEN, 0U, 180000U);
     world_open_ok(GEN, TRACKS);
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
     world_wake();
     world_wake();
 

@@ -30,7 +30,7 @@ target_compile_options(volume_event_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG
 
 foreach(VOLUME_EVENT_CASE
         initial_state sequence wake_slot update_before_wake
-        swap_jumps_two late_subscriber subscriber_limit duplicate_subscription)
+        swap_jumps_two late_subscriber subscriber_limit duplicate_subscription published_edge)
     add_test(NAME volume_event_${VOLUME_EVENT_CASE} COMMAND volume_event_tests ${VOLUME_EVENT_CASE})
 endforeach()
 

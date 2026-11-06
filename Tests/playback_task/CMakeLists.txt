@@ -4,7 +4,7 @@ project(playback_task_host_tests LANGUAGES C)
 
 enable_testing()
 
-# 被测生产代码：纯 C 状态机；不链接 FreeRTOS、HAL、Storage 或真实播放模块，二者由 playback_task_test_support.c 的替身代替。
+# 被测生产代码：纯 C 状态机；不链接 FreeRTOS、HAL、音频读取任务或真实播放模块，二者由 playback_task_test_support.c 的替身代替。
 set(PLAYBACK_TASK_PRODUCTION_SOURCES
     ../../APP/tasks/playback/playback_machine.c
 )

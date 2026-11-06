@@ -6,7 +6,7 @@
 
 **`monitor_stats_tests`**（CTest `monitor_stats`，DIAG-6、#204）验证 `APP/tasks/monitor/monitor_stats.c` 的 5 s 批次计算与成行：
 
-- `CPU` 行：首个窗口从启动算起；之后的窗口只看两次快照的差值；运行计数与总计数 32 位回绕时占比仍对；基准里没有的新任务按 0 起算、本次没有的任务不出现；总计数没有前进时输出 `CPU unavailable` 而不除零；按键的字典序排列；缓冲放不下时末字符为 `~` 且不越界；基准写满后多出的任务不记录；**全部已登记任务同时出现**（Create、Log、Storage、Volume、Flash Boot、Monitor、GUI、Playback、IDLE、Tmr Svc 共 10 个，#211）时每个任务的短键互不相同（`crea`、`log`、`stor`、`volu`、`flas`、`moni`、`gui`、`play`、`idle`、`tmr`），最坏情形（各占 10.0 %）和一个任务占 100.0 % 都不超过 127 字符、没有截断标记 `~`（最长 111 字符）。
+- `CPU` 行：首个窗口从启动算起；之后的窗口只看两次快照的差值；运行计数与总计数 32 位回绕时占比仍对；基准里没有的新任务按 0 起算、本次没有的任务不出现；总计数没有前进时输出 `CPU unavailable` 而不除零；按键的字典序排列；缓冲放不下时末字符为 `~` 且不越界；基准写满后多出的任务不记录；**同一批里可能同时出现的已登记任务**（Audio Read、Log、Storage、Volume、Flash Boot、Monitor、GUI、Playback、IDLE、Tmr Svc、Background 共 11 个，#215）时每个任务的短键互不相同（`audi`、`log`、`stor`、`volu`、`flas`、`moni`、`gui`、`play`、`idle`、`tmr`、`back`），最坏情形（10 个各占 10.0 %）和一个任务占 100.0 % 都不超过 127 字符、没有截断标记 `~`（最长 120 字符）。Create Task 创建完任务就自删，早于 Monitor 的第一批，不在“同时出现”的集合里；它的短键 `crea` 另有一条用例核对与其余 11 个互不相同（12 个名字放进同一批）。如果 Create Task 将来不自删，12 个任务各占两位数会到 129 字符，超出 127，这条测试要跟着改。
 - `Health` 行：累计值与本窗口增量；全零时也输出；累计值回绕时增量仍是真实差值；三项都取 32 位最大值时仍放进 Service Log 的单条 127 字符。
 
 期望值都是手算的字面量（例如 9600 个计数里 IDLE 占 8630 为 `89.8`），不用被测代码的公式重算。

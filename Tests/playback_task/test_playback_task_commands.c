@@ -21,7 +21,7 @@
 static void stop_with_cursor_kept(uint32_t generation, uint16_t tracks)
 {
     world_start_playing(generation, tracks);
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_READ_ERROR);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_READ_ERROR);
     world_wake();
 
     Playback_SnapshotTypeDef snapshot = world_snapshot();
@@ -55,7 +55,7 @@ static void test_boot_snapshot_is_all_zero(void)
     assert(snapshot.StopCount == 0U);
     assert(snapshot.HandledCommandSeq == 0U);
     assert(published_count() == 0U);
-    assert(fake_storage_request_count() == 0U);
+    assert(fake_audio_reader_request_count() == 0U);
 }
 
 /**
@@ -67,10 +67,10 @@ static void test_toggle_when_stopped_without_cursor_opens_first_track(void)
 
     world_send(PLAYBACK_COMMAND_TOGGLE);
 
-    Playback_MachineRequestTypeDef request = fake_storage_last_request();
+    Playback_MachineRequestTypeDef request = fake_audio_reader_last_request();
     Playback_SnapshotTypeDef snapshot = world_snapshot();
 
-    assert(fake_storage_request_count() == 1U);
+    assert(fake_audio_reader_request_count() == 1U);
     assert(request.StreamSeq != 0U);
     assert(request.Generation == 0U);
     assert(request.Position == 0U);
@@ -180,14 +180,14 @@ static void test_toggle_while_paused_resumes_without_reopening(void)
     world_reset();
     world_start_playing(GENERATION, TRACKS);
     world_send(PLAYBACK_COMMAND_TOGGLE);
-    uint32_t requests = fake_storage_request_count();
+    uint32_t requests = fake_audio_reader_request_count();
 
     world_send(PLAYBACK_COMMAND_TOGGLE);
 
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
     assert(call_log_count_of(CALL_RESUME) == 1U);
     assert(!fake_player_is_paused());
-    assert(fake_storage_request_count() == requests);
+    assert(fake_audio_reader_request_count() == requests);
     assert(fake_player_begin_count() == 1U);
 }
 
@@ -203,7 +203,7 @@ static void test_next_while_playing_switches_track_and_keeps_playing(void)
     world_send(PLAYBACK_COMMAND_NEXT);
 
     Playback_SnapshotTypeDef snapshot = world_snapshot();
-    Playback_MachineRequestTypeDef request = fake_storage_last_request();
+    Playback_MachineRequestTypeDef request = fake_audio_reader_last_request();
 
     assert(snapshot.State == PLAYBACK_STATE_PLAYING);
     assert(snapshot.HasTrack);
@@ -231,7 +231,7 @@ static void test_prev_while_playing_goes_to_previous_track_regardless_of_positio
 
     assert(world_snapshot().Index == 2U);
     assert(world_snapshot().PositionMs == 0U);
-    assert(fake_storage_last_request().Position == 2U);
+    assert(fake_audio_reader_last_request().Position == 2U);
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
 }
 
@@ -250,7 +250,7 @@ static void test_next_and_prev_step_around_the_ring(void)
 
     world_send(PLAYBACK_COMMAND_PREV);
     assert(world_snapshot().Index == TRACKS - 1U);
-    assert(fake_storage_last_request().Position == TRACKS - 1U);
+    assert(fake_audio_reader_last_request().Position == TRACKS - 1U);
 }
 
 /**
@@ -265,7 +265,7 @@ static void test_select_while_playing_switches_and_reselect_current_restarts(voi
     world_send_select(GENERATION, 3U);
     assert(world_snapshot().Index == 3U);
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
-    assert(fake_storage_last_request().Position == 3U);
+    assert(fake_audio_reader_last_request().Position == 3U);
     uint32_t seq_after_switch = world_current_seq();
     assert(seq_after_switch > seq_before);
 
@@ -328,7 +328,7 @@ static void test_prev_while_paused_stays_paused(void)
 
     assert(world_snapshot().State == PLAYBACK_STATE_PAUSED);
     assert(world_snapshot().Index == TRACKS - 1U);
-    assert(fake_storage_last_request().Position == TRACKS - 1U);
+    assert(fake_audio_reader_last_request().Position == TRACKS - 1U);
 }
 
 /**
@@ -344,7 +344,7 @@ static void test_select_while_paused_switches_and_plays(void)
 
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
     assert(world_snapshot().Index == 2U);
-    assert(fake_storage_last_request().Position == 2U);
+    assert(fake_audio_reader_last_request().Position == 2U);
 
     world_open_ok(GENERATION, TRACKS);
     assert(!fake_player_is_paused());
@@ -382,7 +382,7 @@ static void test_stream_read_error_stops_and_keeps_cursor(void)
     world_open_ok(GENERATION, TRACKS);
     world_feed_block(30U);
 
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_READ_ERROR);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_READ_ERROR);
     world_wake();
 
     Playback_SnapshotTypeDef snapshot = world_snapshot();
@@ -395,9 +395,9 @@ static void test_stream_read_error_stops_and_keeps_cursor(void)
     assert(snapshot.PositionMs == 0U);
     assert(snapshot.DurationMs == 0U);
     assert(snapshot.StopCount == 1U);
-    assert(fake_storage_last_request().StreamSeq == 0U);
+    assert(fake_audio_reader_last_request().StreamSeq == 0U);
     assert(!fake_player_stream_active());
-    assert(fake_storage_outstanding() == 0U);
+    assert(fake_audio_reader_outstanding() == 0U);
 }
 
 /**
@@ -408,7 +408,7 @@ static void test_toggle_when_stopped_with_cursor_opens_cursor_track(void)
     world_reset();
     world_send_select(GENERATION, 2U);
     world_open_ok(GENERATION, TRACKS);
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_READ_ERROR);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_READ_ERROR);
     world_wake();
     assert(world_snapshot().State == PLAYBACK_STATE_STOPPED);
 
@@ -421,9 +421,9 @@ static void test_toggle_when_stopped_with_cursor_opens_cursor_track(void)
     assert(snapshot.Index == 2U);
     assert(snapshot.Generation == GENERATION);
     assert(snapshot.StopCount == 1U);
-    assert(fake_storage_last_request().StreamSeq != 0U);
-    assert(fake_storage_last_request().Generation == GENERATION);
-    assert(fake_storage_last_request().Position == 2U);
+    assert(fake_audio_reader_last_request().StreamSeq != 0U);
+    assert(fake_audio_reader_last_request().Generation == GENERATION);
+    assert(fake_audio_reader_last_request().Position == 2U);
 }
 
 /**
@@ -433,7 +433,7 @@ static void test_next_and_prev_when_stopped_only_move_cursor(void)
 {
     world_reset();
     stop_with_cursor_kept(GENERATION, TRACKS);
-    uint32_t requests = fake_storage_request_count();
+    uint32_t requests = fake_audio_reader_request_count();
     uint32_t begins = fake_player_begin_count();
 
     world_send(PLAYBACK_COMMAND_NEXT);
@@ -448,7 +448,7 @@ static void test_next_and_prev_when_stopped_only_move_cursor(void)
     assert(world_snapshot().StopCount == 1U);
     assert(world_snapshot().PositionMs == 0U);
     assert(world_snapshot().DurationMs == 0U);
-    assert(fake_storage_request_count() == requests);
+    assert(fake_audio_reader_request_count() == requests);
     assert(fake_player_begin_count() == begins);
 }
 
@@ -470,7 +470,7 @@ static void test_next_and_prev_when_stopped_without_cursor_are_ignored(void)
     assert(snapshot.Index == 0U);
     assert(snapshot.StopCount == 0U);
     assert(snapshot.HandledCommandSeq == 2U);
-    assert(fake_storage_request_count() == 0U);
+    assert(fake_audio_reader_request_count() == 0U);
 }
 
 /**
@@ -488,8 +488,8 @@ static void test_select_when_stopped_opens_and_plays(void)
     assert(snapshot.State == PLAYBACK_STATE_PLAYING);
     assert(snapshot.StopReason == PLAYBACK_STOP_REASON_NONE);
     assert(snapshot.Index == 4U);
-    assert(fake_storage_last_request().Position == 4U);
-    assert(fake_storage_last_request().StreamSeq != 0U);
+    assert(fake_audio_reader_last_request().Position == 4U);
+    assert(fake_audio_reader_last_request().StreamSeq != 0U);
 }
 
 /* ---------------------------------------------------------------------------
@@ -512,7 +512,7 @@ static void test_handled_command_seq_echoes_last_command_including_ignored(void)
 
     assert(world_snapshot().HandledCommandSeq == 7U);
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
-    assert(fake_storage_request_count() == 1U);
+    assert(fake_audio_reader_request_count() == 1U);
 }
 
 /**
@@ -522,7 +522,7 @@ static void test_burst_of_next_steps_cursor_once_per_command(void)
 {
     world_reset();
     world_start_playing(GENERATION, TRACKS);
-    uint32_t requests = fake_storage_request_count();
+    uint32_t requests = fake_audio_reader_request_count();
     Playback_CommandTypeDef commands[3] = {
         { PLAYBACK_COMMAND_NEXT, 10U, 0U, 0U, 0U },
         { PLAYBACK_COMMAND_NEXT, 11U, 0U, 0U, 0U },
@@ -533,8 +533,8 @@ static void test_burst_of_next_steps_cursor_once_per_command(void)
 
     assert(world_snapshot().Index == 3U);
     assert(world_snapshot().HandledCommandSeq == 12U);
-    assert(fake_storage_request_count() == requests + 3U);
-    assert(fake_storage_last_request().Position == 3U);
+    assert(fake_audio_reader_request_count() == requests + 3U);
+    assert(fake_audio_reader_last_request().Position == 3U);
 }
 
 /**

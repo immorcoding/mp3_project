@@ -314,7 +314,7 @@ static void open_stream_for_cursor(Playback_MachineTypeDef *machine, uint32_t au
 }
 
 /**
- * @brief 写“无流”请求，让 Storage 关闭文件并忽略此前的请求。
+ * @brief 写“无流”请求，让音频读取任务关闭文件并忽略此前的请求。
  * @param[in,out] machine 状态机。
  */
 static void close_stream(Playback_MachineTypeDef *machine)
@@ -822,7 +822,7 @@ static void skip_bad_file(Playback_MachineTypeDef *machine)
 /**
  * @brief 按当前流记录推进状态机：开启结果（B6 开启各行）与终止事实（B6 终止各行）。
  * @param[in,out] machine 状态机。
- * @note  BAD_FILE 的应答若带回代次与曲目数（Storage 已解析出曲目），采用它们；否则沿用最近一次开启 OK 的 N。
+ * @note  BAD_FILE 的应答若带回代次与曲目数（音频读取任务已解析出曲目），采用它们；否则沿用最近一次开启 OK 的 N。
  *        每个停止出口之后 RecordValid 为假（流已关闭），后续检查随之跳过。
  */
 static void handle_record(Playback_MachineTypeDef *machine)
@@ -1203,7 +1203,7 @@ void playback_machine_init(Playback_MachineTypeDef *machine, const Playback_Mach
  * @param[in] commands 本次唤醒从命令 FIFO 取空的命令（≤ 8 条，按入队顺序）；count 为 0 时可为 NULL。
  * @param[in] command_count 命令条数。
  * @param[in] now_ms 调用方传入的单调毫秒时刻（B9）；T_data、T_out 都按它判定。
- * @note  不阻塞、不碰 FatFs/LVGL、不同步等 Storage；播放模块的 Stop/Start 阻塞由其自身文档说明。
+ * @note  不阻塞、不碰 FatFs/LVGL、不同步等音频读取任务；播放模块的 Stop/Start 阻塞由其自身文档说明。
  */
 void playback_machine_step(Playback_MachineTypeDef *machine,
                            const Playback_CommandTypeDef *commands,

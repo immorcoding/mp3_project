@@ -5,8 +5,8 @@
   *
   * @details
   *          Create Task（Boot）先建立 Log Service 的静态消息池与 FreeRTOS 队列，再创建
-  *          消费日志的 Log Task，做内存准备（可选的 SDRAM 自检），然后创建卷事件的订阅者
-  *          Storage Task、负责 SD 热插拔与挂载并发布卷事件的 Volume Task（静态创建）、
+  *          消费日志的 Log Task，做内存准备（可选的 SDRAM 自检、曲库锁、音频块池与两个信箱），然后创建卷事件的订阅者
+  *          Storage Task、读文件填块池的 Audio Reader Task（静态创建）、负责 SD 热插拔与挂载并发布卷事件的 Volume Task（静态创建）、
   *          持有播放状态机的 Playback Task（静态创建）、监控 Task、独占
   *          LVGL 执行上下文的 GUI Task 以及轮流调后台作业的 Background Task（静态创建）。
   *          所有任务创建成功后 Create Task 自删。
@@ -16,7 +16,7 @@
 #include "APP/tasks/app_tasks.h"
 
 #include "APP/apps/music/catalog/catalog.h"
-#include "APP/tasks/background/background_task.h"
+#include "APP/tasks/audio_reader/audio_reader_task.h"
 #include "APP/tasks/background/background_task.h"
 #include "APP/tasks/log/log_task.h"
 #include "APP/tasks/monitor/monitor_task.h"
@@ -67,16 +67,17 @@ static StackType_t volume_task_stack[APP_VOLUME_TASK_STACK_WORDS]
 /**
   * @brief  创建应用运行所需的全部任务，然后删除自身。
   * @param  handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
-  * @note   启动分三段：内存准备归本任务（可选的 SDRAM 自检，做完才创建用到 SDRAM 的任务）；卷启动由 Volume Task
-  *         决定时机（它入口先创建 Flash 启动任务，再初始化 SD）；SD 基准在 Volume Task 发卷就绪之前跑。
-  *         曲库锁（`catalog_boot_init()`，静态互斥量）也在内存准备里创建，早于创建 Storage Task，
-  *         所以早于任何任务第一次读写曲库。
+  * @note   启动分三段：内存准备归本任务（可选的 SDRAM 自检、曲库锁、音频块池与两个信箱，做完才创建用到它们的任务）；
+  *         卷启动由 Volume Task 决定时机（它入口先创建 Flash 启动任务，再初始化 SD）；SD 基准在 Volume Task 发卷就绪之前跑。
+  *         曲库锁（`catalog_boot_init()`，静态互斥量）和音频块池、请求信箱、流记录信箱（`audio_reader_boot_init()`）
+  *         在内存准备里创建，早于创建 Storage Task 和 Audio Reader Task，所以早于任何任务第一次读写它们。
   *         Service_Log 必须先于任意可能调用 Service_Log_Post() 的任务创建。SDRAM 自检在 Log Task 创建之后、
-  *         Storage Task 创建之前运行（独占 SDRAM，块池 NOLOAD 段此后才有主，HWD-2）；本任务只有 128 word 栈，
-  *         自检加 snprintf 的栈深度核算见 `APP/tasks/volume/README.md`。
-  *         Storage Task 优先级高于本任务（Boot）：创建它时它先运行到首次阻塞，已完成 storage_audio_stream_init()
-  *         并登记卷事件订阅，播放任务才能调用 Storage 请求信箱（Boot 优先级最低，任何更高优先级的任务没阻塞时
-  *         本任务不会继续）。Volume Task 在 Storage Task 之后创建：它发布的卷事件有订阅者，
+  *         块池初始化和各任务创建之前运行（独占 SDRAM，块池 NOLOAD 段此后才有主，HWD-2）；本任务只有 128 word 栈，
+  *         自检加 snprintf 的栈深度核算见 `APP/tasks/volume/README.md`，块池与信箱初始化的核算见
+  *         `APP/tasks/audio_reader/README.md`。
+  *         Storage Task 优先级高于本任务（Boot）：创建它时它先运行到首次阻塞，已登记卷事件订阅。
+  *         Audio Reader Task（优先级 3）创建后立即运行到第一次等待：登记卷事件订阅、先比对一次序号、看一次请求信箱，
+  *         播放任务此后写请求信箱才有人接。Volume Task 在它们之后创建：它发布的卷事件有订阅者，
   *         即使晚于它订阅也不会漏（登记后先比对一次序号）。
   *         Playback Task 优先级 4 高于 Create Task，创建后立即运行到首次阻塞，
   *         完成命令 FIFO、状态信箱与回调注册，早于 GUI Task 发出第一条命令。
@@ -127,12 +128,20 @@ static void create_task(void *handle)
     /* 曲库锁（静态互斥量）：早于创建任何会读写曲库的任务。 */
     catalog_boot_init();
 
+    /* 音频块池（SDRAM NOLOAD 段，晚于可选的 SDRAM 自检）和请求、流记录两个信箱：早于创建音频读取任务和播放任务。 */
+    audio_reader_boot_init();
+
     if (xTaskCreate(storage_task,
                     "Storage Task",
                     APP_STORAGE_TASK_STACK_WORDS,
                     NULL,
                     APP_STORAGE_TASK_PRIORITY,
                     NULL) != pdPASS)
+    {
+        Error_Handler();
+    }
+
+    if (audio_reader_task_create() == NULL)
     {
         Error_Handler();
     }

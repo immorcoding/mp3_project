@@ -1,9 +1,9 @@
 /**
- * @file storage_audio_range.c
+ * @file audio_reader_range.c
  * @brief 越过标签纯函数的实现：ID3v2 头、尾部 ID3v1 与 APEv2。
  */
 
-#include "storage_audio_range.h"
+#include "audio_reader_range.h"
 
 #include <string.h>
 
@@ -130,14 +130,14 @@ static bool audio_tag_parse_trailer(const uint8_t *tail,
  * @param[in] file_size 文件总长。
  * @param[out] range 成功时的 [Start, End)。
  * @retval true 区间非空且在文件内。
- * @retval false 指针/长度不符约定、标签长度越界或音频区间为空（Storage 应报 BAD_FILE）。
+ * @retval false 指针/长度不符约定、标签长度越界或音频区间为空（音频读取任务应报 BAD_FILE）。
  */
-bool storage_audio_range_locate(const uint8_t *head,
+bool audio_reader_range_locate(const uint8_t *head,
                               uint32_t head_bytes,
                               const uint8_t *tail,
                               uint32_t tail_bytes,
                               uint32_t file_size,
-                              Storage_AudioRangeTypeDef *range)
+                              AudioReader_RangeTypeDef *range)
 {
     uint64_t start;
     uint32_t end;
@@ -148,8 +148,8 @@ bool storage_audio_range_locate(const uint8_t *head,
     {
         return false;
     }
-    expect_head = (file_size < STORAGE_AUDIO_RANGE_HEAD_BYTES) ? file_size : STORAGE_AUDIO_RANGE_HEAD_BYTES;
-    expect_tail = (file_size < STORAGE_AUDIO_RANGE_TAIL_BYTES) ? file_size : STORAGE_AUDIO_RANGE_TAIL_BYTES;
+    expect_head = (file_size < AUDIO_READER_RANGE_HEAD_BYTES) ? file_size : AUDIO_READER_RANGE_HEAD_BYTES;
+    expect_tail = (file_size < AUDIO_READER_RANGE_TAIL_BYTES) ? file_size : AUDIO_READER_RANGE_TAIL_BYTES;
     if ((head_bytes != expect_head) || (tail_bytes != expect_tail))
     {
         return false;
@@ -178,7 +178,7 @@ bool storage_audio_range_locate(const uint8_t *head,
  *         空区间（End 不大于 Start）恒为 Start。先比较再相加，所以任意 32 位偏移都不会回绕。
  * @note  纯计算；本函数不认识音频格式，偏移的含义由 Service/playback 的映射决定。
  */
-uint32_t storage_audio_range_seek_position(const Storage_AudioRangeTypeDef *range, uint32_t audio_offset)
+uint32_t audio_reader_range_seek_position(const AudioReader_RangeTypeDef *range, uint32_t audio_offset)
 {
     uint32_t length;
 

@@ -49,7 +49,7 @@ typedef enum
 {
     PLAYBACK_STOP_REASON_NONE = 0U,        /* 开机后未播过。 */
     PLAYBACK_STOP_REASON_CARD_REMOVED,
-    PLAYBACK_STOP_REASON_NOT_READY,        /* 开启应答 NOT_READY：SD 未就绪。插卡扫描期间 Storage 不应答，结果是 NO_DATA。 */
+    PLAYBACK_STOP_REASON_NOT_READY,        /* 开启应答 NOT_READY：SD 未就绪或曲库没好。插卡或开机后曲库扫描期间音频读取任务立刻应答 NOT_READY（#215，原来请求排队，T_data 内扫完才出声），要等扫完再点一次播放。 */
     PLAYBACK_STOP_REASON_NO_TRACK,         /* 空库或下标越界。 */
     PLAYBACK_STOP_REASON_CATALOG_CHANGED,  /* 开启应答 STALE。 */
     PLAYBACK_STOP_REASON_READ_ERROR,       /* 开启 IO_ERROR 或流中 READ_ERROR。 */

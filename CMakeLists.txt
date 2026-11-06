@@ -160,11 +160,20 @@ if(MP3_HOOK_FLASH_PRESSURE AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_FLASH_PRESSURE 只能在 Debug 构建里打开（当前 ${CMAKE_BUILD_TYPE}）。")
 endif()
 
+# 定位符失效钩子（#215，APP/tasks/audio_reader）：打开后音频读取任务在每次开流前把文件定位符清零，Filesystem 判核对不符、
+# 走真实的退回按路径打开，用于 R4.4（12000 首同文件夹开最后一首，T_data 5 s 内要能出声）；同样只允许 Debug。
+# configure 时 cmake --preset firmware-debug -DMP3_HOOK_LOCATOR_MISS=1，关掉要显式 -DMP3_HOOK_LOCATOR_MISS=0。
+set(MP3_HOOK_LOCATOR_MISS 0 CACHE STRING "定位符失效测试钩子（#215，APP/tasks/audio_reader）：1 打开，0 关闭（默认）")
+if(MP3_HOOK_LOCATOR_MISS AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_LOCATOR_MISS 只能在 Debug 构建里打开（当前 ${CMAKE_BUILD_TYPE}）。")
+endif()
+
 # 添加工程级编译宏
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     FILESYSTEM_HOOK_SD_LATE_DMA=${MP3_HOOK_SD_LATE_DMA}
     VOLUME_HOOK_FAKE_BOUNCE=${MP3_HOOK_FAKE_BOUNCE}
     BACKGROUND_HOOK_FLASH_PRESSURE=${MP3_HOOK_FLASH_PRESSURE}
+    AUDIO_READER_HOOK_LOCATOR_MISS=${MP3_HOOK_LOCATOR_MISS}
     # 在此添加用户自定义的编译宏
 )
 
