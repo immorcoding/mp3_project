@@ -18,8 +18,10 @@ SDRAM。它持有 CubeMX 的 `hsdram1`，在 FMC 控制器配置完成后执行�
 
 ## 运行时请求与事件路径
 
-`Platform_Init()` 在任何任务创建前调用初始化。Storage Task 的可选启动诊断经公开
-Interface 请求 Platform SDRAM；SDRAM 没有中断或任务通知路径。
+`Platform_Init()` 在任何任务创建前调用初始化。可选的启动诊断（破坏性全容量自检）由 Boot 任务
+（`APP/tasks/app_tasks.c` 的 `create_task`）在创建 Storage、Volume 等其他任务之前经公开
+Interface 请求 Platform SDRAM（0.10.0 起不再在 Storage Task 里；Boot 栈只有 128 word，打开自检前须先加大，见
+[卷任务](../../APP/tasks/volume/README.md)“Boot 栈核算”）；SDRAM 没有中断或任务通知路径。
 
 ## 资源与约束
 

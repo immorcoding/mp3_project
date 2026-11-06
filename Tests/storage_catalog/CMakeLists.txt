@@ -53,10 +53,14 @@ add_executable(storage_catalog_open_tests
     ../../APP/tasks/storage/catalog/storage_track_diag.c
     ../../APP/tasks/storage/catalog/storage_catalog_text.c
     ../../APP/tasks/storage/catalog/storage_catalog_name.c
+    ../../APP/tasks/storage/catalog/storage_listbuffer.c
+    ../../APP/tasks/storage/catalog/storage_namebuffer.c
     ../../Components/id3_reader/id3_reader.c
+    ../stubs/freertos/freertos_stub.c
 )
 
-target_include_directories(storage_catalog_open_tests PRIVATE ../..)
+# 窗口槽与名字槽的 complete_unavailable（卷事件收槽）用共用 FreeRTOS 桩的任务通知；桩目录放在 ../.. 之前。
+target_include_directories(storage_catalog_open_tests BEFORE PRIVATE ../stubs/freertos ../..)
 target_compile_features(storage_catalog_open_tests PRIVATE c_std_11)
 target_compile_options(storage_catalog_open_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 

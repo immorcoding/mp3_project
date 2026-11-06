@@ -1,19 +1,21 @@
 /**
  * @file test_sd_removal_chain.c
  * @brief 产品里 SD 读路径的整条链：FatFs 的 `SD_read` → Service 的 BSP 与 DMA 执行器 → Platform SD → SD Card Component，
- *        以及读时超时、拔卡、停不住之后 Storage 的挂载与卸载（#209）。
+ *        以及读时超时、拔卡、停不住之后卷任务的对账、卸载与挂载（#209，#211 起由卷任务的 `volume_sd.c` 接管）。
  *
  * 全部用真实代码：`FATFS/Target/sd_diskio.c`（CubeMX 生成的 FatFs 驱动，原样传 `SD_TIMEOUT`）、`filesystem_sd_bsp.c`、
- * `filesystem_sd_transfer.c`、Filesystem Service 与 FatFs、`platform_sd.c`、`Components/sd/sd.c`、`storage_sd.c`。只有硬件一侧用替身：
+ * `filesystem_sd_transfer.c`、Filesystem Service（含启动、刷新、闸入口）与 FatFs、`platform_sd.c`、`Components/sd/sd.c`、
+ * 卷任务的 `volume_sd.c`、`volume_reconcile.c`、`volume_event.c`。只有硬件一侧用替身：
  * Port（假 SD 卡：一块 64 KiB 的内存 FAT12 镜像，可脚本化“不完成”“读到一半拔卡”“中止停不住”）、两个 IRQ Adapter 的注册函数、
- * HAL 头与 CubeMX 句柄、Flash 传输层、Storage 的曲库与音频流。SDMMC 中断由 FreeRTOS 桩的阻塞钩子在“等待将要发生”时替它发出。
+ * HAL 头与 CubeMX 句柄、Flash 传输层。SDMMC 中断由 FreeRTOS 桩的阻塞钩子在“等待将要发生”时替它发出。
+ * 卷任务的消抖由测试直接调 `volume_sd_step()`（带边沿、再推进 30 ms）代替定时与卡检测中断。
  *
  * 主机单线程，桩不切换任务；通过只证明这一串调用的分支与状态对，不证明真实 ISR 时序、DMA 与 Cache、HAL 寄存器序列。
  */
 
-#include "APP/tasks/storage/catalog/storage_catalog.h"
-#include "APP/tasks/storage/sd/storage_sd.h"
-#include "APP/tasks/storage/stream/storage_audio_stream.h"
+#include "APP/tasks/volume/sd/volume_sd.h"
+#include "APP/tasks/volume/volume_event.h"
+#include "APP/tasks/volume/volume_task.h"
 #include "Adapters/stm32_hal/irq/stm32_gpio_exti_irq.h"
 #include "Adapters/stm32_hal/irq/stm32_sdmmc_irq.h"
 #include "Adapters/stm32_hal/sd/sd_stm32_hal_adapter.h"
@@ -471,48 +473,8 @@ static void interrupt_on_wait(const FreertosStub_Wait *wait, void *context)
 }
 
 /* ------------------------------------------------------------------------- */
-/* Storage 一侧的替身，以及 Flash 传输层的替身                                */
+/* Flash 传输层的替身                                                         */
 /* ------------------------------------------------------------------------- */
-
-static uint32_t catalog_init_calls;
-static uint32_t catalog_invalidate_calls;
-static uint32_t stream_card_removed_calls;
-static Service_Filesystem_FileHandleTypeDef stream_file;
-
-/**
- * @brief 曲库替身：初始化恒成功，只计数。
- * @return 固定 STORAGE_OK。
- */
-Storage_StatusTypeDef storage_catalog_init(void)
-{
-    catalog_init_calls++;
-    return STORAGE_OK;
-}
-
-/**
- * @brief 曲库替身：作废恒成功，只计数。
- * @return 固定 STORAGE_OK。
- */
-Storage_StatusTypeDef storage_catalog_invalidate(void)
-{
-    catalog_invalidate_calls++;
-    return STORAGE_OK;
-}
-
-/**
- * @brief 音频流替身：计数，并像真实实现那样试着关闭音频流打开的文件（测试登记在 stream_file 里）。
- *        拔卡之后关闭会失败（卡不在位时 FatFs 的 validate 报 NOT_READY），文件槽因此不会在这里释放，
- *        要靠随后的卸载使 Token 失效；换卡（卡已经插回）时关闭成功。
- */
-void storage_audio_stream_card_removed(void)
-{
-    stream_card_removed_calls++;
-    if (stream_file.Token != 0U)
-    {
-        (void)Service_Filesystem_CloseFile(stream_file);
-        stream_file.Token = 0U;
-    }
-}
 
 /**
  * @brief Flash 传输层替身：初始化恒失败，本测试不使用 Flash。
@@ -663,16 +625,12 @@ static void clear_script(void)
     fake.last_abort_timeout_ms = 0U;
     fake.init_calls = 0U;
     fake.deinit_calls = 0U;
-    catalog_init_calls = 0U;
-    catalog_invalidate_calls = 0U;
-    stream_card_removed_calls = 0U;
-    stream_file.Token = 0U;
     last_sd_wait_ticks = 0U;
     lock_env_log_reset();
 }
 
 /**
- * @brief 开机：卡在位，`storage_sd_init` 初始化 Platform、InitSD 并挂载；之后的用例共用这套状态。
+ * @brief 开机：卡在位，`volume_sd_start` 初始化 Platform、InitSD 并挂载、发卷就绪；之后的用例共用这套状态。
  */
 static void boot_with_card(void)
 {
@@ -704,9 +662,9 @@ static void boot_with_card(void)
     retUSER = 1U;
     USERPath[0] = '\0';
 
-    assert(storage_sd_init(xTaskGetCurrentTaskHandle()) == STORAGE_OK);
+    assert(volume_sd_start(xTaskGetCurrentTaskHandle()));
     assert(sd_done != NULL);
-    assert(storage_sd_volume_is_mounted());
+    assert(volume_status(VOLUME_ID_SD).Mounted);
     assert(Platform_SD_GetState() == PLATFORM_SD_STATE_READY);
     assert(irq_node != NULL);
     clear_script();
@@ -750,41 +708,59 @@ static void test_product_read_path_gives_up_after_500_ms_and_aborts(void)
 }
 
 /**
- * @brief 断言：读时拔卡之后，Storage 的路径恰好看到一次拔出（卸载、释放文件槽），再插卡看到一次插入并重新挂载成功。
+ * @brief 卡检测边沿之后卷任务的一次完整收尾：边沿、静默 30 ms、刷新与对账、开闸；返回时卷任务回到空闲。
+ *        代替真实的卡检测中断与定时。
+ */
+static void settle_after_edge(void)
+{
+    TickType_t now = xTaskGetTickCount();
+    TickType_t wait = volume_sd_step(now, true);
+
+    assert(wait == pdMS_TO_TICKS(VOLUME_SD_DEBOUNCE_MS));
+    now += wait;
+    freertos_stub_set_tick(now);
+    wait = volume_sd_step(now, false);
+    assert(wait == portMAX_DELAY); /* 空闲：闸已经重新打开。 */
+}
+
+/**
+ * @brief 断言：读时拔卡之后，卷任务恰好看到一次拔出（卸载、释放文件槽、发一次卷消失），再插卡恰好一次插入并重新挂载成功。
  * @param[in] stale_file 拔卡前打开、拔卡后应已失效的文件句柄；Token 为 0 表示拔卡前没有打开文件。
  */
 static void expect_removed_once_then_reinsert_and_remount(Service_Filesystem_FileHandleTypeDef stale_file)
 {
     Service_Filesystem_FileHandleTypeDef file = {0U};
     uint32_t transferred = 0U;
+    uint32_t sequence = volume_status(VOLUME_ID_SD).Sequence;
     uint8_t byte;
 
     assert(Platform_SD_GetState() != PLATFORM_SD_STATE_READY);
-    assert(storage_sd_volume_is_mounted());
+    assert(volume_status(VOLUME_ID_SD).Mounted);
 
-    /* 拔出恰好报告一次：音频流收尾、曲库作废、卷卸载。 */
-    assert(storage_sd_process() == STORAGE_OK);
-    assert(stream_card_removed_calls == 1U);
-    assert(catalog_invalidate_calls == 1U);
-    assert(!storage_sd_volume_is_mounted());
+    /* 拔出恰好报告一次：卷卸载（令牌失效、槽释放），卷消失发布一次。 */
+    settle_after_edge();
+    assert(!volume_status(VOLUME_ID_SD).Mounted);
+    assert(volume_status(VOLUME_ID_SD).Sequence == sequence + 1U);
     assert(Platform_SD_GetState() == PLATFORM_SD_STATE_NOT_PRESENT);
     if (stale_file.Token != 0U)
     {
         assert(Service_Filesystem_ReadFile(stale_file, &byte, 1U, &transferred) == SERVICE_INVALID_HANDLE);
     }
-    assert(storage_sd_process() == STORAGE_OK);
-    assert(stream_card_removed_calls == 1U);
-    assert(catalog_invalidate_calls == 1U);
+    settle_after_edge();
+    assert(volume_status(VOLUME_ID_SD).Sequence == sequence + 1U);
 
-    /* 重新插卡：恰好一次插入，重新挂载成功（文件槽已经因卸载释放，不会返回 BUSY）。 */
+    /* 无卡时文件接口立刻返回，不等：卷没挂。 */
+    assert(open_test_file(&file) == SERVICE_NOT_READY);
+
+    /* 重新插卡：恰好一次插入，重新挂载成功（文件槽已经因卸载释放，不会返回 BUSY），发一次卷就绪。 */
     fake.present = true;
-    assert(storage_sd_process() == STORAGE_OK);
-    assert(storage_sd_volume_is_mounted());
+    settle_after_edge();
+    assert(volume_status(VOLUME_ID_SD).Mounted);
+    assert(volume_status(VOLUME_ID_SD).Sequence == sequence + 2U);
     assert(Platform_SD_GetState() == PLATFORM_SD_STATE_READY);
-    assert(catalog_init_calls == 1U);
     assert(irq_node != NULL);
-    assert(storage_sd_process() == STORAGE_OK);
-    assert(catalog_init_calls == 1U);
+    settle_after_edge();
+    assert(volume_status(VOLUME_ID_SD).Sequence == sequence + 2U);
     assert(open_test_file(&file) == SERVICE_OK);
     assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) == SERVICE_OK);
     assert(transferred == 1U);
@@ -804,11 +780,10 @@ static void test_card_pulled_during_read_is_reported_removed_once(void)
 
     clear_script();
     assert(open_test_file(&file) == SERVICE_OK);
-    stream_file = file;
     fake.hang_next_read = true;
     fake.pull_card_during_wait = true;
 
-    assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) != SERVICE_OK);
+    assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) == SERVICE_NO_MEDIA);
 
     assert(last_sd_wait_ticks == pdMS_TO_TICKS(500U));
     assert(fake.abort_calls == 1U);
@@ -832,11 +807,11 @@ static void test_card_pulled_with_error_event_is_reported_removed_once(void)
 
     clear_script();
     assert(open_test_file(&file) == SERVICE_OK);
-    stream_file = file;
     fake.pull_card_during_wait = true;
     fake.error_event_during_wait = true;
 
-    assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) != SERVICE_OK);
+    /* 读到一半卡没了：Service 在锁内看卡检测脚，返回 NO_MEDIA（不是文件错误），不是 ERROR。 */
+    assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) == SERVICE_NO_MEDIA);
 
     assert(fake.abort_calls == 0U);
     assert(Platform_SD_GetState() == PLATFORM_SD_STATE_NOT_PRESENT);
@@ -845,67 +820,116 @@ static void test_card_pulled_with_error_event_is_reported_removed_once(void)
 }
 
 /**
- * @brief 中止在上界内没停住（stuck）：卷保持 ERROR，Process 不报事件也不重试；之后拔卡仍恰好报告一次拔出，
- *        重新插卡后重新初始化并挂载成功（Port 在中止里已经反初始化，不会被重复反初始化）。
+ * @brief 中止在上界内没停住（stuck）：卷保持 ERROR，没有边沿时卷任务不动、不自动恢复（卷仍挂着，读写都被拒绝）；
+ *        一次轻触卡槽（边沿）让对账看到“设备没就绪”，卸载旧卷、发卷消失；拔卡再插卡后重新初始化并挂载成功、发卷就绪
+ *        （Port 在中止里已经反初始化，不会被重复反初始化）。
  */
 static void test_abort_that_does_not_stop_keeps_error_until_card_is_replugged(void)
 {
     Service_Filesystem_FileHandleTypeDef file = {0U};
     uint8_t byte;
     uint32_t transferred = 0U;
+    uint32_t sequence;
 
     clear_script();
     assert(open_test_file(&file) == SERVICE_OK);
-    stream_file = file;
+    sequence = volume_status(VOLUME_ID_SD).Sequence;
     fake.hang_next_read = true;
     fake.abort_use_override = true;
     fake.abort_override = SDCARD_PORT_TIMEOUT;
 
-    assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) != SERVICE_OK);
+    /* 卡还在位，所以是文件错误（ERROR），不是 NO_MEDIA。 */
+    assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) == SERVICE_ERROR);
 
     assert(strncmp(lock_env_log_text(0U), "stuck ", 6U) == 0);
     assert(Platform_SD_GetState() == PLATFORM_SD_STATE_ERROR);
     assert(irq_node == NULL);
-    /* 卡还在位：Process 不自动重试，也没有事件。 */
-    assert(storage_sd_process() == STORAGE_ERROR);
-    assert(stream_card_removed_calls == 0U);
+    /* 没有边沿：卷任务什么都不做，卷状态字不变，不自动恢复。 */
+    assert(volume_status(VOLUME_ID_SD).Mounted);
+    assert(volume_status(VOLUME_ID_SD).Sequence == sequence);
     assert(fake.init_calls == 0U);
     /* 卷保持 ERROR：新的读被拒绝，不等待。 */
     assert(open_test_file(&(Service_Filesystem_FileHandleTypeDef){0U}) != SERVICE_OK);
     assert(Platform_SD_GetState() == PLATFORM_SD_STATE_ERROR);
 
+    /* 轻触卡槽：刷新失败（设备 ERROR）而卷挂着 → 卸载，卷消失发布一次；仍不自动重新初始化。 */
+    lock_env_log_reset();
+    settle_after_edge();
+    assert(!volume_status(VOLUME_ID_SD).Mounted);
+    assert(volume_status(VOLUME_ID_SD).Sequence == sequence + 1U);
+    assert(fake.init_calls == 0U);
+    assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) == SERVICE_INVALID_HANDLE);
+
+    /* 拔卡：什么都不发；再插卡：重新初始化一次，挂载成功，发卷就绪。 */
     fake.present = false;
-    expect_removed_once_then_reinsert_and_remount(file);
+    settle_after_edge();
+    assert(volume_status(VOLUME_ID_SD).Sequence == sequence + 1U);
+    fake.present = true;
+    settle_after_edge();
+    assert(volume_status(VOLUME_ID_SD).Mounted);
+    assert(volume_status(VOLUME_ID_SD).Sequence == sequence + 2U);
     assert(fake.init_calls == 1U);
+    assert(Platform_SD_GetState() == PLATFORM_SD_STATE_READY);
+    assert(open_test_file(&file) == SERVICE_OK);
+    assert(Service_Filesystem_CloseFile(file) == SERVICE_OK);
 }
 
 /**
- * @brief 静默的拔出之后卡又在 Process 之前插回：Process 看到的是 NOT_PRESENT → READY，报告一次插入（换卡视同拔卡，
- *        音频流先收尾），挂载成功；不会既不报拔出又不报插入。
+ * @brief 静默的拔出之后卡又在刷新之前插回：Platform 看到的是 NOT_PRESENT → READY，报告“重新初始化过”，
+ *        对账走 remount（卸载、发卷消失、挂载、发卷就绪，序号跳 2）；旧的文件句柄已经失效。
+ *        不会既不报拔出又不报插入（#191 的 `via=presence`）。
  */
-static void test_silent_removal_and_quick_reinsertion_is_reported_as_insertion(void)
+static void test_silent_removal_and_quick_reinsertion_is_reconciled_as_a_remount(void)
 {
     Service_Filesystem_FileHandleTypeDef file = {0U};
     uint8_t byte;
     uint32_t transferred = 0U;
+    uint32_t sequence;
 
     clear_script();
     assert(open_test_file(&file) == SERVICE_OK);
-    stream_file = file;
+    sequence = volume_status(VOLUME_ID_SD).Sequence;
     fake.hang_next_read = true;
     fake.pull_card_during_wait = true;
-    assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) != SERVICE_OK);
+    assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) == SERVICE_NO_MEDIA);
     assert(Platform_SD_GetState() == PLATFORM_SD_STATE_NOT_PRESENT);
+    assert(volume_status(VOLUME_ID_SD).Mounted); /* 读失败不会让卷任务知道：要靠边沿之后的对账。 */
 
     fake.present = true;
-    assert(storage_sd_process() == STORAGE_OK);
+    lock_env_log_reset();
+    settle_after_edge();
 
-    assert(stream_card_removed_calls == 1U);
-    assert(catalog_init_calls == 1U);
-    assert(storage_sd_volume_is_mounted());
+    assert(volume_status(VOLUME_ID_SD).Mounted);
+    assert(volume_status(VOLUME_ID_SD).Sequence == sequence + 2U);
     assert(Platform_SD_GetState() == PLATFORM_SD_STATE_READY);
-    assert(storage_sd_process() == STORAGE_OK);
-    assert(catalog_init_calls == 1U);
+    assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) == SERVICE_INVALID_HANDLE);
+    settle_after_edge();
+    assert(volume_status(VOLUME_ID_SD).Sequence == sequence + 2U);
+    assert(open_test_file(&file) == SERVICE_OK);
+    assert(Service_Filesystem_CloseFile(file) == SERVICE_OK);
+}
+
+/**
+ * @brief 假抖动：卡一直在位，刷新没有重新初始化，对账只开闸；卷状态字不变，已打开的文件仍可读。
+ */
+static void test_false_bounce_leaves_the_volume_and_open_files_alone(void)
+{
+    Service_Filesystem_FileHandleTypeDef file = {0U};
+    uint8_t byte;
+    uint32_t transferred = 0U;
+    uint32_t sequence;
+
+    clear_script();
+    assert(open_test_file(&file) == SERVICE_OK);
+    sequence = volume_status(VOLUME_ID_SD).Sequence;
+
+    settle_after_edge();
+
+    assert(volume_status(VOLUME_ID_SD).Mounted);
+    assert(volume_status(VOLUME_ID_SD).Sequence == sequence);
+    assert(Service_Filesystem_ReadFile(file, &byte, 1U, &transferred) == SERVICE_OK);
+    assert(transferred == 1U);
+    assert(Service_Filesystem_CloseFile(file) == SERVICE_OK);
 }
 
 /**
@@ -918,8 +942,9 @@ int main(void)
     test_product_read_path_gives_up_after_500_ms_and_aborts();
     test_card_pulled_during_read_is_reported_removed_once();
     test_card_pulled_with_error_event_is_reported_removed_once();
+    test_false_bounce_leaves_the_volume_and_open_files_alone();
     test_abort_that_does_not_stop_keeps_error_until_card_is_replugged();
-    test_silent_removal_and_quick_reinsertion_is_reported_as_insertion();
+    test_silent_removal_and_quick_reinsertion_is_reconciled_as_a_remount();
     puts("sd_removal_chain: all passed");
     return 0;
 }

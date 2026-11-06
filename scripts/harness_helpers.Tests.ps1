@@ -198,16 +198,32 @@ Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'storage_c
     -Message 'CP936 表变化必须同时选择文件定位符、Flash 与 Storage 曲库主机测试（后者链接真实 cc936.c 做 GBK 查表）'
 
 $catalogConfigImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/catalog/storage_catalog_config.h')
-Assert-HarnessSequence -Expected @('flash_ftl', 'music_gui', 'storage_catalog') -Actual $catalogConfigImpact.HostModules `
-    -Message '曲库配置头（含曲目标签读取常量与窗口条数）变化必须选择 Storage 曲库、音乐 GUI 与 flash_ftl（SD 整条链测试编译了它）主机测试'
+Assert-HarnessSequence -Expected @('music_gui', 'storage_catalog') -Actual $catalogConfigImpact.HostModules `
+    -Message '曲库配置头（含曲目标签读取常量与窗口条数）变化必须选择 Storage 曲库与音乐 GUI 主机测试（SD 整条链测试不再经卷任务编译它）'
 
 $sdComponentImpact = Get-HarnessImpact -ChangedPath @('Components/sd/sd.c')
 Assert-HarnessSequence -Expected @('flash_ftl') -Actual $sdComponentImpact.HostModules `
     -Message 'SD Card Component 变化必须选择 flash_ftl 主机测试（显式中止的状态机测试在其中）'
 
-$sdChainImpact = Get-HarnessImpact -ChangedPath @('Platform/sd/platform_sd.c', 'APP/tasks/storage/sd/storage_sd.c')
+$sdChainImpact = Get-HarnessImpact -ChangedPath @('Platform/sd/platform_sd.c', 'APP/tasks/volume/sd/volume_sd.c')
 Assert-HarnessEqual -Expected $true -Actual (@($sdChainImpact.HostModules) -contains 'flash_ftl') `
-    -Message 'Platform SD 与 Storage 的 SD 生命周期变化必须选择 flash_ftl 主机测试（读时拔卡整条链的测试在其中）'
+    -Message 'Platform SD 与卷任务的 SD 部分变化必须选择 flash_ftl 主机测试（读时拔卡整条链的测试在其中）'
+
+# 卷任务（#211）：生产路径与测试目录选中 volume 主机测试；SD 部分同时选中 flash_ftl（整条链）；不落入未知路径。
+$volumeImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/volume/volume_reconcile.c', 'APP/tasks/volume/volume_event.h', 'Tests/volume/test_volume_sd.c')
+Assert-HarnessSequence -Expected @('flash_ftl', 'volume') -Actual $volumeImpact.HostModules `
+    -Message '卷任务的判断与卷事件变化必须选择 volume 与 flash_ftl（整条链编译了它们）主机测试'
+$volumeTestImpact = Get-HarnessImpact -ChangedPath @('Tests/volume/test_volume_flash.c')
+Assert-HarnessSequence -Expected @('volume') -Actual $volumeTestImpact.HostModules `
+    -Message 'Tests/volume 变化只选择 volume 主机测试'
+Assert-HarnessEqual -Expected 0 -Actual $volumeImpact.UnknownPaths.Count `
+    -Message 'APP/tasks/volume 由主机模块规则覆盖，不应落入未知生产路径'
+$volumeSdImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/volume/sd/volume_sd.c')
+Assert-HarnessSequence -Expected @('flash_ftl', 'volume') -Actual $volumeSdImpact.HostModules `
+    -Message '卷任务的 SD 部分变化必须同时选择 volume 与 flash_ftl（读时拔卡整条链）主机测试'
+$volumeFlashImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/volume/flash/volume_flash.c', 'APP/tasks/volume/flash/volume_flash_task.c')
+Assert-HarnessSequence -Expected @('volume') -Actual $volumeFlashImpact.HostModules `
+    -Message 'Flash 启动流程变化必须选择 volume 主机测试'
 
 $monitorWarnImpact =Get-HarnessImpact -ChangedPath @('APP/tasks/monitor/monitor_warn.c')
 Assert-HarnessSequence -Expected @('monitor_warn') -Actual $monitorWarnImpact.HostModules `
@@ -233,7 +249,7 @@ Assert-HarnessSequence -Expected @('playback_service', 'playback_task') -Actual 
 
 # 主机测试编译的跨层聚合头与配置头：由 check-test-paths.ps1 按真实依赖发现，路由必须与之一致。
 $serviceHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Service/service.h')
-Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'music_gui', 'playback_service', 'playback_task', 'storage_catalog') `
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_task', 'gui_theme', 'music_gui', 'playback_service', 'playback_task', 'storage_audio_stream', 'storage_catalog', 'volume') `
     -Actual $serviceHeaderHostImpact.HostModules -Message 'Service 聚合头变化必须选择所有编译它的主机测试'
 
 $platformHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Platform/platform.h')
@@ -257,7 +273,7 @@ Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'gui_task'
     -Actual $dcacheConfigHostImpact.HostModules -Message 'DCache 配置头变化必须选择所有编译它的主机测试'
 
 $logHeaderHostImpact = Get-HarnessImpact -ChangedPath @('Service/log/log_service.h', 'Service/log/log_service_config.h', 'APP/app_config.h')
-Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'storage_catalog') -Actual $logHeaderHostImpact.HostModules `
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'storage_catalog', 'volume') -Actual $logHeaderHostImpact.HostModules `
     -Message 'Service Log 头与 APP 配置头变化必须选择 FTL 主机测试'
 
 $fatfsPatchImpact = Get-HarnessImpact -ChangedPath @('patches/fatfs/0001-open-by-dirent.patch')
@@ -270,26 +286,26 @@ $filesystemHostImpact = Get-HarnessImpact -ChangedPath @('Service/filesystem/fil
 Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $filesystemHostImpact.HostModules `
     -Message 'Filesystem Service 与 FatFs 变化必须同时选择文件定位符与 FTL 主机测试'
 
-# 共用 FreeRTOS 桩（Tests/stubs/freertos）被 flash_ftl、filesystem_locator 与 ui_cell 编译：改桩必须选中它们，且不落入未知路径。
+# 共用 FreeRTOS 桩（Tests/stubs/freertos）被 flash_ftl、filesystem_locator、ui_cell、volume、storage_catalog 与 storage_audio_stream（只取头）编译：改桩必须选中它们，且不落入未知路径。
 $freertosStubImpact = Get-HarnessImpact -ChangedPath @(
     'Tests/stubs/freertos/freertos_stub.c'
     'Tests/stubs/freertos/freertos_stub.h'
     'Tests/stubs/freertos/Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h')
-Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'ui_cell') -Actual $freertosStubImpact.HostModules `
-    -Message '共用 FreeRTOS 桩变化必须选择 filesystem_locator、flash_ftl 与 ui_cell 主机测试'
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'storage_audio_stream', 'storage_catalog', 'ui_cell', 'volume') -Actual $freertosStubImpact.HostModules `
+    -Message '共用 FreeRTOS 桩变化必须选择 filesystem_locator、flash_ftl、storage_audio_stream、storage_catalog、ui_cell 与 volume 主机测试'
 Assert-HarnessEqual -Expected 0 -Actual $freertosStubImpact.UnknownPaths.Count `
     -Message 'Tests/stubs/freertos 由主机模块规则覆盖，不应落入未知路径'
 Assert-HarnessEqual -Expected $false -Actual $freertosStubImpact.RequiresAllHostTests `
     -Message '共用 FreeRTOS 桩变化不应回退全部主机测试'
 
 # Filesystem 持锁统计在主机上依赖的周期计数器与 Service Log 替身（Tests/stubs/lock_env，#208）被 flash_ftl、
-# filesystem_locator 编译：改它们必须选中这两个模块，且不落入未知路径。
+# filesystem_locator 编译，volume 只用其中的 Service Log 替身（#211）：改它们必须选中这三个模块，且不落入未知路径。
 $lockEnvStubImpact = Get-HarnessImpact -ChangedPath @(
     'Tests/stubs/lock_env/lock_env_stub.h'
     'Tests/stubs/lock_env/lock_env_cycle_counter.c'
     'Tests/stubs/lock_env/lock_env_log.c')
-Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $lockEnvStubImpact.HostModules `
-    -Message '持锁统计的主机替身变化必须选择 filesystem_locator 与 flash_ftl 主机测试'
+Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl', 'volume') -Actual $lockEnvStubImpact.HostModules `
+    -Message '持锁统计的主机替身变化必须选择 filesystem_locator、flash_ftl 与 volume 主机测试'
 Assert-HarnessEqual -Expected 0 -Actual $lockEnvStubImpact.UnknownPaths.Count `
     -Message 'Tests/stubs/lock_env 由主机模块规则覆盖，不应落入未知路径'
 
@@ -297,6 +313,13 @@ Assert-HarnessEqual -Expected 0 -Actual $lockEnvStubImpact.UnknownPaths.Count `
 $filesystemLockImpact = Get-HarnessImpact -ChangedPath @('Service/filesystem/filesystem_lock.c', 'Service/filesystem/filesystem_lock.h')
 Assert-HarnessSequence -Expected @('filesystem_locator', 'flash_ftl') -Actual $filesystemLockImpact.HostModules `
     -Message 'Filesystem 入口锁变化必须同时选择文件定位符与 FTL 主机测试'
+
+# 音频流对卷不可用的分类（#211，storage_audio_result）：生产路径、其头文件依赖与共用桩的头选中 storage_audio_stream。
+$audioResultImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/stream/storage_audio_result.c', 'Service/filesystem/filesystem_types.h')
+Assert-HarnessEqual -Expected $true -Actual (@($audioResultImpact.HostModules) -contains 'storage_audio_stream') `
+    -Message '音频流结果分类及其依赖的 Filesystem 类型头变化必须选择 storage_audio_stream 主机测试'
+Assert-HarnessEqual -Expected 0 -Actual $audioResultImpact.UnknownPaths.Count `
+    -Message 'APP/tasks/storage/stream 由主机模块规则覆盖，不应落入未知生产路径'
 
 # ui_cell（#217）是 APP 私有的界面数据短锁模块：生产路径与测试目录各自选中 ui_cell，不落入未知路径。
 $uiCellImpact = Get-HarnessImpact -ChangedPath @('APP/ui_cell/ui_cell.c', 'APP/ui_cell/ui_cell.h', 'Tests/ui_cell/test_ui_cell.c')
@@ -352,7 +375,7 @@ Assert-HarnessSequence -Expected @('board_test_card') -Actual (Get-HarnessSlowTe
     -Message '真实规则声明样本卡有慢用例'
 
 $harnessImpact = Get-HarnessImpact -ChangedPath @('scripts/verify_changed.ps1')
-Assert-HarnessSequence -Expected @('board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'ui_cell', 'w25qxx') -Actual $harnessImpact.HostModules `
+Assert-HarnessSequence -Expected @('board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'ui_cell', 'volume', 'w25qxx') -Actual $harnessImpact.HostModules `
     -Message 'Harness 变化必须回退全部主机测试'
 Assert-HarnessEqual -Expected $true -Actual $harnessImpact.RequiresAllHostTests -Message 'Harness 变化应标记全部测试'
 
@@ -365,7 +388,7 @@ Assert-HarnessEqual -Expected $false -Actual $doxygenCheckImpact.RequiresHardwar
     -Message 'Doxygen 检查脚本不要求上板'
 
 $unknownImpact = Get-HarnessImpact -ChangedPath @('Service/unmapped/player.c')
-Assert-HarnessSequence -Expected @('board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'ui_cell', 'w25qxx') -Actual $unknownImpact.HostModules `
+Assert-HarnessSequence -Expected @('board_test_card', 'external_loader', 'filesystem_locator', 'flash_ftl', 'gui_canvas', 'gui_font', 'gui_task', 'gui_theme', 'monitor_warn', 'music_gui', 'playback_service', 'playback_task', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'ui_cell', 'volume', 'w25qxx') -Actual $unknownImpact.HostModules `
     -Message '未知生产路径不得以零测试通过'
 Assert-HarnessSequence -Expected @('Service/unmapped/player.c') -Actual $unknownImpact.UnknownPaths `
     -Message '应保留触发保守回退的路径证据'

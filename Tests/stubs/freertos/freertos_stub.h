@@ -43,6 +43,16 @@ typedef struct
  */
 typedef void (*FreertosStub_BlockHook)(const FreertosStub_Wait *wait, void *context);
 
+/**
+ * @brief 通知钩子：每次 xTaskNotifyIndexed（含 FromISR 版本）在通知落进目标槽之前调用一次。
+ *        用来看“这次通知发出时被测模块的状态”，例如证明卷事件是先更新状态再叫醒订阅者。
+ * @param[in] task 目标任务。
+ * @param[in] index 槽号。
+ * @param[in] value 通知值（含义由动作决定）。
+ * @param[in,out] context 安装钩子时给的上下文。
+ */
+typedef void (*FreertosStub_NotifyHook)(TaskHandle_t task, UBaseType_t index, uint32_t value, void *context);
+
 /** @brief 某个信号量（互斥锁或二值信号量）的调用统计。 */
 typedef struct
 {
@@ -102,6 +112,13 @@ void freertos_stub_set_tick_step(TickType_t step);
  * @param[in,out] context 传给钩子的上下文。
  */
 void freertos_stub_set_block_hook(FreertosStub_BlockHook hook, void *context);
+
+/**
+ * @brief 安装通知钩子；传 NULL 取消，reset 也会取消。钩子在通知落进槽之前调用，失败的 WithoutOverwrite 通知也会先经过它。
+ * @param[in] hook 钩子函数。
+ * @param[in,out] context 传给钩子的上下文。
+ */
+void freertos_stub_set_notify_hook(FreertosStub_NotifyHook hook, void *context);
 
 /**
  * @brief 无限等待（portMAX_DELAY）后仍无人放行的次数；真实环境里这些调用会一直阻塞。

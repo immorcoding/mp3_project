@@ -411,6 +411,71 @@ static void test_notify_wait_hook_delivers_notification(void)
     assert(record.last.ticks == 100U);
 }
 
+/** @brief 通知钩子记录：被调用的次数、最近一次的参数，以及调用时目标槽里的值。 */
+typedef struct
+{
+    uint32_t calls;
+    TaskHandle_t task;
+    UBaseType_t index;
+    uint32_t value;
+    uint32_t slot_value_seen;
+} NotifyHookRecord;
+
+/**
+ * @brief 通知钩子：记下参数，并读出此刻目标槽的值（通知还没落进去）。
+ * @param[in] task 目标任务。
+ * @param[in] index 槽号。
+ * @param[in] value 通知值。
+ * @param[in,out] context 指向 NotifyHookRecord。
+ */
+static void record_notify(TaskHandle_t task, UBaseType_t index, uint32_t value, void *context)
+{
+    NotifyHookRecord *record = (NotifyHookRecord *)context;
+
+    record->calls++;
+    record->task = task;
+    record->index = index;
+    record->value = value;
+    record->slot_value_seen = freertos_stub_notification_value(task, index);
+}
+
+/**
+ * @brief 通知钩子在通知落进槽之前被调用（让测试能看到“这次通知发出时被测模块的状态”），
+ *        中断版本同样经过它；取消钩子后不再调用，reset 也会取消。
+ */
+static void test_notify_hook_runs_before_the_notification_lands(void)
+{
+    TaskHandle_t target;
+    NotifyHookRecord record = {0};
+    BaseType_t woken = pdFALSE;
+
+    freertos_stub_reset();
+    target = freertos_stub_task_create();
+    freertos_stub_set_notify_hook(record_notify, &record);
+
+    assert(xTaskNotifyIndexed(target, 1U, 0x4U, eSetBits) == pdPASS);
+    assert(record.calls == 1U);
+    assert(record.task == target);
+    assert(record.index == 1U);
+    assert(record.value == 0x4U);
+    assert(record.slot_value_seen == 0U);
+    assert(freertos_stub_notification_value(target, 1U) == 0x4U);
+
+    assert(xTaskNotifyIndexedFromISR(target, 1U, 0x2U, eSetBits, &woken) == pdPASS);
+    assert(record.calls == 2U);
+    assert(record.slot_value_seen == 0x4U);
+
+    freertos_stub_set_notify_hook(NULL, NULL);
+    assert(xTaskNotifyIndexed(target, 1U, 0x1U, eSetBits) == pdPASS);
+    assert(record.calls == 2U);
+
+    freertos_stub_set_notify_hook(record_notify, &record);
+    freertos_stub_reset();
+    target = freertos_stub_task_create();
+    assert(xTaskNotifyIndexed(target, 0U, 0x1U, eSetBits) == pdPASS);
+    assert(record.calls == 2U);
+}
+
 /**
  * @brief 中断里 Give 单独计数，且按脚本报告“唤醒了更高优先级任务”；portYIELD_FROM_ISR 只在传入非零时计一次让出。
  */
@@ -593,6 +658,7 @@ int main(void)
     test_notify_state_clear_is_per_index();
     test_notify_targets_the_named_task();
     test_notify_wait_hook_delivers_notification();
+    test_notify_hook_runs_before_the_notification_lands();
     test_give_from_isr_counts_and_reports_woken();
     test_task_delay_advances_tick();
     puts("freertos_stub tests passed");

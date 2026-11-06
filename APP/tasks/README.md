@@ -5,7 +5,7 @@
 ## APP 内部 Interface
 
 - `app_task_start()`：由 `APP/app.c` 创建 bootstrap task 并启动调度器；
-- `log_task()`、`storage_task()`、`playback_task()`、`monitor_task()`、`gui_task()`：仅作为 FreeRTOS `TaskFunction_t` 交给创建器。播放任务用 `xTaskCreateStatic` 创建（TCB 与栈在 `app_tasks.c` 的 DTCM `.bss`），其余任务仍用 `xTaskCreate`；
+- `log_task()`、`storage_task()`、`volume_task()`、`playback_task()`、`monitor_task()`、`gui_task()`：仅作为 FreeRTOS `TaskFunction_t` 交给创建器。播放任务用 `xTaskCreateStatic` 创建（TCB 与栈在 `app_tasks.c` 的 DTCM `.bss`）；卷任务同样静态创建，TCB 在 `.bss`，栈放 AXI SRAM 新段 `.app_axi_ram`；一次性的 Flash 启动任务由卷任务静态创建（`volume/flash/volume_flash_task.c`，栈同样在 `.app_axi_ram`），其余任务仍用 `xTaskCreate`；
 - `playback_command_send()`、`playback_snapshot_read()`：播放任务公开合同（`playback/playback_contract.h`），只给音乐应用 GUI 分区（`APP/apps/music/gui/`）和模拟器脚本化后端使用，见 [播放任务](playback/README.md)。
 
 本目录不是独立的跨 Module Interface；其头文件和任务入口只服务于顶层 `APP` Module，其他层不得包含或调用。
@@ -24,8 +24,10 @@ Task 是 APP 创建后的运行时执行上下文：任务通过 Service/Platfor
 
 | 任务 | 优先级 | 栈（word） | 创建方式 | 职责 |
 |---|---|---|---|---|
-| Playback Task | 3 | 5120 | `xTaskCreateStatic`，DTCM | 唯一的播放状态机；解码、PCM 半区补满与提交、快照发布 |
-| Storage Task | 2 | 1024 | `xTaskCreate` | SD 热插拔、曲库、FatFs、Flash 回收、音频流读块 |
+| Playback Task | 4 | 5120 | `xTaskCreateStatic`，DTCM | 唯一的播放状态机；解码、PCM 半区补满与提交、快照发布 |
+| Volume Task | 3 | 1024 | `xTaskCreateStatic`，栈在 AXI `.app_axi_ram` | 卡检测消抖、关闸、对账、SD 挂载与卸载、发布卷事件（不碰具体的文件读写），见 [卷任务](volume/README.md) |
+| Storage Task | 2 | 1024 | `xTaskCreate` | 卷事件的订阅者：曲库扫描、两个槽、音频流读块、Flash 回收；逐步拆给音频读取、前台、后台任务 |
+| Flash Boot Task（一次性） | 2 | 1024（约 4 KiB） | `xTaskCreateStatic`，栈在 AXI `.app_axi_ram` | Flash 基准、挂载、无文件系统时格式化、发 Flash 卷就绪，打栈水位后自删；卷任务创建、不等它 |
 | GUI Task | 1 | 2048 | `xTaskCreate` | LVGL 唯一执行上下文；每圈结束后 `vTaskDelay` 睡到下一个 LVGL 定时器到期 |
 | Log Task | 1 | 512 | `xTaskCreate` | 日志消费 |
 | Monitor Task | 1 | 256 | `xTaskCreate` | 结温与板级监控 |
@@ -33,18 +35,19 @@ Task 是 APP 创建后的运行时执行上下文：任务通过 Service/Platfor
 
 排序依据（[#71](https://github.com/immorcoding/mp3_project/issues/71) A6、B1、B2；[#62](https://github.com/immorcoding/mp3_project/issues/62)）：
 
-- **播放最高**：PCM 半区只有约 24 ms（1152 帧，48 kHz）的补满期限，期限只允许受中断与播放任务自身工作（有上界的一次唤醒，不含 FatFs/LVGL、不同步等待 Storage、发送不阻塞）影响。Storage 的一次 FatFs 读取（含 SD DMA 与可能的单分块 500 ms 超时）和 GUI 的一帧 `lv_timer_handler` 都可能远长于期限，所以播放任务必须能抢占它们。播放与这些长任务的关系只靠优先级：播放的期限不依赖 GUI 或文件读取中途让出，播放任务也不与低优先级任务共用互斥锁。GUI 一帧中途不加让出点；每圈结束后至少睡到下一个 tick，这是给同级和低优先级任务留时间，不是为了播放（睡多久见 [GUI Task](gui/README.md)）。
-- **Storage 高于 GUI/Log/Monitor**：块池缓冲有限，Storage 要在播放消耗完块之前及时补块；GUI 的帧循环不应拖慢读块。
+- **播放最高（4）**：PCM 半区只有约 24 ms（1152 帧，48 kHz）的补满期限，期限只允许受中断与播放任务自身工作（有上界的一次唤醒，不含 FatFs/LVGL、不同步等待 Storage、发送不阻塞）影响。播放不碰文件、不拿任何文件锁（Filesystem 的调用者拒绝名单，入口断言停机），所以卷锁上的优先级反转挡不到它；升到 4 是为了卷任务（3）做对账时播放仍能抢占它。Storage 的一次 FatFs 读取（含 SD DMA 与可能的单分块 500 ms 超时）和 GUI 的一帧 `lv_timer_handler` 都可能远长于期限，所以播放任务必须能抢占它们。播放与这些长任务的关系只靠优先级：播放的期限不依赖 GUI 或文件读取中途让出，播放任务也不与低优先级任务共用互斥锁。GUI 一帧中途不加让出点；每圈结束后至少睡到下一个 tick，这是给同级和低优先级任务留时间，不是为了播放（睡多久见 [GUI Task](gui/README.md)）。
+- **卷任务 3**：用户拔卡要马上停，对账不能被 Storage、GUI 的长活拖住。它与定时器服务任务同级；等 SD 卷锁时持锁的 Storage 经优先级继承临时升到 3，优先级 2 与 3 之间没有别的任务能抢走它，反转的上界是那一次调用的持锁时间（见 [卷任务](volume/README.md)“优先级反转在卷锁上的表现”）。
+- **Storage 与 Flash 启动任务 2，高于 GUI/Log/Monitor**：块池缓冲有限，Storage 要在播放消耗完块之前及时补块；GUI 的帧循环不应拖慢读块。Flash 启动任务低于卷任务，`MountFlash` 持 Flash 卷锁 3.3 至 8.3 s 期间插拔卡不受影响（SD 与 Flash 各一把卷锁）。
 - **GUI、Log、Monitor 同级 1**：时间片轮转，互不依赖。GUI 每圈睡眠，优先级低于它的任务（含 IDLE）才拿得到 CPU。
 - **Boot 最低**：只在启动时创建任务。
-- **定时器服务任务同为 3**：`configTIMER_TASK_PRIORITY` 为 3，应用目前没有软件定时器；引入软件定时器时回调须很短，否则复核两者优先级。`FreeRTOSConfig.h` 的优先级相关配置不改。
+- **定时器服务任务与卷任务同为 3、低于播放（4）**：`configTIMER_TASK_PRIORITY` 为 3，应用目前没有软件定时器（卷任务的消抖用等通知带超时，不用软件定时器），它一直阻塞、不占 CPU；引入软件定时器时回调须很短，否则复核这三个优先级。`FreeRTOSConfig.h` 的优先级相关配置不改。
 
-启动顺序：Playback Task 晚于 Storage Task 创建，使 Storage 已完成 `storage_audio_stream_init()`（播放任务此前调用请求信箱会被拒绝）；Playback Task 先于 GUI Task 创建，使命令 FIFO、状态信箱与回调注册先就绪。
+启动顺序：Boot 先做内存准备（可选的 SDRAM 自检，做完才创建用到 SDRAM 的任务）；Storage Task 先创建，运行到首次阻塞时已完成 `storage_audio_stream_init()` 并登记卷事件订阅（播放任务此前调用请求信箱会被拒绝）；Volume Task 随后创建，入口先创建 Flash 启动任务再初始化 SD；Playback Task 晚于 Storage Task 创建；Playback Task 先于 GUI Task 创建，使命令 FIFO、状态信箱与回调注册先就绪。Boot 优先级最低，任何更高优先级的任务没阻塞时它不会继续，所以这些先后不是靠运气。Boot 只有 128 word 栈，装不下 SDRAM 自检，核算见 [卷任务](volume/README.md)“Boot 栈核算”。
 
 ## 约束
 
 - 任务入口不得返回；
-- Task 之间不能共享 FatFs 对象或绕过其资源所有者；播放任务不碰 FatFs，音频文件的打开、读取、关闭只在 Storage Task；
+- Task 之间不能共享 FatFs 对象或绕过其资源所有者；播放任务不碰 FatFs，音频文件的打开、读取、关闭只在 Storage Task（0.10.0 里逐步移给音频读取任务）；卷任务与 Storage Task 共用 Filesystem 的卷锁，互不等待订阅者；
 - ISR 只唤醒任务，不能把文件系统、日志格式化或设备初始化移入中断。
 
 ## 命名

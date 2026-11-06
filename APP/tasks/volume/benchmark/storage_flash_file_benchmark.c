@@ -3,11 +3,11 @@
  * @brief Flash 文件端到端测速与校验；APP 只消费 Service 文件能力。
  */
 #include "APP/app_config.h"
-#include "APP/tasks/storage/benchmark/storage_flash_benchmark_config.h"
+#include "APP/tasks/volume/benchmark/storage_flash_benchmark_config.h"
 
 #if STORAGE_FLASH_BENCHMARK_ENABLE && STORAGE_FLASH_BENCHMARK_FILE_ENABLE
 
-#include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
+#include "APP/tasks/volume/benchmark/storage_flash_benchmark.h"
 #include "Service/filesystem/filesystem_file.h"
 #include "Service/log/log_service.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"

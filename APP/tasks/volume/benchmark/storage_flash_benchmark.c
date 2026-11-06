@@ -16,8 +16,8 @@
 #if STORAGE_FLASH_BENCHMARK_ENABLE
 
 /* Includes ------------------------------------------------------------------*/
-#include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
-#include "APP/tasks/storage/benchmark/storage_flash_benchmark_config.h"
+#include "APP/tasks/volume/benchmark/storage_flash_benchmark.h"
+#include "APP/tasks/volume/benchmark/storage_flash_benchmark_config.h"
 #include "Service/filesystem/filesystem_flash_access.h"
 
 #include <stdbool.h>

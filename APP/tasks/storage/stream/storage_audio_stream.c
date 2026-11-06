@@ -8,6 +8,9 @@
 #include "storage_audio_stream.h"
 
 #include "storage_audio_range.h"
+#include "storage_audio_result.h"
+
+#include "APP/tasks/volume/volume_event.h"
 
 #include "APP/tasks/storage/catalog/storage_catalog.h"
 #include "APP/tasks/storage/catalog/storage_sheet.h"
@@ -198,44 +201,17 @@ static bool storage_audio_request_pending(void)
 
 /**
  * @brief 本圈是否还有工作，决定主循环能否阻塞等待。
- * @param[in] media 介质状态。
- * @return true 有待处理请求，或流已打开且有空闲块可读。消抖中为 false。
+ * @return true 有待处理请求，或流已打开且有空闲块可读。
+ * @note  卷变了（读到 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`）之后流已经关掉 FIL，`storage_audio_file_open` 为假，
+ *        所以这里不会空转，主循环等卷事件（序号变了就写 `CARD_REMOVED`）。
  */
-bool storage_audio_stream_has_work(Storage_AudioMediaTypeDef media)
+bool storage_audio_stream_has_work(void)
 {
-    if (media == STORAGE_AUDIO_MEDIA_DEBOUNCING)
-    {
-        return false;
-    }
     if (storage_audio_request_pending())
     {
         return true;
     }
     return storage_audio_file_open && (storage_audio_block_free_count() != 0U);
-}
-
-/**
- * @brief 把 Service 状态收成开启结果。
- * @param[in] status 打开/seek/读取的 Service 状态。
- * @param[in] open_failure true 表示打开文件本身失败（无法区分缺失与损坏，按坏文件）。
- * @return 开启结果码。
- */
-static Storage_AudioOpenResultTypeDef storage_audio_map_open_status(Service_StatusTypeDef status,
-                                                                    bool open_failure)
-{
-    switch (status)
-    {
-        case SERVICE_NO_MEDIA:
-        case SERVICE_NOT_READY:
-        case SERVICE_NO_FILESYSTEM:
-            return STORAGE_AUDIO_OPEN_NOT_READY;
-        case SERVICE_TIMEOUT:
-            return STORAGE_AUDIO_OPEN_IO_ERROR;
-        case SERVICE_INVALID_PARAM:
-            return STORAGE_AUDIO_OPEN_BAD_FILE;
-        default:
-            return open_failure ? STORAGE_AUDIO_OPEN_BAD_FILE : STORAGE_AUDIO_OPEN_IO_ERROR;
-    }
 }
 
 /**
@@ -259,7 +235,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_read_exact(uint32_t offset,
     }
     if (status != SERVICE_OK)
     {
-        return storage_audio_map_open_status(status, false);
+        return storage_audio_classify_open_status(status, false);
     }
     return (got == count) ? STORAGE_AUDIO_OPEN_OK : STORAGE_AUDIO_OPEN_IO_ERROR;
 }
@@ -290,7 +266,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t audio_of
     status = Service_Filesystem_GetFileSize(storage_audio_file, &size64);
     if (status != SERVICE_OK)
     {
-        result = storage_audio_map_open_status(status, false);
+        result = storage_audio_classify_open_status(status, false);
     }
     else if ((size64 == 0U) || (size64 > UINT32_MAX))
     {
@@ -327,7 +303,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t audio_of
                 }
                 else
                 {
-                    result = storage_audio_map_open_status(status, false);
+                    result = storage_audio_classify_open_status(status, false);
                 }
             }
         }
@@ -343,7 +319,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_probe_file(uint32_t audio_of
 /**
  * @brief 按请求打开曲目，填写流记录的开启部分。
  * @param[in] request 非“无流”的请求。
- * @param[in] media 介质状态（非消抖）。
+ * @param[in] media 介质状态。
  * @return 开启结果；OK 时 FIL 已打开，storage_audio_record 的参数已填。
  * @note  先按曲库里的文件定位符打开，核对不符退回按路径打开（STOR-17）；打开成功后记一行 `Stream` INFO。
  *        请求的 AudioOffset 钳到音频区间内后定位（0 为区间起点）；钳到末端时流记录同时带 ENDED。代次 0 表示“当前”。位置超出列表按 STALE。无法区分“文件不存在”与“打开时 I/O 错误”，
@@ -397,7 +373,7 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
     status = storage_track_open(request->Position, catalog_index, storage_audio_path, &storage_audio_file, &open_us);
     if (status != SERVICE_OK)
     {
-        return storage_audio_map_open_status(status, true);
+        return storage_audio_classify_open_status(status, true);
     }
     storage_audio_file_open = true;
 
@@ -420,17 +396,13 @@ static Storage_AudioOpenResultTypeDef storage_audio_open(const Storage_AudioRequ
 
 /**
  * @brief 处理请求信箱：关闭旧流，开启新流并应答（主循环第一步）。
- * @param[in] media 介质状态。消抖中暂缓，不消费请求、不应答。
+ * @param[in] media 介质状态。消抖中不暂缓：文件调用在 Filesystem 入口等闸，开流的调用慢约 30 ms 后正常返回，或卸载后返回失败。
  * @note  开启 ≤ f_open + 标签探测（读头、读尾）；一次读块在随后的 read_block。
  */
 void storage_audio_stream_process_request(Storage_AudioMediaTypeDef media)
 {
     Storage_AudioRequestTypeDef request;
 
-    if (media == STORAGE_AUDIO_MEDIA_DEBOUNCING)
-    {
-        return;
-    }
     if (xQueueReceive(storage_audio_request_queue, &request, 0U) != pdTRUE)
     {
         return;
@@ -461,13 +433,23 @@ void storage_audio_stream_process_request(Storage_AudioMediaTypeDef media)
 
 /**
  * @brief 最多读一块并交给播放任务（主循环第三步）。
- * @param[in] media 介质状态。消抖中暂缓补块。
+ * @param[in] media 介质状态；未就绪不读。
+ * @param[in] handled_volume_sequence Storage Task 已经处理过的 SD 卷序号。读失败时拿它判断卷变没变：
+ *            当前序号与它相同且卷仍挂着，说明卡还在、设备出错。
  * @note  一块对应一次 SDMMC DMA，也是取消的上界。读完后若请求信箱已有新请求，说明流被取代，
  *        这个半读的块不入就绪队列，直接放回空闲队列。ENDED 只在最后一块入队之后才写。
+ *
+ *        **读到 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 时**：先对同一个句柄 `CloseFile`（结果不看）。它在
+ *        Filesystem 入口等闸，所以卡刚拔、边沿已到而 30 ms 消抖或对账还没结束时，会一直等到本轮对账结束才返回，
+ *        不会把拔卡误报成读错误；闸开着时立刻返回。然后看 SD 卷：序号变了或卷已不挂，是卡没了，流停住（FIL 已关，
+ *        不空转），等卷事件写 `CARD_REMOVED`；序号没变且卷仍挂着，是卡还在、设备出错（例如标签读取传输出错使设备
+ *        进 ERROR），没有边沿就没有卷事件，立刻按读错误报，不等 T_data（#195 第 9 条）。
  */
-void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media)
+void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media, uint32_t handled_volume_sequence)
 {
     Storage_AudioBlockTypeDef *block;
+    Storage_AudioReadVerdictTypeDef verdict;
+    Volume_StatusTypeDef volume;
     Service_StatusTypeDef status;
     uint32_t want;
     uint32_t got = 0U;
@@ -491,7 +473,27 @@ void storage_audio_stream_read_block(Storage_AudioMediaTypeDef media)
         (void)storage_audio_block_release(block);
         return;
     }
-    if ((status != SERVICE_OK) || (got == 0U))
+    if (Service_Filesystem_StatusIsVolumeUnavailable(status))
+    {
+        /* 先放掉这个句柄再下结论：CloseFile 在 Filesystem 入口等闸，消抖或对账还没结束时会等到结束，闸开着时立刻返回。
+         * 不对它重试、不期待它成功（槽靠卸载释放）。 */
+        (void)Service_Filesystem_CloseFile(storage_audio_file);
+        storage_audio_file_open = false;
+    }
+    volume = volume_status(VOLUME_ID_SD);
+    verdict = storage_audio_classify_read(status, got, volume.Mounted && (volume.Sequence == handled_volume_sequence));
+    if (verdict == STORAGE_AUDIO_READ_STALL)
+    {
+        /* 卡没了或正在对账：不是文件错误，不写 READ_ERROR、不缓存。FIL 已关，记录保持不变；
+         * 卷任务卸载后发卷事件，序号变了由 storage_audio_stream_card_removed() 写 CARD_REMOVED（#195 第 9 条）。 */
+        (void)storage_audio_block_release(block);
+        storage_audio_remaining = 0U;
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO,
+                               storage_audio_log_tag,
+                               "Audio read interrupted: volume unavailable, waiting for volume event.");
+        return;
+    }
+    if (verdict == STORAGE_AUDIO_READ_ERROR)
     {
         (void)storage_audio_block_release(block);
         storage_audio_close_file();
@@ -530,7 +532,9 @@ static bool storage_audio_stream_held_by_playback(void)
 
 /**
  * @brief 确认拔卡（或换卡）时，若当前流仍被播放任务持有，先关闭 FIL，再写 {当前流序号, CARD_REMOVED} 并唤醒播放任务。
- * @note  须在卸载 FatFs 卷之前调用。“当前流”的完整定义见 APP/tasks/storage/README.md 音频流分区的拔卡条目。
+ * @note  由 Storage Task 在处理 SD 卷序号变化时调用，此时卷任务已经卸载（令牌失效），所以 `CloseFile` 只返回
+ *        `INVALID_HANDLE`，无害；不再有“须在卸载之前”的顺序（卷任务不等订阅者）。“当前流”的完整定义见
+ *        APP/tasks/storage/README.md 音频流分区的拔卡条目。
  */
 void storage_audio_stream_card_removed(void)
 {

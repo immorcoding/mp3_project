@@ -2,8 +2,8 @@
  * @file test_flash_file_benchmark.c
  * @brief 真实 APP/Service/FatFs/USER/FTL 文件回归；仅替换任务、日志和故障边界。
  */
-#include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
-#include "APP/tasks/storage/benchmark/storage_flash_benchmark_config.h"
+#include "APP/tasks/volume/benchmark/storage_flash_benchmark.h"
+#include "APP/tasks/volume/benchmark/storage_flash_benchmark_config.h"
 #include "Service/filesystem/filesystem_file.h"
 #include "Service/filesystem/filesystem_service.h"
 #include "Service/log/log_service.h"
