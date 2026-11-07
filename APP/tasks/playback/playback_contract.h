@@ -3,7 +3,7 @@
   * @file    playback_contract.h
   * @brief   播放任务公开合同：GUI 音乐分区与模拟器脚本化后端共用的命令与快照 Interface。
   * @note    来源：#71 K1–K5、#53。只含类型与两个函数声明，不暴露 FreeRTOS 句柄。
-  *          GUI 里只有音乐分区（APP/tasks/gui/music）包含本头，Service/gui 不得包含。
+  *          GUI 侧只有音乐应用的 GUI 分区（APP/apps/music/gui）包含本头，Service/gui 不得包含。
   *          任务入口与通知槽在 playback_task.h，不在本头里。
   ******************************************************************************
   */
@@ -49,7 +49,7 @@ typedef enum
 {
     PLAYBACK_STOP_REASON_NONE = 0U,        /* 开机后未播过。 */
     PLAYBACK_STOP_REASON_CARD_REMOVED,
-    PLAYBACK_STOP_REASON_NOT_READY,        /* 开启应答 NOT_READY：SD 未就绪。插卡扫描期间 Storage 不应答，结果是 NO_DATA。 */
+    PLAYBACK_STOP_REASON_NOT_READY,        /* 开启应答 NOT_READY：SD 未就绪或曲库没好。插卡或开机后曲库扫描期间音频读取任务立刻应答 NOT_READY（#215，原来请求排队，T_data 内扫完才出声），要等扫完再点一次播放。 */
     PLAYBACK_STOP_REASON_NO_TRACK,         /* 空库或下标越界。 */
     PLAYBACK_STOP_REASON_CATALOG_CHANGED,  /* 开启应答 STALE。 */
     PLAYBACK_STOP_REASON_READ_ERROR,       /* 开启 IO_ERROR 或流中 READ_ERROR。 */

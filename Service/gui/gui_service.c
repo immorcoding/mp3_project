@@ -13,6 +13,7 @@
 
 #include "Service/gui/gui_service.h"
 #include "Service/gui/gui_service_input.h"
+#include "Service/gui/gui_service_sleep.h"
 #include "Service/gui/boot/gui_service_boot.h"
 #include "Service/gui/font/gui_service_font.h"
 #include "Service/gui/gui_service_config.h"
@@ -34,6 +35,10 @@
 #include "Platform/touch/platform_touch.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
+
+/* 睡眠上限就是屏幕刷新周期：再睡久就会错过下一次刷新（GUI-28）。 */
+_Static_assert(SERVICE_GUI_SLEEP_MAX_MS == LV_DISP_DEF_REFR_PERIOD,
+               "SERVICE_GUI_SLEEP_MAX_MS must equal LV_DISP_DEF_REFR_PERIOD");
 
 /**
  * @brief LVGL v8 仅保存两块绘制缓冲的指针，故其存储期必须覆盖显示驱动的整个生命周期。
@@ -290,14 +295,23 @@ Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index)
 }
 
 /**
- * @brief  推进 GUI Task 的 LVGL Tick、输入、动画与刷新处理。
+ * @brief  推进 GUI Task 的 LVGL Tick、输入、动画与刷新处理，并给出本圈之后该睡多久。
+ * @return GUI Task 本圈结束后应睡的毫秒数，恒在 SERVICE_GUI_SLEEP_MIN_MS（1）到
+ *         SERVICE_GUI_SLEEP_MAX_MS（16，即 LV_DISP_DEF_REFR_PERIOD）之间。
+ *         等于 lv_timer_handler() 的返回值减本圈实际耗时再夹上下限；输入槽里有待取走的
+ *         命令时只给下限（GUI-28）。
  * @note   只能由完成 Service_GUI_Init() 的同一 GUI Task 周期调用。LCD DMA 传输
  *         期间，LVGL 通过本 Module 的 wait callback 阻塞等待最终 ISR 事件。
+ *         本函数自己不睡眠，睡眠由调用方在测量段之外完成；忽略返回值（如 GUI 模拟器）
+ *         只是不让出 CPU，LVGL 行为不变。本圈耗时只量本函数内部（lv_tick_inc 到
+ *         handler 返回）；下一圈 Process 之前的 gui_step 耗时不在其中，帧间隔会多出这么久。
  */
-void Service_GUI_Process(void)
+uint32_t Service_GUI_Process(void)
 {
     const TickType_t current_tick = xTaskGetTickCount();
     const TickType_t elapsed_ticks = current_tick - service_gui_last_tick;
+    uint32_t timer_ms;
+    uint32_t used_ms;
 
     if (elapsed_ticks != 0U)
     {
@@ -306,13 +320,21 @@ void Service_GUI_Process(void)
         service_gui_last_tick = current_tick;
     }
 
-    (void)lv_timer_handler();
+    timer_ms = lv_timer_handler();
+
+    /*
+     * lv_tick 只在上面推进，handler 运行期间时间不动，timer_ms 是按开头的冻结时间算的；
+     * 渲染与等 DMA 花掉的时间要用 FreeRTOS tick 另量，睡眠时扣掉，否则会叠到帧间隔上。
+     */
+    used_ms = (uint32_t)(xTaskGetTickCount() - current_tick) * (uint32_t)portTICK_PERIOD_MS;
+
+    return service_gui_sleep_ms(timer_ms, used_ms, service_gui_input_has_pending());
 }
 
 /**
  * @brief 读取 QueueTab 顶部已滚出的整行数，供 GUI Task 计算下一窗 Index。
  * @return 完整滚出顶部的行数；对象未就绪或尚无行时为 0。
- * @note 不包含 storage_listbuffer.h。只能由同一 GUI Task 调用。
+ * @note 不包含 APP 的界面数据格子。只能由同一 GUI Task 调用。
  */
 uint16_t Service_GUI_QueueScrollLead(void)
 {
@@ -324,7 +346,7 @@ uint16_t Service_GUI_QueueScrollLead(void)
  * @param[out] input 命令与可选 param；无点击时 command 为 NONE。
  * @retval SERVICE_OK 已写入 input。
  * @retval SERVICE_INVALID_PARAM input 为空。
- * @note 只能由同一 GUI Task 调用。不包含 storage_listbuffer.h。
+ * @note 只能由同一 GUI Task 调用。不包含 APP 的界面数据格子。
  *       `MUSIC_QUEUE_SELECT` 时 param 为播放列表下标；进度条手势 `MUSIC_SEEK_PRESS/DRAG/RELEASE` 时为 0..SERVICE_GUI_SEEK_SCALE 千分比。
  *       空闲不是 NOT_READY。
  */
@@ -442,7 +464,7 @@ Service_StatusTypeDef Service_GUI_StatusFlash(void)
  * @note 只能由同一 GUI Task 在 Init() 成功后调用。Service 不认识文本的语义，只负责画：
  *       曲名宽于可见窗口（SERVICE_GUI_MUSIC_TITLE_WIDTH）时单行循环滚动，否则静止居中；
  *       歌手宽于同一窗口时截断加省略号。占位文案（如 `Unknown Artist`）由调用方决定。
- *       调用返回后调用方可释放或复用两段文本（如把名称槽写回 IDLE）。
+ *       调用返回后调用方可释放或复用两段文本（如 GUI 的结果副本被下一次读结果覆盖）。
  */
 Service_StatusTypeDef Service_GUI_TitleApply(const char *text, const char *artist)
 {
@@ -464,7 +486,7 @@ Service_StatusTypeDef Service_GUI_VinylApply(bool playing, bool reset_angle)
 }
 
 /**
- * @brief 把一窗曲名与歌手填进 Queue 可见行，不包含 storage_listbuffer。
+ * @brief 把一窗曲名与歌手填进 Queue 可见行，不包含 APP 的界面数据格子。
  * @param[in] titles 曲名字符串指针表；length 为 0 时允许为 NULL。
  * @param[in] artists 与 titles 平行的歌手字符串指针表；NULL 表示全部行歌手为空，单项可为 ""。
  * @param[in] length 本窗实际条数，至多 SERVICE_GUI_MAIN_QUEUE_MAX_ROWS。
@@ -476,7 +498,7 @@ Service_StatusTypeDef Service_GUI_VinylApply(bool playing, bool reset_angle)
  * @retval SERVICE_NOT_READY QueueTab 尚未创建。
  * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
  * @note 只能由完成 Service_GUI_Init() 的同一 GUI Task 调用。曲名由调用方持有，
- *       Label 会拷贝文本，调用返回后调用方可把 listbuffer 写回 IDLE。曲名与歌手由调用方备好，
+ *       Label 会拷贝文本，调用返回后调用方可改写自己的窗口副本。曲名与歌手由调用方备好，
  *       本函数不解析路径、不替换空歌手（GUI-25）。
  *       已有行转 head 回收，不按整表无限 create。
  */

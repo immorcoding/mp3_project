@@ -10,8 +10,8 @@
 /**
  * @brief 检查 USER 逻辑盘是否就绪，不触发扫描或格式化。
  * @param lun 驱动内编号，当前后端仅使用 0；不是全局卷号。
- * @return 0 表示已就绪；STA_NOINIT 表示后端或调用上下文未就绪。
- * @note 强实现仅 Storage Task 调用；默认弱实现始终返回 STA_NOINIT。
+ * @return 0 表示已就绪；STA_NOINIT 表示后端未就绪（卷未初始化或未挂载）。
+ * @note 强实现只在持 Flash 卷锁的公开调用里被 FatFs 调用；默认弱实现始终返回 STA_NOINIT。
  */
 DSTATUS BSP_USER_DISKIO_Init(BYTE lun)
 {
@@ -21,19 +21,19 @@ DSTATUS BSP_USER_DISKIO_Init(BYTE lun)
 /**
  * @brief 查询 USER 后端就绪状态，不访问介质。
  * @param lun 驱动内编号，当前仅支持 0。
- * @return 0 为可访问；STA_NOINIT 为未就绪或非所有者上下文。
- * @note 默认弱定义保持未就绪，不伪造介质存在或成功初始化。
+ * @return 0 为可访问；STA_NOINIT 为卷未就绪。
+ * @note 只看卷状态，不看调用任务：FatFs 每次进入都会查询它，非某个固定任务的调用者若在这里得到
+ *       STA_NOINIT，FatFs 会丢弃挂载状态并尝试重挂。默认弱定义保持未就绪，不伪造介质存在或成功初始化。
  */
 DSTATUS BSP_USER_DISKIO_GetStatus(BYTE lun)
 {
-    return lun == 0 && filesystem_flash_transfer_is_owner() &&
-                   Platform_Flash_GetVolumeState() == PLATFORM_FLASH_VOLUME_READY
+    return lun == 0 && Platform_Flash_GetVolumeState() == PLATFORM_FLASH_VOLUME_READY
                ? 0
                : STA_NOINIT;
 }
 
 /**
- * @brief 检查 USER 读写参数、所有者及完整逻辑范围。
+ * @brief 检查 USER 读写参数、卷就绪状态及完整逻辑范围。
  * @param[in] lun 驱动内编号，仅支持 0。
  * @param[in] data 用于非空检查的调用者缓冲，此处不读写其内容。
  * @param[in] lba 起始逻辑扇区号。
@@ -67,7 +67,7 @@ static DRESULT filesystem_flash_check(BYTE lun, const void *data, DWORD lba, UIN
  * @param count 非零扇区数，完整范围不得越过逻辑容量。
  * @return RES_OK 数据已可用；RES_PARERR 参数无效；RES_NOTRDY 未就绪；
  *         RES_ERROR 表示执行失败，输出可能部分更新。
- * @note 强实现仅 Storage Task 调用，DMA 使用 FTL 内部缓冲；默认弱定义安全失败。
+ * @note 强实现只在持 Flash 卷锁的公开调用里被 FatFs 调用，DMA 使用 FTL 内部缓冲；默认弱定义安全失败。
  */
 DRESULT BSP_USER_DISKIO_ReadBlocks(BYTE lun, BYTE *data, DWORD lba, UINT count)
 {
@@ -87,7 +87,7 @@ DRESULT BSP_USER_DISKIO_ReadBlocks(BYTE lun, BYTE *data, DWORD lba, UINT count)
  * @param count 非零扇区数，完整范围必须有效。
  * @return RES_OK 涉及各组已提交；参数、未就绪和执行失败分别为
  *         RES_PARERR、RES_NOTRDY、RES_ERROR。
- * @note 强实现仅 Storage Task 调用；跨组失败可能部分提交，默认弱定义绝不伪报成功。
+ * @note 强实现只在持 Flash 卷锁的公开调用里被 FatFs 调用；跨组失败可能部分提交，默认弱定义绝不伪报成功。
  */
 DRESULT BSP_USER_DISKIO_WriteBlocks(BYTE lun, const BYTE *data, DWORD lba, UINT count)
 {
@@ -106,7 +106,7 @@ DRESULT BSP_USER_DISKIO_WriteBlocks(BYTE lun, const BYTE *data, DWORD lba, UINT 
  * @param data 几何输出缓冲：分别为 DWORD、WORD、DWORD；CTRL_SYNC 允许 NULL。
  * @return 强实现按命令返回 RES_OK、RES_PARERR、RES_NOTRDY 或 RES_ERROR；
  *         默认弱定义固定返回 RES_NOTRDY。
- * @note 强实现仅 Storage Task 调用；GET_BLOCK_SIZE 返回 1，不暴露七扇区组约束。
+ * @note 强实现只在持 Flash 卷锁的公开调用里被 FatFs 调用；GET_BLOCK_SIZE 返回 1，不暴露七扇区组约束。
  */
 DRESULT BSP_USER_DISKIO_Ioctl(BYTE lun, BYTE command, void *data)
 {

@@ -18,7 +18,7 @@ typedef enum
     SERVICE_OK = 0U,         /**< 本次调用成功完成。 */
     SERVICE_ERROR,           /**< 失败且没有更具体的公开语义，例如底层 I/O 或数据损坏。 */
     SERVICE_INVALID_PARAM,   /**< 参数非法，例如空指针、非法卷、非法路径或非法打开方式。 */
-    SERVICE_NOT_READY,       /**< 能力尚未就绪，例如未初始化、未挂载或当前任务不是执行器所有者。 */
+    SERVICE_NOT_READY,       /**< 能力尚未就绪，例如未初始化或未挂载。 */
     SERVICE_BUSY,            /**< 资源正被占用，例如槽用尽、目标已存在、卷上仍有打开对象或目录非空。 */
     SERVICE_TIMEOUT,         /**< 等待底层完成超时。 */
     SERVICE_NO_FILESYSTEM,   /**< 介质存在，但没有可识别的文件系统或 FTL 卷。 */

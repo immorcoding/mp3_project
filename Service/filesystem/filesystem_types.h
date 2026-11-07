@@ -6,7 +6,10 @@
 #ifndef FILESYSTEM_TYPES_H
 #define FILESYSTEM_TYPES_H
 
+#include <stdbool.h>
 #include <stdint.h>
+
+#include "Service/service.h"
 
 #define SERVICE_FILESYSTEM_PATH_MAX_BYTES 255U /* 对外 UTF-8 相对路径最大字节数，不含结尾 '\0'。 */
 #define SERVICE_FILESYSTEM_NAME_MAX_BYTES 255U /* 单个目录项 UTF-8 名称最大字节数，不含结尾 '\0'。 */
@@ -31,5 +34,19 @@ typedef struct
 {
     uint32_t Opaque[4]; /**< Service 私有内容，调用者不得解释。 */
 } Service_Filesystem_FileLocatorTypeDef;
+
+/**
+ * @brief 失败结果是不是“卷不可用”，而不是文件错误。
+ * @param[in] status 文件、目录或生命周期入口返回的 Service 状态。
+ * @retval true `NO_MEDIA`（读写失败时卡检测脚显示卡已不在）、`NOT_READY`（卷没挂，或正在卸载和重挂）或
+ *         `INVALID_HANDLE`（句柄随卸载失效）。
+ * @retval false 成功，或任何其他状态；其他失败表示卡还在，是文件、参数或介质本身的问题。
+ * @note  调用者收到 true 时不当文件错误：不写 `READ_ERROR`，不回退，不缓存，回到等待点先看卷序号
+ *        （STOR-8、ADR-0024 第 13 条）。纯函数，任何任务和上下文都可以调用。
+ */
+static inline bool Service_Filesystem_StatusIsVolumeUnavailable(Service_StatusTypeDef status)
+{
+    return (status == SERVICE_NO_MEDIA) || (status == SERVICE_NOT_READY) || (status == SERVICE_INVALID_HANDLE);
+}
 
 #endif /* FILESYSTEM_TYPES_H */

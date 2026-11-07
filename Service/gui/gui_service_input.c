@@ -58,6 +58,17 @@ void service_gui_input_drop_queue_select(void)
 }
 
 /**
+ * @brief 输入槽里是否有尚未取走的命令。
+ * @return 有待取走的命令为 true。
+ * @note  只读，不取走。Service_GUI_Process() 用它决定本圈结束后只睡下限（GUI-28），
+ *        让下一圈马上 Consume，松手到出声的路径不多等一个刷新周期。
+ */
+bool service_gui_input_has_pending(void)
+{
+    return service_gui_input_pending;
+}
+
+/**
  * @brief 取走一次输入；无点击时写成 NONE 并返回 OK。
  * @param[out] input 命令与可选 param。
  * @retval SERVICE_OK 已写入 input。

@@ -2,7 +2,7 @@
 #
 # 在 PC 上运行真实的 LVGL v8.3.11 与 Service/gui（含手写界面 view/），
 # 只把 Platform LCD、Platform Touch 与 FreeRTOS 任务通知替换为 SDL 替身，
-# 并以假 Storage、假播放后端与假日志替换 APP 音乐分区的依赖。
+# 并以假音乐前台流程、假播放后端与假日志替换 APP 音乐分区的依赖。
 # 本工程独立于固件构建，不进入目标固件。
 
 cmake_minimum_required(VERSION 3.22)
@@ -69,14 +69,24 @@ file(GLOB RESOURCE_PACK_SOURCES CONFIGURE_DEPENDS
     "${REPO_ROOT}/Components/resource_pack/*.c"
 )
 
-# 真实的 APP 音乐分区；它依赖的 Storage 窗口槽与 SD 状态由 fakes/storage_sim.c 提供，
-# 播放合同由 fakes/playback_sim.c 提供，Service Log 由 fakes/log_sim.c 提供。
+# 真实的 APP 应用注册表与音乐 GUI 分区；分区依赖的音乐前台流程（注册表的 foreground_step、boot_init）由
+# fakes/music_sim.c 提供，播放合同由 fakes/playback_sim.c 提供，Service Log 由
+# fakes/log_sim.c 提供。sim_main.c 和产品 gui_task.c 一样遍历 app_table。
 file(GLOB APP_GUI_MUSIC_SOURCES CONFIGURE_DEPENDS
-    "${REPO_ROOT}/APP/tasks/gui/music/*.c"
+    "${REPO_ROOT}/APP/apps/app_table.c"
+    "${REPO_ROOT}/APP/apps/music/gui/*.c"
 )
-# 假 Storage 的曲目显示名经真实的提取纯函数产生（与 Storage 名称槽同一实现）。
+# 假音乐前台流程的曲目显示名经真实的提取纯函数产生（与前台流程同一实现）；格子定义、`ui_cell`（含持锁统计）、
+# 显示延迟汇总和翻页钩子都编译真实代码，只有音乐前台流程由 fakes/music_sim.c 代替（注册表的 foreground_step 与 boot_init）。
 list(APPEND APP_GUI_MUSIC_SOURCES
-    "${REPO_ROOT}/APP/tasks/storage/catalog/storage_catalog_name.c"
+    "${REPO_ROOT}/APP/apps/music/catalog/catalog_name.c"
+    "${REPO_ROOT}/APP/apps/music/music_app.c"
+    "${REPO_ROOT}/APP/apps/music/music_cells.c"
+    "${REPO_ROOT}/APP/apps/music/music_display_stats.c"
+    "${REPO_ROOT}/APP/apps/music/music_hook_pageturn.c"
+    "${REPO_ROOT}/APP/apps/app_table_boot.c"
+    "${REPO_ROOT}/APP/ui_cell/ui_cell.c"
+    "${REPO_ROOT}/APP/ui_cell/ui_cell_stats.c"
 )
 
 # 字体资源：把板上同一份 lv_font_conv bin 在构建期原样生成为字节数组（不入库），
@@ -106,7 +116,7 @@ add_executable(gui_simulator
     fakes/platform_touch_sim.c
     fakes/freertos_sim.c
     fakes/resource_sim.c
-    fakes/storage_sim.c
+    fakes/music_sim.c
     fakes/playback_sim.c
     fakes/log_sim.c
     ${SERVICE_GUI_SOURCES}

@@ -26,7 +26,7 @@ static void test_open_reply_of_superseded_stream_is_discarded(void)
     world_send_select(GENERATION, 2U);
     assert(world_current_seq() > old_seq);
 
-    fake_storage_open_ok(old_seq, 99U, 40U, WORLD_AUDIO_BYTES);
+    fake_audio_reader_open_ok(old_seq, 99U, 40U, WORLD_AUDIO_BYTES);
     world_wake();
 
     assert(fake_player_begin_count() == 0U);
@@ -59,24 +59,24 @@ static void test_stale_blocks_at_queue_head_are_returned_without_feeding(void)
     world_reset();
     world_start_playing(GENERATION, TRACKS);
     uint32_t fed_before = fake_player_fed_total();
-    uint32_t returned_before = fake_storage_returned_count();
+    uint32_t returned_before = fake_audio_reader_returned_count();
     uint32_t old_seq = world_current_seq();
 
     world_send(PLAYBACK_COMMAND_NEXT);
     for (uint32_t i = 0U; i < 5U; i++)
     {
-        fake_storage_enqueue_block(old_seq, 20U, 0x80U);
+        fake_audio_reader_enqueue_block(old_seq, 20U, 0x80U);
     }
     world_wake();
 
-    assert(fake_storage_returned_count() == returned_before + 5U);
-    assert(fake_storage_ready_count() == 0U);
+    assert(fake_audio_reader_returned_count() == returned_before + 5U);
+    assert(fake_audio_reader_ready_count() == 0U);
     assert(fake_player_fed_total() == fed_before);
     for (uint32_t i = 0U; i < 5U; i++)
     {
-        assert(fake_storage_returned_seq(returned_before + i) == old_seq);
+        assert(fake_audio_reader_returned_seq(returned_before + i) == old_seq);
     }
-    assert(fake_storage_outstanding() == 0U);
+    assert(fake_audio_reader_outstanding() == 0U);
 }
 
 /**
@@ -89,10 +89,10 @@ static void test_new_stream_blocks_behind_stale_ones_are_fed_after_open_ok(void)
     uint32_t old_seq = world_current_seq();
 
     world_send(PLAYBACK_COMMAND_NEXT);
-    fake_storage_enqueue_block(old_seq, 20U, 0x80U);
-    fake_storage_enqueue_block(old_seq, 20U, 0x80U);
-    fake_storage_open_ok(world_current_seq(), GENERATION, TRACKS, WORLD_AUDIO_BYTES);
-    fake_storage_enqueue_block(world_current_seq(), 16U, 0x10U);
+    fake_audio_reader_enqueue_block(old_seq, 20U, 0x80U);
+    fake_audio_reader_enqueue_block(old_seq, 20U, 0x80U);
+    fake_audio_reader_open_ok(world_current_seq(), GENERATION, TRACKS, WORLD_AUDIO_BYTES);
+    fake_audio_reader_enqueue_block(world_current_seq(), 16U, 0x10U);
     uint32_t fed_before = fake_player_fed_total();
     world_wake();
 
@@ -109,16 +109,16 @@ static void test_current_blocks_wait_in_queue_until_open_ok(void)
     world_reset();
     world_send(PLAYBACK_COMMAND_TOGGLE);
 
-    fake_storage_enqueue_block(world_current_seq(), 20U, 0x10U);
+    fake_audio_reader_enqueue_block(world_current_seq(), 20U, 0x10U);
     world_wake();
 
     assert(fake_player_fed_total() == 0U);
-    assert(fake_storage_ready_count() == 1U);
-    assert(fake_storage_returned_count() == 0U);
+    assert(fake_audio_reader_ready_count() == 1U);
+    assert(fake_audio_reader_returned_count() == 0U);
 
     world_open_ok(GENERATION, TRACKS);
     assert(fake_player_fed_total() == 20U);
-    assert(fake_storage_ready_count() == 0U);
+    assert(fake_audio_reader_ready_count() == 0U);
 }
 
 /**
@@ -130,13 +130,13 @@ static void test_blocks_are_returned_right_after_copy_and_bytes_keep_order(void)
     world_send(PLAYBACK_COMMAND_TOGGLE);
     world_open_ok(GENERATION, TRACKS);
 
-    fake_storage_enqueue_block(world_current_seq(), 12U, 0U);
-    fake_storage_enqueue_block(world_current_seq(), 12U, 100U);
+    fake_audio_reader_enqueue_block(world_current_seq(), 12U, 0U);
+    fake_audio_reader_enqueue_block(world_current_seq(), 12U, 100U);
     world_wake();
 
     assert(fake_player_fed_total() == 24U);
-    assert(fake_storage_returned_count() == 2U);
-    assert(fake_storage_outstanding() == 0U);
+    assert(fake_audio_reader_returned_count() == 2U);
+    assert(fake_audio_reader_outstanding() == 0U);
     assert(fake_player_fed_bytes()[0] == 0U);
     assert(fake_player_fed_bytes()[11] == 11U);
     assert(fake_player_fed_bytes()[12] == 100U);
@@ -152,13 +152,13 @@ static void test_oversized_block_is_held_across_wakes_until_fully_copied(void)
     world_send(PLAYBACK_COMMAND_TOGGLE);
     world_open_ok(GENERATION, TRACKS);
 
-    fake_storage_enqueue_block(world_current_seq(), 64U, 0U);   /* 窗口容量 40 B。 */
-    fake_storage_enqueue_block(world_current_seq(), 8U, 200U);
+    fake_audio_reader_enqueue_block(world_current_seq(), 64U, 0U);   /* 窗口容量 40 B。 */
+    fake_audio_reader_enqueue_block(world_current_seq(), 8U, 200U);
     world_wake();
-    assert(fake_storage_outstanding() == 1U);
-    assert(fake_storage_ready_count() == 1U);
+    assert(fake_audio_reader_outstanding() == 1U);
+    assert(fake_audio_reader_ready_count() == 1U);
 
-    for (uint32_t i = 0U; (i < 10U) && (fake_storage_ready_count() == 1U); i++)
+    for (uint32_t i = 0U; (i < 10U) && (fake_audio_reader_ready_count() == 1U); i++)
     {
         world_wake();
     }
@@ -167,8 +167,8 @@ static void test_oversized_block_is_held_across_wakes_until_fully_copied(void)
         world_wake();
     }
 
-    assert(fake_storage_returned_count() == 2U);
-    assert(fake_storage_max_outstanding() == 1U);
+    assert(fake_audio_reader_returned_count() == 2U);
+    assert(fake_audio_reader_max_outstanding() == 1U);
     assert(fake_player_fed_total() == 72U);
     for (uint32_t i = 0U; i < 64U; i++)
     {
@@ -186,9 +186,9 @@ static void test_switching_while_playing_cleans_up_in_the_specified_order(void)
     world_reset();
     world_send(PLAYBACK_COMMAND_TOGGLE);
     world_open_ok(GENERATION, TRACKS);
-    fake_storage_enqueue_block(world_current_seq(), 64U, 0U);
+    fake_audio_reader_enqueue_block(world_current_seq(), 64U, 0U);
     world_wake();   /* 手中留着一块未拷完的旧块。 */
-    assert(fake_storage_outstanding() == 1U);
+    assert(fake_audio_reader_outstanding() == 1U);
 
     call_log_reset();
     world_send(PLAYBACK_COMMAND_NEXT);
@@ -202,7 +202,7 @@ static void test_switching_while_playing_cleans_up_in_the_specified_order(void)
     assert(return_at != UINT32_MAX);
     assert(request_at < abandon_at);
     assert(abandon_at < return_at);
-    assert(fake_storage_outstanding() == 0U);
+    assert(fake_audio_reader_outstanding() == 0U);
     assert(!fake_player_stream_active());
     assert(call_log_count_of(CALL_BEGIN_STREAM) == 0U);
 }
@@ -236,16 +236,16 @@ static void test_at_most_one_block_is_held_while_streaming_many_blocks(void)
 
     for (uint32_t i = 0U; i < 6U; i++)
     {
-        fake_storage_enqueue_block(world_current_seq(), 30U, (uint8_t)(i * 30U));
+        fake_audio_reader_enqueue_block(world_current_seq(), 30U, (uint8_t)(i * 30U));
     }
     for (uint32_t i = 0U; i < 20U; i++)
     {
         world_wake();
-        assert(fake_storage_outstanding() <= 1U);
+        assert(fake_audio_reader_outstanding() <= 1U);
     }
 
-    assert(fake_storage_max_outstanding() == 1U);
-    assert(fake_storage_returned_count() == 6U);
+    assert(fake_audio_reader_max_outstanding() == 1U);
+    assert(fake_audio_reader_returned_count() == 6U);
     assert(fake_player_fed_total() == 180U);
 }
 
