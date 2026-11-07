@@ -22,6 +22,7 @@
 #include "APP/tasks/background/background_loop.h"
 #include "APP/tasks/background/background_task.h"
 #include "APP/tasks/background/background_task_config.h"
+#include "APP/tasks/volume/volume_event.h"
 
 /** @brief 一个假作业：记下被调用的次数与顺序，返回脚本里的等待时长。 */
 typedef struct
@@ -303,6 +304,34 @@ static void test_wake_targets_the_bound_task_slot_and_flag(void)
 }
 
 /**
+ * @brief 卷事件叫醒后台任务：任务入口登记订阅后，Flash 或 SD 卷发布卷就绪、卷消失都落在同一个通知槽的 VOLUME 位上，
+ *        睡眠（含无限等待）被它叫醒，醒来时这一位被一次收取并清除，下一圈不再被旧事件叫醒。
+ */
+static void test_volume_event_wakes_the_loop_and_its_flag_is_cleared(void)
+{
+    const background_job_step_t table[] = {job0};
+    const TaskHandle_t task = xTaskGetCurrentTaskHandle();
+
+    begin_scenario();
+    jobs_state[0].returns = BACKGROUND_WAIT_FOREVER;
+    assert(volume_subscribe(task, (UBaseType_t)BACKGROUND_NOTIFY_EVENT, BACKGROUND_NOTIFY_FLAG_VOLUME));
+
+    (void)volume_publish_ready(VOLUME_ID_FLASH);
+    assert(freertos_stub_notification_value(task, (UBaseType_t)BACKGROUND_NOTIFY_EVENT) == BACKGROUND_NOTIFY_FLAG_VOLUME);
+    assert(BACKGROUND_NOTIFY_FLAG_VOLUME == 2UL);
+    assert(background_loop_step(table, 1U));
+    assert(waits_seen.waits == 0U); /* 通知已在，睡眠根本没有开始。 */
+    assert(freertos_stub_notification_value(task, (UBaseType_t)BACKGROUND_NOTIFY_EVENT) == 0U); /* 位被清除 */
+
+    (void)volume_publish_gone(VOLUME_ID_SD);
+    assert(background_loop_step(table, 1U));
+    assert(freertos_stub_notification_value(task, (UBaseType_t)BACKGROUND_NOTIFY_EVENT) == 0U);
+
+    assert(!background_loop_step(table, 1U)); /* 没有新事件：回到无限等待 */
+    assert(waits_seen.last_ticks == portMAX_DELAY);
+}
+
+/**
  * @brief 运行全部用例。
  * @return 0 表示全部通过（失败由 assert 中止）。
  */
@@ -317,6 +346,7 @@ int main(void)
     test_notification_during_the_lap_is_not_lost();
     test_repeated_wakes_collapse_into_one();
     test_wake_targets_the_bound_task_slot_and_flag();
+    test_volume_event_wakes_the_loop_and_its_flag_is_cleared();
     puts("background_loop: OK");
     return 0;
 }

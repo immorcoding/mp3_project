@@ -21,7 +21,7 @@ static void test_first_window_counts_from_boot(void)
         {"IDLE", 8630U},
         {"GUI Task", 710U},
         {"Playback Task", 200U},
-        {"Storage Task", 40U},
+        {"Background Task", 40U},
         {"Log Task", 10U},
         {"Monitor Task", 5U},
         {"Tmr Svc", 5U},
@@ -32,7 +32,7 @@ static void test_first_window_counts_from_boot(void)
     monitor_cpu_format(line, sizeof(line), &baseline, samples, 7U, 9600U, 5000U);
 
     /* 总计数 9600：IDLE 8630 为 89.8 %，GUI 710 为 7.3 %。 */
-    assert(strcmp(line, "CPU win=5000ms gui=7.3 idle=89.8 log=0.1 moni=0.0 play=2.0 stor=0.4 tmr=0.0") == 0);
+    assert(strcmp(line, "CPU win=5000ms back=0.4 gui=7.3 idle=89.8 log=0.1 moni=0.0 play=2.0 tmr=0.0") == 0);
 }
 
 /**
@@ -193,23 +193,23 @@ static void test_health_worst_case_fits_service_log_text(void)
 }
 
 /**
- * @brief 同一批里可能同时出现的任务是 12 个（`Create Task` 创建完就自删，早于第一批；永久任务 11 个加开机后几秒内才有的 `Flash Boot Task`）：
- *        每个任务一个互不相同的短键，CPU 行不超过 127 个字符（Service Log 单条容量 128 B），不被截断。极端组合（十个任务各占 10.0 %）
- *        一位小数放不下，整行退化成整数百分比；平常的占比保持一位小数。
+ * @brief 同一批里可能同时出现的任务是 11 个（`Create Task` 创建完就自删，早于第一批；永久任务 10 个加开机后几秒内才有的 `Flash Boot Task`；
+ *        #220 删掉 Storage Task 之后少一个）：每个任务一个互不相同的短键，CPU 行不超过 127 个字符（Service Log 单条容量 128 B），
+ *        不被截断，极端组合（十个任务各占 10.0 %）一位小数的完整格式也放得下（120 个字符）。
  */
 static void test_every_registered_task_fits_one_cpu_line(void)
 {
     static monitor_cpu_baseline_t baseline;
-    static const char *const names[] = {"Audio Read Task", "Log Task",      "Storage Task", "Volume Task", "Flash Boot Task",
-                                        "Monitor Task",    "GUI Task",     "Playback Task", "IDLE",        "Tmr Svc",
-                                        "Background Task", "Foreground Task"};
-    static const char *const keys[] = {"audi=", "log=", "stor=", "volu=", "flas=", "moni=", "gui=", "play=", "idle=", "tmr=", "back=", "fore="};
-    enum { TASK_COUNT = 12, IDLE_INDEX = 8 };
+    static const char *const names[] = {"Audio Read Task", "Log Task",      "Volume Task",   "Flash Boot Task", "Monitor Task",
+                                        "GUI Task",        "Playback Task", "IDLE",          "Tmr Svc",         "Background Task",
+                                        "Foreground Task"};
+    static const char *const keys[] = {"audi=", "log=", "volu=", "flas=", "moni=", "gui=", "play=", "idle=", "tmr=", "back=", "fore="};
+    enum { TASK_COUNT = 11, IDLE_INDEX = 7 };
     monitor_cpu_sample_t samples[TASK_COUNT];
     char line[MONITOR_LOG_LINE_LENGTH];
     size_t length;
 
-    /* 极端组合：十个任务各占 10.0 %，另两个 0.0 %。一位小数的完整格式是 129 个字符，放不下，退化成整数百分比。 */
+    /* 极端组合：十个任务各占 10.0 %，另一个 0.0 %。一位小数的完整格式是 120 个字符，放得下，不退化。 */
     for (size_t index = 0U; index < (size_t)TASK_COUNT; index++)
     {
         samples[index].name = names[index];
@@ -218,11 +218,10 @@ static void test_every_registered_task_fits_one_cpu_line(void)
 
     memset(&baseline, 0, sizeof(baseline));
     length = monitor_cpu_format(line, sizeof(line), &baseline, samples, (uint8_t)TASK_COUNT, 1000U, 5000U);
-    assert(length <= 127U);
+    assert(length == 120U);
     assert(strchr(line, '~') == NULL);
-    assert(strchr(line, '.') == NULL);
-    assert(strstr(line, "gui=10") != NULL);
-    assert(strstr(line, "fore=0") != NULL);
+    assert(strstr(line, "gui=10.0") != NULL);
+    assert(strstr(line, "fore=0.0") != NULL);
     for (size_t index = 0U; index < (size_t)TASK_COUNT; index++)
     {
         const char *first = strstr(line, keys[index]);
@@ -231,7 +230,7 @@ static void test_every_registered_task_fits_one_cpu_line(void)
         assert(strstr(first + 1, keys[index]) == NULL); /* 每个键只出现一次。 */
     }
 
-    /* 平常的占比：同样 12 个任务，一位小数的完整格式放得下，格式不变。 */
+    /* 平常的占比：同样 11 个任务，格式不变。 */
     for (size_t index = 0U; index < (size_t)TASK_COUNT; index++)
     {
         samples[index].run_time = (index == (size_t)IDLE_INDEX) ? 860U : 10U;
@@ -255,17 +254,46 @@ static void test_every_registered_task_fits_one_cpu_line(void)
 }
 
 /**
- * @brief Create Task 的短键 `crea` 与其余 12 个已登记任务互不相同：13 个名字放进同一批（占比都为 0，行宽不是本用例要测的），
+ * @brief 多出一个任务（12 个）时极端组合一位小数放不下（129 个字符）：整行退化成整数百分比，键不变，仍不超过 127 个字符。
+ *        这条退路在 #218 加的，#220 删掉 Storage 之后默认的 11 个任务已经放得下，但再加任务时它还要管用。
+ */
+static void test_one_more_task_degrades_to_whole_percentages(void)
+{
+    static monitor_cpu_baseline_t baseline;
+    static const char *const names[] = {"Audio Read Task", "Log Task",      "Volume Task",   "Flash Boot Task", "Monitor Task",
+                                        "GUI Task",        "Playback Task", "IDLE",          "Tmr Svc",         "Background Task",
+                                        "Foreground Task", "Create Task"};
+    enum { TASK_COUNT = 12 };
+    monitor_cpu_sample_t samples[TASK_COUNT];
+    char line[MONITOR_LOG_LINE_LENGTH];
+    size_t length;
+
+    for (size_t index = 0U; index < (size_t)TASK_COUNT; index++)
+    {
+        samples[index].name = names[index];
+        samples[index].run_time = (index >= 10U) ? 0U : 100U;
+    }
+    memset(&baseline, 0, sizeof(baseline));
+    length = monitor_cpu_format(line, sizeof(line), &baseline, samples, (uint8_t)TASK_COUNT, 1000U, 5000U);
+    assert(length <= 127U);
+    assert(strchr(line, '~') == NULL);
+    assert(strchr(line, '.') == NULL);
+    assert(strstr(line, "gui=10") != NULL);
+    assert(strstr(line, "crea=0") != NULL);
+}
+
+/**
+ * @brief Create Task 的短键 `crea` 与其余 11 个已登记任务互不相同：12 个名字放进同一批（占比都为 0，行宽不是本用例要测的），
  *        每个键恰好出现一次。
  */
 static void test_create_task_key_is_distinct_from_the_other_registered_tasks(void)
 {
     static monitor_cpu_baseline_t baseline;
-    static const char *const names[] = {"Create Task", "Audio Read Task", "Log Task",      "Storage Task", "Volume Task", "Flash Boot Task",
-                                        "Monitor Task", "GUI Task",       "Playback Task", "IDLE",         "Tmr Svc",     "Background Task",
-                                        "Foreground Task"};
-    static const char *const keys[] = {"crea=", "audi=", "log=", "stor=", "volu=", "flas=", "moni=", "gui=", "play=", "idle=", "tmr=", "back=", "fore="};
-    enum { TASK_COUNT = 13 };
+    static const char *const names[] = {"Create Task", "Audio Read Task", "Log Task",      "Volume Task", "Flash Boot Task",
+                                        "Monitor Task", "GUI Task",       "Playback Task", "IDLE",        "Tmr Svc",
+                                        "Background Task", "Foreground Task"};
+    static const char *const keys[] = {"crea=", "audi=", "log=", "volu=", "flas=", "moni=", "gui=", "play=", "idle=", "tmr=", "back=", "fore="};
+    enum { TASK_COUNT = 12 };
     monitor_cpu_sample_t samples[TASK_COUNT];
     char line[MONITOR_LOG_LINE_LENGTH];
     size_t length;
@@ -305,6 +333,7 @@ int main(void)
     test_health_delta_survives_counter_wrap();
     test_health_worst_case_fits_service_log_text();
     test_every_registered_task_fits_one_cpu_line();
+    test_one_more_task_degrades_to_whole_percentages();
     test_create_task_key_is_distinct_from_the_other_registered_tasks();
     puts("monitor_stats: OK");
     return 0;

@@ -14,8 +14,8 @@
 #define MONITOR_LOG_MESSAGE_LENGTH      64U             /* 单条任务栈监控日志的本地格式化缓冲区长度。 */
 
 /* monitor_task.c：Service Log 消息池的最坏同时到达核算（DIAG-3；保守口径见 APP/tasks/audio_reader/README.md，#218 重算）。 */
-#define MONITOR_TASK_CONCURRENT_MAX     12U             /* 同一批里最多同时存在的任务数：永久任务 11 个（IDLE、Tmr Svc、Log、Storage、Audio Read、Volume、Playback、Monitor、GUI、Background、Foreground）加开机后几秒内才有的 Flash 启动任务；`Create Task` 创建完就自删，早于第一批。 */
-#define MONITOR_POOL_OTHER_WORST_LINES  17U             /* 同一时刻最坏还能到来的其他任务日志行数：Filesystem 持锁统计 3 + 曲库短锁 1 + `ui_cell` 持锁统计 1 + 显示延迟汇总 1 + 前台 step 耗时 1（WARN 或最长值汇总）+ 一次拔卡 8（卷路径日志 5、读取被打断、`Stop reason`、`CARD_REMOVED lat`）+ `SERVICE_BUSY` 2（音频读取任务与前台任务各 1 行）。 */
+#define MONITOR_TASK_CONCURRENT_MAX     11U             /* 同一批里最多同时存在的任务数：永久任务 10 个（IDLE、Tmr Svc、Log、Audio Read、Volume、Playback、Monitor、GUI、Background、Foreground）加开机后几秒内才有的 Flash 启动任务；`Create Task` 创建完就自删，早于第一批。#220 删掉 Storage Task，少一个。 */
+#define MONITOR_POOL_OTHER_WORST_LINES  18U             /* 同一时刻最坏还能到来的其他任务日志行数：Filesystem 持锁统计 3 + 曲库短锁 1 + `ui_cell` 持锁统计 1 + 显示延迟汇总 1 + 前台 step 耗时 1（WARN 或最长值汇总）+ 一次拔卡 8（卷路径日志 5、读取被打断、`Stop reason`、`CARD_REMOVED lat`；拔卡发生在扫描中时是卷路径 5 加 `Scan done res=aborted` 1，没有音频流，在这 8 行之内）+ `SERVICE_BUSY` 2（音频读取任务与前台任务各 1 行）+ Flash 回收失败 1（后台任务的回收作业，失败一次就停，所以只有 1 条，#220）。 */
 #define MONITOR_POOL_SPARE_MIN          8U              /* 以上最坏情况同时到达后消息池至少还要留的块数（用户 2026-11-06 决定）。 */
 
 /* monitor_stats.c、monitor_task.c */

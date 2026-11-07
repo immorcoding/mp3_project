@@ -9,6 +9,7 @@ enable_testing()
 add_executable(background_loop_tests
     test_background_loop.c
     ../../APP/tasks/background/background_loop.c
+    ../../APP/tasks/volume/volume_event.c
     ../stubs/freertos/freertos_stub.c
 )
 
@@ -28,6 +29,7 @@ foreach(PRESSURE_VARIANT default hook floor noreclaim)
         ../../APP/tasks/background/background_flash_pressure.c
         ../../APP/tasks/background/background_jobs.c
         ../../APP/tasks/background/background_loop.c
+        ../../APP/tasks/background/background_reclaim.c
         ../../APP/tasks/volume/volume_event.c
         ../stubs/freertos/freertos_stub.c
         ../stubs/lock_env/lock_env_log.c
@@ -39,12 +41,20 @@ endforeach()
 foreach(PRESSURE_VARIANT hook floor noreclaim)
     target_compile_definitions(background_pressure_${PRESSURE_VARIANT}_tests PRIVATE BACKGROUND_HOOK_FLASH_PRESSURE=1)
 endforeach()
+# 钩子自己的回收默认关闭（#220）；hook 与 floor 两个配置显式打开它，覆盖钩子自己的回收分支；noreclaim 配置不写这个宏，
+# 用默认值，并在测试文件里静态断言默认值是 0。
+foreach(PRESSURE_VARIANT hook floor)
+    target_compile_definitions(background_pressure_${PRESSURE_VARIANT}_tests PRIVATE BACKGROUND_HOOK_FLASH_PRESSURE_RECLAIM=1U)
+endforeach()
 target_compile_definitions(background_pressure_floor_tests PRIVATE
     BACKGROUND_HOOK_FLASH_PRESSURE_FREE_FLOOR=300U TEST_VARIANT_FLOOR=1)
-target_compile_definitions(background_pressure_noreclaim_tests PRIVATE
-    BACKGROUND_HOOK_FLASH_PRESSURE_RECLAIM=0U TEST_VARIANT_NORECLAIM=1)
+target_compile_definitions(background_pressure_noreclaim_tests PRIVATE TEST_VARIANT_NORECLAIM=1)
 
 add_test(NAME background_pressure_default_off COMMAND background_pressure_default_tests default_build_has_no_job)
+add_test(NAME background_registry_steps_follow_builtin_default COMMAND background_pressure_default_tests registry_steps_follow_builtin)
+add_test(NAME background_registry_without_steps_default COMMAND background_pressure_default_tests registry_without_steps)
+add_test(NAME background_registry_steps_follow_builtin_hook COMMAND background_pressure_hook_tests registry_steps_follow_builtin)
+add_test(NAME background_registry_without_steps_hook COMMAND background_pressure_hook_tests registry_without_steps)
 
 foreach(PRESSURE_CASE
         announce table_registers_the_job waits_for_volume one_file_cycle step_return_values
@@ -59,3 +69,30 @@ add_test(NAME background_pressure_noreclaim_announce COMMAND background_pressure
 add_test(NAME background_pressure_noreclaim_cycle COMMAND background_pressure_noreclaim_tests one_file_cycle)
 add_test(NAME background_pressure_noreclaim_returns COMMAND background_pressure_noreclaim_tests step_return_values)
 add_test(NAME background_pressure_never_reclaims COMMAND background_pressure_noreclaim_tests never_reclaims)
+
+# Flash 回收作业（#220）：真实 background_reclaim.c、volume_event.c、共用 FreeRTOS 桩与 Service Log 替身；
+# Filesystem Service 的 ReclaimFlash 在测试文件里用脚本化的假实现。回收作业和卷事件的状态是静态的，每个用例一个进程。
+add_executable(background_reclaim_tests
+    test_background_reclaim.c
+    ../../APP/tasks/background/background_reclaim.c
+    ../../APP/tasks/volume/volume_event.c
+    ../stubs/freertos/freertos_stub.c
+    ../stubs/lock_env/lock_env_log.c
+)
+target_include_directories(background_reclaim_tests BEFORE PRIVATE ../stubs/freertos ../stubs/lock_env ../..)
+target_compile_features(background_reclaim_tests PRIVATE c_std_11)
+target_compile_options(background_reclaim_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+
+foreach(RECLAIM_CASE
+        sequence_zero_does_nothing first_reclaim_after_one_period one_reclaim_per_step period_holds_when_woken_often
+        failure_stops_with_one_error timeout_failure_stops unavailable_and_busy_are_not_failures
+        sequence_change_resumes unmounted_is_not_called)
+    add_test(NAME background_reclaim_${RECLAIM_CASE} COMMAND background_reclaim_tests ${RECLAIM_CASE})
+endforeach()
+
+# 任务优先级排序与 Boot 栈的编译期核对（#220）：只包含 APP/app_config.h，全部是 _Static_assert。
+add_executable(task_priorities_tests test_task_priorities.c)
+target_include_directories(task_priorities_tests PRIVATE ../..)
+target_compile_features(task_priorities_tests PRIVATE c_std_11)
+target_compile_options(task_priorities_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+add_test(NAME task_priorities COMMAND task_priorities_tests)

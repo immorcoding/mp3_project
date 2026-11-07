@@ -7,7 +7,7 @@
   *          本文件是 CubeMX 生成代码与自维护模块之间的入口：main.c 负责
   *          MCU 基础设施初始化；app_init() 负责初始化日志、整机强依赖
   *          Platform Module 并启动 FreeRTOS 任务。可移除 SD 卡的初始化、
-  *          热插拔消抖和挂载由 Volume Task 处理，曲库扫描和音频流读取等文件访问由 Storage Task 处理
+  *          热插拔消抖和挂载由 Volume Task 处理，曲库扫描（后台任务）、曲名与窗口行读取（前台任务）和音频流读取（音频读取任务）等文件访问由各自的任务处理
   *          （Flash 的启动在 Volume Task 创建的一次性 Flash 启动任务里）。
   *
  *          当前初始化依赖顺序为：

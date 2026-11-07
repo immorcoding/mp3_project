@@ -8,7 +8,7 @@
 
 - `app_table.h` / `app_table.c`：注册表，应用目录里唯一认识所有应用的地方。
 - `<app>/gui/`：应用的 GUI 分区（`gui_init`、`gui_step` 的实现、最新需求的写入与结果的读取、播放命令与快照归约）。LVGL 的那一半在 `Service/gui/main/<app>/` 与 `view/`，属于 Service 层，不放这里。
-- `<app>/catalog/`（音乐独有）：应用自己的数据模块，音乐的曲库在这里（一份表、模块内一把短锁，见 [music/catalog](music/catalog/README.md)）。锁在应用内部，不经 `ui_cell`；共用层不认识它，Storage Task（扫描）和前台任务（`catalog.c` 发布后叫醒前台）作为它的调用者包含它的头（任务包含应用不受 `check-layer-includes` 限制，应用之间不互相包含）。
+- `<app>/catalog/`（音乐独有）：应用自己的数据模块，音乐的曲库在这里（一份表、模块内一把短锁，见 [music/catalog](music/catalog/README.md)）。锁在应用内部，不经 `ui_cell`；共用层不认识它，音频读取任务、前台任务和 `music_background.c`（扫描，后台任务调）作为它的调用者包含它的头（任务包含应用不受 `check-layer-includes` 限制，应用之间不互相包含）。
 - `<app>/foreground/`：应用的前台流程（`foreground_step` 的实现，行缓存与窗口组装；音乐的在 [music](music/README.md)“前台流程”）。`<app>_cells.h/.c`：应用的界面数据格子（需求与结果的结构体与存储），`<app>_app.c`：`boot_init`。后台作业随后台任务票加入，现在还没有。
 - 共用层的 `ui_cell`（界面数据短锁）在 `APP/ui_cell/`，不属于任何应用，见 [ui_cell](../ui_cell/README.md)；应用自己的格子结构体放在应用目录里。
 - 应用的 README 写它自己的私有 Interface、运行时路径与编译期依赖；共用约定只写在本页。

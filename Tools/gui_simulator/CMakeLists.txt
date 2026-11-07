@@ -119,6 +119,7 @@ add_executable(gui_simulator
     fakes/music_sim.c
     fakes/playback_sim.c
     fakes/log_sim.c
+    fakes/music_background_sim.c
     ${SERVICE_GUI_SOURCES}
     ${RESOURCE_PACK_SOURCES}
     ${APP_GUI_MUSIC_SOURCES}

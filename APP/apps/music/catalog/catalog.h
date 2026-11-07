@@ -7,6 +7,8 @@
  *        发布规则（STOR-1、#196）：一份表，模块内一把短锁，持锁只拷内存、不调文件接口、不投日志。
  *        扫描开始时锁内把代次置 0，之后写表不拿锁，读者看到代次 0 就不碰表；发布时锁内比对卷序号，
  *        一致才写代次和条数；代次只在发布时加 1，一次开机内不重复；取代次时卷序号不符就算 0。
+ *        扫描是后台任务里的单步作业 `catalog_scan_step()`（音乐注册进注册表的 `background_step`）：
+ *        一步最多一次目录接口调用，读目录一步读一条；每步先比对卷序号，变了就关目录并丢弃，卡还在就重新开始。
  *        详见 `APP/apps/music/catalog/README.md`。
  */
 
@@ -17,13 +19,6 @@
 #include <stdint.h>
 #include "APP/apps/music/catalog/catalog_config.h"
 #include "Service/filesystem/filesystem_types.h"
-
-/** @brief 曲库操作的返回状态。 */
-typedef enum
-{
-    CATALOG_OK = 0U,
-    CATALOG_ERROR
-} Catalog_StatusTypeDef;
 
 /**
  * @brief 读者一次读全的结果：同一把锁内拷出的代次、条数、路径和文件定位符。
@@ -38,20 +33,8 @@ typedef struct
     Service_Filesystem_FileLocatorTypeDef Locator;       /**< 位置有效时的文件定位符，可能全零。 */
 } Catalog_TrackTypeDef;
 
-/** @brief 最近一次扫描结束后，Storage Task 该怎么对待（见 `catalog_scan_verdict()`）。 */
-typedef enum
-{
-    CATALOG_SCAN_DONE = 0U,     /**< 扫描完成（含空库、截断、没有 Music/）或失败但不是卷不可用：照常就绪。 */
-    CATALOG_SCAN_EVENT_PENDING, /**< 卷不可用或卷序号变了而丢弃了扫描，且卷变了：等卷事件，不要就绪。 */
-    CATALOG_SCAN_UNREADABLE     /**< 丢弃了扫描，但卷没变（卡还在、读不了）：没有卷事件可等，要报错。 */
-} Catalog_ScanVerdictTypeDef;
-
 void catalog_boot_init(void);
-Catalog_StatusTypeDef catalog_music_init(void);
-Catalog_ScanVerdictTypeDef catalog_scan_verdict(bool volume_unchanged);
-Catalog_StatusTypeDef catalog_books_init(void);
-Catalog_StatusTypeDef catalog_init(void);
-Catalog_StatusTypeDef catalog_invalidate(void);
+uint32_t catalog_scan_step(void);
 uint32_t catalog_generation(void);
 bool catalog_read_track(uint16_t position, Catalog_TrackTypeDef *out);
 

@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    storage_sd_benchmark.c
-  * @brief   Storage Task 中执行的 SD 文件系统端到端读写测速与完整性校验。
+  * @brief   卷任务 中执行的 SD 文件系统端到端读写测速与完整性校验。
   *
   * @details
   *          本测试经由 Filesystem Service 文件接口、DiskIO、同步 DMA
@@ -340,7 +340,7 @@ static Service_StatusTypeDef storage_sd_benchmark_verify_file(bool *data_matched
   * @brief  执行当前 SD 文件系统端到端读写测速与完整性校验。
   * @retval true 写入、同步、顺序读取和无计时完整性校验均成功。
   * @retval false 测试前清理、读写、校验或最终清理失败。
-  * @note   调用者必须已经在 Storage Task 中成功挂载当前 SD 卷；成功结果只执行一次。
+  * @note   调用者必须已经在 卷任务 中成功挂载当前 SD 卷；成功结果只执行一次。
   */
 bool storage_sd_benchmark_run(void)
 {

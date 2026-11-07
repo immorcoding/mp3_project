@@ -1,6 +1,6 @@
 # 文件系统 Service
 
-本 Module 持有 SD/Flash FatFs 卷生命周期，并同步执行块访问与卷感知文件/目录操作。完成通知不绑定任何任务（每卷一个静态二值信号量，见“请求与事件路径”）。文件接口是线程安全的：每卷一把卷锁在公开函数入口拿，另有一把只罩 `f_open`、`f_opendir` 和按定位符打开的窄表锁；GUI 与播放任务不得调用（入口断言停机）。规则与持锁上界见“并发模型”（ARC-21、[ADR-0024](../../docs/adr/0024-file-interface-concurrency.md)）。调用者现在有三个任务：卷任务（SD 的启动、刷新、暂停与恢复、挂载与卸载）、音频读取任务（读音频文件，#215）和 Storage Task（读曲目标签与目录），Flash 一侧是 Flash 启动任务（初始化、挂载、格式化）和 Storage Task（回收），所以锁第一次真的会被争用；真实并发由第 3 次上板验证。SD 另有一道“闸”和三个卷任务用的入口（启动、刷新、暂停与恢复），见“SD 闸与卷生命周期入口”。仍是一个 Filesystem Module；`sd/` 和 `flash/` 是私有实现分区。公开 Interface 按调用者切开，没有总揽头；卷与路径上限在 `filesystem_types.h`，供文件、目录和生命周期头共用。卡检测、消抖、启动和回收时机由 APP 决定。
+本 Module 持有 SD/Flash FatFs 卷生命周期，并同步执行块访问与卷感知文件/目录操作。完成通知不绑定任何任务（每卷一个静态二值信号量，见“请求与事件路径”）。文件接口是线程安全的：每卷一把卷锁在公开函数入口拿，另有一把只罩 `f_open`、`f_opendir` 和按定位符打开的窄表锁；GUI 与播放任务不得调用（入口断言停机）。规则与持锁上界见“并发模型”（ARC-21、[ADR-0024](../../docs/adr/0024-file-interface-concurrency.md)）。SD 一侧的调用者有四个任务：卷任务（启动、刷新、暂停与恢复、挂载与卸载）、音频读取任务（读音频文件，#215）、前台任务（读曲目标签，#218）和后台任务（曲库扫描读目录，#220）；Flash 一侧是 Flash 启动任务（初始化、挂载、格式化）和后台任务（回收，#220；Storage Task 已删除），所以锁第一次真的会被争用；真实并发由第 3 次上板验证。SD 另有一道“闸”和三个卷任务用的入口（启动、刷新、暂停与恢复），见“SD 闸与卷生命周期入口”。仍是一个 Filesystem Module；`sd/` 和 `flash/` 是私有实现分区。公开 Interface 按调用者切开，没有总揽头；卷与路径上限在 `filesystem_types.h`，供文件、目录和生命周期头共用。卡检测、消抖、启动和回收时机由 APP 决定。
 
 当前文件与目录语义见 [ADR-0014](../../docs/adr/0014-filesystem-volume-aware-file-interface.md)。公开接缝切开与 `Reclaim` 命名见 [ADR-0012](../../docs/adr/0012-filesystem-public-seams.md)。当前产品不提供 USB MSC，见 [ADR-0013](../../docs/adr/0013-usb-msc-product-scope.md)。SD 为曲库主介质、Flash FTL 为机内盘与资源安装暂存，见 [ADR-0015](../../docs/adr/0015-volume-roles-and-resource-install.md)。
 
@@ -12,7 +12,7 @@
 - `filesystem_types.h` 另有失败分类函数 `Service_Filesystem_StatusIsVolumeUnavailable(status)`：`NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 为真，不算文件错误（调用者不写 `READ_ERROR`、不回退、不缓存，先看卷序号）。
 - `filesystem_file.h`：卷感知文件访问。`OpenFile/ReadFile/WriteFile/SeekFile/GetFilePosition/GetFileSize/SyncFile/CloseFile/RemoveFile/RenameFile/GetFileInfo`。调用必须给出 Volume；相对路径只在该卷内解释。另有 `OpenFileByLocator`（按文件定位符只读打开，见下节“文件定位符与 FatFs 补丁”）。`ReadFile`/`WriteFile` 单次不超过 `SERVICE_FILESYSTEM_IO_MAX_BYTES`（32 KiB），超过返回 `SERVICE_INVALID_PARAM`，不截短也不在内部拆分。
 - `filesystem_directory.h`：卷感知目录访问。`OpenDirectory/ReadDirectory/RewindDirectory/CloseDirectory/CreateDirectory/RemoveDirectory`。空路径表示所选卷的根目录；文件接口不得把空路径当作文件名。`ReadDirectory` 给出的目录项带文件定位符 `Locator`。
-- `filesystem_text.h`：文本编码查表。`GbkToUnicode(gbk_code)` 把 GBK 双字节码（首字节在高 8 位）转 Unicode 码点，0 表示无映射；内部调用 FatFs `ff_convert(code, 1)`，只读 CP936 表（Resource Service 在任务启动前就绪），不访问介质、不阻塞，可在任何任务上下文调用。由 Storage 的 `storage_track_text_read()` 作为 GBK 查表回调注入曲目文本函数，FatFs 类型不出本 Module（ARC-12）。
+- `filesystem_text.h`：文本编码查表。`GbkToUnicode(gbk_code)` 把 GBK 双字节码（首字节在高 8 位）转 Unicode 码点，0 表示无映射；内部调用 FatFs `ff_convert(code, 1)`，只读 CP936 表（Resource Service 在任务启动前就绪），不访问介质、不阻塞，可在任何任务上下文调用。由前台任务读标签时（`catalog_track_text_read()`）作为 GBK 查表回调注入曲目文本函数，FatFs 类型不出本 Module（ARC-12）。
 - `filesystem_flash_access.h`：启动诊断的同步包装。`ReadFlashArray/ReadFlashDiagnostic/EraseFlashDiagnostic/ProgramFlashDiagnostic`。这是唯一允许包含 `platform_flash.h` 的公开头，以便使用 Platform 诊断区域枚举。
 
 `FormatAndMountFlash` 显式注销卷、格式化 FTL、建立 FAT12/16 superfloppy，成功返回时 Flash 文件系统必须已经重新挂载。本 Service **不会**在启动或 `MountFlash` 失败时自行调用它。Flash 启动任务（`APP/tasks/volume/flash/`）在 `SERVICE_NO_FILESYSTEM` 时是否调用，由 `VOLUME_FLASH_AUTO_FORMAT` 决定。
@@ -175,7 +175,7 @@ CubeMX 生成的 `FATFS/Target/sd_diskio.c` 在 `SD_read` / `SD_write` 成功之
 - 卷任务（`APP/tasks/volume/sd/volume_sd.c`）已经切到 `StartSD` / `RefreshSD`，不再直接调 `Platform_SD_*`，APP 不再包含 `platform_sd.h`。上面那个无超时的 `while (BSP_SD_GetCardState() != MSD_OK)` 循环因此不会让读写者持锁空转：改 Device 状态的入口都在 SD 卷锁内，状态只能在不持锁的间隙变化。
 - 每次 `PauseSD` 都配 `ResumeSD`，所有路径（对账成功、挂载失败、刷新失败、换卡、无卡）都配；卷任务的做法是“闸只在一次消抖过程的第一个边沿关一次，每次过程以一次开闸结束；对账期间又来了新边沿则闸保持关闭、重新消抖”，主机测试穷举 384 种组合核对。卷任务自己的挂载、卸载、刷新不受闸挡，所以关着闸调用它们是正常用法。
 - 收尾顺序里的“拿 SD 卷锁等在途调用退出”是 `RefreshSD`（和 `UnmountSD`）入口自己的拿锁完成的，不需要另一个入口。已知窗口：`RefreshSD` 和 `UnmountSD` 是两个独立的持锁入口，放锁到再拿锁之间已通过闸、正在等锁的调用可能抢到锁，见 [卷任务](../../APP/tasks/volume/README.md)“已知窗口”。
-- 收到 `Service_Filesystem_StatusIsVolumeUnavailable(status)` 为真的结果，回到等待点先看卷序号（Storage Task 的做法见 [存储任务](../../APP/tasks/storage/README.md)“卷事件与失败约定”）。
+- 收到 `Service_Filesystem_StatusIsVolumeUnavailable(status)` 为真的结果，回到等待点先看卷序号（做法见 [音频读取任务](../../APP/tasks/audio_reader/README.md)“失败约定”和 [曲库](../../APP/apps/music/catalog/README.md)“扫描单步与错误分类”）。
 - `StartSD` 之后卷任务仍调 `InitSD()` 再 `MountSD()`；`RefreshSD` 返回 `ERROR` 时 `card` 仍填写，“刷新失败但卡不在”以及“刷新失败而卡在、设备进了 ERROR”都卸载旧卷，刷新失败时不挂载。
 
 

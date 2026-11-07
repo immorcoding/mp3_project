@@ -313,7 +313,7 @@ R2.1 用钩子关闭的 Debug 构建量（探测会给被探测的那次读加�
 | R4.9 | 拔卡时大目录按路径打开 | | 持锁统计 | 记录，确认很快失败（目前是推断） | | |
 | R4.10 | 写 `CARD_REMOVED` 的延迟 | | `CARD_REMOVED` 时延行 | 记录 | | |
 | R4.11 | 音频读取任务的栈 | | Monitor 栈行 | ≥ 256 B | | |
-| R4.12 | 文件槽：音频流和 Storage Task 的读取同时打开文件（中间状态，这次上板时前台还没切） | | `SERVICE_BUSY` 日志 | 不出现 | | |
+| R4.12 | 文件槽：音频流和 Storage Task 的读取同时打开文件（中间状态，这次上板时前台还没切；Storage Task 已随 #220 删除，此后由 R6.10 接着核对） | | `SERVICE_BUSY` 日志 | 不出现 | | |
 
 第 4 次上板的构建与读法（#215；日志格式见 [音频读取任务 README](../../APP/tasks/audio_reader/README.md)“日志与消息池”，串口里每行前缀是 `<时间> <I|W|E> (<tick>) <标签>: `，标签后面有冒号）：
 
@@ -397,6 +397,46 @@ R5 的这些行都是常开日志加 Debug 日志，不需要仪器；没做的�
 | R6.8 | 后台任务的栈，扫描和回收都跑过再读 | | Monitor 栈行 | ≥ 256 B | | |
 | R6.9 | 曲库短锁最长持有 | | 持锁统计 | 记录（预期微秒级） | | |
 | R6.10 | 音频流、前台、后台同时打开文件 | | `SERVICE_BUSY` 日志 | 不出现 | | |
+| R6.11 | **开机扫描时长**（#220 评估，用户 2026-11-07 选方案 A：Flash 启动任务 2 → 1，与后台任务同级）：常规库、大目录各一次 | | 扫描结束 INFO 的 `us=`；`VOLUME: flash ready` 行的 tick；开机时 `FSLOCK: sd` 的最长持有 | 记录；推算值：大目录约 3.2–4.3 s，常规库约 0.1 s，Flash 就绪约 10 s（大目录）；明显超过推算在票里报告 | | |
+
+第 6 次上板的构建与读法（#220；扫描和回收的日志格式见 [后台任务 README](../../APP/tasks/background/README.md)、[曲库 README](../../APP/apps/music/catalog/README.md)“扫描单步与错误分类”，串口里每行前缀是 `<时间> <I|W|E> (<tick>) <标签>: `，标签后面有冒号）。**这次切的是扫描和回收（Storage Task 删除），并把 Flash 启动任务降到 1；主机测试是单线程的，证明不了真实的任务轮转与持锁交错，下面每一行都靠这次上板。**
+
+- **构建**（缓存变量会留在构建目录里，开过的钩子要显式关；五个钩子**每次都全部写出来**，免得上一次的留着；下面“基础”就是这一串）：
+
+  基础：`-DMP3_HOOK_PAGE_TURN=0 -DMP3_HOOK_LOCATOR_MISS=0 -DMP3_HOOK_FLASH_PRESSURE=0 -DMP3_HOOK_FAKE_BOUNCE=0 -DMP3_HOOK_SD_LATE_DMA=0`
+
+  - **A 无钩子（Debug）**：`cmake --preset firmware-debug -DMP3_HOOK_PAGE_TURN=0 -DMP3_HOOK_LOCATOR_MISS=0 -DMP3_HOOK_FLASH_PRESSURE=0 -DMP3_HOOK_FAKE_BOUNCE=0 -DMP3_HOOK_SD_LATE_DMA=0` 后 `cmake --build --preset firmware-debug`。用于 R6.1、R6.5、R6.6、R6.7、R6.8、R6.9、R6.11 和全部回归行。
+  - **B Flash 压力钩子（Debug）**：基础，只把 `-DMP3_HOOK_FLASH_PRESSURE=1`。开机日志出现 `W (…) HOOK: flash_pressure ON chunk=32768 file=4194304 pace=100ms floor=0 reclaim=0 log=10000ms`（搜 `HOOK: flash_pressure ON`；**`reclaim=0` 是对的**：这一版起回收由后台任务自己的回收作业按产品节拍做，钩子不再另调，擦除节拍和产品一致；看到 `reclaim=1` 说明构建目录里留着旧的宏，重新 configure）。约 4 分钟内 `FLASHHOOK: run free=…` 的 `free` 降到 462 以下且 `erases` > 0 才算压到位。用于 R6.2、R6.3 的“SD 打开与 Flash 关闭或删除同时”、R6.4 的“空闲块接近耗尽时写 32 KiB”、R6.8、R6.10。
+  - **C 压力钩子加定位符失效钩子（Debug）**：基础，把 `-DMP3_HOOK_FLASH_PRESSURE=1 -DMP3_HOOK_LOCATOR_MISS=1`。两个 `HOOK:` 启动行都要出现（`HOOK: flash_pressure ON`、`HOOK: locator_miss ON`）。用大目录卡。用于 R6.3 的“Flash 打开等大目录路径打开占着的表锁”：每次点末尾曲目都按路径打开约 1.2 至 2 s，同时占 SD 卷锁和表锁，而压力钩子每个文件周期（约 13 s）新建一次文件要拿表锁。
+  - **D 16 MiB 压力文件（Debug）**：同 B，另把 `APP/tasks/background/background_task_config.h` 里 `BACKGROUND_HOOK_FLASH_PRESSURE_FILE_BYTES` 临时改成 `(16U * 1024U * 1024U)`（**不提交**，Flash 卷逻辑容量约 18.9 MiB 放得下）。用于 R6.4 的“16 MiB 文件满额删除”。
+  - **E Release 对照**：`cmake --preset firmware-release` 后 `cmake --build --preset firmware-release`（不带任何钩子，Release 本来就不能开）。只用于对照 R6.11 的开机扫描时长（只记录，用同一组数字对照，不判通过与否）。
+- **样本卡**：常规库（`--set all`，24 首以上都行）、大目录（`--set bigdir`，12000 首，末尾有子目录）、空库（没有 `Music` 文件夹，清单 2 C3）。一张卡放多个文件夹，把要用的改名成 `Music`（做法见页首）。用户只有一张卡，卡槽弹出带锁，**做不到 30 ms 内抽插，这次不要求**；12000 首的大目录在 Queue 里**滑不到中段和末尾**，但在第 1 首点“上一首”能跳到第 12000 首（要进末尾子目录的曲目就用这个办法）。
+- **串口日志要开着**（`capture-serial.ps1`），每一行的“实测”都从日志读。下面写的秒表时间是动作的**开始时刻**；汇总行每 10 s 才出一行（`FSLOCK:`、`CATLOCK:`、`FLASHHOOK:`），动作结束后至少再等 10 s 才读。
+
+| # | 要做什么（秒表） | 通过时日志里看到 |
+|---|---|---|
+| R6.1 | **A 版，大目录卡**。① **非唱盘页**：复位，等 `Scan done` 出现后切到 Queue 页（或任一非唱盘页）；**0:00 拔卡，0:05 插回**，读那一轮的 `I (…) Catalog: Scan done res=ok n=12000 us=<µs>`。做 3 次。② **停播的唱盘页**：切到唱盘页（不要点播放），**0:00 拔卡，0:05 插回**，同样读 3 次。（插卡到可以播放 ≈ `Scan done` 的 `us=` 加约 0.2 至 0.6 s 的挂载；卡槽带锁，一次推出再按回即可。） | 非唱盘页每次 `us` ≤ 3000000；唱盘页只记录（预计更慢，GUI 在唱盘页几乎不睡，后台只分得约 7 至 13 % 的 CPU）。参考：第 5 次上板热插重扫 1.49–1.59 s，非唱盘页预期相近。`res=ok n=12000` |
+| R6.2 | **B 版，常规库卡**（`--set soak` 三首 320 kbps 更好，播放不会很快放完）。复位，约 4 分钟后 `FLASHHOOK: run free=… erases=…` 的 `free` 降到 462 以下、`erases` 开始涨。**0:00 点播放**，让它放 **5 min**（到 5:00），其间不要滑 Queue；5:00 读最近的 `FLASHHOOK:` 行和 Monitor 的 `Health` 行。再做一段：**5:00 起每 10 s 点一次“下一首”共 10 次**（到 6:40），读 `Switch idx= lat=`。 | 播放 5 min 内 `erases` 持续在涨（来源有两个：回收作业每 100 ms 一次、每次真擦除约 40 至 50 ms；空闲块耗尽后压力钩子的写自己也擦，所以涨得很快）就算“确认有真擦除”；想只看回收作业的产出，可选：把 `BACKGROUND_HOOK_FLASH_PRESSURE_FREE_FLOOR` 临时改成 300（不提交）重编一版，空闲块降到 300 就停写、只有回收作业在擦，`erases` 约每 100 ms 涨 1；`Health underrun=0(+0)`；播放不断音、没有 `Stop reason`；`lat` ≤ 100000（µs，与 R4.1 的 B 版同阈值）；日志里没有 `FLASH: Reclaim failed`。记录 `erases` 起止值 |
+| R6.3 | ① **B 版，常规库**：复位，等压到位（`free` < 462）。**0:00 点播放；0:10 起每 3 s 点一次“下一首”共 40 次**（到 2:10，SD 上每次切歌都按定位符打开，同时压力钩子每约 13 s 关闭并删除一个 4 MiB 文件、再新建，三种操作各有机会和 SD 打开同时）。② **C 版，大目录卡**：复位，等 `Scan done` 和两个 `HOOK:` 行。**0:00 在第 1 首点“上一首”跳到第 12000 首**（要点 15 次，每次都从第 1 首再点“上一首”，**间隔 10 s**，到 2:30；每次都是按路径打开，约 1.2 至 2 s，占着 SD 卷锁和表锁）。两段做完各等 10 s 再读最后一批 `FSLOCK:` 三行。 | ① 读 `FSLOCK: table n=… hold=<µs>:<操作> wait=<µs>:<操作>`：没有路径打开时，表锁最长持有应 ≤ 20000（µs，参考 10100 至 18000，操作是 `Open` 或 `OpenLoc` 之类，Flash 的 `Open` 在内）；`FSLOCK: sd … wait=` 记录（不应有秒级）；`FSLOCK: flash … hold=<µs>:<操作>` 记录。② 表锁 `hold` 记录大目录按路径打开占表锁的最长值（参考 2047000，操作 `Open`），`wait=` 是别的调用（含 Flash 新建文件）等表锁的最长时间，**记录**，并看 `FLASHHOOK:` 的 `wmax`/`dmax` 有没有因此变成秒级 |
+| R6.4 | **D 版**（16 MiB 压力文件）。复位，等 `HOOK: flash_pressure ON` 和 `FLASHHOOK: start`。让钩子写满第一个 16 MiB 文件（每 100 ms 写 32 KiB，约 55 s 起，空闲块低了会更慢）、关闭、删除，**一直开着约 6 min**，期间不要操作。6:00 读最近的 `FLASHHOOK: run …` 与 `FSLOCK: flash`。“空闲块接近耗尽时写 32 KiB”看 `FLASHHOOK:` 的 `free=` 降到 2 至 6 之后的 `wmax=`。 **SD 上删大文件没有触发手段**（没有产品功能或钩子在 SD 上删文件），这一项写 未测，注明缺手段。 | `FSLOCK: flash n=… hold=<µs>:Remove`（16 MiB 删除推算约 2.2 s，138 ms/MiB）与 `FLASHHOOK:` 的 `dmax=<ms>` 记录；空闲块耗尽时 `wmax` 约 1.5 至 3 s（#191 实测写 64 KiB 最长 3.04 s）；这段时间 `FSLOCK: sd … wait=` 不应受影响（Flash 持锁只挡 Flash 卷），播放（若同时在放）不断音；只记录 |
+| R6.5 | `MountFlash` 8.3 s 的原因：**先用 B 版把空闲块压到耗尽**（`FLASHHOOK: run free=` ≤ 10，约 4 至 6 min），**不动 NOR**，重烧 **A 版**（DFU 只写内部 Flash）。复位，读 `VOLUME: flash boot start` 与 `VOLUME: flash ready path=mount … ms=<n>` 的 tick，再读最后一批 `FSLOCK: flash n=… hold=<µs>:Mount`。另外**新格式化的卷**也量一次（若有）：同样复位读。 | 记录：`ms` 与 `Mount` 的 `hold`、压到耗尽之前与之后各一次。对比第 3 次上板的 3.3 s（卷较空）和 8.3 s（空闲块只剩两个）：若空闲块多时 `ms` 约 3.3 s、耗尽后约 8.3 s，原因就是 FTL 启动扫描要校验的块数随空闲块减少而增加（推断，记录证据） |
+| R6.6 | **A 版，大目录卡**。复位，等 `Scan done`。**0:00 拔卡，0:03 插回（开始扫描）；0:03 起 2 s 内**：切到 Queue 页，上下快滑 Queue，点“播放”一次（应立刻 “SD card not ready”，R4.8）。扫完再等 10 s，读最后一批 `FSLOCK: sd n=… hold=<µs>:<操作> wait=<µs>:<操作>` 与 `FSLOCK: table …`。末尾子目录按路径打开是扫描里最长的一次持锁（`OpenDir`，12000 项的目录要线性找到那个子目录）。 | 记录：`hold` 的最大值应是 `OpenDir`，预计约 1.2 至 2 s（参考 12000 首按路径打开最后一首 1.43–2.05 s）；`wait=` 的最大值与操作；扫描中点播放不出现 “Read timeout”。**扫描期间曲库代次为 0，前台读不了标签，Queue 窗口要等发布后才有内容**，所以这里不会有前台读标签的等锁；等锁的主要是音频读取任务（点播放时 NOT_READY 立刻应答，不碰文件）和卷任务的对账。只记录 |
+| R6.7 | **A 版，大目录卡**。**0:00 插卡，0:00.6 拔卡**（大目录扫描约 1.6 s，0.6 s 在中途）；**0:03 插回**，等 `Scan done`。做 3 次。常规库太快（约 0.1 s），做不到中途拔，用大目录。 | 第一轮日志 `Catalog: Scan done res=aborted n=0 us=…`（被丢弃，**不发布**，没有 `res=ok`、没有 ERROR），重插后 `Scan done res=ok n=12000`；屏幕拔卡后 “No SD card”、Queue 清空，重插扫完后窗口正常（不出现旧卡的曲目）。**拔卡时若落在“卡还在、读不了”**（极少）会出一条 ERROR `Catalog scan aborted but the card is still there; reinsert the card.`，记下次数和上下文，不是预期路径 |
+| R6.8 | **A 版和 B 版**各在做完上面各行之后（扫描和回收都跑过：A 版开机后回收作业每 100 ms 调一次，Flash 空闲块高于水位时约 14 µs 就返回；B 版有真擦除）读 Monitor 栈行 `Background Task: total=6144 B, min free=<B> B, peak=<…>%`（5 s 一批，扫描之后至少等 10 s）。 | `min free` ≥ 256 B，否则在票里报告（后台任务栈放 `.app_axi_ram`，不改链接脚本，放不下由用户决定）；两版取较小的 |
+| R6.9 | 做完 R6.1 至 R6.7 后读最后一行 `CATLOCK: n=<拿取次数> hold=<最长持有 µs>us`（A 版；每 10 s 一行，开机以来的最大值）。 | 记录，预期微秒级（远小于 100 µs） |
+| R6.10 | **B 版**，常规库卡，**0:00 点播放，0:10 起每 5 s 点一次“下一首”共 12 次，同时在 Queue 里连续滑动（让前台读窗口和曲名）约 60 s**，压力钩子同时在 Flash 卷上开关文件。做完搜日志里的 `SERVICE_BUSY`（音频读取 `Audio: SERVICE_BUSY op=…`、前台 `MUSIC: SERVICE_BUSY pos=…`、钩子 `FLASHHOOK` 的新建 BUSY 重试）。 | **不出现**（SD 上最多同时 2 个文件：音频流 1、前台 1；扫描只开目录；钩子只开 Flash 卷的 1 个文件，Flash 有 2 个文件槽）。出现了记下 `op=`、`pos=`、`n=` 并报告 |
+| R6.11 | **开机扫描时长**。**A 版**两次：① **常规库卡**，② **大目录卡**。每种卡**复位 3 次**（按复位键，卡一直在槽里；不是热插），每次读：`VOLUME: flash boot start` 的 tick、`I (…) Catalog: Scan done res=ok n=<n> us=<µs>`（`us` 是扫描开始到结束的总时间，含被抢占和轮转）与它的 tick、`VOLUME: flash ready path=mount … ms=<n>` 的 tick，以及开机后第一批（约 10 s 时）`FSLOCK: sd n=… hold=<µs>:<操作> wait=<µs>:<操作>`。大目录卡再用 **E 版（Release）** 复位 3 次，同样读，只记录。 | 记录三次的值和最大值。**推算**（调度模型，按第 4、5 次上板粗校，不是实测）：大目录 `us` 约 3200000 至 4300000，常规库约 100000；`flash ready` 的 tick 大目录约 10 s（常规库几乎不变，约 8 s）。**对照第 5 次上板（Flash 启动任务优先级 2）：大目录 9.0–9.1 s，常规库 0.39–0.87 s，Flash 就绪约 8 s。** **顺带看**：开机时 `FSLOCK: sd` 的最长持有是否**不再出现 800 ms 级的 `ReadDir`**（第 5 次是 820 ms，持锁的扫描被 Flash 任务抢占；现在应降到毫秒级，只剩 `OpenDir` 找末尾子目录那一次约 1.2 至 2 s）。**超过推算明显**（大目录 `us` > 5 s、常规库 > 0.3 s、`flash ready` > 12 s）在票里报告，不自行调参；实测不理想就退到“扫描期间临时升到 2、只升开机第一次扫描”，那要再问用户 |
+
+**回归行**（A 版，在 R6.x 之间顺带做；每行写在对应清单的行里，下面只写这次要多看的东西）：
+
+- **O6（扫描 12000 首）和 B9（插卡后扫描耗时）**：就是 R6.1 的读数（插入大目录读 `Scan done … us=`，B9 另在常规库卡上读一次），结果词都是 记录。多看：`res=ok`，没有 ERROR。
+- **清单 2 C3（空库 `No tracks`）**：用没有 `Music` 文件夹的卡（配置 D 空库）插入或复位：屏幕 `No tracks`，日志 `Music Directory Open Failed.`（WARN，按空库发布，沿用 STOR-7）和 `Scan done res=ok n=0`；没有 ERROR。
+- **清单 2 C4（`Library changed`，曲库变化后点旧窗口的行）**：**按代码预期很难在板上造出来**。卡一拔，前台就发代次 0 的空窗，旧窗口立刻没了（R5.2），“点旧窗口的行”只剩点行命令与重扫发布同时到达的窄竞态。试一次：大目录卡 **0:00 插卡，0:00 起 1.5 s 内（扫描未发布）连点 Queue 的行 5 次**，再 **扫完后立刻点**；记录屏幕提示。**不要求出现**，一次都没造出就写 未测并注明原因。
+- **清单 1 C3（播放时回收且欠载为 0）**同 R6.2 的数据；**回归说明**：播放中回收不再有“流是否打开”的条件（STOR-12 现行文字），所以 R6.2 之前播放中的真擦除没有上过板，这是第一次。
+
+**要报给用户的情况**（从本节起新增）：R6.8 的 `min free` 不足 256 B；R6.11 明显超过推算（见上）；播放中真擦除时欠载不是 0，或 `FSLOCK: sd … wait=` 在播放中因回收出现秒级（回收只拿 Flash 卷锁，不应出现）；日志里出现 `FLASH: Reclaim failed status=…`（回收失败一次就停，之后到 Flash 卷序号变化为止不再回收；记下 `status` 数值和上下文）；R6.10 出现 `SERVICE_BUSY`；`FLASHHOOK` 的 `wmax`/`dmax` 或 `Reclaim` 的 `wait=` 比第 4 次上板的 1.03 s 更长（同一任务里钩子的写会让回收晚到，预期）。这些都只记录，不自行调参。
+
+R6 的这些行都是常开日志加 Debug 日志，不需要仪器；没做的行写 未测，不得凭印象写 通过。**待上板（`hw:pending`）**：本票的全部专项行与回归行，合并到集成分支之前跑完。
 
 **第 7 次：完整验收（同一提交）**
 

@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    storage_flash_benchmark.c
-  * @brief   Storage Task 中外部 W25Q256 的读取、页编程测速与保留扇区自检。
+  * @brief   Flash 启动任务 中外部 W25Q256 的读取、页编程测速与保留扇区自检。
   *
   * @details
   *          本 Module 在 APP 层组织读取规模、DWT 周期采样和日志；实际物理
@@ -41,7 +41,7 @@ static uint8_t storage_flash_benchmark_buffer[STORAGE_FLASH_BENCHMARK_READ_CHUNK
 /** @brief 本 Module 的稳定日志标签。 */
 static const char storage_flash_benchmark_log_tag[] = "FLASH";
 
-/** @brief 防止同一上电周期重复占用 Storage Task 进行测速。 */
+/** @brief 防止同一上电周期重复占用 Flash 启动任务 进行测速。 */
 static bool storage_flash_benchmark_completed;
 
 /** @brief 防止未来从多个启动路径重入基准入口。 */
@@ -389,7 +389,7 @@ static bool storage_flash_benchmark_run_destructive_diagnostic(void)
 /* Exported functions --------------------------------------------------------*/
 /**
  * @brief  执行一次外部 W25Q256 顺序读取基准并将结果投递到 Log Service。
- * @note   仅在 Storage Task 启动早期、FTL 挂载前运行物理读取和可选保留扇区自检。
+ * @note   仅在 Flash 启动任务 启动早期、FTL 挂载前运行物理读取和可选保留扇区自检。
  *         不访问 FTL/FAT 元数据；破坏性开关开启时会改写两个保留自检扇区。
  *         文件读写测试由挂载成功后的 storage_flash_benchmark_run_file() 单独执行。
  */

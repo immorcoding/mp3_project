@@ -2,15 +2,15 @@
 
 音乐应用的曲库：SD `Music/` 的路径事实表（SDRAM `.storage_catalog` 字符串池 + 偏移/长度 + 文件定位符，不存卷字段）、顺序播放列表，以及曲目显示名、曲目标签文本、曲目打开与相关诊断的纯函数和封装。0.10.0 从 `APP/tasks/storage/catalog/` 搬来（[#212](https://github.com/immorcoding/mp3_project/issues/212)，依据 [#189](https://github.com/immorcoding/mp3_project/issues/189)、[#196](https://github.com/immorcoding/mp3_project/issues/196)，spec [#202](https://github.com/immorcoding/mp3_project/issues/202) F 节）。规则见 STOR-1、STOR-7、STOR-17、ARC-19，技术事实见 [storage.catalog.md](../../../../docs/shape/storage.catalog.md)。
 
-**搬家那张票只搬家和加规则**：扫描这时仍由 Storage Task 同步调用（`catalog_init()`），改成单步函数留给后台任务票。Queue 窗口槽和曲目显示名槽已在前台一次切（[#218](https://github.com/immorcoding/mp3_project/issues/218)）删除，曲名与窗口行改由前台任务经 `ui_cell` 的格子发布（见 [音乐前台流程](../foreground/music_foreground.h) 与 [前台任务](../../../tasks/foreground/README.md)），读者仍是这里的 `catalog_read_track()`。**发布成功后叫醒前台任务一次**（`foreground_task_wake()`，APP 内部接口）：GUI 不会重写没变的需求，前台要主动重新处理最新需求（曲名答过代次 0 的、窗口格里还是空窗的）；被丢弃或失败的扫描不发布，也不叫醒。链接段名 `.storage_catalog`、`.music_sheet` 不改。
+**扫描是后台任务里的单步作业**（[#220](https://github.com/immorcoding/mp3_project/issues/220)）：`catalog_scan_step()` 注册进音乐的 `background_step`，一步最多一次目录调用、一步读一条目录项，遍历状态放 `.apps_sdram`；Storage Task 随这张票删除（见下“扫描单步与错误分类”）。Queue 窗口槽和曲目显示名槽已在前台一次切（[#218](https://github.com/immorcoding/mp3_project/issues/218)）删除，曲名与窗口行改由前台任务经 `ui_cell` 的格子发布（见 [音乐前台流程](../foreground/music_foreground.h) 与 [前台任务](../../../tasks/foreground/README.md)），读者仍是这里的 `catalog_read_track()`。**发布成功后叫醒前台任务一次**（`foreground_task_wake()`，APP 内部接口）：GUI 不会重写没变的需求，前台要主动重新处理最新需求（曲名答过代次 0 的、窗口格里还是空窗的）；被丢弃或失败的扫描不发布，也不叫醒。链接段名 `.storage_catalog`、`.music_sheet` 不改。
 
 ## 文件
 
 | 文件 | 内容 | 主机测试 |
 |---|---|---|
-| `catalog.c/.h` | 扫描、发布、作废、读者一次读全、曲库短锁与持锁统计 | 是（`Tests/music_catalog`，假 Filesystem、假卷状态、共用 FreeRTOS 桩） |
+| `catalog.c/.h` | 扫描单步、发布、作废、读者一次读全、曲库短锁与持锁统计 | 是（`Tests/music_catalog`，假 Filesystem、假卷状态、共用 FreeRTOS 桩） |
 | `catalog_sheet.c/.h` | 顺序播放列表（`SeqList[i] = i`，SDRAM `.music_sheet`），只由 `catalog.c` 用，没有自己的锁和代次 | 经 `catalog.c` |
-| `catalog_config.h` | 容量、扫描重试间隔、持锁统计开关与节拍、诊断阈值与缓冲 | 编译期断言 |
+| `catalog_config.h` | 容量、扫描重试间隔与遍历状态的链接段、持锁统计开关与节拍、诊断阈值与缓冲 | 编译期断言 |
 | `catalog_name.c/.h` | 曲目显示名纯函数 | 是 |
 | `catalog_text.c/.h` | 曲目文本纯函数（ID3 标签） | 是 |
 | `catalog_track_open.c/.h` | 曲目文件的统一打开入口（定位符，核对不符退回路径） | 是 |
@@ -22,10 +22,10 @@
 一份表，模块内一把短锁；**持锁只拷内存**，不调文件接口、不投日志、不等别的对象，所以曲库锁和文件锁永远不嵌套。
 
 - **已发布的状态只有三个字**：代次 `Generation`、条数 `Count`、发布时的卷序号 `VolumeSequence`，都在 `.bss`，只在持锁时读写。表本身（路径池、条目、定位符、播放列表）扫描时由扫描者**不拿锁**地写。
-- **开始扫描**（`catalog_music_init()` 开头）：锁内把代次和条数置 0，记下此刻的 SD 卷序号（`volume_status()`，一个字，不拿锁）。此后读者看到代次 0，**不碰表**。
+- **开始扫描**（卷序号变化、卷挂着时，`catalog_scan_step()` 的第一步）：锁内把代次和条数置 0，记下此刻的 SD 卷序号（`volume_status()`，一个字，不拿锁）。此后读者看到代次 0，**不碰表**。
 - **发布**：播放列表建好以后，锁内比对卷序号：卷挂着且序号与开始时一致，才写代次和条数；不一致则不发布（曲库保持代次 0，结束行 `res=aborted n=0`）。
-- **代次只在发布时加 1**（跳过 0），计数在 `.bss`，一次开机内不重复；`catalog_invalidate()` 只把代次和条数置 0，不动计数。代次 0 永远表示“没有可用曲库”，所以播放列表自己的 `Generation` 字段取消了。
-- **取代次时卷序号不符就算 0**：`catalog_generation()` 和 `catalog_read_track()` 在锁内用 `volume_status(VOLUME_ID_SD)` 比对，卷不在或序号不符都得 0，不需要任何任务调用作废。`catalog_invalidate()` 因此不是正确性必需，只是让状态尽快归零。
+- **代次只在发布时加 1**（跳过 0），计数在 `.bss`，一次开机内不重复；卷消失时扫描作业锁内把代次和条数置 0，不动计数。代次 0 永远表示“没有可用曲库”，所以播放列表自己的 `Generation` 字段取消了。
+- **取代次时卷序号不符就算 0**：`catalog_generation()` 和 `catalog_read_track()` 在锁内用 `volume_status(VOLUME_ID_SD)` 比对，卷不在或序号不符都得 0，不需要任何任务调用作废。扫描作业在卷消失时把状态置 0 因此不是正确性必需，只是让状态尽快归零。
 - **读者一次读全**：`catalog_read_track(position, &out)` 在同一把锁内完成“播放列表位置 → 曲库下标”，并拷出代次、条数、路径和文件定位符（`Catalog_TrackTypeDef`，约 300 B，调用者放静态存储）。代次为 0 时条数为 0、路径空串、定位符全零，表一个字节都不碰；位置越界时代次和条数有效、路径空串，返回 `false`。取代了原来分开取代次、条数、路径、定位符（四次之间可能被重扫插进来）的写法。
 
 读者现在有三处，都是一次读全：音频流开流（音频读取任务的 `audio_reader_open()`，经 `catalog_track_open()` 用同一次读到的定位符）、前台任务的曲名需求与 Queue 窗口的每一行（`music_foreground.c`，每步一行）。前台发布的曲名结果与窗口的代次取自这一次读全，不再另取。
@@ -34,7 +34,7 @@
 
 | 情形 | 行为 |
 |---|---|
-| 扫描中途卡被换 | 每读一条目录项前比对卷序号；变了就关目录（返回值不看）、丢弃本轮、不发布、不记 ERROR。卡还在的话，Storage Task 下一圈看到新的卷序号会重扫。文件接口在闸关着时返回 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 的，也按同样丢弃处理 |
+| 扫描中途卡被换 | 每步先比对卷序号；变了就关目录（返回值不看）、丢弃本轮、不发布、不记 ERROR。卡还在的话，下一步看到新的卷序号就从头重扫（后台任务订阅了卷事件，不靠别的任务叫它）。文件接口在闸关着时返回 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 的，也按同样丢弃处理 |
 | 扫描做完、发布之前换卡 | 发布时锁内比对卷序号，不一致不发布 |
 | 读者在扫描期间读 | 看到代次 0，不碰表，也看不到上一份曲库的路径 |
 | 发布和读者交错 | 发布和每次读都在同一把锁内：读者要么在发布之前（代次 0，不可用），要么在发布之后（完整的一份），读不到半份 |
@@ -43,24 +43,30 @@
 
 ### 锁的创建时机
 
-锁是静态互斥量（不占堆），由 `catalog_boot_init()` 创建；它在 `APP/tasks/app_tasks.c` 的 Create Task（Boot）里、SDRAM 自检之后、创建 Storage Task 和音频读取任务**之前**调用一次，所以早于任何会读写曲库的任务的第一次使用（音频块池与信箱的 `audio_reader_boot_init()` 紧跟其后）。漏调用会在第一次拿锁时 `configASSERT` 停机。它同时复位已发布的状态和代次计数，整个开机只调一次，“一次开机内不重复”因此成立。以后创建音频读取、前台、后台任务的票沿用同一位置（或改为注册表的 `boot_init`）。
+锁是静态互斥量（不占堆），由 `catalog_boot_init()` 创建；它在 `APP/tasks/app_tasks.c` 的 Create Task（Boot）里、SDRAM 自检之后、创建音频读取任务等**之前**调用一次，所以早于任何会读写曲库的任务的第一次使用（音频块池与信箱的 `audio_reader_boot_init()` 紧跟其后）。漏调用会在第一次拿锁时 `configASSERT` 停机。它同时复位已发布的状态、代次计数和扫描的遍历状态（`.apps_sdram` 是 NOLOAD，不自动清零，HWD-2：拥有者在首次使用前整块写入，`memset` 约 33 KiB），整个开机只调一次，“一次开机内不重复”因此成立。
 
-## 扫描与错误分类（#196，沿用 STOR-7）
+## 扫描单步与错误分类（ARC-22、#196、#220，沿用 STOR-7）
+
+扫描是后台任务里的**单步作业** `catalog_scan_step()`：音乐在注册表（`APP/apps/app_table.c`）的 `background_step` 里经 `music_background_step()`（`APP/apps/music/music_background.c`）接它；后台任务每圈把所有作业各调一次，取最小返回值当睡眠时长，卷事件和 `background_task_wake()` 都会叫醒它（见 [后台任务](../../../tasks/background/README.md)）。
+
+- **一步一次目录调用，一步读一条**：每步最多一次 `OpenDirectory`、`ReadDirectory` 或 `CloseDirectory`；读目录一步读一条目录项，每条放一次锁（Filesystem 入口），**不加批量读目录的接口**。一个有 N 个条目的目录要约 N + 3 步（打开、N 条、结束标记、关闭）。返回值：0（还有活，马上再调；后台任务这一圈把别的作业各调一次就回来）、`CATALOG_BUSY_RETRY_MS`（10，遇 `SERVICE_BUSY`）、`BACKGROUND_WAIT_FOREVER`（没有活，等卷事件）。`Tests/music_catalog` 的驱动函数对每一步断言“目录调用不超过一次”。
+- **状态机**：`IDLE` → `OPEN` → `READ`（每条目录项一步）→ `CLOSE`（读到结束标记、表满或读失败之后）→ 下一个目录，或收尾（建播放列表、发布）。**遍历状态**（目录栈 128 层 × 256 B、当前路径、子路径、目录项、目录句柄、条数、计时）全部在静态存储 `.apps_sdram`（ARC-28；NOLOAD，不自动清零，`catalog_boot_init()` 整块写入，HWD-2；Debug map 里 `catalog.c` 的 `.apps_sdram` 贡献 0x8348 = 33608 B），不占后台任务的 6 KiB 栈；原来放在 `.storage_catalog` 里的 32 KiB 目录栈搬到这里，`.storage_catalog` 相应小 0x8000（0x44e520 → 0x446520）。遍历顺序和原来的同步扫描一致：文件按读到的顺序收录，子目录入栈，后入栈的先扫。`Tests/music_catalog` 的 `test_scan_traverses_a_nested_tree_in_the_established_order` 钉住它，期望顺序是用旧的同步实现在同一棵树上跑出来的一次性对照（不是用新代码重算）。
+- **每步先比对卷序号**：和这一轮开始时的序号不同就丢弃——目录开着先关（返回值不看，卡可能已经没了），记 `Scan done res=aborted n=0`；之后卷不在就作废已发布的曲库（锁内把代次、条数置 0）并等卷事件，卷还挂着（换卡，或被吞的拔出加重新挂载）就从头重新开始。后台任务订阅了卷事件，登记后第一圈不等通知、先调一遍所有作业，所以晚订阅、丢叫醒、合并叫醒都不会漏。**扫描只在卷序号变化后发生**；发布完或放弃之后什么都不做，直到下一次卷序号变化。
+- **不向 GUI 发布进度**（0.10.0 用户可见行为不变；以后要发布，用后台作业自己的一格 `ui_cell`）。
+- **整个状态机里持曲库锁的只有两处**：开始（置 0）和发布（比对）。单步里不要再加；文件接口和日志都不在锁内。
 
 | 结果 | 处理 | 实现 |
 |---|---|---|
-| `SERVICE_BUSY` | 过约 10 ms 重试，不算失败 | 打开、读、关目录各一处循环，`CATALOG_BUSY_RETRY_MS`；等的时候卷序号变了就作废这一轮 |
-| `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` | 丢弃本次扫描，不发布，等卷事件 | `Service_Filesystem_StatusIsVolumeUnavailable()`，结束行 `res=aborted` |
+| `SERVICE_BUSY` | 过约 10 ms 重试，不算失败 | 这一步返回 `CATALOG_BUSY_RETRY_MS`，后台任务睡这么久再叫扫描作业，步里不等（原来的 `vTaskDelay` 没有了）；打开、读、关目录各一处；睡的时候卷序号变了，下一步的比对作废这一轮 |
+| `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` | 丢弃本次扫描，不发布，等卷事件 | `Service_Filesystem_StatusIsVolumeUnavailable()`；读目录时先关目录，结束行 `res=aborted`；卡还在读不了的情形见下 |
 | 打开根目录时的其他错误 | 按空库发布，记 WARN | `Music Directory Open Failed.` |
 | 打开子目录时的其他错误 | 跳过这个子目录，记 WARN | `Sub Directory Open Failed.` |
-| 读或关目录时的其他错误 | 不发布，记 ERROR，等下一次插卡 | `Music Directory Read Failed.`（读）与 `Music catalog dfs failed.`，结束行 `res=dfs_error` |
-| 条目满、池满 | 发布截断结果 | `Music Catalog Full.` / `Music Catalog Pool Full.` WARN；池按 4 MiB 与 12000 条的平均 350 B 设计，路径不超过 255 B 时条数先到上限，池满只是防御，主机测试到不了 |
+| 读或关目录时的其他错误 | 不发布，记 ERROR，等下一次插卡 | `Music Directory Read Failed.`（读）与 `Music catalog dfs failed.`，结束行 `res=dfs_error`；之后作业不再自己重试，到卷序号变化为止 |
+| 条目满、池满 | 发布截断结果 | `Music Catalog Full.` / `Music Catalog Pool Full.` WARN，不再扫其余目录；池按 4 MiB 与 12000 条的平均 350 B 设计，路径不超过 255 B 时条数先到上限，池满只是防御，主机测试到不了 |
 
-**打开目录得到卷不可用时再开一次**（#211）：在途调用被拔卡打断时，第一次失败发生在卷任务对账之前、卷序号还没变；路径打开没有句柄可借来等闸，所以再开一次，它在 Filesystem 入口等闸，等到对账结束才下结论——卡没了（再次得到卷不可用，丢弃）或卡还在（照常打开，扫描继续）。根目录和子目录都一样。
+**打开目录得到卷不可用时再开一次**（#211）：在途调用被拔卡打断时，第一次失败发生在卷任务对账之前、卷序号还没变；路径打开没有句柄可借来等闸，所以再开一次，它在 Filesystem 入口等闸，等到对账结束才下结论——卡没了（再次得到卷不可用，丢弃；或者下一步先看到卷序号变了，不再重试）或卡还在（照常打开，扫描继续）。根目录和子目录都一样。
 
-**扫描结束后的判决** `catalog_scan_verdict(volume_unchanged)`：`CATALOG_SCAN_DONE`（没有被丢弃，照常就绪）、`CATALOG_SCAN_EVENT_PENDING`（被丢弃且卷变了，等卷事件重扫、不置就绪）、`CATALOG_SCAN_UNREADABLE`（被丢弃但卷没变：卡还在、读不了，没有边沿就没有卷事件，Storage Task 记 ERROR、置就绪、曲库为空）。扫描中途或发布前卷序号变了而丢弃，同样走这个判决。
-
-目前的 `SERVICE_BUSY` 重试用任务延时（扫描还是同步调用，会占着 Storage Task）；改成单步函数后由返回值告诉后台任务多久后再叫它，卷序号比对和错误表不变。
+**卡还在、读不了**（原来由 Storage Task 的 `catalog_scan_verdict()` 判决，现在在作业里）：丢弃的原因是卷不可用，但收尾时卷序号没变且卷仍挂着——卡还在、设备出错，没有边沿就没有卷事件，等也等不来——记一条 ERROR `Catalog scan aborted but the card is still there; reinsert the card.`，曲库保持代次 0，作业不再自己重试，到卷序号变化（拔插卡）为止。卷序号变了或卷不在（卡没了或换了）则安静地等卷事件。
 
 ## 持锁统计（DIAG-6，与 Filesystem 持锁统计同一个开关）
 
@@ -76,13 +82,12 @@ CATLOCK: n=1204 hold=96us
 
 ### 日志消息池核算（DIAG-3，汇总类日志注明节拍）
 
-本票（#212）新增 1 行（每 10 s 一次，Debug 才有，不超过 36 个字符），当时池 30 块、最坏同时到达 23 行。之后每加一个任务或一种常开日志行都重算过：#213 后台任务 24 行，#215 音频读取任务 26 行（保守口径 28 行，留 2 块），**#218 前台一次切加前台任务、前台 step 耗时、`ui_cell` 持锁统计、显示延迟汇总和前台的 `SERVICE_BUSY` 行后保守口径是 34 行，池加大到 45 块，留 11 块**，最新数字与明细见 [前台任务](../../../tasks/foreground/README.md)“日志与消息池核算”和 [Monitor](../../../tasks/monitor/README.md)。Release 不投本行。
+本票（#212）新增 1 行（每 10 s 一次，Debug 才有，不超过 36 个字符），当时池 30 块、最坏同时到达 23 行。之后每加一个任务或一种常开日志行都重算过：#213 后台任务 24 行，#215 音频读取任务 26 行（保守口径 28 行，留 2 块），**#218 前台一次切加前台任务、前台 step 耗时、`ui_cell` 持锁统计、显示延迟汇总和前台的 `SERVICE_BUSY` 行后保守口径是 34 行，池加大到 45 块，留 11 块；#220 删掉 Storage Task（Monitor 一批少一行）并加 Flash 回收失败 1 行，总数仍是 34 行、留 11 块**，最新数字与明细见 [前台任务](../../../tasks/foreground/README.md)“日志与消息池核算”和 [Monitor](../../../tasks/monitor/README.md)。Release 不投本行。
 
 ## 公开 Interface
 
 - `catalog_boot_init()`：见上，Create Task 里调用一次。
-- `catalog_init()` / `catalog_music_init()`：扫描并发布，返回 `Catalog_StatusTypeDef`（`CATALOG_OK`：扫描完成并发布，或本轮被丢弃；`CATALOG_ERROR`：读或关目录失败）。`catalog_books_init()` 是空桩，恒成功，当前不调用。仅 Storage Task 在卷就绪之后调用；扫描时不 memset 整池。
-- `catalog_invalidate()`：拔卡或卸载时锁内把代次和条数置 0。
+- `catalog_scan_step()`：扫描作业单步（音乐注册表的 `background_step`，只有后台任务调用），返回多少毫秒后再叫它，见上“扫描单步与错误分类”。没有 `catalog_init()`、`catalog_music_init()`、`catalog_scan_verdict()`、`catalog_invalidate()`、`Catalog_StatusTypeDef` 了（#220）；`catalog_books_init()` 的空桩也一并删了（没有调用者，ARC-15）。扫描时不 memset 整池。
 - `catalog_generation()`：当前代次，0 表示不可用。
 - `catalog_read_track(position, &out)`：读者一次读全，见上。
 - 容量（STOR-17）：`CATALOG_MUSIC_MAX_NUM` = 12000 首（保证可同在一个文件夹），路径字符串池 4 MiB。每条随附 16 B 的不透明文件定位符（ARC-19，`MusicCatalogLocator[12000]`，约 188 KiB，与偏移/长度表同在 `.storage_catalog` 段、同下标），只在同一曲库代次内有效；扫描时个别位置取不到定位符则为全零，按它打开会核对不符并退回路径打开。启动不把该段并入 `.bss` 清零。没有 `Music/` 时为空表成功。
@@ -99,17 +104,18 @@ CATLOCK: n=1204 hold=96us
   - Queue 窗口逐行不记。窗口加载完成（打 `READY` 前）时，若本窗有上述四类 WARN 级原因、或本窗最长单次打开 > 30 ms、或整窗总耗时 > 0.5 s、或最长单行 > 1 s（`CATALOG_TRACK_BUDGET_US`），记一行汇总：`Tag win rows=行数 max=本窗最长单行（含打开） omax=本窗最长单次打开 top=自启动最长单行 us=总耗时（含打开） rd=读取次数合计 ok=取到数 nid3=无ID3v2 nofr=帧缺失 dec=解码失败 lim=超读取上限 open=打开失败 rerr=读取错误`（耗时单位 µs；耗时字段排在原因计数之前，万一撞上 Service Log 单条 128 B 上限被截断，丢的是尾部计数而不是 `max`/`top`；加入 `omax` 后十位数的极端取值会超出 128 B 并丢尾部计数，现实取值（耗时 < 10^7 µs）约 120 字符，不截断）；有 WARN 级原因为 WARN，否则 INFO。其余窗口只累加计数器。以空窗收尾的窗口不记汇总。
   - 开流和重开流成功后各记一行 INFO `Stream pos=N off=<B> open=<us> lseek=<us>`（`catalog_track_diag_stream_done()`，DIAG-5）：`pos` 是播放列表位置，`off` 取请求里的 `AudioOffset`（未钳位），`open` 是打开耗时，`lseek` 是定位到音频区间起点加偏移的最后一次 `f_lseek` 耗时；只在曲目或跳转边界记，不在每块读取路径上；开启失败不记（失败由播放侧的 `Open` 日志与现有错误路径呈现）。
   - 核对不符一行 WARN：`Locator miss pos=N`，文本只含位置，不含文件名。
-  - **扫描结束一行 INFO**（DIAG-6、#204，常开，tag `Catalog`，不是 `STORAGE`）：`Scan done res=<结果> n=<条数> us=<微秒>`，每次 `catalog_music_init()` 结束时一行。`res` 取 `ok`（含没有 `Music/`、子目录打不开、条数满截断，此时 `n` 是已收录的条数）、`dfs_error`（目录读取或关闭失败，此前已有一条 ERROR）、`aborted`（本轮扫描被丢弃：卷不可用、扫描中或发布前卷序号变了，此时 `n=0`，不记 ERROR）。`us` 是从扫描开始（作废旧表之后）到遍历结束的耗时，含目录打开与读取以及期间被更高优先级任务抢占的时间，不含建播放列表和发布；DWT 计数器 32 位、480 MHz 下约 9 s 回绕，所以扫描里每次目录打开和读取之后把周期差累加进 64 位计数（相邻两次相隔一次目录操作），不依赖首尾两次读数。主机测试 `Tests/music_catalog` 的 `catalog_open`（含计数器回绕）。spike 参考：12000 首同文件夹约 2.3 s（R1.5 只记录）。
+  - **扫描结束一行 INFO**（DIAG-6、#204，常开，tag `Catalog`，不是 `STORAGE`）：`Scan done res=<结果> n=<条数> us=<微秒>`，每轮扫描结束（发布、放弃或失败）一行。`res` 取 `ok`（含没有 `Music/`、子目录打不开、条数满截断，此时 `n` 是已收录的条数）、`dfs_error`（目录读取或关闭失败，此前已有一条 ERROR）、`aborted`（本轮扫描被丢弃：卷不可用、扫描中或发布前卷序号变了，此时 `n=0`，不记 ERROR）。`us` 是从扫描开始（作废旧表之后）到结束的**总时间**，含目录打开与读取、`SERVICE_BUSY` 的睡眠以及期间被更高优先级任务抢占或与同级任务轮转的时间，不含建播放列表和发布（第 4、5 次上板的开机扫描数字同一口径：12000 首开机扫描 9.0 s 就是这个数）；DWT 计数器 32 位、480 MHz 下约 9 s 回绕，所以每一步开头把周期差累加进 64 位计数（相邻两步相隔一次目录调用加一次睡眠，远小于回绕周期），不依赖首尾两次读数。主机测试 `Tests/music_catalog` 的 `catalog_open`（含计数器回绕）。spike 参考：12000 首同文件夹约 2.3 s（R1.5 只记录）。
   - **板测清单 B8**：在标签读取范围内，“Storage 单圈最大耗时”有了固件出口：曲名 INFO 的 `us`（M10）、窗口汇总行的 `max` 与 `top`；原判据是单行标签读取上界 < T_data/2，现在只有 1 s 的日志阈值，判据由板级验收清单重新定。B9（扫描耗时）、B10 不在此范围。无主机测试，实际日志与耗时由板级验收票取证。
 
 
 ## 编译期依赖
 
 - 卷事件的 `volume_status()`（`APP/tasks/volume/volume_event.h`，应用可以包含任务的公开合同，ARC-23）。
-- Filesystem Service 的目录与文件 Interface、失败分类函数；Log Service；Cortex-M7 周期计数器 Adapter；原生 FreeRTOS 的静态互斥量、tick 与延时。
+- 后台任务的配置头（`APP/tasks/background/background_task_config.h`，`BACKGROUND_WAIT_FOREVER`）、前台任务的叫醒函数（`foreground_task_wake()`）。
+- Filesystem Service 的目录与文件 Interface、失败分类函数；Log Service；Cortex-M7 周期计数器 Adapter；原生 FreeRTOS 的静态互斥量与 tick。
 - `Components/id3_reader`（曲目文本函数）。
-- 不包含别的应用，也不包含 `APP/tasks/storage/`。反方向：Storage Task、音频读取任务（`APP/tasks/audio_reader/`，直接包含，不做注入）、两个槽和 `app_tasks.c` 包含本目录的头；`scripts/check-layer-includes.ps1` 的 `app` 种类只拦“应用包含别的应用”，任务包含应用不受限，ARC-23 也只禁应用之间互相包含。
+- 不包含别的应用。反方向：音频读取任务（`APP/tasks/audio_reader/`，直接包含，不做注入）、前台流程、`music_background.c` 和 `app_tasks.c` 包含本目录的头；`scripts/check-layer-includes.ps1` 的 `app` 种类只拦“应用包含别的应用”，任务包含应用不受限，ARC-23 也只禁应用之间互相包含。
 
 ## 保真边界
 
-主机测试是单线程的，通过不等于并发没问题。`Tests/music_catalog` 证明：发布规则、卷序号比对、错误表各分支、读者一次读全的内容、每次调用拿放曲库锁各一次、文件接口与日志不在锁内、拿不到锁时读者等到拿到为止、持锁统计的数字与格式。**不证明**：真实任务抢占与优先级继承、读者与扫描者真实交错时的内存可见性（Cortex-M7 单核加互斥量的屏障）、持锁的真实时长（板上看 `CATLOCK` 行）、12000 首的扫描耗时。这些进板级验收。
+主机测试是单线程的，通过不等于并发没问题。`Tests/music_catalog` 证明：每一步最多一次目录调用、一步读一条、遍历顺序与旧实现一致（嵌套树）、扫描中途卷序号变化关目录并重新开始、重新开始后的发布、没有活时只等通知、`SERVICE_BUSY` 返回 10 ms 而不是在步里等、发布规则、卷序号比对、错误表各分支（含卡还在读不了记一条 ERROR 且不再重试）、读者一次读全的内容、每次调用拿放曲库锁各一次、文件接口与日志不在锁内、拿不到锁时读者等到拿到为止、持锁统计的数字与格式。**不证明**：真实任务抢占与优先级继承、后台任务与 Flash 启动任务同级时的 CPU 份额（开机扫描时长，靠第 6 次上板）、读者与扫描者真实交错时的内存可见性（Cortex-M7 单核加互斥量的屏障）、持锁的真实时长（板上看 `CATLOCK` 行）、12000 首的扫描耗时。这些进板级验收。

@@ -13,8 +13,9 @@
 #define CATALOG_MUSIC_MAX_NUM    12000U  /* 最多曲目数（STOR-17，可同在一个文件夹）；须能放入 uint16_t。每条另随附 16 B 文件定位符，共约 188 KiB。 */
 
 /* catalog.c */
-#define CATALOG_DIR_STACK_MAX    128U    /* 待扫子目录栈深度；同时只开一个目录句柄。 */
-#define CATALOG_BUSY_RETRY_MS    10U     /* 扫描中文件调用返回 SERVICE_BUSY（槽用尽）时等多久再试（#196 错误分类表，初值）。 */
+#define CATALOG_DIR_STACK_MAX    128U    /* 待扫子目录栈深度；同时只开一个目录句柄。栈在扫描遍历状态里，放 `.apps_sdram`（128 × 256 B = 32 KiB）。 */
+#define CATALOG_BUSY_RETRY_MS    10U     /* 扫描单步遇到 SERVICE_BUSY（槽用尽）时返回的等待毫秒数：后台任务睡这么久再叫扫描作业（#196 错误分类表，初值）。 */
+#define CATALOG_SDRAM_SECTION    ".apps_sdram" /* 扫描遍历状态所在的链接段：SDRAM，NOLOAD，不自动清零，`catalog_boot_init()` 整块写入，ASSERT 卡总量 8 MiB（HWD-2、ARC-28）。 */
 
 /* catalog.c：曲库短锁的持锁统计（DIAG-6；与 Filesystem 的持锁统计同一个开关：Debug 开、Release 关）。
  * 固件 Release 带 -DNDEBUG，整段编译掉，不占时间也不占字段。 */

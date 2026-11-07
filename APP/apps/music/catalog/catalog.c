@@ -11,8 +11,11 @@
  *          - 开始扫描：锁内把代次置 0。发布：锁内比对卷序号，一致才写代次和条数。
  *            代次只在发布时加 1，一次开机内不重复。取代次时卷序号不符就算 0。
  *
- *          扫描这时仍由 Storage Task 同步调用，改成单步函数留给后台任务票。发布成功后叫醒前台任务一次（`foreground_task_wake()`，
- *          APP 内部接口），前台流程据此重新处理最新需求。
+ *          扫描是后台任务里的单步作业（`catalog_scan_step()`，音乐注册进注册表的 `background_step`，ARC-22）：一步最多一次
+ *          目录接口调用，读目录一步读一条、每条放一次锁；遍历状态（目录栈、当前路径、目录句柄、计数）放静态存储
+ *          `.apps_sdram`（ARC-28），不占后台任务的 6 KiB 栈。每步先比对 SD 卷序号：变了就关目录（返回值不看）并丢弃，
+ *          卡还在就重新开始；扫描只在卷序号变化后发生（后台任务订阅了卷事件）。发布成功后叫醒前台任务一次
+ *          （`foreground_task_wake()`，APP 内部接口），前台流程据此重新处理最新需求。
  */
 
 #include "catalog.h"
@@ -25,6 +28,7 @@
 #include <string.h>
 
 #include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
+#include "APP/tasks/background/background_task_config.h"
 #include "APP/tasks/foreground/foreground_task.h"
 #include "APP/tasks/volume/volume_event.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
@@ -56,8 +60,6 @@ typedef struct
 
 static const char catalog_log_tag[] = "Catalog";
 
-static Service_Filesystem_DirectoryHandleTypeDef music_directory;
-
 /** @brief 已发布的状态；只在持曲库锁时访问。 */
 static Catalog_PublishedTypeDef catalog_published;
 
@@ -67,15 +69,6 @@ static uint32_t catalog_generation_counter;
 /** @brief 曲库锁（静态互斥量）；`catalog_boot_init()` 创建。 */
 static StaticSemaphore_t catalog_lock_storage;
 static SemaphoreHandle_t catalog_lock;
-
-/** @brief 本轮扫描的工作下标，上电为零，每次开扫前清零。 */
-static uint32_t music_catalog_index;
-
-/** @brief 本轮扫描开始时的 SD 卷序号；发布时与当时的卷序号比对。只在扫描者（Storage Task）访问。 */
-static uint32_t music_catalog_scan_sequence;
-
-/** @brief 本轮扫描因为卷不可用（NO_MEDIA、NOT_READY、INVALID_HANDLE）或卷序号变了被丢弃；每次开扫前清零，只在 Storage Task 访问。 */
-static bool music_catalog_scan_aborted;
 
 static Catalog_MusicTypeDef MusicCatalogPool
     __attribute__((section(".storage_catalog"), aligned(32)));
@@ -87,15 +80,48 @@ static Catalog_MusicItemsTypeDef MusicCatalogIndex[CATALOG_MUSIC_MAX_NUM]
 static Service_Filesystem_FileLocatorTypeDef MusicCatalogLocator[CATALOG_MUSIC_MAX_NUM]
     __attribute__((section(".storage_catalog"), aligned(32)));
 
-static char catalog_dir_stack[CATALOG_DIR_STACK_MAX]
-                                     [SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U]
-    __attribute__((section(".storage_catalog"), aligned(32)));
+/** @brief 扫描单步状态机的步骤：下一步要做哪一次目录调用。 */
+typedef enum
+{
+    CATALOG_SCAN_IDLE = 0U, /**< 没有进行中的扫描：卷没挂，或这一轮已发布、已放弃；等卷序号变化。 */
+    CATALOG_SCAN_OPEN,      /**< 下一步：打开 `Current` 目录。 */
+    CATALOG_SCAN_READ,      /**< 下一步：读一条目录项。 */
+    CATALOG_SCAN_CLOSE      /**< 下一步：关目录（读到结束标记、表满，或读失败之后）。 */
+} Catalog_ScanPhaseTypeDef;
 
-/** @brief 本轮扫描开始时的周期计数器读数；与 music_catalog_scan_cycles 一起只在 Storage Task 访问。 */
-static uint32_t music_catalog_scan_last_cycles;
+/** @brief 本轮扫描关目录之后要怎样收尾。 */
+typedef enum
+{
+    CATALOG_SCAN_FAILURE_NONE = 0U, /**< 没有失败：继续下一个目录，或发布。 */
+    CATALOG_SCAN_FAILURE_DISCARD,   /**< 卷不可用：丢弃，不发布；卡被拔走就等卷事件，卡还在读不了就记 ERROR 要求重插卡。 */
+    CATALOG_SCAN_FAILURE_ERROR      /**< 读或关目录的其他错误：不发布，记 ERROR，等下一次插卡。 */
+} Catalog_ScanFailureTypeDef;
 
-/** @brief 本轮扫描累计的周期数（64 位）：DWT 为 32 位，480 MHz 下约 9 s 回绕，扫描可能更长，所以边走边累加。 */
-static uint64_t music_catalog_scan_cycles;
+/**
+ * @brief 扫描的遍历状态：全部静态，放 `.apps_sdram`（NOLOAD，不自动清零，`catalog_boot_init()` 整块写入，HWD-2）。
+ * @note  只在后台任务里访问（单写者）。约 33 KiB，其中目录栈 128 层 × 256 B；曲库本身（路径池、条目、定位符）在 `.storage_catalog`。
+ */
+typedef struct
+{
+    Catalog_ScanPhaseTypeDef Phase;
+    Catalog_ScanFailureTypeDef Failure;
+    uint32_t SeenSequence;      /**< 最近处理过的 SD 卷序号；扫描进行中也是本轮扫描开始时的序号，发布时与当时的卷序号比对。 */
+    uint32_t Index;             /**< 本轮已收录的条数（播放列表的工作下标）。 */
+    uint32_t StackTop;          /**< 待扫目录栈的深度。 */
+    bool DirectoryOpen;         /**< `Directory` 句柄是否有效（已打开、还没关）。 */
+    bool OpenRetried;           /**< 本目录“卷不可用时再开一次”已经用掉。 */
+    bool CurrentIsRoot;         /**< `Current` 是根目录 `Music`。 */
+    uint32_t ClockLast;         /**< 周期计数器上次读数。 */
+    uint64_t ClockCycles;       /**< 本轮累计周期数（64 位）：DWT 为 32 位，480 MHz 下约 9 s 回绕，扫描可能更长，所以边走边累加。 */
+    Service_Filesystem_DirectoryHandleTypeDef Directory;
+    Service_Filesystem_DirectoryEntryTypeDef Entry;
+    char Current[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
+    char Child[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
+    char Stack[CATALOG_DIR_STACK_MAX][SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
+} Catalog_ScanStateTypeDef;
+
+static Catalog_ScanStateTypeDef catalog_scan_state
+    __attribute__((section(CATALOG_SDRAM_SECTION), aligned(32)));
 
 #if CATALOG_LOCK_STATS_ENABLE
 /* 周期计数器是 32 位的，480 MHz 下约 8.9 s 回绕；区间超过这个 tick 数（4 s，留足余量）就改用 tick 量。 */
@@ -278,7 +304,7 @@ static void catalog_lock_leave(void)
 
 /**
  * @brief 创建曲库锁并复位已发布的状态。
- * @note  只在 Create Task（Boot）里调用一次，早于创建任何会读写曲库的任务（Storage Task 及以后的音频读取、前台、后台），
+ * @note  只在 Create Task（Boot）里调用一次，早于创建任何会读写曲库的任务（音频读取、前台、后台），
  *        所以其他函数不需要检查“锁建了没有”，漏调用会在第一次拿锁时断言停机。静态互斥量不占堆。
  *        代次计数从 0 重新开始：整个开机只调用一次，所以“一次开机内不重复”成立。
  */
@@ -290,6 +316,7 @@ void catalog_boot_init(void)
     catalog_published.Count = 0U;
     catalog_published.VolumeSequence = 0U;
     catalog_generation_counter = 0U;
+    (void)memset(&catalog_scan_state, 0, sizeof(catalog_scan_state)); /* NOLOAD 段不自动清零：第一次使用前整块写入 */
 #if CATALOG_LOCK_STATS_ENABLE
     (void)memset(&catalog_lock_stats, 0, sizeof(catalog_lock_stats));
     catalog_lock_stats.report_last_tick = xTaskGetTickCount();
@@ -301,21 +328,22 @@ void catalog_boot_init(void)
  */
 static void catalog_scan_clock_start(void)
 {
-    music_catalog_scan_last_cycles = CortexM7CycleCounter_Read();
-    music_catalog_scan_cycles = 0U;
+    catalog_scan_state.ClockLast = CortexM7CycleCounter_Read();
+    catalog_scan_state.ClockCycles = 0U;
 }
 
 /**
  * @brief 把距上次读数过去的周期数累加进本轮扫描耗时。
- * @note  扫描里每次目录打开与读取之后调用；相邻两次调用相隔一次目录操作（毫秒级），远小于 32 位计数器的回绕周期，
- *        所以无符号减法取差值总是对的。
+ * @note  扫描进行中的每一步开头、每次收尾记日志之前调用；相邻两次调用相隔一步（毫秒级，BUSY 重试也只有约 10 ms，
+ *        后台任务被抢占也远小于 32 位计数器的回绕周期），所以无符号减法取差值总是对的。含目录读取、打开、等待与任务切换，
+ *        也就是从开始到结束的总时间（第 4、5 次上板的开机扫描数字同一口径）。
  */
 static void catalog_scan_clock_poll(void)
 {
     const uint32_t now = CortexM7CycleCounter_Read();
 
-    music_catalog_scan_cycles += (uint32_t)(now - music_catalog_scan_last_cycles);
-    music_catalog_scan_last_cycles = now;
+    catalog_scan_state.ClockCycles += (uint32_t)(now - catalog_scan_state.ClockLast);
+    catalog_scan_state.ClockLast = now;
 }
 
 /**
@@ -332,44 +360,67 @@ static uint32_t catalog_scan_clock_us(void)
         return 0U;
     }
 
-    us = (music_catalog_scan_cycles * 1000000ULL) / frequency_hz;
+    us = (catalog_scan_state.ClockCycles * 1000000ULL) / frequency_hz;
     return (us > UINT32_MAX) ? UINT32_MAX : (uint32_t)us;
 }
 
 /**
  * @brief 记扫描结束一行 INFO：结果、条数、耗时（DIAG-6）。
  * @param[in] result 结果名，静态字符串：ok、dfs_error、aborted。
- * @note  常开，每次扫描一行；文本只含结果名与数值。耗时单位微秒，含目录读取、打开与扫描中的任务切换，不含建播放列表。
+ * @note  常开，每次扫描一行；文本只含结果名与数值。耗时单位微秒，含目录读取、打开、等待与扫描中的任务切换，不含建播放列表。
  *        条数取工作下标：丢弃本次扫描时调用者已把它清零。
  */
 static void catalog_scan_log_end(const char *result)
 {
     char text[64];
 
+    catalog_scan_clock_poll();
     (void)snprintf(text, sizeof(text), "Scan done res=%s n=%lu us=%lu",
                    result,
-                   (unsigned long)music_catalog_index,
+                   (unsigned long)catalog_scan_state.Index,
                    (unsigned long)catalog_scan_clock_us());
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, catalog_log_tag, text);
 }
 
 /**
- * @brief 开始一轮扫描：锁内把代次置 0、条数置 0，记下此刻的卷序号，清扫描工作状态。
- * @note  此后读者看到代次 0，不碰表；扫描者写表不拿锁。卷序号取自 `volume_status()`（读一个字，不拿锁）。
+ * @brief 拔卡或卸载时作废已发布的曲库：锁内把代次和条数置 0。
+ * @note  不清表，不动代次计数（下一次发布仍加 1，不会重复）。即使不调用它，取代次时卷序号不符也会算 0，
+ *        所以这是让已发布的状态尽快归零，不是正确性所必需。
  */
-static void catalog_scan_begin(void)
+static void catalog_published_invalidate(void)
 {
-    music_catalog_scan_sequence = volume_status(VOLUME_ID_SD).Sequence;
+    catalog_lock_enter();
+    catalog_published.Generation = 0U;
+    catalog_published.Count = 0U;
+    catalog_lock_leave();
+}
+
+/**
+ * @brief 开始一轮扫描：锁内把代次置 0、条数置 0，记下此刻的卷序号，清遍历状态，根目录 `Music` 作为第一个要打开的目录。
+ * @param[in] sequence 这一轮对应的 SD 卷序号（调用者刚读到的）。
+ * @note  此后读者看到代次 0，不碰表；扫描者写表不拿锁。整个状态机里持锁的只有这里和发布两处。
+ */
+static void catalog_scan_begin(uint32_t sequence)
+{
+    catalog_scan_state.SeenSequence = sequence;
 
     catalog_lock_enter();
     catalog_published.Generation = 0U;
     catalog_published.Count = 0U;
     catalog_lock_leave();
 
-    music_catalog_index = 0U;
+    catalog_scan_state.Index = 0U;
     MusicCatalogPool.Tail = 0U;
-    music_catalog_scan_aborted = false;
+    catalog_scan_state.Failure = CATALOG_SCAN_FAILURE_NONE;
+    catalog_scan_state.DirectoryOpen = false;
+    catalog_scan_state.OpenRetried = false;
     catalog_scan_clock_start();
+
+    (void)memset(catalog_scan_state.Current, 0, sizeof(catalog_scan_state.Current));
+    (void)memcpy(catalog_scan_state.Current, "Music", sizeof("Music"));
+    catalog_scan_state.CurrentIsRoot = true;
+    catalog_scan_state.StackTop = 0U;
+    catalog_scan_state.Phase = CATALOG_SCAN_OPEN;
 }
 
 /**
@@ -386,7 +437,7 @@ static bool catalog_scan_publish(void)
     {
         const Volume_StatusTypeDef volume = volume_status(VOLUME_ID_SD);
 
-        if (volume.Mounted && (volume.Sequence == music_catalog_scan_sequence))
+        if (volume.Mounted && (volume.Sequence == catalog_scan_state.SeenSequence))
         {
             catalog_generation_counter++;
             if (catalog_generation_counter == 0U)
@@ -394,38 +445,13 @@ static bool catalog_scan_publish(void)
                 catalog_generation_counter = 1U;
             }
             catalog_published.Generation = catalog_generation_counter;
-            catalog_published.Count = (uint16_t)music_catalog_index;
-            catalog_published.VolumeSequence = music_catalog_scan_sequence;
+            catalog_published.Count = (uint16_t)catalog_scan_state.Index;
+            catalog_published.VolumeSequence = catalog_scan_state.SeenSequence;
             published = true;
         }
     }
     catalog_lock_leave();
     return published;
-}
-
-/**
- * @brief 扫描中途看一眼卷序号：和开扫时一样才继续。
- * @return true 卷序号没变；false 卷变了（换卡、拔插），本轮扫描作废。
- */
-static bool catalog_scan_volume_unchanged(void)
-{
-    return volume_status(VOLUME_ID_SD).Sequence == music_catalog_scan_sequence;
-}
-
-/**
- * @brief 文件调用返回 `SERVICE_BUSY`（槽用尽）后等一会儿再试，不算失败。
- * @return true 可以重试；false 等的时候卷变了，本轮扫描作废（`music_catalog_scan_aborted` 已置位）。
- * @note  现在扫描由 Storage Task 同步调用，所以用任务延时；改成单步函数后由返回值告诉后台任务多久后再叫它。
- */
-static bool catalog_scan_wait_before_retry(void)
-{
-    vTaskDelay(pdMS_TO_TICKS(CATALOG_BUSY_RETRY_MS));
-    if (!catalog_scan_volume_unchanged())
-    {
-        music_catalog_scan_aborted = true;
-        return false;
-    }
-    return true;
 }
 
 /**
@@ -464,7 +490,7 @@ static bool catalog_music_append(const char *path,
     uint32_t length;
     uint32_t needed;
 
-    if (music_catalog_index >= CATALOG_MUSIC_MAX_NUM)
+    if (catalog_scan_state.Index >= CATALOG_MUSIC_MAX_NUM)
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
                                catalog_log_tag,
@@ -483,11 +509,11 @@ static bool catalog_music_append(const char *path,
     }
 
     (void)memcpy(&MusicCatalogPool.Path[MusicCatalogPool.Tail], path, needed);
-    MusicCatalogIndex[music_catalog_index].Offset = MusicCatalogPool.Tail;
-    MusicCatalogIndex[music_catalog_index].Length = length;
-    MusicCatalogLocator[music_catalog_index] = *locator;
+    MusicCatalogIndex[catalog_scan_state.Index].Offset = MusicCatalogPool.Tail;
+    MusicCatalogIndex[catalog_scan_state.Index].Length = length;
+    MusicCatalogLocator[catalog_scan_state.Index] = *locator;
     MusicCatalogPool.Tail += needed;
-    music_catalog_index++;
+    catalog_scan_state.Index++;
     return true;
 }
 
@@ -511,346 +537,329 @@ static bool catalog_music_join_path(char *destination,
 }
 
 /**
- * @brief 打开一个目录（单次）；`SERVICE_BUSY`（槽用尽）等约 10 ms 重试，不算失败。
- * @param[in] path 目录路径。
- * @param[out] directory 目录句柄。
- * @return 最后一次调用的状态；重试途中卷序号变了时返回 `SERVICE_BUSY` 且 `music_catalog_scan_aborted` 已置位。
+ * @brief 扫描做完：建播放列表，按发布规则发布，叫醒前台任务一次。
+ * @note  发布时锁内比对卷序号：卷在扫描途中变了（或卷已不在），这份结果属于旧卡，不发布、记 aborted；
+ *        卡还在的话下一步看到新的卷序号会重新开始。发布成功后在放锁之后叫醒前台任务（GUI 不会重写没变的需求，
+ *        前台要主动重新处理最新需求：曲名答过代次 0 的、窗口格里还是空窗的）；被丢弃或失败的扫描不发布，也不叫醒。
  */
-static Service_StatusTypeDef catalog_scan_open_directory_once(const char *path,
-                                                              Service_Filesystem_DirectoryHandleTypeDef *directory)
+static void catalog_scan_finish_ok(void)
 {
-    Service_StatusTypeDef status;
-
-    for (;;)
-    {
-        status = Service_Filesystem_OpenDirectory(SERVICE_FILESYSTEM_VOLUME_SD, path, directory);
-        if ((status != SERVICE_BUSY) || !catalog_scan_wait_before_retry())
-        {
-            return status;
-        }
-    }
-}
-
-/**
- * @brief 打开一个目录；`SERVICE_BUSY` 重试，卷不可用时再开一次。
- * @param[in] path 目录路径。
- * @param[out] directory 目录句柄。
- * @return 最后一次调用的状态；重试途中卷序号变了时返回 `SERVICE_BUSY` 且 `music_catalog_scan_aborted` 已置位。
- * @note  在途调用被拔卡打断时，第一次失败发生在卷任务对账之前，卷序号还没变。路径打开没有句柄可借来等闸，
- *        所以再开一次：它在 Filesystem 入口等闸，等到本轮对账结束，才有资格下结论——卡没了（卷已卸载，
- *        再次得到卷不可用）或卡还在（照常打开，扫描继续）（#211）。
- */
-static Service_StatusTypeDef catalog_scan_open_directory(const char *path,
-                                                         Service_Filesystem_DirectoryHandleTypeDef *directory)
-{
-    Service_StatusTypeDef status = catalog_scan_open_directory_once(path, directory);
-
-    if (!music_catalog_scan_aborted && Service_Filesystem_StatusIsVolumeUnavailable(status))
-    {
-        status = catalog_scan_open_directory_once(path, directory);
-    }
-    return status;
-}
-
-/**
- * @brief 读一条目录项；`SERVICE_BUSY` 等约 10 ms 重试，不算失败。
- * @param[in] directory 目录句柄。
- * @param[out] entry 目录项。
- * @return 最后一次调用的状态；重试途中卷序号变了时返回 `SERVICE_BUSY` 且 `music_catalog_scan_aborted` 已置位。
- */
-static Service_StatusTypeDef catalog_scan_read_directory(Service_Filesystem_DirectoryHandleTypeDef directory,
-                                                         Service_Filesystem_DirectoryEntryTypeDef *entry)
-{
-    Service_StatusTypeDef status;
-
-    for (;;)
-    {
-        status = Service_Filesystem_ReadDirectory(directory, entry);
-        catalog_scan_clock_poll();
-        if ((status != SERVICE_BUSY) || !catalog_scan_wait_before_retry())
-        {
-            return status;
-        }
-    }
-}
-
-/**
- * @brief 关一个目录；`SERVICE_BUSY` 等约 10 ms 重试，不算失败。
- * @param[in] directory 目录句柄。
- * @return 最后一次调用的状态；重试途中卷序号变了时返回 `SERVICE_BUSY` 且 `music_catalog_scan_aborted` 已置位。
- */
-static Service_StatusTypeDef catalog_scan_close_directory(Service_Filesystem_DirectoryHandleTypeDef directory)
-{
-    Service_StatusTypeDef status;
-
-    for (;;)
-    {
-        status = Service_Filesystem_CloseDirectory(directory);
-        if ((status != SERVICE_BUSY) || !catalog_scan_wait_before_retry())
-        {
-            return status;
-        }
-    }
-}
-
-/**
- * @brief 用路径栈遍历 `Music/`，同时只开一个目录句柄；每个 `.mp3` 条目连同它的文件定位符写入曲库。
- * @return CATALOG_OK 扫描完成（含没有 `Music/`、子目录打不开、表满截断）；CATALOG_ERROR 目录读取或关闭失败，
- *         或本轮扫描被丢弃（`music_catalog_scan_aborted` 置位，不记 ERROR）。
- * @note  错误分类（#196，沿用 STOR-7）：`SERVICE_BUSY` 过约 10 ms 重试；`NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` 丢弃本轮；
- *        打开根目录的其他错误按空库、打开子目录的其他错误跳过该子目录，各记 WARN；读或关目录的其他错误不发布，记 ERROR；
- *        条目满、池满发布截断结果。每读一条前比对卷序号，变了就关目录（返回值不看）并丢弃本轮。
- */
-static Catalog_StatusTypeDef catalog_music_dfs(void)
-{
-    uint32_t stack_top = 1U;
-    Catalog_StatusTypeDef result = CATALOG_OK;
-
-    (void)memset(catalog_dir_stack[0], 0, sizeof(catalog_dir_stack[0]));
-    (void)memcpy(catalog_dir_stack[0], "Music", sizeof("Music"));
-
-    while (stack_top > 0U)
-    {
-        char current[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
-        Service_StatusTypeDef open_status;
-        Service_StatusTypeDef read_status;
-        Service_StatusTypeDef close_status;
-
-        stack_top--;
-        (void)memcpy(current,
-                      catalog_dir_stack[stack_top],
-                      sizeof(current));
-
-        open_status = catalog_scan_open_directory(current, &music_directory);
-        if (open_status != SERVICE_OK)
-        {
-            catalog_scan_clock_poll();
-            if (music_catalog_scan_aborted || Service_Filesystem_StatusIsVolumeUnavailable(open_status))
-            {
-                /* 卷没了或正在对账：不是“没有 Music 目录”，也不是子目录坏了；丢弃本次扫描，等卷事件。 */
-                music_catalog_scan_aborted = true;
-                return CATALOG_ERROR;
-            }
-            if ((stack_top == 0U) && (strcmp(current, "Music") == 0))
-            {
-                (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
-                                       catalog_log_tag,
-                                       "Music Directory Open Failed.");
-                return CATALOG_OK;
-            }
-
-            (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
-                                   catalog_log_tag,
-                                   "Sub Directory Open Failed.");
-            continue;
-        }
-
-        catalog_scan_clock_poll();
-
-        for (;;)
-        {
-            Service_Filesystem_DirectoryEntryTypeDef entry;
-            char child[SERVICE_FILESYSTEM_PATH_MAX_BYTES + 1U];
-
-            if (!catalog_scan_volume_unchanged())
-            {
-                /* 换卡或拔插：关目录（返回值不看）并丢弃；卡还在的话，调用者看到新卷序号会重新开始。 */
-                (void)Service_Filesystem_CloseDirectory(music_directory);
-                music_catalog_scan_aborted = true;
-                return CATALOG_ERROR;
-            }
-
-            read_status = catalog_scan_read_directory(music_directory, &entry);
-            if (read_status != SERVICE_OK)
-            {
-                if (music_catalog_scan_aborted || Service_Filesystem_StatusIsVolumeUnavailable(read_status))
-                {
-                    music_catalog_scan_aborted = true; /* 同上：不是文件错误，丢弃本次扫描。 */
-                }
-                else
-                {
-                    (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                                           catalog_log_tag,
-                                           "Music Directory Read Failed.");
-                }
-                result = CATALOG_ERROR;
-                break;
-            }
-
-            if (entry.Name[0] == '\0')
-            {
-                break;
-            }
-
-            if (entry.Name[0] == '.')
-            {
-                continue;
-            }
-
-            if (!catalog_music_join_path(child, sizeof(child), current, entry.Name))
-            {
-                continue;
-            }
-
-            if (entry.IsDirectory)
-            {
-                if (stack_top >= CATALOG_DIR_STACK_MAX)
-                {
-                    (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
-                                           catalog_log_tag,
-                                           "Music Directory Stack Full.");
-                    continue;
-                }
-
-                (void)memcpy(catalog_dir_stack[stack_top], child, sizeof(child));
-                stack_top++;
-                continue;
-            }
-
-            if (!catalog_music_file_strcheck(entry.Name))
-            {
-                continue;
-            }
-
-            if (!catalog_music_append(child, &entry.Locator))
-            {
-                result = CATALOG_OK;
-                stack_top = 0U;
-                break;
-            }
-        }
-
-        close_status = catalog_scan_close_directory(music_directory);
-        if (close_status != SERVICE_OK)
-        {
-            if (music_catalog_scan_aborted || Service_Filesystem_StatusIsVolumeUnavailable(close_status))
-            {
-                music_catalog_scan_aborted = true;
-            }
-            result = CATALOG_ERROR;
-            break;
-        }
-
-        if (result != CATALOG_OK)
-        {
-            break;
-        }
-    }
-
-    return result;
-}
-
-/**
- * @brief 最近一次扫描结束后，Storage Task 该怎么对待。
- * @param[in] volume_unchanged 扫描结束时 SD 卷仍挂着且卷序号与 Storage 已处理的相同。
- * @return 扫描没有被丢弃：`CATALOG_SCAN_DONE`。丢弃了且卷变了（卡没了或换了）：`CATALOG_SCAN_EVENT_PENDING`，
- *         等卷事件重扫，不要就绪。丢弃了但卷没变：`CATALOG_SCAN_UNREADABLE`——卡还在、设备出错，没有边沿就没有卷事件，
- *         等也等不来，调用者要报错（卷任务对账之前的调用已在 Filesystem 入口等过闸，所以卷序号此时是结论）。
- */
-Catalog_ScanVerdictTypeDef catalog_scan_verdict(bool volume_unchanged)
-{
-    if (!music_catalog_scan_aborted)
-    {
-        return CATALOG_SCAN_DONE;
-    }
-
-    return volume_unchanged ? CATALOG_SCAN_UNREADABLE : CATALOG_SCAN_EVENT_PENDING;
-}
-
-/**
- * @brief 扫描已挂载 SD 的 `Music/`，建播放列表，再按发布规则发布。
- * @return CATALOG_OK 扫描完成并发布（含空目录或表满截断），或本轮扫描被丢弃（卷不可用、卷序号变了，曲库保持代次 0）；
- *         CATALOG_ERROR 读取或关闭目录失败（不发布）。
- * @note 仅 Storage Task 在卷就绪（卷事件）之后调用。不 memset 整池。开始时锁内把代次置 0，之后写表不拿锁；
- *       发布时锁内比对卷序号，一致才写代次和条数。丢弃本轮不是文件错误，不记 ERROR。
- */
-Catalog_StatusTypeDef catalog_music_init(void)
-{
-    catalog_scan_begin();
-    if (catalog_music_dfs() != CATALOG_OK)
-    {
-        if (music_catalog_scan_aborted)
-        {
-            /* 扫描期间卷消失、正在对账或卷序号变了：丢弃已收录的条目，不发布，曲库保持代次 0，等卷事件重新扫描。
-             * 这不是文件错误（#195 第 9 条、#196），所以返回成功、不记 ERROR。 */
-            music_catalog_index = 0U;
-            catalog_scan_log_end("aborted");
-            return CATALOG_OK;
-        }
-
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                               catalog_log_tag,
-                               "Music catalog dfs failed.");
-        catalog_scan_log_end("dfs_error");
-        return CATALOG_ERROR;
-    }
-
-    catalog_sheet_fill((uint16_t)music_catalog_index);
+    catalog_sheet_fill((uint16_t)catalog_scan_state.Index);
     if (!catalog_scan_publish())
     {
-        /* 扫描做完时卷序号已经变了（或卷已不在）：这份结果属于旧卡，不发布。 */
-        music_catalog_scan_aborted = true;
-        music_catalog_index = 0U;
+        catalog_scan_state.Index = 0U;
         catalog_scan_log_end("aborted");
-        return CATALOG_OK;
     }
-
-    catalog_scan_log_end("ok");
-
-    /* 发布之后叫醒前台任务一次：GUI 不会重写没变的需求，前台要主动重新处理最新需求（曲名答过代次 0 的、窗口格里还是空窗的）。
-     * 在放锁之后叫醒，不在持锁时（持锁只拷内存）。被丢弃或失败的扫描不发布，也不叫醒。 */
-    foreground_task_wake();
-
-    return CATALOG_OK;
+    else
+    {
+        catalog_scan_log_end("ok");
+        foreground_task_wake();
+    }
+    catalog_scan_state.Phase = CATALOG_SCAN_IDLE;
 }
 
 /**
- * @brief 预留的 Books Catalog 初始化。
- * @return 当前尚未扫描，返回 CATALOG_OK。
+ * @brief 本轮因为卷不可用（NO_MEDIA、NOT_READY、INVALID_HANDLE）被丢弃：不发布，等卷事件。
+ * @note  收尾时再看一眼卷：序号变了或卷不在是卡没了（或换了），卷事件已经或即将叫醒后台任务，这里不报错；
+ *        序号没变且卷仍挂着，是卡还在、读不了（设备出错），没有边沿就没有卷事件，等也等不来，所以记一条 ERROR
+ *        要求重插卡，曲库保持代次 0，之后不再自己重试，到卷序号变化为止（#211）。
  */
-Catalog_StatusTypeDef catalog_books_init(void)
+static void catalog_scan_finish_discard(void)
 {
-    return CATALOG_OK;
-}
+    Volume_StatusTypeDef volume;
 
-/**
- * @brief 按产品卷顺序重建 Catalog。
- * @return 任一子库失败则 CATALOG_ERROR。
- */
-Catalog_StatusTypeDef catalog_init(void)
-{
-    if (catalog_music_init() != CATALOG_OK)
+    catalog_scan_state.Index = 0U;
+    catalog_scan_log_end("aborted");
+    catalog_scan_state.Phase = CATALOG_SCAN_IDLE;
+
+    volume = volume_status(VOLUME_ID_SD);
+    if (volume.Mounted && (volume.Sequence == catalog_scan_state.SeenSequence))
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
                                catalog_log_tag,
-                               "Music catalog initialization failed.");
-        return CATALOG_ERROR;
+                               "Catalog scan aborted but the card is still there; reinsert the card.");
     }
-
-    // if (catalog_books_init() != CATALOG_OK)
-    // {
-    //     (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-    //                            catalog_log_tag,
-    //                            "Books catalog initialization failed.");
-    //     return CATALOG_ERROR;
-    // }
-
-    return CATALOG_OK;
 }
 
 /**
- * @brief 拔卡或卸载时作废曲库：锁内把代次和条数置 0。
- * @return CATALOG_OK。
- * @note  不清表，不动代次计数（下一次发布仍加 1，不会重复）。即使不调用它，取代次时卷序号不符也会算 0，
- *        所以这是让已发布的状态尽快归零，不是正确性所必需。
+ * @brief 读或关目录的其他错误：不发布，记 ERROR，等下一次插卡（沿用 STOR-7）。
  */
-Catalog_StatusTypeDef catalog_invalidate(void)
+static void catalog_scan_finish_error(void)
 {
-    catalog_lock_enter();
-    catalog_published.Generation = 0U;
-    catalog_published.Count = 0U;
-    catalog_lock_leave();
-    return CATALOG_OK;
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                           catalog_log_tag,
+                           "Music catalog dfs failed.");
+    catalog_scan_log_end("dfs_error");
+    catalog_scan_state.Phase = CATALOG_SCAN_IDLE;
+}
+
+/**
+ * @brief 弹出栈顶目录作为下一个要打开的目录；栈空就扫描结束，走发布。
+ * @return 恒为 0：状态变了，马上再调一步。
+ */
+static uint32_t catalog_scan_next_directory(void)
+{
+    if (catalog_scan_state.StackTop == 0U)
+    {
+        catalog_scan_finish_ok();
+        return 0U;
+    }
+
+    catalog_scan_state.StackTop--;
+    (void)memcpy(catalog_scan_state.Current,
+                 catalog_scan_state.Stack[catalog_scan_state.StackTop],
+                 sizeof(catalog_scan_state.Current));
+    catalog_scan_state.CurrentIsRoot = false;
+    catalog_scan_state.OpenRetried = false;
+    catalog_scan_state.Phase = CATALOG_SCAN_OPEN;
+    return 0U;
+}
+
+/**
+ * @brief 卷序号变了（或第一次看到一个序号）：旧的全部作废，再看现状。
+ * @param[in] volume 这一步开头读到的 SD 卷状态。
+ * @return 卷不在返回 `BACKGROUND_WAIT_FOREVER`（等卷事件）；卷挂着返回 0（下一步开始打开根目录）。
+ * @note  正在扫描就丢弃：目录开着先关（返回值不看，卡可能已经没了），记 `aborted`；之后卷不在就作废已发布的曲库并等卷事件，
+ *        卷还挂着（换卡，或被吞的拔出加重新挂载）就从头重新开始。这一步最多一次目录调用（关目录），不在同一步里再打开。
+ */
+static uint32_t catalog_scan_restart(Volume_StatusTypeDef volume)
+{
+    if (catalog_scan_state.DirectoryOpen)
+    {
+        (void)Service_Filesystem_CloseDirectory(catalog_scan_state.Directory);
+        catalog_scan_state.DirectoryOpen = false;
+    }
+
+    if (catalog_scan_state.Phase != CATALOG_SCAN_IDLE)
+    {
+        catalog_scan_state.Index = 0U;
+        catalog_scan_log_end("aborted");
+    }
+    catalog_scan_state.Phase = CATALOG_SCAN_IDLE;
+
+    if (!volume.Mounted)
+    {
+        catalog_scan_state.SeenSequence = volume.Sequence;
+        catalog_published_invalidate();
+        return BACKGROUND_WAIT_FOREVER;
+    }
+
+    catalog_scan_begin(volume.Sequence);
+    return 0U;
+}
+
+/**
+ * @brief 打开 `Current` 目录（本步唯一的文件调用）。
+ * @return 多少毫秒后再叫它。
+ * @note  `SERVICE_BUSY`（槽用尽）不算失败：约 10 ms 后再试，不在步里等。打开得到卷不可用时，第一次失败发生在卷任务对账之前，
+ *        所以再开一次（它在 Filesystem 入口等闸，等到本轮对账结束）才下结论：卡没了（再次得到卷不可用，或下一步卷序号已变）
+ *        还是卡还在（照常打开）。其他错误：根目录按空库发布并记 WARN（沿用 STOR-7），子目录跳过并记 WARN。
+ */
+static uint32_t catalog_scan_step_open(void)
+{
+    const Service_StatusTypeDef status = Service_Filesystem_OpenDirectory(SERVICE_FILESYSTEM_VOLUME_SD,
+                                                                          catalog_scan_state.Current,
+                                                                          &catalog_scan_state.Directory);
+
+    if (status == SERVICE_OK)
+    {
+        catalog_scan_state.DirectoryOpen = true;
+        catalog_scan_state.Phase = CATALOG_SCAN_READ;
+        return 0U;
+    }
+
+    if (status == SERVICE_BUSY)
+    {
+        return CATALOG_BUSY_RETRY_MS;
+    }
+
+    if (Service_Filesystem_StatusIsVolumeUnavailable(status))
+    {
+        if (!catalog_scan_state.OpenRetried)
+        {
+            catalog_scan_state.OpenRetried = true;
+            return 0U;
+        }
+        catalog_scan_finish_discard();
+        return 0U;
+    }
+
+    if (catalog_scan_state.CurrentIsRoot)
+    {
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
+                               catalog_log_tag,
+                               "Music Directory Open Failed.");
+        catalog_scan_finish_ok();
+        return 0U;
+    }
+
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
+                           catalog_log_tag,
+                           "Sub Directory Open Failed.");
+    return catalog_scan_next_directory();
+}
+
+/**
+ * @brief 读一条目录项并处理它（本步唯一的文件调用，每条放一次锁）。
+ * @return 多少毫秒后再叫它。
+ * @note  `SERVICE_BUSY` 约 10 ms 后再试。读失败：卷不可用就丢弃（先关目录），其他错误记 ERROR、不发布（先关目录）。
+ *        结束标记、表满都转到关目录。点开头的项跳过；子目录入栈（栈满记 WARN 并跳过）；`.mp3` 收录，条数满或池满发布截断结果。
+ */
+static uint32_t catalog_scan_step_read(void)
+{
+    const Service_StatusTypeDef status = Service_Filesystem_ReadDirectory(catalog_scan_state.Directory,
+                                                                          &catalog_scan_state.Entry);
+
+    if (status == SERVICE_BUSY)
+    {
+        return CATALOG_BUSY_RETRY_MS;
+    }
+
+    if (status != SERVICE_OK)
+    {
+        if (Service_Filesystem_StatusIsVolumeUnavailable(status))
+        {
+            catalog_scan_state.Failure = CATALOG_SCAN_FAILURE_DISCARD;
+        }
+        else
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
+                                   catalog_log_tag,
+                                   "Music Directory Read Failed.");
+            catalog_scan_state.Failure = CATALOG_SCAN_FAILURE_ERROR;
+        }
+        catalog_scan_state.Phase = CATALOG_SCAN_CLOSE;
+        return 0U;
+    }
+
+    if (catalog_scan_state.Entry.Name[0] == '\0')
+    {
+        catalog_scan_state.Phase = CATALOG_SCAN_CLOSE;
+        return 0U;
+    }
+
+    if (catalog_scan_state.Entry.Name[0] == '.')
+    {
+        return 0U;
+    }
+
+    if (!catalog_music_join_path(catalog_scan_state.Child,
+                                 sizeof(catalog_scan_state.Child),
+                                 catalog_scan_state.Current,
+                                 catalog_scan_state.Entry.Name))
+    {
+        return 0U;
+    }
+
+    if (catalog_scan_state.Entry.IsDirectory)
+    {
+        if (catalog_scan_state.StackTop >= CATALOG_DIR_STACK_MAX)
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
+                                   catalog_log_tag,
+                                   "Music Directory Stack Full.");
+            return 0U;
+        }
+
+        (void)memcpy(catalog_scan_state.Stack[catalog_scan_state.StackTop],
+                     catalog_scan_state.Child,
+                     sizeof(catalog_scan_state.Child));
+        catalog_scan_state.StackTop++;
+        return 0U;
+    }
+
+    if (!catalog_music_file_strcheck(catalog_scan_state.Entry.Name))
+    {
+        return 0U;
+    }
+
+    if (!catalog_music_append(catalog_scan_state.Child, &catalog_scan_state.Entry.Locator))
+    {
+        /* 条目满或池满：发布截断结果，不再扫其余目录。 */
+        catalog_scan_state.StackTop = 0U;
+        catalog_scan_state.Phase = CATALOG_SCAN_CLOSE;
+    }
+    return 0U;
+}
+
+/**
+ * @brief 关目录（本步唯一的文件调用），然后按本轮的收尾方式往下走。
+ * @return 多少毫秒后再叫它。
+ * @note  `SERVICE_BUSY` 约 10 ms 后再试。关目录得到卷不可用就丢弃（盖过之前的读错误，因为卡没了不是文件错误）；
+ *        其他关目录错误不发布，记 ERROR。
+ */
+static uint32_t catalog_scan_step_close(void)
+{
+    const Service_StatusTypeDef status = Service_Filesystem_CloseDirectory(catalog_scan_state.Directory);
+
+    if (status == SERVICE_BUSY)
+    {
+        return CATALOG_BUSY_RETRY_MS;
+    }
+
+    catalog_scan_state.DirectoryOpen = false;
+    if (status != SERVICE_OK)
+    {
+        if (Service_Filesystem_StatusIsVolumeUnavailable(status))
+        {
+            catalog_scan_state.Failure = CATALOG_SCAN_FAILURE_DISCARD;
+        }
+        else if (catalog_scan_state.Failure == CATALOG_SCAN_FAILURE_NONE)
+        {
+            catalog_scan_state.Failure = CATALOG_SCAN_FAILURE_ERROR;
+        }
+    }
+
+    switch (catalog_scan_state.Failure)
+    {
+    case CATALOG_SCAN_FAILURE_DISCARD:
+        catalog_scan_finish_discard();
+        return 0U;
+    case CATALOG_SCAN_FAILURE_ERROR:
+        catalog_scan_finish_error();
+        return 0U;
+    case CATALOG_SCAN_FAILURE_NONE:
+    default:
+        return catalog_scan_next_directory();
+    }
+}
+
+/**
+ * @brief 扫描作业单步（音乐注册进注册表的 `background_step`，ARC-22）。
+ * @return 多少毫秒后再叫它：0 马上（还有活）；`CATALOG_BUSY_RETRY_MS`（槽用尽，过约 10 ms 重试）；
+ *         `BACKGROUND_WAIT_FOREVER`（没有活：卷没挂，或这一轮已发布、已放弃，等卷事件叫醒）。
+ * @note  一步最多一次目录接口调用；读目录一步读一条，每条放一次锁；不批量。每步先比对 SD 卷序号：变了就关目录
+ *        （返回值不看）并丢弃，卡还在就重新开始，卡不在就作废已发布的曲库。扫描只在卷序号变化后发生，后台任务订阅了卷事件，
+ *        所以丢叫醒、合并叫醒、晚订阅都不会漏（任务入口登记后第一圈就调所有作业）。不向 GUI 发布进度。
+ *        扫描进行中返回 0，后台任务马上再调一圈（别的作业各调一次）；优先级 1 的后台任务被前台、GUI 抢占时，
+ *        持锁的这一步最多是一次目录接口调用的时间。
+ */
+uint32_t catalog_scan_step(void)
+{
+    const Volume_StatusTypeDef volume = volume_status(VOLUME_ID_SD);
+
+    if (catalog_scan_state.Phase != CATALOG_SCAN_IDLE)
+    {
+        catalog_scan_clock_poll();
+    }
+
+    if (volume.Sequence != catalog_scan_state.SeenSequence)
+    {
+        return catalog_scan_restart(volume);
+    }
+
+    switch (catalog_scan_state.Phase)
+    {
+    case CATALOG_SCAN_OPEN:
+        return catalog_scan_step_open();
+    case CATALOG_SCAN_READ:
+        return catalog_scan_step_read();
+    case CATALOG_SCAN_CLOSE:
+        return catalog_scan_step_close();
+    case CATALOG_SCAN_IDLE:
+    default:
+        return BACKGROUND_WAIT_FOREVER;
+    }
 }
 
 /**

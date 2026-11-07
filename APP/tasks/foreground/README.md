@@ -41,14 +41,14 @@ for(;;)
 
 ## 优先级与交错
 
-前台任务优先级 2（用户 2026-11-06 的票面：前台 2；GUI、Log、Monitor 1 → 2；Storage Task 2 → 1）：
+前台任务优先级 2（用户 2026-11-06 的票面：前台 2；GUI、Log、Monitor 1 → 2；Storage Task 2 → 1，#220 删除 Storage Task，Flash 启动任务 2 → 1）：
 
 | 优先级 | 任务 |
 |---|---|
 | 4 | 播放 |
 | 3 | 音频读取、卷、定时器服务（一直阻塞） |
-| 2 | 前台、GUI、Log、Monitor、Flash 启动（一次性） |
-| 1 | Storage（曲库扫描、Flash 回收）、后台 |
+| 2 | 前台、GUI、Log、Monitor |
+| 1 | 后台（曲库扫描、Flash 回收）、Flash 启动（一次性，#220：2 → 1） |
 | 0 | Boot（自删）、IDLE |
 
 和各任务的交错（都是纸面推算，**主机测试是单线程的，证明不了真实交错，靠第 5 次上板**）：
@@ -57,7 +57,7 @@ for(;;)
 - **音频读取（3）和卷（3）**：都比前台高，读取任务一读一块（32 KiB，持 SD 锁约 7 ms，实测的 SD 读 32 KiB 持锁最长 6.85 ms）就抢占前台。前台要读标签时在 Filesystem 入口等 SD 卷锁：锁被读取任务持有时前台睡着等（互斥锁带优先级继承，持锁的低优先级任务临时升到前台的级别）。**水位以上**读取任务每读一块用唯一的等待点让 1 tick（让的是 SD 锁），前台这时拿得到锁，一次标签读取（至多几次读，初值 4 次）的等待推算 14–27 ms；**水位以下**（切歌后补块期约 140 ms）读取任务连续补块不让路，前台一行标签读取要等到补块间隙，这是 R5.4 要核对的最坏情形（上限推算 50 ms 内）。卷任务消抖对账期间 Filesystem 入口在闸前等约 30 ms，前台的文件调用也在闸前等，step 因此变长，不记为故障（WARN 只记录）。
 - **GUI（2）**：同级，时间片轮转（`configUSE_TIME_SLICING` 开，1 ms）。GUI 每圈睡 1 至 16 ms，没活就让出，所以两者同时就绪的时间很短，交替各占一个 tick。前台一步 ≤ 约 1 ms CPU 加一次文件调用（文件调用在等锁或等 DMA 时是睡着的，不占 CPU），不会把 GUI 一帧拖过刷新周期。
 - **`ui_cell` 的短锁**：GUI 的写和读都是不等的（`try`），拿不到下一帧再试，所以 GUI 永远不等；前台的写（`ui_cell_write`）等到拿到为止，持锁者只拷内存（窗口格约 6 KiB，推算数 µs 到几十 µs，未测，R5.3 实测），可能的最坏是持锁的 GUI 被音频读取或播放抢占，前台等到它回来放锁（同级的互斥锁继承不升高优先级，等待上界是被抢占的时间，不是死锁）。前台读需求格也是不等的：读不到而序号变了时 step 返回 1 ms，自己重试，因为没有人会再叫醒它（`ui_cell_changed()`）。
-- **Storage 与后台（1）**：前台和 GUI 空闲时才跑。Storage 扫描曲库时持 SD 锁调目录读取，前台要读标签就等那一次调用（持锁的 Storage 经优先级继承临时升到 2，直到放锁）；大目录路径打开最长约 2 s，但曲库里的文件一律走定位符，不走这条路。后台的 Flash 作业只碰 Flash 卷，不挡前台。
+- **后台与 Flash 启动（1）**：前台和 GUI 空闲时才跑。后台任务扫描曲库时持 SD 锁调目录读取，前台要读标签就等那一次调用（持锁的后台任务经优先级继承临时升到 2，直到放锁；#220 把扫描从 Storage Task 搬到后台任务，Storage 已删除）；大目录路径打开最长约 2 s，但曲库里的文件一律走定位符，不走这条路。后台的 Flash 作业只碰 Flash 卷，不挡前台。
 - **Log、Monitor（2）**：同级，各自很短（Monitor 每 5 s 一批约 20 行，几 ms）。Log、Monitor 从 1 升到 2 是票面要求，让日志不被 GUI 和前台饿着。
 
 结论：前台与 GUI 同级且各自都是“短步、不等”，没有互相饿死的路径；前台对 SD 锁的等待由读取任务的让路（1 tick）和水位决定，是第 5 次上板要量的数字（R5.4：前台等 SD 锁 ≤ 50 ms）。**这些优先级和步长都是纸面决定，由板级验收修正。**
@@ -76,7 +76,7 @@ for(;;)
 
 NOLOAD 段不清零：栈靠 `xTaskCreateStatic` 填充（`app_tasks.c`、`foreground_task.c` 各有一个 `_Static_assert` 核对这个前提），格子和 `.apps_sdram` 里的缓冲与状态由 Boot 里的 `boot_init` 在第一次使用前整块写入，行缓存的行内容靠键表判断有效（键表在 `boot_init` 里清零）。格子、副本和 SDRAM 状态只经 CPU 读写，不作 DMA，不需要 Cache 维护。
 
-### Boot 栈核算（128 word = 512 B）
+### Boot 栈核算（#218 当时 128 word = 512 B；#220 起 192 word，最新核算见 [卷任务](../volume/README.md)“默认构建的 Boot 栈核算”）
 
 新增的最深调用链有两条（`-fstack-usage` 用工程的真实编译命令，Debug 与 Release 各量一次；一次任务切换最坏要在任务栈上留约 204 B，见 [卷任务](../volume/README.md)“Boot 栈核算”）：
 
@@ -89,7 +89,7 @@ NOLOAD 段不清零：栈靠 `xTaskCreateStatic` 填充（`app_tasks.c`、`foreg
 
 ## Monitor 登记
 
-`monitor_task.c` 的登记表加了 `Foreground Task`（栈 1536 word），名字只在 `APP/app_config.h` 的 `APP_FOREGROUND_TASK_NAME` 定义一次，创建处（`foreground_task.c`，带 `_Static_assert` 核对长度）和 Monitor 都引用它：**正好 15 个字符**（`configMAX_TASK_NAME_LEN` 为 16，再长一个字符会被截成登记不上的名字，每批出 `Task not registered in monitor` WARN）。CPU 占比行的短键是 `fore`，与 `crea`、`log`、`stor`、`moni`、`gui`、`play`、`idle`、`tmr`、`back`、`audi`、`volu`、`flas` 互不相同。同一批里可能同时出现的任务是 12 个（永久任务 11 加开机后几秒的 Flash 启动任务），CPU 行在极端组合（十个任务各占 10.0 %）下一位小数的完整格式是 129 字符，放不下，所以 `monitor_cpu_format()` 在放不下时整行退化成整数百分比（`gui=10`），保证一行放得下；平常占比保持一位小数，格式不变。核算见 [Monitor](../monitor/README.md)。
+`monitor_task.c` 的登记表加了 `Foreground Task`（栈 1536 word），名字只在 `APP/app_config.h` 的 `APP_FOREGROUND_TASK_NAME` 定义一次，创建处（`foreground_task.c`，带 `_Static_assert` 核对长度）和 Monitor 都引用它：**正好 15 个字符**（`configMAX_TASK_NAME_LEN` 为 16，再长一个字符会被截成登记不上的名字，每批出 `Task not registered in monitor` WARN）。CPU 占比行的短键是 `fore`，与 `crea`、`log`、`moni`、`gui`、`play`、`idle`、`tmr`、`back`、`audi`、`volu`、`flas` 互不相同（`stor` 随 Storage Task 在 #220 删除）。同一批里可能同时出现的任务是 11 个（永久任务 10 加开机后几秒的 Flash 启动任务；#218 当时是 12 个），CPU 行在极端组合（十个任务各占 10.0 %）下一位小数的完整格式 #218 当时是 129 字符放不下，所以 `monitor_cpu_format()` 在放不下时整行退化成整数百分比（`gui=10`）；#220 删掉 Storage 之后是 120 字符，放得下，退化的退路保留（再多一个任务时用）；平常占比保持一位小数，格式不变。核算见 [Monitor](../monitor/README.md)。
 
 ## 日志与消息池核算（DIAG-3）
 
@@ -97,7 +97,7 @@ NOLOAD 段不清零：栈靠 `xTaskCreateStatic` 填充（`app_tasks.c`、`foreg
 
 | 项 | 行数 |
 |---|---|
-| Monitor 一批（开机后 `MountFlash` 期间 12 个任务加 5 行固定行） | 17 |
+| Monitor 一批（开机后 `MountFlash` 期间 11 个任务加 5 行固定行，#220 删掉 Storage Task 少一行；#218 当时 12 个任务、17 行） | 16 |
 | Filesystem 持锁统计 | 3 |
 | 曲库短锁统计 | 1 |
 | `ui_cell` 持锁统计（本票） | 1 |
@@ -105,9 +105,10 @@ NOLOAD 段不清零：栈靠 `xTaskCreateStatic` 填充（`app_tasks.c`、`foreg
 | 前台 step 耗时（WARN 或汇总，本票） | 1 |
 | 一次拔卡（保守口径：卷路径日志 5、读取被打断、`Stop reason`、`CARD_REMOVED lat`） | 8 |
 | `SERVICE_BUSY`（异常路径：音频读取任务与前台任务各 1 行，文件槽用尽时会同时到） | 2 |
-| **最坏同时到达** | **34，留 11 块**（池 45） |
+| Flash 回收失败（#220：后台任务的回收作业，失败一次就停，只有 1 条） | 1 |
+| **最坏同时到达** | **34，留 11 块**（池 45；#218 当时 Monitor 17 + 17 = 34，#220 是 Monitor 16 + 18） |
 
-Flash 压力钩子构建再加统计行 1、卷满 1、停下 1 共 3 行，37 行，留 8 块；翻页注入钩子构建再加补满耗时 1 行，35 行，留 10 块。池深在 `Service/log/log_service_config.h`，`monitor_task.c` 的 `_Static_assert` 核对 `MONITOR_TASK_CONCURRENT_MAX + 5 + MONITOR_POOL_OTHER_WORST_LINES + MONITOR_POOL_SPARE_MIN <= LOG_SERVICE_QUEUE_LENGTH`（12 + 5 + 17 + 8 = 42 ≤ 45），每加一个任务或一种常开日志行就要重算。排空按每 5 ms 一行，34 行约 170 ms。
+Flash 压力钩子构建再加统计行 1、卷满 1、停下 1 共 3 行，37 行，留 8 块；翻页注入钩子构建再加补满耗时 1 行，35 行，留 10 块。池深在 `Service/log/log_service_config.h`，`monitor_task.c` 的 `_Static_assert` 核对 `MONITOR_TASK_CONCURRENT_MAX + 5 + MONITOR_POOL_OTHER_WORST_LINES + MONITOR_POOL_SPARE_MIN <= LOG_SERVICE_QUEUE_LENGTH`（#220：11 + 5 + 18 + 8 = 42 ≤ 45；#218 当时 12 + 5 + 17 + 8），每加一个任务或一种常开日志行就要重算。排空按每 5 ms 一行，34 行约 170 ms。
 
 **前台的 `SERVICE_BUSY` 日志**（WARN，标签 `MUSIC`，`SERVICE_BUSY pos=<位置> n=<连续第几次>`）：BUSY 是瞬时的，前台一律过约 10 ms 重试，不设次数上限、不显示回退名（ARC-27），所以日志必须节制：连续 BUSY 只在第 1 次和之后每满 `MUSIC_BUSY_LOG_EVERY`（100）次各记一行，读到非 BUSY 的结果后计数清零。BUSY 的终止靠卷事件、曲库代次变化或新需求（窗口以空窗收尾、曲名答代次 0）。正常情况下这一行不应出现（SD 同时最多 2 个文件，见 [音频读取任务](../audio_reader/README.md) R4.12），出现了就是文件槽被别处占着，R5、R6.10 核对日志里没有它。
 
@@ -157,7 +158,7 @@ ARC-26 / spec G 写“前台一步最多一次文件调用加约 1 ms CPU”。�
 ## 给后面的票
 
 - **#219（可见变化）**：模拟器假后端的无卡开播从约 100 ms 改成立刻停止，只重录 `music_card_removed` 受影响的帧；假后端在 `Tools/gui_simulator/fakes/music_sim.c`（`playback_sim.c` 的开启应答仍是 100 ms）。42 个场景的 `.expected` 在本票一个都没动，哈希门槛是可比较的基线。
-- **#220（后台任务搬扫描和回收）**：Storage Task 现在只剩曲库扫描和 Flash 回收，优先级 1；扫描搬走之后曲库发布的位置会变，`catalog.c` 里发布成功后的 `foreground_task_wake()` 要保留（前台靠它重发窗口和重答曲名）；注册表要加 `background_step` 列；Flash 压力钩子的 `BACKGROUND_HOOK_FLASH_PRESSURE_RECLAIM` 改 0。
+- **#220（后台任务搬扫描和回收）已做**：Storage Task 删除，扫描和 Flash 回收搬进后台任务；`catalog.c` 里发布成功后的 `foreground_task_wake()` 保留（前台靠它重发窗口和重答曲名）；注册表加了 `background_step` 列；Flash 压力钩子的 `BACKGROUND_HOOK_FLASH_PRESSURE_RECLAIM` 改成 0。
 - **加应用**：只在 `app_table.c` 多一行（`name`、`boot_init`、`gui_init`、`gui_step`、`foreground_step`）；前台任务的循环、栈和 Monitor 登记都不改。每个应用的前台 step 照 ARC-26 控制在一次文件调用加约 1 ms CPU 之内，最长耗时会出现在 `FOREGROUND:` 行里。
 
 ## 命名

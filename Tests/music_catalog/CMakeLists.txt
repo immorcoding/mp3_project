@@ -48,6 +48,7 @@ add_test(NAME catalog_text COMMAND music_catalog_text_tests)
 add_executable(music_catalog_open_tests
     test_catalog_open.c
     ../stubs/freertos/freertos_stub.c
+    ../../APP/apps/music/music_background.c
     ../../APP/apps/music/catalog/catalog.c
     ../../APP/apps/music/catalog/catalog_sheet.c
     ../../APP/apps/music/catalog/catalog_track_open.c

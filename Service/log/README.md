@@ -34,7 +34,7 @@ Service_Log 将多个普通任务的短日志文本汇集到静态消息块池�
 
 调度器启动前，`main()` 里的 `LOG_Printf` 直接写日志核心队列（Log Task 还不存在，没人取），队列深度 `LOG_QUEUE_DEPTH` 是 5，满了丢最旧的并计入 `DroppedCount`。这一段启动序列共写 10 条 INFO：`LOG: Initialization successful.`、`PLATFORM: Initialization successful.`、`RESOURCE: RPKC1 …`、`RESOURCE: Loaded id=1` 至 `id=5`、`RESOURCE: Initialization time=…`、`RESOURCE: Initialization successful.`。留下最新 5 条，丢掉前 5 条：LOG、PLATFORM 两行，RPKC1 一行，`Loaded id=1`、`id=2`。所以每次开机的串口日志都从 `RESOURCE: Loaded id=3` 开始，Monitor 的第一批 `Health` 是 `log_core=5(+5)`，之后是 `(+0)`。
 
-- **`BOOT: FW` 没丢**：它是调度器启动之后由 Create Task 经 `Service_Log_Post()` 投的，走 45 块的 Service 消息池，不经过核心队列在 Log Task 起来之前的堆积。`HOOK:` 行同理（在 Storage Task、前台任务或音频读取任务里投）。
+- **`BOOT: FW` 没丢**：它是调度器启动之后由 Create Task 经 `Service_Log_Post()` 投的，走 45 块的 Service 消息池，不经过核心队列在 Log Task 起来之前的堆积。`HOOK:` 行同理（在后台任务、前台任务或音频读取任务里投）。
 - **不是 #207–#209 引入的**：LOG/PLATFORM 两行自 2026-07-29、`RPKC1` 与 `Loaded` 行自 2026-09-01、队列深度 5 自 2026-08-30 就是这样；`APP/app.c`、`Components/log`、`Service/resource`、`Platform/log` 自 0.10.0 的 spec 提交起未改。
 - **判读 R1.3**：开机批次的 `log_core=5(+5)` 是基线，不算日志丢失；之后任何 `(+n)` 才算。
 - 依据是读代码加日志首行（保留的 5 条正好从 `Loaded id=3` 起），没有加打点实测。要让这 5 行也出得来，要么调大 `LOG_QUEUE_DEPTH`（占 RAM），要么把启动序列的汇总行压少，另开票。

@@ -5,7 +5,7 @@
  *          失败一次就停、卷序号变化再开始，日志带空闲块数和真擦除次数，默认构建里没有作业。
  *
  * @details
- *          链接真实的 `background_flash_pressure.c`、`background_jobs.c`、`background_loop.c`、`volume_event.c`、
+ *          链接真实的 `background_flash_pressure.c`、`background_jobs.c`、`background_reclaim.c`、`background_loop.c`、`volume_event.c`、
  *          共用 FreeRTOS 桩与 Service Log 替身；Filesystem Service 的五个入口（OpenFile、WriteFile、CloseFile、
  *          RemoveFile、ReclaimFlash）和 `Platform_Flash_GetVolumeDiagnostics` 在本文件里用脚本化的假实现替换，
  *          假 FTL 只有"空闲块、水位以下回收一块并计一次擦除、空闲块耗尽时写入自己擦"这点模型。
@@ -32,7 +32,9 @@
 
 #include "APP/tasks/background/background_flash_pressure.h"
 #include "APP/tasks/background/background_jobs.h"
+#include "APP/apps/app_table.h"
 #include "APP/tasks/background/background_loop.h"
+#include "APP/tasks/background/background_reclaim.h"
 #include "APP/tasks/background/background_task_config.h"
 #include "APP/tasks/volume/volume_event.h"
 #include "Platform/flash/platform_flash.h"
@@ -43,6 +45,11 @@
 /* 期望值用的字面量（#213 的设计：4 MiB 文件、32 KiB 一块、回收水位 462、100 ms 节拍），不用配置宏重算。 */
 #define EXPECT_WRITES_PER_FILE 128U
 #define EXPECT_LOW_WATER 462U
+
+#if defined(TEST_VARIANT_NORECLAIM)
+/* 钩子自己的回收默认关闭：产品的回收由后台任务的回收作业负责，钩子再调会让回收被叫两次（#220）。 */
+_Static_assert(BACKGROUND_HOOK_FLASH_PRESSURE_RECLAIM == 0U, "the hook does not reclaim by default (#220)");
+#endif
 
 enum { KIND_REMOVE = 0, KIND_OPEN, KIND_WRITE, KIND_CLOSE, KIND_RECLAIM, KIND_COUNT };
 
@@ -403,22 +410,70 @@ static void expected_first_cycle(char *expected, bool with_reclaim)
     strcat(expected, "CRO");
 }
 
+/**
+ * @brief 假应用 a 的后台作业：只用来在作业表里认出自己。
+ * @return 1。
+ */
+static uint32_t app_a_step(void)
+{
+    return 1U;
+}
+
+/**
+ * @brief 假应用 c 的后台作业：只用来在作业表里认出自己。
+ * @return 2。
+ */
+static uint32_t app_c_step(void)
+{
+    return 2U;
+}
+
+/** @brief 注册表各应用的 `background_step` 按表的顺序接在内置作业之后，空字段不占位。 */
+static void test_registry_background_steps_follow_the_builtin_jobs(void)
+{
+    const AppTable_EntryTypeDef rows[] = {
+        {"a", NULL, NULL, NULL, NULL, app_a_step},
+        {"b", NULL, NULL, NULL, NULL, NULL},
+        {"c", NULL, NULL, NULL, NULL, app_c_step},
+    };
+    background_job_step_t jobs[BACKGROUND_JOB_MAX];
+    const size_t builtin = (BACKGROUND_HOOK_FLASH_PRESSURE != 0U) ? 2U : 1U;
+    const size_t count = background_jobs_build(rows, 3U, jobs, BACKGROUND_JOB_MAX);
+
+    assert(count == (builtin + 2U));
+    assert(jobs[0] == background_reclaim_step);
+    assert(jobs[builtin] == app_a_step);
+    assert(jobs[builtin + 1U] == app_c_step);
+}
+
+/** @brief 没有应用登记后台作业时只剩内置作业；回收作业无论钩子开不开都在表里，不进注册表。 */
+static void test_registry_without_background_steps_adds_nothing(void)
+{
+    const AppTable_EntryTypeDef rows[] = {{"a", NULL, NULL, NULL, NULL, NULL}};
+    background_job_step_t jobs[BACKGROUND_JOB_MAX];
+    const size_t builtin = (BACKGROUND_HOOK_FLASH_PRESSURE != 0U) ? 2U : 1U;
+
+    assert(background_jobs_build(rows, 1U, jobs, BACKGROUND_JOB_MAX) == builtin);
+    assert(jobs[0] == background_reclaim_step);
+    assert(background_jobs_build(NULL, 0U, jobs, BACKGROUND_JOB_MAX) == builtin);
+}
+
 #if (BACKGROUND_HOOK_FLASH_PRESSURE == 0U)
 
 /**
- * @brief 默认构建：作业表里没有作业，整圈都是等通知，没有文件调用也没有日志；启动不投 HOOK 行。
+ * @brief 默认构建：作业表里只有内置的回收作业，没有压力钩子，也没有文件调用和日志；启动不投 HOOK 行。
+ *        Flash 卷还没发过事件（序号 0）时整圈都是等通知。
  */
-static void test_default_build_has_no_job(void)
+static void test_default_build_has_no_pressure_job(void)
 {
-    size_t count = 0U;
-    const background_job_step_t *table;
+    background_job_step_t jobs[BACKGROUND_JOB_MAX];
+    size_t count;
 
-    begin_scenario(true);
-    table = background_jobs_table(&count);
-    assert(table != NULL);
+    begin_scenario(false);
+    count = background_jobs_build(NULL, 0U, jobs, BACKGROUND_JOB_MAX);
     assert(count == 1U);
-    assert(table[0] == NULL);
-    assert(background_loop_run_jobs(table, count) == BACKGROUND_WAIT_FOREVER);
+    assert(jobs[0] == background_reclaim_step);
+    assert(background_loop_run_jobs(jobs, count) == BACKGROUND_WAIT_FOREVER);
 
     /* 就算直接调作业函数（表里不会有它），关闭时也什么都不做。 */
     assert(background_flash_pressure_step() == BACKGROUND_WAIT_FOREVER);
@@ -449,14 +504,15 @@ static void test_announce_posts_one_hook_line(void)
     assert(lock_env_log_longest_text() <= 127U);
 }
 
-/** @brief 钩子打开：作业表里有这个作业。 */
+/** @brief 钩子打开：作业表里是回收作业在前、压力钩子在后。 */
 static void test_table_registers_the_job(void)
 {
-    size_t count = 0U;
-    const background_job_step_t *table = background_jobs_table(&count);
+    background_job_step_t jobs[BACKGROUND_JOB_MAX];
+    const size_t count = background_jobs_build(NULL, 0U, jobs, BACKGROUND_JOB_MAX);
 
-    assert(count == 1U);
-    assert(table[0] == background_flash_pressure_step);
+    assert(count == 2U);
+    assert(jobs[0] == background_reclaim_step);
+    assert(jobs[1] == background_flash_pressure_step);
 }
 
 /** @brief Flash 卷没就绪（含 Flash 启动任务挂载期间）：不碰 Flash 卷、不投日志，只按轮询间隔回头看；就绪后才开始。 */
@@ -863,8 +919,10 @@ typedef struct
 } Case;
 
 static const Case cases[] = {
+    {"registry_steps_follow_builtin", test_registry_background_steps_follow_the_builtin_jobs},
+    {"registry_without_steps", test_registry_without_background_steps_adds_nothing},
 #if (BACKGROUND_HOOK_FLASH_PRESSURE == 0U)
-    {"default_build_has_no_job", test_default_build_has_no_job},
+    {"default_build_has_no_job", test_default_build_has_no_pressure_job},
 #else
     {"announce", test_announce_posts_one_hook_line},
     {"table_registers_the_job", test_table_registers_the_job},

@@ -1,6 +1,6 @@
 # Service
 
-本目录包含跨 Platform 和 Component 的产品流程 Module。当前有异步日志投递、FatFs 卷操作、GUI 运行时、资源包加载与播放解码。曲库扫描属于 APP 的 Storage Task（0.10.0 里逐步移给后台任务），卷的挂载与热插拔属于 APP 的卷任务，都不在本目录。未来跨任务存储命令可在此增加独立目录。
+本目录包含跨 Platform 和 Component 的产品流程 Module。当前有异步日志投递、FatFs 卷操作、GUI 运行时、资源包加载与播放解码。曲库扫描属于 APP 的音乐应用（后台任务里的扫描作业，0.10.0 删除了 Storage Task），卷的挂载与热插拔属于 APP 的卷任务，都不在本目录。未来跨任务存储命令可在此增加独立目录。
 
 ## 公开 Interface
 

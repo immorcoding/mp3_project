@@ -162,10 +162,10 @@ static void begin_scenario(void)
 static void test_every_app_is_called_once_per_round_in_order_and_null_fields_are_skipped(void)
 {
     const AppTable_EntryTypeDef table[] = {
-        {"a", NULL, NULL, NULL, app0_step},
-        {"empty", NULL, NULL, NULL, NULL},
-        {"b", NULL, NULL, NULL, app1_step},
-        {"c", NULL, NULL, NULL, app2_step},
+        {"a", NULL, NULL, NULL, app0_step, NULL},
+        {"empty", NULL, NULL, NULL, NULL, NULL},
+        {"b", NULL, NULL, NULL, app1_step, NULL},
+        {"c", NULL, NULL, NULL, app2_step, NULL},
     };
 
     begin_scenario();
@@ -187,9 +187,9 @@ static void test_every_app_is_called_once_per_round_in_order_and_null_fields_are
 static void test_the_wait_is_the_smallest_return_value(void)
 {
     const AppTable_EntryTypeDef table[] = {
-        {"a", NULL, NULL, NULL, app0_step},
-        {"b", NULL, NULL, NULL, app1_step},
-        {"c", NULL, NULL, NULL, app2_step},
+        {"a", NULL, NULL, NULL, app0_step, NULL},
+        {"b", NULL, NULL, NULL, app1_step, NULL},
+        {"c", NULL, NULL, NULL, app2_step, NULL},
     };
 
     begin_scenario();
@@ -222,7 +222,7 @@ static void test_wait_ticks_conversion(void)
 /** @brief 一圈 = 调一遍 step、调一次回调、再按最小返回值等通知（回调先于等待）；等的是前台任务的 0 号槽。 */
 static void test_one_round_runs_steps_then_the_callback_then_waits_for_notification(void)
 {
-    const AppTable_EntryTypeDef table[] = {{"a", NULL, NULL, NULL, app0_step}};
+    const AppTable_EntryTypeDef table[] = {{"a", NULL, NULL, NULL, app0_step, NULL}};
 
     begin_scenario();
     apps_state[0].returns = 25U;
@@ -244,7 +244,7 @@ static void test_one_round_runs_steps_then_the_callback_then_waits_for_notificat
 /** @brief 睡眠期间有人叫醒：等待提前返回（真）；叫醒在 step 运行期间到达也不丢，下一次等待立刻返回。 */
 static void test_a_wake_during_the_wait_or_during_a_step_is_not_lost(void)
 {
-    const AppTable_EntryTypeDef table[] = {{"a", NULL, NULL, NULL, app0_step}};
+    const AppTable_EntryTypeDef table[] = {{"a", NULL, NULL, NULL, app0_step, NULL}};
 
     begin_scenario();
     apps_state[0].returns = FOREGROUND_WAIT_FOREVER;
@@ -285,8 +285,8 @@ static void test_wake_before_bind_is_a_noop(void)
 static void test_each_app_keeps_its_own_longest_step_time(void)
 {
     const AppTable_EntryTypeDef table[] = {
-        {"a", NULL, NULL, NULL, app0_step},
-        {"b", NULL, NULL, NULL, app1_step},
+        {"a", NULL, NULL, NULL, app0_step, NULL},
+        {"b", NULL, NULL, NULL, app1_step, NULL},
     };
 
     begin_scenario();
@@ -309,7 +309,7 @@ static void test_each_app_keeps_its_own_longest_step_time(void)
 /** @brief 超过 50 ms 且刷新了最长值才记 WARN；没刷新（更短或相等）不记；再刷新再记；整个过程不停机（返回值照常）。 */
 static void test_slow_step_warns_only_when_the_longest_value_is_refreshed(void)
 {
-    const AppTable_EntryTypeDef table[] = {{"music", NULL, NULL, NULL, app0_step}};
+    const AppTable_EntryTypeDef table[] = {{"music", NULL, NULL, NULL, app0_step, NULL}};
 
     begin_scenario();
     apps_state[0].returns = 7U;
@@ -342,7 +342,7 @@ static void test_warn_line_fits_the_log_capacity_even_with_a_long_app_name(void)
 {
     const AppTable_EntryTypeDef table[] = {
         {"an-application-name-that-is-far-too-long-to-be-a-sensible-registry-entry-and-keeps-going-on-and-on-and-on-and-on",
-         NULL, NULL, NULL, app0_step},
+         NULL, NULL, NULL, app0_step, NULL},
     };
 
     begin_scenario();
@@ -356,8 +356,8 @@ static void test_warn_line_fits_the_log_capacity_even_with_a_long_app_name(void)
 static void test_longest_values_below_the_threshold_are_summarised_in_one_line_per_period(void)
 {
     const AppTable_EntryTypeDef table[] = {
-        {"music", NULL, NULL, NULL, app0_step},
-        {"books", NULL, NULL, NULL, app1_step},
+        {"music", NULL, NULL, NULL, app0_step, NULL},
+        {"books", NULL, NULL, NULL, app1_step, NULL},
     };
 
     begin_scenario();
@@ -402,7 +402,7 @@ static void test_summary_line_is_truncated_visibly_not_overflowed(void)
     begin_scenario();
     for (size_t index = 0U; index < 8U; index++)
     {
-        table[index] = (AppTable_EntryTypeDef){names[index], NULL, NULL, NULL, app0_step};
+        table[index] = (AppTable_EntryTypeDef){names[index], NULL, NULL, NULL, app0_step, NULL};
     }
     apps_state[0].cost_us = 4321U; /* 8 个应用各记 4321 us，都没超阈值。 */
     (void)foreground_loop_run_steps(table, 8U);
@@ -415,7 +415,7 @@ static void test_summary_line_is_truncated_visibly_not_overflowed(void)
 /** @brief 周期计数器没启动（频率 0）：耗时记 0，不会误报，也不会除零。 */
 static void test_unavailable_cycle_counter_records_zero_without_warning(void)
 {
-    const AppTable_EntryTypeDef table[] = {{"music", NULL, NULL, NULL, app0_step}};
+    const AppTable_EntryTypeDef table[] = {{"music", NULL, NULL, NULL, app0_step, NULL}};
 
     begin_scenario();
     lock_env_set_counter_unavailable(true);
@@ -428,7 +428,7 @@ static void test_unavailable_cycle_counter_records_zero_without_warning(void)
 /** @brief 周期计数器 32 位回绕：耗时用无符号差，仍然正确。 */
 static void test_cycle_counter_wrap_does_not_inflate_a_step_time(void)
 {
-    const AppTable_EntryTypeDef table[] = {{"music", NULL, NULL, NULL, app0_step}};
+    const AppTable_EntryTypeDef table[] = {{"music", NULL, NULL, NULL, app0_step, NULL}};
 
     begin_scenario();
     lock_env_advance_us(8947000U); /* 480 MHz 下约 4.29e9 周期：让计数器贴近 32 位上限。 */
@@ -441,10 +441,10 @@ static void test_cycle_counter_wrap_does_not_inflate_a_step_time(void)
 static void test_boot_init_is_called_in_table_order_and_null_fields_are_skipped(void)
 {
     const AppTable_EntryTypeDef table[] = {
-        {"a", boot0, NULL, NULL, NULL},
-        {"none", NULL, NULL, NULL, app0_step},
-        {"b", boot1, NULL, NULL, NULL},
-        {"c", boot3, NULL, NULL, NULL},
+        {"a", boot0, NULL, NULL, NULL, NULL},
+        {"none", NULL, NULL, NULL, app0_step, NULL},
+        {"b", boot1, NULL, NULL, NULL, NULL},
+        {"c", boot3, NULL, NULL, NULL, NULL},
     };
 
     begin_scenario();

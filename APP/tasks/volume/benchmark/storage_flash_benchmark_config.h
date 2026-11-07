@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    storage_flash_benchmark_config.h
-  * @brief   Storage Task 外部 NOR Flash 基准的私有数据规模参数。
+  * @brief   Flash 启动任务 外部 NOR Flash 基准的私有数据规模参数。
   *
   * @details
   *          本 Module 同时包含非破坏性的 0xEC 顺序读取测速，以及仅在显式开关

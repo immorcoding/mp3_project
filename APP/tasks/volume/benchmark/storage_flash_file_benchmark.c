@@ -19,7 +19,7 @@
 _Static_assert(STORAGE_FLASH_BENCHMARK_FILE_CHUNK_BYTES <= SERVICE_FILESYSTEM_IO_MAX_BYTES,
                "Flash file benchmark chunk must fit one Filesystem transfer");
 
-/** @brief 应用层缓冲不直接用于 DMA；静态持有，避免占用 Storage Task 栈。 */
+/** @brief 应用层缓冲不直接用于 DMA；静态持有，避免占用 Flash 启动任务 栈。 */
 static uint8_t storage_flash_file_buffer[STORAGE_FLASH_BENCHMARK_FILE_CHUNK_BYTES];
 /** @brief 一次启动只尝试一次，包括失败，防止反复写入造成磨损。 */
 static bool storage_flash_file_attempted;
@@ -133,7 +133,7 @@ static Service_StatusTypeDef storage_flash_file_read(Service_Filesystem_FileHand
 
 /**
  * @brief 在 Flash 挂载后执行一次文件写入、读取测速、独立校验及删除。
- * @note 仅 Storage Task 调用；不直接包含或调用 FatFs/Platform/FTL，不自动格式化。
+ * @note 仅 Flash 启动任务 调用；不直接包含或调用 FatFs/Platform/FTL，不自动格式化。
  *       CREATE_NEW 失败时不删除同名文件；只有本轮成功创建才拥有删除权。
  *       所有失败均进入关闭/删除清理；介质或文件锁故障时明确报告残留，不假报已删除。
  */
