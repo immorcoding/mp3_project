@@ -29,7 +29,8 @@ typedef struct
 static Background_ReclaimStateTypeDef background_reclaim_state;
 
 /**
- * @brief  毫秒向上取整换成 tick 的反向：tick 数换成毫秒（1 kHz 时相等，其他节拍向上取整，不会把非零变成 0）。
+ * @brief  tick 数换成毫秒，向上取整，不会把非零变成 0（返回 0 会让后台任务忙等）。
+ * @note   没有公共函数可复用：`volume_sd.c`、`volume_flash.c`、两个基准各有一份私有换算（它们向下取整或另有用途），先各留一份，不为这一处新建共用模块。
  * @param[in] ticks tick 数。
  * @return 毫秒数。
  */

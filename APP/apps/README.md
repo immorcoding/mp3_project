@@ -9,13 +9,13 @@
 - `app_table.h` / `app_table.c`：注册表，应用目录里唯一认识所有应用的地方。
 - `<app>/gui/`：应用的 GUI 分区（`gui_init`、`gui_step` 的实现、最新需求的写入与结果的读取、播放命令与快照归约）。LVGL 的那一半在 `Service/gui/main/<app>/` 与 `view/`，属于 Service 层，不放这里。
 - `<app>/catalog/`（音乐独有）：应用自己的数据模块，音乐的曲库在这里（一份表、模块内一把短锁，见 [music/catalog](music/catalog/README.md)）。锁在应用内部，不经 `ui_cell`；共用层不认识它，音频读取任务、前台任务和 `music_background.c`（扫描，后台任务调）作为它的调用者包含它的头（任务包含应用不受 `check-layer-includes` 限制，应用之间不互相包含）。
-- `<app>/foreground/`：应用的前台流程（`foreground_step` 的实现，行缓存与窗口组装；音乐的在 [music](music/README.md)“前台流程”）。`<app>_cells.h/.c`：应用的界面数据格子（需求与结果的结构体与存储），`<app>_app.c`：`boot_init`。后台作业随后台任务票加入，现在还没有。
+- `<app>/foreground/`：应用的前台流程（`foreground_step` 的实现，行缓存与窗口组装；音乐的在 [music](music/README.md)“前台流程”）。`<app>_cells.h/.c`：应用的界面数据格子（需求与结果的结构体与存储），`<app>_app.c`：`boot_init`。`<app>_background.c`：应用的后台入口（`background_step` 的实现；音乐的 `music_background_step()` 现在只转交曲库扫描 `catalog_scan_step()`，有两个后台作业的应用在这里合并，ARC-22）。
 - 共用层的 `ui_cell`（界面数据短锁）在 `APP/ui_cell/`，不属于任何应用，见 [ui_cell](../ui_cell/README.md)；应用自己的格子结构体放在应用目录里。
 - 应用的 README 写它自己的私有 Interface、运行时路径与编译期依赖；共用约定只写在本页。
 
 ## 注册表
 
-`app_table[]` 一个应用一行，空字段（`NULL`）由调用方跳过。字段随用到它的票再加；现在有五列（#216 加 `name`、`gui_init`、`gui_step`，#218 加 `boot_init`、`foreground_step`）：
+`app_table[]` 一个应用一行，空字段（`NULL`）由调用方跳过。字段随用到它的票再加；现在有六列（#216 加 `name`、`gui_init`、`gui_step`，#218 加 `boot_init`、`foreground_step`，#220 加 `background_step`）：
 
 | 字段 | 谁调用 | 时机 |
 |---|---|---|
@@ -24,10 +24,11 @@
 | `gui_init` | `APP/tasks/gui/gui_task.c` | `Service_GUI_Init()` 成功之后调用一次 |
 | `gui_step` | `APP/tasks/gui/gui_task.c` | 每圈 `Service_GUI_ConsumeInput()` 之后、`Service_GUI_Process()` 之前；不等文件、不查询卷状态 |
 | `foreground_step` | `APP/tasks/foreground/foreground_task.c` | 前台任务每圈每个应用恰好一次；返回“多少 ms 后再叫我”（0 马上，`FOREGROUND_WAIT_FOREVER` 等通知），取所有应用里的最小值 |
+| `background_step` | `APP/tasks/background/background_jobs.c`（`background_jobs_build()` 在后台任务入口拼作业表） | 后台任务每圈每个作业恰好一次（内置的回收作业在前，各应用的 `background_step` 在后）；返回“多少 ms 后再叫我”（0 马上，`BACKGROUND_WAIT_FOREVER` 等通知）；一步最多一次可能耗时的文件调用或约 10 ms 的 CPU（ARC-22）；卷事件和 `background_task_wake()` 都会叫醒后台任务 |
 
-计划中的 `background_step` 尚未存在，不要提前加。GUI 任务与 GUI 模拟器（`Tools/gui_simulator/sim_main.c`）编译并遍历同一份 `app_table.c`（调用 `app_table_boot_init()`，并在每圈里替身前台任务调用 `foreground_step`），所以模拟器走的就是产品的接入路径；模拟器的前台后端是脚本化的假实现（`Tools/gui_simulator/fakes/music_sim.c`，见模拟器 README）。
+后台任务（`APP/tasks/background/`）遍历同一份表拼自己的作业表，回收这样的后台任务自己的作业不进注册表（见 [后台任务](../tasks/background/README.md)）。GUI 任务与 GUI 模拟器（`Tools/gui_simulator/sim_main.c`）编译并遍历同一份 `app_table.c`（调用 `app_table_boot_init()`，并在每圈里替身前台任务调用 `foreground_step`），所以模拟器走的就是产品的接入路径；模拟器的前台后端是脚本化的假实现（`Tools/gui_simulator/fakes/music_sim.c`，见模拟器 README）；模拟器不跑后台任务，音乐的 `background_step` 由 `fakes/music_background_sim.c` 代替（恒“没有活”）。
 
-加一个应用：在 `app_table.c` 包含它的入口头并多写一行（`name`、`boot_init`、`gui_init`、`gui_step`、`foreground_step`）；任务循环、栈和 Monitor 登记都不改（所有应用共用前台任务和它的栈）。
+加一个应用：在 `app_table.c` 包含它的入口头并多写一行（`name`、`boot_init`、`gui_init`、`gui_step`、`foreground_step`、`background_step`）；任务循环、栈和 Monitor 登记都不改（所有应用共用前台任务和后台任务，以及它们的栈）。
 
 ## 前台一步的规则（ARC-26）
 
@@ -45,7 +46,7 @@
 应用的大块缓冲与跨任务交接数据按用途放段（HWD-2，链接脚本一个字没改）：
 
 - `.app_axi_ram`（AXI SRAM，NOLOAD）：静态创建的任务栈和 GUI 与前台任务共享的数据（界面数据格子、GUI 一侧的结果副本）。NOLOAD 不清零：格子由 `boot_init` 整块写入，栈由 `xTaskCreateStatic` 填充。
-- `.apps_sdram`（SDRAM，NOLOAD，由链接脚本的 `ASSERT` 卡在 8 MiB 以内）：应用的缓冲和状态，现在只有音乐前台流程的：行缓存的行内容与键表、窗口组装缓冲、曲名组装区与临时一行、曲库读全结果、流程状态变量（`MUSIC_SDRAM_SECTION`，40224 B，不放 DMA 缓冲，只经 CPU 读写）。ARC-28：应用内存默认放这里，DTCM 留给任务栈与内核；step 里不放大局部变量（临时的大对象也放这里）。启动自检之后才有主，`boot_init` 在 SDRAM 自检之后整块写入。
+- `.apps_sdram`（SDRAM，NOLOAD，由链接脚本的 `ASSERT` 卡在 8 MiB 以内）：应用的缓冲和状态，现在有音乐的两块：前台流程的行缓存的行内容与键表、窗口组装缓冲、曲名组装区与临时一行、曲库读全结果、流程状态变量（40224 B），和曲库扫描的遍历状态（目录栈、当前路径、目录项、句柄、计数，`catalog.c`，33608 B，#220）；两块共用一个段名宏 `MUSIC_SDRAM_SECTION`（`music_config.h`），合计 0x12080 = 73856 B（Debug 与 Release map 一致），不放 DMA 缓冲，只经 CPU 读写。ARC-28：应用内存默认放这里，DTCM 留给任务栈与内核；step 里不放大局部变量（临时的大对象也放这里）。启动自检之后才有主，`boot_init` 在 SDRAM 自检之后整块写入。
 - DTCM `.bss`：小的状态（缓存键表要求启动时清零，所以放这里）。
 
 分配与总量见 [前台任务](../tasks/foreground/README.md)“栈、内存与段”。
@@ -61,6 +62,6 @@
 
 前台只表示屏幕正显示哪一页，只有 GUI 侧知道。所有 step 一直被轮流调用，没有 enter/leave 回调；离开前台时应用的 GUI step 改自己的需求状态。0.10.0 只有音乐，分页器不公开当前页。
 
-## 尚未落地的约定
+## 已落地与尚未落地的约定
 
-下列约定已由 [#202](https://github.com/immorcoding/mp3_project/issues/202) 的 G 节确定，随各自的票实现，现在代码里还没有：`background_step` 列、同一应用前台与后台之间的短锁、后台任务的一步规则。实现时把现状写进本页。
+下列约定由 [#202](https://github.com/immorcoding/mp3_project/issues/202) 的 G 节确定：`background_step` 列和后台任务的一步规则已在 #220 落地（见上表与 [后台任务](../tasks/background/README.md)）；同一应用前台与后台之间的“应用自己持有数据加一把短锁”目前只有音乐的曲库短锁（`catalog.c`，扫描在后台写、前台与音频读取任务读）一个实例，还没有提炼成通用约定，等第二个应用出现时再写进本页。

@@ -59,10 +59,12 @@
 |---|---|---|
 | `SERVICE_BUSY` | 过约 10 ms 重试，不算失败 | 这一步返回 `CATALOG_BUSY_RETRY_MS`，后台任务睡这么久再叫扫描作业，步里不等（原来的 `vTaskDelay` 没有了）；打开、读、关目录各一处；睡的时候卷序号变了，下一步的比对作废这一轮 |
 | `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE` | 丢弃本次扫描，不发布，等卷事件 | `Service_Filesystem_StatusIsVolumeUnavailable()`；读目录时先关目录，结束行 `res=aborted`；卡还在读不了的情形见下 |
-| 打开根目录时的其他错误 | 按空库发布，记 WARN | `Music Directory Open Failed.` |
-| 打开子目录时的其他错误 | 跳过这个子目录，记 WARN | `Sub Directory Open Failed.` |
-| 读或关目录时的其他错误 | 不发布，记 ERROR，等下一次插卡 | `Music Directory Read Failed.`（读）与 `Music catalog dfs failed.`，结束行 `res=dfs_error`；之后作业不再自己重试，到卷序号变化为止 |
+| 打开根目录时的其他错误 | 按空库发布，记 WARN | `Music Directory Open Failed.`（节流，见下） |
+| 打开子目录时的其他错误 | 跳过这个子目录，记 WARN | `Sub Directory Open Failed.`（节流，见下） |
+| 读或关目录时的其他错误 | 不发布，记**一条** ERROR，等下一次插卡 | `Music catalog dfs failed at=<read 或 close> status=<Service 状态数值>`，结束行 `res=dfs_error`；之后作业不再自己重试，到卷序号变化为止。原来读失败记 `Music Directory Read Failed.` 又在收尾记 `Music catalog dfs failed.` 两条 ERROR，消息池核算没算，#220 合成一条 |
 | 条目满、池满 | 发布截断结果 | `Music Catalog Full.` / `Music Catalog Pool Full.` WARN，不再扫其余目录；池按 4 MiB 与 12000 条的平均 350 B 设计，路径不超过 255 B 时条数先到上限，池满只是防御，主机测试到不了 |
+
+**扫描期间的 WARN 节流**（DIAG-3，#220）：目录打不开（根或子目录）和目录栈满的 WARN 每轮扫描只记**第一条**，其余只计数，汇总进结束行：`Scan done res=ok n=2 us=… skipped=4`（`skipped=` 只在有被节流的条数时才出现，所以平常的结束行格式不变）。原来目录很多的卡上每个坏目录一条 WARN，会塞满只有 45 块的消息池（原有行为）。条目满、池满的 WARN 一轮只有一条（记完扫描就收尾），不节流。节流后**一轮扫描最多 3 行日志**：第一条 WARN（或截断的 WARN）、一条 ERROR（读或关目录失败）、`Scan done`；消息池核算按这个上界（见 [后台任务](../../../tasks/background/README.md)“消息池”），它落在“一次拔卡 8 行”的预算之内（插卡扫描时没有音频流，那 3 行音频日志的位置由这 3 行占用）。主机测试：`test_sub_directory_open_warnings_are_throttled_to_one_per_scan`、`test_a_scan_logs_at_most_three_lines_even_when_everything_goes_wrong`。
 
 **打开目录得到卷不可用时再开一次**（#211）：在途调用被拔卡打断时，第一次失败发生在卷任务对账之前、卷序号还没变；路径打开没有句柄可借来等闸，所以再开一次，它在 Filesystem 入口等闸，等到对账结束才下结论——卡没了（再次得到卷不可用，丢弃；或者下一步先看到卷序号变了，不再重试）或卡还在（照常打开，扫描继续）。根目录和子目录都一样。
 
@@ -104,14 +106,14 @@ CATLOCK: n=1204 hold=96us
   - Queue 窗口逐行不记。窗口加载完成（打 `READY` 前）时，若本窗有上述四类 WARN 级原因、或本窗最长单次打开 > 30 ms、或整窗总耗时 > 0.5 s、或最长单行 > 1 s（`CATALOG_TRACK_BUDGET_US`），记一行汇总：`Tag win rows=行数 max=本窗最长单行（含打开） omax=本窗最长单次打开 top=自启动最长单行 us=总耗时（含打开） rd=读取次数合计 ok=取到数 nid3=无ID3v2 nofr=帧缺失 dec=解码失败 lim=超读取上限 open=打开失败 rerr=读取错误`（耗时单位 µs；耗时字段排在原因计数之前，万一撞上 Service Log 单条 128 B 上限被截断，丢的是尾部计数而不是 `max`/`top`；加入 `omax` 后十位数的极端取值会超出 128 B 并丢尾部计数，现实取值（耗时 < 10^7 µs）约 120 字符，不截断）；有 WARN 级原因为 WARN，否则 INFO。其余窗口只累加计数器。以空窗收尾的窗口不记汇总。
   - 开流和重开流成功后各记一行 INFO `Stream pos=N off=<B> open=<us> lseek=<us>`（`catalog_track_diag_stream_done()`，DIAG-5）：`pos` 是播放列表位置，`off` 取请求里的 `AudioOffset`（未钳位），`open` 是打开耗时，`lseek` 是定位到音频区间起点加偏移的最后一次 `f_lseek` 耗时；只在曲目或跳转边界记，不在每块读取路径上；开启失败不记（失败由播放侧的 `Open` 日志与现有错误路径呈现）。
   - 核对不符一行 WARN：`Locator miss pos=N`，文本只含位置，不含文件名。
-  - **扫描结束一行 INFO**（DIAG-6、#204，常开，tag `Catalog`，不是 `STORAGE`）：`Scan done res=<结果> n=<条数> us=<微秒>`，每轮扫描结束（发布、放弃或失败）一行。`res` 取 `ok`（含没有 `Music/`、子目录打不开、条数满截断，此时 `n` 是已收录的条数）、`dfs_error`（目录读取或关闭失败，此前已有一条 ERROR）、`aborted`（本轮扫描被丢弃：卷不可用、扫描中或发布前卷序号变了，此时 `n=0`，不记 ERROR）。`us` 是从扫描开始（作废旧表之后）到结束的**总时间**，含目录打开与读取、`SERVICE_BUSY` 的睡眠以及期间被更高优先级任务抢占或与同级任务轮转的时间，不含建播放列表和发布（第 4、5 次上板的开机扫描数字同一口径：12000 首开机扫描 9.0 s 就是这个数）；DWT 计数器 32 位、480 MHz 下约 9 s 回绕，所以每一步开头把周期差累加进 64 位计数（相邻两步相隔一次目录调用加一次睡眠，远小于回绕周期），不依赖首尾两次读数。主机测试 `Tests/music_catalog` 的 `catalog_open`（含计数器回绕）。spike 参考：12000 首同文件夹约 2.3 s（R1.5 只记录）。
+  - **扫描结束一行 INFO**（DIAG-6、#204，常开，tag `Catalog`，不是 `STORAGE`）：`Scan done res=<结果> n=<条数> us=<微秒>[ skipped=<被节流的 WARN 条数>]`，每轮扫描结束（发布、放弃或失败）一行。`res` 取 `ok`（含没有 `Music/`、子目录打不开、条数满截断，此时 `n` 是已收录的条数）、`dfs_error`（目录读取或关闭失败，此前已有一条 ERROR）、`aborted`（本轮扫描被丢弃：卷不可用、扫描中或发布前卷序号变了，此时 `n=0`，不记 ERROR）。`us` 是从扫描开始（作废旧表之后）到结束的**总时间**，含目录打开与读取、`SERVICE_BUSY` 的睡眠以及期间被更高优先级任务抢占或与同级任务轮转的时间，不含建播放列表和发布（第 4、5 次上板的开机扫描数字同一口径：12000 首开机扫描 9.0 s 就是这个数）；DWT 计数器 32 位、480 MHz 下约 9 s 回绕，所以每一步开头把周期差累加进 64 位计数（相邻两步相隔一次目录调用加一次睡眠，远小于回绕周期），不依赖首尾两次读数。主机测试 `Tests/music_catalog` 的 `catalog_open`（含计数器回绕）。spike 参考：12000 首同文件夹约 2.3 s（R1.5 只记录）。
   - **板测清单 B8**：在标签读取范围内，“Storage 单圈最大耗时”有了固件出口：曲名 INFO 的 `us`（M10）、窗口汇总行的 `max` 与 `top`；原判据是单行标签读取上界 < T_data/2，现在只有 1 s 的日志阈值，判据由板级验收清单重新定。B9（扫描耗时）、B10 不在此范围。无主机测试，实际日志与耗时由板级验收票取证。
 
 
 ## 编译期依赖
 
 - 卷事件的 `volume_status()`（`APP/tasks/volume/volume_event.h`，应用可以包含任务的公开合同，ARC-23）。
-- 后台任务的配置头（`APP/tasks/background/background_task_config.h`，`BACKGROUND_WAIT_FOREVER`）、前台任务的叫醒函数（`foreground_task_wake()`）。
+- 后台任务的公开头（`APP/tasks/background/background_task.h`，再导出配置头里的 `BACKGROUND_WAIT_FOREVER`）、前台任务的叫醒函数（`foreground_task_wake()`）、音乐的配置头（`music_config.h`，链接段名 `MUSIC_SDRAM_SECTION`）。
 - Filesystem Service 的目录与文件 Interface、失败分类函数；Log Service；Cortex-M7 周期计数器 Adapter；原生 FreeRTOS 的静态互斥量与 tick。
 - `Components/id3_reader`（曲目文本函数）。
 - 不包含别的应用。反方向：音频读取任务（`APP/tasks/audio_reader/`，直接包含，不做注入）、前台流程、`music_background.c` 和 `app_tasks.c` 包含本目录的头；`scripts/check-layer-includes.ps1` 的 `app` 种类只拦“应用包含别的应用”，任务包含应用不受限，ARC-23 也只禁应用之间互相包含。

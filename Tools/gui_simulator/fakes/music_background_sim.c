@@ -5,14 +5,15 @@
  */
 
 #include "APP/apps/music/music_background.h"
+#include "APP/tasks/background/background_task_config.h"
 
 #include <stdint.h>
 
 /**
  * @brief  替身：模拟器不跑后台任务，永远说“没有活，等通知”。
- * @return `UINT32_MAX`（即 `BACKGROUND_WAIT_FOREVER`）。
+ * @return `BACKGROUND_WAIT_FOREVER`。
  */
 uint32_t music_background_step(void)
 {
-    return UINT32_MAX; /* BACKGROUND_WAIT_FOREVER */
+    return BACKGROUND_WAIT_FOREVER;
 }

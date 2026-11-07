@@ -188,6 +188,8 @@
                 '^APP/apps/music/catalog/'
                 # 音乐注册进注册表的后台入口 music_background_step() 接曲库扫描单步（#220），测试经它驱动扫描。
                 '^APP/apps/music/music_background\.[ch]$'
+                # 扫描遍历状态的链接段名取 MUSIC_SDRAM_SECTION（#220），catalog.c 包含音乐应用的配置头。
+                '^APP/apps/music/music_config\.h$'
                 # 曲库发布成功后叫醒前台任务一次（#218）：catalog.c 包含前台任务头，测试里用假的叫醒函数。
                 '^APP/tasks/foreground/foreground_task(?:_config)?\.h$'
                 # 扫描单步返回 `BACKGROUND_WAIT_FOREVER`（#220）：catalog.c 包含后台任务的配置头。
@@ -387,6 +389,8 @@
         '^APP/apps/app_table(?:_boot)?\.[ch]$'
         '^APP/ui_cell/'
         '^APP/tasks/foreground/foreground_task(?:_config)?\.h$'
+        # 假的音乐后台入口返回 BACKGROUND_WAIT_FOREVER（#220）。
+        '^APP/tasks/background/background_task_config\.h$'
         '^APP/tasks/audio_reader/audio_reader_(?:block|config)\.h$'
         '^APP/tasks/playback/playback_(?:contract|task_config)\.h$'
         '^Service/log/log_service(?:_config)?\.h$'

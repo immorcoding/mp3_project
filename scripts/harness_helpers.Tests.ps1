@@ -294,6 +294,12 @@ Assert-HarnessEqual -Expected $false -Actual $musicBackgroundSourceImpact.Requir
 $musicBackgroundHeaderImpact = Get-HarnessImpact -ChangedPath @('APP/apps/music/music_background.h')
 Assert-HarnessEqual -Expected $true -Actual $musicBackgroundHeaderImpact.RequiresGuiScenarios `
     -Message '假音乐后台入口实现的 music_background.h 变化必须跑场景回归'
+$musicConfigImpact = Get-HarnessImpact -ChangedPath @('APP/apps/music/music_config.h')
+Assert-HarnessEqual -Expected $true -Actual (@($musicConfigImpact.HostModules) -contains 'music_catalog') `
+    -Message '音乐配置头（MUSIC_SDRAM_SECTION，扫描遍历状态的链接段名）被曲库主机测试编译（#220），变化必须选择 music_catalog'
+$backgroundConfigImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/background/background_task_config.h')
+Assert-HarnessEqual -Expected $true -Actual $backgroundConfigImpact.RequiresGuiScenarios `
+    -Message '假的音乐后台入口（模拟器）返回 BACKGROUND_WAIT_FOREVER，后台任务配置头变化必须跑场景回归'
 Assert-HarnessEqual -Expected 0 -Actual $backgroundImpact.UnknownPaths.Count `
     -Message 'APP/tasks/background 由主机模块规则覆盖，不应落入未知生产路径'
 $volumeTaskConfigImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/volume/volume_task_config.h')

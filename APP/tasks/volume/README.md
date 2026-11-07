@@ -134,7 +134,7 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
 
 `path` 取 `idle`、`gate_only`、`mount`、`unmount`、`remount`（含义见上表）。`card` 三位依次是 present、ready、reinit，成立写 `p`、`r`、`i`，不成立写 `-`（例：`pri` 是卡在、就绪、重新初始化过；`---` 是卡不在）。`seq=a->b` 是这次对账前后的卷序号，**`remount` 是 `a->a+2`**。`ref` 是 `RefreshSD` 花的时间（等在途调用退出，加可能的重新初始化约 186 ms）。**`end` 是从第一个边沿到闸重新打开的时间，即收尾时刻**（spike 参考 +34 至 35 ms：30 ms 静默加几毫秒）。`edges`、`ref`、`end` 超过 9999 都写 9999。`gate=kept` 表示这一轮没有开闸，之后会有下一条 `settle` 行。
 
-保留的人读日志（`SD` 标签）：`Card ready: … MB`、`Card inserted: … MB`、`Filesystem mounted.`、`No FAT filesystem found.`、`Filesystem mount failed.`、`Card removed.`、`No card inserted.`、`Hotplug refresh failed: device=…, port=…`。Storage Task 在读取被拔卡打断时记一行 `Audio: Audio read interrupted: volume unavailable, waiting for volume event.`——看到它说明拔卡落进了在途读取（R3.1）。
+保留的人读日志（`SD` 标签）：`Card ready: … MB`、`Card inserted: … MB`、`Filesystem mounted.`、`No FAT filesystem found.`、`Filesystem mount failed.`、`Card removed.`、`No card inserted.`、`Hotplug refresh failed: device=…, port=…`。音频读取任务在读取被拔卡打断时记一行 `Audio: Audio read interrupted: volume unavailable, waiting for volume event.`——看到它说明拔卡落进了在途读取（R3.1）。
 
 ### 怎么从日志判断 R3.1 至 R3.5
 

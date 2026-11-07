@@ -23,7 +23,7 @@
 
 ## 保真边界
 
-PASS 只证明补丁函数与 Service 入口在内存镜像上的行为。不证明 SD 卡上的耗时、真实卡的簇布局（目录簇在 FAT 中的分布影响簇链上的 FAT 扇区读数）、`Storage` 对三态结果的使用（改用定位符票），也不证明工作树里的 `ff.c` 已打补丁——后者由 `scripts/apply-vendor-patches.ps1 -Check`（FAST）与固件链接保证。
+PASS 只证明补丁函数与 Service 入口在内存镜像上的行为。不证明 SD 卡上的耗时、真实卡的簇布局（目录簇在 FAT 中的分布影响簇链上的 FAT 扇区读数）、曲库对三态结果的使用（改用定位符票），也不证明工作树里的 `ff.c` 已打补丁——后者由 `scripts/apply-vendor-patches.ps1 -Check`（FAST）与固件链接保证。
 
 从仓库根目录运行：
 

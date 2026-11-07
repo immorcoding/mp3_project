@@ -429,6 +429,11 @@ Service_StatusTypeDef Service_Filesystem_ReadDirectory(Service_Filesystem_Direct
         const TreeDir *dir = &g_tree[directory.Token - 100U];
         const char *name = dir->entries[g_dir_pos];
 
+        if ((g_read_dir_status != SERVICE_OK) && (g_dir_reads > g_read_dir_status_after))
+        {
+            return note_status(g_read_dir_status);
+        }
+
         memset(entry, 0, sizeof(*entry));
         if (name != NULL)
         {
@@ -1444,6 +1449,24 @@ static bool log_has_error(void)
 }
 
 /**
+ * @brief 日志里 ERROR 级的行数。
+ * @return 行数。
+ */
+static uint32_t log_error_count(void)
+{
+    uint32_t count = 0U;
+
+    for (uint32_t i = 0U; i < g_log_count; i++)
+    {
+        if (g_log[i].level == SERVICE_LOG_LEVEL_ERROR)
+        {
+            count++;
+        }
+    }
+    return count;
+}
+
+/**
  * @brief 打开 Music/ 就得到 NO_MEDIA / NOT_READY / INVALID_HANDLE（卷没了或正在对账）：不是“没有 Music 目录”，
  *        丢弃本次扫描，不发布（曲库保持无效），等卷事件重新扫描（#196 的错误分类，#211）。
  *        第一次失败发生在对账之前，所以再开一次（它在 Filesystem 入口等闸）才下结论。
@@ -1577,7 +1600,7 @@ static void test_scan_is_discarded_when_the_volume_goes_away_mid_scan(void)
     assert(catalog_generation() == 0U);
     assert(count_now() == 0U);
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
-    assert(log_count_prefix("Music Directory Read Failed") == 0U);
+    assert(log_count_prefix("Music catalog dfs failed") == 0U);
     assert(!log_has_error());
 
     /* 读到一半：卡还在、读不了。 */
@@ -1594,7 +1617,7 @@ static void test_scan_is_discarded_when_the_volume_goes_away_mid_scan(void)
 
     assert(catalog_generation() == 0U);
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
-    assert(log_count_prefix("Music Directory Read Failed") == 0U);
+    assert(log_count_prefix("Music catalog dfs failed") == 0U);
     assert(log_count_prefix("Catalog scan aborted but the card is still there") == 1U);
 
     /* 打开子目录时卷不可用。 */
@@ -1849,7 +1872,7 @@ static void test_busy_is_retried_after_about_10_ms_and_is_not_a_failure(void)
     assert(count_now() == 3U);
     assert((TickType_t)(xTaskGetTickCount() - start) >= (4U * pdMS_TO_TICKS(CATALOG_BUSY_RETRY_MS)));
     assert(log_count_prefix("Music Directory Open Failed") == 0U);
-    assert(log_count_prefix("Music Directory Read Failed") == 0U);
+    assert(log_count_prefix("Music catalog dfs failed") == 0U);
     assert(!log_has_error());
     assert(strncmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=3", 20U) == 0);
 }
@@ -1930,7 +1953,7 @@ static void test_other_sub_open_error_skips_that_directory_with_warn(void)
     assert(!log_has_error());
 }
 
-/** @brief 错误表：读目录的其他错误不发布，记 ERROR。 */
+/** @brief 错误表：读目录的其他错误不发布，只记一条 ERROR（带发生在读和状态数值）；之后不再自己重试。 */
 static void test_other_read_error_does_not_publish_and_logs_error(void)
 {
     world_reset();
@@ -1939,11 +1962,12 @@ static void test_other_read_error_does_not_publish_and_logs_error(void)
     scan(3U, 0U);
 
     assert(catalog_generation() == 0U);
-    assert(log_count_prefix("Music Directory Read Failed.") == 1U);
-    assert(log_last_prefix("Music Directory Read Failed.")->level == SERVICE_LOG_LEVEL_ERROR);
+    assert(log_count_prefix("Music catalog dfs failed at=read status=1") == 1U); /* SERVICE_ERROR 是 1 */
+    assert(log_last_prefix("Music catalog dfs failed")->level == SERVICE_LOG_LEVEL_ERROR);
+    assert(log_error_count() == 1U); /* 原来是 `Music Directory Read Failed.` 加 `Music catalog dfs failed.` 两条 */
 }
 
-/** @brief 错误表：关目录的其他错误不发布，记 ERROR。 */
+/** @brief 错误表：关目录的其他错误不发布，只记一条 ERROR（带发生在关和状态数值）。 */
 static void test_other_close_error_does_not_publish_and_logs_error(void)
 {
     world_reset();
@@ -1952,7 +1976,8 @@ static void test_other_close_error_does_not_publish_and_logs_error(void)
     scan(3U, 0U);
 
     assert(catalog_generation() == 0U);
-    assert(log_has_error());
+    assert(log_count_prefix("Music catalog dfs failed at=close status=1") == 1U);
+    assert(log_error_count() == 1U);
     assert(strncmp(log_last_prefix("Scan done")->text, "Scan done res=dfs_error", 23U) == 0);
 }
 
@@ -2023,6 +2048,63 @@ static void test_scan_traverses_a_nested_tree_in_the_established_order(void)
     assert(g_open_dir_calls == 6U); /* 六个目录各开一次，隐藏目录 .hidden 没有开 */
     assert(g_close_calls == 6U);
     assert(!log_has_error());
+}
+
+/**
+ * @brief 目录打不开的 WARN 带节流：一轮扫描里一堆子目录都打不开，只记第一条，其余只计数，汇总进 `Scan done` 行的 `skipped=`
+ *        （目录很多的卡上原来每个目录一条 WARN，会塞满 Service Log 的消息池，DIAG-3）；其余收录照常，不是 ERROR。
+ */
+static void test_sub_directory_open_warnings_are_throttled_to_one_per_scan(void)
+{
+    static const TreeDir tree[] = {
+        {"Music", {"a.mp3", "D1/", "D2/", "D3/", "D4/", "D5/", "b.mp3", NULL}},
+    };
+    Catalog_TrackTypeDef track;
+
+    world_reset();
+    g_tree = tree;
+    g_tree_count = 1U;
+
+    scan(0U, 0U);
+
+    assert(count_now() == 2U); /* 五个子目录都不在树里，打不开；两个文件照常收录 */
+    assert(catalog_read_track(1U, &track));
+    assert(log_count_prefix("Sub Directory Open Failed.") == 1U);
+    assert(log_last_prefix("Sub Directory Open Failed.")->level == SERVICE_LOG_LEVEL_WARN);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=2 us=0 skipped=4") == 0);
+    assert(log_error_count() == 0U);
+
+    /* 下一轮从零数：再一次只记一条。 */
+    g_log_count = 0U;
+    scan(0U, 0U);
+    assert(log_count_prefix("Sub Directory Open Failed.") == 1U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=2 us=0 skipped=4") == 0);
+}
+
+/**
+ * @brief 一轮扫描最多三行日志（消息池核算的上界）：第一条 WARN、一条 ERROR、`Scan done`。这里让两个子目录打不开（第二个只计数）、
+ *        第三个子目录读失败：WARN 只有一条，ERROR 只有一条（带 `at=read`），结束行带 `skipped=1`。
+ */
+static void test_a_scan_logs_at_most_three_lines_even_when_everything_goes_wrong(void)
+{
+    static const TreeDir tree[] = {
+        {"Music", {"a.mp3", "D1/", "D2/", "D3/", NULL}},
+        {"Music/D1", {"x.mp3", NULL}},
+    };
+
+    world_reset();
+    g_tree = tree;
+    g_tree_count = sizeof(tree) / sizeof(tree[0]);
+    g_read_dir_status = SERVICE_ERROR; /* 根目录读了 5 次（a.mp3、三个子目录、结束标记）之后的读都失败：D1 的第一次读 */
+    g_read_dir_status_after = 5U;
+
+    scan(0U, 0U); /* 栈后进先出：先试 D3（不在树里，WARN），再 D2（不在，计数），最后 D1（打开成功，读失败） */
+
+    assert(g_log_count == 3U);
+    assert(log_count_prefix("Sub Directory Open Failed.") == 1U);
+    assert(log_count_prefix("Music catalog dfs failed at=read status=1") == 1U);
+    assert(log_count_prefix("Scan done res=dfs_error n=1 us=0 skipped=1") == 1U);
+    assert(catalog_generation() == 0U);
 }
 
 /** @brief 没有活时作业只等通知：卷没挂、扫描已发布、扫描已放弃，每一步都不碰文件接口、不拿曲库锁、不投日志。 */
@@ -2207,6 +2289,8 @@ int main(void)
     test_full_catalog_publishes_the_truncated_result();
     test_scan_makes_one_directory_call_per_step_and_reads_one_entry_per_step();
     test_scan_traverses_a_nested_tree_in_the_established_order();
+    test_sub_directory_open_warnings_are_throttled_to_one_per_scan();
+    test_a_scan_logs_at_most_three_lines_even_when_everything_goes_wrong();
     test_idle_scan_step_waits_for_a_notification_and_does_nothing();
     test_busy_makes_the_step_return_about_10_ms_instead_of_blocking();
     test_lock_stats_report_one_line_per_period_after_the_lock_is_released();

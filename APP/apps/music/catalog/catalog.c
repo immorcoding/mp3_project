@@ -28,6 +28,7 @@
 #include <string.h>
 
 #include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
+#include "APP/apps/music/music_config.h"
 #include "APP/tasks/background/background_task.h"
 #include "APP/tasks/foreground/foreground_task.h"
 #include "APP/tasks/volume/volume_event.h"
@@ -107,6 +108,10 @@ typedef struct
     Catalog_ScanFailureTypeDef Failure;
     uint32_t SeenSequence;      /**< 最近处理过的 SD 卷序号；扫描进行中也是本轮扫描开始时的序号，发布时与当时的卷序号比对。 */
     uint32_t Index;             /**< 本轮已收录的条数（播放列表的工作下标）。 */
+    uint32_t WarnLogged;        /**< 本轮已记的节流 WARN 条数（目录打不开、目录栈满），见 `catalog_scan_warn()`。 */
+    uint32_t WarnSkipped;       /**< 本轮因节流没记的 WARN 条数，汇总进 `Scan done` 行的 `skipped=`。 */
+    const char *FailureAt;      /**< 读或关目录的其他错误发生在哪一步（`"read"` 或 `"close"` 的字面量），收尾时进那一条 ERROR。 */
+    int FailureStatus;          /**< 那次失败的 Service 状态数值。 */
     uint32_t StackTop;          /**< 待扫目录栈的深度。 */
     bool DirectoryOpen;         /**< `Directory` 句柄是否有效（已打开、还没关）。 */
     bool OpenRetried;           /**< 本目录“卷不可用时再开一次”已经用掉。 */
@@ -121,7 +126,7 @@ typedef struct
 } Catalog_ScanStateTypeDef;
 
 static Catalog_ScanStateTypeDef catalog_scan_state
-    __attribute__((section(CATALOG_SDRAM_SECTION), aligned(32)));
+    __attribute__((section(MUSIC_SDRAM_SECTION), aligned(32)));
 
 /* 条数写进 uint16_t 的已发布状态和播放列表（`(uint16_t)catalog_scan_state.Index`）：上限必须放得下。 */
 _Static_assert(CATALOG_MUSIC_MAX_NUM <= UINT16_MAX, "the catalog count must fit uint16_t");
@@ -375,14 +380,40 @@ static uint32_t catalog_scan_clock_us(void)
  */
 static void catalog_scan_log_end(const char *result)
 {
-    char text[64];
+    char text[80];
+    int length;
 
     catalog_scan_clock_poll();
-    (void)snprintf(text, sizeof(text), "Scan done res=%s n=%lu us=%lu",
-                   result,
-                   (unsigned long)catalog_scan_state.Index,
-                   (unsigned long)catalog_scan_clock_us());
+    length = snprintf(text, sizeof(text), "Scan done res=%s n=%lu us=%lu",
+                      result,
+                      (unsigned long)catalog_scan_state.Index,
+                      (unsigned long)catalog_scan_clock_us());
+    if ((catalog_scan_state.WarnSkipped != 0U) && (length > 0) && ((size_t)length < sizeof(text)))
+    {
+        (void)snprintf(&text[length], sizeof(text) - (size_t)length, " skipped=%lu",
+                       (unsigned long)catalog_scan_state.WarnSkipped);
+    }
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_INFO, catalog_log_tag, text);
+}
+
+/**
+ * @brief 记一条扫描期间的 WARN，带节流：每轮扫描只记第一条，其余只计数，汇总进 `Scan done` 行的 `skipped=`。
+ * @param[in] text WARN 正文。
+ * @note  目录打不开、目录栈满在目录很多的卡上可能一轮出几百条，会塞满 Service Log 的消息池（DIAG-3）。条目满与池满的 WARN
+ *        一轮只有一条（记完扫描就收尾），不走这里。节流后一轮扫描最多 3 行日志：第一条 WARN（或截断的 WARN）、一条 ERROR（读或关目录失败）、
+ *        `Scan done`，消息池核算按这个上界。
+ */
+static void catalog_scan_warn(const char *text)
+{
+    if (catalog_scan_state.WarnLogged == 0U)
+    {
+        catalog_scan_state.WarnLogged = 1U;
+        (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN, catalog_log_tag, text);
+    }
+    else if (catalog_scan_state.WarnSkipped < UINT32_MAX)
+    {
+        catalog_scan_state.WarnSkipped++;
+    }
 }
 
 /**
@@ -420,6 +451,10 @@ static void catalog_scan_begin(uint32_t sequence)
     catalog_scan_state.Index = 0U;
     MusicCatalogPool.Tail = 0U;
     catalog_scan_state.Failure = CATALOG_SCAN_FAILURE_NONE;
+    catalog_scan_state.FailureAt = "";
+    catalog_scan_state.FailureStatus = 0;
+    catalog_scan_state.WarnLogged = 0U;
+    catalog_scan_state.WarnSkipped = 0U;
     catalog_scan_state.DirectoryOpen = false;
     catalog_scan_state.OpenRetried = false;
     catalog_scan_clock_start();
@@ -588,13 +623,18 @@ static void catalog_scan_finish_discard(void)
 }
 
 /**
- * @brief 读或关目录的其他错误：不发布，记 ERROR，等下一次插卡（沿用 STOR-7）。
+ * @brief 读或关目录的其他错误：不发布，记一条 ERROR（带发生在读还是关、状态数值），等下一次插卡（沿用 STOR-7）。
+ * @note  读失败不再单独记一条：原来读失败记 `Music Directory Read Failed.` 又在收尾记 `Music catalog dfs failed.` 两条 ERROR，
+ *        消息池核算没算，合成这一条。
  */
 static void catalog_scan_finish_error(void)
 {
-    (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                           catalog_log_tag,
-                           "Music catalog dfs failed.");
+    char text[64];
+
+    (void)snprintf(text, sizeof(text), "Music catalog dfs failed at=%s status=%d",
+                   catalog_scan_state.FailureAt,
+                   catalog_scan_state.FailureStatus);
+    (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, catalog_log_tag, text);
     catalog_scan_log_end("dfs_error");
     catalog_scan_state.Phase = CATALOG_SCAN_IDLE;
 }
@@ -691,16 +731,12 @@ static uint32_t catalog_scan_step_open(void)
 
     if (catalog_scan_state.CurrentIsRoot)
     {
-        (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
-                               catalog_log_tag,
-                               "Music Directory Open Failed.");
+        catalog_scan_warn("Music Directory Open Failed.");
         catalog_scan_finish_ok();
         return 0U;
     }
 
-    (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
-                           catalog_log_tag,
-                           "Sub Directory Open Failed.");
+    catalog_scan_warn("Sub Directory Open Failed.");
     return catalog_scan_next_directory();
 }
 
@@ -727,9 +763,7 @@ static void catalog_scan_take_entry(void)
     {
         if (catalog_scan_state.StackTop >= CATALOG_DIR_STACK_MAX)
         {
-            (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
-                                   catalog_log_tag,
-                                   "Music Directory Stack Full.");
+            catalog_scan_warn("Music Directory Stack Full.");
             return;
         }
 
@@ -777,10 +811,9 @@ static uint32_t catalog_scan_step_read(void)
         }
         else
         {
-            (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR,
-                                   catalog_log_tag,
-                                   "Music Directory Read Failed.");
             catalog_scan_state.Failure = CATALOG_SCAN_FAILURE_ERROR;
+            catalog_scan_state.FailureAt = "read";
+            catalog_scan_state.FailureStatus = (int)status;
         }
         catalog_scan_state.Phase = CATALOG_SCAN_CLOSE;
         return 0U;
@@ -821,6 +854,8 @@ static uint32_t catalog_scan_step_close(void)
         else if (catalog_scan_state.Failure == CATALOG_SCAN_FAILURE_NONE)
         {
             catalog_scan_state.Failure = CATALOG_SCAN_FAILURE_ERROR;
+            catalog_scan_state.FailureAt = "close";
+            catalog_scan_state.FailureStatus = (int)status;
         }
     }
 
