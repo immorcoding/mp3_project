@@ -156,7 +156,7 @@ ARC-26 / spec G 写“前台一步最多一次文件调用加约 1 ms CPU”。�
 
 ## 给后面的票
 
-- **#219（可见变化）**：模拟器假后端的无卡开播从约 100 ms 改成立刻停止，只重录 `music_card_removed` 受影响的帧；假后端在 `Tools/gui_simulator/fakes/music_sim.c`（`playback_sim.c` 的开启应答仍是 100 ms）。42 个场景的 `.expected` 在本票一个都没动，哈希门槛是可比较的基线。
+- **#219（可见变化，已完成）**：模拟器假播放后端（`Tools/gui_simulator/fakes/playback_sim.c`）的无卡开播从约 100 ms 改成当圈按 NOT_READY 停止，STALE、NO_TRACK 仍约 100 ms 后应答；重录了 `music_card_removed/no_card_play_flash` 与 `vinyl_rotation/cleared_play_not_ready` 两帧（两个场景各一帧，用户 2026-11-07 批准后者）。前台一次切（#218）本身没动 42 个场景的 `.expected`，哈希门槛是可比较的基线。
 - **#220（后台任务搬扫描和回收）**：Storage Task 现在只剩曲库扫描和 Flash 回收，优先级 1；扫描搬走之后曲库发布的位置会变，`catalog.c` 里发布成功后的 `foreground_task_wake()` 要保留（前台靠它重发窗口和重答曲名）；注册表要加 `background_step` 列；Flash 压力钩子的 `BACKGROUND_HOOK_FLASH_PRESSURE_RECLAIM` 改 0。
 - **加应用**：只在 `app_table.c` 多一行（`name`、`boot_init`、`gui_init`、`gui_step`、`foreground_step`）；前台任务的循环、栈和 Monitor 登记都不改。每个应用的前台 step 照 ARC-26 控制在一次文件调用加约 1 ms CPU 之内，最长耗时会出现在 `FOREGROUND:` 行里。
 
