@@ -14,6 +14,11 @@
   *            位置 0、总时长未知、代次可能为 0（未确认）；应答时按假音乐前台流程的曲库判定
   *            NOT_READY（未挂载）、STALE（代次不符 -> CATALOG_CHANGED）、NO_TRACK（越界），
   *            否则确认代次、取得曲目数并给出总时长。
+  *          - 无卡（未挂载）时开启不等 PLAYBACK_SIM_OPEN_MS，同一圈按 NOT_READY 停止，GUI 看不到
+  *            开启中的播放态（#219）：产品里卡没了曲库代次是 0，音频读取任务不读文件、立刻应答
+  *            NOT_READY（#194 第 15 条），它与播放任务的优先级都高于 GUI。产品里 STALE、NO_TRACK
+  *            同样在读文件之前应答，假后端为了不动其他场景仍等 PLAYBACK_SIM_OPEN_MS；也不模拟
+  *            “扫描中”（代次 0 而卡在），开流宽限与读块被拔卡打断（#200 第 14、15 条）。
   *          - 位置只在开启 OK 后的播放态按虚拟时钟推进；到总时长自动前进（末曲回首曲）。
   *          - 拔卡（C 键）：有流（播放或暂停）时停止 CARD_REMOVED、无当前曲。
   *          - 坏文件（B 键）：每按一次，让之后一次开启应答为坏文件。坏文件按 B5 跳过：
@@ -341,6 +346,13 @@ static void playback_sim_advance(uint32_t elapsed_ms)
 
     if (playback_sim.opening)
     {
+        /* 无卡立刻应答 NOT_READY（#219）：handle 与本函数在同一圈，GUI step 之前就已停止。 */
+        if (!music_sim_mounted())
+        {
+            playback_sim_open_reply();
+            return;
+        }
+
         playback_sim.open_elapsed_ms += elapsed_ms;
         if (playback_sim.open_elapsed_ms >= PLAYBACK_SIM_OPEN_MS)
         {
@@ -431,7 +443,7 @@ void playback_sim_toggle_suspend(void)
 
 /**
  * @brief C 键拔卡时由 sim_main.c 调用：有流（播放或暂停）时停止 CARD_REMOVED（K5）。
- * @note  停止态没有流，没有终止事实可处理，游标保留；之后开播在应答时得到 NOT_READY。
+ * @note  停止态没有流，没有终止事实可处理，游标保留；之后开播同一圈得到 NOT_READY（#219）。
  */
 void playback_sim_card_removed(void)
 {
