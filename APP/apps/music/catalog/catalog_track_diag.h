@@ -1,8 +1,8 @@
 /**
  * @file catalog_track_diag.h
- * @brief 标签读取与打开诊断：DWT 计时、Storage 私有计数器、名称槽 INFO/WARN、Queue 窗口汇总行、
+ * @brief 标签读取与打开诊断：DWT 计时、计数器、曲名 INFO/WARN、Queue 窗口汇总行、
  *        Locator miss WARN 与开流 Stream INFO。
- * @note  名称槽和窗口槽的累加（`name_done`、`row_done`、`window_*`）只由 Storage Task 调用（前台一次切之后是前台任务）；
+ * @note  曲名和窗口行的累加（`name_done`、`row_done`、`window_*`）只由前台任务调用；
  *        曲目打开（`locator_miss`）和音频流开启（`stream_done`、计时）还会被音频读取任务调用，所以这几个只用无状态的计时
  *        和日志，唯一被两个任务同时累加的定位符核对不符计数器放在短临界区里（#215）。不进 ISR 与每帧路径（DIAG-3、DIAG-4、DIAG-5）。
  *        日志文本只含播放列表位置与原因名，不含文件名、标题或歌手。不改读取行为。

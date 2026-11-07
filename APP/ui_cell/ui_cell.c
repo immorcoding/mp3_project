@@ -10,6 +10,7 @@
  */
 
 #include "ui_cell.h"
+#include "ui_cell_stats.h"
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h"
@@ -66,7 +67,31 @@ static void wake_reader(const UiCellTypeDef *cell)
 }
 
 /**
- * @brief 初始化一个格子；全模块的互斥锁在第一次调用时创建（静态存储，不占堆）。
+ * @brief 确保全模块唯一的互斥锁已创建（静态存储，不占堆）。
+ * @note  只在 Boot 任务或单线程环境里调用，不与其他 ui_cell 函数并发；已创建则什么都不做。
+ */
+static void ensure_lock(void)
+{
+    if (lock_handle == NULL)
+    {
+        lock_handle = xSemaphoreCreateMutexStatic(&lock_buffer);
+        configASSERT(lock_handle != NULL);
+    }
+}
+
+/**
+ * @brief Boot 任务直接调用：先把全模块的互斥锁创建好。
+ * @note  创建静态互斥量要进 FreeRTOS 队列的发送路径，调用链深；Boot 任务只有 128 word 栈，所以这一步由 `create_task` 直接调用
+ *        （链最短），之后经注册表的 `boot_init` 初始化各个格子时锁已经存在，不再走这条深链。不调用也行：`ui_cell_init()` 第一次调用时
+ *        会创建，只是那时调用链叠在注册表遍历之下。
+ */
+void ui_cell_boot_init(void)
+{
+    ensure_lock();
+}
+
+/**
+ * @brief 初始化一个格子；全模块的互斥锁在第一次调用（`ui_cell_boot_init()` 或本函数）时创建（静态存储，不占堆）。
  * @param[out] cell 格子。
  * @param[in,out] storage 数据存放处；本函数不改写内容，调用者在这之前放好初值（静态存储为全零）。
  * @param[in] size 数据大小（字节），非 0。
@@ -79,11 +104,7 @@ void ui_cell_init(UiCellTypeDef *cell, void *storage, size_t size, UiCell_WakeCa
     configASSERT(storage != NULL);
     configASSERT(size > 0U);
 
-    if (lock_handle == NULL)
-    {
-        lock_handle = xSemaphoreCreateMutexStatic(&lock_buffer);
-        configASSERT(lock_handle != NULL);
-    }
+    ensure_lock();
 
     cell->storage = storage;
     cell->size = size;
@@ -104,6 +125,7 @@ void ui_cell_init(UiCellTypeDef *cell, void *storage, size_t size, UiCell_WakeCa
 void ui_cell_write(UiCellTypeDef *cell, const void *src)
 {
     BaseType_t taken;
+    uint32_t hold_start;
 
     configASSERT(cell != NULL);
     configASSERT(src != NULL);
@@ -115,7 +137,9 @@ void ui_cell_write(UiCellTypeDef *cell, const void *src)
     {
         return;
     }
+    hold_start = ui_cell_stats_hold_begin();
     store_locked(cell, src);
+    ui_cell_stats_hold_end(hold_start);
     (void)xSemaphoreGive(lock_handle);
 
     wake_reader(cell);
@@ -131,15 +155,21 @@ void ui_cell_write(UiCellTypeDef *cell, const void *src)
  */
 bool ui_cell_try_write(UiCellTypeDef *cell, const void *src)
 {
+    uint32_t hold_start;
+
     configASSERT(cell != NULL);
     configASSERT(src != NULL);
     assert_single_writer(cell);
 
     if (xSemaphoreTake(lock_handle, 0U) != pdTRUE)
     {
+        ui_cell_stats_gui_try(true);
         return false;
     }
+    ui_cell_stats_gui_try(false);
+    hold_start = ui_cell_stats_hold_begin();
     store_locked(cell, src);
+    ui_cell_stats_hold_end(hold_start);
     (void)xSemaphoreGive(lock_handle);
 
     wake_reader(cell);
@@ -157,6 +187,9 @@ bool ui_cell_try_write(UiCellTypeDef *cell, const void *src)
  */
 bool ui_cell_read_if_changed(const UiCellTypeDef *cell, void *dst, uint32_t *seen)
 {
+    bool gui_side;
+    uint32_t hold_start;
+
     configASSERT(cell != NULL);
     configASSERT(dst != NULL);
     configASSERT(seen != NULL);
@@ -165,12 +198,39 @@ bool ui_cell_read_if_changed(const UiCellTypeDef *cell, void *dst, uint32_t *see
     {
         return false;
     }
+    gui_side = (cell->wake == NULL); /* 约定（见 ui_cell.h）：结果格（叫醒函数为空）的读者是 GUI，需求格的读者是前台任务；只决定统计口径。 */
     if (xSemaphoreTake(lock_handle, 0U) != pdTRUE)
     {
+        if (gui_side)
+        {
+            ui_cell_stats_gui_try(true);
+        }
         return false;
     }
+    if (gui_side)
+    {
+        ui_cell_stats_gui_try(false);
+    }
+    hold_start = ui_cell_stats_hold_begin();
     memcpy(dst, cell->storage, cell->size);
     *seen = cell->sequence; /* 序号在锁内读取，与拷到的那份一致。 */
+    ui_cell_stats_hold_end(hold_start);
     (void)xSemaphoreGive(lock_handle);
     return true;
+}
+
+/**
+ * @brief 不拿锁地问“有没有新的一份”：格子的序号与读者已见序号不同。
+ * @param[in] cell 格子。
+ * @param[in] seen 读者持有的已见序号。
+ * @retval true 有新的一份（可能还没读到：`ui_cell_read_if_changed()` 拿不到锁时返回假，序号仍然不同）。
+ * @retval false 没有变化。
+ * @note  永不阻塞，不碰锁。读者在 `ui_cell_read_if_changed()` 返回假之后用它区分“没变”和“锁被占着没读到”，后者要尽快重试，
+ *        否则没有人再叫醒读者，需求会一直停在格子里。
+ */
+bool ui_cell_changed(const UiCellTypeDef *cell, uint32_t seen)
+{
+    configASSERT(cell != NULL);
+
+    return cell->sequence != seen;
 }

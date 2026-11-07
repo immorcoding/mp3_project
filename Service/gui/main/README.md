@@ -26,7 +26,7 @@ main/
   三个既有 Page 的物理槽位与逻辑圆点状态。
 - `queue/` 不依赖 Canvas 或分页状态；行工厂按 Length 在 `QueueTab` 中构造行。
   可见行由 `Service_GUI_QueueApply()` 按 Length 填入，窗口滑动时转 head，
-  并从当前 `scroll_y` 扣整行高度；不包含 `storage_listbuffer.h`。
+  并从当前 `scroll_y` 扣整行高度；不包含 APP 的任何头（`music_cells.h`、`ui_cell.h` 等）。
   Queue 滚动不是 Pager，不要等 `SCROLL_END` 吸附。
 - `transport/` 不依赖 Canvas 或 Queue 行；绑三键与进度条手势（四类事件：按下 `SEEK_PRESS`、拖动 `SEEK_DRAG`、松手 `SEEK_RELEASE`、取消 `SEEK_CANCEL`），并换播放符号 / 写回百分比；`SeekEnable`/`SeekCancel` 控制是否响应与结束拖动。
 - `title/` 不依赖 Canvas、Queue 或 Transport；只写曲名与歌手 Label 的文本和曲名的长文本模式，不认识名字 / 空白 / `--` / `Unknown Artist` 的语义。

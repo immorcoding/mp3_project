@@ -57,7 +57,7 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 
 给 [#135](https://github.com/immorcoding/mp3_project/issues/135) 板级验收 I1–I6 用（#142）。音频与 `--set names` 相同（44.1 kHz 192 kbps 30 s，约 720 KB），只在文件头加不同的 ID3v2 标签；复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set tags`）。不含在 `all` 内：单独放一个文件夹，与 `--set names` 同写法；按下表顺序逐个复制。样本内容以 ASCII 为主，标签表在 [card_tags.py](card_tags.py)。
 
-| 顺序 | 文件名 | 字节 | 唱盘页曲名 | Queue 曲名 / 歌手 | 名称槽 INFO：来源，读取次数 | 验收项 |
+| 顺序 | 文件名 | 字节 | 唱盘页曲名 | Queue 曲名 / 歌手 | 曲名 INFO（`Tag idx=`）：来源，读取次数 | 验收项 |
 |---:|---|---:|---|---|---|---|
 | 1 | `tag-1-v23-utf16le.mp3` | 721077 | `Tag Sample UTF16LE` | `Tag Sample UTF16LE` / `Test Artist A` | 标题，1 | I1 |
 | 2 | `tag-2-v24-utf8.mp3` | 721039 | `Tag Sample UTF8` | `Tag Sample UTF8` / `Test Artist B` | 标题，1 | I2 |
@@ -79,7 +79,7 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 
 字段规则以 [#135](https://github.com/immorcoding/mp3_project/issues/135) E 节为准：多值按 NUL 拆分、去首尾空白（ASCII 空白与 U+3000）、丢弃空项，以 ` / ` 连写，不按 `/` 拆分；超过容量（252 B 含 `\0`，即 251 B）按 UTF-8 字符边界截断，不加省略号。
 
-| 顺序 | 文件名 | 字节 | 唱盘页曲名 | Queue 曲名 / 歌手 | 名称槽 INFO：来源，读取次数 | 验收项 |
+| 顺序 | 文件名 | 字节 | 唱盘页曲名 | Queue 曲名 / 歌手 | 曲名 INFO（`Tag idx=`）：来源，读取次数 | 验收项 |
 |---:|---|---:|---|---|---|---|
 | 1 | `glyph-1-cjk.mp3` | 721046 | `晴天 夜曲 测试标题` | 同左 / `周杰伦` | 标题，1 | F2 |
 | 2 | `glyph-2-latin-ext.mp3` | 721131 | `Beyoncé – F1® Theme ™ ’Tis “Live” …` | 同左 / `Déjà Vu ® – “Zoé” ’ ™ …` | 标题，1 | F3 |

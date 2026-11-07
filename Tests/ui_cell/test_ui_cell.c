@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "freertos_stub.h"
+#include "lock_env_stub.h"
 #include "APP/ui_cell/ui_cell.h"
 
 #define CELL_SIZE 64U
@@ -344,6 +345,23 @@ static void test_lock_is_free_after_every_operation(void)
     assert(xSemaphoreGive(module_lock) == pdTRUE);
 }
 
+/**
+ * @brief Boot 直接调用 `ui_cell_boot_init()` 先创建锁：之后的 `ui_cell_init()` 不再创建，全模块始终一把锁；重复调用不创建新锁。
+ *        （模块的锁是静态的，只在第一次创建，所以这个用例只能证明“再调用不新建”，第一次创建发生在第一个用例的 setup 里。）
+ */
+static void test_boot_init_does_not_create_a_second_lock(void)
+{
+    Fixture f;
+
+    setup(&f, NULL);
+    freertos_stub_reset();
+    ui_cell_boot_init();
+    ui_cell_boot_init();
+    assert(freertos_stub_last_created_semaphore() == NULL); /* reset 之后没有创建过新锁。 */
+    ui_cell_init(&f.cell, f.storage, CELL_SIZE, NULL);
+    assert(freertos_stub_last_created_semaphore() == NULL);
+}
+
 /** @brief 全模块只有一把锁：多个格子共用它，第二个格子初始化不再创建新锁。 */
 static void test_all_cells_share_one_lock(void)
 {
@@ -428,6 +446,76 @@ static void test_null_wake_writes_without_waking(void)
     assert(wake_calls == 0U);
 }
 
+/** @brief 不拿锁就能问“有没有新的一份”：序号和已见序号不同为真，相同为假；锁被占着也能问，不碰锁。 */
+static void test_changed_reports_a_new_value_without_touching_the_lock(void)
+{
+    Fixture f;
+    uint8_t src[CELL_SIZE];
+    uint8_t copy[CELL_SIZE];
+    uint32_t seen = 0U;
+    uint32_t takes_before;
+
+    setup(&f, NULL);
+    fill_pattern(src, 0x0CU);
+
+    assert(ui_cell_changed(&f.cell, seen)); /* 新读者：初值算一份新的。 */
+    assert(ui_cell_read_if_changed(&f.cell, copy, &seen));
+    assert(!ui_cell_changed(&f.cell, seen));
+
+    ui_cell_write(&f.cell, src);
+    takes_before = freertos_stub_semaphore_stats(module_lock).take_calls;
+    assert(xSemaphoreTake(module_lock, 0U) == pdTRUE); /* 别的任务占着锁，读者读不到，但看得出有新的。 */
+    assert(ui_cell_changed(&f.cell, seen));
+    assert(!ui_cell_read_if_changed(&f.cell, copy, &seen)); /* 读失败：序号没变，下一次再试。 */
+    assert(ui_cell_changed(&f.cell, seen));
+    assert(xSemaphoreGive(module_lock) == pdTRUE);
+    assert(freertos_stub_semaphore_stats(module_lock).take_calls == takes_before + 2U); /* 两次拿取都是上面显式的，changed 不拿锁。 */
+
+    assert(ui_cell_read_if_changed(&f.cell, copy, &seen));
+    assert(!ui_cell_changed(&f.cell, seen));
+}
+
+/** @brief GUI 一侧的不等入口计入持锁统计：不等的写、结果格（叫醒函数为空）的读；拿不到锁计入 busy；等到拿到的写不计入。 */
+static void test_gui_side_attempts_and_busy_are_counted(void)
+{
+    Fixture result_cell;
+    Fixture request_cell;
+    uint8_t src[CELL_SIZE];
+    uint8_t copy[CELL_SIZE];
+    uint32_t seen_result = 0U;
+    uint32_t seen_request = 0U;
+    UiCell_StatsTypeDef before;
+    UiCell_StatsTypeDef after;
+
+    setup(&result_cell, NULL);               /* 结果格：叫醒函数为空，读者是 GUI。 */
+    memset(&request_cell, 0, sizeof(request_cell));
+    ui_cell_init(&request_cell.cell, request_cell.storage, CELL_SIZE, count_wake); /* 需求格：读者是前台。 */
+    fill_pattern(src, 0x0DU);
+    ui_cell_stats_get(&before);
+
+    ui_cell_write(&result_cell.cell, src);                                  /* 任务写：不是 GUI 的不等入口。 */
+    assert(ui_cell_read_if_changed(&result_cell.cell, copy, &seen_result)); /* GUI 读结果格：计一次。 */
+    assert(ui_cell_try_write(&request_cell.cell, src));                     /* GUI 写需求格：计一次。 */
+    assert(ui_cell_read_if_changed(&request_cell.cell, copy, &seen_request)); /* 前台读需求格：不计。 */
+    ui_cell_stats_get(&after);
+    assert(after.GuiTries == before.GuiTries + 2U);
+    assert(after.GuiBusy == before.GuiBusy);
+
+    freertos_stub_semaphore_fail_next_takes(module_lock, 1U);
+    assert(!ui_cell_try_write(&request_cell.cell, src));                     /* GUI 拿不到：计尝试，也计 busy。 */
+    ui_cell_stats_get(&after);
+    assert(after.GuiTries == before.GuiTries + 3U);
+    assert(after.GuiBusy == before.GuiBusy + 1U);
+
+    ui_cell_write(&result_cell.cell, src);                                   /* 任务写又来一次，GUI 读到后追上；这一读计一次。 */
+    assert(ui_cell_read_if_changed(&result_cell.cell, copy, &seen_result));
+    ui_cell_stats_get(&before);
+    assert(!ui_cell_read_if_changed(&result_cell.cell, copy, &seen_result)); /* 没变化的读不碰锁，不计。 */
+    ui_cell_stats_get(&after);
+    assert(after.GuiTries == before.GuiTries);
+    assert(after.GuiBusy == before.GuiBusy);
+}
+
 static jmp_buf abort_jump;
 static volatile sig_atomic_t abort_seen;
 
@@ -504,10 +592,13 @@ int main(void)
     test_read_without_lock_fails_and_keeps_reader_state();
     test_write_waits_for_a_held_lock();
     test_lock_is_free_after_every_operation();
+    test_boot_init_does_not_create_a_second_lock();
     test_all_cells_share_one_lock();
     test_write_calls_wake_once_after_releasing_the_lock();
     test_read_does_not_call_wake();
     test_null_wake_writes_without_waking();
+    test_changed_reports_a_new_value_without_touching_the_lock();
+    test_gui_side_attempts_and_busy_are_counted();
     test_second_writer_task_trips_the_debug_assertion();
     puts("ui_cell tests passed");
     return 0;

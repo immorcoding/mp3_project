@@ -11,7 +11,7 @@
   *            PLAYBACK_QUEUE_FULL。每圈 playback_sim_step() 把 FIFO 取空，逐条处理并
   *            回显序号（含被忽略的命令）；挂起时命令只入队（S 键）。
   *          - “开启”一首后约 PLAYBACK_SIM_OPEN_MS 才有应答：期间三态照报（播放/暂停）、
-  *            位置 0、总时长未知、代次可能为 0（未确认）；应答时按假 Storage 判定
+  *            位置 0、总时长未知、代次可能为 0（未确认）；应答时按假音乐前台流程的曲库判定
   *            NOT_READY（未挂载）、STALE（代次不符 -> CATALOG_CHANGED）、NO_TRACK（越界），
   *            否则确认代次、取得曲目数并给出总时长。
   *          - 位置只在开启 OK 后的播放态按虚拟时钟推进；到总时长自动前进（末曲回首曲）。
@@ -43,8 +43,7 @@
 
 #include "APP/tasks/playback/playback_contract.h"
 #include "APP/tasks/playback/playback_task_config.h"
-#include "APP/tasks/storage/storage_task.h"
-#include "fakes/storage_sim.h"
+#include "fakes/music_sim.h"
 
 #define PLAYBACK_SIM_OPEN_MS               100U     /* 开启请求到应答（首帧给出总时长）的虚拟时长。 */
 #define PLAYBACK_SIM_DURATION_BASE_MS      150000U  /* 第 0 首的总时长（2:30）。 */
@@ -167,24 +166,24 @@ static void playback_sim_skip_bad(void)
 }
 
 /**
- * @brief 开启应答：按假 Storage 判定结果；B 键排队的坏文件按 B5 跳过；OK 时确认代次、
+ * @brief 开启应答：按假音乐前台流程的曲库判定结果；B 键排队的坏文件按 B5 跳过；OK 时确认代次、
  *        曲目数与总时长，并清零连跳计数。
  */
 static void playback_sim_open_reply(void)
 {
     Playback_SnapshotTypeDef *snapshot = &playback_sim.snapshot;
-    const uint32_t storage_generation = storage_sim_generation_get();
-    const uint16_t count = storage_sim_track_count();
+    const uint32_t catalog_generation = music_sim_generation_get();
+    const uint16_t count = music_sim_track_count();
 
     playback_sim.opening = false;
 
-    if (!storage_task_sd_is_mounted())
+    if (!music_sim_mounted())
     {
         playback_sim_enter_stopped(PLAYBACK_STOP_REASON_NOT_READY);
         return;
     }
 
-    if ((snapshot->Generation != 0U) && (snapshot->Generation != storage_generation))
+    if ((snapshot->Generation != 0U) && (snapshot->Generation != catalog_generation))
     {
         playback_sim_enter_stopped(PLAYBACK_STOP_REASON_CATALOG_CHANGED);
         return;
@@ -204,7 +203,7 @@ static void playback_sim_open_reply(void)
     }
 
     playback_sim.consecutive_skips = 0U;
-    snapshot->Generation = storage_generation;
+    snapshot->Generation = catalog_generation;
     snapshot->DurationMs = PLAYBACK_SIM_DURATION_BASE_MS +
                            ((uint32_t)snapshot->Index * PLAYBACK_SIM_DURATION_STEP_MS);
     playback_sim.track_count = count;

@@ -7,6 +7,7 @@
 
 #include "APP/tasks/monitor/monitor_stats.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -70,6 +71,55 @@ static size_t monitor_stats_mark_truncated(char *buffer, size_t size)
     buffer[size - 2U] = '~';
     buffer[size - 1U] = '\0';
     return size - 1U;
+}
+
+/**
+  * @brief  把每个任务的 ` 键=占比` 追加到缓冲末尾。
+  * @param[in,out] buffer 输出缓冲。
+  * @param[in]  size 缓冲长度。
+  * @param[in,out] used 已写入的字符数，成功时更新。
+  * @param[in]  entries 已按键排序的项。
+  * @param[in]  entry_count 项数。
+  * @param[in]  integer_only 为真时占比只写整数部分（不带小数）。
+  * @retval true 全部放下。
+  * @retval false 放不下；缓冲末尾内容未定义，调用者要重写或标记截断。
+  */
+static bool monitor_stats_append_shares(char *buffer,
+                                        size_t size,
+                                        size_t *used,
+                                        const monitor_cpu_entry_t *entries,
+                                        uint8_t entry_count,
+                                        bool integer_only)
+{
+    for (uint8_t index = 0U; index < entry_count; index++)
+    {
+        int written;
+
+        if (integer_only)
+        {
+            written = snprintf(&buffer[*used],
+                               size - *used,
+                               " %s=%lu",
+                               entries[index].key,
+                               (unsigned long)(entries[index].share_x10 / 10U));
+        }
+        else
+        {
+            written = snprintf(&buffer[*used],
+                               size - *used,
+                               " %s=%lu.%lu",
+                               entries[index].key,
+                               (unsigned long)(entries[index].share_x10 / 10U),
+                               (unsigned long)(entries[index].share_x10 % 10U));
+        }
+        if ((written < 0) || ((size_t)written >= (size - *used)))
+        {
+            return false;
+        }
+        *used += (size_t)written;
+    }
+
+    return true;
 }
 
 /**
@@ -137,22 +187,20 @@ size_t monitor_cpu_format(char *buffer,
     }
     used = (size_t)written;
 
-    for (uint8_t index = 0U; index < entry_count; index++)
+    if (monitor_stats_append_shares(buffer, size, &used, entries, entry_count, false))
     {
-        written = snprintf(&buffer[used],
-                           size - used,
-                           " %s=%lu.%lu",
-                           entries[index].key,
-                           (unsigned long)(entries[index].share_x10 / 10U),
-                           (unsigned long)(entries[index].share_x10 % 10U));
-        if ((written < 0) || ((size_t)written >= (size - used)))
-        {
-            return monitor_stats_mark_truncated(buffer, size);
-        }
-        used += (size_t)written;
+        return used;
     }
 
-    return used;
+    /* 一位小数放不下（同批任务多、占比都是两位数的极端组合，#218 加前台任务后 12 个任务最长 129 字符）：退化成整数百分比，
+     * 每个任务少两个字符，保证一行放得下而不是丢掉末尾几个任务；正常情况行格式不变。 */
+    used = (size_t)written;
+    if (monitor_stats_append_shares(buffer, size, &used, entries, entry_count, true))
+    {
+        return used;
+    }
+
+    return monitor_stats_mark_truncated(buffer, size);
 }
 
 /**

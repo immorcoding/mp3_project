@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    test_gui_music_queue_rows.c
- * @brief   Queue 窗口客户把窗口槽两列文本按行交给 QueueApply 的主机行为测试。
+ * @brief   Queue 窗口客户把窗口结果的两列文本按行交给 QueueApply 的主机行为测试。
  ******************************************************************************
  */
 
@@ -12,13 +12,13 @@
 #include "APP/apps/music/gui/gui_music_queue_rows.h"
 
 /**
- * @brief 按行写入窗口槽的一行文本。
- * @param[out] window 窗口槽副本。
+ * @brief 按行写入窗口结果的一行文本。
+ * @param[out] window 窗口结果副本。
  * @param[in] row 行号。
  * @param[in] title 曲目显示名。
  * @param[in] artist 歌手；空串表示取不到。
  */
-static void put_row(Storage_ListBufferTypeDef *window,
+static void put_row(MusicCells_WindowTypeDef *window,
                     uint16_t row,
                     const char *title,
                     const char *artist)
@@ -28,13 +28,13 @@ static void put_row(Storage_ListBufferTypeDef *window,
 }
 
 /**
- * @brief 曲名与歌手按行平行交出：第 i 行的曲名与歌手来自窗口槽同一行。
+ * @brief 曲名与歌手按行平行交出：第 i 行的曲名与歌手来自窗口结果的同一行。
  */
 static void test_titles_and_artists_are_parallel(void)
 {
-    static Storage_ListBufferTypeDef window;
-    const char *titles[STORAGE_LISTBUFFER_MAX_ENTRIES];
-    const char *artists[STORAGE_LISTBUFFER_MAX_ENTRIES];
+    static MusicCells_WindowTypeDef window;
+    const char *titles[MUSIC_WINDOW_MAX_ENTRIES];
+    const char *artists[MUSIC_WINDOW_MAX_ENTRIES];
     uint16_t length;
 
     (void)memset(&window, 0, sizeof(window));
@@ -57,9 +57,9 @@ static void test_titles_and_artists_are_parallel(void)
  */
 static void test_missing_artist_shows_unknown_artist(void)
 {
-    static Storage_ListBufferTypeDef window;
-    const char *titles[STORAGE_LISTBUFFER_MAX_ENTRIES];
-    const char *artists[STORAGE_LISTBUFFER_MAX_ENTRIES];
+    static MusicCells_WindowTypeDef window;
+    const char *titles[MUSIC_WINDOW_MAX_ENTRIES];
+    const char *artists[MUSIC_WINDOW_MAX_ENTRIES];
     uint16_t length;
 
     (void)memset(&window, 0, sizeof(window));
@@ -81,13 +81,13 @@ static void test_missing_artist_shows_unknown_artist(void)
 }
 
 /**
- * @brief 占位只在 GUI 侧：窗口槽里的歌手仍是空串，不被写成 `Unknown Artist`。
+ * @brief 占位只在 GUI 侧：窗口结果里的歌手仍是空串，不被写成 `Unknown Artist`。
  */
 static void test_unknown_artist_does_not_touch_window(void)
 {
-    static Storage_ListBufferTypeDef window;
-    const char *titles[STORAGE_LISTBUFFER_MAX_ENTRIES];
-    const char *artists[STORAGE_LISTBUFFER_MAX_ENTRIES];
+    static MusicCells_WindowTypeDef window;
+    const char *titles[MUSIC_WINDOW_MAX_ENTRIES];
+    const char *artists[MUSIC_WINDOW_MAX_ENTRIES];
 
     (void)memset(&window, 0, sizeof(window));
     put_row(&window, 0U, "Kiss the Rain (Live)", "");
@@ -103,21 +103,21 @@ static void test_unknown_artist_does_not_touch_window(void)
  */
 static void test_length_is_clamped_to_capacity(void)
 {
-    static Storage_ListBufferTypeDef window;
-    const char *titles[STORAGE_LISTBUFFER_MAX_ENTRIES];
-    const char *artists[STORAGE_LISTBUFFER_MAX_ENTRIES];
+    static MusicCells_WindowTypeDef window;
+    const char *titles[MUSIC_WINDOW_MAX_ENTRIES];
+    const char *artists[MUSIC_WINDOW_MAX_ENTRIES];
     uint16_t i;
 
     (void)memset(&window, 0, sizeof(window));
-    for (i = 0U; i < STORAGE_LISTBUFFER_MAX_ENTRIES; i++)
+    for (i = 0U; i < MUSIC_WINDOW_MAX_ENTRIES; i++)
     {
         put_row(&window, i, "T", "A");
     }
-    window.Length = (uint16_t)(STORAGE_LISTBUFFER_MAX_ENTRIES + 5U);
+    window.Length = (uint16_t)(MUSIC_WINDOW_MAX_ENTRIES + 5U);
 
-    assert(gui_music_queue_rows(&window, titles, artists) == STORAGE_LISTBUFFER_MAX_ENTRIES);
-    assert(strcmp(titles[STORAGE_LISTBUFFER_MAX_ENTRIES - 1U], "T") == 0);
-    assert(strcmp(artists[STORAGE_LISTBUFFER_MAX_ENTRIES - 1U], "A") == 0);
+    assert(gui_music_queue_rows(&window, titles, artists) == MUSIC_WINDOW_MAX_ENTRIES);
+    assert(strcmp(titles[MUSIC_WINDOW_MAX_ENTRIES - 1U], "T") == 0);
+    assert(strcmp(artists[MUSIC_WINDOW_MAX_ENTRIES - 1U], "A") == 0);
 }
 
 /**
@@ -125,9 +125,9 @@ static void test_length_is_clamped_to_capacity(void)
  */
 static void test_empty_window_has_no_rows(void)
 {
-    static Storage_ListBufferTypeDef window;
-    const char *titles[STORAGE_LISTBUFFER_MAX_ENTRIES];
-    const char *artists[STORAGE_LISTBUFFER_MAX_ENTRIES];
+    static MusicCells_WindowTypeDef window;
+    const char *titles[MUSIC_WINDOW_MAX_ENTRIES];
+    const char *artists[MUSIC_WINDOW_MAX_ENTRIES];
 
     (void)memset(&window, 0, sizeof(window));
     window.Length = 0U;

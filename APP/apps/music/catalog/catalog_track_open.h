@@ -1,7 +1,7 @@
 /**
  * @file catalog_track_open.h
  * @brief 曲目文件的打开：先按曲库里的文件定位符打开，核对不符退回按路径打开（STOR-17、ARC-19、DIAG-5）。
- * @note  名称槽、Queue 窗口行、开启音频流与跳转重开流四条路径共用这一个入口。只由 Storage Task 调用。
+ * @note  曲名、Queue 窗口行（前台任务）、开启音频流与跳转重开流（音频读取任务）四条路径共用这一个入口。
  */
 
 #ifndef CATALOG_TRACK_OPEN_H

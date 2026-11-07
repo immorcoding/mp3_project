@@ -9,7 +9,7 @@
  *          默认构建也编译；发布构建不开。打开方式：configure 时 `cmake --preset firmware-debug -DMP3_HOOK_LOCATOR_MISS=1`，
  *          只允许 Debug。打开后音频读取任务在每次开流和重开流前把曲库读出的文件定位符清零（全零表示“无定位符”），
  *          Filesystem 因此一定判为核对不符，走真实的“退回按路径打开”路径：日志出现 `Locator miss` WARN，
- *          12000 首同文件夹开最后一首要 1.4 至 2.1 s（T_data 5 s 之内）。只影响音频流，不影响名称槽和窗口槽。
+ *          12000 首同文件夹开最后一首要 1.4 至 2.1 s（T_data 5 s 之内）。只影响音频流；前台任务的曲名和窗口行在自己的开文件处也有同一个钩子判断（R5.5）。
  */
 
 #ifndef AUDIO_READER_CONFIG_H

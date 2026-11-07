@@ -168,12 +168,21 @@ if(MP3_HOOK_LOCATOR_MISS AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_LOCATOR_MISS 只能在 Debug 构建里打开（当前 ${CMAKE_BUILD_TYPE}）。")
 endif()
 
+# 翻页注入钩子（#218，APP/apps/music）：打开后 GUI 音乐分区每次看到新一首开始播放，就自动写一次翻页需求，让前台任务在块池补满的同时读一窗标签，
+# 与音频读取任务争 SD 卷锁；前台任务量块池补满的耗时并记一行日志，用于 R5.4（水位与让路）；同样只允许 Debug。
+# configure 时 cmake --preset firmware-debug -DMP3_HOOK_PAGE_TURN=1，关掉要显式 -DMP3_HOOK_PAGE_TURN=0。
+set(MP3_HOOK_PAGE_TURN 0 CACHE STRING "翻页注入测试钩子（#218，APP/apps/music）：1 打开，0 关闭（默认）")
+if(MP3_HOOK_PAGE_TURN AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_PAGE_TURN 只能在 Debug 构建里打开（当前 ${CMAKE_BUILD_TYPE}）。")
+endif()
+
 # 添加工程级编译宏
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     FILESYSTEM_HOOK_SD_LATE_DMA=${MP3_HOOK_SD_LATE_DMA}
     VOLUME_HOOK_FAKE_BOUNCE=${MP3_HOOK_FAKE_BOUNCE}
     BACKGROUND_HOOK_FLASH_PRESSURE=${MP3_HOOK_FLASH_PRESSURE}
     AUDIO_READER_HOOK_LOCATOR_MISS=${MP3_HOOK_LOCATOR_MISS}
+    MUSIC_HOOK_PAGE_TURN=${MP3_HOOK_PAGE_TURN}
     # 在此添加用户自定义的编译宏
 )
 

@@ -9,7 +9,7 @@
 #define GUI_SERVICE_MAIN_QUEUE_CONFIG_H
 
 /* gui_service_main_queue.c */
-#define SERVICE_GUI_MAIN_QUEUE_MAX_ROWS     12U /* 一次构造的行数上限；须与 STORAGE_LISTBUFFER_MAX_ENTRIES 同值。本目录不得包含 APP 头。 */
+#define SERVICE_GUI_MAIN_QUEUE_MAX_ROWS     12U /* 一次构造的行数上限；须与 APP 音乐应用的 MUSIC_WINDOW_MAX_ENTRIES 同值。本目录不得包含 APP 头。 */
 
 #define SERVICE_GUI_MAIN_QUEUE_ROW_BORDER   4   /* 左侧边条宽；LVGL 8.3 内容区按四边各减此值，行高含上下各一份。 */
 #define SERVICE_GUI_MAIN_QUEUE_ROW_PAD_VER  2   /* 行 Panel 上下内边距，行高含上下各一份。 */

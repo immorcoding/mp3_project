@@ -334,7 +334,7 @@ uint32_t Service_GUI_Process(void)
 /**
  * @brief 读取 QueueTab 顶部已滚出的整行数，供 GUI Task 计算下一窗 Index。
  * @return 完整滚出顶部的行数；对象未就绪或尚无行时为 0。
- * @note 不包含 storage_listbuffer.h。只能由同一 GUI Task 调用。
+ * @note 不包含 APP 的界面数据格子。只能由同一 GUI Task 调用。
  */
 uint16_t Service_GUI_QueueScrollLead(void)
 {
@@ -346,7 +346,7 @@ uint16_t Service_GUI_QueueScrollLead(void)
  * @param[out] input 命令与可选 param；无点击时 command 为 NONE。
  * @retval SERVICE_OK 已写入 input。
  * @retval SERVICE_INVALID_PARAM input 为空。
- * @note 只能由同一 GUI Task 调用。不包含 storage_listbuffer.h。
+ * @note 只能由同一 GUI Task 调用。不包含 APP 的界面数据格子。
  *       `MUSIC_QUEUE_SELECT` 时 param 为播放列表下标；进度条手势 `MUSIC_SEEK_PRESS/DRAG/RELEASE` 时为 0..SERVICE_GUI_SEEK_SCALE 千分比。
  *       空闲不是 NOT_READY。
  */
@@ -464,7 +464,7 @@ Service_StatusTypeDef Service_GUI_StatusFlash(void)
  * @note 只能由同一 GUI Task 在 Init() 成功后调用。Service 不认识文本的语义，只负责画：
  *       曲名宽于可见窗口（SERVICE_GUI_MUSIC_TITLE_WIDTH）时单行循环滚动，否则静止居中；
  *       歌手宽于同一窗口时截断加省略号。占位文案（如 `Unknown Artist`）由调用方决定。
- *       调用返回后调用方可释放或复用两段文本（如把名称槽写回 IDLE）。
+ *       调用返回后调用方可释放或复用两段文本（如 GUI 的结果副本被下一次读结果覆盖）。
  */
 Service_StatusTypeDef Service_GUI_TitleApply(const char *text, const char *artist)
 {
@@ -486,7 +486,7 @@ Service_StatusTypeDef Service_GUI_VinylApply(bool playing, bool reset_angle)
 }
 
 /**
- * @brief 把一窗曲名与歌手填进 Queue 可见行，不包含 storage_listbuffer。
+ * @brief 把一窗曲名与歌手填进 Queue 可见行，不包含 APP 的界面数据格子。
  * @param[in] titles 曲名字符串指针表；length 为 0 时允许为 NULL。
  * @param[in] artists 与 titles 平行的歌手字符串指针表；NULL 表示全部行歌手为空，单项可为 ""。
  * @param[in] length 本窗实际条数，至多 SERVICE_GUI_MAIN_QUEUE_MAX_ROWS。
@@ -498,7 +498,7 @@ Service_StatusTypeDef Service_GUI_VinylApply(bool playing, bool reset_angle)
  * @retval SERVICE_NOT_READY QueueTab 尚未创建。
  * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
  * @note 只能由完成 Service_GUI_Init() 的同一 GUI Task 调用。曲名由调用方持有，
- *       Label 会拷贝文本，调用返回后调用方可把 listbuffer 写回 IDLE。曲名与歌手由调用方备好，
+ *       Label 会拷贝文本，调用返回后调用方可改写自己的窗口副本。曲名与歌手由调用方备好，
  *       本函数不解析路径、不替换空歌手（GUI-25）。
  *       已有行转 head 回收，不按整表无限 create。
  */
