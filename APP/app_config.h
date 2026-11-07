@@ -28,7 +28,7 @@
 #define STORAGE_SDRAM_BENCHMARK_ENABLE  0      /* 产品默认关闭 SDRAM 破坏性自检。 */
 
 /* app_tasks.h */
-#define APP_BOOT_TASK_STACK_WORDS       192U   /* Boot Task 栈深度，单位为 word（768 B）。#220 从 128 word 提到 192 word（用户 2026-11-06 的决定，多占 256 B）：#218 静态核算余量只剩约 76 B；最深调用链和余量的核算见 APP/tasks/foreground/README.md“Boot 栈核算”。打开可选的 SDRAM 自检（STORAGE_SDRAM_BENCHMARK_ENABLE）仍装不下，app_tasks.c 有编译期断言。 */
+#define APP_BOOT_TASK_STACK_WORDS       192U   /* Boot Task 栈深度，单位为 word（768 B）。#220 从 128 word 提到 192 word（用户 2026-11-06 的决定，多占 256 B）：#218 静态核算余量只剩约 76 B；最深调用链和余量的核算见 APP/tasks/volume/README.md“默认构建的 Boot 栈核算”。打开可选的 SDRAM 自检（STORAGE_SDRAM_BENCHMARK_ENABLE）仍装不下，app_tasks.c 有编译期断言。 */
 #define APP_LOG_TASK_STACK_WORDS        512U   /* Log Task 栈深度，单位为 word。 */
 #define APP_AUDIO_READER_TASK_NAME      "Audio Read Task" /* 音频读取任务的名字，只在这里定义一次：创建（audio_reader_task.c）和 Monitor 的登记表（monitor_task.c）都引用它。最长 15 个字符（configMAX_TASK_NAME_LEN 为 16），“Audio Reader Task”有 17 个，会被截断成登记不上的名字；audio_reader_task.c 有编译期断言。 */
 #define APP_AUDIO_READER_TASK_STACK_WORDS 1024U /* Audio Read Task 栈深度，单位为 word（4 KiB）；静态创建，栈位于 AXI SRAM 新段 .app_axi_ram（与卷 4 KiB、Flash 启动 4 KiB、后台 6 KiB、前台 6 KiB 共 24 KiB）。读取任务只读文件、填块池，不解码；第 4 次上板最低剩余 2048 至 2688 B（R4.11）。初值，由板级验收修正。 */

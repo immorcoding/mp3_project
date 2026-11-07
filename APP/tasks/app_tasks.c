@@ -75,7 +75,7 @@ static StackType_t volume_task_stack[APP_VOLUME_TASK_STACK_WORDS]
   *         和各应用的 `boot_init`（`app_table_boot_init()`：音乐的四个界面数据格子、行缓存键表）
   *         在内存准备里创建，早于创建任何任务，所以早于任何任务第一次读写它们（Foreground Task 与 GUI Task 创建即用格子）。
   *         Service_Log 必须先于任意可能调用 Service_Log_Post() 的任务创建。SDRAM 自检在 Log Task 创建之后、
-  *         块池初始化和各任务创建之前运行（独占 SDRAM，块池 NOLOAD 段此后才有主，HWD-2）；本任务只有 128 word 栈，
+  *         块池初始化和各任务创建之前运行（独占 SDRAM，块池 NOLOAD 段此后才有主，HWD-2）；本任务栈 192 word（#220 从 128 提上来），
   *         自检加 snprintf 的栈深度核算见 `APP/tasks/volume/README.md`，块池与信箱初始化的核算见
   *         `APP/tasks/audio_reader/README.md`。
   *         Audio Reader Task（优先级 3）创建后立即运行到第一次等待：登记卷事件订阅、先比对一次序号、看一次请求信箱，
@@ -137,7 +137,7 @@ static void create_task(void *handle)
     audio_reader_boot_init();
 
     /* 界面数据格子的锁（静态互斥量）：创建它要进队列发送路径，调用链深，所以由本任务直接调用、放在最浅的位置，
-     * 而不是留给注册表 boot_init 里的第一个 ui_cell_init（Boot 栈只有 128 word，核算见 APP/tasks/foreground/README.md）。 */
+     * 而不是留给注册表 boot_init 里的第一个 ui_cell_init（Boot 栈 192 word，核算见 APP/tasks/volume/README.md“默认构建的 Boot 栈核算”）。 */
     ui_cell_boot_init();
 
     /* 各应用的内存准备（注册表 boot_init）：音乐的界面数据格子、行缓存键表。晚于可选的 SDRAM 自检（行缓存和组装缓冲在 SDRAM 应用段）、

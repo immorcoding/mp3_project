@@ -27,7 +27,7 @@ static QueueHandle_t audio_reader_ready_queue;
 /**
  * @brief 创建两个静态队列，并把全部块放入空闲队列。
  * @note  仅 Boot 任务（app_tasks.c）在 SDRAM 全容量诊断（若启用）之后、创建音频读取任务和播放任务之前调用一次；
- *        不触碰块内容（NOLOAD 段此时内容无效）。Boot 栈只有 128 word：本函数最深一条是 xQueueSend 的调用链，
+ *        不触碰块内容（NOLOAD 段此时内容无效）。Boot 栈 192 word（#220 从 128 提上来）：本函数最深一条是 xQueueSend 的调用链，
  *        核算见 APP/tasks/audio_reader/README.md。
  */
 void audio_reader_block_init(void)

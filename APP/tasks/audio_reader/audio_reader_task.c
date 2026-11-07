@@ -52,7 +52,7 @@ static StackType_t audio_reader_task_stack[APP_AUDIO_READER_TASK_STACK_WORDS]
 
 /**
  * @brief  Boot 任务里的内存准备：块池和两个信箱。
- * @note   由 `create_task`（Boot，128 word 栈）在创建音频读取任务和播放任务之前调用一次，晚于可选的 SDRAM 全容量诊断
+ * @note   由 `create_task`（Boot，192 word 栈）在创建音频读取任务和播放任务之前调用一次，晚于可选的 SDRAM 全容量诊断
  *         （诊断是破坏性的，必须独占，块池 NOLOAD 段此后才有主，HWD-2）。栈核算：最深一条是 `audio_reader_block_init()`
  *         → `xQueueSend`，见 `APP/tasks/audio_reader/README.md`“Boot 栈核算”。
  */

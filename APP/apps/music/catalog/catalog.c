@@ -28,7 +28,7 @@
 #include <string.h>
 
 #include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
-#include "APP/tasks/background/background_task_config.h"
+#include "APP/tasks/background/background_task.h"
 #include "APP/tasks/foreground/foreground_task.h"
 #include "APP/tasks/volume/volume_event.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
@@ -122,6 +122,9 @@ typedef struct
 
 static Catalog_ScanStateTypeDef catalog_scan_state
     __attribute__((section(CATALOG_SDRAM_SECTION), aligned(32)));
+
+/* 条数写进 uint16_t 的已发布状态和播放列表（`(uint16_t)catalog_scan_state.Index`）：上限必须放得下。 */
+_Static_assert(CATALOG_MUSIC_MAX_NUM <= UINT16_MAX, "the catalog count must fit uint16_t");
 
 #if CATALOG_LOCK_STATS_ENABLE
 /* 周期计数器是 32 位的，480 MHz 下约 8.9 s 回绕；区间超过这个 tick 数（4 s，留足余量）就改用 tick 量。 */
@@ -383,6 +386,15 @@ static void catalog_scan_log_end(const char *result)
 }
 
 /**
+ * @brief 本轮扫描被丢弃：已收录的条数清零，记一行 `Scan done res=aborted n=0`。
+ */
+static void catalog_scan_log_aborted(void)
+{
+    catalog_scan_state.Index = 0U;
+    catalog_scan_log_end("aborted");
+}
+
+/**
  * @brief 拔卡或卸载时作废已发布的曲库：锁内把代次和条数置 0。
  * @note  不清表，不动代次计数（下一次发布仍加 1，不会重复）。即使不调用它，取代次时卷序号不符也会算 0，
  *        所以这是让已发布的状态尽快归零，不是正确性所必需。
@@ -403,11 +415,7 @@ static void catalog_published_invalidate(void)
 static void catalog_scan_begin(uint32_t sequence)
 {
     catalog_scan_state.SeenSequence = sequence;
-
-    catalog_lock_enter();
-    catalog_published.Generation = 0U;
-    catalog_published.Count = 0U;
-    catalog_lock_leave();
+    catalog_published_invalidate();
 
     catalog_scan_state.Index = 0U;
     MusicCatalogPool.Tail = 0U;
@@ -547,8 +555,7 @@ static void catalog_scan_finish_ok(void)
     catalog_sheet_fill((uint16_t)catalog_scan_state.Index);
     if (!catalog_scan_publish())
     {
-        catalog_scan_state.Index = 0U;
-        catalog_scan_log_end("aborted");
+        catalog_scan_log_aborted();
     }
     else
     {
@@ -568,8 +575,7 @@ static void catalog_scan_finish_discard(void)
 {
     Volume_StatusTypeDef volume;
 
-    catalog_scan_state.Index = 0U;
-    catalog_scan_log_end("aborted");
+    catalog_scan_log_aborted();
     catalog_scan_state.Phase = CATALOG_SCAN_IDLE;
 
     volume = volume_status(VOLUME_ID_SD);
@@ -632,8 +638,7 @@ static uint32_t catalog_scan_restart(Volume_StatusTypeDef volume)
 
     if (catalog_scan_state.Phase != CATALOG_SCAN_IDLE)
     {
-        catalog_scan_state.Index = 0U;
-        catalog_scan_log_end("aborted");
+        catalog_scan_log_aborted();
     }
     catalog_scan_state.Phase = CATALOG_SCAN_IDLE;
 
@@ -700,6 +705,55 @@ static uint32_t catalog_scan_step_open(void)
 }
 
 /**
+ * @brief 处理读到的一条有名字的目录项（不调文件接口）：点开头的跳过；子目录入栈（栈满记 WARN 并跳过）；`.mp3` 收录。
+ * @note  条目数满或池满时发布截断结果：清空待扫栈并转到关目录，不再扫其余目录。
+ */
+static void catalog_scan_take_entry(void)
+{
+    if (catalog_scan_state.Entry.Name[0] == '.')
+    {
+        return;
+    }
+
+    if (!catalog_music_join_path(catalog_scan_state.Child,
+                                 sizeof(catalog_scan_state.Child),
+                                 catalog_scan_state.Current,
+                                 catalog_scan_state.Entry.Name))
+    {
+        return;
+    }
+
+    if (catalog_scan_state.Entry.IsDirectory)
+    {
+        if (catalog_scan_state.StackTop >= CATALOG_DIR_STACK_MAX)
+        {
+            (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
+                                   catalog_log_tag,
+                                   "Music Directory Stack Full.");
+            return;
+        }
+
+        (void)memcpy(catalog_scan_state.Stack[catalog_scan_state.StackTop],
+                     catalog_scan_state.Child,
+                     sizeof(catalog_scan_state.Child));
+        catalog_scan_state.StackTop++;
+        return;
+    }
+
+    if (!catalog_music_file_strcheck(catalog_scan_state.Entry.Name))
+    {
+        return;
+    }
+
+    if (!catalog_music_append(catalog_scan_state.Child, &catalog_scan_state.Entry.Locator))
+    {
+        /* 条目满或池满：发布截断结果，不再扫其余目录。 */
+        catalog_scan_state.StackTop = 0U;
+        catalog_scan_state.Phase = CATALOG_SCAN_CLOSE;
+    }
+}
+
+/**
  * @brief 读一条目录项并处理它（本步唯一的文件调用，每条放一次锁）。
  * @return 多少毫秒后再叫它。
  * @note  `SERVICE_BUSY` 约 10 ms 后再试。读失败：卷不可用就丢弃（先关目录），其他错误记 ERROR、不发布（先关目录）。
@@ -738,47 +792,7 @@ static uint32_t catalog_scan_step_read(void)
         return 0U;
     }
 
-    if (catalog_scan_state.Entry.Name[0] == '.')
-    {
-        return 0U;
-    }
-
-    if (!catalog_music_join_path(catalog_scan_state.Child,
-                                 sizeof(catalog_scan_state.Child),
-                                 catalog_scan_state.Current,
-                                 catalog_scan_state.Entry.Name))
-    {
-        return 0U;
-    }
-
-    if (catalog_scan_state.Entry.IsDirectory)
-    {
-        if (catalog_scan_state.StackTop >= CATALOG_DIR_STACK_MAX)
-        {
-            (void)Service_Log_Post(SERVICE_LOG_LEVEL_WARN,
-                                   catalog_log_tag,
-                                   "Music Directory Stack Full.");
-            return 0U;
-        }
-
-        (void)memcpy(catalog_scan_state.Stack[catalog_scan_state.StackTop],
-                     catalog_scan_state.Child,
-                     sizeof(catalog_scan_state.Child));
-        catalog_scan_state.StackTop++;
-        return 0U;
-    }
-
-    if (!catalog_music_file_strcheck(catalog_scan_state.Entry.Name))
-    {
-        return 0U;
-    }
-
-    if (!catalog_music_append(catalog_scan_state.Child, &catalog_scan_state.Entry.Locator))
-    {
-        /* 条目满或池满：发布截断结果，不再扫其余目录。 */
-        catalog_scan_state.StackTop = 0U;
-        catalog_scan_state.Phase = CATALOG_SCAN_CLOSE;
-    }
+    catalog_scan_take_entry();
     return 0U;
 }
 

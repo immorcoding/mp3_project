@@ -41,7 +41,7 @@ static uint32_t background_reclaim_ticks_to_ms(TickType_t ticks)
 /**
  * @brief  记失败那一条 ERROR（只记一条，之后作业停下，不再重试）。
  * @param[in] status `ReclaimFlash` 返回的失败状态。
- * @note   正文带状态数值，不超过 127 字符；不用 `%s` 以外的大格式，栈用量很小。
+ * @note   正文带状态数值（`%d`），96 B 的行缓冲放得下（Service Log 单条正文最多 127 字符）；栈用量很小。
  */
 static void background_reclaim_log_failure(Service_StatusTypeDef status)
 {

@@ -5,7 +5,7 @@
  *
  * @details
  *          `volume_flash_boot()` 是流程本身（纯粹的 Service 调用加日志加发事件，主机可测）；
- *          `volume_flash_task.c` 把它包成一次性的 Flash 启动任务：卷任务创建它、不等它，优先级 2，
+ *          `volume_flash_task.c` 把它包成一次性的 Flash 启动任务：卷任务创建它、不等它，优先级 1（#220 从 2 降到 1，与后台任务同级），
  *          约 4 KiB 静态栈放 AXI 新段，跑完在自删前打一行栈水位。这样 `MountFlash`（实测 3.3 至 8.3 s）
  *          不在卷任务的调用栈里跑，插拔卡不用等它（STOR-9）。
  *

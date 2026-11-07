@@ -22,7 +22,7 @@ static const char storage_sdram_benchmark_log_tag[] = "SDRAM";
   * @brief  执行 SDRAM 破坏性诊断与吞吐基准，并将结果投递到 Log Service。
   * @note   此函数由 Boot 任务（`create_task`）在创建 Volume、Storage 等任务之前调用，所以破坏性自检仍然独占 SDRAM
   *         （HWD-2）。Boot 任务的优先级最低，Log Task 在每行日志投递后马上抢占并转交，日志随诊断进度显示。
-  *         Boot 栈只有 128 word，本函数加 snprintf 的栈深度核算见 `APP/tasks/volume/README.md`。
+  *         Boot 栈 192 word 仍装不下，本函数加 snprintf 的栈深度核算见 `APP/tasks/volume/README.md`。
   */
 void storage_sdram_benchmark_run(void)
 {
