@@ -125,13 +125,6 @@ SECTIONS
   {
       . = ALIGN(4);
 
-      *APP/tasks/storage/benchmark/*.obj(
-          .text
-          .text.*
-          .rodata
-          .rodata.*
-      )
-
       *APP/tasks/volume/benchmark/*.obj(
           .text
           .text.*
@@ -387,7 +380,7 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
-  /* Storage Catalog 曲目表；NOLOAD，由 Storage Task 在挂载扫描时完整写入。 */
+  /* 曲库曲目表（路径池、条目、定位符）；NOLOAD，由后台任务的曲库扫描作业在扫描期间写入（发布之前读者不碰它），不自动清零。 */
   .storage_catalog (NOLOAD) :
   {
     . = ALIGN(32);
@@ -395,7 +388,7 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
-  /* 歌曲清单；NOLOAD，由 Storage Task 在挂载扫描时完整写入，在catalog初始化之后。 */
+  /* 播放列表；NOLOAD，由后台任务的曲库扫描在发布之前写入，读者经 catalog_read_track() 在曲库锁内查。 */
   .music_sheet (NOLOAD) :
   {
     . = ALIGN(32);
