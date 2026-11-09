@@ -67,6 +67,10 @@ typedef struct
     uint8_t ExpectedAddressedWriteData[W25QXX_PAGE_PROGRAM_MAX_SIZE_BYTES];
     uint32_t ExpectedAddressedWriteDataLength;
     bool AddressedWriteWasCalled;
+    bool PreemptArmed;                                    /**< 下一次读墙钟时模拟“被抢占”：时间前进、锁存状态改变，一次性。 */
+    uint32_t PreemptAdvanceMs;                            /**< 被抢占期间墙钟前进的毫秒数。 */
+    W25Qxx_BusStatusTypeDef PreemptPollingStatus;         /**< 被抢占期间状态匹配轮询的锁存结果变成什么。 */
+    W25Qxx_BusStatusTypeDef PreemptAsyncAddressedStatus;  /**< 被抢占期间异步读取的状态变成什么。 */
 } W25Qxx_FakeBusTypeDef;
 
 /* 当前板级 W25Q256 只约束厂商和容量；MemoryType 的 0x40 / 0x70 均可接受。 */
@@ -239,15 +243,30 @@ static W25Qxx_BusStatusTypeDef test_w25qxx_write_command(
 
 /**
  * @brief 提供由测试用例控制的毫秒时钟。
- * @param[in] context Fake Bus Context，可为 NULL。
+ * @param[in,out] context Fake Bus Context，可为 NULL。
  * @return 返回 TickMs；Context 为空时返回 0。
- * @note 不主动推进时间，用例通过修改 TickMs 精确触发超时。
+ * @note 默认不主动推进时间，用例通过修改 TickMs 精确触发超时。用例置位 PreemptArmed 后，
+ *       下一次调用先模拟“任务在读状态与读墙钟之间被更高优先级任务抢占”：墙钟前进 PreemptAdvanceMs，
+ *       锁存的轮询状态与读取状态同时变成用例指定的值，再返回前进后的时间；只生效一次。
  */
 static uint32_t test_w25qxx_get_tick_ms(void *context)
 {
-    const W25Qxx_FakeBusTypeDef *fake_bus = context;
+    W25Qxx_FakeBusTypeDef *fake_bus = context;
 
-    return (fake_bus != NULL) ? fake_bus->TickMs : 0u;
+    if (fake_bus == NULL)
+    {
+        return 0u;
+    }
+
+    if (fake_bus->PreemptArmed)
+    {
+        fake_bus->PreemptArmed = false;
+        fake_bus->TickMs += fake_bus->PreemptAdvanceMs;
+        fake_bus->StatusPollingStatus = fake_bus->PreemptPollingStatus;
+        fake_bus->AsyncAddressedStatus = fake_bus->PreemptAsyncAddressedStatus;
+    }
+
+    return fake_bus->TickMs;
 }
 
 /**
@@ -1404,6 +1423,295 @@ static void test_w25qxx_process_times_out_stalled_sector_erase(void)
     assert(fake_bus.StatusPollingAbortWasCalled);
 }
 
+/**
+ * @brief 构造页编程用例的 Fake Bus：启动命令、状态轮询参数与超时用例一致，轮询初始为 BUSY。
+ * @return 填好期望值的 Fake Bus。
+ */
+static W25Qxx_FakeBusTypeDef test_w25qxx_make_page_program_bus(void)
+{
+    W25Qxx_FakeBusTypeDef fake_bus = {
+        .ExpectedInstruction = 0x9Fu,
+        .Response = {
+            .ManufacturerID = W25QXX_MANUFACTURER_ID_WINBOND,
+            .MemoryType = 0x40u,
+            .CapacityID = W25QXX_CAPACITY_ID_256MBIT
+        },
+        .ExpectedStatusRegister1Instruction = 0x05u,
+        .StatusRegister1ResponseSequence = {0x00u, 0x02u},
+        .StatusRegister1ResponseCount = 2u,
+        .ExpectedStatusRegister2Instruction = 0x35u,
+        .StatusRegister2ResponseSequence = {0x02u, 0x02u},
+        .StatusRegister2ResponseCount = 2u,
+        .ExpectedExecuteInstruction = 0x06u,
+        .ExpectedAddressedWriteInstruction = 0x34u,
+        .ExpectedAddressedWriteAddress = 0x00012340u,
+        .ExpectedAddressedWriteTransferConfig = {
+            .AddressLength = 4u,
+            .AddressLineMode = W25QXX_BUS_LINES_1,
+            .DataLineMode = W25QXX_BUS_LINES_4,
+            .HasAlternateByte = false,
+            .AlternateByte = 0u,
+            .AlternateByteLineMode = W25QXX_BUS_LINES_1,
+            .DummyCycles = 0u
+        },
+        .ExpectedAddressedWriteData = {0x5Au},
+        .ExpectedAddressedWriteDataLength = 1u,
+        .ExpectedStatusPollingInstruction = 0x05u,
+        .ExpectedStatusPollingMatch = 0x00u,
+        .ExpectedStatusPollingMask = 0x01u,
+        .StatusPollingStatus = W25QXX_BUS_BUSY,
+        .StatusPollingAbortStatus = W25QXX_BUS_OK
+    };
+
+    return fake_bus;
+}
+
+/**
+ * @brief 构造扇区擦除用例的 Fake Bus：命令、状态轮询参数与超时用例一致，轮询初始为 BUSY。
+ * @return 填好期望值的 Fake Bus。
+ */
+static W25Qxx_FakeBusTypeDef test_w25qxx_make_sector_erase_bus(void)
+{
+    W25Qxx_FakeBusTypeDef fake_bus = {
+        .ExpectedInstruction = 0x9Fu,
+        .Response = {
+            .ManufacturerID = W25QXX_MANUFACTURER_ID_WINBOND,
+            .MemoryType = 0x40u,
+            .CapacityID = W25QXX_CAPACITY_ID_256MBIT
+        },
+        .ExpectedStatusRegister1Instruction = 0x05u,
+        .StatusRegister1ResponseSequence = {0x00u, 0x02u},
+        .StatusRegister1ResponseCount = 2u,
+        .ExpectedStatusRegister2Instruction = 0x35u,
+        .StatusRegister2ResponseSequence = {0x02u, 0x02u},
+        .StatusRegister2ResponseCount = 2u,
+        .ExpectedExecuteInstruction = 0x06u,
+        .ExpectedAddressedExecuteInstruction = 0x21u,
+        .ExpectedAddressedExecuteAddress = 0x00000000u,
+        .ExpectedAddressedExecuteTransferConfig = {
+            .AddressLength = 4u,
+            .AddressLineMode = W25QXX_BUS_LINES_1,
+            .DataLineMode = W25QXX_BUS_LINES_1,
+            .HasAlternateByte = false,
+            .AlternateByte = 0u,
+            .AlternateByteLineMode = W25QXX_BUS_LINES_1,
+            .DummyCycles = 0u
+        },
+        .ExpectedStatusPollingInstruction = 0x05u,
+        .ExpectedStatusPollingMatch = 0x00u,
+        .ExpectedStatusPollingMask = 0x01u,
+        .StatusPollingStatus = W25QXX_BUS_BUSY,
+        .StatusPollingAbortStatus = W25QXX_BUS_OK
+    };
+
+    return fake_bus;
+}
+
+/**
+ * @brief 构造异步读取用例的 Fake Bus：命令与超时用例一致，读取状态初始为 BUSY。
+ * @return 填好期望值的 Fake Bus。
+ */
+static W25Qxx_FakeBusTypeDef test_w25qxx_make_async_read_bus(void)
+{
+    W25Qxx_FakeBusTypeDef fake_bus = {
+        .ExpectedInstruction = 0x9Fu,
+        .Response = {
+            .ManufacturerID = W25QXX_MANUFACTURER_ID_WINBOND,
+            .MemoryType = 0x40u,
+            .CapacityID = W25QXX_CAPACITY_ID_256MBIT
+        },
+        .ExpectedAsyncAddressedInstruction = 0xECu,
+        .ExpectedAsyncAddress = 0x00010200u,
+        .ExpectedAsyncAddressedTransferConfig = {
+            .AddressLength = 4u,
+            .AddressLineMode = W25QXX_BUS_LINES_4,
+            .DataLineMode = W25QXX_BUS_LINES_4,
+            .HasAlternateByte = true,
+            .AlternateByte = 0xFFu,
+            .AlternateByteLineMode = W25QXX_BUS_LINES_4,
+            .DummyCycles = 4u
+        },
+        .ExpectedAsyncAddressedDataLength = 4u,
+        .AsyncAddressedStatus = W25QXX_BUS_BUSY
+    };
+
+    return fake_bus;
+}
+
+/**
+ * @brief 验证页编程的竞态：读完“仍在忙”的锁存状态之后被抢占，回来时墙钟已过时限、芯片其实已完成。
+ * @note 抢占点在 Fake 的 GetTickMs 里：该次读时钟先把时间推过时限、并让锁存状态变成 OK。
+ *       旧写法（先读状态、再读时钟）会据此误判页编程超时，进而中止轮询、让卷进入 ERROR；
+ *       新写法（先读时钟、再读状态）读到 OK，按完成处理。断言失败即终止测试。
+ */
+static void test_w25qxx_process_completes_page_program_preempted_after_it_finished(void)
+{
+    static const uint8_t data[] = {0x5Au};
+    W25Qxx_FakeBusTypeDef fake_bus = test_w25qxx_make_page_program_bus();
+    W25Qxx_HandleTypeDef hflash = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &fake_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+
+    assert(W25Qxx_Init(&hflash) == W25QXX_OK);
+    assert(W25Qxx_ProgramPageStart(&hflash,
+                                    fake_bus.ExpectedAddressedWriteAddress,
+                                    data,
+                                    sizeof(data)) == W25QXX_OK);
+
+    fake_bus.PreemptArmed = true;
+    fake_bus.PreemptAdvanceMs = W25QXX_PAGE_PROGRAM_TIMEOUT_MS;
+    fake_bus.PreemptPollingStatus = W25QXX_BUS_OK;
+    assert(W25Qxx_Process(&hflash) == W25QXX_OK);
+    assert(!fake_bus.PreemptArmed); /* 抢占确实发生在 Process 里。 */
+    assert(!fake_bus.StatusPollingAbortWasCalled);
+    assert(hflash.State == W25QXX_STATE_READY);
+    assert(hflash.ActiveOperation == W25QXX_OPERATION_NONE);
+    assert(hflash.ErrorCode == W25QXX_ERROR_NONE);
+    assert(hflash.LastBusStatus == W25QXX_BUS_OK);
+}
+
+/**
+ * @brief 验证扇区擦除的同一竞态：被抢占超过擦除时限、芯片已完成，按完成处理，不中止轮询。
+ * @note 断言失败即终止测试。
+ */
+static void test_w25qxx_process_completes_sector_erase_preempted_after_it_finished(void)
+{
+    W25Qxx_FakeBusTypeDef fake_bus = test_w25qxx_make_sector_erase_bus();
+    W25Qxx_HandleTypeDef hflash = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &fake_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+
+    assert(W25Qxx_Init(&hflash) == W25QXX_OK);
+    assert(W25Qxx_SectorEraseStart(&hflash,
+                                    fake_bus.ExpectedAddressedExecuteAddress) == W25QXX_OK);
+
+    fake_bus.PreemptArmed = true;
+    fake_bus.PreemptAdvanceMs = W25QXX_SECTOR_ERASE_TIMEOUT_MS + 100u;
+    fake_bus.PreemptPollingStatus = W25QXX_BUS_OK;
+    assert(W25Qxx_Process(&hflash) == W25QXX_OK);
+    assert(!fake_bus.PreemptArmed);
+    assert(!fake_bus.StatusPollingAbortWasCalled);
+    assert(hflash.State == W25QXX_STATE_READY);
+    assert(hflash.ErrorCode == W25QXX_ERROR_NONE);
+}
+
+/**
+ * @brief 验证异步数组读取的同一竞态：被抢占超过读取时限、传输其实已完成，按完成处理。
+ * @note 断言失败即终止测试。
+ */
+static void test_w25qxx_process_completes_async_read_preempted_after_it_finished(void)
+{
+    W25Qxx_FakeBusTypeDef fake_bus = test_w25qxx_make_async_read_bus();
+    W25Qxx_HandleTypeDef hflash = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &fake_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+    uint8_t read_buffer[4] = {0u};
+
+    assert(W25Qxx_Init(&hflash) == W25QXX_OK);
+    assert(W25Qxx_StartRead(&hflash,
+                             fake_bus.ExpectedAsyncAddress,
+                             read_buffer,
+                             sizeof(read_buffer)) == W25QXX_OK);
+
+    fake_bus.PreemptArmed = true;
+    fake_bus.PreemptAdvanceMs = W25QXX_ARRAY_READ_TIMEOUT_MS;
+    fake_bus.PreemptAsyncAddressedStatus = W25QXX_BUS_OK;
+    assert(W25Qxx_Process(&hflash) == W25QXX_OK);
+    assert(!fake_bus.PreemptArmed);
+    assert(hflash.State == W25QXX_STATE_READY);
+    assert(hflash.ActiveOperation == W25QXX_OPERATION_NONE);
+    assert(hflash.ErrorCode == W25QXX_ERROR_NONE);
+}
+
+/**
+ * @brief 验证真的一直忙时仍按时超时：被抢占越过时限、锁存状态始终是 BUSY，页编程、扇区擦除、异步读取都报各自的超时。
+ * @note 抢占不能让真超时被吞掉。断言失败即终止测试。
+ */
+static void test_w25qxx_process_still_times_out_when_preempted_and_still_busy(void)
+{
+    static const uint8_t data[] = {0x5Au};
+    W25Qxx_FakeBusTypeDef page_bus = test_w25qxx_make_page_program_bus();
+    W25Qxx_HandleTypeDef page = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &page_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+    W25Qxx_FakeBusTypeDef erase_bus = test_w25qxx_make_sector_erase_bus();
+    W25Qxx_HandleTypeDef erase = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &erase_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+    W25Qxx_FakeBusTypeDef read_bus = test_w25qxx_make_async_read_bus();
+    W25Qxx_HandleTypeDef read = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &read_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+    uint8_t read_buffer[4] = {0u};
+
+    assert(W25Qxx_Init(&page) == W25QXX_OK);
+    assert(W25Qxx_ProgramPageStart(&page, page_bus.ExpectedAddressedWriteAddress, data, sizeof(data)) == W25QXX_OK);
+    page_bus.PreemptArmed = true;
+    page_bus.PreemptAdvanceMs = W25QXX_PAGE_PROGRAM_TIMEOUT_MS;
+    page_bus.PreemptPollingStatus = W25QXX_BUS_BUSY;
+    assert(W25Qxx_Process(&page) == W25QXX_ERROR);
+    assert(page.ErrorCode == W25QXX_ERROR_PAGE_PROGRAM_TIMEOUT);
+    assert(page.LastBusStatus == W25QXX_BUS_TIMEOUT);
+    assert(page_bus.StatusPollingAbortWasCalled);
+
+    assert(W25Qxx_Init(&erase) == W25QXX_OK);
+    assert(W25Qxx_SectorEraseStart(&erase, erase_bus.ExpectedAddressedExecuteAddress) == W25QXX_OK);
+    erase_bus.PreemptArmed = true;
+    erase_bus.PreemptAdvanceMs = W25QXX_SECTOR_ERASE_TIMEOUT_MS;
+    erase_bus.PreemptPollingStatus = W25QXX_BUS_BUSY;
+    assert(W25Qxx_Process(&erase) == W25QXX_ERROR);
+    assert(erase.ErrorCode == W25QXX_ERROR_SECTOR_ERASE_TIMEOUT);
+    assert(erase_bus.StatusPollingAbortWasCalled);
+
+    assert(W25Qxx_Init(&read) == W25QXX_OK);
+    assert(W25Qxx_StartRead(&read, read_bus.ExpectedAsyncAddress, read_buffer, sizeof(read_buffer)) == W25QXX_OK);
+    read_bus.PreemptArmed = true;
+    read_bus.PreemptAdvanceMs = W25QXX_ARRAY_READ_TIMEOUT_MS;
+    read_bus.PreemptAsyncAddressedStatus = W25QXX_BUS_BUSY;
+    assert(W25Qxx_Process(&read) == W25QXX_ERROR);
+    assert(read.ErrorCode == W25QXX_ERROR_READ_ARRAY_TIMEOUT);
+}
+
+/**
+ * @brief 验证时限边界：还差 1 ms 到时限时仍在忙，返回 BUSY、不中止、不报错；到时限那一刻才超时。
+ * @note 时限不动（页编程 5 ms、擦除 500 ms、读 100 ms），本用例钉住边界没有被修复挪动。断言失败即终止测试。
+ */
+static void test_w25qxx_process_timeout_boundary_is_unchanged(void)
+{
+    static const uint8_t data[] = {0x5Au};
+    W25Qxx_FakeBusTypeDef fake_bus = test_w25qxx_make_page_program_bus();
+    W25Qxx_HandleTypeDef hflash = {
+        .BusOps = &test_w25qxx_fake_bus_ops,
+        .BusContext = &fake_bus,
+        .ExpectedJedecID = &test_w25q256_expected_id
+    };
+
+    assert(W25Qxx_Init(&hflash) == W25QXX_OK);
+    assert(W25Qxx_ProgramPageStart(&hflash, fake_bus.ExpectedAddressedWriteAddress, data, sizeof(data)) == W25QXX_OK);
+
+    fake_bus.TickMs = W25QXX_PAGE_PROGRAM_TIMEOUT_MS - 1u;
+    assert(W25Qxx_Process(&hflash) == W25QXX_BUSY);
+    assert(!fake_bus.StatusPollingAbortWasCalled);
+    assert(hflash.State == W25QXX_STATE_BUSY);
+
+    fake_bus.TickMs = W25QXX_PAGE_PROGRAM_TIMEOUT_MS;
+    assert(W25Qxx_Process(&hflash) == W25QXX_ERROR);
+    assert(hflash.ErrorCode == W25QXX_ERROR_PAGE_PROGRAM_TIMEOUT);
+    assert(fake_bus.StatusPollingAbortWasCalled);
+}
+
 static unsigned quiesce_calls;
 
 /**
@@ -1529,6 +1837,11 @@ int main(void)
     test_w25qxx_sector_erase_starts_and_completes();
     test_w25qxx_sector_erase_rejects_unaligned_address();
     test_w25qxx_process_times_out_stalled_sector_erase();
+    test_w25qxx_process_completes_page_program_preempted_after_it_finished();
+    test_w25qxx_process_completes_sector_erase_preempted_after_it_finished();
+    test_w25qxx_process_completes_async_read_preempted_after_it_finished();
+    test_w25qxx_process_still_times_out_when_preempted_and_still_busy();
+    test_w25qxx_process_timeout_boundary_is_unchanged();
 
     return 0;
 }
