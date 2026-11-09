@@ -49,7 +49,7 @@ typedef struct
 
 Service_StatusTypeDef Service_GUI_Init(uint32_t notify_index);
 Service_StatusTypeDef Service_GUI_ThemeApply(uint8_t id);
-void Service_GUI_Process(void);
+uint32_t Service_GUI_Process(void);
 uint16_t Service_GUI_QueueScrollLead(void);
 Service_StatusTypeDef Service_GUI_ConsumeInput(Service_GUI_InputTypeDef *input);
 Service_StatusTypeDef Service_GUI_TransportApply(bool playing);

@@ -37,14 +37,14 @@ static void test_step_requests_carry_cursor_generation_and_new_position(void)
     world_start_playing(5U, 12U);
 
     world_send(PLAYBACK_COMMAND_NEXT);
-    assert(fake_storage_last_request().Generation == 5U);
-    assert(fake_storage_last_request().Position == 1U);
+    assert(fake_audio_reader_last_request().Generation == 5U);
+    assert(fake_audio_reader_last_request().Position == 1U);
     assert(world_snapshot().Generation == 5U);
 
     world_send(PLAYBACK_COMMAND_PREV);
     world_send(PLAYBACK_COMMAND_PREV);
-    assert(fake_storage_last_request().Generation == 5U);
-    assert(fake_storage_last_request().Position == 11U);
+    assert(fake_audio_reader_last_request().Generation == 5U);
+    assert(fake_audio_reader_last_request().Position == 11U);
     assert(world_snapshot().Index == 11U);
     assert(world_snapshot().Generation == 5U);
 }
@@ -76,12 +76,12 @@ static void test_step_before_open_ok_is_ignored_because_track_count_is_unknown(v
 {
     world_reset();
     world_send(PLAYBACK_COMMAND_TOGGLE);
-    uint32_t requests = fake_storage_request_count();
+    uint32_t requests = fake_audio_reader_request_count();
 
     world_send(PLAYBACK_COMMAND_NEXT);
     world_send(PLAYBACK_COMMAND_PREV);
 
-    assert(fake_storage_request_count() == requests);
+    assert(fake_audio_reader_request_count() == requests);
     assert(world_snapshot().Index == 0U);
     assert(world_snapshot().Generation == 0U);
     assert(world_snapshot().HandledCommandSeq == 3U);
@@ -99,8 +99,8 @@ static void test_select_in_same_generation_keeps_track_count_for_following_step(
     world_send(PLAYBACK_COMMAND_NEXT);
 
     assert(world_snapshot().Index == 0U);
-    assert(fake_storage_last_request().Generation == 5U);
-    assert(fake_storage_last_request().Position == 0U);
+    assert(fake_audio_reader_last_request().Generation == 5U);
+    assert(fake_audio_reader_last_request().Position == 0U);
 }
 
 /**
@@ -114,8 +114,8 @@ static void test_select_with_new_generation_rebinds_cursor_and_track_count(void)
     world_send_select(9U, 1U);
     assert(world_snapshot().Generation == 9U);
     assert(world_snapshot().Index == 1U);
-    assert(fake_storage_last_request().Generation == 9U);
-    assert(fake_storage_last_request().Position == 1U);
+    assert(fake_audio_reader_last_request().Generation == 9U);
+    assert(fake_audio_reader_last_request().Position == 1U);
 
     world_send(PLAYBACK_COMMAND_NEXT);   /* 新代次的曲目数未知：忽略。 */
     assert(world_snapshot().Index == 1U);
@@ -123,7 +123,7 @@ static void test_select_with_new_generation_rebinds_cursor_and_track_count(void)
     world_open_ok(9U, 2U);
     world_send(PLAYBACK_COMMAND_NEXT);
     assert(world_snapshot().Index == 0U);   /* 新代次只有 2 首，环回首曲。 */
-    assert(fake_storage_last_request().Generation == 9U);
+    assert(fake_audio_reader_last_request().Generation == 9U);
 }
 
 /**

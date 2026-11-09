@@ -1,6 +1,6 @@
 /**
  * @file filesystem_flash_access.h
- * @brief Storage Task 启动诊断使用的 Flash 原始访问 Interface。
+ * @brief 启动诊断使用的 Flash 原始访问 Interface；每个函数拿 Flash 卷锁一次，GUI 与播放任务不得调用。
  */
 
 #ifndef FILESYSTEM_FLASH_ACCESS_H

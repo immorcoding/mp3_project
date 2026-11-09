@@ -12,7 +12,7 @@
 
 /**
  * @brief GUI Task 私有的任务通知槽。
- * @note  索引只在本任务的通知数组内有效；与 Storage Task 的槽位编号互不相关。
+ * @note  索引只在本任务的通知数组内有效；与其他任务的槽位编号互不相关。
  */
 typedef enum
 {

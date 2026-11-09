@@ -48,20 +48,23 @@ uint8_t BSP_SD_ITConfig(void)
   * @param[out] p_data 至少 block_count * 512 B 的接收缓冲，返回前保持有效。
   * @param[in] read_address 起始逻辑扇区号，不是字节地址。
   * @param[in] block_count 非零逻辑扇区数。
-  * @param[in] timeout_ms 每个内部 DMA 分块等待及后续卡同步的毫秒预算。
+  * @param[in] timeout_ms FatFs 传来的超时，**被忽略**：生成的 sd_diskio.c 传 SD_TIMEOUT，等于 HAL 的
+  *            SDMMC_DATATIMEOUT（0xFFFFFFFF），用它等会让真卡死时持 SD 卷锁约 49.7 天，永远走不到显式中止。
+  *            每个 DMA 分块一律等 FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS。
   * @retval MSD_OK 所有请求块均已到达 p_data。
   * @retval MSD_ERROR 请求未能以同步方式完成。
-  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
+  * @note  只在持 SD 卷锁的公开调用里被 FatFs 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_ReadBlocks(uint32_t *p_data,
                           uint32_t read_address,
                           uint32_t block_count,
                           uint32_t timeout_ms)
 {
+    (void)timeout_ms;
     return filesystem_sd_transfer_read_blocks((uint8_t *)p_data,
                                               read_address,
                                               block_count,
-                                              timeout_ms)
+                                              FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS)
         ? MSD_OK
         : MSD_ERROR;
 }
@@ -71,20 +74,22 @@ uint8_t BSP_SD_ReadBlocks(uint32_t *p_data,
   * @param[in] p_data 至少 block_count * 512 B 的输入缓冲，返回前不可改写。
   * @param[in] write_address 起始逻辑扇区号，不是字节地址。
   * @param[in] block_count 非零逻辑扇区数。
-  * @param[in] timeout_ms 每个内部 DMA 分块等待及后续卡同步的毫秒预算。
+  * @param[in] timeout_ms FatFs 传来的超时，**被忽略**，原因同 BSP_SD_ReadBlocks：每个 DMA 分块一律等
+  *            FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS。
   * @retval MSD_OK 所有请求块均已提交到卡。
   * @retval MSD_ERROR 请求未能以同步方式完成。
-  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
+  * @note  只在持 SD 卷锁的公开调用里被 FatFs 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_WriteBlocks(uint32_t *p_data,
                            uint32_t write_address,
                            uint32_t block_count,
                            uint32_t timeout_ms)
 {
+    (void)timeout_ms;
     return filesystem_sd_transfer_write_blocks((const uint8_t *)p_data,
                                                write_address,
                                                block_count,
-                                               timeout_ms)
+                                               FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS)
         ? MSD_OK
         : MSD_ERROR;
 }
@@ -96,7 +101,7 @@ uint8_t BSP_SD_WriteBlocks(uint32_t *p_data,
   * @param[in] block_count 非零逻辑扇区数。
   * @retval MSD_OK 所有请求块均已到达 p_data。
   * @retval MSD_ERROR 请求未能以同步方式完成。
-  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
+  * @note  只在持 SD 卷锁的公开调用里被 FatFs 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *p_data,
                               uint32_t read_address,
@@ -115,7 +120,7 @@ uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *p_data,
   * @param[in] block_count 非零逻辑扇区数。
   * @retval MSD_OK 所有请求块均已提交到卡。
   * @retval MSD_ERROR 请求未能以同步方式完成。
-  * @note  仅 Storage Task 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
+  * @note  只在持 SD 卷锁的公开调用里被 FatFs 调用；使用 Service 内部 DMA 中转缓冲，函数等待完成后返回。
   */
 uint8_t BSP_SD_WriteBlocks_DMA(uint32_t *p_data,
                                uint32_t write_address,

@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    playback_task_test_support.h
- * @brief   playback_machine 主机测试的替身与场景助手：调用日志、假存储窗口、假播放模块、快照记录。
+ * @brief   playback_machine 主机测试的替身与场景助手：调用日志、假音频读取任务、假播放模块、快照记录。
  * @note    替身只实现 playback_machine.h 的 Ops，不向生产头增加测试专用入口。
  ******************************************************************************
  */
@@ -58,28 +58,28 @@ void fake_cycles_advance(uint32_t cycles);
 uint32_t published_count(void);
 Playback_SnapshotTypeDef published_last(void);
 
-/* 假存储窗口：脚本化 Storage 一侧。 */
+/* 假音频读取任务：脚本化音频读取任务一侧。 */
 #define FAKE_BLOCK_CAPACITY 64U
 #define FAKE_BLOCK_POOL     8U
-uint32_t fake_storage_request_count(void);
-Playback_MachineRequestTypeDef fake_storage_last_request(void);
-/** @brief Storage 侧整份覆盖写流记录信箱（开启 OK）。 */
-void fake_storage_open_ok(uint32_t stream_seq, uint32_t generation, uint16_t track_count, uint32_t audio_bytes);
-/** @brief Storage 侧整份覆盖写流记录信箱（任意内容）。 */
-void fake_storage_write_record(const Playback_MachineRecordTypeDef *record);
+uint32_t fake_audio_reader_request_count(void);
+Playback_MachineRequestTypeDef fake_audio_reader_last_request(void);
+/** @brief 音频读取任务侧整份覆盖写流记录信箱（开启 OK）。 */
+void fake_audio_reader_open_ok(uint32_t stream_seq, uint32_t generation, uint16_t track_count, uint32_t audio_bytes);
+/** @brief 音频读取任务侧整份覆盖写流记录信箱（任意内容）。 */
+void fake_audio_reader_write_record(const Playback_MachineRecordTypeDef *record);
 /** @brief 保留开启参数，只改终止状态（ENDED 在最后一块入队之后写）。 */
-void fake_storage_set_end(uint32_t stream_seq, Playback_MachineEndTypeDef end);
+void fake_audio_reader_set_end(uint32_t stream_seq, Playback_MachineEndTypeDef end);
 /** @brief 把 length 字节（值为 fill_value 起递增）作为带 stream_seq 戳的块放入就绪队列。 */
-void fake_storage_enqueue_block(uint32_t stream_seq, uint32_t length, uint8_t fill_value);
-uint32_t fake_storage_ready_count(void);
+void fake_audio_reader_enqueue_block(uint32_t stream_seq, uint32_t length, uint8_t fill_value);
+uint32_t fake_audio_reader_ready_count(void);
 /** @brief 已取走但尚未归还的块数。 */
-uint32_t fake_storage_outstanding(void);
+uint32_t fake_audio_reader_outstanding(void);
 /** @brief 曾同时持有的最大块数（B15：最多一块）。 */
-uint32_t fake_storage_max_outstanding(void);
+uint32_t fake_audio_reader_max_outstanding(void);
 /** @brief 已归还的块数。 */
-uint32_t fake_storage_returned_count(void);
+uint32_t fake_audio_reader_returned_count(void);
 /** @brief 第 n 个被归还的块的流序号。 */
-uint32_t fake_storage_returned_seq(uint32_t index);
+uint32_t fake_audio_reader_returned_seq(uint32_t index);
 
 /* 假播放模块：按窗口容量与每帧字节数建模解码。 */
 typedef struct
@@ -165,9 +165,9 @@ uint32_t world_now(void);
 void world_wake_at(uint32_t now_ms);
 /** @brief 在绝对时刻 now_ms 发一条命令（SELECT 请用 world_send_select_at）。 */
 void world_send_at(Playback_CommandKindTypeDef kind, uint32_t now_ms);
-/** @brief Storage 对当前流应答任意开启结果（非 OK），并唤醒一次。 */
+/** @brief 音频读取任务对当前流应答任意开启结果（非 OK），并唤醒一次。 */
 void world_open_result(Playback_MachineOpenResultTypeDef result);
-/** @brief Storage 对当前流应答 BAD_FILE，并唤醒一次。 */
+/** @brief 音频读取任务对当前流应答 BAD_FILE，并唤醒一次。 */
 void world_open_bad_file(void);
 /** @brief 最近分配的流序号（= 最近一次请求信箱写入的序号）。 */
 uint32_t world_current_seq(void);
@@ -176,7 +176,7 @@ Playback_SnapshotTypeDef world_snapshot(void);
 uint32_t world_last_command_seq(void);
 /** @brief 开启参数里的音频字节数（场景助手统一使用）。 */
 #define WORLD_AUDIO_BYTES 4096U
-/** @brief Storage 对当前流应答开启 OK，并唤醒一次。 */
+/** @brief 音频读取任务对当前流应答开启 OK，并唤醒一次。 */
 void world_open_ok(uint32_t generation, uint16_t track_count);
 /** @brief 给当前流放入一块并唤醒一次。 */
 void world_feed_block(uint32_t length);

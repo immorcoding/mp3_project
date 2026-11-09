@@ -2,12 +2,13 @@
  * @file test_flash_file_benchmark.c
  * @brief 真实 APP/Service/FatFs/USER/FTL 文件回归；仅替换任务、日志和故障边界。
  */
-#include "APP/tasks/storage/benchmark/storage_flash_benchmark.h"
-#include "APP/tasks/storage/benchmark/storage_flash_benchmark_config.h"
+#include "APP/tasks/volume/benchmark/storage_flash_benchmark.h"
+#include "APP/tasks/volume/benchmark/storage_flash_benchmark_config.h"
 #include "Service/filesystem/filesystem_file.h"
 #include "Service/filesystem/filesystem_service.h"
 #include "Service/log/log_service.h"
 #include "FATFS/App/fatfs.h"
+#include "freertos_stub.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,36 +20,53 @@ uint8_t retUSER;
 uint8_t retSD = 1U;
 FATFS USERFatFS;
 FATFS SDFatFS;
-static bool owner = true;
 static const char *scenario;
 static unsigned removes, closes, writes;
 static bool passed, failed, cleanup_failed;
 
-bool filesystem_sd_transfer_init(uint32_t notify_index)
-{
-    (void)notify_index;
-    return false;
-}
-
-bool filesystem_sd_transfer_is_bound(void)
+/**
+ * @brief SD 传输层替身：初始化结果固定。
+ * @return 固定值，见函数体。
+ */
+bool filesystem_sd_transfer_init(void)
 {
     return false;
 }
 
-uint32_t filesystem_sd_transfer_notify_index(void)
+/**
+ * @brief SD 传输层替身：就绪状态固定。
+ * @return 固定值，见函数体。
+ */
+bool filesystem_sd_transfer_is_ready(void)
 {
-    return 0U;
+    return false;
 }
 
-bool filesystem_flash_transfer_init(uint32_t notify_index)
+/**
+ * @brief SD 传输层替身：卡检测脚，恒表示有卡（读写失败时不会被改成 NO_MEDIA）。
+ * @return 恒为 true。
+ */
+bool filesystem_sd_transfer_card_present(void)
 {
-    (void)notify_index;
     return true;
 }
 
-bool filesystem_flash_transfer_is_owner(void)
+/**
+ * @brief Flash 传输层替身：初始化恒成功。
+ * @return 恒为 true。
+ */
+bool filesystem_flash_transfer_init(void)
 {
-    return owner;
+    return true;
+}
+
+/**
+ * @brief Flash 传输层替身：恒已就绪。
+ * @return 恒为 true。
+ */
+bool filesystem_flash_transfer_is_ready(void)
+{
+    return true;
 }
 
 Service_StatusTypeDef filesystem_flash_transfer_open(void)
@@ -69,16 +87,6 @@ Service_StatusTypeDef filesystem_flash_transfer_recover(void)
 Service_StatusTypeDef filesystem_flash_transfer_reclaim(void)
 {
     return SERVICE_OK;
-}
-
-/**
- * @brief 提供假 tick，不测量硬件性能。
- * @return 每次调用递增 10 的 tick。
- */
-uint32_t xTaskGetTickCount(void)
-{
-    static uint32_t tick;
-    return tick += 10U;
 }
 
 /**
@@ -181,7 +189,7 @@ Service_StatusTypeDef __wrap_Service_Filesystem_RemoveFile(Service_Filesystem_Vo
 }
 
 /**
- * @brief 核对所有者、路径、同名保护、文件槽和旧句柄失效。
+ * @brief 核对未初始化时的拒绝、路径、同名保护、文件槽和旧句柄失效；卷已挂载但还没 InitFlash 时先断言拒绝。
  */
 static void test_contract(void)
 {
@@ -189,12 +197,11 @@ static void test_contract(void)
     uint8_t data[16] = {1, 2, 3};
     uint32_t transferred;
 
-    owner = false;
     assert(Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_FLASH,
                                        "test.bin",
                                        SERVICE_FILESYSTEM_FILE_MODE_CREATE_NEW,
                                        &file) == SERVICE_NOT_READY);
-    owner = true;
+    assert(Service_Filesystem_InitFlash() == SERVICE_OK);
     assert(Service_Filesystem_OpenFile(SERVICE_FILESYSTEM_VOLUME_FLASH,
                                        "../bad",
                                        SERVICE_FILESYSTEM_FILE_MODE_CREATE_NEW,
@@ -259,6 +266,9 @@ int test_flash_file_benchmark(void)
 {
     scenario = getenv("FLASH_FILE_SCENARIO");
     assert(scenario);
+    /* 共用 FreeRTOS 桩提供假 tick：每次查询前进 10，不测量硬件性能。 */
+    freertos_stub_reset();
+    freertos_stub_set_tick_step(10U);
     char placeholder[4];
     uint8_t work[4096];
     assert(FATFS_LinkDriver(&USER_Driver, placeholder) == 0);
@@ -270,6 +280,11 @@ int test_flash_file_benchmark(void)
     {
         test_contract();
         return 0;
+    }
+    /* “未初始化”场景：卷已挂载但没有调用 InitFlash，文件接口拒绝，基准不得动任何东西。 */
+    if (strcmp(scenario, "not_initialized") != 0)
+    {
+        assert(Service_Filesystem_InitFlash() == SERVICE_OK);
     }
     TCHAR path[40] = {(TCHAR)USERPath[0], ':', '/'};
     const char *name = STORAGE_FLASH_BENCHMARK_FILE_NAME;
@@ -291,12 +306,10 @@ int test_flash_file_benchmark(void)
     DWORD free_before;
     FATFS *free_fs;
     assert(f_getfree(drive, &free_before, &free_fs) == FR_OK);
-    owner = strcmp(scenario, "nonowner") != 0;
     storage_flash_benchmark_run_file();
     unsigned attempts = removes;
     storage_flash_benchmark_run_file();
     assert(removes == attempts);
-    owner = true;
     FILINFO info;
     FRESULT exists = f_stat(path, &info);
     if (!strcmp(scenario, "exists"))
@@ -325,7 +338,7 @@ int test_flash_file_benchmark(void)
     else
     {
         assert(exists == FR_NO_FILE);
-        assert(removes == (!strcmp(scenario, "nonowner") ? 0U : 1U));
+        assert(removes == (!strcmp(scenario, "not_initialized") ? 0U : 1U));
         assert(passed == !strcmp(scenario, "success"));
         assert(failed == (strcmp(scenario, "success") != 0));
     }

@@ -9,11 +9,13 @@
 #ifndef PLAYBACK_TASK_H
 #define PLAYBACK_TASK_H
 
+#include <stdint.h>
+
 #include "APP/tasks/playback/playback_task_config.h"
 
 /**
  * @brief 播放任务私有的任务通知槽。
- * @note  索引只在本任务的通知数组内有效；与 Storage Task、GUI Task 的槽位编号互不相关。
+ * @note  索引只在本任务的通知数组内有效；与其他任务（音频读取、GUI 等）的槽位编号互不相关。
  */
 typedef enum
 {
@@ -22,5 +24,6 @@ typedef enum
 } Playback_NotifyIndexTypeDef;
 
 void playback_task(void *handle);
+uint32_t playback_task_get_underrun_total(void);
 
 #endif /* PLAYBACK_TASK_H */

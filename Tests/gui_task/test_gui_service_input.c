@@ -136,6 +136,64 @@ static void test_drop_queue_select_keeps_other_commands(void)
 }
 
 /**
+ * @brief 空槽没有待取走的命令；post 之后有，Consume 之后又没有。
+ */
+static void test_pending_follows_post_and_consume(void)
+{
+    Service_GUI_InputTypeDef input;
+
+    assert(!service_gui_input_has_pending());
+
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_NEXT, 0U);
+    assert(service_gui_input_has_pending());
+
+    assert(service_gui_input_consume(&input) == SERVICE_OK);
+    assert(!service_gui_input_has_pending());
+}
+
+/**
+ * @brief 对 NONE 的 post 被忽略，不让睡眠误以为有输入待取。
+ */
+static void test_pending_ignores_post_of_none(void)
+{
+    service_gui_input_post(SERVICE_GUI_INPUT_NONE, 0U);
+    assert(!service_gui_input_has_pending());
+}
+
+/**
+ * @brief 合并后的进度条按下与拖动仍算一次待取走的输入，取走后清空。
+ */
+static void test_pending_stays_set_through_press_drag_merge(void)
+{
+    Service_GUI_InputTypeDef input;
+
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_PRESS, 100U);
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_SEEK_DRAG, 420U);
+    assert(service_gui_input_has_pending());
+
+    assert(service_gui_input_consume(&input) == SERVICE_OK);
+    assert(!service_gui_input_has_pending());
+}
+
+/**
+ * @brief 丢掉 Queue 选曲后槽空；丢不掉的其它命令仍待取走。
+ */
+static void test_pending_after_drop_queue_select(void)
+{
+    Service_GUI_InputTypeDef input;
+
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_QUEUE_SELECT, 3U);
+    service_gui_input_drop_queue_select();
+    assert(!service_gui_input_has_pending());
+
+    service_gui_input_post(SERVICE_GUI_INPUT_MUSIC_PLAY_PAUSE, 0U);
+    service_gui_input_drop_queue_select();
+    assert(service_gui_input_has_pending());
+    assert(service_gui_input_consume(&input) == SERVICE_OK);
+    assert(!service_gui_input_has_pending());
+}
+
+/**
  * @brief 运行全部输入单槽测试。
  * @return 成功时返回 0。
  */
@@ -149,6 +207,10 @@ int main(void)
     test_drag_after_pending_press_keeps_press_with_latest_value();
     test_drop_queue_select_keeps_seek();
     test_drop_queue_select_keeps_other_commands();
+    test_pending_follows_post_and_consume();
+    test_pending_ignores_post_of_none();
+    test_pending_stays_set_through_press_drag_merge();
+    test_pending_after_drop_queue_select();
 
     puts("gui_service_input_tests: all tests passed");
     return 0;

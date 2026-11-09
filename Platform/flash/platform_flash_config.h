@@ -11,7 +11,7 @@
 #include "Components/w25qxx/w25qxx.h"
 
 /* platform_flash.c */
-#define PLATFORM_FLASH_QSPI_TIMEOUT_MS                 100u          /* JEDEC ID 等短同步事务的板级超时，单位为毫秒。 */
+#define PLATFORM_FLASH_QSPI_TIMEOUT_MS                 3000u         /* 单次阻塞式 HAL QSPI 调用的软件时限，单位为毫秒；取 3000 的理由与代价见 Platform/flash/README.md“QSPI 软件时限”，Service 的单次请求预算须大于它。 */
 #define PLATFORM_FLASH_EXPECTED_MANUFACTURER_ID        W25QXX_MANUFACTURER_ID_WINBOND  /* 当前 PCB 焊接 Winbond；MemoryType 不参与兼容性判定。 */
 #define PLATFORM_FLASH_EXPECTED_CAPACITY_ID            W25QXX_CAPACITY_ID_256MBIT  /* 当前 PCB 焊接 W25Q256。 */
 

@@ -2,9 +2,9 @@
   ******************************************************************************
   * @file    playback_machine.h
   * @brief   播放任务的纯 C 状态机：命令、流交接、切歌、暂停、播完，以及坏文件、超时、故障与停止原因（#71 B1–B17、K3–K5）。
-  * @note    不依赖 FreeRTOS、HAL 或 Storage 的头：存储窗口（请求信箱、流记录、块队列）与播放模块经
+  * @note    不依赖 FreeRTOS、HAL 或音频读取任务的头：音频读取任务（请求信箱、流记录、块队列）与播放模块经
   *          Ops 注入，时刻由调用方传入（B9）。任务外壳负责等待通知、取空命令 FIFO、读单调毫秒时刻、
-  *          把 Ops 接到 storage_audio_stream_* 与 Service_Playback_*，并保证单线程调用本模块。
+  *          把 Ops 接到 audio_reader_stream_* 与 Service_Playback_*，并保证单线程调用本模块。
   *          游标即快照中的 {HasTrack, Generation, Index}，只由本状态机写（ADR-0020 第 4 条）。
   ******************************************************************************
   */
@@ -19,7 +19,7 @@
 #include "APP/tasks/playback/playback_task_config.h"
 #include "Service/playback/playback_service.h"
 
-/** @brief 请求信箱内容（播放任务 → Storage）；StreamSeq 为 0 表示“无流”。与 Storage_AudioRequestTypeDef 一一对应。 */
+/** @brief 请求信箱内容（播放任务 → 音频读取任务）；StreamSeq 为 0 表示“无流”。与 AudioReader_RequestTypeDef 一一对应。 */
 typedef struct
 {
     uint32_t StreamSeq;    /**< 播放任务分配的单调流序号；0 = 无流。 */
@@ -28,7 +28,7 @@ typedef struct
     uint32_t AudioOffset;  /**< 相对音频区间起点的字节数；切歌与普通开流为 0，跳转为映射给出的偏移。 */
 } Playback_MachineRequestTypeDef;
 
-/** @brief 开启结果。与 Storage_AudioOpenResultTypeDef 一一对应。 */
+/** @brief 开启结果。与 AudioReader_OpenResultTypeDef 一一对应。 */
 typedef enum
 {
     PLAYBACK_MACHINE_OPEN_PENDING = 0U,
@@ -40,7 +40,7 @@ typedef enum
     PLAYBACK_MACHINE_OPEN_IO_ERROR
 } Playback_MachineOpenResultTypeDef;
 
-/** @brief 终止状态。与 Storage_AudioEndTypeDef 一一对应。 */
+/** @brief 终止状态。与 AudioReader_EndTypeDef 一一对应。 */
 typedef enum
 {
     PLAYBACK_MACHINE_END_NONE = 0U,
@@ -49,7 +49,7 @@ typedef enum
     PLAYBACK_MACHINE_END_CARD_REMOVED
 } Playback_MachineEndTypeDef;
 
-/** @brief 流记录信箱内容（Storage → 播放任务）。与 Storage_AudioRecordTypeDef 一一对应。 */
+/** @brief 流记录信箱内容（音频读取任务 → 播放任务）。与 AudioReader_RecordTypeDef 一一对应。 */
 typedef struct
 {
     uint32_t StreamSeq;                          /**< 这份记录属于哪个流。 */
@@ -60,16 +60,16 @@ typedef struct
     Playback_MachineEndTypeDef End;              /**< 终止状态。 */
 } Playback_MachineRecordTypeDef;
 
-/** @brief 就绪队列里一块的视图；Handle 由存储窗口解释，状态机只原样交还。 */
+/** @brief 就绪队列里一块的视图；Handle 由音频读取任务解释，状态机只原样交还。 */
 typedef struct
 {
-    void *Handle;              /**< 存储窗口的块句柄。 */
+    void *Handle;              /**< 音频读取任务的块句柄。 */
     uint32_t StreamSeq;        /**< 块头：所属流序号。 */
     uint32_t ValidBytes;       /**< 块头：有效字节数。 */
     const uint8_t *Data;       /**< 块数据，仅在归还之前有效。 */
 } Playback_MachineBlockTypeDef;
 
-/** @brief 存储窗口 Ops：请求信箱、流记录信箱、就绪队列；对应 storage_audio_stream_*（外壳适配）。 */
+/** @brief 音频流 Ops：请求信箱、流记录信箱、就绪队列；对应 audio_reader_stream_*（外壳适配）。 */
 typedef struct
 {
     bool (*WriteRequest)(const Playback_MachineRequestTypeDef *request);  /**< 覆盖写请求信箱；不阻塞。 */
@@ -77,7 +77,7 @@ typedef struct
     bool (*PeekReadyBlock)(Playback_MachineBlockTypeDef *block);          /**< 窥视就绪队列队首，不取走。 */
     bool (*TakeReadyBlock)(Playback_MachineBlockTypeDef *block);          /**< 取走就绪队列队首。 */
     void (*ReturnBlock)(const Playback_MachineBlockTypeDef *block);       /**< 放回空闲队列并置“块已归还”。 */
-} Playback_MachineStorageOpsTypeDef;
+} Playback_MachineStreamOpsTypeDef;
 
 /** @brief 播放模块 Ops：对应 Service_Playback_* 的输入与输出管线操作（外壳直接填函数指针）。 */
 typedef struct
@@ -96,7 +96,7 @@ typedef struct
 /** @brief 状态机的全部外部依赖。 */
 typedef struct
 {
-    Playback_MachineStorageOpsTypeDef Storage;                        /**< 存储窗口。 */
+    Playback_MachineStreamOpsTypeDef Stream;                          /**< 音频读取任务。 */
     Playback_MachinePlayerOpsTypeDef Player;                          /**< 播放模块。 */
     void (*PublishSnapshot)(const Playback_SnapshotTypeDef *snapshot);/**< 覆盖写状态信箱；只在快照变化时调用。 */
     void (*LogInfo)(const char *text);                                /**< INFO 日志（可为空）；只在命令与曲目边界调用，不进每帧路径；文本由实现复制。 */
@@ -140,8 +140,14 @@ typedef struct
     Service_Playback_SeekPointTypeDef SeekPoint;/**< 本次跳转的映射结果（偏移、落点、方式、是否钳位）。 */
     uint32_t SeekTargetMs;                     /**< 本次跳转的目标毫秒。 */
     uint32_t SeekStartCycles;                  /**< 处理 SEEK 命令时的周期计数器读数，供 lat。 */
-    bool SeekHoldEnd;                          /**< 当前流由跳转重开且尚未起播过：暂停中回报流尾放完（含钳位后零帧）时不前进，等恢复。 */
+    bool SwitchActive;                         /**< 一次换曲（用户的 NEXT、PREV、SELECT，或自动前进）已执行且输出尚未重新起播（DIAG-6）；停止使其作废，更新的用户换曲覆盖它。 */
+    bool SwitchAuto;                           /**< 等待起播的换曲是自动前进（播完前进、跳过坏文件续上），Switch 行带 auto 后缀；用户换曲为假。 */
+    uint32_t SwitchStartCycles;               /**< 处理该换曲命令时的周期计数器读数，供 Switch 的 lat。 */
+    uint32_t UnderrunTotal;                    /**< 开机以来播放模块回报的欠载次数累计（Platform 的计数每次 Start 清零，这里累加）。 */
+    bool SeekHoldEnd;                         /**< 当前流由跳转重开且尚未起播过：暂停中回报流尾放完（含钳位后零帧）时不前进，等恢复。 */
 } Playback_MachineTypeDef;
+
+uint32_t playback_machine_underrun_total(const Playback_MachineTypeDef *machine);
 
 void playback_machine_init(Playback_MachineTypeDef *machine, const Playback_MachineOpsTypeDef *ops);
 void playback_machine_step(Playback_MachineTypeDef *machine,
