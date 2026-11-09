@@ -23,7 +23,7 @@
 - **每次唤醒**：有界等待事件槽（无事件时最长 `PLAYBACK_TASK_WAKE_PERIOD_MS` = 100 ms，让 T_data、T_out 这类只靠时刻到期的判定在没有 FLAG 时也能评估）→ 把命令 FIFO 取空（≤ 深度 8 条，不按唤醒次数计数）→ 以 `xTaskGetTickCount()` 换算的单调毫秒时刻（B9，要求 tick 为 1 kHz）调用 `playback_machine_step()`。
 - **命令 FIFO**（K2）：深度 `PLAYBACK_COMMAND_QUEUE_DEPTH` = 8 的静态 FreeRTOS 队列；`playback_command_send()` 零超时入队，满、参数为空或任务尚未启动返回 `PLAYBACK_QUEUE_FULL`，成功后置命令 FLAG。任务上下文调用，不得在 ISR 调用。
 - **状态信箱**（K2、B17）：长度 1 的静态覆盖队列；状态机每次快照变化经 `PublishSnapshot` 整份 `xQueueOverwrite`，`playback_snapshot_read()` 用 `xQueuePeek` 窥视，不取走；首次发布前读到全零快照。不唤醒 GUI。
-- **音频读取任务映射**（0.10.0 前叫 Storage 映射，#215 改名，字段、枚举和语义不变）：请求信箱含 `AudioOffset`（切歌与普通开流为 0），外壳逐字段映射并由 `_Static_assert` 固定偏移。状态机自带 `Playback_Machine{Request,Record,Block}TypeDef` 与结果、终止枚举（因为 `audio_reader_stream.h` 引入 FreeRTOS，状态机不能包含它，#78），外壳逐字段映射到 `audio_reader_stream_request()`、`audio_reader_stream_get_record()`、`audio_reader_block_peek_ready()/take_ready()` 与 `audio_reader_stream_return_block()`，并用 `_Static_assert` 固定两边结构体大小、字段宽度与偏移、枚举值的一一对应；任何一边改字段或枚举，编译期报错。不改音频读取任务的公开头。播放状态机本身这次没有改：它内部的存储窗口 Ops 仍叫 `Storage`（`Playback_MachineStorageOpsTypeDef`、`Ops.Storage.*`），是否改名留给用户决定。
+- **音频读取任务映射**（0.10.0 前叫 Storage 映射，#215 改名，字段、枚举和语义不变）：请求信箱含 `AudioOffset`（切歌与普通开流为 0），外壳逐字段映射并由 `_Static_assert` 固定偏移。状态机自带 `Playback_Machine{Request,Record,Block}TypeDef` 与结果、终止枚举（因为 `audio_reader_stream.h` 引入 FreeRTOS，状态机不能包含它，#78），外壳逐字段映射到 `audio_reader_stream_request()`、`audio_reader_stream_get_record()`、`audio_reader_block_peek_ready()/take_ready()` 与 `audio_reader_stream_return_block()`，并用 `_Static_assert` 固定两边结构体大小、字段宽度与偏移、枚举值的一一对应；任何一边改字段或枚举，编译期报错。不改音频读取任务的公开头。#215 当时播放状态机本身没有改；它内部指向音频读取任务的 Ops 原叫 `Storage`，#222 收尾时只改名为 `Stream`（`Playback_MachineStreamOpsTypeDef`、`Ops.Stream.*`，与 `audio_reader_stream_*` 同名），行为不变。
 - **播放模块映射**：`Playback_MachinePlayerOpsTypeDef` 直接填 `Service_Playback_*` 函数指针（含 `MapSeek` 与 `ReopenStream`）。
 - **B2**：外壳不碰 FatFs/LVGL，不同步等待音频读取任务（只写请求信箱、读流记录信箱、取放块队列，全部零超时），不阻塞发送，没有运行期 malloc。命令 FIFO 与状态信箱是静态队列，在 DTCM `.bss`，不占内核堆（#71 F 节原计两个堆对象，实现改为静态，堆余量更大）。
 - **不做主机测试**：外壳依赖 FreeRTOS、音频读取任务与 Platform，进板级验收；状态机逻辑由 `Tests/playback_task/` 覆盖。
@@ -82,7 +82,7 @@
 
 状态机不包含音频读取任务或 FreeRTOS 的头，外部依赖都经 `Playback_MachineOpsTypeDef` 注入，由 `playback_task.c` 装配：
 
-- 存储窗口：写请求信箱、窥视流记录、窥视/取走就绪块、归还块。类型与 `audio_reader_stream.h` 的请求、记录、结果枚举一一对应，外壳做 1:1 映射并以静态断言固定。
+- 音频读取任务：写请求信箱、窥视流记录、窥视/取走就绪块、归还块。类型与 `audio_reader_stream.h` 的请求、记录、结果枚举一一对应，外壳做 1:1 映射并以静态断言固定。
 - 播放模块：`BeginStream`、`Feed`、`FinishInput`、`Pump`、`PauseOutput`、`ResumeOutput`、`AbandonStream`，签名即 `Service_Playback_*`，外壳直接填函数指针。
 - 状态信箱：`PublishSnapshot` 覆盖写。
 - INFO / DEBUG 日志：`LogInfo(text)`、`LogDebug(text)` 可为空；外壳接到 `Service_Log_Post(INFO / DEBUG, "PLAYBACK", text)`（非阻塞，队列满丢弃）。单条 INFO 文本缓冲 `PLAYBACK_MACHINE_LOG_TEXT_SIZE` 为 96 B（Seek 行最长约 88 B，小于 Service_Log 单块正文 128 B）。
@@ -118,4 +118,4 @@
 
 ## 主机测试
 
-`Tests/playback_task/`：假存储窗口与假播放模块（含线性假 `MapSeek`/`ReopenStream` 与假周期计数器），覆盖跳转（`playback_task_seek`：执行与落点、三种忽略、最新者胜、带偏移重开、暂停中预填、越尾、`TrackStartCount`、作废、计时、Seek INFO）、切歌时延与欠载累计（`playback_task_switch`：Switch INFO 的格式、触发、auto 与作废）、K3 全部格子、K5 的快照字段、流身份与块交接、切歌清理顺序、暂停、EOF 与短文件、游标环形步进与代次绑定，以及 B5 坏文件有界跳过、B6 每一行停止原因、B7/B8 超时、B10 与 K3 的 AUDIO_FAULT 锁存。
+`Tests/playback_task/`：假音频读取任务与假播放模块（含线性假 `MapSeek`/`ReopenStream` 与假周期计数器），覆盖跳转（`playback_task_seek`：执行与落点、三种忽略、最新者胜、带偏移重开、暂停中预填、越尾、`TrackStartCount`、作废、计时、Seek INFO）、切歌时延与欠载累计（`playback_task_switch`：Switch INFO 的格式、触发、auto 与作废）、K3 全部格子、K5 的快照字段、流身份与块交接、切歌清理顺序、暂停、EOF 与短文件、游标环形步进与代次绑定，以及 B5 坏文件有界跳过、B6 每一行停止原因、B7/B8 超时、B10 与 K3 的 AUDIO_FAULT 锁存。

@@ -174,6 +174,6 @@ cmake --build --preset firmware-debug
 
 ## 给后面票的注意事项
 
-- **#221、#222**：Storage Task 和 `APP/tasks/storage/` 已不存在；ROUTES 里 `APP/tasks/storage/` 的条目要换成各任务（inbox 的 `route` 行）。播放状态机里存储窗口 Ops 仍叫 `Storage`（#215 用户决定 #222 收尾时只改名）。
+- **#221、#222**：Storage Task 和 `APP/tasks/storage/` 已不存在；ROUTES 里 `APP/tasks/storage/` 的条目要换成各任务（inbox 的 `route` 行）。播放状态机里指向音频读取任务的 Ops 已在 #222 收尾时改名为 `Stream`（`Playback_MachineStreamOpsTypeDef`、`Ops.Stream.*`），只改名、不改行为。
 - **第 6 次上板之后**：R6.2 起 STOR-12 的“播放中真擦除、欠载 0”才有证据（回收作业按产品节拍），通过后 STOR-12 才能升回 settled。
 - **扩作业**：新增后台作业只在注册表多一行 `background_step`；若要临时提高后台任务优先级（封面解码，#196），只改后台任务内部，单步函数的接口不变。

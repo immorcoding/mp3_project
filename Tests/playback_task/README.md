@@ -2,7 +2,7 @@
 
 本目录通过 `playback_machine.h` 的公开接口验证播放任务的纯 C 状态机（[#71](https://github.com/immorcoding/mp3_project/issues/71) 缝 1，票 [#78](https://github.com/immorcoding/mp3_project/issues/78)）：编译真实的 `APP/tasks/playback/playback_machine.c`，不链接 FreeRTOS、HAL、音频读取任务或真实播放模块。外部依赖由 `playback_task_test_support.c` 的替身经 `Playback_MachineOpsTypeDef` 注入：
 
-- **假存储窗口**（音频读取任务的替身，函数名 `fake_audio_reader_*`，#215 起由 `fake_storage_*` 改名；状态机内部 Ops 字段仍叫 `Storage`，状态机不改）：请求信箱（记录写入）、流记录信箱（测试脚本化音频读取任务一侧）、就绪块队列与块的取走/归还账（统计同时持有块数，B15 最多一块）；
+- **假音频读取任务**（函数名 `fake_audio_reader_*`，#215 起由 `fake_storage_*` 改名；状态机的对应 Ops 字段 #222 起叫 `Stream`，原叫 `Storage`）：请求信箱（记录写入）、流记录信箱（测试脚本化音频读取任务一侧）、就绪块队列与块的取走/归还账（统计同时持有块数，B15 最多一块）；
 - **假播放模块**（含线性假 `MapSeek`/`ReopenStream`：按 `BeginStream` 的音频字节数与首帧给出的总时长线性映射，最多钳到 `AudioBytes − 2 × BytesPerFrame`，首帧后流级事实保留到下一次 `BeginStream`）：按窗口容量、每帧字节数和每次推进帧数建模的 `Service_Playback_*` 子集，暂停且预填已满时不再解码，`fake_player_release_tail()` 模拟“流尾放完”；故障注入（R 耗尽、Start 被拒、TRANSFER_ERROR、STOP_FAILED 等 `Pump` 事实，输出已 Start/有进展/欠载事件，下一次 Stop 失败、Pump 失败、BeginStream 被拒）；
 - **调用日志**：替身按序记录调用，用来断言 B11 的清理顺序。
 

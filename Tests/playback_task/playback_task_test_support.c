@@ -245,7 +245,7 @@ Playback_SnapshotTypeDef published_last(void)
 }
 
 /* ---------------------------------------------------------------------------
- * 假存储窗口
+ * 假音频读取任务
  * ------------------------------------------------------------------------- */
 
 typedef struct
@@ -270,7 +270,7 @@ static uint32_t fake_returned;
 static uint32_t fake_returned_seq_log[64];
 
 /**
- * @brief 复位假存储窗口。
+ * @brief 复位假音频读取任务。
  */
 static void fake_audio_reader_reset(void)
 {
@@ -1154,11 +1154,11 @@ void world_reset(void)
     world_now_ms = 1000U;
     world_command_seq = 0U;
 
-    world_ops.Storage.WriteRequest = fake_write_request;
-    world_ops.Storage.ReadRecord = fake_read_record;
-    world_ops.Storage.PeekReadyBlock = fake_peek_ready_block;
-    world_ops.Storage.TakeReadyBlock = fake_take_ready_block;
-    world_ops.Storage.ReturnBlock = fake_return_block;
+    world_ops.Stream.WriteRequest = fake_write_request;
+    world_ops.Stream.ReadRecord = fake_read_record;
+    world_ops.Stream.PeekReadyBlock = fake_peek_ready_block;
+    world_ops.Stream.TakeReadyBlock = fake_take_ready_block;
+    world_ops.Stream.ReturnBlock = fake_return_block;
     world_ops.Player.BeginStream = fake_begin_stream;
     world_ops.Player.MapSeek = fake_map_seek;
     world_ops.Player.ReopenStream = fake_reopen_stream;

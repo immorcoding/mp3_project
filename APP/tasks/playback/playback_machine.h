@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    playback_machine.h
   * @brief   播放任务的纯 C 状态机：命令、流交接、切歌、暂停、播完，以及坏文件、超时、故障与停止原因（#71 B1–B17、K3–K5）。
-  * @note    不依赖 FreeRTOS、HAL 或音频读取任务的头：存储窗口（请求信箱、流记录、块队列）与播放模块经
+  * @note    不依赖 FreeRTOS、HAL 或音频读取任务的头：音频读取任务（请求信箱、流记录、块队列）与播放模块经
   *          Ops 注入，时刻由调用方传入（B9）。任务外壳负责等待通知、取空命令 FIFO、读单调毫秒时刻、
   *          把 Ops 接到 audio_reader_stream_* 与 Service_Playback_*，并保证单线程调用本模块。
   *          游标即快照中的 {HasTrack, Generation, Index}，只由本状态机写（ADR-0020 第 4 条）。
@@ -60,16 +60,16 @@ typedef struct
     Playback_MachineEndTypeDef End;              /**< 终止状态。 */
 } Playback_MachineRecordTypeDef;
 
-/** @brief 就绪队列里一块的视图；Handle 由存储窗口解释，状态机只原样交还。 */
+/** @brief 就绪队列里一块的视图；Handle 由音频读取任务解释，状态机只原样交还。 */
 typedef struct
 {
-    void *Handle;              /**< 存储窗口的块句柄。 */
+    void *Handle;              /**< 音频读取任务的块句柄。 */
     uint32_t StreamSeq;        /**< 块头：所属流序号。 */
     uint32_t ValidBytes;       /**< 块头：有效字节数。 */
     const uint8_t *Data;       /**< 块数据，仅在归还之前有效。 */
 } Playback_MachineBlockTypeDef;
 
-/** @brief 存储窗口 Ops：请求信箱、流记录信箱、就绪队列；对应 audio_reader_stream_*（外壳适配）。 */
+/** @brief 音频流 Ops：请求信箱、流记录信箱、就绪队列；对应 audio_reader_stream_*（外壳适配）。 */
 typedef struct
 {
     bool (*WriteRequest)(const Playback_MachineRequestTypeDef *request);  /**< 覆盖写请求信箱；不阻塞。 */
@@ -77,7 +77,7 @@ typedef struct
     bool (*PeekReadyBlock)(Playback_MachineBlockTypeDef *block);          /**< 窥视就绪队列队首，不取走。 */
     bool (*TakeReadyBlock)(Playback_MachineBlockTypeDef *block);          /**< 取走就绪队列队首。 */
     void (*ReturnBlock)(const Playback_MachineBlockTypeDef *block);       /**< 放回空闲队列并置“块已归还”。 */
-} Playback_MachineStorageOpsTypeDef;
+} Playback_MachineStreamOpsTypeDef;
 
 /** @brief 播放模块 Ops：对应 Service_Playback_* 的输入与输出管线操作（外壳直接填函数指针）。 */
 typedef struct
@@ -96,7 +96,7 @@ typedef struct
 /** @brief 状态机的全部外部依赖。 */
 typedef struct
 {
-    Playback_MachineStorageOpsTypeDef Storage;                        /**< 存储窗口。 */
+    Playback_MachineStreamOpsTypeDef Stream;                          /**< 音频读取任务。 */
     Playback_MachinePlayerOpsTypeDef Player;                          /**< 播放模块。 */
     void (*PublishSnapshot)(const Playback_SnapshotTypeDef *snapshot);/**< 覆盖写状态信箱；只在快照变化时调用。 */
     void (*LogInfo)(const char *text);                                /**< INFO 日志（可为空）；只在命令与曲目边界调用，不进每帧路径；文本由实现复制。 */

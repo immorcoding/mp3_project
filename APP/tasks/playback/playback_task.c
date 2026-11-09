@@ -298,9 +298,9 @@ static uint32_t playback_task_cycles_to_us(uint32_t cycles)
     return (frequency_hz == 0U) ? 0U : (uint32_t)(((uint64_t)cycles * 1000000ULL) / frequency_hz);
 }
 
-/** @brief 状态机的全部外部依赖：存储窗口经本文件适配，播放模块直接填 Service_Playback_* 函数指针。 */
+/** @brief 状态机的全部外部依赖：音频读取任务经本文件适配，播放模块直接填 Service_Playback_* 函数指针。 */
 static const Playback_MachineOpsTypeDef playback_task_ops = {
-    .Storage = {
+    .Stream = {
         .WriteRequest = playback_task_write_request,
         .ReadRecord = playback_task_read_record,
         .PeekReadyBlock = playback_task_peek_ready_block,
