@@ -43,8 +43,9 @@ static uint32_t background_reclaim_ticks_to_ms(TickType_t ticks)
 /**
  * @brief  记失败那一条 ERROR（只记一条，之后作业停下，不再重试），带 FTL 失败诊断（`background_flash_diag.h`）。
  * @param[in] status `ReclaimFlash` 返回的失败状态。
- * @note   一行不超过 127 字符（128 B 的行缓冲，放不下时截断尾巴）：状态数值（1 是 `SERVICE_ERROR`，FTL 的任何非 OK 结果都压成它，分不出具体原因）加
- *        诊断片段（FTL 的具体结果、请求类别、失败次数、空闲块等），最后是“停到 Flash 卷序号变化为止”。失败后 FTL 不就绪，`valid`/`stale` 读作 0。
+ * @note   一行不超过 127 字符（128 B 的行缓冲）：先是状态数值（1 是 `SERVICE_ERROR`，FTL 的任何非 OK 结果都压成它，分不出具体原因）和括号里的
+ *        “停到 Flash 卷序号变化为止”，再接诊断片段（FTL 的具体结果、请求类别、失败次数、空闲块，之后依次是 `qspi`、`rej`、`hw`，放不下的段整段丢掉）。
+ *        失败后 FTL 不就绪，`valid`/`stale` 读作 0。
  */
 static void background_reclaim_log_failure(Service_StatusTypeDef status)
 {

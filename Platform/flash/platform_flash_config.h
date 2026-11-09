@@ -11,17 +11,7 @@
 #include "Components/w25qxx/w25qxx.h"
 
 /* platform_flash.c */
-/* 单次阻塞式 HAL QSPI 调用的软件时限，单位为毫秒：JEDEC ID、状态寄存器、SFDP、同步读、写使能与擦除命令，
- * 以及页编程的 `HAL_QSPI_Command` + `HAL_QSPI_Transmit`（256 B）都用它。
- * 为什么是 3000：HAL 在内部忙等标志位，并用墙钟（`HAL_GetTick`）判断超时，而且是先读标志、后读墙钟；
- * 调用者是优先级 1 的后台任务（#220 起 Flash 请求由后台任务和回收作业发起），发 256 B 的中途被更高优先级的任务
- * （GUI 等）抢占，回来时墙钟已过时限，HAL 就把 `hqspi.State` 置成 ERROR 并返回错误（第 6 次上板：
- * `hw=18/1`，被抢占推断在 1.3 s 以上）。而 `HAL_QSPI_Abort` 对 ERROR 态不起作用，QSPI 从此所有命令失败，
- * 直到重启 Flash 不可用、回收也停。所以时限要远大于任务可能被抢占的最长时间。
- * 代价：芯片或总线真的挂死时，同步调用要 3 s 才报错；启动期（调度器启动前，`Platform_Flash_Init` 依次做
- * JEDEC、SFDP、QE、探测读，第一个失败就返回）最坏一次多等 3 s，正常时序不受影响。
- * Service 的单次请求预算必须大于它：`FILESYSTEM_FLASH_RECLAIM_TIMEOUT_MS` 为此从 2000 改成 5000。 */
-#define PLATFORM_FLASH_QSPI_TIMEOUT_MS                 3000u
+#define PLATFORM_FLASH_QSPI_TIMEOUT_MS                 3000u         /* 单次阻塞式 HAL QSPI 调用的软件时限，单位为毫秒；取 3000 的理由与代价见 Platform/flash/README.md“QSPI 软件时限”，Service 的单次请求预算须大于它。 */
 #define PLATFORM_FLASH_EXPECTED_MANUFACTURER_ID        W25QXX_MANUFACTURER_ID_WINBOND  /* 当前 PCB 焊接 Winbond；MemoryType 不参与兼容性判定。 */
 #define PLATFORM_FLASH_EXPECTED_CAPACITY_ID            W25QXX_CAPACITY_ID_256MBIT  /* 当前 PCB 焊接 W25Q256。 */
 

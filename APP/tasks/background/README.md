@@ -137,7 +137,7 @@ cmake --build --preset firmware-debug
 
 **为什么**：文件接口把 FTL 的任何非 OK 结果（`NO_SPACE`、`CORRUPT`、`IO_ERROR`……）都压成 `SERVICE_ERROR`（数值 1），第 6 次上板压到底后钩子停在 `stopped at=write status=1`，原因看不出来。FTL 自己的“最近结果”每次请求都会被覆盖，失败后卷又不就绪，事后读不到，所以 Platform 在请求以非 OK 收尾的那一刻记下，之后的请求不冲掉它。**只读诊断，不改变任何产品行为。**
 
-**数据来源**：`Platform_Flash_GetVolumeDiagnostics()`（既有诊断通路）的新字段 `LastFailure`（FTL 结果归一化后的分类）、`LastFailureOperation`（打开、格式化、读、写、同步、回收）、`LastFailureRawStatus`（失败时 FTL 最近一次原始访问的结果）、`LastFailureDeviceError`、`LastFailurePortStatus`（失败时芯片后端快照）、`FailureCount`（开机以来以非 OK 收尾的请求数）、`LastRejection`（最近一次被 FTL 在受理时就拒绝的请求，例如卷故障后的 `NOT_READY`）。新增的是 `Platform_Flash_VolumeDiagnosticsTypeDef` 末尾的字段和两个枚举，没有新增函数；Filesystem Service 的接口没有改。
+**数据来源**：`Platform_Flash_GetVolumeDiagnostics()`（既有诊断通路）的新字段 `LastFailure`（FTL 结果归一化后的分类）、`LastFailureOperation`（打开、格式化、读、写、同步、回收）、`LastFailureRawStatus`（失败时 FTL 最近一次原始访问的结果）、`LastFailureDeviceError`、`LastFailurePortStatus`（失败时芯片后端快照）、`FailureCount`（开机以来以非 OK 收尾的请求数）、`LastRejection`（最近一次被 FTL 在受理时就拒绝的请求，例如卷故障后的 `NOT_READY`），以及 QSPI 失败快照 `LastFailureQspiError`、`LastFailureQspiState`、`LastFailureQspiStatus`（失败时 QSPI 控制器的三个原始值，含义见 [Platform Flash README](../../../Platform/flash/README.md)“QSPI 失败快照”）。新增的是 `Platform_Flash_VolumeDiagnosticsTypeDef` 末尾的字段和两个枚举，没有新增函数；Filesystem Service 的接口没有改。
 
 **格式**（回收失败行和钩子停下行共用，`background_flash_diag.h`）：
 
@@ -153,7 +153,7 @@ cmake --build --preset firmware-debug
 | `n` | 开机以来以非 OK 收尾的请求数（最多写 999），**等于 1 时省略** | 没有 `n=` 就是第一次失败（省出的字符给 `qspi`）；每次重启复位 |
 | `free` | **失败后**的空闲块数 | 和统计行 `free=` 比较，看失败时是否已耗尽（FTL 下限约 2） |
 | `valid`、`stale` | 失败后的有效、失效块数，**两者都为 0 时省略** | FTL 故障后不就绪，这两个读作 0，所以停下行另带写之前的 `pre=` |
-| `qspi` | 失败时 QSPI 控制器的 `hqspi.ErrorCode`、`hqspi.State`、`QUADSPI->SR`，十六进制；三个值都为 0 时省略 | **HAL 层的证据**。`ErrorCode`：1 超时、2 传输错误、4 DMA、8 参数；`State`：1 就绪、2 忙、4 错误、8 中止中、12/22 间接写/读中、42 自动轮询中、82 内存映射中；`SR`：bit0 TEF（传输错误）、bit1 TCF、bit2 FTF、bit3 SMF、bit4 TOF（QSPI 超时计数）、bit5 BUSY、bit13:8 FLEVEL（FIFO 水位）。`qspi=1/4/…`（超时、错误态）说明是 HAL 的软件时限到了：它让 `State` 一直停在 4，`HAL_QSPI_Abort` 对错误态不起作用，之后所有命令都失败直到重启（第 6 次上板 C 版 v3 的 `hw=18/1` 就是这样撞出来的）；`ErrorCode` 是 0、`State` 是 1 说明 HAL 没出错，问题在更下面。快照在**芯片驱动第一次报告失败、FTL 还没开始静默**时取（静默会清 TEF/TCF/SMF/TOF）；收尾时才发现的失败取的是那一刻的值 |
+| `qspi` | Platform 记下的失败时 QSPI 的三个原始值 `<ErrorCode>/<State>/<SR>`，十六进制，原样打印；三个值都为 0 时省略 | **APP 不解读**：位含义和判读见 [Platform Flash README](../../../Platform/flash/README.md)“QSPI 失败快照”（例如什么样的 `qspi=` 说明是 HAL 软件时限到了） |
 | `rej` | 最近一次被 FTL 在受理时就拒绝的请求的结果，没有则省略 | 例如 `NOT_READY`：重启后第一个请求被已故障的卷拒绝（`at=open status=1` 就是这样） |
 | `hw` | 失败时芯片后端错误码和端口状态（十六进制），都为 0 则省略 | 非 0 指向硬件 |
 | `diag=n/a` | Platform 读不到（FTL 还没绑定） | 取代以上全部字段 |

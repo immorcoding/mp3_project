@@ -186,9 +186,9 @@ static void test_qspi_snapshot_segment(void)
     g_diag.FreeBlocks = 2U;
     assert(strstr(append_to(text, sizeof(text), "", NULL), "qspi=") == NULL); /* 三个值都是 0：省略。 */
 
-    g_diag.LastFailureQspiError = 0x1U; /* HAL_QSPI_ERROR_TIMEOUT */
-    g_diag.LastFailureQspiState = 0x4U; /* HAL_QSPI_STATE_ERROR */
-    g_diag.LastFailureQspiStatus = 0x10U; /* TOF */
+    g_diag.LastFailureQspiError = 0x1U; /* 三个值只当原始数字原样打印，APP 不解读。 */
+    g_diag.LastFailureQspiState = 0x4U;
+    g_diag.LastFailureQspiStatus = 0x10U;
     assert(strcmp(append_to(text, sizeof(text), "", " pre=1/2/3"),
                   " ftl=IO_ERROR op=write raw=timeout free=2 pre=1/2/3 qspi=1/4/10") == 0);
 

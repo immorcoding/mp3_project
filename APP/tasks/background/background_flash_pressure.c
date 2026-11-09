@@ -17,7 +17,8 @@
  *            wmax=<最长一次写 ms> rmax=<最长一次回收 ms> dmax=<最长一次删除 ms>`，最大值是自上一行起的（含等锁时间）。
  *          - 卷满：WARN `flash full after <字节> B, closing file`，一次会话只记一次。
  *          - 停下：ERROR `stopped at=<步骤名> status=<Service 状态数值> <FTL 失败诊断>[ pre=<空闲>/<有效>/<失效> req=<字节> file=<字节>]`，
- *            一行不超过 127 字符（诊断片段见 `background_flash_diag.h`；`pre`、`req`、`file` 只在写步失败时有）；之后到 Flash 卷序号变化为止不再动。
+ *            诊断片段里 `pre` 等额外段之后还有 `qspi`、`rej`、`hw`（见 `background_flash_diag.h`）；一行不超过 127 字符，放不下的段整段丢掉；
+ *            `pre`、`req`、`file` 只在写步失败时有；之后到 Flash 卷序号变化为止不再动。
  *          启动那一行 `HOOK: flash_pressure ON …` 由 `background_flash_pressure_announce()` 投（WARN）。
  *
  *          空闲块数和擦除次数来自 `Platform_Flash_GetVolumeDiagnostics()`，在 Flash 卷锁外读，只给人看：
@@ -217,7 +218,7 @@ static void flash_pressure_start_session(uint32_t sequence, TickType_t now)
  * @return 这一步返回的等待毫秒数。
  * @note   行里写：停在哪一步、文件接口的状态数值（1 是 `SERVICE_ERROR`，FTL 的任何非 OK 结果都压成它）、`background_flash_diag.h` 的诊断片段
  *         （FTL 的具体结果、请求类别、失败次数、失败后的空闲块等）；写步另加失败那次写之前的快照 `pre=<空闲>/<有效>/<失效>`、
- *         那次写请求的字节数 `req=` 与当前文件已写字节 `file=`（`rej`、`hw` 在最后，放不下先截断它们）。停下是一次性的，仍是一行，
+ *         那次写请求的字节数 `req=` 与当前文件已写字节 `file=`（它们之后依次是 `qspi`、`rej`、`hw`，放不下的段整段丢掉，不留半截字段）。停下是一次性的，仍是一行，
  *         消息池核算不变（只是这一行变长，没有新增行）。
  */
 static uint32_t flash_pressure_stop(FlashPressure_PhaseTypeDef at, Service_StatusTypeDef status)

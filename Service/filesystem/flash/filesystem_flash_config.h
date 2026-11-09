@@ -15,7 +15,7 @@
 #define FILESYSTEM_FLASH_WRITE_TIMEOUT_MS                    120000U  /* 写请求与 CTRL_SYNC 的最大等待，单位毫秒。 */
 #define FILESYSTEM_FLASH_OPEN_TIMEOUT_MS                     120000U  /* 扫描并打开 FTL 卷的最大等待，单位毫秒。 */
 #define FILESYSTEM_FLASH_FORMAT_TIMEOUT_MS                   3600000U /* 24 MiB 全擦除约六千次，不是普通写请求预算。 */
-#define FILESYSTEM_FLASH_RECOVERY_TIMEOUT_MS                 2000U    /* 等待器件恢复并重扫的最大时间，单位毫秒。 */
-#define FILESYSTEM_FLASH_RECLAIM_TIMEOUT_MS                  5000U    /* 单次回收一块的最大等待，单位毫秒；必须大于 Platform 的单次 HAL QSPI 调用时限 `PLATFORM_FLASH_QSPI_TIMEOUT_MS`（3000 ms），否则一次被抢占 2 至 3 s 的健康回收会被服务层中止（#220）。 */
+#define FILESYSTEM_FLASH_RECOVERY_TIMEOUT_MS                 5000U    /* 等待器件恢复并重扫的最大时间，单位毫秒；须大于 Platform 的单次 HAL QSPI 调用时限 `PLATFORM_FLASH_QSPI_TIMEOUT_MS`（3000 ms），理由同回收预算（#220）。 */
+#define FILESYSTEM_FLASH_RECLAIM_TIMEOUT_MS                  5000U    /* 单次回收一块的最大等待，单位毫秒；须大于 Platform 的单次 HAL QSPI 调用时限 `PLATFORM_FLASH_QSPI_TIMEOUT_MS`（3000 ms），否则一次被抢占 2 至 3 s 的健康回收会被服务层中止（#220）。 */
 
 #endif /* FILESYSTEM_FLASH_CONFIG_H */
