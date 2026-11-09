@@ -252,7 +252,25 @@ static void test_failure_line_carries_ftl_diagnostics(void)
     g_diag.FailureCount = 1U;
     g_diag.FreeBlocks = 3U;
     fail_the_first_reclaim();
-    assert_single_error_line("Reclaim failed status=1 (stopped until Flash seq changes) ftl=CORRUPT op=reclaim raw=ok n=1 free=3");
+    assert_single_error_line("Reclaim failed status=1 (stopped until Flash seq changes) ftl=CORRUPT op=reclaim raw=ok free=3");
+}
+
+/** @brief 失败行带 QSPI 快照与芯片驱动错误码：`qspi=<ErrorCode>/<State>/<SR>` 在 `hw` 之前，整行不超过 127 字符（第 6 次上板：HAL 超时后 QSPI 进入 ERROR 态）。 */
+static void test_failure_line_carries_the_qspi_snapshot(void)
+{
+    begin_scenario(1000U);
+    g_diag.LastFailure = PLATFORM_FLASH_FAILURE_IO_ERROR;
+    g_diag.LastFailureOperation = PLATFORM_FLASH_FAILED_OP_RECLAIM;
+    g_diag.LastFailureRawStatus = 2U;
+    g_diag.FailureCount = 1U;
+    g_diag.FreeBlocks = 3U;
+    g_diag.LastFailureDeviceError = 0x1bU;
+    g_diag.LastFailurePortStatus = 0x1U;
+    g_diag.LastFailureQspiError = 0x1U;
+    g_diag.LastFailureQspiState = 0x4U;
+    g_diag.LastFailureQspiStatus = 0x22U;
+    fail_the_first_reclaim();
+    assert_single_error_line("Reclaim failed status=1 (stopped until Flash seq changes) ftl=IO_ERROR op=reclaim raw=error free=3 qspi=1/4/22 hw=1b/1");
 }
 
 /** @brief FTL 从没失败过而文件接口报错（错误不是 FTL 来的）：`ftl=none`，让人一眼看出该去别处找原因。 */
@@ -376,6 +394,7 @@ static const Case cases[] = {
     {"sequence_change_resumes", test_sequence_change_resumes_after_a_stop},
     {"unmounted_is_not_called", test_unmounted_volume_is_not_called},
     {"failure_line_carries_ftl_diagnostics", test_failure_line_carries_ftl_diagnostics},
+    {"failure_line_carries_the_qspi_snapshot", test_failure_line_carries_the_qspi_snapshot},
     {"failure_line_when_ftl_never_failed", test_failure_line_when_ftl_never_failed},
     {"failure_line_without_diagnostics", test_failure_line_without_diagnostics},
     {"failure_line_worst_case_fits", test_failure_line_worst_case_fits},

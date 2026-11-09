@@ -76,6 +76,8 @@ typedef struct
     uint32_t reported_free;                /**< 最近一次诊断读取返回的值，用来核对日志里的数。 */
     uint32_t reported_erases;
     bool diag_fails;
+    bool fault_clears_blocks;              /**< 写失败被注入时，有效/失效块数清零、空闲块改成 fault_free_blocks（模拟 FTL 故障后不就绪）。 */
+    uint32_t fault_free_blocks;            /**< 写失败后的空闲块数，0 表示不变。 */
     uint32_t valid_groups;                 /**< 诊断里的有效块数（默认 0：模拟 FTL 故障后不就绪）。 */
     uint32_t stale_blocks;                 /**< 诊断里的失效块数。 */
     Platform_Flash_VolumeDiagnosticsTypeDef failure; /**< 只用其中的失败诊断字段：Platform 记下的最近一次 FTL 失败。 */
@@ -190,6 +192,15 @@ Service_StatusTypeDef Service_Filesystem_WriteFile(Service_Filesystem_FileHandle
     fake.last_write_source = buffer;
     if (note_call(KIND_WRITE, 'W', &status))
     {
+        if (fake.fault_clears_blocks)
+        {
+            fake.valid_groups = 0U;
+            fake.stale_blocks = 0U;
+            if (fake.fault_free_blocks != 0U)
+            {
+                fake.free_blocks = fake.fault_free_blocks;
+            }
+        }
         return status;
     }
     if (!fake.handle_open || (file.Token != fake.token))
@@ -284,6 +295,9 @@ Platform_StatusTypeDef Platform_Flash_GetVolumeDiagnostics(Platform_Flash_Volume
     diagnostics->LastFailurePortStatus = fake.failure.LastFailurePortStatus;
     diagnostics->FailureCount = fake.failure.FailureCount;
     diagnostics->LastRejection = fake.failure.LastRejection;
+    diagnostics->LastFailureQspiError = fake.failure.LastFailureQspiError;
+    diagnostics->LastFailureQspiState = fake.failure.LastFailureQspiState;
+    diagnostics->LastFailureQspiStatus = fake.failure.LastFailureQspiStatus;
     fake.reported_free = fake.free_blocks;
     fake.reported_erases = fake.erases;
     return PLATFORM_OK;
@@ -808,7 +822,42 @@ static void test_stop_line_carries_ftl_diagnostics_after_a_fault(void)
     /* 第一次写 32768 B = 10 个 3584 B 组，空闲块 1000 到 990；第二次写前快照是 990/0/0，请求 32768，文件已写 32768。 */
     assert(stopped_line() != NULL);
     assert(strcmp(stopped_line(),
-                  "stopped at=write status=1 ftl=CORRUPT op=write raw=ok n=1 free=990 pre=990/0/0 req=32768 file=32768") == 0);
+                  "stopped at=write status=1 ftl=CORRUPT op=write raw=ok free=990 pre=990/0/0 req=32768 file=32768") == 0);
+    assert(lock_env_log_longest_text() <= 127U);
+}
+
+/**
+ * @brief 第 6 次上板 C 版 v3 的真实场景：下限 300，第五次写（文件已写 128 KiB）时 HAL 超时，QSPI 进入 ERROR，FTL 不就绪。
+ *        停下行带 FTL 结果、请求类别、写前快照（300/5497/345）、写请求字节数、文件已写字节、QSPI 快照与芯片驱动错误码，
+ *        整行 125 字符，不超过 127。
+ */
+static void test_stop_line_of_the_board6_c3_failure(void)
+{
+    begin_scenario(true);
+    fake.free_blocks = 336U; /* 前四次写各耗 10 块，每次写后回收加 1 块：第五次写开始前正好 300。 */
+    fake.valid_groups = 5497U;
+    fake.stale_blocks = 345U;
+    fake.fault_clears_blocks = true;
+    fake.fault_free_blocks = 293U;
+    fake.fail_at[KIND_WRITE] = 5U;
+    fake.fail_status[KIND_WRITE] = SERVICE_ERROR;
+    fake.failure.LastFailure = PLATFORM_FLASH_FAILURE_IO_ERROR;
+    fake.failure.LastFailureOperation = PLATFORM_FLASH_FAILED_OP_WRITE;
+    fake.failure.LastFailureRawStatus = 2U;
+    fake.failure.FailureCount = 1U;
+    fake.failure.LastFailureDeviceError = 0x18U;
+    fake.failure.LastFailurePortStatus = 0x1U;
+    fake.failure.LastFailureQspiError = 0x1U;
+    fake.failure.LastFailureQspiState = 0x4U;
+    fake.failure.LastFailureQspiStatus = 0x22U;
+
+    for (uint32_t guard = 0U; (stopped_line() == NULL) && (guard < 100U); guard++)
+    {
+        (void)drive_one(false);
+    }
+    assert(stopped_line() != NULL);
+    assert(strcmp(stopped_line(),
+                  "stopped at=write status=1 ftl=IO_ERROR op=write raw=error free=293 pre=300/5497/345 req=32768 file=131072 qspi=1/4/22 hw=18/1") == 0);
     assert(lock_env_log_longest_text() <= 127U);
 }
 
@@ -853,7 +902,7 @@ static void test_stop_line_of_a_non_write_step_has_no_write_fields(void)
     fake.failure.LastRejection = PLATFORM_FLASH_FAILURE_NOT_READY;
 
     (void)drive(2U); /* R O(失败) */
-    assert(strcmp(stopped_line(), "stopped at=open status=1 ftl=NOT_READY op=open raw=ok n=1 free=1000 rej=NOT_READY") == 0);
+    assert(strcmp(stopped_line(), "stopped at=open status=1 ftl=NOT_READY op=open raw=ok free=1000 rej=NOT_READY") == 0);
 }
 
 /** @brief 诊断读不到（FTL 没绑定）：停下行仍然记，写 `diag=n/a`；写请求字节数与文件已写字节照带（写之前的快照也读不到）。 */
@@ -1084,6 +1133,7 @@ static const Case cases[] = {
     {"write_failure_stops", test_write_failure_stops_until_the_volume_sequence_changes},
     {"reclaim_failure_stops", test_reclaim_failure_stops},
     {"stop_line_after_a_fault", test_stop_line_carries_ftl_diagnostics_after_a_fault},
+    {"stop_line_board6_c3", test_stop_line_of_the_board6_c3_failure},
     {"stop_line_ready_volume", test_stop_line_with_a_ready_volume},
     {"stop_line_ftl_never_failed", test_stop_line_when_the_ftl_never_failed},
     {"stop_line_non_write_step", test_stop_line_of_a_non_write_step_has_no_write_fields},

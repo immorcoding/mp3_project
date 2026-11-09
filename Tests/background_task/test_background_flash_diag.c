@@ -87,7 +87,7 @@ static void test_write_failure_after_fault(void)
     g_diag.FailureCount = 1U;
     g_diag.FreeBlocks = 3U;
     assert(strcmp(append_to(text, sizeof(text), "stopped at=write status=1", NULL),
-                  "stopped at=write status=1 ftl=CORRUPT op=write raw=ok n=1 free=3") == 0);
+                  "stopped at=write status=1 ftl=CORRUPT op=write raw=ok free=3") == 0);
 }
 
 /** @brief FTL 仍就绪（有效/失效块数非零）时带上它们；额外文字在它们之后、`rej`、`hw` 之前。 */
@@ -106,8 +106,11 @@ static void test_optional_parts_and_their_order(void)
     g_diag.LastRejection = PLATFORM_FLASH_FAILURE_NOT_READY;
     g_diag.LastFailureDeviceError = 0x2U;
     g_diag.LastFailurePortStatus = 0xabU;
+    g_diag.LastFailureQspiError = 0x1U;
+    g_diag.LastFailureQspiState = 0x4U;
+    g_diag.LastFailureQspiStatus = 0x2022U;
     assert(strcmp(append_to(text, sizeof(text), "p", " pre=3/980/12 req=65536"),
-                  "p ftl=IO_ERROR op=reclaim raw=timeout n=7 free=2 valid=980 stale=12 pre=3/980/12 req=65536 rej=NOT_READY hw=2/ab") == 0);
+                  "p ftl=IO_ERROR op=reclaim raw=timeout n=7 free=2 valid=980 stale=12 pre=3/980/12 req=65536 qspi=1/4/2022 rej=NOT_READY hw=2/ab") == 0);
 }
 
 /** @brief 只有失效块数非零也算就绪，两个都写出来；只有端口状态非零也写 `hw`。 */
@@ -122,7 +125,7 @@ static void test_zero_checks_use_either_value(void)
     g_diag.StaleBlocks = 5U;
     g_diag.LastFailurePortStatus = 1U;
     assert(strcmp(append_to(text, sizeof(text), "", NULL),
-                  " ftl=NO_SPACE op=write raw=ok n=1 free=0 valid=0 stale=5 hw=0/1") == 0);
+                  " ftl=NO_SPACE op=write raw=ok free=0 valid=0 stale=5 hw=0/1") == 0);
 }
 
 /** @brief 每种分类、每种请求类别、每种原始结果都有短名；越界值不越界读，落到兜底名。 */
@@ -170,6 +173,57 @@ static void test_failure_count_is_capped(void)
     assert(strstr(append_to(text, sizeof(text), "", NULL), " n=999 ") != NULL);
 }
 
+/** @brief QSPI 快照段：十六进制 `qspi=<ErrorCode>/<State>/<SR>`，在额外文字之后、`rej`、`hw` 之前；三个值都为 0 时整段省略，没有失败过也不出。 */
+static void test_qspi_snapshot_segment(void)
+{
+    char text[128];
+
+    begin_scenario();
+    g_diag.LastFailure = PLATFORM_FLASH_FAILURE_IO_ERROR;
+    g_diag.LastFailureOperation = PLATFORM_FLASH_FAILED_OP_WRITE;
+    g_diag.LastFailureRawStatus = 3U;
+    g_diag.FailureCount = 1U;
+    g_diag.FreeBlocks = 2U;
+    assert(strstr(append_to(text, sizeof(text), "", NULL), "qspi=") == NULL); /* 三个值都是 0：省略。 */
+
+    g_diag.LastFailureQspiError = 0x1U; /* HAL_QSPI_ERROR_TIMEOUT */
+    g_diag.LastFailureQspiState = 0x4U; /* HAL_QSPI_STATE_ERROR */
+    g_diag.LastFailureQspiStatus = 0x10U; /* TOF */
+    assert(strcmp(append_to(text, sizeof(text), "", " pre=1/2/3"),
+                  " ftl=IO_ERROR op=write raw=timeout free=2 pre=1/2/3 qspi=1/4/10") == 0);
+
+    g_diag.LastFailureQspiError = 0U;
+    g_diag.LastFailureQspiState = 0x1U; /* 只有 State 非零也要写出来。 */
+    g_diag.LastFailureQspiStatus = 0U;
+    assert(strstr(append_to(text, sizeof(text), "", NULL), " qspi=0/1/0") != NULL);
+}
+
+/**
+ * @brief 第 6 次上板 C 版 v3 的真实样例：写页编程时被抢占，HAL 超时错误，QSPI 进入 ERROR；
+ *        整行 125 字符，放得下 `qspi`（总线错误 `hw=18/1` 还在最后）。
+ * @note  `n=1` 省略正是为了给 `qspi` 腾位置；去掉省略的话这一行是 129 字符，`hw` 会被整段丢掉。
+ */
+static void test_board6_c3_sample_line_keeps_qspi_and_hw(void)
+{
+    char text[128];
+
+    begin_scenario();
+    g_diag.LastFailure = PLATFORM_FLASH_FAILURE_IO_ERROR;
+    g_diag.LastFailureOperation = PLATFORM_FLASH_FAILED_OP_WRITE;
+    g_diag.LastFailureRawStatus = 2U;
+    g_diag.FailureCount = 1U;
+    g_diag.FreeBlocks = 293U;
+    g_diag.LastFailureDeviceError = 0x18U;
+    g_diag.LastFailurePortStatus = 0x1U;
+    g_diag.LastFailureQspiError = 0x1U;
+    g_diag.LastFailureQspiState = 0x4U;
+    g_diag.LastFailureQspiStatus = 0x22U;
+    (void)append_to(text, sizeof(text), "stopped at=write status=1", " pre=300/5497/345 req=32768 file=131072");
+    assert(strcmp(text,
+                  "stopped at=write status=1 ftl=IO_ERROR op=write raw=error free=293 pre=300/5497/345 req=32768 file=131072 qspi=1/4/22 hw=18/1") == 0);
+    assert(strlen(text) <= 127U);
+}
+
 /** @brief 读不到诊断（FTL 还没绑定）：写 `diag=n/a`，额外文字照样带上，不假装有数据。 */
 static void test_diagnostics_unavailable(void)
 {
@@ -198,17 +252,27 @@ static void test_truncation_is_safe_at_every_size(void)
     g_diag.LastRejection = PLATFORM_FLASH_FAILURE_UNFORMATTED;
     g_diag.LastFailureDeviceError = 0xffffffffU;
     g_diag.LastFailurePortStatus = 0xffffffffU;
+    g_diag.LastFailureQspiError = 0xffffffffU;
+    g_diag.LastFailureQspiState = 0xffffffffU;
+    g_diag.LastFailureQspiStatus = 0xffffffffU;
     (void)append_to(reference, sizeof(reference), "stopped at=write status=1", " pre=4094/4094/4094 req=65536 file=16777216");
     assert(strlen(reference) > 127U);
 
     for (size_t size = 1U; size <= 128U; size++)
     {
+        const size_t prefix_length = strlen("stopped at=write status=1");
+
         memset(guarded, 0x5a, sizeof(guarded));
         (void)snprintf(guarded, size, "%s", "stopped at=write status=1");
         background_flash_diag_append(guarded, size, " pre=4094/4094/4094 req=65536 file=16777216");
         assert(guarded[size - 1U] == '\0' || strlen(guarded) < size);
         assert(strlen(guarded) < size);
         assert(strncmp(guarded, reference, strlen(guarded)) == 0);
+        if (size > prefix_length)
+        {
+            /* 整段取舍：结果要么是完整内容，要么恰好停在两段之间（下一个字符是空格），不留半截字段。 */
+            assert((reference[strlen(guarded)] == '\0') || (reference[strlen(guarded)] == ' '));
+        }
         for (size_t tail = size; tail < sizeof(guarded); tail++)
         {
             assert((unsigned char)guarded[tail] == 0x5aU); /* 缓冲之外一个字节也没写 */
@@ -242,6 +306,8 @@ static const struct
     {"zero_checks_use_either_value", test_zero_checks_use_either_value},
     {"every_name", test_every_name},
     {"failure_count_is_capped", test_failure_count_is_capped},
+    {"qspi_snapshot_segment", test_qspi_snapshot_segment},
+    {"board6_c3_sample_line", test_board6_c3_sample_line_keeps_qspi_and_hw},
     {"diagnostics_unavailable", test_diagnostics_unavailable},
     {"truncation_is_safe", test_truncation_is_safe_at_every_size},
     {"invalid_arguments", test_invalid_arguments_are_ignored},

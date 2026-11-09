@@ -44,6 +44,14 @@ static uint32_t platform_flash_last_failure_device;
 static uint32_t platform_flash_last_failure_port;
 static uint32_t platform_flash_failure_count;
 static Platform_Flash_FailureTypeDef platform_flash_last_rejection;
+static uint32_t platform_flash_last_failure_qspi_error;
+static uint32_t platform_flash_last_failure_qspi_state;
+static uint32_t platform_flash_last_failure_qspi_status;
+/* QSPI 失败快照的暂存：本次请求里第一次看到芯片驱动或 HAL 报告失败时取，请求结束记失败时转入 last_*；新请求开始清除。 */
+static uint32_t platform_flash_pending_qspi_error;
+static uint32_t platform_flash_pending_qspi_state;
+static uint32_t platform_flash_pending_qspi_status;
+static bool platform_flash_pending_qspi_valid;
 /* 按物理数据块上限分配表，不跨 Module 引用 FTL 私有预留比例。 */
 static uint32_t platform_flash_map[PLATFORM_FLASH_FTL_DATA_BLOCKS]
     __attribute__((section(".flash_ftl_tables"), aligned(32)));
@@ -773,6 +781,39 @@ static Platform_Flash_FailureTypeDef platform_flash_map_failure(FlashFTL_StatusT
 }
 
 /**
+ * @brief 把此刻 QSPI 控制器的 HAL 句柄和状态寄存器抄进暂存（只用于诊断）。
+ * @note  读 `hqspi.ErrorCode`、`hqspi.State` 和 `QUADSPI->SR`，都是只读访问，不碰 FIFO、不清标志；
+ *        Platform 借用 CubeMX 的 `hqspi`，三个值始终取得到。仅唯一普通执行上下文调用。
+ */
+static void platform_flash_capture_qspi_snapshot(void)
+{
+    platform_flash_pending_qspi_error = (uint32_t)hqspi.ErrorCode;
+    platform_flash_pending_qspi_state = (uint32_t)hqspi.State;
+    platform_flash_pending_qspi_status = (uint32_t)QUADSPI->SR;
+    platform_flash_pending_qspi_valid = true;
+}
+
+/**
+ * @brief 本次请求里第一次看到芯片驱动或 HAL 已报告失败时，立刻取 QSPI 快照（还没开始静默）。
+ * @note  每次推进 FTL 之后调用，开销是几次比较：W25Qxx Device 进入 ERROR、HAL 句柄进入 ERROR 或带着错误码，
+ *        都说明刚才那一步的底层访问失败了。FTL 在下一次推进才开始静默，静默会清掉 TEF/TCF/SMF/TOF 标志。
+ *        已取过就不再取，保留第一次的值。
+ */
+static void platform_flash_note_qspi_fault(void)
+{
+    if (platform_flash_pending_qspi_valid)
+    {
+        return;
+    }
+    if ((hplatform_flash.State == W25QXX_STATE_ERROR) ||
+        (hqspi.State == HAL_QSPI_STATE_ERROR) ||
+        (hqspi.ErrorCode != HAL_QSPI_ERROR_NONE))
+    {
+        platform_flash_capture_qspi_snapshot();
+    }
+}
+
+/**
  * @brief 记下一次以非 OK 收尾的 FTL 请求：结果、请求类别、原始访问结果和芯片后端快照（只用于诊断）。
  * @param[in] result FTL 的最终结果，不应是 OK、RUNNING 或 WAIT。
  * @note  不参与任何状态判断，不改变产品行为；失败后 FTL 已不就绪，下一次请求会覆盖 FTL 自己的“最近结果”，
@@ -789,6 +830,15 @@ static void platform_flash_record_failure(FlashFTL_StatusTypeDef result)
                                           : UINT32_MAX;
     platform_flash_last_failure_device = hplatform_flash.ErrorCode;
     platform_flash_last_failure_port = hplatform_flash.LastBusStatus;
+    if (!platform_flash_pending_qspi_valid)
+    {
+        /* 第一次失败没在 ProcessOperation 里被看到（例如收尾时才失败）：只能取此刻的值，静默可能已清掉部分标志。 */
+        platform_flash_capture_qspi_snapshot();
+    }
+    platform_flash_last_failure_qspi_error = platform_flash_pending_qspi_error;
+    platform_flash_last_failure_qspi_state = platform_flash_pending_qspi_state;
+    platform_flash_last_failure_qspi_status = platform_flash_pending_qspi_status;
+    platform_flash_pending_qspi_valid = false;
     if (platform_flash_failure_count < UINT32_MAX)
     {
         platform_flash_failure_count++;
@@ -816,6 +866,7 @@ Platform_StatusTypeDef Platform_Flash_ProcessOperation(void)
     {
         FlashFTL_StatusTypeDef result = FlashFTL_Process(&platform_flash_ftl);
         platform_flash_ftl_result = result;
+        platform_flash_note_qspi_fault();
         platform_flash_needs_wait = result == FLASH_FTL_WAIT;
         if (result == FLASH_FTL_RUNNING || result == FLASH_FTL_WAIT)
         {
@@ -1222,6 +1273,7 @@ static Platform_StatusTypeDef platform_flash_start_volume(uint32_t operation,
         return result == FLASH_FTL_BUSY ? PLATFORM_BUSY : PLATFORM_FLASH_ERROR;
     }
     platform_flash_active_operation = (Platform_Flash_FailedOperationTypeDef)(operation + 1U);
+    platform_flash_pending_qspi_valid = false;
     platform_flash_ftl_result = FLASH_FTL_RUNNING;
     platform_flash_ftl_active = true;
     platform_flash_raw_failed = false;
@@ -1410,7 +1462,10 @@ Platform_StatusTypeDef Platform_Flash_GetVolumeDiagnostics(
                                                              platform_flash_last_failure_device,
                                                              platform_flash_last_failure_port,
                                                              platform_flash_failure_count,
-                                                             platform_flash_last_rejection};
+                                                             platform_flash_last_rejection,
+                                                             platform_flash_last_failure_qspi_error,
+                                                             platform_flash_last_failure_qspi_state,
+                                                             platform_flash_last_failure_qspi_status};
     return PLATFORM_OK;
 }
 

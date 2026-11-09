@@ -160,7 +160,10 @@ typedef struct
     /* 以下是失败诊断（#220，只读，不影响任何产品行为）：Platform 在每次 FTL 请求以非 OK 结果收尾时记下，
      * 之后的请求不会冲掉它；FTL 自己的“最近结果”会被下一次请求覆盖，所以要在 Platform 层记。
      * 目前只有后台任务读（回收失败行、Flash 压力钩子的停下行，都只在失败那一次读），不拿 Flash 卷锁：
-     * 另一个任务正在收尾失败请求时，各字段之间可能差一次更新，只给人看，不用来做判断。 */
+     * 另一个任务正在收尾失败请求时，各字段之间可能差一次更新，只给人看，不用来做判断。
+     * 末尾三个 QSPI 快照在“芯片驱动第一次报告失败、FTL 还没开始静默”那一刻取（静默会清掉 TEF/TCF/SMF/TOF 标志，
+     * 并且 `HAL_QSPI_Abort` 对 ERROR 态不起作用，所以 ErrorCode 与 State 会一直留着）；没有失败过时全 0，
+     * Platform 直接读 `hqspi` 与 `QUADSPI->SR`，三个值始终取得到。 */
     Platform_Flash_FailureTypeDef LastFailure;               /**< 最近一次以非 OK 收尾的请求的 FTL 结果。 */
     Platform_Flash_FailedOperationTypeDef LastFailureOperation; /**< 那次请求的类别。 */
     uint32_t LastFailureRawStatus;                           /**< 失败时 FTL 最近一次原始访问的归一化结果：0 成功、1 忙、2 错误、3 超时；读不到时为 `UINT32_MAX`。 */
@@ -168,6 +171,9 @@ typedef struct
     uint32_t LastFailurePortStatus;                          /**< 失败时端口状态快照。 */
     uint32_t FailureCount;                                   /**< 开机以来以非 OK 收尾的请求数（饱和在 32 位）。 */
     Platform_Flash_FailureTypeDef LastRejection;             /**< 最近一次被 FTL 在受理时就拒绝的请求的 FTL 结果（例如卷故障后的 NOT_READY）。 */
+    uint32_t LastFailureQspiError;                           /**< 失败时 `hqspi.ErrorCode`（`HAL_QSPI_ERROR_*`：1 超时、2 传输错误、4 DMA、8 参数）。 */
+    uint32_t LastFailureQspiState;                           /**< 失败时 `hqspi.State`（`HAL_QSPI_STATE_*`：1 就绪、2 忙、4 错误、8 中止中、0x12/0x22 间接写/读中、0x42 自动轮询中、0x82 内存映射中）。 */
+    uint32_t LastFailureQspiStatus;                          /**< 失败时 `QUADSPI->SR`（bit0 TEF、bit1 TCF、bit2 FTF、bit3 SMF、bit4 TOF、bit5 BUSY、bit13:8 FLEVEL）。 */
 } Platform_Flash_VolumeDiagnosticsTypeDef;
 
 Platform_StatusTypeDef Platform_Flash_BindVolume(void);

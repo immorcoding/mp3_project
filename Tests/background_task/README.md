@@ -1,13 +1,13 @@
 # 后台任务主机测试
 
-本目录验证 `APP/tasks/background/` 里能在主机上跑的部分（#213、#220，ARC-22）。五个测试程序（压力钩子一份源码编四个配置），61 个 CTest：
+本目录验证 `APP/tasks/background/` 里能在主机上跑的部分（#213、#220，ARC-22）。五个测试程序（压力钩子一份源码编四个配置），65 个 CTest：
 
 | 程序 | CTest | 链接的生产代码 | 替身 |
 |---|---|---|---|
 | `background_loop_tests` | `background_loop`（1 个） | `background_loop.c`、`volume_event.c` | 共用 FreeRTOS 桩（任务通知、tick、阻塞钩子） |
-| `background_reclaim_tests` | `background_reclaim_*`（13 个，每个用例一个进程） | `background_reclaim.c`、`background_flash_diag.c`、`volume_event.c` | 共用桩、Service Log 替身、**`Service_Filesystem_ReclaimFlash` 在测试文件里用脚本化的假实现**（脚本给出每次调用的返回状态，记录调用时刻）、**`Platform_Flash_GetVolumeDiagnostics` 的可设置假实现**（失败行读它） |
-| `background_flash_diag_tests` | `background_flash_diag_*`（9 个，每个用例一个进程） | `background_flash_diag.c` | **`Platform_Flash_GetVolumeDiagnostics` 在测试文件里用可设置的假实现**（直接给出 Platform 记下的最近一次 FTL 失败、请求类别、原始结果、块计数、芯片后端快照） |
-| `background_pressure_{default,hook,floor,noreclaim}_tests` | `background_pressure_*`（33 个）、`background_registry_*`（4 个），每个用例一个进程 | `background_flash_pressure.c`、`background_flash_diag.c`、`background_jobs.c`、`background_reclaim.c`、`background_loop.c`、`volume_event.c` | 共用桩、Service Log 替身（`Tests/stubs/lock_env`）、**Filesystem 的五个文件入口（RemoveFile、OpenFile、WriteFile、CloseFile、ReclaimFlash）和 `Platform_Flash_GetVolumeDiagnostics` 在测试文件里用脚本化的假实现**（假 FTL：空闲块、水位以下回收一块计一次擦除、耗尽时写入自己擦） |
+| `background_reclaim_tests` | `background_reclaim_*`（14 个，每个用例一个进程） | `background_reclaim.c`、`background_flash_diag.c`、`volume_event.c` | 共用桩、Service Log 替身、**`Service_Filesystem_ReclaimFlash` 在测试文件里用脚本化的假实现**（脚本给出每次调用的返回状态，记录调用时刻）、**`Platform_Flash_GetVolumeDiagnostics` 的可设置假实现**（失败行读它） |
+| `background_flash_diag_tests` | `background_flash_diag_*`（11 个，每个用例一个进程） | `background_flash_diag.c` | **`Platform_Flash_GetVolumeDiagnostics` 在测试文件里用可设置的假实现**（直接给出 Platform 记下的最近一次 FTL 失败、请求类别、原始结果、块计数、芯片后端快照） |
+| `background_pressure_{default,hook,floor,noreclaim}_tests` | `background_pressure_*`（34 个）、`background_registry_*`（4 个），每个用例一个进程 | `background_flash_pressure.c`、`background_flash_diag.c`、`background_jobs.c`、`background_reclaim.c`、`background_loop.c`、`volume_event.c` | 共用桩、Service Log 替身（`Tests/stubs/lock_env`）、**Filesystem 的五个文件入口（RemoveFile、OpenFile、WriteFile、CloseFile、ReclaimFlash）和 `Platform_Flash_GetVolumeDiagnostics` 在测试文件里用脚本化的假实现**（假 FTL：空闲块、水位以下回收一块计一次擦除、耗尽时写入自己擦） |
 | `task_priorities_tests` | `task_priorities`（1 个） | 只包含 `APP/app_config.h`，全是 `_Static_assert` | 无 |
 
 压力钩子的四个配置：默认（钩子关闭）、`BACKGROUND_HOOK_FLASH_PRESSURE=1` 加 `RECLAIM=1`（覆盖钩子自己的回收分支）、再加 `FREE_FLOOR=300`、钩子打开但 `RECLAIM` 用默认值（`_Static_assert` 核对默认是 0：产品的回收由回收作业负责，#220）。作业状态和卷事件是静态的，每个用例一个进程（命令行参数选用例）。

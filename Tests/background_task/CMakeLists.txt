@@ -62,7 +62,7 @@ foreach(PRESSURE_CASE
         write_source_and_chunk stats_lines goes_below_low_water diagnostics_failure open_hard_failure
         close_failure remove_failure full_volume no_space_is_full volume_unavailable sequence_change
         write_failure_stops reclaim_failure_stops open_busy_retry open_busy_gives_up
-        stop_line_after_a_fault stop_line_ready_volume stop_line_ftl_never_failed stop_line_non_write_step
+        stop_line_after_a_fault stop_line_board6_c3 stop_line_ready_volume stop_line_ftl_never_failed stop_line_non_write_step
         stop_line_without_diagnostics stop_line_worst_case)
     add_test(NAME background_pressure_${PRESSURE_CASE} COMMAND background_pressure_hook_tests ${PRESSURE_CASE})
 endforeach()
@@ -90,7 +90,7 @@ target_compile_options(background_reclaim_tests PRIVATE -Wall -Wextra -Werror -U
 foreach(RECLAIM_CASE
         sequence_zero_does_nothing first_reclaim_after_one_period one_reclaim_per_step period_holds_when_woken_often
         failure_stops_with_one_error timeout_failure_stops unavailable_and_busy_are_not_failures
-        sequence_change_resumes unmounted_is_not_called failure_line_carries_ftl_diagnostics
+        sequence_change_resumes unmounted_is_not_called failure_line_carries_ftl_diagnostics failure_line_carries_the_qspi_snapshot
         failure_line_when_ftl_never_failed failure_line_without_diagnostics failure_line_worst_case_fits)
     add_test(NAME background_reclaim_${RECLAIM_CASE} COMMAND background_reclaim_tests ${RECLAIM_CASE})
 endforeach()
@@ -104,7 +104,7 @@ target_include_directories(background_flash_diag_tests BEFORE PRIVATE ../stubs/f
 target_compile_features(background_flash_diag_tests PRIVATE c_std_11)
 target_compile_options(background_flash_diag_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 foreach(DIAG_CASE
-        no_failure_recorded write_failure_after_fault optional_parts_and_order zero_checks_use_either_value
+        no_failure_recorded write_failure_after_fault optional_parts_and_order zero_checks_use_either_value qspi_snapshot_segment board6_c3_sample_line
         every_name failure_count_is_capped diagnostics_unavailable truncation_is_safe invalid_arguments)
     add_test(NAME background_flash_diag_${DIAG_CASE} COMMAND background_flash_diag_tests ${DIAG_CASE})
 endforeach()
