@@ -120,6 +120,33 @@ typedef struct
     uint32_t PhysicalBytes;
 } Platform_Flash_VolumeInfoTypeDef;
 
+/** @brief FTL 最近一次非 OK 结果的归一化分类（只用于诊断，0 表示没有失败过）。 */
+typedef enum
+{
+    PLATFORM_FLASH_FAILURE_NONE = 0,       /**< 没有失败过。 */
+    PLATFORM_FLASH_FAILURE_INVALID_PARAM,  /**< 参数、范围或几何不满足。 */
+    PLATFORM_FLASH_FAILURE_NOT_READY,      /**< 卷没打开或已故障。 */
+    PLATFORM_FLASH_FAILURE_NO_SPACE,       /**< 无法安全分配且没有可回收块。 */
+    PLATFORM_FLASH_FAILURE_IO_ERROR,       /**< 原始访问失败或被显式中止。 */
+    PLATFORM_FLASH_FAILURE_CORRUPT,        /**< 提交关联、数据、版本选择或回读验证损坏。 */
+    PLATFORM_FLASH_FAILURE_INCOMPATIBLE,   /**< 格式或几何不兼容，或版本空间耗尽。 */
+    PLATFORM_FLASH_FAILURE_INCOMPLETE,     /**< 最新格式代次未完成。 */
+    PLATFORM_FLASH_FAILURE_UNFORMATTED,    /**< 没有可识别的卷描述。 */
+    PLATFORM_FLASH_FAILURE_OTHER           /**< 其他非 OK 结果。 */
+} Platform_Flash_FailureTypeDef;
+
+/** @brief 失败发生时正在执行的 FTL 请求类别（只用于诊断，0 表示没有）。 */
+typedef enum
+{
+    PLATFORM_FLASH_FAILED_OP_NONE = 0,     /**< 没有。 */
+    PLATFORM_FLASH_FAILED_OP_OPEN,         /**< 打开卷、重建映射。 */
+    PLATFORM_FLASH_FAILED_OP_FORMAT,       /**< 格式化。 */
+    PLATFORM_FLASH_FAILED_OP_READ,         /**< 读逻辑扇区。 */
+    PLATFORM_FLASH_FAILED_OP_WRITE,        /**< 写逻辑扇区。 */
+    PLATFORM_FLASH_FAILED_OP_SYNC,         /**< 同步。 */
+    PLATFORM_FLASH_FAILED_OP_RECLAIM       /**< 回收一块。 */
+} Platform_Flash_FailedOperationTypeDef;
+
 typedef struct
 {
     uint32_t FormatVersion;
@@ -130,6 +157,17 @@ typedef struct
     uint32_t SessionErases;
     uint32_t DeviceError;
     uint32_t PortStatus;
+    /* 以下是失败诊断（#220，只读，不影响任何产品行为）：Platform 在每次 FTL 请求以非 OK 结果收尾时记下，
+     * 之后的请求不会冲掉它；FTL 自己的“最近结果”会被下一次请求覆盖，所以要在 Platform 层记。
+     * 目前只有后台任务读（回收失败行、Flash 压力钩子的停下行，都只在失败那一次读），不拿 Flash 卷锁：
+     * 另一个任务正在收尾失败请求时，各字段之间可能差一次更新，只给人看，不用来做判断。 */
+    Platform_Flash_FailureTypeDef LastFailure;               /**< 最近一次以非 OK 收尾的请求的 FTL 结果。 */
+    Platform_Flash_FailedOperationTypeDef LastFailureOperation; /**< 那次请求的类别。 */
+    uint32_t LastFailureRawStatus;                           /**< 失败时 FTL 最近一次原始访问的归一化结果：0 成功、1 忙、2 错误、3 超时；读不到时为 `UINT32_MAX`。 */
+    uint32_t LastFailureDeviceError;                         /**< 失败时芯片后端的错误码快照。 */
+    uint32_t LastFailurePortStatus;                          /**< 失败时端口状态快照。 */
+    uint32_t FailureCount;                                   /**< 开机以来以非 OK 收尾的请求数（饱和在 32 位）。 */
+    Platform_Flash_FailureTypeDef LastRejection;             /**< 最近一次被 FTL 在受理时就拒绝的请求的 FTL 结果（例如卷故障后的 NOT_READY）。 */
 } Platform_Flash_VolumeDiagnosticsTypeDef;
 
 Platform_StatusTypeDef Platform_Flash_BindVolume(void);

@@ -76,6 +76,9 @@ typedef struct
     uint32_t reported_free;                /**< 最近一次诊断读取返回的值，用来核对日志里的数。 */
     uint32_t reported_erases;
     bool diag_fails;
+    uint32_t valid_groups;                 /**< 诊断里的有效块数（默认 0：模拟 FTL 故障后不就绪）。 */
+    uint32_t stale_blocks;                 /**< 诊断里的失效块数。 */
+    Platform_Flash_VolumeDiagnosticsTypeDef failure; /**< 只用其中的失败诊断字段：Platform 记下的最近一次 FTL 失败。 */
 } Fake;
 
 static Fake fake;
@@ -272,6 +275,15 @@ Platform_StatusTypeDef Platform_Flash_GetVolumeDiagnostics(Platform_Flash_Volume
     memset(diagnostics, 0, sizeof(*diagnostics));
     diagnostics->FreeBlocks = fake.free_blocks;
     diagnostics->SessionErases = fake.erases;
+    diagnostics->ValidGroups = fake.valid_groups;
+    diagnostics->StaleBlocks = fake.stale_blocks;
+    diagnostics->LastFailure = fake.failure.LastFailure;
+    diagnostics->LastFailureOperation = fake.failure.LastFailureOperation;
+    diagnostics->LastFailureRawStatus = fake.failure.LastFailureRawStatus;
+    diagnostics->LastFailureDeviceError = fake.failure.LastFailureDeviceError;
+    diagnostics->LastFailurePortStatus = fake.failure.LastFailurePortStatus;
+    diagnostics->FailureCount = fake.failure.FailureCount;
+    diagnostics->LastRejection = fake.failure.LastRejection;
     fake.reported_free = fake.free_blocks;
     fake.reported_erases = fake.erases;
     return PLATFORM_OK;
@@ -761,6 +773,134 @@ static void test_write_failure_stops_until_the_volume_sequence_changes(void)
     assert(strcmp(fake.calls, "ROWGWCRO") == 0);
 }
 
+/**
+ * @brief 日志里第一条正文以 "stopped" 开头的 FLASHHOOK 行。
+ * @return 正文；没有为 NULL。
+ */
+static const char *stopped_line(void)
+{
+    for (uint32_t index = 0U; index < lock_env_log_count(); index++)
+    {
+        if ((strcmp(lock_env_log_tag(index), "FLASHHOOK") == 0) && (strncmp(lock_env_log_text(index), "stopped", 7U) == 0))
+        {
+            return lock_env_log_text(index);
+        }
+    }
+    return NULL;
+}
+
+/**
+ * @brief 第 6 次上板的复现：第二次写失败，FTL 因此不就绪（有效/失效块数读作 0）。停下行带 FTL 最近一次失败的具体结果、
+ *        请求类别、原始访问结果、失败次数、失败后的空闲块、失败那次写之前的快照、写请求字节数与文件已写字节。
+ */
+static void test_stop_line_carries_ftl_diagnostics_after_a_fault(void)
+{
+    begin_scenario(true);
+    fake.fail_at[KIND_WRITE] = 2U;
+    fake.fail_status[KIND_WRITE] = SERVICE_ERROR;
+    fake.failure.LastFailure = PLATFORM_FLASH_FAILURE_CORRUPT;
+    fake.failure.LastFailureOperation = PLATFORM_FLASH_FAILED_OP_WRITE;
+    fake.failure.LastFailureRawStatus = 0U;
+    fake.failure.FailureCount = 1U;
+
+    (void)drive(2U + 2U + 1U); /* R O WG W(失败) */
+    assert(strcmp(fake.calls, "ROWGW") == 0);
+    /* 第一次写 32768 B = 10 个 3584 B 组，空闲块 1000 到 990；第二次写前快照是 990/0/0，请求 32768，文件已写 32768。 */
+    assert(stopped_line() != NULL);
+    assert(strcmp(stopped_line(),
+                  "stopped at=write status=1 ftl=CORRUPT op=write raw=ok n=1 free=990 pre=990/0/0 req=32768 file=32768") == 0);
+    assert(lock_env_log_longest_text() <= 127U);
+}
+
+/** @brief FTL 仍就绪（有效/失效块数非零）而写失败：这两个数既在失败后的读数里，也在写之前的快照里。 */
+static void test_stop_line_with_a_ready_volume(void)
+{
+    begin_scenario(true);
+    fake.fail_at[KIND_WRITE] = 2U;
+    fake.fail_status[KIND_WRITE] = SERVICE_ERROR;
+    fake.valid_groups = 100U;
+    fake.stale_blocks = 7U;
+    fake.failure.LastFailure = PLATFORM_FLASH_FAILURE_IO_ERROR;
+    fake.failure.LastFailureOperation = PLATFORM_FLASH_FAILED_OP_WRITE;
+    fake.failure.LastFailureRawStatus = 2U;
+    fake.failure.FailureCount = 2U;
+
+    (void)drive(2U + 2U + 1U);
+    assert(strcmp(stopped_line(),
+                  "stopped at=write status=1 ftl=IO_ERROR op=write raw=error n=2 free=990 valid=100 stale=7 pre=990/100/7 req=32768 file=32768") == 0);
+}
+
+/** @brief 文件接口报错而 FTL 从没失败过（错误不是 FTL 来的）：停下行写 `ftl=none`。 */
+static void test_stop_line_when_the_ftl_never_failed(void)
+{
+    begin_scenario(true);
+    fake.fail_at[KIND_WRITE] = 1U;
+    fake.fail_status[KIND_WRITE] = SERVICE_ERROR;
+
+    (void)drive(2U + 1U); /* R O W(失败) */
+    assert(strcmp(stopped_line(), "stopped at=write status=1 ftl=none n=0 free=1000 pre=1000/0/0 req=32768 file=0") == 0);
+}
+
+/** @brief 别的步骤失败（这里是新建）：没有写请求，所以不带 pre、req、file，只带 FTL 诊断。 */
+static void test_stop_line_of_a_non_write_step_has_no_write_fields(void)
+{
+    begin_scenario(true);
+    fake.fail_at[KIND_OPEN] = 1U;
+    fake.fail_status[KIND_OPEN] = SERVICE_ERROR;
+    fake.failure.LastFailure = PLATFORM_FLASH_FAILURE_NOT_READY;
+    fake.failure.LastFailureOperation = PLATFORM_FLASH_FAILED_OP_OPEN;
+    fake.failure.FailureCount = 1U;
+    fake.failure.LastRejection = PLATFORM_FLASH_FAILURE_NOT_READY;
+
+    (void)drive(2U); /* R O(失败) */
+    assert(strcmp(stopped_line(), "stopped at=open status=1 ftl=NOT_READY op=open raw=ok n=1 free=1000 rej=NOT_READY") == 0);
+}
+
+/** @brief 诊断读不到（FTL 没绑定）：停下行仍然记，写 `diag=n/a`；写请求字节数与文件已写字节照带（写之前的快照也读不到）。 */
+static void test_stop_line_without_diagnostics(void)
+{
+    begin_scenario(true);
+    fake.fail_at[KIND_WRITE] = 2U;
+    fake.fail_status[KIND_WRITE] = SERVICE_ERROR;
+
+    (void)drive(2U + 2U - 1U); /* R O WG（第一次写成功之后的回收）之前一步：下一步是回收，再下一步是失败的写 */
+    (void)drive(1U);
+    fake.diag_fails = true;
+    (void)drive(1U);
+    assert(strcmp(stopped_line(), "stopped at=write status=1 diag=n/a req=32768 file=32768") == 0);
+}
+
+/**
+ * @brief 最坏取值（四位数的块数、失败次数封顶、拒绝与硬件快照都在）：行不超过 127 字符；写请求字节数和文件已写字节
+ *        不被截断（`rej`、`hw` 在最后，先被截断）。
+ */
+static void test_stop_line_worst_case_keeps_the_write_fields(void)
+{
+    const char *line;
+
+    begin_scenario(true);
+    fake.free_blocks = 4094U;
+    fake.fail_at[KIND_WRITE] = 120U;
+    fake.fail_status[KIND_WRITE] = SERVICE_ERROR;
+    fake.failure.LastFailure = PLATFORM_FLASH_FAILURE_NOT_READY;
+    fake.failure.LastFailureOperation = PLATFORM_FLASH_FAILED_OP_RECLAIM;
+    fake.failure.LastFailureRawStatus = 3U;
+    fake.failure.FailureCount = 100000U;
+    fake.failure.LastRejection = PLATFORM_FLASH_FAILURE_UNFORMATTED;
+    fake.failure.LastFailureDeviceError = 0xffU;
+    fake.failure.LastFailurePortStatus = 0xffU;
+
+    for (uint32_t guard = 0U; (stopped_line() == NULL) && (guard < 1000U); guard++)
+    {
+        (void)drive_one(false);
+    }
+    line = stopped_line();
+    assert(line != NULL);
+    assert(lock_env_log_longest_text() <= 127U);
+    assert(strstr(line, " req=32768 file=3899392") != NULL); /* 119 次写之后：119 * 32768 B */
+    assert(strstr(line, "n=999") != NULL);
+}
+
 /** @brief 回收失败一次也停（失败一次就停，F 节）：记 ERROR、关文件、不再调。 */
 static void test_reclaim_failure_stops(void)
 {
@@ -943,6 +1083,12 @@ static const Case cases[] = {
     {"sequence_change", test_sequence_change_between_steps_restarts_the_cycle},
     {"write_failure_stops", test_write_failure_stops_until_the_volume_sequence_changes},
     {"reclaim_failure_stops", test_reclaim_failure_stops},
+    {"stop_line_after_a_fault", test_stop_line_carries_ftl_diagnostics_after_a_fault},
+    {"stop_line_ready_volume", test_stop_line_with_a_ready_volume},
+    {"stop_line_ftl_never_failed", test_stop_line_when_the_ftl_never_failed},
+    {"stop_line_non_write_step", test_stop_line_of_a_non_write_step_has_no_write_fields},
+    {"stop_line_without_diagnostics", test_stop_line_without_diagnostics},
+    {"stop_line_worst_case", test_stop_line_worst_case_keeps_the_write_fields},
     {"open_busy_retry", test_open_busy_is_retried_after_cleanup},
     {"open_busy_gives_up", test_open_busy_gives_up_after_the_retry_limit},
 #endif

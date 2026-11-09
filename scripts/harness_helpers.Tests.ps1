@@ -277,9 +277,12 @@ $backgroundReclaimImpact = Get-HarnessImpact -ChangedPath @(
     'APP/tasks/background/background_jobs.c'
     'APP/tasks/background/background_jobs.h'
     'Tests/background_task/test_background_reclaim.c'
+    'APP/tasks/background/background_flash_diag.c'
+    'APP/tasks/background/background_flash_diag.h'
+    'Tests/background_task/test_background_flash_diag.c'
     'Tests/background_task/test_task_priorities.c')
 Assert-HarnessSequence -Expected @('background_task') -Actual $backgroundReclaimImpact.HostModules `
-    -Message '回收作业、作业表与优先级核对（#220）变化只选择 background_task 主机测试'
+    -Message '回收作业、作业表、Flash 失败诊断片段与优先级核对（#220）变化只选择 background_task 主机测试'
 Assert-HarnessEqual -Expected $false -Actual $backgroundReclaimImpact.RequiresAllHostTests `
     -Message '后台任务的新文件由主机模块规则覆盖，不应落入未知生产路径'
 $appConfigImpact = Get-HarnessImpact -ChangedPath @('APP/app_config.h')

@@ -35,6 +35,15 @@ static bool platform_flash_ftl_active;
 static bool platform_flash_raw_failed;
 static bool platform_flash_needs_wait;
 static FlashFTL_StatusTypeDef platform_flash_ftl_result = FLASH_FTL_NOT_READY;
+/* 失败诊断（#220）：只由唯一普通执行上下文写，GetVolumeDiagnostics 读；不参与任何状态判断，不改变产品行为。 */
+static Platform_Flash_FailedOperationTypeDef platform_flash_active_operation;
+static Platform_Flash_FailureTypeDef platform_flash_last_failure;
+static Platform_Flash_FailedOperationTypeDef platform_flash_last_failure_operation;
+static uint32_t platform_flash_last_failure_raw;
+static uint32_t platform_flash_last_failure_device;
+static uint32_t platform_flash_last_failure_port;
+static uint32_t platform_flash_failure_count;
+static Platform_Flash_FailureTypeDef platform_flash_last_rejection;
 /* 按物理数据块上限分配表，不跨 Module 引用 FTL 私有预留比例。 */
 static uint32_t platform_flash_map[PLATFORM_FLASH_FTL_DATA_BLOCKS]
     __attribute__((section(".flash_ftl_tables"), aligned(32)));
@@ -730,6 +739,63 @@ Platform_StatusTypeDef Platform_Flash_StartReadArray(
 }
 
 /**
+ * @brief 把 FTL 的非 OK 结果归一化成诊断分类。
+ * @param[in] result FTL 返回的状态。
+ * @return 诊断分类；OK、RUNNING、WAIT 不是失败，返回 NONE。
+ */
+static Platform_Flash_FailureTypeDef platform_flash_map_failure(FlashFTL_StatusTypeDef result)
+{
+    switch (result)
+    {
+        case FLASH_FTL_OK:
+        case FLASH_FTL_RUNNING:
+        case FLASH_FTL_WAIT:
+            return PLATFORM_FLASH_FAILURE_NONE;
+        case FLASH_FTL_INVALID_PARAM:
+            return PLATFORM_FLASH_FAILURE_INVALID_PARAM;
+        case FLASH_FTL_NOT_READY:
+            return PLATFORM_FLASH_FAILURE_NOT_READY;
+        case FLASH_FTL_NO_SPACE:
+            return PLATFORM_FLASH_FAILURE_NO_SPACE;
+        case FLASH_FTL_IO_ERROR:
+            return PLATFORM_FLASH_FAILURE_IO_ERROR;
+        case FLASH_FTL_CORRUPT:
+            return PLATFORM_FLASH_FAILURE_CORRUPT;
+        case FLASH_FTL_INCOMPATIBLE:
+            return PLATFORM_FLASH_FAILURE_INCOMPATIBLE;
+        case FLASH_FTL_INCOMPLETE:
+            return PLATFORM_FLASH_FAILURE_INCOMPLETE;
+        case FLASH_FTL_UNFORMATTED:
+            return PLATFORM_FLASH_FAILURE_UNFORMATTED;
+        default:
+            return PLATFORM_FLASH_FAILURE_OTHER;
+    }
+}
+
+/**
+ * @brief 记下一次以非 OK 收尾的 FTL 请求：结果、请求类别、原始访问结果和芯片后端快照（只用于诊断）。
+ * @param[in] result FTL 的最终结果，不应是 OK、RUNNING 或 WAIT。
+ * @note  不参与任何状态判断，不改变产品行为；失败后 FTL 已不就绪，下一次请求会覆盖 FTL 自己的“最近结果”，
+ *        所以在这里单独保存。仅唯一普通执行上下文调用。
+ */
+static void platform_flash_record_failure(FlashFTL_StatusTypeDef result)
+{
+    FlashFTL_DiagnosticsTypeDef raw;
+
+    platform_flash_last_failure = platform_flash_map_failure(result);
+    platform_flash_last_failure_operation = platform_flash_active_operation;
+    platform_flash_last_failure_raw = (FlashFTL_GetDiagnostics(&platform_flash_ftl, &raw) == FLASH_FTL_OK)
+                                          ? (uint32_t)raw.LastRawStatus
+                                          : UINT32_MAX;
+    platform_flash_last_failure_device = hplatform_flash.ErrorCode;
+    platform_flash_last_failure_port = hplatform_flash.LastBusStatus;
+    if (platform_flash_failure_count < UINT32_MAX)
+    {
+        platform_flash_failure_count++;
+    }
+}
+
+/**
  * @brief 在普通上下文推进当前 FTL 请求或原始诊断，并完成安全收尾。
  * @retval PLATFORM_OK 整个请求成功完成，先前开启的映射模式也已恢复。
  * @retval PLATFORM_BUSY 仍需软件推进、等待硬件或继续故障收尾。
@@ -756,6 +822,10 @@ Platform_StatusTypeDef Platform_Flash_ProcessOperation(void)
             return PLATFORM_BUSY;
         }
         status = result == FLASH_FTL_OK ? PLATFORM_OK : PLATFORM_FLASH_ERROR;
+        if (result != FLASH_FTL_OK)
+        {
+            platform_flash_record_failure(result);
+        }
         platform_flash_ftl_active = false;
     }
     else
@@ -789,6 +859,7 @@ Platform_StatusTypeDef Platform_Flash_ProcessOperation(void)
         {
             /* 数据可能已提交，但板级模式恢复失败仍须关闭卷入口，等待显式恢复。 */
             platform_flash_ftl_result = FLASH_FTL_IO_ERROR;
+            platform_flash_record_failure(FLASH_FTL_IO_ERROR);
             status = PLATFORM_FLASH_ERROR;
         }
     }
@@ -1143,9 +1214,14 @@ static Platform_StatusTypeDef platform_flash_start_volume(uint32_t operation,
     }
     if (result != FLASH_FTL_OK)
     {
+        if (result != FLASH_FTL_BUSY)
+        {
+            platform_flash_last_rejection = platform_flash_map_failure(result);
+        }
         (void)platform_flash_restore_memory_mapped_mode_if_needed(restore);
         return result == FLASH_FTL_BUSY ? PLATFORM_BUSY : PLATFORM_FLASH_ERROR;
     }
+    platform_flash_active_operation = (Platform_Flash_FailedOperationTypeDef)(operation + 1U);
     platform_flash_ftl_result = FLASH_FTL_RUNNING;
     platform_flash_ftl_active = true;
     platform_flash_raw_failed = false;
@@ -1304,7 +1380,8 @@ Platform_StatusTypeDef Platform_Flash_GetVolumeInfo(Platform_Flash_VolumeInfoTyp
 
 /**
  * @brief 查询逻辑卷和芯片后端诊断快照，不输出日志。
- * @param diagnostics 接收格式/代次、块计数及归一化芯片错误/端口状态。
+ * @param diagnostics 接收格式/代次、块计数、归一化芯片错误/端口状态，以及 Platform 记下的最近一次 FTL 失败（结果、请求类别、原始访问结果、
+ *        芯片后端快照、失败次数、最近一次受理拒绝）。FTL 不就绪（失败之后）时有效/失效块数读作零。
  * @retval PLATFORM_OK 已复制快照。
  * @retval PLATFORM_FLASH_ERROR 未绑定或输出指针无效。
  * @note 仅唯一普通执行上下文调用。SessionErases 是数据块累计擦除数，
@@ -1326,7 +1403,14 @@ Platform_StatusTypeDef Platform_Flash_GetVolumeDiagnostics(
                                                              raw.StaleBlocks,
                                                              raw.SessionErases,
                                                              hplatform_flash.ErrorCode,
-                                                             hplatform_flash.LastBusStatus};
+                                                             hplatform_flash.LastBusStatus,
+                                                             platform_flash_last_failure,
+                                                             platform_flash_last_failure_operation,
+                                                             platform_flash_last_failure_raw,
+                                                             platform_flash_last_failure_device,
+                                                             platform_flash_last_failure_port,
+                                                             platform_flash_failure_count,
+                                                             platform_flash_last_rejection};
     return PLATFORM_OK;
 }
 

@@ -16,7 +16,8 @@
  *            `<start|run> free=<空闲块> erases=<真擦除次数，钩子开始之后的增量> wr_kib=<已写 KiB> files=<已删文件数>
  *            wmax=<最长一次写 ms> rmax=<最长一次回收 ms> dmax=<最长一次删除 ms>`，最大值是自上一行起的（含等锁时间）。
  *          - 卷满：WARN `flash full after <字节> B, closing file`，一次会话只记一次。
- *          - 停下：ERROR `stopped at=<步骤名> status=<Service 状态数值> until Flash volume sequence changes`。
+ *          - 停下：ERROR `stopped at=<步骤名> status=<Service 状态数值> <FTL 失败诊断>[ pre=<空闲>/<有效>/<失效> req=<字节> file=<字节>]`，
+ *            一行不超过 127 字符（诊断片段见 `background_flash_diag.h`；`pre`、`req`、`file` 只在写步失败时有）；之后到 Flash 卷序号变化为止不再动。
  *          启动那一行 `HOOK: flash_pressure ON …` 由 `background_flash_pressure_announce()` 投（WARN）。
  *
  *          空闲块数和擦除次数来自 `Platform_Flash_GetVolumeDiagnostics()`，在 Flash 卷锁外读，只给人看：
@@ -25,6 +26,7 @@
  ******************************************************************************
  */
 
+#include "APP/tasks/background/background_flash_diag.h"
 #include "APP/tasks/background/background_flash_pressure.h"
 #include "APP/tasks/background/background_task_config.h"
 #include "APP/tasks/volume/volume_event.h"
@@ -32,6 +34,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "Platform/flash/platform_flash.h"
 #include "Service/filesystem/filesystem_file.h"
@@ -92,6 +95,9 @@ typedef struct
     uint32_t write_max_ms;                     /**< 自上一行起最长一次写。 */
     uint32_t reclaim_max_ms;                   /**< 自上一行起最长一次回收。 */
     uint32_t remove_max_ms;                    /**< 自上一行起最长一次删除。 */
+    Platform_Flash_VolumeDiagnosticsTypeDef pre_write; /**< 最近一次写之前的 FTL 诊断快照，停下行用（失败后 FTL 不就绪，有效/失效块数读作 0）。 */
+    bool pre_write_valid;                      /**< `pre_write` 读到了。 */
+    uint32_t write_request;                    /**< 最近一次写请求的字节数。 */
 } FlashPressure_StateTypeDef;
 
 static FlashPressure_StateTypeDef flash_pressure;
@@ -205,20 +211,46 @@ static void flash_pressure_start_session(uint32_t sequence, TickType_t now)
 }
 
 /**
- * @brief  失败一次就停：记一条 ERROR；文件还开着就先关闭，不删除。
+ * @brief  失败一次就停：记一条 ERROR（带 FTL 失败诊断，一行不超过 127 字符）；文件还开着就先关闭，不删除。
  * @param[in] at 失败发生的步骤。
  * @param[in] status 文件接口返回的状态。
  * @return 这一步返回的等待毫秒数。
+ * @note   行里写：停在哪一步、文件接口的状态数值（1 是 `SERVICE_ERROR`，FTL 的任何非 OK 结果都压成它）、`background_flash_diag.h` 的诊断片段
+ *         （FTL 的具体结果、请求类别、失败次数、失败后的空闲块等）；写步另加失败那次写之前的快照 `pre=<空闲>/<有效>/<失效>`、
+ *         那次写请求的字节数 `req=` 与当前文件已写字节 `file=`（`rej`、`hw` 在最后，放不下先截断它们）。停下是一次性的，仍是一行，
+ *         消息池核算不变（只是这一行变长，没有新增行）。
  */
 static uint32_t flash_pressure_stop(FlashPressure_PhaseTypeDef at, Service_StatusTypeDef status)
 {
-    char text[96];
+    char text[128];
+    char extra[64];
 
     (void)snprintf(text,
                    sizeof(text),
-                   "stopped at=%s status=%lu until Flash volume sequence changes",
+                   "stopped at=%s status=%lu",
                    flash_pressure_phase_names[at],
                    (unsigned long)status);
+    extra[0] = '\0';
+    if ((at == FLASH_PRESSURE_WRITE) && flash_pressure.pre_write_valid)
+    {
+        (void)snprintf(extra,
+                       sizeof(extra),
+                       " pre=%lu/%lu/%lu req=%lu file=%lu",
+                       (unsigned long)flash_pressure.pre_write.FreeBlocks,
+                       (unsigned long)flash_pressure.pre_write.ValidGroups,
+                       (unsigned long)flash_pressure.pre_write.StaleBlocks,
+                       (unsigned long)flash_pressure.write_request,
+                       (unsigned long)flash_pressure.file_bytes);
+    }
+    else if (at == FLASH_PRESSURE_WRITE)
+    {
+        (void)snprintf(extra,
+                       sizeof(extra),
+                       " req=%lu file=%lu",
+                       (unsigned long)flash_pressure.write_request,
+                       (unsigned long)flash_pressure.file_bytes);
+    }
+    background_flash_diag_append(text, sizeof(text), extra);
     (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, flash_pressure_tag, text);
 
     if (flash_pressure.file_open)
@@ -328,8 +360,6 @@ static uint32_t flash_pressure_step_reclaim(void)
  */
 static uint32_t flash_pressure_step_write(void)
 {
-    uint32_t free_blocks;
-    uint32_t erases;
     uint32_t request;
     uint32_t done = 0U;
     const uint32_t floor_blocks = BACKGROUND_HOOK_FLASH_PRESSURE_FREE_FLOOR;
@@ -337,8 +367,11 @@ static uint32_t flash_pressure_step_write(void)
     TickType_t start;
     Service_StatusTypeDef status;
 
+    /* 写之前取一份 FTL 诊断快照：失败之后 FTL 不就绪，有效/失效块数读作 0，停下行要用失败前的数字。 */
+    flash_pressure.pre_write_valid = (Platform_Flash_GetVolumeDiagnostics(&flash_pressure.pre_write) == PLATFORM_OK);
+
     /* 空闲块下限（默认 0 不启用）：低于它就不写，只给回收机会，等空闲块回到下限以上。 */
-    if ((floor_blocks != 0U) && flash_pressure_read_stats(&free_blocks, &erases) && (free_blocks < floor_blocks))
+    if ((floor_blocks != 0U) && flash_pressure.pre_write_valid && (flash_pressure.pre_write.FreeBlocks < floor_blocks))
     {
         if (BACKGROUND_HOOK_FLASH_PRESSURE_RECLAIM != 0U)
         {
@@ -353,6 +386,7 @@ static uint32_t flash_pressure_step_write(void)
         request = BACKGROUND_HOOK_FLASH_PRESSURE_CHUNK_BYTES;
     }
 
+    flash_pressure.write_request = request;
     start = xTaskGetTickCount();
     status = Service_Filesystem_WriteFile(flash_pressure.file,
                                           (const void *)BACKGROUND_HOOK_FLASH_PRESSURE_SOURCE_ADDRESS,

@@ -26,6 +26,7 @@
 #include "lock_env_stub.h"
 
 #include "APP/tasks/background/background_reclaim.h"
+#include "Platform/flash/platform_flash.h"
 #include "APP/tasks/background/background_task_config.h"
 #include "APP/tasks/volume/volume_event.h"
 #include "Service/filesystem/filesystem_service.h"
@@ -54,6 +55,25 @@ Service_StatusTypeDef Service_Filesystem_ReclaimFlash(void)
     return (index < g_script_length) ? g_script[index] : SERVICE_OK;
 }
 
+/* 假的 Platform 卷诊断：回收失败行会读它（FTL 最近一次失败）；用例按需设置。 */
+static Platform_Flash_VolumeDiagnosticsTypeDef g_diag;
+static bool g_diag_fails;
+
+/**
+ * @brief  假的 Platform 卷诊断：复制设置好的快照，或按要求失败。
+ * @param[out] diagnostics 接收快照。
+ * @return 要求失败时 PLATFORM_FLASH_ERROR，否则 PLATFORM_OK。
+ */
+Platform_StatusTypeDef Platform_Flash_GetVolumeDiagnostics(Platform_Flash_VolumeDiagnosticsTypeDef *diagnostics)
+{
+    if (g_diag_fails)
+    {
+        return PLATFORM_FLASH_ERROR;
+    }
+    *diagnostics = g_diag;
+    return PLATFORM_OK;
+}
+
 /**
  * @brief 开始一个场景：脚本与计数清空，桩复位，日志清空，tick 设为给定值。
  * @param[in] tick 起始 tick。
@@ -63,6 +83,8 @@ static void begin_scenario(TickType_t tick)
     memset(g_script, 0, sizeof(g_script));
     g_script_length = 0U;
     g_reclaim_calls = 0U;
+    memset(&g_diag, 0, sizeof(g_diag));
+    g_diag_fails = false;
     freertos_stub_reset();
     freertos_stub_set_tick(tick);
     lock_env_log_reset();
@@ -177,7 +199,7 @@ static void test_failure_stops_with_one_error_line(void)
     advance_ms(100U);
     assert(background_reclaim_step() == BACKGROUND_WAIT_FOREVER);
     assert(g_reclaim_calls == 1U);
-    assert_single_error_line("Reclaim failed status=1, stopped until Flash volume sequence changes");
+    assert_single_error_line("Reclaim failed status=1 (stopped until Flash seq changes) ftl=none n=0 free=0");
 
     for (uint32_t round = 0U; round < 50U; round++)
     {
@@ -201,11 +223,77 @@ static void test_timeout_failure_stops(void)
     advance_ms(100U);
     assert(background_reclaim_step() == BACKGROUND_WAIT_FOREVER);
     assert(g_reclaim_calls == 2U);
-    assert_single_error_line("Reclaim failed status=5, stopped until Flash volume sequence changes");
+    assert_single_error_line("Reclaim failed status=5 (stopped until Flash seq changes) ftl=none n=0 free=0");
 
     advance_ms(5000U);
     assert(background_reclaim_step() == BACKGROUND_WAIT_FOREVER);
     assert(g_reclaim_calls == 2U);
+}
+
+/**
+ * @brief 让第一次回收失败并走到失败行（诊断快照由调用者事先设好）。
+ */
+static void fail_the_first_reclaim(void)
+{
+    g_script[0] = SERVICE_ERROR;
+    g_script_length = 1U;
+    flash_becomes_ready();
+    advance_ms(100U);
+    assert(background_reclaim_step() == BACKGROUND_WAIT_FOREVER);
+}
+
+/** @brief 失败行带 FTL 最近一次失败的具体结果、请求类别、原始访问结果、失败次数、空闲块（第 6 次上板：状态数值 1 分不出原因）。 */
+static void test_failure_line_carries_ftl_diagnostics(void)
+{
+    begin_scenario(1000U);
+    g_diag.LastFailure = PLATFORM_FLASH_FAILURE_CORRUPT;
+    g_diag.LastFailureOperation = PLATFORM_FLASH_FAILED_OP_RECLAIM;
+    g_diag.LastFailureRawStatus = 0U;
+    g_diag.FailureCount = 1U;
+    g_diag.FreeBlocks = 3U;
+    fail_the_first_reclaim();
+    assert_single_error_line("Reclaim failed status=1 (stopped until Flash seq changes) ftl=CORRUPT op=reclaim raw=ok n=1 free=3");
+}
+
+/** @brief FTL 从没失败过而文件接口报错（错误不是 FTL 来的）：`ftl=none`，让人一眼看出该去别处找原因。 */
+static void test_failure_line_when_ftl_never_failed(void)
+{
+    begin_scenario(1000U);
+    g_diag.FreeBlocks = 554U;
+    fail_the_first_reclaim();
+    assert_single_error_line("Reclaim failed status=1 (stopped until Flash seq changes) ftl=none n=0 free=554");
+}
+
+/** @brief 诊断读不到（FTL 没绑定）：失败行仍然记，写 `diag=n/a`。 */
+static void test_failure_line_without_diagnostics(void)
+{
+    begin_scenario(1000U);
+    g_diag_fails = true;
+    fail_the_first_reclaim();
+    assert_single_error_line("Reclaim failed status=1 (stopped until Flash seq changes) diag=n/a");
+}
+
+/** @brief 所有可选段都出现的最坏取值：行不超过 127 字符，固定文字和主要诊断完整，尾部（`hw`）截断但仍以 NUL 结尾。 */
+static void test_failure_line_worst_case_fits(void)
+{
+    begin_scenario(1000U);
+    g_diag.LastFailure = PLATFORM_FLASH_FAILURE_NOT_READY;
+    g_diag.LastFailureOperation = PLATFORM_FLASH_FAILED_OP_RECLAIM;
+    g_diag.LastFailureRawStatus = 3U;
+    g_diag.FailureCount = 100000U;
+    g_diag.FreeBlocks = 4094U;
+    g_diag.ValidGroups = 4094U;
+    g_diag.StaleBlocks = 4094U;
+    g_diag.LastRejection = PLATFORM_FLASH_FAILURE_UNFORMATTED;
+    g_diag.LastFailureDeviceError = 0xffU;
+    g_diag.LastFailurePortStatus = 0xffU;
+    fail_the_first_reclaim();
+
+    assert(lock_env_log_count() == 1U);
+    assert(lock_env_log_longest_text() <= 127U);
+    assert(strncmp(lock_env_log_text(0U),
+                   "Reclaim failed status=1 (stopped until Flash seq changes) ftl=NOT_READY op=reclaim raw=timeout n=999 free=4094 valid=4094 stale=4094",
+                   100U) == 0);
 }
 
 /** @brief 卷不可用类和忙碌的返回值不是失败：不停、不记日志，下个周期照常给机会。 */
@@ -287,6 +375,10 @@ static const Case cases[] = {
     {"unavailable_and_busy_are_not_failures", test_volume_unavailable_and_busy_results_are_not_failures},
     {"sequence_change_resumes", test_sequence_change_resumes_after_a_stop},
     {"unmounted_is_not_called", test_unmounted_volume_is_not_called},
+    {"failure_line_carries_ftl_diagnostics", test_failure_line_carries_ftl_diagnostics},
+    {"failure_line_when_ftl_never_failed", test_failure_line_when_ftl_never_failed},
+    {"failure_line_without_diagnostics", test_failure_line_without_diagnostics},
+    {"failure_line_worst_case_fits", test_failure_line_worst_case_fits},
 };
 
 /**

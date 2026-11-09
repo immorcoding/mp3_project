@@ -160,6 +160,24 @@ if(MP3_HOOK_FLASH_PRESSURE AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_FLASH_PRESSURE 只能在 Debug 构建里打开（当前 ${CMAKE_BUILD_TYPE}）。")
 endif()
 
+# Flash 压力钩子的两个调参（#220，第 6 次上板追加）：不用为每一版固件临时改源码。
+#   MP3_HOOK_FLASH_PRESSURE_FREE_FLOOR  空闲块下限：低于它钩子停写、只等后台任务的回收作业抬回来，默认 0（不设下限，一路压到耗尽）；
+#                                        300 把空闲块保持在回收水位（本板 462）以下、耗尽以上，擦除全来自回收作业，是产品节拍。
+#   MP3_HOOK_FLASH_PRESSURE_FILE_MIB    一个压力文件写满多少 MiB 就关闭并删除，默认 4（16 做 16 MiB 满额删除；Flash 卷逻辑容量约 18.9 MiB）。
+# 只允许 Debug（非默认值在发布构建里会在 configure 时报错）；缓存变量会留在构建目录里，要回默认值显式写 0 和 4。
+set(MP3_HOOK_FLASH_PRESSURE_FREE_FLOOR 0 CACHE STRING "Flash 压力钩子的空闲块下限（#220）：0 不设（默认）")
+set(MP3_HOOK_FLASH_PRESSURE_FILE_MIB 4 CACHE STRING "Flash 压力钩子的压力文件大小，单位 MiB（#220）：默认 4")
+if(NOT MP3_HOOK_FLASH_PRESSURE_FREE_FLOOR MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "MP3_HOOK_FLASH_PRESSURE_FREE_FLOOR 必须是非负整数（当前 \"${MP3_HOOK_FLASH_PRESSURE_FREE_FLOOR}\"）。")
+endif()
+if(NOT MP3_HOOK_FLASH_PRESSURE_FILE_MIB MATCHES "^[0-9]+$" OR MP3_HOOK_FLASH_PRESSURE_FILE_MIB LESS 1 OR MP3_HOOK_FLASH_PRESSURE_FILE_MIB GREATER 16)
+    message(FATAL_ERROR "MP3_HOOK_FLASH_PRESSURE_FILE_MIB 必须是 1 到 16 的整数（当前 \"${MP3_HOOK_FLASH_PRESSURE_FILE_MIB}\"，Flash 卷逻辑容量约 18.9 MiB）。")
+endif()
+if((NOT MP3_HOOK_FLASH_PRESSURE_FREE_FLOOR EQUAL 0 OR NOT MP3_HOOK_FLASH_PRESSURE_FILE_MIB EQUAL 4) AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(FATAL_ERROR "测试钩子不能进发布构建：MP3_HOOK_FLASH_PRESSURE_FREE_FLOOR、MP3_HOOK_FLASH_PRESSURE_FILE_MIB 只能在 Debug 构建里改成非默认值（当前 ${CMAKE_BUILD_TYPE}）。")
+endif()
+math(EXPR MP3_HOOK_FLASH_PRESSURE_FILE_BYTES "${MP3_HOOK_FLASH_PRESSURE_FILE_MIB} * 1024 * 1024")
+
 # 定位符失效钩子（#215，APP/tasks/audio_reader）：打开后音频读取任务在每次开流前把文件定位符清零，Filesystem 判核对不符、
 # 走真实的退回按路径打开，用于 R4.4（12000 首同文件夹开最后一首，T_data 5 s 内要能出声）；同样只允许 Debug。
 # configure 时 cmake --preset firmware-debug -DMP3_HOOK_LOCATOR_MISS=1，关掉要显式 -DMP3_HOOK_LOCATOR_MISS=0。
@@ -181,6 +199,8 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     FILESYSTEM_HOOK_SD_LATE_DMA=${MP3_HOOK_SD_LATE_DMA}
     VOLUME_HOOK_FAKE_BOUNCE=${MP3_HOOK_FAKE_BOUNCE}
     BACKGROUND_HOOK_FLASH_PRESSURE=${MP3_HOOK_FLASH_PRESSURE}
+    BACKGROUND_HOOK_FLASH_PRESSURE_FREE_FLOOR=${MP3_HOOK_FLASH_PRESSURE_FREE_FLOOR}U
+    BACKGROUND_HOOK_FLASH_PRESSURE_FILE_BYTES=${MP3_HOOK_FLASH_PRESSURE_FILE_BYTES}U
     AUDIO_READER_HOOK_LOCATOR_MISS=${MP3_HOOK_LOCATOR_MISS}
     MUSIC_HOOK_PAGE_TURN=${MP3_HOOK_PAGE_TURN}
     # 在此添加用户自定义的编译宏

@@ -39,4 +39,6 @@ Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识、QSPI Ada
 
 唯一上层回调所有者是 Filesystem Service 的 Flash 执行器：它在 `InitFlash` 里先建立一个静态二值信号量、再设置回调，回调在 ISR 里只 `xSemaphoreGiveFromISR`；等待和 `ProcessOperation()` 由正在执行 Flash 请求的任务完成，不绑定固定任务（现在是 Flash 启动任务的挂载和后台任务的回收作业）。Process 按当前操作派发到原始 W25Qxx 或 FTL，不重复推进同一底层操作。映射关闭覆盖整个 FTL 请求，不能每页完成就重新打开；错误时先确保控制器/DMA 不再访问缓冲，再显式恢复，NOR 内部仍忙不能视为已取消。
 
+**FTL 失败诊断（#220，只读）**：`Platform_Flash_GetVolumeDiagnostics()` 除块计数外还给出 Platform 记下的最近一次 FTL 失败：`LastFailure`（FTL 非 OK 结果的归一化分类）、`LastFailureOperation`（打开、格式化、读、写、同步、回收）、`LastFailureRawStatus`（失败时 FTL 最近一次原始访问的结果：0 成功、1 忙、2 错误、3 超时）、`LastFailureDeviceError` 与 `LastFailurePortStatus`（失败时芯片后端快照）、`FailureCount`、`LastRejection`（最近一次被 FTL 在受理时就拒绝的请求）。原因：Filesystem Service 把 FTL 的任何非 OK 结果压成 `SERVICE_ERROR`，而 FTL 自己的“最近结果”每次请求都会被覆盖，失败后卷又不就绪，事后读不到。记录发生在 `ProcessOperation()` 得到最终结果和 `start_volume` 被 FTL 拒绝的那一刻，唯一执行上下文，不参与任何状态判断，不改变产品行为；之后的请求不冲掉它。当前只有后台任务的回收失败行和 Flash 压力钩子的停下行读它，格式见 [后台任务](../../APP/tasks/background/README.md)“Flash 失败诊断”。
+
 诊断范围仍受 ADR-0009 限制，不能借自检接口操作 FTL。具体容量、内存和启动顺序在设计文档维护，主机与构建验证通过，实际 QSPI/MDMA 和掉电验收待完成。

@@ -35,13 +35,13 @@
 #define BACKGROUND_HOOK_FLASH_PRESSURE_CHUNK_BYTES 32768U  /* 每步写的字节数，等于单次写上限 32 KiB（`SERVICE_FILESYSTEM_IO_MAX_BYTES`）；调小只会让每步更短。 */
 #endif
 #ifndef BACKGROUND_HOOK_FLASH_PRESSURE_FILE_BYTES
-#define BACKGROUND_HOOK_FLASH_PRESSURE_FILE_BYTES (4U * 1024U * 1024U) /* 一个压力文件写满多少字节就关闭并删除；4 MiB 的删除约 0.55 s，想看 16 MiB 满额删除就调到卷容量以内。 */
+#define BACKGROUND_HOOK_FLASH_PRESSURE_FILE_BYTES (4U * 1024U * 1024U) /* 一个压力文件写满多少字节就关闭并删除；4 MiB 的删除约 0.55 s；CMake 缓存变量 MP3_HOOK_FLASH_PRESSURE_FILE_MIB（1 至 16，默认 4）把它传进来，16 MiB 满额删除不用改源码。 */
 #endif
 #ifndef BACKGROUND_HOOK_FLASH_PRESSURE_PACE_MS
 #define BACKGROUND_HOOK_FLASH_PRESSURE_PACE_MS 100U  /* 每写一块、回收一次之后让出的时间，单位为毫秒；也是回收的节拍（与产品回收 100 ms 一次一致）。 */
 #endif
 #ifndef BACKGROUND_HOOK_FLASH_PRESSURE_FREE_FLOOR
-#define BACKGROUND_HOOK_FLASH_PRESSURE_FREE_FLOOR 0U /* 空闲块低于它就暂停写入、只等回收；0 表示不设下限，一路压到 FTL 自己回收才能继续写（R6.4 要的最坏情形）。想只压到水位以下而不耗尽，设成比水位（本板 462）小的数，例如 300。 */
+#define BACKGROUND_HOOK_FLASH_PRESSURE_FREE_FLOOR 0U /* 空闲块低于它就暂停写入、只等回收；0 表示不设下限，一路压到 FTL 自己回收才能继续写（R6.4 要的最坏情形）。想只压到水位以下而不耗尽，设成比水位（本板 462）小的数，例如 300；CMake 缓存变量 MP3_HOOK_FLASH_PRESSURE_FREE_FLOOR 把它传进来。 */
 #endif
 #ifndef BACKGROUND_HOOK_FLASH_PRESSURE_RECLAIM
 #define BACKGROUND_HOOK_FLASH_PRESSURE_RECLAIM 0U /* 写一块之后是否由本作业另调一次回收；默认 0：产品的回收由后台任务自己的回收作业（`background_reclaim.c`，100 ms 周期、一次一块）负责，钩子再调会让回收被叫两次、擦除节拍比产品高一倍；主机测试用 -D 打开它来覆盖钩子自己的回收分支。 */
