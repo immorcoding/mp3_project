@@ -26,7 +26,7 @@
 - 取消 `Storage_AudioMediaTypeDef`（#195：消抖由文件接口挡住，不需要介质状态入参）。曲库好不好改由曲库代次决定：代次 0（扫描中、卷变了、没发布）立刻应答 `NOT_READY`，读取任务不订阅“曲库就绪”（#194 第 15 条）。
 - `audio_reader_task.h`：只给 `app_tasks.c`（Boot）用，不是跨模块 Interface。读取任务直接包含音乐曲库的公开头（`catalog.h`、`catalog_track_open.h`、`catalog_track_diag.h`），不做注入（ARC-23：任务包含应用的头不受分层脚本限制；读取任务只服务音乐，加 Books 不碰它）。
 
-`playback_machine` 的 Ops 里存储窗口一组仍叫 `Storage`（`Playback_MachineStorageOpsTypeDef`、`Ops.Storage.*`）：播放状态机这次不改，这几个名字留给用户决定是否另开票改（未决问题，见交付汇报）。
+`playback_machine` 的 Ops 里指向音频读取任务的一组叫 `Stream`（`Playback_MachineStreamOpsTypeDef`、`Ops.Stream.*`），与 `audio_reader_stream_*` 同名；#215 当时仍叫 `Storage`，#222 收尾时只改名、不改行为。
 
 ## 优先级、栈与启动
 

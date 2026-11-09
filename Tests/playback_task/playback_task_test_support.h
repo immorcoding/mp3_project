@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    playback_task_test_support.h
- * @brief   playback_machine 主机测试的替身与场景助手：调用日志、假存储窗口、假播放模块、快照记录。
+ * @brief   playback_machine 主机测试的替身与场景助手：调用日志、假音频读取任务、假播放模块、快照记录。
  * @note    替身只实现 playback_machine.h 的 Ops，不向生产头增加测试专用入口。
  ******************************************************************************
  */
@@ -58,7 +58,7 @@ void fake_cycles_advance(uint32_t cycles);
 uint32_t published_count(void);
 Playback_SnapshotTypeDef published_last(void);
 
-/* 假存储窗口（音频读取任务的替身）：脚本化音频读取任务一侧。 */
+/* 假音频读取任务：脚本化音频读取任务一侧。 */
 #define FAKE_BLOCK_CAPACITY 64U
 #define FAKE_BLOCK_POOL     8U
 uint32_t fake_audio_reader_request_count(void);

@@ -232,7 +232,7 @@ static void return_held_block(Playback_MachineTypeDef *machine)
 {
     if (machine->Holding)
     {
-        machine->Ops->Storage.ReturnBlock(&machine->Held);
+        machine->Ops->Stream.ReturnBlock(&machine->Held);
         machine->Holding = false;
         machine->HeldOffset = 0U;
     }
@@ -310,7 +310,7 @@ static void open_stream_for_cursor(Playback_MachineTypeDef *machine, uint32_t au
     request.Generation = machine->Snapshot.Generation;
     request.Position = machine->Snapshot.Index;
     request.AudioOffset = audio_offset;
-    (void)machine->Ops->Storage.WriteRequest(&request);
+    (void)machine->Ops->Stream.WriteRequest(&request);
 }
 
 /**
@@ -331,7 +331,7 @@ static void close_stream(Playback_MachineTypeDef *machine)
     machine->InputFinished = false;
     machine->RecordValid = false;
     reset_stream_tracking(machine);
-    (void)machine->Ops->Storage.WriteRequest(&request);
+    (void)machine->Ops->Stream.WriteRequest(&request);
 }
 
 static void enter_stopped(Playback_MachineTypeDef *machine, Playback_StopReasonTypeDef reason, bool keep_cursor);
@@ -397,7 +397,7 @@ static void discard_stale_blocks(Playback_MachineTypeDef *machine)
 
     for (uint32_t i = 0U; i < PLAYBACK_MACHINE_STALE_BLOCK_LIMIT; i++)
     {
-        if (!machine->Ops->Storage.PeekReadyBlock(&block))
+        if (!machine->Ops->Stream.PeekReadyBlock(&block))
         {
             break;
         }
@@ -405,11 +405,11 @@ static void discard_stale_blocks(Playback_MachineTypeDef *machine)
         {
             break;
         }
-        if (!machine->Ops->Storage.TakeReadyBlock(&block))
+        if (!machine->Ops->Stream.TakeReadyBlock(&block))
         {
             break;
         }
-        machine->Ops->Storage.ReturnBlock(&block);
+        machine->Ops->Stream.ReturnBlock(&block);
     }
 }
 
@@ -740,7 +740,7 @@ static void refresh_record(Playback_MachineTypeDef *machine)
     Playback_MachineRecordTypeDef record;
 
     machine->RecordValid = false;
-    if ((machine->StreamSeq == 0U) || !machine->Ops->Storage.ReadRecord(&record) ||
+    if ((machine->StreamSeq == 0U) || !machine->Ops->Stream.ReadRecord(&record) ||
         (record.StreamSeq != machine->StreamSeq))
     {
         return;
@@ -895,7 +895,7 @@ static bool ready_has_current_block(const Playback_MachineTypeDef *machine)
 {
     Playback_MachineBlockTypeDef block;
 
-    return machine->Ops->Storage.PeekReadyBlock(&block) && (block.StreamSeq == machine->StreamSeq);
+    return machine->Ops->Stream.PeekReadyBlock(&block) && (block.StreamSeq == machine->StreamSeq);
 }
 
 /**
@@ -912,7 +912,7 @@ static uint32_t feed_blocks(Playback_MachineTypeDef *machine)
     {
         if (!machine->Holding)
         {
-            if (!ready_has_current_block(machine) || !machine->Ops->Storage.TakeReadyBlock(&machine->Held))
+            if (!ready_has_current_block(machine) || !machine->Ops->Stream.TakeReadyBlock(&machine->Held))
             {
                 break;
             }
