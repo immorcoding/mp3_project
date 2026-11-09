@@ -6,7 +6,8 @@
  * @details
  *          默认关闭（`BACKGROUND_HOOK_FLASH_PRESSURE`），代码写成 `if (开关)`，默认构建也编译；发布构建不开。
  *          打开后，Flash 卷就绪时开始在 Flash 卷根目录循环：新建 `FLASHP.TMP`、32 KiB 一块写到 4 MiB、
- *          每写一块给 FTL 一次回收机会、写满关闭并删除。每步最多一次文件调用，返回多久后再叫它。
+ *          写满关闭并删除；每写一块是否另给 FTL 一次回收机会由 `BACKGROUND_HOOK_FLASH_PRESSURE_RECLAIM` 决定（默认关闭：回收由后台任务自己的回收作业
+ *          `background_reclaim.c` 按产品节拍负责，#220）。每步最多一次文件调用，返回多久后再叫它。
  *          日志与调参见 `APP/tasks/background/README.md` 与 `background_task_config.h`。
  ******************************************************************************
  */

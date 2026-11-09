@@ -34,13 +34,13 @@
 
 /* 一批最多的日志行数：每个任务一行栈占用，加 Heap、温度、GUI 最长帧、CPU 占比、Health 五行（DIAG-6）。
  * 一批在 5 s 内一次投完，不分散；它自己必须放得进 Service Log 的消息池，余量留给同时到来的其他任务日志。
- * 稳态 11 个任务（IDLE、Tmr Svc、Log、Storage、Audio Read、Volume、Playback、Monitor、GUI、Background、Foreground），一批 16 行；
- * 开机后 MountFlash 期间多一个 Flash 启动任务，12 个任务、17 行。 */
+ * 稳态 10 个任务（IDLE、Tmr Svc、Log、Audio Read、Volume、Playback、Monitor、GUI、Background、Foreground），一批 15 行；
+ * 开机后 MountFlash 期间多一个 Flash 启动任务，11 个任务、16 行（#220 删掉 Storage Task，各少一个）。 */
 #define MONITOR_BATCH_FIXED_LINES 5U
 _Static_assert((MONITOR_CPU_TASK_MAX + MONITOR_BATCH_FIXED_LINES) <= LOG_SERVICE_QUEUE_LENGTH,
                "one Monitor batch must fit the Service Log message pool");
 
-/* 最坏同时到达的行数（保守口径，#218 重算）：Monitor 一批（开机后 12 个任务、17 行）加其他任务的最坏 17 行，池里还要至少留 8 块。
+/* 最坏同时到达的行数（保守口径，#218 重算，#220 再算）：Monitor 一批（开机后 11 个任务、16 行）加其他任务的最坏 18 行，池里还要至少留 8 块。
  * 每加一个任务或一种常开日志行就要重算这条（改 MONITOR_TASK_CONCURRENT_MAX、MONITOR_POOL_OTHER_WORST_LINES 或池深），
  * 编译期拦住，而不是等板测发现 `Health log_svc` 在涨。 */
 _Static_assert((MONITOR_TASK_CONCURRENT_MAX + MONITOR_BATCH_FIXED_LINES + MONITOR_POOL_OTHER_WORST_LINES + MONITOR_POOL_SPARE_MIN)
@@ -74,11 +74,6 @@ static UBaseType_t monitor_get_task_stack_words(const char *task_name)
     if (strcmp(task_name, "Create Task") == 0)
     {
         return APP_BOOT_TASK_STACK_WORDS;
-    }
-
-    if (strcmp(task_name, "Storage Task") == 0)
-    {
-        return APP_STORAGE_TASK_STACK_WORDS;
     }
 
     if (strcmp(task_name, "Volume Task") == 0)

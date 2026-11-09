@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    storage_sd_benchmark_config.h
-  * @brief   Storage Task SD 端到端测速的私有数据规模参数。
+  * @brief   卷任务 SD 端到端测速的私有数据规模参数。
   *
   * @details
   *          本文件只控制 APP 诊断测试，不影响 Filesystem Service 的实际 DMA

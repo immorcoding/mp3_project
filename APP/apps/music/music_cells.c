@@ -31,7 +31,7 @@ UiCellTypeDef music_cell_window_result;
  * @brief Boot 任务调用一次：整块写入四个存储（NOLOAD 段不清零，初值全零 = 没有需求、没有结果），再初始化格子。
  * @note  在创建 GUI 任务和前台任务之前调用（注册表的 `boot_init`）。需求格的叫醒函数是 `foreground_task_wake`：此刻前台任务还没
  *        创建，所以传函数而不是任务句柄；它在任务绑定句柄之前是空操作。结果格不叫醒 GUI（GUI 最慢 16 ms 看一次）。
- *        只做内存写入和一次静态互斥量创建，不碰文件接口，栈很浅（Boot 栈只有 128 word）。
+ *        只做内存写入和一次静态互斥量创建，不碰文件接口，栈很浅（Boot 栈 192 word，核算见 `APP/tasks/volume/README.md`“默认构建的 Boot 栈核算”）。
  */
 void music_cells_boot_init(void)
 {

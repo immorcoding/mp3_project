@@ -2,7 +2,7 @@
 
 卷任务（Volume Task）接管 SD 的热插拔和挂载：消抖、关闸、对账、卸载与挂载、发布卷事件。用户任何时候拔卡都马上停止，读取中拔卡不再被吞，换卡、轻触卡槽、快速拔插都停在正确状态。Flash 的启动（基准、挂载、无文件系统时格式化）放在一次性的 Flash 启动任务里，所以 `MountFlash`（实测 3.3 至 8.3 s）期间插拔卡照常响应。依据 [ADR-0024](../../../docs/adr/0024-file-interface-concurrency.md) 的“卷生命周期”一节和 [ADR-0023](../../../docs/adr/0023-task-split-and-app-contract.md)；规则 STOR-8、STOR-9、ARC-21；决定来源 [#195](https://github.com/immorcoding/mp3_project/issues/195)、[#189](https://github.com/immorcoding/mp3_project/issues/189)。
 
-卷任务只管“卷在不在”，不碰具体的文件读写，也不碰曲库、音频流、界面数据：这些是订阅者的事（目前是音频读取任务、前台任务，见 [音频读取任务](../audio_reader/README.md)，和 Storage Task，见 [存储任务](../storage/README.md)）。加应用时卷任务和卷事件都不改。
+卷任务只管“卷在不在”，不碰具体的文件读写，也不碰曲库、音频流、界面数据：这些是订阅者的事（目前是音频读取任务、前台任务和后台任务，见 [音频读取任务](../audio_reader/README.md)、[前台任务](../foreground/README.md)、[后台任务](../background/README.md)；Storage Task 随 #220 删除）。加应用时卷任务和卷事件都不改。
 
 ## 目录
 
@@ -34,21 +34,21 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
 | **卷** | **3** | **1024 word，AXI `.app_axi_ram`** | 静态，TCB 在 DTCM `.bss` |
 | 定时器服务 | 3（`configTIMER_TASK_PRIORITY`，不改） | 128 word | 内核创建；应用没有软件定时器，它一直阻塞 |
 | 前台、GUI、Log、Monitor（#218：GUI、Log、Monitor 由 1 升到 2） | 2 | 前台 1536 word（AXI），其余不变 | 见 [前台任务](../foreground/README.md) |
-| **Flash 启动（一次性）** | **2** | **1024 word（约 4 KiB），AXI `.app_axi_ram`** | 静态，跑完自删 |
-| Storage（#218：由 2 降到 1） | 1 | 1024 word | 动态，不变 |
-| Boot、IDLE | 0 | Boot 128 word | 不变 |
+| 后台 | 1 | 1536 word（6 KiB），AXI `.app_axi_ram` | 静态，见 [后台任务](../background/README.md) |
+| **Flash 启动（一次性）**（#220：由 2 降到 1，与后台同级） | **1** | **1024 word（约 4 KiB），AXI `.app_axi_ram`** | 静态，跑完自删 |
+| Boot、IDLE | 0 | Boot 192 word（#220：由 128 提到 192） | 动态；Boot 栈核算见下 |
 
 `configMAX_PRIORITIES` 是 5（优先级 0 至 4），`FreeRTOSConfig.h` 一个字没改。**定时器服务任务和卷任务同为 3**：它与播放（4）的关系是播放抢占它，与卷任务同级（`configUSE_TIME_SLICING` 为 1，轮转）；因为应用没有软件定时器，它永远阻塞在队列上，不占 CPU，所以同级没有影响。引入软件定时器时回调须很短，并复核这三个优先级（本任务的消抖因此也**不用软件定时器**，用等通知带超时）。
 
-**创建顺序**（`app_tasks.c` 的 `create_task`，即 Boot 任务）：Log Task → 可选的 SDRAM 自检（内存准备，做完才创建用到 SDRAM 的任务） → 曲库锁与音频块池、信箱（`audio_reader_boot_init()`，#215 起在 Boot 里，不再是 Storage Task 的第一件事） → Storage Task（运行到首次阻塞：登记卷事件订阅、先比对一次序号） → Audio Read Task（优先级 3，运行到第一次等待：登记订阅、先比对一次序号、看一次请求信箱） → **Volume Task** → Playback Task → Monitor → GUI。Boot 优先级最低，任何更高优先级的任务没阻塞时它不会继续，所以创建下一个任务时前面的都已经运行到首次阻塞。
+**创建顺序**（`app_tasks.c` 的 `create_task`，即 Boot 任务）：Log Task → 可选的 SDRAM 自检（内存准备，做完才创建用到 SDRAM 的任务） → 曲库锁与音频块池、信箱（`audio_reader_boot_init()`，#215 起在 Boot 里） → Audio Read Task（优先级 3，运行到第一次等待：登记订阅、先比对一次序号、看一次请求信箱） → **Volume Task** → Playback Task → 前台 → Monitor → GUI → 后台（入口拼作业表、登记订阅、第一圈调一遍所有作业）。Boot 优先级最低，任何更高优先级的任务没阻塞时它不会继续，所以创建下一个任务时前面的都已经运行到首次阻塞。
 
-**卷任务入口**（`volume_task()`）：先创建 Flash 启动任务（优先级 2，低于本任务，所以只是进入就绪；本任务一旦阻塞在 SD 初始化的 DMA 等待上，它就开始运行），**再**初始化 SD，不等 Flash。`volume_sd_start()`：`Service_Filesystem_StartSD()`（注册卡检测回调、初始化设备）→ 卡在就 `InitSD()` + `MountSD()` → **SD 基准（默认关闭）在发卷就绪之前跑**（别的任务还不会碰这个卷，独占条件成立）→ `volume_publish_ready(SD)`。无卡不发事件、序号保持 0；卡在但没就绪、挂载失败、卡上没有 FAT：不发事件，只记日志，SD 等下一次边沿再试。
+**卷任务入口**（`volume_task()`）：先创建 Flash 启动任务（优先级 1，低于本任务，所以只是进入就绪；本任务一旦阻塞在 SD 初始化的 DMA 等待上，它就开始运行），**再**初始化 SD，不等 Flash。`volume_sd_start()`：`Service_Filesystem_StartSD()`（注册卡检测回调、初始化设备）→ 卡在就 `InitSD()` + `MountSD()` → **SD 基准（默认关闭）在发卷就绪之前跑**（别的任务还不会碰这个卷，独占条件成立）→ `volume_publish_ready(SD)`。无卡不发事件、序号保持 0；卡在但没就绪、挂载失败、卡上没有 FAT：不发事件，只记日志，SD 等下一次边沿再试。
 
 **Flash 启动任务**（`volume_flash_boot()`）：`InitFlash()` → 可选物理基准 → `MountFlash()`（持 Flash 卷锁 3.3 至 8.3 s）→ 成功则可选文件基准、发 Flash 卷就绪；`SERVICE_NO_FILESYSTEM` 时按 `VOLUME_FLASH_AUTO_FORMAT`（1）格式化并挂载；**其他失败（损坏、不兼容、忙、超时）不格式化**，保留可诊断状态；挂载或格式化失败**不发事件，只记日志**。结束后任务自己打一行栈水位再 `vTaskDelete(NULL)`。`FormatAndMountFlash` 只有这条启动路径用到；`RecoverAndMountFlash` 目前 APP 没有调用者；运行中的恢复这次不加。
 
-**Flash 启动任务和 SD 初始化的先后**：Flash 启动任务是被卷任务创建的、优先级更低，所以 SD 初始化（约 186 ms 的卡初始化加挂载）先占着 CPU 和 SD 卷锁，Flash 启动任务在卷任务第一次阻塞（等 DMA 完成信号量）时才开始 `InitFlash`。两者用两把不同的卷锁，互不等待：SD 在 Flash 的 3.3 至 8.3 s 里照常对账（R3.5）。
+**Flash 启动任务和 SD 初始化的先后**：Flash 启动任务是被卷任务创建的、优先级更低（1，#220 起与后台任务同级，开机前约 8 s 和曲库扫描轮流用 CPU，见 [后台任务](../background/README.md)“和 Flash 启动任务的关系”），所以 SD 初始化（约 186 ms 的卡初始化加挂载）先占着 CPU 和 SD 卷锁，Flash 启动任务在卷任务第一次阻塞（等 DMA 完成信号量）时才开始 `InitFlash`。两者用两把不同的卷锁，互不等待：SD 在 Flash 的 3.3 至 8.3 s 里照常对账（R3.5）。
 
-**Flash 卷事件的订阅者**：Storage Task 是 Flash 回收的调用者，回收要拿 Flash 卷锁，而 `MountFlash` 在锁内持有 3.3 至 8.3 s，所以 Storage Task 只在 Flash 卷已挂载（卷状态字的挂载位）时才回收，否则它会陪 `MountFlash` 等完整段，音频流、曲库扫描都被它拖住。
+**Flash 卷事件的订阅者**：后台任务的回收作业是 Flash 回收的调用者，回收要拿 Flash 卷锁，而 `MountFlash` 在锁内持有 3.3 至 8.3 s，所以回收作业只在 Flash 卷序号非 0 且已挂载（卷状态字的挂载位）时才调用，否则它会陪 `MountFlash` 等完整段，曲库扫描（同一个任务里的另一个作业）也被它拖住。后台任务订阅卷事件，Flash 卷就绪时被叫醒。
 
 ## 消抖：等通知带超时，不用软件定时器
 
@@ -76,13 +76,13 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
 5. 更新卷状态字、序号加 1、**逐个叫醒订阅者**（先更新，再叫醒）。
 6. **开闸**（`ResumeSD`），等在闸前的调用被放行：卡还在的返回正常结果，卡已拔的得到 `NOT_READY` 或 `INVALID_HANDLE`。
 
-**为什么不等订阅者**：卸载已经让旧令牌全部失效，订阅者晚点收尾也碰不到旧卡；等回话要多一套确认机制，还会被优先级低的订阅者拖住（后台任务最终是 1）；一个订阅者卡住不该让整个卷无法恢复。代价：开闸时订阅者可能还没处理完事件，它们在自己的任务里比对序号，调用先拿到失败返回再看序号。
+**为什么不等订阅者**：卸载已经让旧令牌全部失效，订阅者晚点收尾也碰不到旧卡；等回话要多一套确认机制，还会被优先级低的订阅者拖住（后台任务是 1）；一个订阅者卡住不该让整个卷无法恢复。代价：开闸时订阅者可能还没处理完事件，它们在自己的任务里比对序号，调用先拿到失败返回再看序号。
 
 **对账期间又来了新边沿**：每次对账结束，卷任务非阻塞地看一眼通知槽；有检测位就**不开闸**，从现在起重新消抖（日志 `gate=kept`），直到一次对账期间没有新边沿才开闸。刷新、卸载、挂载任何一步里来的边沿都一样，所以闸不会在对账中途被放开。
 
 **每次 `PauseSD` 都配 `ResumeSD`**（Service 的闸没有超时放行，也没有看门狗，漏配会让所有 SD 调用者一直等）：不变量是“`volume_sd_step()` 返回 `portMAX_DELAY` 时闸一定是开的”；消抖中返回的一定是有限等待，最终必然再走到对账之后的开闸。主机测试 `test_every_path_pairs_pause_with_resume` 穷举 384 种组合（卷挂没挂 × 卡的四种现状 × 刷新成败 × 挂载三种结果 × 卸载成败 × 在刷新/卸载/挂载处来不来新边沿）逐条核对：闸收尾时开着，`PauseSD`、`ResumeSD` 各一次，卷状态字与假 Service 眼里的挂载状态一致，卷序号的变化与上表一致，订阅者被叫醒时闸始终关着。
 
-**已知窗口**（#210 的 `RefreshSD` 和 `UnmountSD` 是两个独立的持锁入口）：刷新放锁到卸载拿锁之间，已经通过闸、正在等锁的调用可能抢到 SD 卷锁。Storage Task（优先级 1，#218 起；原来是 2，都低于卷任务 3）和前台任务（2）挤不进来：卷任务从刷新返回到调用卸载中间不阻塞，放锁只是把等待者放进就绪表。音频读取任务（#215）升到 3 之后与卷任务同级、时间片轮转，空隙理论上可以被插进去；**#215 评估过**（[音频读取任务 README](../audio_reader/README.md)“`RefreshSD` 与 `UnmountSD` 之间的空隙”）：要在空隙里拿到锁，调用者必须过闸之后、拿锁之前被挂起超过整个静默期，实际不成立；早就排在锁上的等待者排在卷任务前面，在 `RefreshSD` 之前拿锁。即使发生，后果是读 1 块新卡上按旧文件系统解释的垃圾字节，随旧流作废，读取任务只读不写，没有数据错乱和死锁。要彻底关掉需要 Service 提供“刷新加卸载”的合并入口，超出 spec M 节的授权，没有加，选项写在音频读取任务 README 与交付汇报里。
+**已知窗口**（#210 的 `RefreshSD` 和 `UnmountSD` 是两个独立的持锁入口）：刷新放锁到卸载拿锁之间，已经通过闸、正在等锁的调用可能抢到 SD 卷锁。后台任务（优先级 1）和前台任务（2）挤不进来：卷任务从刷新返回到调用卸载中间不阻塞，放锁只是把等待者放进就绪表。音频读取任务（#215）升到 3 之后与卷任务同级、时间片轮转，空隙理论上可以被插进去；**#215 评估过**（[音频读取任务 README](../audio_reader/README.md)“`RefreshSD` 与 `UnmountSD` 之间的空隙”）：要在空隙里拿到锁，调用者必须过闸之后、拿锁之前被挂起超过整个静默期，实际不成立；早就排在锁上的等待者排在卷任务前面，在 `RefreshSD` 之前拿锁。即使发生，后果是读 1 块新卡上按旧文件系统解释的垃圾字节，随旧流作废，读取任务只读不写，没有数据错乱和死锁。要彻底关掉需要 Service 提供“刷新加卸载”的合并入口，超出 spec M 节的授权，没有加，选项写在音频读取任务 README 与交付汇报里。
 
 ## 卷事件
 
@@ -90,31 +90,31 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
 - **先更新再叫醒**：`volume_event_publish()` 先写状态字，再对每个订阅者 `xTaskNotifyIndexed(eSetBits)`，被叫醒的任务读到的一定是新状态（主机测试用桩的通知钩子在叫醒那一刻读状态字验证）。
 - **只有卷就绪和卷消失两种事件**，没有“卷将要消失”：卷任务知道时卡已经没了，令牌由卸载统一作废。每个事件序号加 1。
 - **跳 2 的含义**：换卡是“卸载 → 发卷消失（序号 n+1）→ 挂载 → 发卷就绪（序号 n+2）”，挂载位前后都是真，序号跳 2。订阅者上次见到 n、现在见到 n+2：序号变了就按“**旧的全部作废，再看现状**”处理，不需要知道中间发生了几次；叫醒是两次，但通知位合并，订阅者醒一次就看到最终状态。只留最新状态不会丢掉中间一次，因为序号告诉它“变过”。
-- **订阅者晚登记怎么不漏**：登记（`volume_subscribe`）之前发布的事件不会补叫醒，但状态字已经是最新的；订阅者在入口**登记后先比对一次序号**（Storage Task 的 `storage_task_apply_sd_volume()`）。发布与登记的任何交错都安全：事件在登记前，比对就看到新序号；事件在登记后，通知会到；两者之间的窗口里既有通知又有新序号，只是多醒一次。
+- **订阅者晚登记怎么不漏**：登记（`volume_subscribe`）之前发布的事件不会补叫醒，但状态字已经是最新的；订阅者在入口**登记后先比对一次序号**（后台任务入口登记后第一圈各作业比对卷序号，如 `catalog_scan_step()`；前台、音频读取任务同理）。发布与登记的任何交错都安全：事件在登记前，比对就看到新序号；事件在登记后，通知会到；两者之间的窗口里既有通知又有新序号，只是多醒一次。
 - **边沿时刻（#215，诊断）**：卷任务在每次对账的第一个卡检测边沿调 `volume_event_note_edge(VOLUME_ID_SD, tick)`，之后这次对账里的每个卷事件发布时先把它抄进“已发布的边沿”、再写状态字、再叫醒；订阅者用 `volume_event_published_edge()` 读，读状态字、读边沿、再读一次状态字，两次状态字不同（读的时候又发布了新事件）或没有边沿（开机挂载）就返回假。音频读取任务写 `CARD_REMOVED` 之后用它算 `CARD_REMOVED lat=<ms>ms` 一行（相对第一个边沿，1 ms 分辨率）。换卡的卸载与挂载两个事件共用同一个边沿。APP 内部接口，不是 Service 接口。
-- **订阅表**：登记在临界区里先填表项再加计数，发布者读到计数时表项一定写完；只增不减，上限 `VOLUME_SUBSCRIBER_MAX`。订阅者最终是三个（音频读取、前台、后台），Storage Task 现在占一个，#218 后前台任务也登记了（Storage、读取、前台 3 个，后台再加 1 个正好 4）。
+- **订阅表**：登记在临界区里先填表项再加计数，发布者读到计数时表项一定写完；只增不减，上限 `VOLUME_SUBSCRIBER_MAX`。订阅者最终是三个（音频读取、前台、后台），#220 删掉 Storage Task 之后正是这三个，上限 4 余一个。
 
 ## 订阅者与正在进行的文件调用如何交错
 
-下面以音频读取任务为例（#215 起读块在它那里；Storage Task 的扫描调用和前台任务的标签读取调用的交错与此相同）：它每圈**先比对 SD 卷序号**，再处理请求、读块。事件到达时它可能正在一次文件调用里：
+下面以音频读取任务为例（#215 起读块在它那里；后台任务的扫描调用和前台任务的标签读取调用的交错与此相同）：它每圈**先比对 SD 卷序号**，再处理请求、读块。事件到达时它可能正在一次文件调用里：
 
 - 调用在**闸前**等（消抖中）：闸开后返回，卡还在就返回正常结果（慢约 30 ms），卡已拔返回 `NOT_READY`（按路径/卷）或 `INVALID_HANDLE`（按句柄）。
 - 调用已经**持锁在途**（读 32 KiB，正常 3 至 7 ms）：卷任务的 `RefreshSD` 等它放锁；真拔卡时它很快失败返回 `NO_MEDIA`（Service 在锁内看到卡检测脚显示卡不在，把 `ERROR` 改成 `NO_MEDIA`）。
 - 调用返回 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`：**卷变了时不是文件错误**——读块得到 `NO_MEDIA`、`NOT_READY`、`INVALID_HANDLE`：先对同一个句柄 `CloseFile`（结果不看；它在 Filesystem 入口等闸，卡刚拔、边沿已到而 30 ms 消抖或对账还没结束时会一直等到本轮对账结束才返回，闸开着时立刻返回），再看 SD 卷：**序号和读取任务已处理的不同，或卷已不挂**，是卡没了，不写 `READ_ERROR`、不对这个句柄重试，FIL 已关、流停住（不空转），等卷事件写 `CARD_REMOVED`；**序号没变且卷仍挂着**，是卡还在、设备出了错（例如标签读取传输出错使设备进 ERROR，FatFs 的下一次读得到 `NOT_READY`），没有边沿就没有卷事件，立刻按读错误报，不等 T_data。流停住之后回到主循环顶部比对序号，序号变了就写 `CARD_REMOVED`（已读完、仍被播放任务持有的流也算）、作废曲库、收掉两个槽（含已经 READY 但 GUI 还没取走的旧窗口和旧名字，换卡后不会贴出旧卡的行）、卷挂着就重新扫描。**这就是用户可见的唯一变化：在途读取被拔卡打断时显示 “No SD card”，游标重置**（原来是读取错误，游标保留）。判断“卷变没变”的纯函数是 `audio_reader_classify_read()`（`Tests/audio_reader`）。
 - 其他错误（`ERROR` 且卡检测脚显示卡还在，`BUSY`，`TIMEOUT`…）表示卡还在，立刻按原来的方式报错。已知漏洞（推断，板上没测到）：数据脚比检测脚先断时，第一次失败仍是 `ERROR`，显示读取错误，同样停播。
-- 曲库扫描进行中卷消失：打开/读/关目录得到卷不可用，丢弃本次扫描，不发布（日志 `Scan done res=aborted`）。打开目录的第一次失败发生在卷任务对账之前，所以**再开一次**（它在 Filesystem 入口等闸，等到本轮对账结束）才下结论；读目录失败后紧跟的 `CloseDirectory` 同样在闸前等。扫描结束后 Storage 看 `catalog_scan_verdict()`：卷变了（卡没了或换了）不置就绪，留给下一圈的卷事件重扫，空库不会因此“就绪”约 30 ms；**卷没变**（卡还在、读不了，例如设备进了 ERROR）则没有卷事件可等，记一条 ERROR `Catalog scan aborted but the card is still there; reinsert the card.`，卷挂着就绪、曲库为空（与原来扫描失败的做法一致），拔插卡（边沿）后重新对账、重扫。其余失败仍按 STOR-7 处理。
+- 曲库扫描进行中卷消失：打开/读/关目录得到卷不可用，丢弃本次扫描，不发布（日志 `Scan done res=aborted`）。扫描是后台任务里的单步作业，**每步先比对卷序号**，序号变了就关目录（返回值不看）并丢弃。打开目录的第一次失败发生在卷任务对账之前，所以**再开一次**（它在 Filesystem 入口等闸，等到本轮对账结束）才下结论；读目录失败后紧跟的 `CloseDirectory` 同样在闸前等。丢弃之后收尾时再看卷：卷变了（卡没了或换了）安静地等卷事件，卡没了就作废已发布的曲库、卡换了就从头重扫；**卷没变**（卡还在、读不了，例如设备进了 ERROR）则没有卷事件可等，记一条 ERROR `Catalog scan aborted but the card is still there; reinsert the card.`，曲库保持代次 0，作业不再自己重试，拔插卡（边沿）后重新对账、重扫（#220 起这条判决在扫描作业里，原来是 Storage Task 的 `catalog_scan_verdict()`）。其余失败仍按 STOR-7 处理。
 
 ## 开机曲库比以前提前出现
 
-以前 Storage Task 先挂 Flash（`MountFlash` 3.3 至 8.3 s）才初始化 SD、扫描曲库；现在 Flash 在 Flash 启动任务里并行，SD 的挂载和曲库扫描开机后约 0.3 至 0.6 s 就开始。**插着卡开机时，曲库（`Scan done`）比以前早 3 至 8 s 出现**，点播放也更早能响。这是异步 Flash 的必然结果，不是 bug；上板时确认（`Scan done` 的 tick，和 R6.1 的扫描耗时口径一致）。
+以前 Storage Task 先挂 Flash（`MountFlash` 3.3 至 8.3 s）才初始化 SD、扫描曲库；现在 Flash 在 Flash 启动任务里并行，SD 的挂载和曲库扫描开机后约 0.3 至 0.6 s 就开始（第 4 次上板大目录开机扫描 3.59 s）。第 5 次上板，Storage 降到优先级 1、Flash 启动任务还是 2 时，扫描几乎轮不上（大目录 9.0 s）；#220 把扫描搬进后台任务并把 Flash 启动任务降到 1（与后台任务同级轮转），开机扫描推算大目录约 3.2–4.3 s、常规库约 0.1 s，Flash 就绪晚约 1.5–2 s，第 6 次上板量（`Scan done` 的 `us=` 与 `flash ready … ms=`）。
 
 ## 优先级反转在卷锁上的表现
 
-卷任务（3）要 SD 卷锁做刷新、卸载、挂载；锁可能被 Storage Task（1，#218 起；扫描时）、前台任务（2，读标签）或音频读取任务（3）持有。音频读取任务与卷任务同级，没有优先级继承可言，卷任务等它那一次调用做完（正常 3 至 7 ms，拔卡 +1 ms 失败返回，故障路径约 0.6 s），放锁后读取任务的下一次调用在入口等闸。Storage Task（2）持锁时：
+卷任务（3）要 SD 卷锁做刷新、卸载、挂载；锁可能被后台任务（1，扫描时）、前台任务（2，读标签）或音频读取任务（3）持有。音频读取任务与卷任务同级，没有优先级继承可言，卷任务等它那一次调用做完（正常 3 至 7 ms，拔卡 +1 ms 失败返回，故障路径约 0.6 s），放锁后读取任务的下一次调用在入口等闸。后台任务（1）或前台任务（2）持锁时：
 
-- 互斥锁带**优先级继承**：卷任务等锁时，持锁的 Storage Task 或前台任务临时升到 3，所以优先级 1、2 和 3 之间没有能抢走它的任务（Flash 启动任务也是 2，但它只持 Flash 卷锁）。反转的上界就是那一次调用的持锁时间：正常读 3 至 7 ms，拔卡时 +1 ms 失败返回，故障路径（卡不响应）500 ms 等待加 100 ms Abort，约 0.6 s。
+- 互斥锁带**优先级继承**：卷任务等锁时，持锁的后台任务或前台任务临时升到 3，所以优先级 1、2 和 3 之间没有能抢走它的任务（Flash 启动任务是 1，也只持 Flash 卷锁）。反转的上界就是那一次调用的持锁时间：正常读 3 至 7 ms，拔卡时 +1 ms 失败返回，故障路径（卡不响应）500 ms 等待加 100 ms Abort，约 0.6 s。
 - 播放任务（4）**不碰文件、不拿任何文件锁**（调用者拒绝名单，入口断言停机），所以它不会被卷锁拖住；这也是播放升到 4 的原因，卷任务（3）做对账时播放仍能抢占。
-- **Flash 启动任务持 Flash 卷锁 3.3 至 8.3 s 时插拔卡不受影响**（R3.5）：卷任务从不拿 Flash 卷锁（Flash 不归它挂载，也没有拔插）；SD 与 Flash 各一把卷锁，互不影响。唯一可能陪 `MountFlash` 等锁的是 Storage Task 的回收，已按“Flash 卷已挂载才回收”挡住。文件和目录入口在拿锁之前先看一次“卷没挂”，没挂立刻返回 `NOT_READY`，不陪等。
+- **Flash 启动任务持 Flash 卷锁 3.3 至 8.3 s 时插拔卡不受影响**（R3.5）：卷任务从不拿 Flash 卷锁（Flash 不归它挂载，也没有拔插）；SD 与 Flash 各一把卷锁，互不影响。唯一可能陪 `MountFlash` 等锁的是后台任务的回收作业，已按“Flash 卷序号非 0 且已挂载才回收”挡住。文件和目录入口在拿锁之前先看一次“卷没挂”，没挂立刻返回 `NOT_READY`，不陪等。
 - 闸上的等待是睡眠，不占 CPU，也不持锁；持锁等闸被断言禁止（卷任务要这把锁才能开闸）。
 
 ## 卷路径日志（DIAG-6，常开）
@@ -134,7 +134,7 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
 
 `path` 取 `idle`、`gate_only`、`mount`、`unmount`、`remount`（含义见上表）。`card` 三位依次是 present、ready、reinit，成立写 `p`、`r`、`i`，不成立写 `-`（例：`pri` 是卡在、就绪、重新初始化过；`---` 是卡不在）。`seq=a->b` 是这次对账前后的卷序号，**`remount` 是 `a->a+2`**。`ref` 是 `RefreshSD` 花的时间（等在途调用退出，加可能的重新初始化约 186 ms）。**`end` 是从第一个边沿到闸重新打开的时间，即收尾时刻**（spike 参考 +34 至 35 ms：30 ms 静默加几毫秒）。`edges`、`ref`、`end` 超过 9999 都写 9999。`gate=kept` 表示这一轮没有开闸，之后会有下一条 `settle` 行。
 
-保留的人读日志（`SD` 标签）：`Card ready: … MB`、`Card inserted: … MB`、`Filesystem mounted.`、`No FAT filesystem found.`、`Filesystem mount failed.`、`Card removed.`、`No card inserted.`、`Hotplug refresh failed: device=…, port=…`。Storage Task 在读取被拔卡打断时记一行 `Audio: Audio read interrupted: volume unavailable, waiting for volume event.`——看到它说明拔卡落进了在途读取（R3.1）。
+保留的人读日志（`SD` 标签）：`Card ready: … MB`、`Card inserted: … MB`、`Filesystem mounted.`、`No FAT filesystem found.`、`Filesystem mount failed.`、`Card removed.`、`No card inserted.`、`Hotplug refresh failed: device=…, port=…`。音频读取任务在读取被拔卡打断时记一行 `Audio: Audio read interrupted: volume unavailable, waiting for volume event.`——看到它说明拔卡落进了在途读取（R3.1）。
 
 ### 怎么从日志判断 R3.1 至 R3.5
 
@@ -154,7 +154,7 @@ APP 内部接口，按 #202 M 节授权（“卷状态函数”）；没有改 S
 
 ## Boot 栈核算（SDRAM 自检搬到 Boot）
 
-Boot 任务只有 `APP_BOOT_TASK_STACK_WORDS = 128` word（512 B）。SDRAM 自检（`STORAGE_SDRAM_BENCHMARK_ENABLE`，默认 0）现在在 Boot 任务里、创建其他任务之前运行（独占 SDRAM，HWD-2）。核算（`-fstack-usage`，`create_task` 与 `storage_sdram_benchmark_run` 用工程的真实编译命令，libc 函数从 Debug ELF 反汇编数 `push`/`sub sp`）：
+Boot 任务的栈现在是 `APP_BOOT_TASK_STACK_WORDS = 192` word（768 B，#220 从 128 word 提上来；下面这一节核算的是 SDRAM 自检，用的是旧的 512 B）。SDRAM 自检（`STORAGE_SDRAM_BENCHMARK_ENABLE`，默认 0）现在在 Boot 任务里、创建其他任务之前运行（独占 SDRAM，HWD-2）。核算（`-fstack-usage`，`create_task` 与 `storage_sdram_benchmark_run` 用工程的真实编译命令，libc 函数从 Debug ELF 反汇编数 `push`/`sub sp`）：
 
 | 调用链上的函数 | Debug（-O0） | Release（-Os） |
 |---|---|---|
@@ -167,7 +167,24 @@ Boot 任务只有 `APP_BOOT_TASK_STACK_WORDS = 128` word（512 B）。SDRAM 自�
 | 一次任务切换最坏要在任务栈上留的 | 约 204 B（硬件压栈 26 word 加软件保存 25 word，Cortex-M7 带 FPU） | 约 204 B |
 | **需要** | **约 852 B** | **约 820 B** |
 
-另一条链 `Platform_SDRAM_RunDiagnostic`（16 加 56 加 24 加 24，约 120 B）加 `storage_sdram_benchmark_run` 200 B，约 370 B，比 `snprintf` 链浅。**结论：512 B 不够，缺约 340 B，所以打开 SDRAM 自检时 Boot 栈放不下。** 默认构建自检关闭，所以不影响产品固件和本票的板测；我没有加大 Boot 栈（那是 `app_config.h` 里的决定，不在这张票的授权里），而是在 `app_tasks.c` 加了一个编译期断言：打开 `STORAGE_SDRAM_BENCHMARK_ENABLE` 且 `APP_BOOT_TASK_STACK_WORDS < 320` 时直接编译失败，提醒先决定怎么办（比如 Boot 栈加到 320 word 以上，或把自检放进别的有足够栈的地方）。320 word（1280 B）是按上表数字给的最小建议，不是已决定的值。
+另一条链 `Platform_SDRAM_RunDiagnostic`（16 加 56 加 24 加 24，约 120 B）加 `storage_sdram_benchmark_run` 200 B，约 370 B，比 `snprintf` 链浅。**结论：512 B 不够，缺约 340 B；#220 提到 768 B 后仍不够（需要约 852 B，缺约 84 B），所以打开 SDRAM 自检时 Boot 栈放不下。** 默认构建自检关闭，所以不影响产品固件和本票的板测；我没有加大 Boot 栈（那是 `app_config.h` 里的决定，不在这张票的授权里），而是在 `app_tasks.c` 加了一个编译期断言：打开 `STORAGE_SDRAM_BENCHMARK_ENABLE` 且 `APP_BOOT_TASK_STACK_WORDS < 320` 时直接编译失败，提醒先决定怎么办（比如 Boot 栈加到 320 word 以上，或把自检放进别的有足够栈的地方）。320 word（1280 B）是按上表数字给的最小建议，不是已决定的值；断言仍然成立（192 < 320）。
+
+### 默认构建的 Boot 栈核算（#220，192 word = 768 B）
+
+#218 的静态核算说 128 word 的余量只剩约 76 B（Debug），用户 2026-11-06 决定提到 192 word（`APP/app_config.h`，多占 256 B；Boot 栈是动态创建的，开机时占堆、Boot 自删后还给堆）。这一票往 Boot 里改了三件事：删掉创建 Storage Task；`catalog_boot_init()` 多整块写入 `.apps_sdram` 里的扫描遍历状态（一次 `memset`，叶函数约 8 B，不是最深链）；创建后台任务不变。重新核算的方法：用工程的真实编译命令加 `-fstack-usage -fcallgraph-info=su` 重编 Boot 路径上的全部翻译单元（`app_tasks.c`、曲库、音频读取、`ui_cell`、注册表、FreeRTOS `tasks.c`/`queue.c`/`list.c`/`heap_4.c`/`port.c`、`log_service.c`），合并调用图，从 `create_task` 起取最深链；一次任务切换最坏要在任务栈上留约 204 B（见上，Cortex-M7 带 FPU）。**Boot 自删，Monitor 读不到它的栈，所以这是静态核算，不是实测。**
+
+| 项 | Debug（-O0） | Release（-Os） |
+|---|---|---|
+| ① 会走的最深链：`create_task` → `ui_cell_boot_init` → `ensure_lock` → `xQueueCreateMutexStatic` → `prvInitialiseMutex` → `xQueueGenericSend` → `prvCopyDataToQueue` → `xTaskPriorityDisinherit` | 48 + 8 + 8 + 40 + 16 + 48 + 32 + 32 = **232 B**（含 `uxListRemove` 24 B 是 256 B） | 约 120 B（40 + 8 + 24 + 48） |
+| ② `catalog_boot_init` 链（创建曲库锁，同样进队列发送路径；整块 `memset` 是叶函数） | 48 + 8 + 40 + 16 + 48 + 32 + 32 = **224 B** | 约 120 B |
+| ③ `audio_reader_boot_init` → `audio_reader_block_init` → `xQueueGenericSend`（32 次） | **168 B** | 约 136 B（40 + 8 + 40 + 48） |
+| ④ 动态创建任务：`create_task` → `xTaskCreate` → `prvCreateTask` → `pvPortMalloc` → `xTaskResumeAll` | 48 + 40 + 48 + 40 + 40 = **216 B** | 约 176 B（40 + 48 + 40 + 48，`prvCreateTask` 被内联） |
+| **静态调用图最深**（含从不执行的分支：`xTaskResumeAll` 里补记 tick 的 `xTaskIncrementTick`、`xQueueGenericSend` 的阻塞分支） | **260 B**（④ 加 `xTaskIncrementTick` 40 + `prvResetNextTaskUnblockTime` 4） | **232 B** |
+| 加一次任务切换 204 B：会走的最深链 | **436 B**（① 加 204） | 约 380 B（④ 加 204） |
+| 加一次任务切换 204 B：静态调用图最深 | **464 B** | **436 B** |
+| 栈 768 B 的余量 | 会走的最深链 **332 B**；静态调用图最深 **304 B** | 会走的最深链约 **388 B**；静态调用图最深 **332 B** |
+
+原来 128 word（512 B）的余量是会走的最深链 76 B（Debug）、静态调用图最深约 48 B；提到 192 word 后余量 300 B 以上，往 Boot 里再加几条初始化链也放得下。往 Boot 里加初始化调用时，核对“最深链 + 204 B”不超过 768 B；打开 SDRAM 自检仍装不下（`app_tasks.c` 的断言挡住）。核算脚本和各函数的帧在汇报与 inbox 里，不进仓库。
 
 ## 内存与 HWD-2
 
@@ -180,7 +197,7 @@ Boot 任务只有 `APP_BOOT_TASK_STACK_WORDS = 128` word（512 B）。SDRAM 自�
 
 每张新任务票都要在 Monitor 的任务登记表加一行，漏了会出 `Task not registered in monitor` WARN。本票加了 `Volume Task`（1024 word）和 `Flash Boot Task`（1024 word）。Flash 启动任务只在开机后 `MountFlash` 期间存在，自删之后 Monitor 读不到它的栈，所以它自删前自己打一行水位（见日志表）。
 
-**CPU 占比行不能超过 127 字符**（`monitor_cpu_format` 写满会打 `~`；#218 起 12 个任务同批时一位小数放不下，改整数百分比，见 [Monitor](../monitor/README.md)）：任务短键取名字第一个词的前 4 个小写字符，新增的是 `volu` 和 `flas`（#213 又加了 `back`，11 个任务时最长 120 字符，见 [后台任务](../background/README.md)），与已有的 `crea`、`log`、`stor`、`moni`、`gui`、`play`、`idle`、`tmr` 互不相同。`Tests/monitor_warn` 的 `test_every_registered_task_fits_one_cpu_line` 用全部 10 个任务核对：最坏（10 个任务各占 10.0 %）和一个任务占 100.0 % 两种情形都不超过 127 字符、没有 `~`；实际最长 111 字符。Monitor 一批的行数：稳态 8 个任务（`IDLE`、`Tmr Svc`、`Log Task`、`Storage Task`、`Volume Task`、`Playback Task`、`Monitor Task`、`GUI Task`）加 5 行固定行共 13 行；开机后 `MountFlash` 期间多一个 `Flash Boot Task`，9 个任务共 14 行。都放得进 30 条的消息池。
+**CPU 占比行不能超过 127 字符**（`monitor_cpu_format` 写满会打 `~`；#218 起 12 个任务同批时一位小数放不下，改整数百分比，见 [Monitor](../monitor/README.md)；#220 删掉 Storage Task 后同批最多 11 个任务，极端组合一位小数也只有 120 字符）：任务短键取名字第一个词的前 4 个小写字符，新增的是 `volu` 和 `flas`（#213 又加了 `back`），与已有的 `crea`、`log`、`moni`、`gui`、`play`、`idle`、`tmr` 互不相同（`stor` 随 Storage Task 删除）。`Tests/monitor_warn` 的 `test_every_registered_task_fits_one_cpu_line` 用同批的 11 个任务核对：最坏（十个任务各占 10.0 %）120 字符、没有 `~`。Monitor 一批的行数：稳态 10 个任务（`IDLE`、`Tmr Svc`、`Log Task`、`Audio Read Task`、`Volume Task`、`Playback Task`、`Monitor Task`、`GUI Task`、`Background Task`、`Foreground Task`）加 5 行固定行共 15 行；开机后 `MountFlash` 期间多一个 `Flash Boot Task`，11 个任务共 16 行。都放得进 45 块的消息池。
 
 ## 日志消息池核算（DIAG-3，汇总类日志注明节拍）
 

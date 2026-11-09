@@ -12,6 +12,8 @@
 #ifndef BACKGROUND_TASK_H
 #define BACKGROUND_TASK_H
 
+#include "APP/tasks/background/background_task_config.h"
+
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 

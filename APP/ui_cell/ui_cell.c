@@ -81,7 +81,7 @@ static void ensure_lock(void)
 
 /**
  * @brief Boot 任务直接调用：先把全模块的互斥锁创建好。
- * @note  创建静态互斥量要进 FreeRTOS 队列的发送路径，调用链深；Boot 任务只有 128 word 栈，所以这一步由 `create_task` 直接调用
+ * @note  创建静态互斥量要进 FreeRTOS 队列的发送路径，调用链深；Boot 任务栈只有 192 word（#220 从 128 提上来），所以这一步由 `create_task` 直接调用
  *        （链最短），之后经注册表的 `boot_init` 初始化各个格子时锁已经存在，不再走这条深链。不调用也行：`ui_cell_init()` 第一次调用时
  *        会创建，只是那时调用链叠在注册表遍历之下。
  */

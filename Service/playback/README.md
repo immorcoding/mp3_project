@@ -33,7 +33,7 @@
 
 ## 跳转：毫秒到字节的映射与从落点重开
 
-真跳转（[#172](https://github.com/immorcoding/mp3_project/issues/172) E 节、[#166](https://github.com/immorcoding/mp3_project/issues/166) 第 8–11 条、[ADR-0021](../../docs/adr/0021-seek-by-reopen-with-audio-offset.md)）把“目标毫秒 → 文件内字节偏移”放在本模块，Storage 只收一个相对音频区间的偏移。本模块提供两项能力，不接合同、不认识播放任务；它们由播放任务（[#176](https://github.com/immorcoding/mp3_project/issues/176)，见 [播放任务 README](../../APP/tasks/playback/README.md) 的“跳转”）接上：命令处理时调 `MapSeek`，Storage 开启 OK 后调 `ReopenStream`（暂停中随后 `PauseOutput`）。
+真跳转（[#172](https://github.com/immorcoding/mp3_project/issues/172) E 节、[#166](https://github.com/immorcoding/mp3_project/issues/166) 第 8–11 条、[ADR-0021](../../docs/adr/0021-seek-by-reopen-with-audio-offset.md)）把“目标毫秒 → 文件内字节偏移”放在本模块，音频读取任务只收一个相对音频区间的偏移。本模块提供两项能力，不接合同、不认识播放任务；它们由播放任务（[#176](https://github.com/immorcoding/mp3_project/issues/176)，见 [播放任务 README](../../APP/tasks/playback/README.md) 的“跳转”）接上：命令处理时调 `MapSeek`，音频读取任务应答开启 OK 后调 `ReopenStream`（暂停中随后 `PauseOutput`）。
 
 - `Service_Playback_MapSeek(target_ms, &point)`：纯计算，输出 `{AudioOffset, LandingMs, Map, Clamped}`。
 - `Service_Playback_ReopenStream(landing_ms)`：从落点重开。**选的是新入口，不给 `BeginStream` 加参数**：两者的清理范围不同（`BeginStream` 把一切归零并重新探测流头，重开保留流级事实），合在一个入口里要靠一个布尔参数区分两种截然相反的语义，调用点也读不出意图。

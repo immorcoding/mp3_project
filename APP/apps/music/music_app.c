@@ -10,7 +10,7 @@
 
 /**
  * @brief 注册表的 `boot_init`：Boot 任务在创建 GUI 任务和前台任务之前调用一次。
- * @note  只做内存写入和一次静态互斥量创建，不碰文件接口、不阻塞、不投日志。Boot 任务只有 128 word 栈，最深一条是
+ * @note  只做内存写入和一次静态互斥量创建，不碰文件接口、不阻塞、不投日志。Boot 任务栈 192 word（#220 从 128 提上来），最深一条是
  *        `music_cells_boot_init()` → `ui_cell_init()` → 创建静态互斥量，核算见 `APP/tasks/foreground/README.md`“Boot 栈核算”。
  */
 void music_boot_init(void)

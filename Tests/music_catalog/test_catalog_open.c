@@ -1,16 +1,19 @@
 /**
  * @file test_catalog_open.c
- * @brief 曲库的主机测试：扫描、错误分类、发布规则与卷序号、一次读全、曲库短锁，以及按文件定位符打开
- *        （STOR-1、STOR-7、STOR-17、ARC-19、DIAG-4、DIAG-5、DIAG-6）。
+ * @brief 曲库的主机测试：扫描单步、错误分类、发布规则与卷序号、一次读全、曲库短锁，以及按文件定位符打开
+ *        （STOR-1、STOR-7、STOR-17、ARC-19、ARC-22、DIAG-4、DIAG-5、DIAG-6）。
  * @note  链接真实的 catalog.c、catalog_sheet.c、catalog_track_open.c、catalog_track_text.c 与
  *        catalog_track_diag.c；Filesystem Service、Log Service、DWT Adapter 与卷状态函数由本文件的假实现替换，
- *        只实现既有公开函数；曲库短锁走共用 FreeRTOS 桩。经曲库扫描、一次读全、诊断出口观察行为。
+ *        只实现既有公开函数；曲库短锁走共用 FreeRTOS 桩。经音乐注册进注册表的后台入口（`music_background_step()`，它接曲库扫描单步 `catalog_scan_step()`）、一次读全、诊断出口观察行为；每一步最多一次文件调用由驱动函数 `step_once()` 对每一步断言。
+ *        主机测试是单线程的：证明每一步的分支、返回值和发布结果，不证明真实任务切换、锁的真实时长与后台任务的 CPU 份额。
  */
 
 #include "APP/apps/music/catalog/catalog.h"
 #include "APP/apps/music/catalog/catalog_sheet.h"
 #include "APP/apps/music/catalog/catalog_track_diag.h"
 #include "APP/apps/music/catalog/catalog_track_text.h"
+#include "APP/apps/music/music_background.h"
+#include "APP/tasks/background/background_task_config.h"
 #include "APP/tasks/volume/volume_event.h"
 
 #include "freertos_stub.h"
@@ -76,7 +79,7 @@ uint32_t CortexM7CycleCounter_GetFrequencyHz(void)
 }
 
 /**
- * @brief 前台任务叫醒函数的替身：计次。曲库发布后叫醒前台一次（`catalog_music_init()` 的发布成功路径），用来核对发布规则的这一句。
+ * @brief 前台任务叫醒函数的替身：计次。曲库发布后叫醒前台一次（扫描单步的发布成功路径），用来核对发布规则的这一句。
  */
 void foreground_task_wake(void)
 {
@@ -198,6 +201,8 @@ static uint32_t g_open_handles;
 static uint32_t g_dir_token;
 static uint32_t g_dir_pos;
 static uint32_t g_dir_read_cost_us; /* 一次目录读取消耗的微秒（推进假 DWT），扫描耗时的来源 */
+static uint32_t g_dir_calls_in_step; /* 当前这一步里目录接口（打开、读、关）被调用的次数；驱动函数断言一步最多一次 */
+static bool g_unavailable_removes_card; /* 假目录接口返回“卷不可用”类状态时，同时让卷消失（模拟卡被拔走，卷任务已卸载） */
 static bool g_read_dir_fail;        /* 目录读取一律报错 */
 static Service_StatusTypeDef g_open_root_status; /* 非 SERVICE_OK 时，打开 Music/ 返回它（卷不可用等） */
 static uint32_t g_open_root_status_times;        /* 上面那个状态返回几次之后恢复正常；0 表示一直返回 */
@@ -217,6 +222,17 @@ static uint32_t g_swap_after_reads; /* 非 0：第 N 次读目录时卷序号加
 static bool g_swap_on_close;        /* 关目录时卷序号加 2（扫描做完、发布之前换卡） */
 static bool g_busy_swaps_volume;    /* 报 SERVICE_BUSY 的同时卷序号加 2 */
 static void (*g_read_hook)(void);   /* 每次读目录开头调用，用来在扫描途中以读者身份调用曲库 */
+
+/* 目录树假实现：非空时 OpenDirectory/ReadDirectory 按它走（路径对不上返回 SERVICE_ERROR），不用合成曲库的两层结构。 */
+typedef struct
+{
+    const char *path;
+    const char *entries[12]; /* NULL 结尾；以 '/' 结尾的是子目录，其余是文件 */
+} TreeDir;
+static const TreeDir *g_tree;
+static uint32_t g_tree_count;
+
+static uint32_t g_scans_started;    /* 自 world_reset 起 `scan()` 已启动的扫描次数；第二次起 `scan()` 先换卡（卷序号加 2）才会重扫 */
 
 static uint8_t g_file_bytes[512];
 static uint32_t g_file_length;
@@ -306,6 +322,21 @@ static Service_StatusTypeDef take_scripted_status(Service_StatusTypeDef *status,
 }
 
 /**
+ * @brief 假目录接口要返回 status 之前调用：状态是“卷不可用”类且打开了“卡被拔走”开关时，让假卷消失（序号加 1、未挂载）。
+ * @param[in] status 即将返回的状态。
+ * @return 原样返回 status，方便写成 `return note_status(x);`。
+ */
+static Service_StatusTypeDef note_status(Service_StatusTypeDef status)
+{
+    if (g_unavailable_removes_card && Service_Filesystem_StatusIsVolumeUnavailable(status))
+    {
+        g_volume.Mounted = false;
+        g_volume.Sequence += 1U;
+    }
+    return status;
+}
+
+/**
  * @brief 假目录打开：只认 `Music` 与（有子文件夹时）`Music/Sub`。
  * @param[in] volume 卷，须为 SD。
  * @param[in] path 目录路径。
@@ -318,6 +349,22 @@ Service_StatusTypeDef Service_Filesystem_OpenDirectory(Service_Filesystem_Volume
 {
     assert(volume == SERVICE_FILESYSTEM_VOLUME_SD);
     assert(!catalog_lock_is_held()); /* 持锁只拷内存：不调文件接口 */
+    g_dir_calls_in_step++;
+    if (g_tree != NULL)
+    {
+        for (uint32_t i = 0U; i < g_tree_count; i++)
+        {
+            if (strcmp(g_tree[i].path, path) == 0)
+            {
+                g_open_dir_calls++;
+                g_dir_token = 100U + i;
+                g_dir_pos = 0U;
+                directory->Token = g_dir_token;
+                return SERVICE_OK;
+            }
+        }
+        return SERVICE_ERROR;
+    }
     if (g_music_missing)
     {
         return SERVICE_ERROR;
@@ -338,7 +385,7 @@ Service_StatusTypeDef Service_Filesystem_OpenDirectory(Service_Filesystem_Volume
 
         if (scripted != SERVICE_OK)
         {
-            return scripted;
+            return note_status(scripted);
         }
         g_dir_token = 1U;
     }
@@ -348,7 +395,7 @@ Service_StatusTypeDef Service_Filesystem_OpenDirectory(Service_Filesystem_Volume
 
         if (scripted != SERVICE_OK)
         {
-            return scripted;
+            return note_status(scripted);
         }
         g_dir_token = 2U;
     }
@@ -374,8 +421,38 @@ Service_StatusTypeDef Service_Filesystem_ReadDirectory(Service_Filesystem_Direct
     uint32_t base = (directory.Token == 1U) ? ROOT_ID_BASE : SUB_ID_BASE;
 
     assert(!catalog_lock_is_held());
+    g_dir_calls_in_step++;
     g_cycles += g_dir_read_cost_us;
     g_dir_reads++;
+    if (directory.Token >= 100U)
+    {
+        const TreeDir *dir = &g_tree[directory.Token - 100U];
+        const char *name = dir->entries[g_dir_pos];
+
+        if ((g_read_dir_status != SERVICE_OK) && (g_dir_reads > g_read_dir_status_after))
+        {
+            return note_status(g_read_dir_status);
+        }
+
+        memset(entry, 0, sizeof(*entry));
+        if (name != NULL)
+        {
+            const size_t length = strlen(name);
+
+            g_dir_pos++;
+            if (name[length - 1U] == '/')
+            {
+                memcpy(entry->Name, name, length - 1U);
+                entry->IsDirectory = true;
+            }
+            else
+            {
+                memcpy(entry->Name, name, length);
+                entry->Locator = locator_for(1U);
+            }
+        }
+        return SERVICE_OK;
+    }
     if (g_read_hook != NULL)
     {
         g_read_hook();
@@ -391,7 +468,7 @@ Service_StatusTypeDef Service_Filesystem_ReadDirectory(Service_Filesystem_Direct
     }
     if ((g_read_dir_status != SERVICE_OK) && (g_dir_reads > g_read_dir_status_after))
     {
-        return g_read_dir_status;
+        return note_status(g_read_dir_status);
     }
     if (g_read_dir_fail)
     {
@@ -436,6 +513,7 @@ Service_StatusTypeDef Service_Filesystem_CloseDirectory(Service_Filesystem_Direc
 {
     (void)directory;
     assert(!catalog_lock_is_held());
+    g_dir_calls_in_step++;
     g_close_calls++;
     if (g_swap_on_close)
     {
@@ -446,7 +524,7 @@ Service_StatusTypeDef Service_Filesystem_CloseDirectory(Service_Filesystem_Direc
         g_close_busy--;
         return SERVICE_BUSY;
     }
-    return g_close_status;
+    return note_status(g_close_status);
 }
 
 /**
@@ -643,6 +721,11 @@ static void world_reset(void)
     g_last_opened_id = UINT32_MAX;
     g_open_handles = 0U;
     g_dir_read_cost_us = 0U;
+    g_dir_calls_in_step = 0U;
+    g_tree = NULL;
+    g_tree_count = 0U;
+    g_unavailable_removes_card = false;
+    g_scans_started = 0U;
     g_read_dir_fail = false;
     g_open_root_status = SERVICE_OK;
     g_open_root_status_times = 0U;
@@ -674,7 +757,63 @@ static void world_reset(void)
 }
 
 /**
- * @brief 扫描合成曲库。
+ * @brief 跑扫描作业一步：断言一步最多一次文件调用，把假时间推进它要求的等待。
+ * @return 这一步的返回值：毫秒后再叫它，0 马上，`BACKGROUND_WAIT_FOREVER` 等通知。
+ */
+static uint32_t step_once(void)
+{
+    uint32_t wait;
+
+    g_dir_calls_in_step = 0U;
+    wait = music_background_step(); /* 音乐注册进注册表的 background_step，它接曲库扫描单步 */
+    assert(g_dir_calls_in_step <= 1U); /* ARC-22：一步最多一次可能耗时的文件调用 */
+    if ((wait != 0U) && (wait != BACKGROUND_WAIT_FOREVER))
+    {
+        g_cycles += wait * 1000U; /* 假 DWT 为 1 MHz：等待的毫秒也是真实经过的时间 */
+        freertos_stub_set_tick(xTaskGetTickCount() + (TickType_t)wait);
+    }
+    return wait;
+}
+
+/**
+ * @brief 一直跑到作业要求等通知（扫描做完、被放弃，或根本没有活）；有上限，防止状态机停不下来。
+ * @return 跑过的步数。
+ */
+static uint32_t run_to_idle(void)
+{
+    for (uint32_t steps = 1U; steps <= 200000U; steps++)
+    {
+        if (step_once() == BACKGROUND_WAIT_FOREVER)
+        {
+            return steps;
+        }
+    }
+    assert(!"the scan did not settle");
+    return 0U;
+}
+
+/**
+ * @brief 跑到日志里出现以 prefix 开头的行为止（每步之后看一次）；有上限。
+ * @param[in] prefix 行首文本。
+ * @return 出现时已跑过的步数。
+ */
+static uint32_t run_until_log(const char *prefix)
+{
+    for (uint32_t steps = 1U; steps <= 200000U; steps++)
+    {
+        (void)step_once();
+        if (log_count_prefix(prefix) != 0U)
+        {
+            return steps;
+        }
+    }
+    assert(!"expected log line did not appear");
+    return 0U;
+}
+
+/**
+ * @brief 扫描合成曲库：卷（重新）挂载，作业一路跑到做完。第二次起先换卡（卷序号加 2）才会重扫，
+ *        因为扫描只在卷序号变化后发生（卷事件）。
  * @param[in] root Music/ 下文件数。
  * @param[in] sub Music/Sub/ 下文件数。
  */
@@ -682,7 +821,22 @@ static void scan(uint32_t root, uint32_t sub)
 {
     g_root_count = root;
     g_sub_count = sub;
-    assert(catalog_music_init() == CATALOG_OK);
+    g_volume.Mounted = true;
+    if (g_scans_started++ != 0U)
+    {
+        g_volume.Sequence += 2U;
+    }
+    (void)run_to_idle();
+}
+
+/**
+ * @brief 卡被拔走：卷消失（序号加 1，未挂载），作业跑到不再有活。
+ */
+static void unmount_card(void)
+{
+    g_volume.Mounted = false;
+    g_volume.Sequence += 1U;
+    (void)run_to_idle();
 }
 
 /**
@@ -801,7 +955,7 @@ static void test_locator_is_valid_only_within_one_generation(void)
     first_generation = catalog_generation();
     assert(locator_at(3U, &locator));
 
-    assert(catalog_invalidate() == CATALOG_OK);
+    unmount_card(); /* 卷消失：旧代次作废，定位符取不到 */
     assert(!locator_at(3U, &locator));
 
     scan(2U, 0U);
@@ -1172,12 +1326,12 @@ static void test_scan_end_info_for_truncated_catalog(void)
 static void test_scan_end_info_for_directory_read_failure(void)
 {
     world_reset();
-    g_root_count = 3U;
     g_read_dir_fail = true;
 
-    assert(catalog_music_init() == CATALOG_ERROR);
+    scan(3U, 0U);
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=dfs_error n=0 us=0") == 0);
     assert(log_count_prefix("Scan done") == 1U);
+    assert(catalog_generation() == 0U);
 }
 
 /**
@@ -1261,16 +1415,20 @@ static void test_publishing_wakes_the_foreground_exactly_once_and_a_discarded_sc
     world_reset();
     g_foreground_wakes = 0U;
     g_root_count = 3U;
-    g_swap_after_reads = 2U; /* 扫描途中换卡：丢弃，不发布。 */
-    assert(catalog_music_init() == CATALOG_OK);
+    g_swap_after_reads = 2U; /* 扫描途中换卡：丢弃，不发布，不叫醒；之后卡还在，重新开始并发布才叫醒。 */
+    g_volume.Mounted = true;
+    (void)run_until_log("Scan done res=aborted");
     assert(catalog_generation() == 0U);
     assert(g_foreground_wakes == 0U);
+    (void)run_to_idle();
+    assert(catalog_generation() != 0U);
+    assert(g_foreground_wakes == 1U);
 
     world_reset();
     g_foreground_wakes = 0U;
-    g_root_count = 3U;
     g_read_dir_fail = true; /* 读目录失败：不发布。 */
-    assert(catalog_music_init() == CATALOG_ERROR);
+    scan(3U, 0U);
+    assert(catalog_generation() == 0U);
     assert(g_foreground_wakes == 0U);
 }
 
@@ -1291,8 +1449,29 @@ static bool log_has_error(void)
 }
 
 /**
+ * @brief 日志里 ERROR 级的行数。
+ * @return 行数。
+ */
+static uint32_t log_error_count(void)
+{
+    uint32_t count = 0U;
+
+    for (uint32_t i = 0U; i < g_log_count; i++)
+    {
+        if (g_log[i].level == SERVICE_LOG_LEVEL_ERROR)
+        {
+            count++;
+        }
+    }
+    return count;
+}
+
+/**
  * @brief 打开 Music/ 就得到 NO_MEDIA / NOT_READY / INVALID_HANDLE（卷没了或正在对账）：不是“没有 Music 目录”，
- *        丢弃本次扫描，不发布（曲库保持无效），不记 ERROR，等卷事件重新扫描（#196 的错误分类，#211）。
+ *        丢弃本次扫描，不发布（曲库保持无效），等卷事件重新扫描（#196 的错误分类，#211）。
+ *        第一次失败发生在对账之前，所以再开一次（它在 Filesystem 入口等闸）才下结论。
+ *        卡被拔走（卷序号变了、卷不在）：安静丢弃，不记 ERROR，等卷事件。
+ *        卡还在（卷序号没变且卷仍挂着）：卡还在、读不了，没有卷事件可等，记一条 ERROR 要求重插卡，且不再自己重试。
  *        其他失败（这里的 SERVICE_ERROR）仍按空库发布，沿用 STOR-7。
  */
 static void test_scan_is_discarded_when_the_volume_is_unavailable_on_root_open(void)
@@ -1301,26 +1480,58 @@ static void test_scan_is_discarded_when_the_volume_is_unavailable_on_root_open(v
 
     for (size_t index = 0U; index < sizeof(unavailable) / sizeof(unavailable[0]); index++)
     {
+        /* 卡被拔走。 */
         world_reset();
         scan(3U, 0U);
         assert(catalog_generation() != 0U);
-        assert(catalog_invalidate() == CATALOG_OK);
         g_log_count = 0U;
         g_open_dir_calls = 0U;
         g_open_root_status = unavailable[index];
+        g_unavailable_removes_card = true;
+        g_volume.Sequence += 2U; /* 换卡，扫描随之开始 */
 
-        assert(catalog_music_init() == CATALOG_OK);
+        (void)run_to_idle();
 
-        assert(g_open_dir_calls == 2U); /* 第一次失败发生在对账之前，再开一次（在 Filesystem 入口等闸）才下结论 */
-
+        assert(g_open_dir_calls == 1U); /* 卡走了：下一步先比对卷序号，变了就丢弃，不再重试 */
         assert(catalog_generation() == 0U);
         assert(count_now() == 0U);
         assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
         assert(log_count_prefix("Music Directory Open Failed") == 0U);
         assert(!log_has_error());
-        /* 序号变了：卡没了，等卷事件；序号没变且卷仍挂着：卡还在、读不了，没有卷事件可等。 */
-        assert(catalog_scan_verdict(false) == CATALOG_SCAN_EVENT_PENDING);
-        assert(catalog_scan_verdict(true) == CATALOG_SCAN_UNREADABLE);
+
+        /* 卡还在、读不了。 */
+        world_reset();
+        scan(3U, 0U);
+        g_log_count = 0U;
+        g_open_dir_calls = 0U;
+        g_open_root_status = unavailable[index];
+        g_volume.Sequence += 2U;
+
+        (void)run_to_idle();
+
+        assert(g_open_dir_calls == 2U); /* 卷序号没变：第一次失败发生在对账之前，再开一次（等闸）才下结论 */
+        assert(catalog_generation() == 0U);
+        assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+        assert(log_has_error());
+        assert(strcmp(log_last_prefix("Catalog scan aborted")->text,
+                      "Catalog scan aborted but the card is still there; reinsert the card.") == 0);
+        assert(log_last_prefix("Catalog scan aborted")->level == SERVICE_LOG_LEVEL_ERROR);
+
+        /* 没有新的卷序号就不再重试，也不再记日志；换了卡（卷序号变了）才重新开始。 */
+        g_log_count = 0U;
+        g_open_dir_calls = 0U;
+        for (uint32_t lap = 0U; lap < 20U; lap++)
+        {
+            assert(step_once() == BACKGROUND_WAIT_FOREVER);
+        }
+        assert(g_open_dir_calls == 0U);
+        assert(g_log_count == 0U);
+
+        g_open_root_status = SERVICE_OK;
+        g_volume.Sequence += 2U;
+        (void)run_to_idle();
+        assert(catalog_generation() != 0U);
+        assert(count_now() == 3U);
     }
 
     world_reset();
@@ -1346,8 +1557,7 @@ static void test_open_directory_that_fails_once_as_unavailable_is_retried_and_th
     assert(catalog_generation() != 0U);
     assert(count_now() == 3U);
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=3 us=0") == 0);
-    assert(catalog_scan_verdict(true) == CATALOG_SCAN_DONE);
-    assert(catalog_scan_verdict(false) == CATALOG_SCAN_DONE);
+    assert(!log_has_error());
 }
 
 /**
@@ -1362,48 +1572,68 @@ static void test_sub_directory_that_fails_once_as_unavailable_is_retried_too(voi
     scan(2U, 3U);
 
     assert(count_now() == 5U);
-    assert(catalog_scan_verdict(true) == CATALOG_SCAN_DONE);
+    assert(!log_has_error());
 }
 
 /**
- * @brief 扫描到一半读目录得到卷不可用：丢弃已经收录的条目，不发布，不记 ERROR；
+ * @brief 扫描到一半读目录得到卷不可用：先关目录，再丢弃已经收录的条目，不发布；
  *        打开子目录时卷不可用同样丢弃整次扫描，而不是跳过这个子目录继续。
+ *        卡被拔走时安静丢弃（不记 ERROR）；卡还在时记 ERROR 要求重插卡。
  */
 static void test_scan_is_discarded_when_the_volume_goes_away_mid_scan(void)
 {
+    /* 读到一半：卡被拔走。 */
     world_reset();
     scan(3U, 0U);
-    assert(catalog_invalidate() == CATALOG_OK);
     g_log_count = 0U;
     g_root_count = 5U;
     g_read_dir_status = SERVICE_NO_MEDIA;
     g_read_dir_status_after = 2U;
     g_dir_reads = 0U;
+    g_unavailable_removes_card = true;
+    g_close_calls = 0U;
+    g_volume.Sequence += 2U;
 
-    assert(catalog_music_init() == CATALOG_OK);
+    (void)run_to_idle();
 
+    assert(g_close_calls == 1U); /* 出错之后关目录（它的结果这时已不影响结论） */
     assert(catalog_generation() == 0U);
     assert(count_now() == 0U);
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
-    assert(log_count_prefix("Music Directory Read Failed") == 0U);
+    assert(log_count_prefix("Music catalog dfs failed") == 0U);
     assert(!log_has_error());
-    assert(catalog_scan_verdict(false) == CATALOG_SCAN_EVENT_PENDING);
-    assert(catalog_scan_verdict(true) == CATALOG_SCAN_UNREADABLE);
 
+    /* 读到一半：卡还在、读不了。 */
+    world_reset();
+    scan(3U, 0U);
+    g_log_count = 0U;
+    g_root_count = 5U;
+    g_read_dir_status = SERVICE_NO_MEDIA;
+    g_read_dir_status_after = 2U;
+    g_dir_reads = 0U;
+    g_volume.Sequence += 2U;
+
+    (void)run_to_idle();
+
+    assert(catalog_generation() == 0U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+    assert(log_count_prefix("Music catalog dfs failed") == 0U);
+    assert(log_count_prefix("Catalog scan aborted but the card is still there") == 1U);
+
+    /* 打开子目录时卷不可用。 */
     world_reset();
     scan(3U, 2U);
-    assert(catalog_invalidate() == CATALOG_OK);
     g_log_count = 0U;
     g_open_sub_status = SERVICE_NOT_READY;
+    g_unavailable_removes_card = true;
+    g_volume.Sequence += 2U;
 
-    assert(catalog_music_init() == CATALOG_OK);
+    (void)run_to_idle();
 
     assert(catalog_generation() == 0U);
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
     assert(log_count_prefix("Sub Directory Open Failed") == 0U);
     assert(!log_has_error());
-    assert(catalog_scan_verdict(false) == CATALOG_SCAN_EVENT_PENDING);
-    assert(catalog_scan_verdict(true) == CATALOG_SCAN_UNREADABLE);
 }
 
 /* ---- 发布规则、卷序号、一次读全、曲库短锁（STOR-1、#196） ---- */
@@ -1434,10 +1664,9 @@ static void test_generation_is_zero_while_rescanning(void)
     old_generation = catalog_generation();
     assert(old_generation != 0U);
 
-    g_root_count = 5U;
     g_read_hook = reader_during_scan_hook;
     g_hook_calls = 0U;
-    assert(catalog_music_init() == CATALOG_OK);
+    scan(5U, 0U); /* 换卡之后重扫 */
     g_read_hook = NULL;
 
     assert(g_hook_calls > 0U);
@@ -1459,7 +1688,7 @@ static void test_generation_only_increases_on_publish_and_never_repeats(void)
         scan(2U + round, 0U);
         assert(catalog_generation() > previous);
         previous = catalog_generation();
-        assert(catalog_invalidate() == CATALOG_OK);
+        unmount_card(); /* 卷消失：代次读作 0，计数不拨回 */
         assert(catalog_generation() == 0U);
     }
     assert(previous == 4U);
@@ -1478,7 +1707,7 @@ static void test_generation_reads_zero_when_the_volume_sequence_differs(void)
     assert(catalog_generation() != 0U);
     assert(catalog_read_track(1U, &track));
 
-    g_volume.Sequence += 2U; /* 换卡：序号跳 2，没有调用 catalog_invalidate */
+    g_volume.Sequence += 2U; /* 换卡：序号跳 2，没有任何作废调用 */
     assert(catalog_generation() == 0U);
     assert(!catalog_read_track(1U, &track));
     assert(track.Generation == 0U);
@@ -1535,7 +1764,7 @@ static void test_every_call_takes_and_releases_the_lock_exactly_once(void)
     before = after;
     (void)catalog_read_track(1U, &track);
     (void)catalog_generation();
-    (void)catalog_invalidate();
+    (void)catalog_read_track(2U, &track);
     after = freertos_stub_semaphore_stats(g_lock);
     assert(after.take_successes - before.take_successes == 3U);
     assert(after.give_successes - before.give_successes == 3U);
@@ -1565,15 +1794,16 @@ static void test_reader_waits_for_the_lock_instead_of_reading_without_it(void)
     assert(after.last_timeout_ticks == portMAX_DELAY);
 }
 
-/** @brief 扫描途中换卡（读目录时卷序号变了）：关目录、丢弃，不发布，不记 ERROR；卡还在就由调用者重新开始。 */
+/** @brief 扫描途中换卡（读目录时卷序号变了）：每步比对卷序号，变了就关目录（返回值不看）、丢弃，不发布，不记 ERROR；卡还在就重新开始。 */
 static void test_card_swapped_mid_scan_discards_without_publishing(void)
 {
     world_reset();
     g_swap_after_reads = 3U;
     g_close_status = SERVICE_ERROR; /* 关目录的返回值不看 */
     g_root_count = 6U;
+    g_volume.Mounted = true;
 
-    assert(catalog_music_init() == CATALOG_OK);
+    (void)run_until_log("Scan done res=aborted");
 
     assert(g_close_calls == 1U);
     assert(catalog_generation() == 0U);
@@ -1581,23 +1811,24 @@ static void test_card_swapped_mid_scan_discards_without_publishing(void)
     assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
     assert(!log_has_error());
 
-    /* 调用者看到新的卷序号，卡还在：重新开始，这次发布。 */
-    g_swap_after_reads = 0U;
+    /* 卡还在：看到新的卷序号，从头重新开始，这次发布全部 6 条。 */
     g_close_status = SERVICE_OK;
-    g_dir_reads = 0U;
-    assert(catalog_music_init() == CATALOG_OK);
+    (void)run_to_idle();
     assert(catalog_generation() != 0U);
     assert(count_now() == 6U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=6 us=0") == 0);
+    assert(log_count_prefix("Scan done") == 2U);
 }
 
-/** @brief 扫描做完、发布之前换卡：发布时比对卷序号不一致，旧卡的结果不发布。 */
+/** @brief 扫描做完、发布之前换卡：发布时比对卷序号不一致，旧卡的结果不发布；新卡的扫描照常发布。 */
 static void test_card_swapped_just_before_publish_does_not_publish(void)
 {
     world_reset();
     g_swap_on_close = true;
     g_root_count = 3U;
+    g_volume.Mounted = true;
 
-    assert(catalog_music_init() == CATALOG_OK);
+    (void)run_until_log("Scan done res=aborted");
 
     assert(catalog_generation() == 0U);
     assert(count_now() == 0U);
@@ -1605,22 +1836,23 @@ static void test_card_swapped_just_before_publish_does_not_publish(void)
     assert(!log_has_error());
 
     g_swap_on_close = false; /* 新卡：同样的扫描，序号与开始时一致，发布 */
-    assert(catalog_music_init() == CATALOG_OK);
+    (void)run_to_idle();
     assert(catalog_generation() != 0U);
     assert(count_now() == 3U);
 }
 
-/** @brief 卷在扫描开始时就不在：不发布。 */
-static void test_unmounted_volume_is_never_published(void)
+/** @brief 卷不在（序号变过、没有挂载）：不扫描、不碰文件接口、不发布，作业只等卷事件。 */
+static void test_unmounted_volume_is_never_scanned_or_published(void)
 {
     world_reset();
     g_volume.Mounted = false;
     g_root_count = 3U;
 
-    assert(catalog_music_init() == CATALOG_OK);
+    assert(step_once() == BACKGROUND_WAIT_FOREVER);
 
     assert(catalog_generation() == 0U);
-    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+    assert(g_open_dir_calls == 0U);
+    assert(log_count_prefix("Scan done") == 0U);
 }
 
 /** @brief 错误表：SERVICE_BUSY 过约 10 ms 重试，不算失败（打开根目录、读目录、关目录各一处）。 */
@@ -1640,28 +1872,30 @@ static void test_busy_is_retried_after_about_10_ms_and_is_not_a_failure(void)
     assert(count_now() == 3U);
     assert((TickType_t)(xTaskGetTickCount() - start) >= (4U * pdMS_TO_TICKS(CATALOG_BUSY_RETRY_MS)));
     assert(log_count_prefix("Music Directory Open Failed") == 0U);
-    assert(log_count_prefix("Music Directory Read Failed") == 0U);
+    assert(log_count_prefix("Music catalog dfs failed") == 0U);
     assert(!log_has_error());
     assert(strncmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=3", 20U) == 0);
 }
 
-/** @brief 重试等的时候卷序号变了：作废这一轮，不再继续试。 */
+/** @brief 重试等的时候卷序号变了：作废这一轮，不再用旧的卷序号继续试。 */
 static void test_busy_retry_stops_when_the_volume_changes(void)
 {
     world_reset();
     g_open_root_busy = 1000U;
     g_busy_swaps_volume = true;
     g_root_count = 3U;
+    g_volume.Mounted = true;
 
-    assert(catalog_music_init() == CATALOG_OK);
+    (void)run_until_log("Scan done res=aborted");
 
     assert(g_open_root_busy == 999U); /* 只试了一次 */
     assert(catalog_generation() == 0U);
-    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+    /* 耗时是从开始到结束的总时间，含那次 10 ms 的重试等待。 */
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=10000") == 0);
     assert(log_count_prefix("Music Directory Open Failed") == 0U);
 }
 
-/** @brief 错误表：关目录时卷不可用同样丢弃，不记 ERROR。 */
+/** @brief 错误表：关目录时卷不可用同样丢弃；卡被拔走时安静，卡还在读不了时记一条 ERROR 要求重插卡。 */
 static void test_volume_unavailable_on_close_discards_the_scan(void)
 {
     static const Service_StatusTypeDef unavailable[] = {SERVICE_NO_MEDIA, SERVICE_NOT_READY, SERVICE_INVALID_HANDLE};
@@ -1670,13 +1904,22 @@ static void test_volume_unavailable_on_close_discards_the_scan(void)
     {
         world_reset();
         g_close_status = unavailable[index];
-        g_root_count = 3U;
+        g_unavailable_removes_card = true;
 
-        assert(catalog_music_init() == CATALOG_OK);
+        scan(3U, 0U);
 
         assert(catalog_generation() == 0U);
         assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
         assert(!log_has_error());
+
+        world_reset();
+        g_close_status = unavailable[index];
+
+        scan(3U, 0U);
+
+        assert(catalog_generation() == 0U);
+        assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=aborted n=0 us=0") == 0);
+        assert(log_count_prefix("Catalog scan aborted but the card is still there") == 1U);
     }
 }
 
@@ -1685,9 +1928,8 @@ static void test_other_root_open_error_publishes_an_empty_library_with_warn(void
 {
     world_reset();
     g_open_root_status = SERVICE_ERROR;
-    g_root_count = 3U;
 
-    assert(catalog_music_init() == CATALOG_OK);
+    scan(3U, 0U);
 
     assert(catalog_generation() != 0U);
     assert(count_now() == 0U);
@@ -1711,31 +1953,31 @@ static void test_other_sub_open_error_skips_that_directory_with_warn(void)
     assert(!log_has_error());
 }
 
-/** @brief 错误表：读目录的其他错误不发布，记 ERROR。 */
+/** @brief 错误表：读目录的其他错误不发布，只记一条 ERROR（带发生在读和状态数值）；之后不再自己重试。 */
 static void test_other_read_error_does_not_publish_and_logs_error(void)
 {
     world_reset();
-    g_root_count = 3U;
     g_read_dir_fail = true;
 
-    assert(catalog_music_init() == CATALOG_ERROR);
+    scan(3U, 0U);
 
     assert(catalog_generation() == 0U);
-    assert(log_count_prefix("Music Directory Read Failed.") == 1U);
-    assert(log_last_prefix("Music Directory Read Failed.")->level == SERVICE_LOG_LEVEL_ERROR);
+    assert(log_count_prefix("Music catalog dfs failed at=read status=1") == 1U); /* SERVICE_ERROR 是 1 */
+    assert(log_last_prefix("Music catalog dfs failed")->level == SERVICE_LOG_LEVEL_ERROR);
+    assert(log_error_count() == 1U); /* 原来是 `Music Directory Read Failed.` 加 `Music catalog dfs failed.` 两条 */
 }
 
-/** @brief 错误表：关目录的其他错误不发布，记 ERROR。 */
+/** @brief 错误表：关目录的其他错误不发布，只记一条 ERROR（带发生在关和状态数值）。 */
 static void test_other_close_error_does_not_publish_and_logs_error(void)
 {
     world_reset();
-    g_root_count = 3U;
     g_close_status = SERVICE_ERROR;
 
-    assert(catalog_music_init() == CATALOG_ERROR);
+    scan(3U, 0U);
 
     assert(catalog_generation() == 0U);
-    assert(log_has_error());
+    assert(log_count_prefix("Music catalog dfs failed at=close status=1") == 1U);
+    assert(log_error_count() == 1U);
     assert(strncmp(log_last_prefix("Scan done")->text, "Scan done res=dfs_error", 23U) == 0);
 }
 
@@ -1747,6 +1989,175 @@ static void test_full_catalog_publishes_the_truncated_result(void)
 
     assert(catalog_generation() != 0U);
     assert(count_now() == 12000U);
+}
+
+/* ---- 扫描单步（ARC-22、#196） ---- */
+
+/** @brief 一步读一条目录项，一步最多一次文件调用（`step_once()` 对每一步都断言）；总调用数与目录树一致，不加批量读目录。 */
+static void test_scan_makes_one_directory_call_per_step_and_reads_one_entry_per_step(void)
+{
+    uint32_t steps;
+
+    world_reset();
+    g_root_count = 3U;
+    g_sub_count = 2U;
+    g_volume.Mounted = true;
+
+    steps = run_to_idle();
+
+    assert(g_open_dir_calls == 2U);  /* Music、Music/Sub */
+    assert(g_dir_reads == 8U);       /* 根目录 3 个文件、Sub、结束标记；Sub 里 2 个文件、结束标记 */
+    assert(g_close_calls == 2U);
+    assert(steps >= 12U);            /* 12 次目录调用各占一步 */
+    assert(count_now() == 5U);
+}
+
+/**
+ * @brief 目录树遍历结果与改成单步之前一致：同一棵树（嵌套、隐藏目录、非 mp3 文件、大写扩展名、空目录）经旧的同步扫描
+ *        与新的单步扫描得到同一份有序列表。期望的顺序是用旧实现在同一棵树上跑出来的（一次性对照，不是用新代码重算）：
+ *        文件按读到的顺序收录，子目录入栈，后入栈的先扫（栈顺序）。
+ */
+static void test_scan_traverses_a_nested_tree_in_the_established_order(void)
+{
+    static const TreeDir tree[] = {
+        {"Music", {"a.mp3", "B/", "c.mp3", "D/", ".hidden/", "notes.txt", "E.MP3", "F/", NULL}},
+        {"Music/B", {"b1.mp3", "G/", "b2.mp3", NULL}},
+        {"Music/B/G", {"g1.mp3", NULL}},
+        {"Music/D", {"d1.mp3", "H/", NULL}},
+        {"Music/D/H", {"h1.mp3", "h2.mp3", NULL}},
+        {"Music/F", {NULL}},
+    };
+    static const char *const expected[] = {
+        "Music/a.mp3", "Music/c.mp3", "Music/E.MP3", "Music/D/d1.mp3", "Music/D/H/h1.mp3",
+        "Music/D/H/h2.mp3", "Music/B/b1.mp3", "Music/B/b2.mp3", "Music/B/G/g1.mp3",
+    };
+    Catalog_TrackTypeDef track;
+
+    world_reset();
+    g_tree = tree;
+    g_tree_count = sizeof(tree) / sizeof(tree[0]);
+
+    scan(0U, 0U);
+
+    assert(count_now() == (sizeof(expected) / sizeof(expected[0])));
+    for (uint16_t index = 0U; index < (sizeof(expected) / sizeof(expected[0])); index++)
+    {
+        assert(catalog_read_track(index, &track));
+        assert(strcmp(track.Path, expected[index]) == 0);
+    }
+    assert(g_open_dir_calls == 6U); /* 六个目录各开一次，隐藏目录 .hidden 没有开 */
+    assert(g_close_calls == 6U);
+    assert(!log_has_error());
+}
+
+/**
+ * @brief 目录打不开的 WARN 带节流：一轮扫描里一堆子目录都打不开，只记第一条，其余只计数，汇总进 `Scan done` 行的 `skipped=`
+ *        （目录很多的卡上原来每个目录一条 WARN，会塞满 Service Log 的消息池，DIAG-3）；其余收录照常，不是 ERROR。
+ */
+static void test_sub_directory_open_warnings_are_throttled_to_one_per_scan(void)
+{
+    static const TreeDir tree[] = {
+        {"Music", {"a.mp3", "D1/", "D2/", "D3/", "D4/", "D5/", "b.mp3", NULL}},
+    };
+    Catalog_TrackTypeDef track;
+
+    world_reset();
+    g_tree = tree;
+    g_tree_count = 1U;
+
+    scan(0U, 0U);
+
+    assert(count_now() == 2U); /* 五个子目录都不在树里，打不开；两个文件照常收录 */
+    assert(catalog_read_track(1U, &track));
+    assert(log_count_prefix("Sub Directory Open Failed.") == 1U);
+    assert(log_last_prefix("Sub Directory Open Failed.")->level == SERVICE_LOG_LEVEL_WARN);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=2 us=0 skipped=4") == 0);
+    assert(log_error_count() == 0U);
+
+    /* 下一轮从零数：再一次只记一条。 */
+    g_log_count = 0U;
+    scan(0U, 0U);
+    assert(log_count_prefix("Sub Directory Open Failed.") == 1U);
+    assert(strcmp(log_last_prefix("Scan done")->text, "Scan done res=ok n=2 us=0 skipped=4") == 0);
+}
+
+/**
+ * @brief 一轮扫描最多三行日志（消息池核算的上界）：第一条 WARN、一条 ERROR、`Scan done`。这里让两个子目录打不开（第二个只计数）、
+ *        第三个子目录读失败：WARN 只有一条，ERROR 只有一条（带 `at=read`），结束行带 `skipped=1`。
+ */
+static void test_a_scan_logs_at_most_three_lines_even_when_everything_goes_wrong(void)
+{
+    static const TreeDir tree[] = {
+        {"Music", {"a.mp3", "D1/", "D2/", "D3/", NULL}},
+        {"Music/D1", {"x.mp3", NULL}},
+    };
+
+    world_reset();
+    g_tree = tree;
+    g_tree_count = sizeof(tree) / sizeof(tree[0]);
+    g_read_dir_status = SERVICE_ERROR; /* 根目录读了 5 次（a.mp3、三个子目录、结束标记）之后的读都失败：D1 的第一次读 */
+    g_read_dir_status_after = 5U;
+
+    scan(0U, 0U); /* 栈后进先出：先试 D3（不在树里，WARN），再 D2（不在，计数），最后 D1（打开成功，读失败） */
+
+    assert(g_log_count == 3U);
+    assert(log_count_prefix("Sub Directory Open Failed.") == 1U);
+    assert(log_count_prefix("Music catalog dfs failed at=read status=1") == 1U);
+    assert(log_count_prefix("Scan done res=dfs_error n=1 us=0 skipped=1") == 1U);
+    assert(catalog_generation() == 0U);
+}
+
+/** @brief 没有活时作业只等通知：卷没挂、扫描已发布、扫描已放弃，每一步都不碰文件接口、不拿曲库锁、不投日志。 */
+static void test_idle_scan_step_waits_for_a_notification_and_does_nothing(void)
+{
+    FreertosStub_SemaphoreStats before;
+    FreertosStub_SemaphoreStats after;
+
+    world_reset();
+    g_volume.Mounted = false;
+    g_volume.Sequence = 0U; /* 开机至今没有卡 */
+    before = freertos_stub_semaphore_stats(g_lock);
+    for (uint32_t lap = 0U; lap < 5U; lap++)
+    {
+        assert(step_once() == BACKGROUND_WAIT_FOREVER);
+    }
+    after = freertos_stub_semaphore_stats(g_lock);
+    assert(g_open_dir_calls == 0U);
+    assert(g_dir_reads == 0U);
+    assert(g_log_count == 0U);
+    assert(after.take_calls == before.take_calls);
+
+    scan(2U, 0U); /* 扫完发布之后同样只等通知 */
+    g_open_dir_calls = 0U;
+    g_dir_reads = 0U;
+    g_log_count = 0U;
+    for (uint32_t lap = 0U; lap < 5U; lap++)
+    {
+        assert(step_once() == BACKGROUND_WAIT_FOREVER);
+    }
+    assert(g_open_dir_calls == 0U);
+    assert(g_dir_reads == 0U);
+    assert(g_log_count == 0U);
+}
+
+/** @brief SERVICE_BUSY（槽用尽）不算失败：这一步返回约 10 ms 让后台任务睡一会儿再叫它，不在步里阻塞等待。 */
+static void test_busy_makes_the_step_return_about_10_ms_instead_of_blocking(void)
+{
+    uint32_t first_wait = 0U;
+
+    world_reset();
+    g_open_root_busy = 1U;
+    g_root_count = 1U;
+    g_volume.Mounted = true;
+
+    for (uint32_t lap = 0U; (lap < 10U) && (first_wait == 0U); lap++)
+    {
+        first_wait = step_once();
+    }
+    assert(first_wait == 10U);
+    assert(xTaskGetTickCount() >= 10U); /* 睡的时间由后台任务的等待负责，步本身没有 vTaskDelay（桩里 tick 只随驱动前进） */
+    (void)run_to_idle();
+    assert(count_now() == 1U);
 }
 
 /* ---- 曲库短锁的持锁统计（Debug 构建，DIAG-6） ---- */
@@ -1803,7 +2214,7 @@ static void test_lock_stats_hold_is_the_longest_locked_interval_only(void)
     (void)catalog_read_track(0U, &track);
 
     freertos_stub_set_tick(pdMS_TO_TICKS(CATALOG_LOCK_STATS_PERIOD_MS));
-    (void)catalog_invalidate();
+    (void)catalog_generation();
 
     assert(strstr(log_last_prefix("n=")->text, "hold=90us") != NULL);
 }
@@ -1867,7 +2278,7 @@ int main(void)
     test_reader_waits_for_the_lock_instead_of_reading_without_it();
     test_card_swapped_mid_scan_discards_without_publishing();
     test_card_swapped_just_before_publish_does_not_publish();
-    test_unmounted_volume_is_never_published();
+    test_unmounted_volume_is_never_scanned_or_published();
     test_busy_is_retried_after_about_10_ms_and_is_not_a_failure();
     test_busy_retry_stops_when_the_volume_changes();
     test_volume_unavailable_on_close_discards_the_scan();
@@ -1876,6 +2287,12 @@ int main(void)
     test_other_read_error_does_not_publish_and_logs_error();
     test_other_close_error_does_not_publish_and_logs_error();
     test_full_catalog_publishes_the_truncated_result();
+    test_scan_makes_one_directory_call_per_step_and_reads_one_entry_per_step();
+    test_scan_traverses_a_nested_tree_in_the_established_order();
+    test_sub_directory_open_warnings_are_throttled_to_one_per_scan();
+    test_a_scan_logs_at_most_three_lines_even_when_everything_goes_wrong();
+    test_idle_scan_step_waits_for_a_notification_and_does_nothing();
+    test_busy_makes_the_step_return_about_10_ms_instead_of_blocking();
     test_lock_stats_report_one_line_per_period_after_the_lock_is_released();
     test_lock_stats_hold_is_the_longest_locked_interval_only();
     test_lock_stats_line_fits_the_log_capacity();

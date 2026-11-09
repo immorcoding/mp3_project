@@ -186,8 +186,14 @@
             Name = 'music_catalog'
             PathPatterns = @(
                 '^APP/apps/music/catalog/'
+                # 音乐注册进注册表的后台入口 music_background_step() 接曲库扫描单步（#220），测试经它驱动扫描。
+                '^APP/apps/music/music_background\.[ch]$'
+                # 扫描遍历状态的链接段名取 MUSIC_SDRAM_SECTION（#220），catalog.c 包含音乐应用的配置头。
+                '^APP/apps/music/music_config\.h$'
                 # 曲库发布成功后叫醒前台任务一次（#218）：catalog.c 包含前台任务头，测试里用假的叫醒函数。
                 '^APP/tasks/foreground/foreground_task(?:_config)?\.h$'
+                # 扫描单步返回 `BACKGROUND_WAIT_FOREVER`（#220）：catalog.c 包含后台任务的配置头。
+                '^APP/tasks/background/background_task(?:_config)?\.h$'
                 # 按定位符打开的测试以假实现替换 Filesystem / Log Service 与周期计数器 Adapter，只依赖它们的公开头。
                 '^Service/filesystem/filesystem_(?:file|directory)\.h$'
                 '^Service/log/log_service(?:_config)?\.h$'
@@ -285,6 +291,10 @@
             Name = 'background_task'
             PathPatterns = @(
                 '^APP/tasks/background/'
+                # 作业表从注册表的 `background_step` 拼起（#220）：background_jobs.h 包含注册表头，它再包含 Service/gui 的聚合头（输入类型）。
+                '^APP/apps/app_table\.h$'
+                '^Service/gui/gui_service\.h$'
+                '^Platform/lcd/platform_lcd\.h$'
                 '^APP/tasks/volume/volume_(?:event\.(?:c|h)|task_config\.h)$'
                 '^APP/app_config\.h$'
                 '^Platform/platform\.h$'
@@ -373,11 +383,14 @@
         # 翻页钩子；fakes/music_sim.c 实现音乐前台流程（注册表的 foreground_step 与 boot_init）和前台叫醒函数，
         # fakes/playback_sim.c 实现播放合同头（FIFO 深度取播放任务配置），fakes/log_sim.c 实现 Service Log 头。
         '^APP/apps/music/gui/'
-        '^APP/apps/music/music_(?:app|cells|config|display_stats|hook_pageturn)\.[ch]$'
+        '^APP/apps/music/music_(?:app|background|cells|config|display_stats|hook_pageturn)\.h$'
+        '^APP/apps/music/music_(?:app|cells|config|display_stats|hook_pageturn)\.c$'
         '^APP/apps/music/foreground/music_foreground\.h$'
         '^APP/apps/app_table(?:_boot)?\.[ch]$'
         '^APP/ui_cell/'
         '^APP/tasks/foreground/foreground_task(?:_config)?\.h$'
+        # 假的音乐后台入口返回 BACKGROUND_WAIT_FOREVER（#220）。
+        '^APP/tasks/background/background_task_config\.h$'
         '^APP/tasks/audio_reader/audio_reader_(?:block|config)\.h$'
         '^APP/tasks/playback/playback_(?:contract|task_config)\.h$'
         '^Service/log/log_service(?:_config)?\.h$'

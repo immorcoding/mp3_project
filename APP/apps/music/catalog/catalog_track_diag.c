@@ -59,7 +59,7 @@ static const char *const catalog_track_diag_reason_name[CATALOG_TRACK_DIAG_COUNT
 static CatalogTrackDiag_CountersTypeDef catalog_track_diag_counters;
 
 /** @brief 文件定位符核对不符、退回按路径打开的次数（板上预期为 0；定位符失效钩子打开时每次开流加 1）。
- *         多个任务同时累加（音频读取任务、Storage Task），读-改-写不是原子的，所以在短临界区里加，日志在临界区之外投。 */
+ *         多个任务同时累加（音频读取任务、前台任务），读-改-写不是原子的，所以在短临界区里加，日志在临界区之外投。 */
 static volatile uint32_t catalog_track_diag_locator_misses;
 static CatalogTrackDiag_WindowTypeDef catalog_track_diag_window;
 
@@ -284,7 +284,7 @@ void catalog_track_diag_window_end(void)
 /**
  * @brief 文件定位符核对不符、退回按路径打开：累加计数器，记一行 WARN（DIAG-5）。
  * @param[in] position 播放列表位置。
- * @note  文本只含位置，不含文件名；板上预期为 0。计数器由多个任务同时累加（音频读取任务开流、Storage Task 读名称与窗口行），
+ * @note  文本只含位置，不含文件名；板上预期为 0。计数器由多个任务同时累加（音频读取任务开流、前台任务读名称与窗口行），
  *        所以自增放在一个只含两条指令的短临界区里；`Service_Log_Post` 不阻塞，但仍放在临界区之外。
  */
 void catalog_track_diag_locator_miss(uint16_t position)

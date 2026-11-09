@@ -6,7 +6,7 @@
 
 - `gui/`：GUI 分区，见 [gui/README.md](gui/README.md)。入口 `gui_music_init()`、`gui_music_step()` 在注册表里登记为 `gui_init`、`gui_step`。窗口客户、曲名客户、快照归约、Queue 行整理都是纯 C，可主机测试（`Tests/music_gui`）。
 - `foreground/`：前台流程，见下节。入口 `music_foreground_step()` 登记为 `foreground_step`，`music_foreground_boot_init()` 经 `music_boot_init()` 登记为 `boot_init`。
-- `catalog/`：曲库（SD `Music/` 的路径事实表、播放列表、曲目显示名与标签文本、曲目打开、读取诊断），见 [catalog/README.md](catalog/README.md)。一份表、模块内一把短锁，发布时比对卷序号，读者经 `catalog_read_track()` 一次读全；扫描这时仍由 Storage Task 同步调用，发布成功后叫醒前台任务一次；改成后台单步作业留给后台任务票。
+- `catalog/`：曲库（SD `Music/` 的路径事实表、播放列表、曲目显示名与标签文本、曲目打开、读取诊断），见 [catalog/README.md](catalog/README.md)。一份表、模块内一把短锁，发布时比对卷序号，读者经 `catalog_read_track()` 一次读全；扫描是后台任务里的单步作业（`catalog_scan_step()`，经 `music_background_step()` 注册进注册表的 `background_step`，#220），发布成功后叫醒前台任务一次。
 - 界面数据格子 `music_cells.h` / `music_cells.c`：曲名需求、曲名结果、窗口需求、窗口结果四个 `ui_cell` 格子的类型与存储（AXI 新段 `.app_axi_ram`，Boot 里整块写入）。需求格 GUI 写、前台任务读（叫醒函数 `foreground_task_wake`），结果格前台任务写、GUI 读（不叫醒）。
 - `music_config.h`：窗口行数（12）、行缓存行数（64）、`SERVICE_BUSY` 重试间隔（10 ms，不设次数上限）与日志节拍（第 1 次和每满 100 次一行）、链接段名、显示延迟汇总的开关与节拍、翻页注入钩子的开关。
 - `music_display_stats.*`：显示延迟汇总（曲名、新窗口、拔卡后 Queue 清空），走持锁统计的开关（Debug 开、Release 关），见下节“证据出口”。

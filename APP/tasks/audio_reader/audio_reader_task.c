@@ -15,7 +15,7 @@
  *
  *          静态创建：TCB 在 DTCM `.bss`，4 KiB 栈（1024 word）放 AXI SRAM 新段 `.app_axi_ram`（NOLOAD，只经 CPU 读写，
  *          不作 DMA）。HWD-2：栈在 `xTaskCreateStatic` 里被内核整块填成已知值，首次使用前因此完整写入。
- *          优先级 3，与卷任务、定时器服务任务同级（时间片轮转），低于播放（4），高于前台、GUI、Log、Monitor（2）与 Storage、后台（1，#218）。
+ *          优先级 3，与卷任务、定时器服务任务同级（时间片轮转），低于播放（4），高于前台、GUI、Log、Monitor（2）与后台、Flash 启动任务（1，#218、#220）。
  ******************************************************************************
  */
 
@@ -52,7 +52,7 @@ static StackType_t audio_reader_task_stack[APP_AUDIO_READER_TASK_STACK_WORDS]
 
 /**
  * @brief  Boot 任务里的内存准备：块池和两个信箱。
- * @note   由 `create_task`（Boot，128 word 栈）在创建音频读取任务和播放任务之前调用一次，晚于可选的 SDRAM 全容量诊断
+ * @note   由 `create_task`（Boot，192 word 栈）在创建音频读取任务和播放任务之前调用一次，晚于可选的 SDRAM 全容量诊断
  *         （诊断是破坏性的，必须独占，块池 NOLOAD 段此后才有主，HWD-2）。栈核算：最深一条是 `audio_reader_block_init()`
  *         → `xQueueSend`，见 `APP/tasks/audio_reader/README.md`“Boot 栈核算”。
  */

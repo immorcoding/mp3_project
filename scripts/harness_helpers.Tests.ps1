@@ -228,9 +228,9 @@ Assert-HarnessSequence -Expected @('music_catalog', 'music_foreground') -Actual 
 
 $storageTaskHeaderImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/storage/storage_task.h')
 Assert-HarnessEqual -Expected $true -Actual $storageTaskHeaderImpact.RequiresAllHostTests `
-    -Message 'Storage 任务头不再被任何主机模块编译（#218 删除了带入它的窗口槽与名字槽），与 storage_task.c 一样保守回退到全部主机测试'
+    -Message 'Storage 任务已随 #220 删除，旧路径上的变化落入未知生产路径，保守回退到全部主机测试'
 Assert-HarnessEqual -Expected $false -Actual $storageTaskHeaderImpact.RequiresGuiScenarios `
-    -Message '模拟器不再替身 Storage 任务头，其变化不跑场景回归'
+    -Message '模拟器没有 Storage 任务头，旧路径的变化不跑场景回归'
 
 $sdComponentImpact = Get-HarnessImpact -ChangedPath @('Components/sd/sd.c')
 Assert-HarnessSequence -Expected @('flash_ftl') -Actual $sdComponentImpact.HostModules `
@@ -269,8 +269,40 @@ $backgroundImpact = Get-HarnessImpact -ChangedPath @(
     'APP/tasks/background/background_task.c'
     'APP/tasks/background/background_task_config.h'
     'Tests/background_task/test_background_loop.c')
-Assert-HarnessSequence -Expected @('background_task') -Actual $backgroundImpact.HostModules `
-    -Message '后台任务变化必须选择 background_task 主机测试'
+Assert-HarnessSequence -Expected @('background_task', 'music_catalog') -Actual $backgroundImpact.HostModules `
+    -Message '后台任务变化必须选择 background_task 主机测试；配置头（BACKGROUND_WAIT_FOREVER）同时被曲库测试编译（#220），所以也选 music_catalog'
+$backgroundReclaimImpact = Get-HarnessImpact -ChangedPath @(
+    'APP/tasks/background/background_reclaim.c'
+    'APP/tasks/background/background_reclaim.h'
+    'APP/tasks/background/background_jobs.c'
+    'APP/tasks/background/background_jobs.h'
+    'Tests/background_task/test_background_reclaim.c'
+    'APP/tasks/background/background_flash_diag.c'
+    'APP/tasks/background/background_flash_diag.h'
+    'Tests/background_task/test_background_flash_diag.c'
+    'Tests/background_task/test_task_priorities.c')
+Assert-HarnessSequence -Expected @('background_task') -Actual $backgroundReclaimImpact.HostModules `
+    -Message '回收作业、作业表、Flash 失败诊断片段与优先级核对（#220）变化只选择 background_task 主机测试'
+Assert-HarnessEqual -Expected $false -Actual $backgroundReclaimImpact.RequiresAllHostTests `
+    -Message '后台任务的新文件由主机模块规则覆盖，不应落入未知生产路径'
+$appConfigImpact = Get-HarnessImpact -ChangedPath @('APP/app_config.h')
+Assert-HarnessEqual -Expected $true -Actual (@($appConfigImpact.HostModules) -contains 'background_task') `
+    -Message 'APP/app_config.h（任务优先级与 Boot 栈）变化必须选择 background_task，它的 test_task_priorities.c 钉住优先级排序'
+# 音乐的后台入口（#220）：music_background.c/h 被曲库主机测试编译；模拟器用 fakes/music_background_sim.c 实现同一个头，所以 .h 变化跑场景回归，.c 不跑。
+$musicBackgroundSourceImpact = Get-HarnessImpact -ChangedPath @('APP/apps/music/music_background.c')
+Assert-HarnessSequence -Expected @('music_catalog') -Actual $musicBackgroundSourceImpact.HostModules `
+    -Message '音乐后台入口实现变化选择曲库主机测试'
+Assert-HarnessEqual -Expected $false -Actual $musicBackgroundSourceImpact.RequiresGuiScenarios `
+    -Message '模拟器用假的音乐后台入口，实现变化不跑场景回归'
+$musicBackgroundHeaderImpact = Get-HarnessImpact -ChangedPath @('APP/apps/music/music_background.h')
+Assert-HarnessEqual -Expected $true -Actual $musicBackgroundHeaderImpact.RequiresGuiScenarios `
+    -Message '假音乐后台入口实现的 music_background.h 变化必须跑场景回归'
+$musicConfigImpact = Get-HarnessImpact -ChangedPath @('APP/apps/music/music_config.h')
+Assert-HarnessEqual -Expected $true -Actual (@($musicConfigImpact.HostModules) -contains 'music_catalog') `
+    -Message '音乐配置头（MUSIC_SDRAM_SECTION，扫描遍历状态的链接段名）被曲库主机测试编译（#220），变化必须选择 music_catalog'
+$backgroundConfigImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/background/background_task_config.h')
+Assert-HarnessEqual -Expected $true -Actual $backgroundConfigImpact.RequiresGuiScenarios `
+    -Message '假的音乐后台入口（模拟器）返回 BACKGROUND_WAIT_FOREVER，后台任务配置头变化必须跑场景回归'
 Assert-HarnessEqual -Expected 0 -Actual $backgroundImpact.UnknownPaths.Count `
     -Message 'APP/tasks/background 由主机模块规则覆盖，不应落入未知生产路径'
 $volumeTaskConfigImpact = Get-HarnessImpact -ChangedPath @('APP/tasks/volume/volume_task_config.h')
@@ -309,8 +341,8 @@ Assert-HarnessSequence -Expected @('background_task', 'filesystem_locator', 'fla
     -Actual $platformHeaderHostImpact.HostModules -Message 'Platform 聚合头变化必须选择所有编译它的主机测试'
 
 $platformLcdHostImpact = Get-HarnessImpact -ChangedPath @('Platform/lcd/platform_lcd.h')
-Assert-HarnessSequence -Expected @('foreground_task', 'gui_task', 'gui_theme') -Actual $platformLcdHostImpact.HostModules `
-    -Message 'Platform LCD 头变化必须选择前台任务（注册表头经 GUI Service 头带入它）、GUI Task 与主题主机测试'
+Assert-HarnessSequence -Expected @('background_task', 'foreground_task', 'gui_task', 'gui_theme') -Actual $platformLcdHostImpact.HostModules `
+    -Message 'Platform LCD 头变化必须选择前台任务与后台任务（注册表头经 GUI Service 头带入它们）、GUI Task 与主题主机测试'
 
 $platformAudioHostImpact = Get-HarnessImpact -ChangedPath @('Platform/audio/platform_audio.h')
 Assert-HarnessSequence -Expected @('playback_service') -Actual $platformAudioHostImpact.HostModules `

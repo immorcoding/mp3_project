@@ -96,7 +96,7 @@ static uint32_t audio_reader_grace_sequence;               /* 宽限开始时已
 /**
  * @brief 创建请求信箱和流记录信箱（静态）并复位流状态。
  * @note  由 Boot 任务调用一次，须早于创建播放任务和音频读取任务（播放任务此后才能调用 request）。块池由
- *        audio_reader_block_init() 另行初始化。Boot 栈只有 128 word，这里只有两次 xQueueCreateStatic。
+ *        audio_reader_block_init() 另行初始化。Boot 栈 192 word，这里只有两次 xQueueCreateStatic。
  */
 void audio_reader_stream_boot_init(void)
 {

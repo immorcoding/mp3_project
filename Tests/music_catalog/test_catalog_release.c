@@ -2,10 +2,11 @@
  * @file test_catalog_release.c
  * @brief 发布构建（曲库源码带 -DNDEBUG）的曲库主机测试：持锁统计整段编译掉，发布规则不受开关影响。
  * @note  链接带 -DNDEBUG 编译的真实 catalog.c、catalog_sheet.c 与 catalog_name.c（本文件自己仍带断言）；Filesystem Service、Log Service、DWT Adapter 与卷状态函数
- *        由本文件的假实现替换，曲库短锁走共用 FreeRTOS 桩。目录扫描只靠“Music/ 打不开按空库发布”这一条路径走通发布。
+ *        由本文件的假实现替换，曲库短锁走共用 FreeRTOS 桩。扫描单步（`catalog_scan_step()`）只靠“Music/ 打不开按空库发布”这一条路径走通发布。
  */
 
 #include "APP/apps/music/catalog/catalog.h"
+#include "APP/tasks/background/background_task_config.h"
 #include "APP/tasks/volume/volume_event.h"
 
 #include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
@@ -117,6 +118,21 @@ Service_StatusTypeDef Service_Filesystem_CloseDirectory(Service_Filesystem_Direc
     return SERVICE_OK;
 }
 
+/**
+ * @brief 把扫描作业一路跑到它要求等通知（有上限，防止状态机停不下来）。
+ */
+static void run_to_idle(void)
+{
+    for (uint32_t steps = 0U; steps < 1000U; steps++)
+    {
+        if (catalog_scan_step() == BACKGROUND_WAIT_FOREVER)
+        {
+            return;
+        }
+    }
+    assert(!"the scan did not settle");
+}
+
 /** @brief 发布构建里：读写曲库不投 CATLOCK 汇总，哪怕节拍早已过去；发布规则照常。 */
 static void test_release_build_never_posts_lock_statistics(void)
 {
@@ -125,20 +141,23 @@ static void test_release_build_never_posts_lock_statistics(void)
     freertos_stub_reset();
     catalog_boot_init();
 
-    assert(catalog_music_init() == CATALOG_OK); /* 根目录打不开：按空库发布 */
+    run_to_idle(); /* 卷挂载（序号 3）：根目录打不开，按空库发布 */
     assert(catalog_generation() == 1U);
 
     freertos_stub_set_tick(100U * 1000U); /* 远超汇总节拍 */
     (void)catalog_read_track(0U, &track);
     (void)catalog_generation();
-    (void)catalog_invalidate();
+    g_volume.Mounted = false; /* 拔卡：卷消失，作业作废已发布的曲库 */
+    g_volume.Sequence += 1U;
+    run_to_idle();
 
     assert(g_log_catlock_count == 0U);
     assert(catalog_generation() == 0U);
     assert(g_log_count >= 1U); /* 其他日志（WARN、扫描结束）照常 */
 
-    g_volume.Sequence += 2U;
-    assert(catalog_music_init() == CATALOG_OK); /* 序号变了也能在新序号下重新发布 */
+    g_volume.Mounted = true;
+    g_volume.Sequence += 1U;
+    run_to_idle(); /* 序号变了也能在新序号下重新发布 */
     assert(catalog_generation() == 2U);
     g_volume.Sequence += 2U;
     assert(catalog_generation() == 0U); /* 取代次时序号不符就算 0 */

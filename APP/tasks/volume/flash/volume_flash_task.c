@@ -4,8 +4,8 @@
  * @brief   一次性的 Flash 启动任务：跑 `volume_flash_boot()`，自删前自己打一行栈水位。
  *
  * @details
- *          卷任务创建它、不等它，优先级 2（低于卷任务的 3），所以 Flash 启动期间（`MountFlash` 3.3 至 8.3 s）
- *          卷任务照常处理插拔卡；这个任务只持 Flash 卷锁，与 SD 卷锁互不相干（STOR-9、R3.5）。
+ *          卷任务创建它、不等它，优先级 1（低于卷任务的 3，#220 从 2 降到 1，与后台任务同级轮转，开机前约 8 s 不再抢走曲库扫描的 CPU），
+ *          所以 Flash 启动期间（`MountFlash` 3.3 至 8.3 s）卷任务照常处理插拔卡；这个任务只持 Flash 卷锁，与 SD 卷锁互不相干（STOR-9、R3.5）。
  *          静态创建：TCB 在 DTCM `.bss`，约 4 KiB 栈放 AXI SRAM 新段 `.app_axi_ram`（NOLOAD，只经 CPU 读写，
  *          不作 DMA）。任务自删之后 Monitor 读不到它的栈，所以自删前自己打一行水位，格式与 Monitor 的栈行相同。
  *          与 ARC-17 字面不符的静态栈留给补丁版本改回动态（地图评论、ARC-17 的 Signal）。

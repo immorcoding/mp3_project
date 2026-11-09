@@ -13,12 +13,13 @@
 
 #include "APP/apps/music/gui/gui_music.h"
 #include "APP/apps/music/music_app.h"
+#include "APP/apps/music/music_background.h"
 #include "APP/apps/music/foreground/music_foreground.h"
 
 const AppTable_EntryTypeDef app_table[] =
 {
-    /* name,    boot_init,       gui_init,        gui_step,        foreground_step */
-    {  "music", music_boot_init, gui_music_init,  gui_music_step,  music_foreground_step },
+    /* name,    boot_init,       gui_init,        gui_step,        foreground_step,      background_step */
+    {  "music", music_boot_init, gui_music_init,  gui_music_step,  music_foreground_step, music_background_step },
 };
 
 const size_t app_table_count = sizeof(app_table) / sizeof(app_table[0]);

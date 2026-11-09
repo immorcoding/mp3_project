@@ -34,6 +34,12 @@ typedef struct
      * 返回多少毫秒后再叫它：0 马上，`FOREGROUND_WAIT_FOREVER` 等通知。
      */
     uint32_t (*foreground_step)(void);
+    /**
+     * 后台任务每圈调用一次；NULL 跳过。一步最多一次可能耗时的文件调用，或约 10 ms 的 CPU 计算（ARC-22）。
+     * 返回多少毫秒后再叫它：0 马上，`BACKGROUND_WAIT_FOREVER` 等通知（卷事件和 `background_task_wake()` 都会叫醒后台任务）。
+     * 有两个后台作业的应用自己在这个函数里合并。
+     */
+    uint32_t (*background_step)(void);
 } AppTable_EntryTypeDef;
 
 /** @brief 注册表行数。 */
