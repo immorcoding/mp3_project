@@ -19,7 +19,7 @@
  */
 static uint16_t requested_position(void)
 {
-    return fake_storage_last_request().Position;
+    return fake_audio_reader_last_request().Position;
 }
 
 /**
@@ -28,7 +28,7 @@ static uint16_t requested_position(void)
  */
 static bool request_is_no_stream(void)
 {
-    return fake_storage_last_request().StreamSeq == 0U;
+    return fake_audio_reader_last_request().StreamSeq == 0U;
 }
 
 /**
@@ -57,9 +57,9 @@ static void bad_file_then_expect_skip_to(uint16_t expected_position, uint32_t ex
  */
 static void open_with_data_and_fact(FakePlayerFactTypeDef fact, uint16_t tracks)
 {
-    fake_storage_enqueue_block(world_current_seq(), 30U, 1U);
+    fake_audio_reader_enqueue_block(world_current_seq(), 30U, 1U);
     fake_player_set_fact(fact);
-    fake_storage_open_ok(world_current_seq(), GENERATION, tracks, WORLD_AUDIO_BYTES);
+    fake_audio_reader_open_ok(world_current_seq(), GENERATION, tracks, WORLD_AUDIO_BYTES);
     world_wake();
 }
 
@@ -121,9 +121,9 @@ static void test_select_and_stopped_toggle_skip_forward(void)
     bad_file_then_expect_skip_to(2U, 1U);
 
     world_send(PLAYBACK_COMMAND_PREV);   /* 方向再次向前 */
-    fake_storage_open_ok(world_current_seq(), GENERATION, TRACKS, WORLD_AUDIO_BYTES);
+    fake_audio_reader_open_ok(world_current_seq(), GENERATION, TRACKS, WORLD_AUDIO_BYTES);
     world_wake();
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_READ_ERROR);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_READ_ERROR);
     world_wake();
     assert(world_snapshot().State == PLAYBACK_STATE_STOPPED);
 
@@ -170,7 +170,7 @@ static void test_single_track_library_with_bad_file_stops_all_bad(void)
 {
     world_reset();
     world_start_playing(GENERATION, 1U);
-    uint32_t requests = fake_storage_request_count();
+    uint32_t requests = fake_audio_reader_request_count();
 
     world_send(PLAYBACK_COMMAND_NEXT);   /* 环形步进回到自己 */
     world_open_bad_file();
@@ -179,7 +179,7 @@ static void test_single_track_library_with_bad_file_stops_all_bad(void)
     assert(world_snapshot().StopReason == PLAYBACK_STOP_REASON_ALL_BAD);
     assert(world_snapshot().SkippedBadCount == 1U);
     assert(world_snapshot().StopCount == 1U);
-    assert(fake_storage_request_count() == requests + 2U);   /* NEXT 的请求与停止时的“无流”，没有重试请求。 */
+    assert(fake_audio_reader_request_count() == requests + 2U);   /* NEXT 的请求与停止时的“无流”，没有重试请求。 */
     assert(request_is_no_stream());
 }
 
@@ -457,7 +457,7 @@ static void test_bad_file_with_unknown_track_count_stops_no_track(void)
 }
 
 /**
- * @brief 坏文件应答若带回代次与曲目数（Storage 已解析出曲目），状态机采用它们，从而可以跳过。
+ * @brief 坏文件应答若带回代次与曲目数（音频读取任务已解析出曲目），状态机采用它们，从而可以跳过。
  */
 static void test_bad_file_record_carrying_track_count_enables_skipping(void)
 {
@@ -470,14 +470,14 @@ static void test_bad_file_record_carrying_track_count_enables_skipping(void)
     record.OpenResult = PLAYBACK_MACHINE_OPEN_BAD_FILE;
     record.Generation = GENERATION;
     record.TrackCount = TRACKS;
-    fake_storage_write_record(&record);
+    fake_audio_reader_write_record(&record);
     world_wake();
 
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
     assert(world_snapshot().SkippedBadCount == 1U);
     assert(world_snapshot().Generation == GENERATION);
     assert(world_snapshot().Index == 1U);
-    assert(fake_storage_last_request().Generation == GENERATION);
+    assert(fake_audio_reader_last_request().Generation == GENERATION);
 }
 
 /**
@@ -494,7 +494,7 @@ static void test_stale_bad_file_record_is_ignored(void)
 
     record.StreamSeq = old_seq;
     record.OpenResult = PLAYBACK_MACHINE_OPEN_BAD_FILE;
-    fake_storage_write_record(&record);
+    fake_audio_reader_write_record(&record);
     world_wake();
 
     assert(world_snapshot().SkippedBadCount == 0U);

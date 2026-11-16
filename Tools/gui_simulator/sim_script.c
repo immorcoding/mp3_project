@@ -59,7 +59,7 @@ static bool sim_script_add(const sim_action_t *action)
     return true;
 }
 
-/** @brief 假 Storage 槽位开关的命令行名与对应开关。 */
+/** @brief 假前台流程开关（曲名与窗口应答）和假播放后端开关的命令行名与对应开关。 */
 static const struct
 {
     const char *option;
@@ -72,7 +72,7 @@ static const struct
 };
 
 /**
- * @brief 按命令行名查假 Storage 槽位开关。
+ * @brief 按命令行名查假前台流程与假播放后端的脚本开关。
  * @param[in]  option  命令行参数名，如 `--window-delay`。
  * @param[out] control 查到时写入对应开关。
  * @return 是槽位开关时为 true。
@@ -232,9 +232,9 @@ bool sim_script_parse(int argc, char *argv[], sim_script_options_t *options)
 }
 
 /**
- * @brief 推进脚本：执行到期的截图、动画计数、按键、名称槽开关与触点动作。
+ * @brief 推进脚本：执行到期的截图、动画计数、按键、替身开关与触点动作。
  * @param[in] elapsed_ms 自 GUI 初始化完成起的毫秒数。
- * @param[in] handlers   按键与名称槽开关的处理函数。
+ * @param[in] handlers   按键与替身开关的处理函数。
  * @retval true  所有动作已完成，应退出。
  * @retval false 无脚本或仍有未完成动作。
  */

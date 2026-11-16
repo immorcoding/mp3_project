@@ -245,7 +245,7 @@ Playback_SnapshotTypeDef published_last(void)
 }
 
 /* ---------------------------------------------------------------------------
- * 假存储窗口
+ * 假音频读取任务
  * ------------------------------------------------------------------------- */
 
 typedef struct
@@ -270,9 +270,9 @@ static uint32_t fake_returned;
 static uint32_t fake_returned_seq_log[64];
 
 /**
- * @brief 复位假存储窗口。
+ * @brief 复位假音频读取任务。
  */
-static void fake_storage_reset(void)
+static void fake_audio_reader_reset(void)
 {
     memset(fake_blocks, 0, sizeof(fake_blocks));
     fake_ready_length = 0U;
@@ -395,7 +395,7 @@ static void fake_return_block(const Playback_MachineBlockTypeDef *block)
  * @brief 已写请求次数。
  * @return 次数。
  */
-uint32_t fake_storage_request_count(void)
+uint32_t fake_audio_reader_request_count(void)
 {
     return fake_request_count;
 }
@@ -404,7 +404,7 @@ uint32_t fake_storage_request_count(void)
  * @brief 最近一次写入的请求。
  * @return 请求副本。
  */
-Playback_MachineRequestTypeDef fake_storage_last_request(void)
+Playback_MachineRequestTypeDef fake_audio_reader_last_request(void)
 {
     return fake_last_request;
 }
@@ -416,7 +416,7 @@ Playback_MachineRequestTypeDef fake_storage_last_request(void)
  * @param[in] track_count 曲目数。
  * @param[in] audio_bytes 音频字节数。
  */
-void fake_storage_open_ok(uint32_t stream_seq, uint32_t generation, uint16_t track_count, uint32_t audio_bytes)
+void fake_audio_reader_open_ok(uint32_t stream_seq, uint32_t generation, uint16_t track_count, uint32_t audio_bytes)
 {
     Playback_MachineRecordTypeDef record;
 
@@ -426,14 +426,14 @@ void fake_storage_open_ok(uint32_t stream_seq, uint32_t generation, uint16_t tra
     record.Generation = generation;
     record.TrackCount = track_count;
     record.AudioBytes = audio_bytes;
-    fake_storage_write_record(&record);
+    fake_audio_reader_write_record(&record);
 }
 
 /**
  * @brief 整份覆盖写流记录信箱。
  * @param[in] record 记录。
  */
-void fake_storage_write_record(const Playback_MachineRecordTypeDef *record)
+void fake_audio_reader_write_record(const Playback_MachineRecordTypeDef *record)
 {
     fake_record = *record;
     fake_record_present = true;
@@ -444,7 +444,7 @@ void fake_storage_write_record(const Playback_MachineRecordTypeDef *record)
  * @param[in] stream_seq 流序号；与现有记录不同时整份重写为只含终止状态的记录。
  * @param[in] end 终止状态。
  */
-void fake_storage_set_end(uint32_t stream_seq, Playback_MachineEndTypeDef end)
+void fake_audio_reader_set_end(uint32_t stream_seq, Playback_MachineEndTypeDef end)
 {
     if (!fake_record_present || (fake_record.StreamSeq != stream_seq))
     {
@@ -461,7 +461,7 @@ void fake_storage_set_end(uint32_t stream_seq, Playback_MachineEndTypeDef end)
  * @param[in] length 有效字节数，1..FAKE_BLOCK_CAPACITY。
  * @param[in] fill_value 第一个字节的值，其后逐字节加一。
  */
-void fake_storage_enqueue_block(uint32_t stream_seq, uint32_t length, uint8_t fill_value)
+void fake_audio_reader_enqueue_block(uint32_t stream_seq, uint32_t length, uint8_t fill_value)
 {
     assert((length >= 1U) && (length <= FAKE_BLOCK_CAPACITY));
     for (uint32_t i = 0U; i < FAKE_BLOCK_POOL; i++)
@@ -489,7 +489,7 @@ void fake_storage_enqueue_block(uint32_t stream_seq, uint32_t length, uint8_t fi
  * @brief 就绪队列长度。
  * @return 块数。
  */
-uint32_t fake_storage_ready_count(void)
+uint32_t fake_audio_reader_ready_count(void)
 {
     return fake_ready_length;
 }
@@ -498,7 +498,7 @@ uint32_t fake_storage_ready_count(void)
  * @brief 当前被取走未归还的块数。
  * @return 块数。
  */
-uint32_t fake_storage_outstanding(void)
+uint32_t fake_audio_reader_outstanding(void)
 {
     return fake_outstanding;
 }
@@ -507,7 +507,7 @@ uint32_t fake_storage_outstanding(void)
  * @brief 历史上同时持有块数的最大值。
  * @return 块数。
  */
-uint32_t fake_storage_max_outstanding(void)
+uint32_t fake_audio_reader_max_outstanding(void)
 {
     return fake_max_outstanding;
 }
@@ -516,7 +516,7 @@ uint32_t fake_storage_max_outstanding(void)
  * @brief 已归还块数。
  * @return 块数。
  */
-uint32_t fake_storage_returned_count(void)
+uint32_t fake_audio_reader_returned_count(void)
 {
     return fake_returned;
 }
@@ -526,7 +526,7 @@ uint32_t fake_storage_returned_count(void)
  * @param[in] index 归还次序。
  * @return 流序号。
  */
-uint32_t fake_storage_returned_seq(uint32_t index)
+uint32_t fake_audio_reader_returned_seq(uint32_t index)
 {
     assert((index < fake_returned) && (index < 64U));
     return fake_returned_seq_log[index];
@@ -1149,16 +1149,16 @@ void world_reset(void)
     call_log_reset();
     fake_log_clear();
     fake_cycle_counter = 0U;
-    fake_storage_reset();
+    fake_audio_reader_reset();
     fake_player_reset();
     world_now_ms = 1000U;
     world_command_seq = 0U;
 
-    world_ops.Storage.WriteRequest = fake_write_request;
-    world_ops.Storage.ReadRecord = fake_read_record;
-    world_ops.Storage.PeekReadyBlock = fake_peek_ready_block;
-    world_ops.Storage.TakeReadyBlock = fake_take_ready_block;
-    world_ops.Storage.ReturnBlock = fake_return_block;
+    world_ops.Stream.WriteRequest = fake_write_request;
+    world_ops.Stream.ReadRecord = fake_read_record;
+    world_ops.Stream.PeekReadyBlock = fake_peek_ready_block;
+    world_ops.Stream.TakeReadyBlock = fake_take_ready_block;
+    world_ops.Stream.ReturnBlock = fake_return_block;
     world_ops.Player.BeginStream = fake_begin_stream;
     world_ops.Player.MapSeek = fake_map_seek;
     world_ops.Player.ReopenStream = fake_reopen_stream;
@@ -1349,18 +1349,18 @@ uint32_t world_last_command_seq(void)
 }
 
 /**
- * @brief Storage 对当前流应答开启 OK，并唤醒一次。
+ * @brief 音频读取任务对当前流应答开启 OK，并唤醒一次。
  * @param[in] generation 应答带回的代次。
  * @param[in] track_count 应答带回的曲目数。
  */
 void world_open_ok(uint32_t generation, uint16_t track_count)
 {
-    fake_storage_open_ok(world_current_seq(), generation, track_count, WORLD_AUDIO_BYTES);
+    fake_audio_reader_open_ok(world_current_seq(), generation, track_count, WORLD_AUDIO_BYTES);
     world_wake();
 }
 
 /**
- * @brief Storage 对当前流应答指定的开启结果（只含结果，不带 OK 的参数），并唤醒一次。
+ * @brief 音频读取任务对当前流应答指定的开启结果（只含结果，不带 OK 的参数），并唤醒一次。
  * @param[in] result 开启结果。
  */
 void world_open_result(Playback_MachineOpenResultTypeDef result)
@@ -1370,12 +1370,12 @@ void world_open_result(Playback_MachineOpenResultTypeDef result)
     memset(&record, 0, sizeof(record));
     record.StreamSeq = world_current_seq();
     record.OpenResult = result;
-    fake_storage_write_record(&record);
+    fake_audio_reader_write_record(&record);
     world_wake();
 }
 
 /**
- * @brief Storage 对当前流应答 BAD_FILE，并唤醒一次。
+ * @brief 音频读取任务对当前流应答 BAD_FILE，并唤醒一次。
  */
 void world_open_bad_file(void)
 {
@@ -1388,7 +1388,7 @@ void world_open_bad_file(void)
  */
 void world_feed_block(uint32_t length)
 {
-    fake_storage_enqueue_block(world_current_seq(), length, 1U);
+    fake_audio_reader_enqueue_block(world_current_seq(), length, 1U);
     world_wake();
 }
 

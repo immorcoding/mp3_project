@@ -67,7 +67,9 @@ typedef enum
     SDCARD_ERROR_PORT_GET_INFO,   /**< 获取介质信息失败。 */
     SDCARD_ERROR_PORT_READ,       /**< 读取块失败。 */
     SDCARD_ERROR_PORT_WRITE,      /**< 写入块失败。 */
-    SDCARD_ERROR_PORT_SYNC        /**< 等待介质完成内部传输失败。 */
+    SDCARD_ERROR_PORT_SYNC,       /**< 等待介质完成内部传输失败。 */
+    SDCARD_ERROR_TRANSFER_ABORTED, /**< 在飞的传输被显式中止并已停住；Device 回到 READY，调用者那一笔传输算失败。 */
+    SDCARD_ERROR_PORT_ABORT       /**< 中止没能在上界内停住在飞的传输（或中止本身失败）；Port 已被反初始化。 */
 } SDCard_ErrorTypeDef;
 
 /**
@@ -184,6 +186,19 @@ typedef SDCard_PortStatusTypeDef (*SDCard_PortSyncFunc)(void *context,
     uint32_t timeout_ms);
 
 /**
+  * @brief 在上界内中止在飞的 DMA 传输的 Port 函数类型。
+  * @param context 与 PortOps 成对绑定的底层对象。
+  * @param timeout_ms 从调用起算的有限上界，单位为毫秒；Port 不得等得比它更久。
+  * @retval SDCARD_PORT_OK 传输已停止：数据通路静止、卡回到可传输状态，Port 仍可继续使用。
+  * @retval SDCARD_PORT_NOT_PRESENT 中止时发现介质已拔出。
+  * @retval SDCARD_PORT_TIMEOUT 到上界还没停住。
+  * @retval 其他值 中止本身失败。
+  * @note   除 SDCARD_PORT_OK 外，返回之前 Port 必须已经自行反初始化（Device 随后把它当作未初始化）。
+  */
+typedef SDCard_PortStatusTypeDef (*SDCard_PortAbortTransferFunc)(void *context,
+    uint32_t timeout_ms);
+
+/**
   * @brief SD Card Device 的 Port 操作表。
   * @note  Ops 与 PortContext 必须由同一个 Adapter 成对安装。
   */
@@ -198,6 +213,7 @@ typedef struct
     SDCard_PortStartReadBlocksFunc StartReadBlocks; /**< 启动异步块读取，可选。 */
     SDCard_PortStartWriteBlocksFunc StartWriteBlocks; /**< 启动异步块写入，可选。 */
     SDCard_PortSyncFunc Sync;             /**< 等待卡回到传输状态。 */
+    SDCard_PortAbortTransferFunc AbortTransfer; /**< 在上界内中止在飞的 DMA 传输，可选。 */
 } SDCard_PortOpsTypeDef;
 
 /**
@@ -247,6 +263,8 @@ SDCard_StatusTypeDef SDCard_StartWriteBlocks(SDCard_HandleTypeDef *hsdcard,
 SDCard_StatusTypeDef SDCard_CompleteTransfer(SDCard_HandleTypeDef *hsdcard);
 
 SDCard_StatusTypeDef SDCard_FailTransfer(SDCard_HandleTypeDef *hsdcard);
+
+SDCard_StatusTypeDef SDCard_AbortTransfer(SDCard_HandleTypeDef *hsdcard);
 
 SDCard_StatusTypeDef SDCard_Sync(SDCard_HandleTypeDef *hsdcard);
 

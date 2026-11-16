@@ -28,6 +28,6 @@
 ## 任务通知数组长度
 
 `configTASK_NOTIFICATION_ARRAY_ENTRIES` 是每个 TCB 通知数组的槽位数，不是全系统事件编号。
-当前为 4，不少于 Storage Task 实际占用的槽数量。具体槽位命名由各 APP Task 的枚举持有：
-Storage Task 见 `APP/tasks/storage/storage_task.h`，GUI Task 见 `APP/tasks/gui/gui_task.h`。
+当前为 4，不少于各 APP Task 实际占用的槽数量（Storage Task 已随 #220 删除，现在各任务都只用一个槽）。具体槽位命名由各 APP Task 的枚举持有：
+后台任务见 `APP/tasks/background/background_loop.h`，GUI Task 见 `APP/tasks/gui/gui_task.h`。
 不同任务可以复用同一索引值。

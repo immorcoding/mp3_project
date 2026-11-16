@@ -2,7 +2,7 @@
 param(
     [string]$HostCompiler,
 
-    [ValidateSet('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'storage_audio_stream', 'storage_catalog', 'playback_service', 'playback_task', 'monitor_warn', 'board_test_card')]
+    [ValidateSet('external_loader', 'flash_ftl', 'filesystem_locator', 'gui_task', 'music_gui', 'gui_theme', 'gui_canvas', 'gui_font', 'w25qxx', 'resource_pack', 'audio_reader', 'music_catalog', 'ui_cell', 'foreground_task', 'music_foreground', 'volume', 'background_task', 'playback_service', 'playback_task', 'monitor_warn', 'board_test_card')]
     [string[]]$Module,
 
     [switch]$AllowGeneratedUpdate

@@ -8,9 +8,9 @@
 
 - `Service_GUI_Init(notify_index)`：仅由 GUI Task 调用一次。`notify_index` 是本任务 `GUI_NotifyIndexTypeDef` 给出的 LCD DMA 完成槽。初始化 LVGL，注册 v8 显示驱动与 Pointer 输入驱动，绑定 LCD DMA 最终回调；以 STARTUP 外观初始化共享颜色 style，由 `view/` 创建全部 Screen 并加载 Boot，再应用 Screen 外观、准备 Main 与 Boot。
 - `Service_GUI_ThemeApply(id)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`；启动序列未结束（Boot 仍存在）时返回 `SERVICE_BUSY`，因为 Boot 可能正显示共享 Canvas 工作帧。首次生成毛玻璃失败时回滚到原外观。切换 Default/Solid 调色板，刷新共享颜色 style 与 BootReveal/Lock/Main 的壁纸或 Ground，再设置 Music Tab 毛玻璃或薄层；首次切到 Default 时按需生成长期模糊壁纸。
-- `Service_GUI_Process()`：仅在同一 GUI Task 上下文周期调用。按 FreeRTOS Tick 推进 LVGL 时间，并调用 `lv_timer_handler()` 处理刷新、动画和输入。
-- `Service_GUI_QueueApply(titles, artists, length, window_index, current_index)`：仅由同一 GUI Task 调用。把一窗曲名与歌手填进 Queue 可见行：第 i 行曲名 Label 显示 `titles[i]`，歌手 Label 显示 `artists[i]`；`artists` 与 `titles` 平行，`NULL` 表示全部行歌手为空，单项可为 `""`（GUI-25：不替换成 `--`，不解析路径）。`length` 为 0 时全部 Hidden，`titles`/`artists` 可为 NULL。`window_index` 是本窗在播放列表上的起点，用于已有行转 head。`current_index` 是正在播放的播放列表下标；无当前曲时为 `SERVICE_GUI_QUEUE_NO_CURRENT`。不包含 `storage_listbuffer.h`。Label 会拷贝文本。
-- `Service_GUI_ConsumeInput(input)`：仅由同一 GUI Task 调用。取走上一圈 `Process()` 记下的一次点击。无点击时 `command` 为 `SERVICE_GUI_INPUT_NONE` 且返回 `SERVICE_OK`，不用 `SERVICE_NOT_READY` 表示空闲。`MUSIC_QUEUE_SELECT` 时 `param` 为播放列表下标；进度条手势 `MUSIC_SEEK_PRESS` / `MUSIC_SEEK_DRAG` / `MUSIC_SEEK_RELEASE` 时为 0..`SERVICE_GUI_SEEK_SCALE`（1000）千分比，`MUSIC_SEEK_CANCEL`（触摸丢失）时为 0。输入是单槽，后一次覆盖未取走的一次，唯一的合并是：未取走的 `SEEK_PRESS` 遇到 `SEEK_DRAG` 时保留按下、比例取拖动的值（LVGL 同一次读触摸先发 PRESSED 再发 PRESSING）。不包含 `storage_listbuffer.h`。
+- `uint32_t Service_GUI_Process()`：仅在同一 GUI Task 上下文周期调用。按 FreeRTOS Tick 推进 LVGL 时间，并调用 `lv_timer_handler()` 处理刷新、动画和输入。返回值是调用者本圈结束后该睡的毫秒数（GUI-28），恒为 1 至 `SERVICE_GUI_SLEEP_MAX_MS`（16，等于 `LV_DISP_DEF_REFR_PERIOD`，`gui_service.c` 用 `_Static_assert` 守住）：`lv_timer_handler()` 的返回值减去本圈实际耗时（FreeRTOS Tick），再夹上下限。不能直接按 handler 的返回值睡：`lv_tick` 只在每圈开头推进，handler 运行期间时间不动，返回值接近一整个周期，直接睡会把渲染耗时叠到帧间隔上。输入槽里有尚未取走的命令时只给下限 `SERVICE_GUI_SLEEP_MIN_MS`（1），让下一圈马上 `ConsumeInput`；没有定时器待命（`LV_NO_TIMER_READY`）、handler 已到期或本圈耗时超过返回值，分别落在上限、下限、下限。本函数自己不睡眠，由 GUI Task 在其测量段之外 `vTaskDelay`；忽略返回值（GUI 模拟器每圈固定推进 5 ms）只是不让出 CPU，LVGL 行为不变。新结果到达不提前唤醒 GUI。下限 1 ms 只睡到下一个 Tick，实际 0 至 1 ms。
+- `Service_GUI_QueueApply(titles, artists, length, window_index, current_index)`：仅由同一 GUI Task 调用。把一窗曲名与歌手填进 Queue 可见行：第 i 行曲名 Label 显示 `titles[i]`，歌手 Label 显示 `artists[i]`；`artists` 与 `titles` 平行，`NULL` 表示全部行歌手为空，单项可为 `""`（GUI-25：不替换成 `--`，不解析路径）。`length` 为 0 时全部 Hidden，`titles`/`artists` 可为 NULL。`window_index` 是本窗在播放列表上的起点，用于已有行转 head。`current_index` 是正在播放的播放列表下标；无当前曲时为 `SERVICE_GUI_QUEUE_NO_CURRENT`。不包含 APP 的任何头（`music_cells.h`、`ui_cell.h` 等）。Label 会拷贝文本。
+- `Service_GUI_ConsumeInput(input)`：仅由同一 GUI Task 调用。取走上一圈 `Process()` 记下的一次点击。无点击时 `command` 为 `SERVICE_GUI_INPUT_NONE` 且返回 `SERVICE_OK`，不用 `SERVICE_NOT_READY` 表示空闲。`MUSIC_QUEUE_SELECT` 时 `param` 为播放列表下标；进度条手势 `MUSIC_SEEK_PRESS` / `MUSIC_SEEK_DRAG` / `MUSIC_SEEK_RELEASE` 时为 0..`SERVICE_GUI_SEEK_SCALE`（1000）千分比，`MUSIC_SEEK_CANCEL`（触摸丢失）时为 0。输入是单槽，后一次覆盖未取走的一次，唯一的合并是：未取走的 `SEEK_PRESS` 遇到 `SEEK_DRAG` 时保留按下、比例取拖动的值（LVGL 同一次读触摸先发 PRESSED 再发 PRESSING）。不包含 APP 的任何头（`music_cells.h`、`ui_cell.h` 等）。
 - `Service_GUI_TransportApply(playing)`：仅由同一 GUI Task 调用。把 `MusicPlayPauseIcon` 换成 `LV_SYMBOL_PAUSE` 或 `LV_SYMBOL_PLAY`。
 - `Service_GUI_ProgressApply(percent)`：仅由同一 GUI Task 调用。把 `MusicPlayingSlider` 设为 0..100 百分比（进度条内部量程为千分比，乘 10）；Slider 处于 `PRESSED` 时不覆盖当前拖动。不解码、不发跳转命令。
 - `Service_GUI_SeekEnable(enabled)`：仅由同一 GUI Task 调用。为假时进度条不响应按压：按下当圈吞掉这次按压（`lv_indev_wait_release`，进度条离开 `PRESSED`），不跟手、不 post 手势事件、父对象不滚动，外观不变（不置灰，GUI-19）；若此刻正在拖动，按 `SeekCancel` 结束。Init 后为假，由调用方按播放快照打开（GUI-10：总时长未知含停止态时不响应）。
@@ -21,7 +21,7 @@
   - `Service_GUI_SkipNoticeApply(added)`：累加跳过数并显示 `Skipped 1 file` / `Skipped k files`，单次 `lv_timer` 在 `SERVICE_GUI_MUSIC_SKIP_NOTICE_MS`（2000）后回到时间并清零累加数；期间再调用则累加并重新计时；有常驻文本时不显示也不累加；`added` 为 0 不做任何事。计时器创建失败返回 `SERVICE_ERROR`，状态行不变。
   - `Service_GUI_StatusFlash()`：以时间 Label 为 var 的 `lv_anim` 在 `SERVICE_GUI_MUSIC_STATUS_FLASH_MS`（300）内把 `text_opa` 淡出再淡回；同一 Label 至多一条闪烁动画，重复调用先删旧动画、恢复不透明再重启。
   - 计时器与动画都按 LVGL tick 计时，模拟器中来自虚拟时钟。两个时长常量在 `gui_service_config.h`。
-- `Service_GUI_TitleApply(text, artist)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`；`text` 为 NULL 返回 `SERVICE_INVALID_PARAM`（两列都不改）。曲名与歌手在同一次调用里写入 Now Playing 的曲名 Label（view 句柄 `music.title_label`）与歌手 Label（`music.artist_label`，曲名下方），两者属于同一次应答的曲目身份、同时出现、同时清空（GUI-26）。`text` 是调用方给出的 UTF-8 曲名：曲目显示名、空串（留空）或 `--`；`artist` 为歌手，`NULL` 或 `""` 表示无歌手（留空）；占位文案 `Unknown Artist` 由调用方（GUI 音乐分区）决定，Service 不认识这些语义，只负责画。歌手 Label 为 Ink、Opa `SERVICE_GUI_MUSIC_ARTIST_OPA`（180），宽同曲名，超宽 `LV_LABEL_LONG_DOT` 截断加省略号，文本相同不重写。曲名每次文本变化后按 Label 字体量出像素宽度：宽于 `SERVICE_GUI_MUSIC_TITLE_WIDTH`（192 px）用 `LV_LABEL_LONG_SCROLL_CIRCULAR` 单行循环滚动（`SERVICE_GUI_MUSIC_TITLE_SPEED`，24 px/s），否则 `LV_LABEL_LONG_CLIP` 静止居中；不换行、不截断、不加省略号。文本相同不重写，避免重启滚动。Label 拷贝文本，调用返回后调用方可把名称槽写回 `IDLE`。Init 时曲名写入初始 `--`、歌手为空。两个 Label 同用 `font/` 给出的字体：资源包 FONT 解码成功为 Noto Sans CJK SC 12 px（GB2312 与 ASCII），否则回退 `lv_font_montserrat_12`；字集外的字符画占位框（GUI-24）。不包含 `storage_namebuffer.h`。
+- `Service_GUI_TitleApply(text, artist)`：仅由同一 GUI Task 在 `Init()` 成功后调用，之前返回 `SERVICE_NOT_READY`；`text` 为 NULL 返回 `SERVICE_INVALID_PARAM`（两列都不改）。曲名与歌手在同一次调用里写入 Now Playing 的曲名 Label（view 句柄 `music.title_label`）与歌手 Label（`music.artist_label`，曲名下方），两者属于同一次应答的曲目身份、同时出现、同时清空（GUI-26）。`text` 是调用方给出的 UTF-8 曲名：曲目显示名、空串（留空）或 `--`；`artist` 为歌手，`NULL` 或 `""` 表示无歌手（留空）；占位文案 `Unknown Artist` 由调用方（GUI 音乐分区）决定，Service 不认识这些语义，只负责画。歌手 Label 为 Ink、Opa `SERVICE_GUI_MUSIC_ARTIST_OPA`（180），宽同曲名，超宽 `LV_LABEL_LONG_DOT` 截断加省略号，文本相同不重写。曲名每次文本变化后按 Label 字体量出像素宽度：宽于 `SERVICE_GUI_MUSIC_TITLE_WIDTH`（192 px）用 `LV_LABEL_LONG_SCROLL_CIRCULAR` 单行循环滚动（`SERVICE_GUI_MUSIC_TITLE_SPEED`，24 px/s），否则 `LV_LABEL_LONG_CLIP` 静止居中；不换行、不截断、不加省略号。文本相同不重写，避免重启滚动。Label 拷贝文本，调用返回后调用方可改写自己的曲名副本。Init 时曲名写入初始 `--`、歌手为空。两个 Label 同用 `font/` 给出的字体：资源包 FONT 解码成功为 Noto Sans CJK SC 12 px（GB2312 与 ASCII），否则回退 `lv_font_montserrat_12`；字集外的字符画占位框（GUI-24）。不包含 APP 的任何头（`music_cells.h`、`ui_cell.h` 等）。
 - `Service_GUI_VinylApply(playing, reset_angle)`：仅由同一 GUI Task 调用。`playing` 为真时唱盘从当前角度顺时针匀速续转（`SERVICE_GUI_MAIN_VINYL_REVOLUTION_MS`，6 s 一圈），为假时停在当前角度；`reset_angle` 为真先把角度归零，用于切歌、同曲重选与停止归零。调用方按播放快照在三态变化或需要归零时调用，Service 不读播放快照；重复调用不叠加动画。
 - `Service_GUI_QueueScrollLead()`：仅由同一 GUI Task 调用。返回 `QueueTab` 顶部已滚出的整行数，供窗口协议计算下一窗 `Index`。换窗时从当前 `scroll_y` 扣整行高度，不把列表吸回整页。
 
@@ -54,7 +54,10 @@ GUI Task
   -> Platform LCD 最终 ISR 回调
   -> Service GUI: lv_disp_flush_ready() + GUI Task 通知
   -> LVGL wait_cb 继续刷新
+  -> Process() 返回睡眠毫秒数 -> GUI Task: vTaskDelay（测量段之外）
 ```
+
+每圈节奏：GUI Task 的一圈依次为 `ConsumeInput`、各应用 `gui_step`、`Process()`（含渲染与等 DMA）、`vTaskDelay`。睡眠让出 CPU 给同级与低优先级任务；屏幕仍只按 16 ms 刷新定时器更新，触摸轮询定时器（`LV_INDEV_DEF_READ_PERIOD` 16 ms）与动画定时器也在各自到期时刻被叫醒，睡眠不会晚于任何一个定时器的到期时刻。松手产生的命令由 `Process()` 内的 LVGL 事件回调写入输入槽，该圈返回下限，下一圈开头即取走。
 
 触摸路径为：
 
@@ -83,7 +86,8 @@ LVGL Pointer read_cb
 ```text
 Service/gui/
 ├─ gui_service.c / .h / _config.h    GUI Task 生命周期、显示/触摸和 DMA 桥接、ThemeApply 编排
-├─ gui_service_input.c / .h          点击命令单槽（Process 写入，下一圈 Consume）
+├─ gui_service_input.c / .h          点击命令单槽（Process 写入，下一圈 Consume）；`has_pending` 供睡眠决定只睡下限
+├─ gui_service_sleep.c / .h          每圈睡眠时长：定时器返回值减本圈耗时、夹上下限、有待取输入取下限（不含 LVGL，主机测试）
 ├─ view/                             手写界面：创建全部 Screen、静态样式、对象句柄、默认壁纸
 │  ├─ gui_service_view.c / .h        创建顺序、句柄、壁纸入口
 │  ├─ gui_service_view_boot.c        Boot / BootReveal
@@ -150,7 +154,7 @@ Service/gui/
 - `main/queue/`：只持有 Queue 可见行对象。行工厂按 Length 在 `QueueTab` 中构造行，窗口滑动时
   转 head 改字，并套用当前/非当前样式（Border Opa、曲名颜色角色，不改 Width）。点按
   `CLICKED` 只刷新行样式并 `post` 选曲命令。用 `QueueScrollLead` 报告滚出顶部的整行数。
-  不包含 `storage_listbuffer.h`。
+  不包含 APP 的任何头（`music_cells.h`、`ui_cell.h` 等）。
 - `main/transport/`：给 Now Playing 三键挂 `CLICKED`、给进度条挂 `PRESSED`/`PRESSING`/`RELEASED`/`PRESS_LOST`，`post` 上一首/播放暂停/下一首/进度条手势；
   `TransportApply` 只改播放符号，`ProgressApply` 改进度条（拖动中不写回），`SeekEnable`/`SeekCancel` 吞掉不响应或已取消的按压，`TimeApply` 格式化时间；
   时间 Label 兼作状态行，本 Module 持有常驻标志、跳过累加数、提示计时器与闪烁动画，按“常驻 > 提示 > 时间”
@@ -173,6 +177,6 @@ Service/gui/
 
 ## 验证
 
-- 主机测试：`Tests/gui_theme`（调色板）、`Tests/gui_canvas`（合成）、`Tests/gui_font`（字体 bin 解码器）、`Tests/gui_task`（输入单槽、窗口协议、Transport）。
-- 界面等价性：`./Tools/gui_simulator/run-scenarios.ps1` 在 PC 上原样运行本 Module，逐帧比对场景基线；见 [Tools/gui_simulator/README.md](../../Tools/gui_simulator/README.md)。
-- 板级：显示刷新、DMA、触摸与真实帧率仍须上板（`hw:pending`）。
+- 主机测试：`Tests/gui_theme`（调色板）、`Tests/gui_canvas`（合成）、`Tests/gui_font`（字体 bin 解码器）、`Tests/gui_task`（输入单槽、睡眠时长计算）、`Tests/music_gui`（窗口协议、Transport）。睡眠时长的主机测试只证明减耗时、夹上下限与有待取输入取下限的算术，不证明 `Process()` 里传的耗时与待取标志取得对，也不证明真实节拍。
+- 界面等价性：`./Tools/gui_simulator/run-scenarios.ps1` 在 PC 上原样运行本 Module，逐帧比对场景基线；见 [Tools/gui_simulator/README.md](../../Tools/gui_simulator/README.md)。模拟器忽略 `Process()` 的返回值，不覆盖睡眠。
+- 板级：显示刷新、DMA、触摸与真实帧率仍须上板（`hw:pending`）；睡眠后的 CPU 空闲比例、最长帧与松手到出声时延同样只能上板量。

@@ -15,7 +15,7 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 `Tools/board_test_card/test_*.py` 是主机模块 `board_test_card`（`scripts/rules/verification.psd1`，`Kind = 'Python'`），由 `./scripts/test-host.ps1 -Module board_test_card` 运行（需要 `python` 在 PATH 中）：
 
 - FULL（`./scripts/verify.ps1`、`capture-verification.ps1 -Mode FULL`）全跑。
-- CHANGED（pre-push）在改动落在 `Tools/board_test_card/` 或 `Tests/playback_service/fixtures/xing/`（`test_card_seek.py` 逐字节核对这些夹具）时选中它，并带 `-SkipSlow`：只跳过 `test_card_glyphs.py` 的整文件确定性用例（约 45 s），其余约 13 s。该用例读环境变量 `MP3_SKIP_SLOW_TESTS=1` 自行跳过，所以直接 `python Tools/board_test_card/test_card_glyphs.py` 仍全跑。
+- CHANGED（pre-push）在改动落在 `Tools/board_test_card/` 或 `Tests/playback_service/fixtures/xing/`（`test_card_seek.py` 逐字节核对这些夹具）时选中它，并带 `-SkipSlow`：只跳过 `test_card_glyphs.py` 与 `test_card_soak.py` 的整文件用例（约 45 s 与 25 s），其余约 15 s。这些用例读环境变量 `MP3_SKIP_SLOW_TESTS=1` 自行跳过，所以直接 `python Tools/board_test_card/test_card_glyphs.py` 仍全跑。
 - 未安装 `lameenc` 时：运行开头打印“未安装 lameenc”，依赖它的整文件用例（glyphs、seek、xing、bigdir 探针曲）由用例自身 skip，`-v` 输出里能看到每条 skip 的原因；其余合同用例照常运行，不算失败。要跑全套先 `pip install lameenc`（字节数以 1.9.0 为准）。
 - 单个用例手动运行同前：`python Tools/board_test_card/test_card_names.py` 等。
 
@@ -32,7 +32,7 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 
 ### 曲目显示名样本（`--set names`）
 
-给 #112 板测行 T7、T8 用。内容都是同一段可播音频（44.1 kHz 192 kbps 30 s，约 720 KB，与 `card-04` 同音频），只有文件名不同；与上表样本一样复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set names`），曲库相对路径为 `Music/<文件名>`。不含在 `all` 内：换一张空卡（或格式化后）单独复制，期望显示名按 [#102](https://github.com/immorcoding/mp3_project/issues/102) 规则（只去末尾 `.mp3`，大小写不限，其余原样）。
+给 #112 板测行 T7、T8 用。内容都是同一段可播音频（44.1 kHz 192 kbps 30 s，约 720 KB，与 `card-04` 同音频），只有文件名不同；与上表样本一样复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set names`），曲库相对路径为 `Music/<文件名>`。不含在 `all` 内：单独放一个文件夹（见下文“三文件夹”），期望显示名按 [#102](https://github.com/immorcoding/mp3_project/issues/102) 规则（只去末尾 `.mp3`，大小写不限，其余原样）。
 
 | 复制顺序 | 文件名 | 期望显示名 | 覆盖点 |
 |---:|---|---|---|
@@ -48,16 +48,16 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 - 名字合同（FAT 合法字符、`Music/` 整串路径 UTF-8 ≤ 255 B、字库外字、滚动宽度）由 `python Tools/board_test_card/test_card_names.py` 检查，不需要 `lameenc`。名字表在 [card_names.py](card_names.py)。
 
 - 固件按 FAT 目录项顺序入库，目录顺序等于创建顺序：必须按上表顺序逐个复制，不要整夹拖拽；`--copy-to` 已按此顺序。
-- `--set first-bad`（坏文件在首位）、`--set all-unsupported`（整库不可播，期望 ALL_BAD）复制子集，相对顺序不变；换子集前先格式化卡。
+- `--set first-bad`（坏文件在首位）、`--set all-unsupported`（整库不可播，期望 ALL_BAD）复制子集，相对顺序不变；每个子集放进卡上自己的文件夹，不必格式化卡（摆法见下文“三文件夹”）；`first-bad` 要求 `bad-zero.mp3` 是该文件夹里最先创建的文件。
 - 每个和弦 1 s、起止采样为 0，循环拼接，曲内没有人为咔哒声；同一 `lameenc` 版本下输出逐字节一致，上表字节数以 `lameenc` 1.9.0 为准。
 
 - 串口日志：`capture-serial.ps1 -Port <COM口> -OutFile <路径>` 采集板子 USB CDC 日志（时间戳、自动重连），用法见[板级验收清单](../../docs/agents/board-test-checklist.md#烧录与日志)。日志文件允许边写边读。
 
 ### ID3 标签样本（`--set tags`）
 
-给 [#135](https://github.com/immorcoding/mp3_project/issues/135) 板级验收 I1–I6 用（#142）。音频与 `--set names` 相同（44.1 kHz 192 kbps 30 s，约 720 KB），只在文件头加不同的 ID3v2 标签；复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set tags`）。不含在 `all` 内：换一张空卡（或格式化后）单独复制，与 `--set names` 同写法；按下表顺序逐个复制。样本内容以 ASCII 为主，标签表在 [card_tags.py](card_tags.py)。
+给 [#135](https://github.com/immorcoding/mp3_project/issues/135) 板级验收 I1–I6 用（#142）。音频与 `--set names` 相同（44.1 kHz 192 kbps 30 s，约 720 KB），只在文件头加不同的 ID3v2 标签；复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set tags`）。不含在 `all` 内：单独放一个文件夹，与 `--set names` 同写法；按下表顺序逐个复制。样本内容以 ASCII 为主，标签表在 [card_tags.py](card_tags.py)。
 
-| 顺序 | 文件名 | 字节 | 唱盘页曲名 | Queue 曲名 / 歌手 | 名称槽 INFO：来源，读取次数 | 验收项 |
+| 顺序 | 文件名 | 字节 | 唱盘页曲名 | Queue 曲名 / 歌手 | 曲名 INFO（`Tag idx=`）：来源，读取次数 | 验收项 |
 |---:|---|---:|---|---|---|---|
 | 1 | `tag-1-v23-utf16le.mp3` | 721077 | `Tag Sample UTF16LE` | `Tag Sample UTF16LE` / `Test Artist A` | 标题，1 | I1 |
 | 2 | `tag-2-v24-utf8.mp3` | 721039 | `Tag Sample UTF8` | `Tag Sample UTF8` / `Test Artist B` | 标题，1 | I2 |
@@ -75,11 +75,11 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 
 ### 曲目元数据字形样本（`--set glyphs`）
 
-给 [#145](https://github.com/immorcoding/mp3_project/issues/145) 板级验收 F2、F3 用（#150），0.8.2（[#146](https://github.com/immorcoding/mp3_project/issues/146)）的 V3、V4 复用。音频与 `--set names`、`--set tags` 相同（44.1 kHz 192 kbps 30 s，约 720 KB），只在文件头加不同的 ID3v2 标签；复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set glyphs`）。不含在 `all` 内：换一张空卡（或格式化后）单独复制，不与 `--set tags` 混在同一张卡；按下表顺序逐个复制。标签表在 [card_glyphs.py](card_glyphs.py)。
+给 [#145](https://github.com/immorcoding/mp3_project/issues/145) 板级验收 F2、F3 用（#150），0.8.2（[#146](https://github.com/immorcoding/mp3_project/issues/146)）的 V3、V4 复用。音频与 `--set names`、`--set tags` 相同（44.1 kHz 192 kbps 30 s，约 720 KB），只在文件头加不同的 ID3v2 标签；复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set glyphs`）。不含在 `all` 内：单独放一个文件夹，不与 `--set tags` 混在同一个文件夹；按下表顺序逐个复制。标签表在 [card_glyphs.py](card_glyphs.py)。
 
 字段规则以 [#135](https://github.com/immorcoding/mp3_project/issues/135) E 节为准：多值按 NUL 拆分、去首尾空白（ASCII 空白与 U+3000）、丢弃空项，以 ` / ` 连写，不按 `/` 拆分；超过容量（252 B 含 `\0`，即 251 B）按 UTF-8 字符边界截断，不加省略号。
 
-| 顺序 | 文件名 | 字节 | 唱盘页曲名 | Queue 曲名 / 歌手 | 名称槽 INFO：来源，读取次数 | 验收项 |
+| 顺序 | 文件名 | 字节 | 唱盘页曲名 | Queue 曲名 / 歌手 | 曲名 INFO（`Tag idx=`）：来源，读取次数 | 验收项 |
 |---:|---|---:|---|---|---|---|
 | 1 | `glyph-1-cjk.mp3` | 721046 | `晴天 夜曲 测试标题` | 同左 / `周杰伦` | 标题，1 | F2 |
 | 2 | `glyph-2-latin-ext.mp3` | 721131 | `Beyoncé – F1® Theme ™ ’Tis “Live” …` | 同左 / `Déjà Vu ® – “Zoé” ’ ™ …` | 标题，1 | F3 |
@@ -94,7 +94,7 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 
 ### 跳转样本（`--set seek`）
 
-给 [#172](https://github.com/immorcoding/mp3_project/issues/172) 的跳转板级验收 S1–S4 用（#174）。四首都是 44.1 kHz 立体声、3:30（210 s）的刻度音：全零静音底，每 10 s 一声 1 kHz 短哔（100 ms，峰值 12000），整分钟（60、120、180 s）在 0.25 s 后再来一声，共 23 声，最后一声在 200 s。头由 [card_xing.py](card_xing.py) 自写（`Info`/`Xing` 的帧数、字节数、TOC 口径见[夹具 README](../../Tests/playback_service/fixtures/README.md#xing跳转精度夹具174)），刻度表在 [card_seek.py](card_seek.py)。复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set seek`）。不含在 `all` 内：换一张空卡单独复制，按下表顺序逐个复制。
+给 [#172](https://github.com/immorcoding/mp3_project/issues/172) 的跳转板级验收 S1–S4 用（#174）。四首都是 44.1 kHz 立体声、3:30（210 s）的刻度音：全零静音底，每 10 s 一声 1 kHz 短哔（100 ms，峰值 12000），整分钟（60、120、180 s）在 0.25 s 后再来一声，共 23 声，最后一声在 200 s。头由 [card_xing.py](card_xing.py) 自写（`Info`/`Xing` 的帧数、字节数、TOC 口径见[夹具 README](../../Tests/playback_service/fixtures/README.md#xing跳转精度夹具174)），刻度表在 [card_seek.py](card_seek.py)。复制进卡的 `Music/` 目录（`--copy-to <盘符>:\Music --set seek`）。不含在 `all` 内：单独放一个文件夹，按下表顺序逐个复制。
 
 | 顺序 | 文件名 | 字节 | 头 | 编码 | 期望现象（映射、听感） |
 |---:|---|---:|---|---|---|
@@ -110,7 +110,7 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 
 ### 大目录卡（`--set bigdir`）
 
-给 [#172](https://github.com/immorcoding/mp3_project/issues/172) 的“打开耗时”组（清单 1 O1–O8）用（#180）：12000 首同在 `Music/` 一个文件夹，比较 5 个探针位置的打开耗时。逻辑在 [card_bigdir.py](card_bigdir.py)；不含在 `all` 内，且不同于其他子集，它只生成这一套文件（不再同时生成全套样本）。**换一张空卡（或格式化后）单独复制，只需 1 张**。
+给 [#172](https://github.com/immorcoding/mp3_project/issues/172) 的“打开耗时”组（清单 1 O1–O8）用（#180）：曲库 12000 首，其中 11998 首同在一个文件夹、最后 2 首在排在末尾的子目录里，比较 5 个探针位置的打开耗时。逻辑在 [card_bigdir.py](card_bigdir.py)；不含在 `all` 内，且不同于其他子集，它只生成这一套文件（不再同时生成全套样本）。放进卡上的“大目录”文件夹，不必换卡。
 
 ```powershell
 python Tools/board_test_card/make_card.py <输出目录> --set bigdir
@@ -118,8 +118,38 @@ python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Music --se
 ```
 
 - 文件名恒为 50 个 ASCII 字符（约 5 个 FAT 目录项：4 个长名项 + 1 个短名项），形如 `00001-bigdir-open-time-card-long-file-name-pad.mp3`；前缀是 5 位零填充序号，目录顺序（创建顺序）与曲库顺序一致。`Music/` 整串路径约 56 B，远低于 255 B。
-- 探针曲：第 **1、3000、6000、9000、12000** 首，44.1 kHz 立体声 CBR 128 kbps、192 s（约 3.0 MB，≥ 3 分钟）；其余 11995 首是同参数约 1 s 的小 MP3（约 16 KB）。
+- **末尾子目录**（#214）：曲库上限 12000（STOR-17）且按深度优先扫描，子目录在当前目录读完后才处理，所以根目录只放第 1 ~ 11998 首，最后两首（第 11999、12000 首）放进创建在所有根文件之后的子目录 `zz-tail-subdir/`，合计恰为 12000，子目录里的曲目不会被截断。固件按路径（定位符失效时）打开它们，要先在 11998 个目录项里找到子目录，用来测大目录里按路径打开子目录（清单 3 R6.6）。第 12000 首（探针）因此在子目录里：清单 1 O 组“第 12000 首”按曲库顺序指它；第 11999 首是约 1 s 的小 MP3。路径形如 `Music/zz-tail-subdir/12000-bigdir-open-time-card-long-file-name-pad.mp3`，约 70 B。
+- 探针曲：第 **1、3000、6000、9000、12000** 首，44.1 kHz 立体声 CBR 128 kbps、192 s（约 3.0 MB，≥ 3 分钟）；其余 11995 首（含子目录里的第 11999 首）是同参数约 1 s 的小 MP3（约 16 KB）。
 - 容量：输出目录与 SD 卡各约 260 MB 有效数据；FAT32 簇取整后建议卡上至少留 1 GiB 空闲，输出目录所在盘同样留 ≥ 1 GiB。
-- 复制 12000 个文件较慢，请用 `--copy-to`（按文件名升序逐个复制）；手动复制必须保证创建顺序等于文件名升序，不要整夹拖拽。
-- 合同（文件数、名字长度与前缀顺序、探针位置、不进 `all`）由 `python Tools/board_test_card/test_card_bigdir.py` 检查：只看文件名清单与注入的 sink，不写盘；探针时长一条需要 `lameenc`，未装时跳过。该测试在 FULL 与命中该目录的 CHANGED 内。
+- 复制 12000 个文件较慢，请用 `--copy-to`（先按文件名升序复制根目录文件，再复制子目录里的两首，子目录在第一首复制时创建）；手动复制必须保证创建顺序等于文件名升序且子目录最后创建，不要整夹拖拽。
+- 合同（文件数、名字长度与前缀顺序、探针位置、子目录名排在所有根文件之后且合计 12000、写出与复制顺序、不进 `all`）由 `python Tools/board_test_card/test_card_bigdir.py` 检查：只看文件名清单与注入的 sink（另有一条往临时目录写 12000 个极小占位文件，核对子目录落盘）；探针时长一条需要 `lameenc`，未装时跳过。该测试在 FULL 与命中该目录的 CHANGED 内。
 - 探针曲只用 `lameenc` 现有 CBR 输出，不带 Xing/Info 头，也不依赖 `--set seek`。
+
+### 长跑样本（`--set soak`）
+
+给 [#198](https://github.com/immorcoding/mp3_project/issues/198) 第 6 条的 2 h 纯播放长跑（清单 1 C1）用（#214）：三首都是 MPEG-1 L3 立体声 320 kbps、3:30（210 s），采样率依次为 32、44.1、48 kHz，按此顺序入库，末曲环回首曲。内容与 `card-01..03` 同一段和弦，文件名不同（`soak-1-32k-320k.mp3`、`soak-2-44k1-320k.mp3`、`soak-3-48k-320k.mp3`），字节数 8402400、8402024、8400960，以 `lameenc` 1.9.0 为准。不含在 `all` 内，只生成这三个文件。数据在 [card_soak.py](card_soak.py)。
+
+```powershell
+python Tools/board_test_card/make_card.py <输出目录> --set soak
+python Tools/board_test_card/make_card.py <输出目录> --copy-to I:\Soak --set soak
+```
+
+- 要让循环严格是这三首，库里就只能有它们：单独放卡上的 `Soak` 文件夹（同下文“三文件夹”，上板前改名成 `Music`）；与 `Combined` 混放时，循环会带上其余曲目，清单 3 R7.1 不成立。
+- 合同（三首、采样率与比特率及顺序、不进 `all`、不与其他子集重名）由 `python Tools/board_test_card/test_card_soak.py` 检查；读回 MPEG 帧头核对采样率与比特率、字节数、逐字节确定性需要 `lameenc`，未装时跳过，且属慢用例（CHANGED 带 `-SkipSlow` 时跳过，见上文“测试”）。
+
+### 三文件夹加长跑文件夹（一张卡）
+
+用户只有一张 SD 卡，所有验收样本一次装完：卡上建三个验收文件夹（综合、异常、大目录，各复制一次）加一个长跑文件夹 `Soak`（约 25 MB，不算额外负担），上板前把要用的那个改名成 `Music`，其余保持原名。固件曲库只扫 `Music/`（含子目录），没有 `Music` 就是空库（清单配置 D）。
+
+| 文件夹 | 内容 | 命令（`<输出目录>` 每条各用一个） | 用途 |
+|---|---|---|---|
+| `Combined`（综合） | `all`，再 `seek`，再 5 首以上真实歌曲 | `--copy-to I:\Combined --set all`，再 `--copy-to I:\Combined --set seek` | 大部分回归、跳转、交互项 |
+| `Abnormal`（异常） | 整库不可播 | `--copy-to I:\Abnormal --set all-unsupported` | 清单 1 F4（ALL_BAD）；清空 `Music` 测空库 |
+| `BigDir`（大目录） | `bigdir`：11998 首根目录文件 + 末尾子目录 `zz-tail-subdir/` 的 2 首 | `--copy-to I:\BigDir --set bigdir` | 清单 1 O 组、清单 3 R6.6 |
+| `Soak`（长跑） | `soak`：32、44.1、48 kHz 三首 320 kbps | `--copy-to I:\Soak --set soak` | 清单 1 C1、清单 3 R7.1（库里只有这三首才是三首循环） |
+
+- 各文件夹里的复制顺序就是 FAT 目录项顺序，也是入库顺序：按上文各表逐个复制，不要整夹拖拽；`--copy-to` 已按此顺序。
+- 改文件夹名只改它在上级目录里的那一个目录项，不动里面的目录项顺序（按 FAT 结构推断）。
+- 卡上留约 1 GiB 空闲：`bigdir` 约 260 MB 有效数据，12000 个文件按簇取整后占用更多，另有 `Combined`、`Soak` 和输出目录所在盘同样要有余量。
+- **这个做法还没在板上试过**，第一次上板时确认：改名后曲库顺序与文件夹创建时一致；`Combined` 里 `all` 的坏文件仍按目录顺序跳过；改名切换前后卡上的目录项顺序没变。
+- 某个子集想重新装：删掉那个文件夹后重建，再按顺序复制，不必格式化整张卡。

@@ -10,8 +10,8 @@
  *          只刷新行样式并记下播放列表下标，不打开文件。可见行数跟 Apply
  *          传入的 Length 走，至多 SERVICE_GUI_MAIN_QUEUE_MAX_ROWS；曲名是 GUI Task 传入的窗口文本。
  *          曲名与歌手显示曲目元数据，字体取 GUI 字体子模块（GUI-24），行高按其行高算出。
- *          窗口滑动时在已有 panel 上转 head 改字，不无限 create。不得包含
- *          storage_listbuffer.h。
+ *          窗口滑动时在已有 panel 上转 head 改字，不无限 create。不得包含 APP 的界面数据格子（ui_cell、
+ *          music_cells.h）。
   ******************************************************************************
   */
 
@@ -578,7 +578,7 @@ static void service_gui_main_queue_on_scroll(lv_event_t *e)
  * @note 窗口不满上限说明已到列表末尾；满上限时按可能还有处理。GUI Task 在末尾附近 request 的窗口
  *       起点会让可见首行之上只留回滑行，末窗因此不满，滚到列表末尾时下沿照常回弹。已知瞬态：
  *       曲库恰为上限行，或末尾所在窗口恰好满上限时，快速滑到末尾的那一下停在末行不回弹，
- *       等不满上限的末窗 READY 后才回弹（窗口槽不带曲目总数，Service 无从区分）。
+ *       等不满上限的末窗到达后才回弹（窗口结果不带曲目总数，Service 无从区分）。
  */
 static void service_gui_main_queue_note_edges(uint16_t window_index, uint16_t length)
 {
@@ -623,7 +623,7 @@ Service_StatusTypeDef service_gui_main_queue_prepare(void)
  * @retval SERVICE_INVALID_PARAM Length 超上限，或 Length 非 0 但 titles 为空。
  * @retval SERVICE_NOT_READY QueueTab 尚未创建。
  * @retval SERVICE_ERROR 补造行时 LVGL 未能创建对象。
- * @note 歌手按 artists[i] 填写，NULL 表与 NULL 项都显示空串。不包含 storage_listbuffer.h。已有行转 head，不无限 create。
+ * @note 歌手按 artists[i] 填写，NULL 表与 NULL 项都显示空串。不包含 APP 的界面数据格子。已有行转 head，不无限 create。
  */
 Service_StatusTypeDef service_gui_main_queue_apply(
     const char **titles,

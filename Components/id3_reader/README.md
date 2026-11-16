@@ -11,10 +11,10 @@
 
 ## 编译期依赖和运行路径
 
-Implementation 只依赖 ISO C 与本 Module 头文件。运行时由上层（Storage 的 `storage_catalog_text`）读文件并驱动 `Open`/`NextFrame` 循环，再对每个目标帧调用 `DecodeField`；GBK 表由上层经 Filesystem Service 的 `Service_Filesystem_GbkToUnicode()` 注入，使 FatFs 仍只在 Filesystem Service 内（ARC-12）。不读 ID3v1/v1.1，不持有状态之外的内存。
+Implementation 只依赖 ISO C 与本 Module 头文件。运行时由上层（Storage 的 `catalog_text`）读文件并驱动 `Open`/`NextFrame` 循环，再对每个目标帧调用 `DecodeField`；GBK 表由上层经 Filesystem Service 的 `Service_Filesystem_GbkToUnicode()` 注入，使 FatFs 仍只在 Filesystem Service 内（ARC-12）。不读 ID3v1/v1.1，不持有状态之外的内存。
 
 ## 约束
 
 - 块与输出由调用者持有；`NextFrame` 与 `Open` 会就地改写块（去同步还原），帧指针随块失效。
 - v2.4 帧大小严格按 syncsafe 解析，不实现 iTunes 非 syncsafe 回退；遇到时按非法帧结束。
-- 本 Module 没有独立测试工程：它只经 `Tests/storage_catalog` 的曲目文本函数接缝被测，见 [主机测试说明](../../Tests/storage_catalog/README.md)。主机 PASS 不证明 FatFs 实际读取、SD 耗时，也不证明板上 CP936 表已就绪。
+- 本 Module 没有独立测试工程：它只经 `Tests/music_catalog` 的曲目文本函数接缝被测，见 [主机测试说明](../../Tests/music_catalog/README.md)。主机 PASS 不证明 FatFs 实际读取、SD 耗时，也不证明板上 CP936 表已就绪。

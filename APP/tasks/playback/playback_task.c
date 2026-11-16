@@ -1,8 +1,8 @@
 /**
  * @file playback_task.c
- * @brief 播放任务外壳：把命令、Storage 音频流、播放模块与 Platform 音频事件接到纯 C 状态机（#71 B1、B2、K2、A5）。
+ * @brief 播放任务外壳：把命令、音频读取任务的音频流、播放模块与 Platform 音频事件接到纯 C 状态机（#71 B1、B2、K2、A5）。
  * @note  本文件不做主机测试，进板级验收；逻辑由 Tests/playback_task 覆盖状态机。
- *        不碰 FatFs/LVGL，不同步等待 Storage，发送不阻塞，没有运行期 malloc（B2）：命令 FIFO、状态信箱都是
+ *        不碰 FatFs/LVGL，不同步等待音频读取任务，发送不阻塞，没有运行期 malloc（B2）：命令 FIFO、状态信箱都是
  *        静态创建的 FreeRTOS 队列，位于 DTCM .bss。
  */
 
@@ -13,8 +13,8 @@
 
 #include "APP/tasks/playback/playback_contract.h"
 #include "APP/tasks/playback/playback_machine.h"
-#include "APP/tasks/storage/stream/storage_audio_block.h"
-#include "APP/tasks/storage/stream/storage_audio_stream.h"
+#include "APP/tasks/audio_reader/audio_reader_block.h"
+#include "APP/tasks/audio_reader/audio_reader_stream.h"
 #include "Adapters/cortex/cycle_counter/cortex_m7_cycle_counter_adapter.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/queue.h"
@@ -26,53 +26,53 @@
 _Static_assert((unsigned)PLAYBACK_NOTIFY_COUNT <= (unsigned)configTASK_NOTIFICATION_ARRAY_ENTRIES,
                "Playback Task notify slots exceed FreeRTOS array length");
 _Static_assert(configTICK_RATE_HZ == 1000U, "playback_task_now_ms() assumes a 1 kHz tick");
-_Static_assert((PLAYBACK_MACHINE_STALE_BLOCK_LIMIT == STORAGE_AUDIO_BLOCK_COUNT) &&
-                   (PLAYBACK_MACHINE_FEED_BLOCK_LIMIT == STORAGE_AUDIO_BLOCK_COUNT),
-               "状态机的块循环上限须与块池块数 STORAGE_AUDIO_BLOCK_COUNT 同值");
+_Static_assert((PLAYBACK_MACHINE_STALE_BLOCK_LIMIT == AUDIO_READER_BLOCK_COUNT) &&
+                   (PLAYBACK_MACHINE_FEED_BLOCK_LIMIT == AUDIO_READER_BLOCK_COUNT),
+               "状态机的块循环上限须与块池块数 AUDIO_READER_BLOCK_COUNT 同值");
 
 /**
- * @brief 断言状态机自带类型与 Storage 类型的某个字段一一对应（宽度与偏移都相同）。
- * @note  #78 决定：状态机携带 storage_audio_stream.h 类型的 1:1 副本，映射在本外壳里做；
+ * @brief 断言状态机自带类型与音频读取任务类型的某个字段一一对应（宽度与偏移都相同）。
+ * @note  #78 决定：状态机携带 audio_reader_stream.h 类型的 1:1 副本，映射在本外壳里做；
  *        任何一边增删字段、改变宽度或顺序，这里在编译期报错，提醒同步另一边。
  */
-#define PLAYBACK_TASK_ASSERT_FIELD(machine_type, storage_type, field)                                      \
-    _Static_assert(sizeof(((machine_type *)0)->field) == sizeof(((storage_type *)0)->field),               \
-                   #machine_type "." #field " width differs from " #storage_type);                          \
-    _Static_assert(offsetof(machine_type, field) == offsetof(storage_type, field),                         \
-                   #machine_type "." #field " offset differs from " #storage_type)
+#define PLAYBACK_TASK_ASSERT_FIELD(machine_type, reader_type, field)                                      \
+    _Static_assert(sizeof(((machine_type *)0)->field) == sizeof(((reader_type *)0)->field),               \
+                   #machine_type "." #field " width differs from " #reader_type);                          \
+    _Static_assert(offsetof(machine_type, field) == offsetof(reader_type, field),                         \
+                   #machine_type "." #field " offset differs from " #reader_type)
 
-_Static_assert(sizeof(Playback_MachineRequestTypeDef) == sizeof(Storage_AudioRequestTypeDef),
-               "Playback_MachineRequestTypeDef must mirror Storage_AudioRequestTypeDef");
-PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, Storage_AudioRequestTypeDef, StreamSeq);
-PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, Storage_AudioRequestTypeDef, Generation);
-PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, Storage_AudioRequestTypeDef, Position);
-PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, Storage_AudioRequestTypeDef, AudioOffset);
+_Static_assert(sizeof(Playback_MachineRequestTypeDef) == sizeof(AudioReader_RequestTypeDef),
+               "Playback_MachineRequestTypeDef must mirror AudioReader_RequestTypeDef");
+PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, AudioReader_RequestTypeDef, StreamSeq);
+PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, AudioReader_RequestTypeDef, Generation);
+PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, AudioReader_RequestTypeDef, Position);
+PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRequestTypeDef, AudioReader_RequestTypeDef, AudioOffset);
 
-_Static_assert(sizeof(Playback_MachineRecordTypeDef) == sizeof(Storage_AudioRecordTypeDef),
-               "Playback_MachineRecordTypeDef must mirror Storage_AudioRecordTypeDef");
-PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, Storage_AudioRecordTypeDef, StreamSeq);
-PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, Storage_AudioRecordTypeDef, OpenResult);
-PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, Storage_AudioRecordTypeDef, Generation);
-PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, Storage_AudioRecordTypeDef, TrackCount);
-PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, Storage_AudioRecordTypeDef, AudioBytes);
-PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, Storage_AudioRecordTypeDef, End);
+_Static_assert(sizeof(Playback_MachineRecordTypeDef) == sizeof(AudioReader_RecordTypeDef),
+               "Playback_MachineRecordTypeDef must mirror AudioReader_RecordTypeDef");
+PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, AudioReader_RecordTypeDef, StreamSeq);
+PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, AudioReader_RecordTypeDef, OpenResult);
+PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, AudioReader_RecordTypeDef, Generation);
+PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, AudioReader_RecordTypeDef, TrackCount);
+PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, AudioReader_RecordTypeDef, AudioBytes);
+PLAYBACK_TASK_ASSERT_FIELD(Playback_MachineRecordTypeDef, AudioReader_RecordTypeDef, End);
 
-_Static_assert(sizeof(Playback_MachineOpenResultTypeDef) == sizeof(Storage_AudioOpenResultTypeDef),
+_Static_assert(sizeof(Playback_MachineOpenResultTypeDef) == sizeof(AudioReader_OpenResultTypeDef),
                "open result enums must have the same width");
-_Static_assert((int)PLAYBACK_MACHINE_OPEN_PENDING == (int)STORAGE_AUDIO_OPEN_PENDING, "open result PENDING differs");
-_Static_assert((int)PLAYBACK_MACHINE_OPEN_OK == (int)STORAGE_AUDIO_OPEN_OK, "open result OK differs");
-_Static_assert((int)PLAYBACK_MACHINE_OPEN_NOT_READY == (int)STORAGE_AUDIO_OPEN_NOT_READY, "open result NOT_READY differs");
-_Static_assert((int)PLAYBACK_MACHINE_OPEN_STALE == (int)STORAGE_AUDIO_OPEN_STALE, "open result STALE differs");
-_Static_assert((int)PLAYBACK_MACHINE_OPEN_NO_TRACK == (int)STORAGE_AUDIO_OPEN_NO_TRACK, "open result NO_TRACK differs");
-_Static_assert((int)PLAYBACK_MACHINE_OPEN_BAD_FILE == (int)STORAGE_AUDIO_OPEN_BAD_FILE, "open result BAD_FILE differs");
-_Static_assert((int)PLAYBACK_MACHINE_OPEN_IO_ERROR == (int)STORAGE_AUDIO_OPEN_IO_ERROR, "open result IO_ERROR differs");
+_Static_assert((int)PLAYBACK_MACHINE_OPEN_PENDING == (int)AUDIO_READER_OPEN_PENDING, "open result PENDING differs");
+_Static_assert((int)PLAYBACK_MACHINE_OPEN_OK == (int)AUDIO_READER_OPEN_OK, "open result OK differs");
+_Static_assert((int)PLAYBACK_MACHINE_OPEN_NOT_READY == (int)AUDIO_READER_OPEN_NOT_READY, "open result NOT_READY differs");
+_Static_assert((int)PLAYBACK_MACHINE_OPEN_STALE == (int)AUDIO_READER_OPEN_STALE, "open result STALE differs");
+_Static_assert((int)PLAYBACK_MACHINE_OPEN_NO_TRACK == (int)AUDIO_READER_OPEN_NO_TRACK, "open result NO_TRACK differs");
+_Static_assert((int)PLAYBACK_MACHINE_OPEN_BAD_FILE == (int)AUDIO_READER_OPEN_BAD_FILE, "open result BAD_FILE differs");
+_Static_assert((int)PLAYBACK_MACHINE_OPEN_IO_ERROR == (int)AUDIO_READER_OPEN_IO_ERROR, "open result IO_ERROR differs");
 
-_Static_assert(sizeof(Playback_MachineEndTypeDef) == sizeof(Storage_AudioEndTypeDef),
+_Static_assert(sizeof(Playback_MachineEndTypeDef) == sizeof(AudioReader_EndTypeDef),
                "end enums must have the same width");
-_Static_assert((int)PLAYBACK_MACHINE_END_NONE == (int)STORAGE_AUDIO_END_NONE, "end NONE differs");
-_Static_assert((int)PLAYBACK_MACHINE_END_ENDED == (int)STORAGE_AUDIO_END_ENDED, "end ENDED differs");
-_Static_assert((int)PLAYBACK_MACHINE_END_READ_ERROR == (int)STORAGE_AUDIO_END_READ_ERROR, "end READ_ERROR differs");
-_Static_assert((int)PLAYBACK_MACHINE_END_CARD_REMOVED == (int)STORAGE_AUDIO_END_CARD_REMOVED, "end CARD_REMOVED differs");
+_Static_assert((int)PLAYBACK_MACHINE_END_NONE == (int)AUDIO_READER_END_NONE, "end NONE differs");
+_Static_assert((int)PLAYBACK_MACHINE_END_ENDED == (int)AUDIO_READER_END_ENDED, "end ENDED differs");
+_Static_assert((int)PLAYBACK_MACHINE_END_READ_ERROR == (int)AUDIO_READER_END_READ_ERROR, "end READ_ERROR differs");
+_Static_assert((int)PLAYBACK_MACHINE_END_CARD_REMOVED == (int)AUDIO_READER_END_CARD_REMOVED, "end CARD_REMOVED differs");
 
 static const char playback_task_log_tag[] = "PLAYBACK";
 
@@ -165,55 +165,55 @@ static void playback_task_publish_snapshot(const Playback_SnapshotTypeDef *snaps
 }
 
 /**
- * @brief 把状态机的请求写进 Storage 请求信箱。
+ * @brief 把状态机的请求写进音频读取任务的请求信箱。
  * @param[in] request 状态机请求；StreamSeq 为 0 表示无流。
- * @return Storage 已接收返回 true；信箱尚未初始化返回 false。
+ * @return 音频读取任务已接收返回 true；信箱尚未初始化返回 false。
  */
 static bool playback_task_write_request(const Playback_MachineRequestTypeDef *request)
 {
-    Storage_AudioRequestTypeDef storage_request;
+    AudioReader_RequestTypeDef reader_request;
 
-    storage_request.StreamSeq = request->StreamSeq;
-    storage_request.Generation = request->Generation;
-    storage_request.Position = request->Position;
-    storage_request.AudioOffset = request->AudioOffset;
-    return storage_audio_stream_request(&storage_request);
+    reader_request.StreamSeq = request->StreamSeq;
+    reader_request.Generation = request->Generation;
+    reader_request.Position = request->Position;
+    reader_request.AudioOffset = request->AudioOffset;
+    return audio_reader_stream_request(&reader_request);
 }
 
 /**
- * @brief 窥视 Storage 流记录信箱，不消费。
+ * @brief 窥视音频读取任务的流记录信箱，不消费。
  * @param[out] record 接收状态机视图的记录。
  * @return 信箱里已有记录返回 true。
  */
 static bool playback_task_read_record(Playback_MachineRecordTypeDef *record)
 {
-    Storage_AudioRecordTypeDef storage_record;
+    AudioReader_RecordTypeDef reader_record;
 
-    if (!storage_audio_stream_get_record(&storage_record))
+    if (!audio_reader_stream_get_record(&reader_record))
     {
         return false;
     }
 
-    record->StreamSeq = storage_record.StreamSeq;
-    record->OpenResult = (Playback_MachineOpenResultTypeDef)storage_record.OpenResult;
-    record->Generation = storage_record.Generation;
-    record->TrackCount = storage_record.TrackCount;
-    record->AudioBytes = storage_record.AudioBytes;
-    record->End = (Playback_MachineEndTypeDef)storage_record.End;
+    record->StreamSeq = reader_record.StreamSeq;
+    record->OpenResult = (Playback_MachineOpenResultTypeDef)reader_record.OpenResult;
+    record->Generation = reader_record.Generation;
+    record->TrackCount = reader_record.TrackCount;
+    record->AudioBytes = reader_record.AudioBytes;
+    record->End = (Playback_MachineEndTypeDef)reader_record.End;
     return true;
 }
 
 /**
- * @brief 把 Storage 块转成状态机的块视图。
- * @param[in] storage_block Storage 块。
+ * @brief 把音频块转成状态机的块视图。
+ * @param[in] reader_block 音频块。
  * @param[out] block 块视图；Handle 是块指针，数据直接指向块内容。
  */
-static void playback_task_fill_block(Storage_AudioBlockTypeDef *storage_block, Playback_MachineBlockTypeDef *block)
+static void playback_task_fill_block(AudioReader_BlockTypeDef *reader_block, Playback_MachineBlockTypeDef *block)
 {
-    block->Handle = storage_block;
-    block->StreamSeq = storage_block->StreamSeq;
-    block->ValidBytes = storage_block->ValidBytes;
-    block->Data = storage_block->Data;
+    block->Handle = reader_block;
+    block->StreamSeq = reader_block->StreamSeq;
+    block->ValidBytes = reader_block->ValidBytes;
+    block->Data = reader_block->Data;
 }
 
 /**
@@ -223,13 +223,13 @@ static void playback_task_fill_block(Storage_AudioBlockTypeDef *storage_block, P
  */
 static bool playback_task_peek_ready_block(Playback_MachineBlockTypeDef *block)
 {
-    Storage_AudioBlockTypeDef *storage_block = storage_audio_block_peek_ready();
+    AudioReader_BlockTypeDef *reader_block = audio_reader_block_peek_ready();
 
-    if (storage_block == NULL)
+    if (reader_block == NULL)
     {
         return false;
     }
-    playback_task_fill_block(storage_block, block);
+    playback_task_fill_block(reader_block, block);
     return true;
 }
 
@@ -240,23 +240,23 @@ static bool playback_task_peek_ready_block(Playback_MachineBlockTypeDef *block)
  */
 static bool playback_task_take_ready_block(Playback_MachineBlockTypeDef *block)
 {
-    Storage_AudioBlockTypeDef *storage_block = storage_audio_block_take_ready();
+    AudioReader_BlockTypeDef *reader_block = audio_reader_block_take_ready();
 
-    if (storage_block == NULL)
+    if (reader_block == NULL)
     {
         return false;
     }
-    playback_task_fill_block(storage_block, block);
+    playback_task_fill_block(reader_block, block);
     return true;
 }
 
 /**
- * @brief 把块放回空闲队列并置 Storage 的“块已归还”FLAG。
+ * @brief 把块放回空闲队列并叫醒音频读取任务（“块已归还”）。
  * @param[in] block 状态机持有的块视图。
  */
 static void playback_task_return_block(const Playback_MachineBlockTypeDef *block)
 {
-    (void)storage_audio_stream_return_block((Storage_AudioBlockTypeDef *)block->Handle);
+    (void)audio_reader_stream_return_block((AudioReader_BlockTypeDef *)block->Handle);
 }
 
 /**
@@ -298,9 +298,9 @@ static uint32_t playback_task_cycles_to_us(uint32_t cycles)
     return (frequency_hz == 0U) ? 0U : (uint32_t)(((uint64_t)cycles * 1000000ULL) / frequency_hz);
 }
 
-/** @brief 状态机的全部外部依赖：存储窗口经本文件适配，播放模块直接填 Service_Playback_* 函数指针。 */
+/** @brief 状态机的全部外部依赖：音频读取任务经本文件适配，播放模块直接填 Service_Playback_* 函数指针。 */
 static const Playback_MachineOpsTypeDef playback_task_ops = {
-    .Storage = {
+    .Stream = {
         .WriteRequest = playback_task_write_request,
         .ReadRecord = playback_task_read_record,
         .PeekReadyBlock = playback_task_peek_ready_block,
@@ -326,13 +326,23 @@ static const Playback_MachineOpsTypeDef playback_task_ops = {
 };
 
 /**
- * @brief Storage 音频流的唤醒回调：把原因映射成本任务的 FLAG。
- * @param[in] reason 唤醒原因。
- * @note  在 Storage Task 上下文调用，不得阻塞。
+ * @brief 读开机以来的欠载累计次数（DIAG-6）；任意任务可调用。
+ * @return 累计次数；播放任务尚未启动时为 0。
+ * @note  写者只有播放任务；32 位对齐读取不撕裂，Monitor 只读取窗口差值用。
  */
-static void playback_task_storage_wake(Storage_AudioWakeTypeDef reason)
+uint32_t playback_task_get_underrun_total(void)
 {
-    playback_task_notify((reason == STORAGE_AUDIO_WAKE_STREAM_RECORD) ? PLAYBACK_NOTIFY_FLAG_STREAM_RECORD
+    return playback_machine_underrun_total(&playback_task_machine);
+}
+
+/**
+ * @brief 音频读取任务的唤醒回调：把原因映射成本任务的 FLAG。
+ * @param[in] reason 唤醒原因。
+ * @note  在音频读取任务上下文调用，不得阻塞。
+ */
+static void playback_task_audio_reader_wake(AudioReader_WakeTypeDef reason)
+{
+    playback_task_notify((reason == AUDIO_READER_WAKE_STREAM_RECORD) ? PLAYBACK_NOTIFY_FLAG_STREAM_RECORD
                                                                       : PLAYBACK_NOTIFY_FLAG_BLOCK_READY);
 }
 
@@ -409,10 +419,10 @@ static uint32_t playback_task_drain_commands(Playback_CommandTypeDef *commands)
 /**
  * @brief 播放任务入口：初始化后按事件唤醒，每次唤醒调用一次状态机（B1）。
  * @param[in] handle 当前未使用，保留为 FreeRTOS TaskFunction_t 规定的参数。
- * @note  初始化顺序：命令 FIFO 与状态信箱 → 播放模块 → 注册 Storage 与 Platform 的唤醒回调 → 发布任务句柄。
+ * @note  初始化顺序：命令 FIFO 与状态信箱 → 播放模块 → 注册音频读取任务与 Platform 的唤醒回调 → 发布任务句柄。
  *        任一步失败则记日志并删除本任务，快照保持全零；任务句柄未发布（或已撤回）时 playback_command_send()
- *        返回 PLAYBACK_QUEUE_FULL。须在 storage_task() 完成 storage_audio_stream_init() 之后收到第一条命令
- *        （app_tasks.c 先于本任务创建 Storage Task，它在首次阻塞前即完成该初始化）。
+ *        返回 PLAYBACK_QUEUE_FULL。请求信箱、流记录信箱与块池由 Boot 任务在创建本任务之前初始化
+ *        （app_tasks.c 的 audio_reader_boot_init()），所以本任务一启动就可以写请求信箱。
  */
 void playback_task(void *handle)
 {
@@ -435,12 +445,12 @@ void playback_task(void *handle)
 
     playback_machine_init(&playback_task_machine, &playback_task_ops);
     playback_task_handle = xTaskGetCurrentTaskHandle();
-    storage_audio_stream_set_wake_callback(playback_task_storage_wake);
+    audio_reader_stream_set_wake_callback(playback_task_audio_reader_wake);
 
     if (Platform_Audio_SetEventCallback(playback_task_audio_event, NULL) != PLATFORM_OK)
     {
         (void)Service_Log_Post(SERVICE_LOG_LEVEL_ERROR, playback_task_log_tag, "Audio callback registration failed.");
-        storage_audio_stream_set_wake_callback(NULL);
+        audio_reader_stream_set_wake_callback(NULL);
         playback_task_handle = NULL;
         vTaskDelete(NULL);
     }

@@ -20,8 +20,8 @@
  */
 static void finish_stream_input(uint32_t block_bytes)
 {
-    fake_storage_enqueue_block(world_current_seq(), block_bytes, 1U);
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    fake_audio_reader_enqueue_block(world_current_seq(), block_bytes, 1U);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
     world_wake();
 }
 
@@ -33,8 +33,8 @@ static void test_finish_input_waits_until_all_blocks_are_copied(void)
     world_reset();
     world_start_playing(GENERATION, TRACKS);
 
-    fake_storage_enqueue_block(world_current_seq(), 64U, 0U);   /* 大于窗口，会分几次交入。 */
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    fake_audio_reader_enqueue_block(world_current_seq(), 64U, 0U);   /* 大于窗口，会分几次交入。 */
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
     world_wake();
     assert(!fake_player_input_finished());
     assert(call_log_count_of(CALL_FINISH_INPUT) == 0U);
@@ -46,7 +46,7 @@ static void test_finish_input_waits_until_all_blocks_are_copied(void)
 
     assert(fake_player_input_finished());
     assert(call_log_count_of(CALL_FINISH_INPUT) == 1U);
-    assert(fake_storage_outstanding() == 0U);
+    assert(fake_audio_reader_outstanding() == 0U);
 }
 
 /**
@@ -90,9 +90,9 @@ static void test_stream_end_advances_to_next_track_without_stopping(void)
     assert(snapshot.PositionMs == 0U);
     assert(snapshot.DurationMs == 0U);
     assert(snapshot.StopCount == 0U);
-    assert(fake_storage_last_request().StreamSeq > old_seq);
-    assert(fake_storage_last_request().Generation == GENERATION);
-    assert(fake_storage_last_request().Position == 1U);
+    assert(fake_audio_reader_last_request().StreamSeq > old_seq);
+    assert(fake_audio_reader_last_request().Generation == GENERATION);
+    assert(fake_audio_reader_last_request().Position == 1U);
 }
 
 /**
@@ -112,7 +112,7 @@ static void test_last_track_wraps_to_first_after_stream_end(void)
     assert(world_snapshot().State == PLAYBACK_STATE_PLAYING);
     assert(world_snapshot().Index == 0U);
     assert(world_snapshot().StopCount == 0U);
-    assert(fake_storage_last_request().Position == 0U);
+    assert(fake_audio_reader_last_request().Position == 0U);
 }
 
 /**
@@ -126,13 +126,13 @@ static void test_stream_end_advances_only_once(void)
     fake_player_release_tail();
     world_wake();
     assert(world_snapshot().Index == 1U);
-    uint32_t requests = fake_storage_request_count();
+    uint32_t requests = fake_audio_reader_request_count();
 
     world_wake();
     world_wake();
 
     assert(world_snapshot().Index == 1U);
-    assert(fake_storage_request_count() == requests);
+    assert(fake_audio_reader_request_count() == requests);
 }
 
 /**
@@ -163,9 +163,9 @@ static void test_short_file_fully_read_before_first_wake_is_processed_in_order(v
 {
     world_reset();
     world_send(PLAYBACK_COMMAND_TOGGLE);
-    fake_storage_open_ok(world_current_seq(), GENERATION, TRACKS, 25U);
-    fake_storage_enqueue_block(world_current_seq(), 25U, 0U);
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    fake_audio_reader_open_ok(world_current_seq(), GENERATION, TRACKS, 25U);
+    fake_audio_reader_enqueue_block(world_current_seq(), 25U, 0U);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
 
     world_wake();
 
@@ -175,7 +175,7 @@ static void test_short_file_fully_read_before_first_wake_is_processed_in_order(v
     assert(fake_player_input_finished());
     assert(world_snapshot().DurationMs == 180000U);
     assert(world_snapshot().PositionMs > 0U);
-    assert(fake_storage_outstanding() == 0U);
+    assert(fake_audio_reader_outstanding() == 0U);
 
     fake_player_release_tail();
     world_wake();
@@ -196,7 +196,7 @@ static void test_position_never_decreases_within_a_track_and_resets_on_switch(vo
 
     for (uint32_t i = 0U; i < 8U; i++)
     {
-        fake_storage_enqueue_block(world_current_seq(), 20U, 0U);
+        fake_audio_reader_enqueue_block(world_current_seq(), 20U, 0U);
         world_wake();
         assert(world_snapshot().PositionMs >= last);
         last = world_snapshot().PositionMs;

@@ -35,6 +35,23 @@ static bool platform_flash_ftl_active;
 static bool platform_flash_raw_failed;
 static bool platform_flash_needs_wait;
 static FlashFTL_StatusTypeDef platform_flash_ftl_result = FLASH_FTL_NOT_READY;
+/* 失败诊断（#220）：只由唯一普通执行上下文写，GetVolumeDiagnostics 读；不参与任何状态判断，不改变产品行为。 */
+static Platform_Flash_FailedOperationTypeDef platform_flash_active_operation;
+static Platform_Flash_FailureTypeDef platform_flash_last_failure;
+static Platform_Flash_FailedOperationTypeDef platform_flash_last_failure_operation;
+static uint32_t platform_flash_last_failure_raw;
+static uint32_t platform_flash_last_failure_device;
+static uint32_t platform_flash_last_failure_port;
+static uint32_t platform_flash_failure_count;
+static Platform_Flash_FailureTypeDef platform_flash_last_rejection;
+static uint32_t platform_flash_last_failure_qspi_error;
+static uint32_t platform_flash_last_failure_qspi_state;
+static uint32_t platform_flash_last_failure_qspi_status;
+/* QSPI 失败快照的暂存：本次请求里第一次看到芯片驱动或 HAL 报告失败时取，请求结束记失败时转入 last_*；新请求开始清除。 */
+static uint32_t platform_flash_pending_qspi_error;
+static uint32_t platform_flash_pending_qspi_state;
+static uint32_t platform_flash_pending_qspi_status;
+static bool platform_flash_pending_qspi_valid;
 /* 按物理数据块上限分配表，不跨 Module 引用 FTL 私有预留比例。 */
 static uint32_t platform_flash_map[PLATFORM_FLASH_FTL_DATA_BLOCKS]
     __attribute__((section(".flash_ftl_tables"), aligned(32)));
@@ -730,6 +747,105 @@ Platform_StatusTypeDef Platform_Flash_StartReadArray(
 }
 
 /**
+ * @brief 把 FTL 的非 OK 结果归一化成诊断分类。
+ * @param[in] result FTL 返回的状态。
+ * @return 诊断分类；OK、RUNNING、WAIT 不是失败，返回 NONE。
+ */
+static Platform_Flash_FailureTypeDef platform_flash_map_failure(FlashFTL_StatusTypeDef result)
+{
+    switch (result)
+    {
+        case FLASH_FTL_OK:
+        case FLASH_FTL_RUNNING:
+        case FLASH_FTL_WAIT:
+            return PLATFORM_FLASH_FAILURE_NONE;
+        case FLASH_FTL_INVALID_PARAM:
+            return PLATFORM_FLASH_FAILURE_INVALID_PARAM;
+        case FLASH_FTL_NOT_READY:
+            return PLATFORM_FLASH_FAILURE_NOT_READY;
+        case FLASH_FTL_NO_SPACE:
+            return PLATFORM_FLASH_FAILURE_NO_SPACE;
+        case FLASH_FTL_IO_ERROR:
+            return PLATFORM_FLASH_FAILURE_IO_ERROR;
+        case FLASH_FTL_CORRUPT:
+            return PLATFORM_FLASH_FAILURE_CORRUPT;
+        case FLASH_FTL_INCOMPATIBLE:
+            return PLATFORM_FLASH_FAILURE_INCOMPATIBLE;
+        case FLASH_FTL_INCOMPLETE:
+            return PLATFORM_FLASH_FAILURE_INCOMPLETE;
+        case FLASH_FTL_UNFORMATTED:
+            return PLATFORM_FLASH_FAILURE_UNFORMATTED;
+        default:
+            return PLATFORM_FLASH_FAILURE_OTHER;
+    }
+}
+
+/**
+ * @brief 把此刻 QSPI 控制器的 HAL 句柄和状态寄存器抄进暂存（只用于诊断）。
+ * @note  读 `hqspi.ErrorCode`、`hqspi.State` 和 `QUADSPI->SR`，都是只读访问，不碰 FIFO、不清标志；
+ *        Platform 借用 CubeMX 的 `hqspi`，三个值始终取得到。仅唯一普通执行上下文调用。
+ */
+static void platform_flash_capture_qspi_snapshot(void)
+{
+    platform_flash_pending_qspi_error = (uint32_t)hqspi.ErrorCode;
+    platform_flash_pending_qspi_state = (uint32_t)hqspi.State;
+    platform_flash_pending_qspi_status = (uint32_t)QUADSPI->SR;
+    platform_flash_pending_qspi_valid = true;
+}
+
+/**
+ * @brief 本次请求里第一次看到芯片驱动或 HAL 已报告失败时，立刻取 QSPI 快照（还没开始静默）。
+ * @note  每次推进 FTL 之后调用，开销是几次比较：W25Qxx Device 进入 ERROR、HAL 句柄进入 ERROR 或带着错误码，
+ *        都说明刚才那一步的底层访问失败了。FTL 在下一次推进才开始静默，静默会清掉 TEF/TCF/SMF/TOF 标志。
+ *        已取过就不再取，保留第一次的值。
+ */
+static void platform_flash_note_qspi_fault(void)
+{
+    if (platform_flash_pending_qspi_valid)
+    {
+        return;
+    }
+    if ((hplatform_flash.State == W25QXX_STATE_ERROR) ||
+        (hqspi.State == HAL_QSPI_STATE_ERROR) ||
+        (hqspi.ErrorCode != HAL_QSPI_ERROR_NONE))
+    {
+        platform_flash_capture_qspi_snapshot();
+    }
+}
+
+/**
+ * @brief 记下一次以非 OK 收尾的 FTL 请求：结果、请求类别、原始访问结果和芯片后端快照（只用于诊断）。
+ * @param[in] result FTL 的最终结果，不应是 OK、RUNNING 或 WAIT。
+ * @note  不参与任何状态判断，不改变产品行为；失败后 FTL 已不就绪，下一次请求会覆盖 FTL 自己的“最近结果”，
+ *        所以在这里单独保存。仅唯一普通执行上下文调用。
+ */
+static void platform_flash_record_failure(FlashFTL_StatusTypeDef result)
+{
+    FlashFTL_DiagnosticsTypeDef raw;
+
+    platform_flash_last_failure = platform_flash_map_failure(result);
+    platform_flash_last_failure_operation = platform_flash_active_operation;
+    platform_flash_last_failure_raw = (FlashFTL_GetDiagnostics(&platform_flash_ftl, &raw) == FLASH_FTL_OK)
+                                          ? (uint32_t)raw.LastRawStatus
+                                          : UINT32_MAX;
+    platform_flash_last_failure_device = hplatform_flash.ErrorCode;
+    platform_flash_last_failure_port = hplatform_flash.LastBusStatus;
+    if (!platform_flash_pending_qspi_valid)
+    {
+        /* 第一次失败没在 ProcessOperation 里被看到（例如收尾时才失败）：只能取此刻的值，静默可能已清掉部分标志。 */
+        platform_flash_capture_qspi_snapshot();
+    }
+    platform_flash_last_failure_qspi_error = platform_flash_pending_qspi_error;
+    platform_flash_last_failure_qspi_state = platform_flash_pending_qspi_state;
+    platform_flash_last_failure_qspi_status = platform_flash_pending_qspi_status;
+    platform_flash_pending_qspi_valid = false;
+    if (platform_flash_failure_count < UINT32_MAX)
+    {
+        platform_flash_failure_count++;
+    }
+}
+
+/**
  * @brief 在普通上下文推进当前 FTL 请求或原始诊断，并完成安全收尾。
  * @retval PLATFORM_OK 整个请求成功完成，先前开启的映射模式也已恢复。
  * @retval PLATFORM_BUSY 仍需软件推进、等待硬件或继续故障收尾。
@@ -750,12 +866,17 @@ Platform_StatusTypeDef Platform_Flash_ProcessOperation(void)
     {
         FlashFTL_StatusTypeDef result = FlashFTL_Process(&platform_flash_ftl);
         platform_flash_ftl_result = result;
+        platform_flash_note_qspi_fault();
         platform_flash_needs_wait = result == FLASH_FTL_WAIT;
         if (result == FLASH_FTL_RUNNING || result == FLASH_FTL_WAIT)
         {
             return PLATFORM_BUSY;
         }
         status = result == FLASH_FTL_OK ? PLATFORM_OK : PLATFORM_FLASH_ERROR;
+        if (result != FLASH_FTL_OK)
+        {
+            platform_flash_record_failure(result);
+        }
         platform_flash_ftl_active = false;
     }
     else
@@ -789,6 +910,7 @@ Platform_StatusTypeDef Platform_Flash_ProcessOperation(void)
         {
             /* 数据可能已提交，但板级模式恢复失败仍须关闭卷入口，等待显式恢复。 */
             platform_flash_ftl_result = FLASH_FTL_IO_ERROR;
+            platform_flash_record_failure(FLASH_FTL_IO_ERROR);
             status = PLATFORM_FLASH_ERROR;
         }
     }
@@ -1143,9 +1265,15 @@ static Platform_StatusTypeDef platform_flash_start_volume(uint32_t operation,
     }
     if (result != FLASH_FTL_OK)
     {
+        if (result != FLASH_FTL_BUSY)
+        {
+            platform_flash_last_rejection = platform_flash_map_failure(result);
+        }
         (void)platform_flash_restore_memory_mapped_mode_if_needed(restore);
         return result == FLASH_FTL_BUSY ? PLATFORM_BUSY : PLATFORM_FLASH_ERROR;
     }
+    platform_flash_active_operation = (Platform_Flash_FailedOperationTypeDef)(operation + 1U);
+    platform_flash_pending_qspi_valid = false;
     platform_flash_ftl_result = FLASH_FTL_RUNNING;
     platform_flash_ftl_active = true;
     platform_flash_raw_failed = false;
@@ -1304,7 +1432,8 @@ Platform_StatusTypeDef Platform_Flash_GetVolumeInfo(Platform_Flash_VolumeInfoTyp
 
 /**
  * @brief 查询逻辑卷和芯片后端诊断快照，不输出日志。
- * @param diagnostics 接收格式/代次、块计数及归一化芯片错误/端口状态。
+ * @param diagnostics 接收格式/代次、块计数、归一化芯片错误/端口状态，以及 Platform 记下的最近一次 FTL 失败（结果、请求类别、原始访问结果、
+ *        芯片后端快照、失败次数、最近一次受理拒绝）。FTL 不就绪（失败之后）时有效/失效块数读作零。
  * @retval PLATFORM_OK 已复制快照。
  * @retval PLATFORM_FLASH_ERROR 未绑定或输出指针无效。
  * @note 仅唯一普通执行上下文调用。SessionErases 是数据块累计擦除数，
@@ -1326,7 +1455,17 @@ Platform_StatusTypeDef Platform_Flash_GetVolumeDiagnostics(
                                                              raw.StaleBlocks,
                                                              raw.SessionErases,
                                                              hplatform_flash.ErrorCode,
-                                                             hplatform_flash.LastBusStatus};
+                                                             hplatform_flash.LastBusStatus,
+                                                             platform_flash_last_failure,
+                                                             platform_flash_last_failure_operation,
+                                                             platform_flash_last_failure_raw,
+                                                             platform_flash_last_failure_device,
+                                                             platform_flash_last_failure_port,
+                                                             platform_flash_failure_count,
+                                                             platform_flash_last_rejection,
+                                                             platform_flash_last_failure_qspi_error,
+                                                             platform_flash_last_failure_qspi_state,
+                                                             platform_flash_last_failure_qspi_status};
     return PLATFORM_OK;
 }
 

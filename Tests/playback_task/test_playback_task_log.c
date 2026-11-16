@@ -158,8 +158,8 @@ static void test_stream_end_logs_finished_then_auto_advance(void)
 
     world_reset();
     world_start_playing(GENERATION, TRACKS);
-    fake_storage_enqueue_block(world_current_seq(), 20U, 1U);
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    fake_audio_reader_enqueue_block(world_current_seq(), 20U, 1U);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
     world_wake();
     fake_player_release_tail();
     world_wake();
@@ -174,8 +174,8 @@ static void test_auto_advance_failure_does_not_log_auto(void)
 {
     world_reset();
     world_start_playing(GENERATION, TRACKS);
-    fake_storage_enqueue_block(world_current_seq(), 20U, 1U);
-    fake_storage_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
+    fake_audio_reader_enqueue_block(world_current_seq(), 20U, 1U);
+    fake_audio_reader_set_end(world_current_seq(), PLAYBACK_MACHINE_END_ENDED);
     world_wake();
     fake_player_release_tail();
     fake_player_fail_next_stop();

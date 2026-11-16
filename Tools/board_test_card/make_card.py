@@ -40,6 +40,7 @@ import card_glyphs  # noqa: E402
 import card_seek  # noqa: E402
 import card_xing  # noqa: E402
 import card_bigdir  # noqa: E402
+import card_soak  # noqa: E402
 
 # 整数 Hz 和弦：1 s 周期，包络 3 Hz 也是整周期，首尾采样都为 0。
 PROGRESSION = [
@@ -83,12 +84,14 @@ SETS = {
     "all-unsupported": ["bad-zero.mp3", "card-06-mpeg2-22k.mp3", "bad-empty.mp3"],
     # 曲目显示名样本（#117）：内容都是同一段可播音频，只有文件名不同；不属于 all，需单独复制进卡的 Music/ 目录（--copy-to 指向 Music）。
     "names": [sample.filename for sample in card_names.NAME_SAMPLES],
-    # ID3 标签样本（#142）：六类标签形态，音频同 names；不属于 all，换空卡单独复制进 Music/。
+    # ID3 标签样本（#142）：六类标签形态，音频同 names；不属于 all，单独放一个文件夹（上板前改名成 Music）。
     "tags": [sample.filename for sample in card_tags.TAG_SAMPLES],
-    # 曲目元数据字形样本（#150）：中文、西文扩展字符、多值与超长歌手，音频同 names；不属于 all，换空卡单独复制进 Music/。
+    # 曲目元数据字形样本（#150）：中文、西文扩展字符、多值与超长歌手，音频同 names；不属于 all，单独放一个文件夹（上板前改名成 Music）。
     "glyphs": [sample.filename for sample in card_glyphs.GLYPH_SAMPLES],
-    # 跳转样本（#174）：44.1 kHz、3:30 的刻度音，四种头部；不属于 all，换空卡单独复制进 Music/。
+    # 跳转样本（#174）：44.1 kHz、3:30 的刻度音，四种头部；不属于 all，单独放一个文件夹（上板前改名成 Music）。
     "seek": [sample.filename for sample in card_seek.SEEK_SAMPLES],
+    # 长跑样本（#214）：32、44.1、48 kHz 三首 320 kbps，供 2 h 长跑；不属于 all，单独放一个文件夹。
+    "soak": [sample.filename for sample in card_soak.SOAK_SAMPLES],
     # 主机精度夹具（#174）：不上板、不复制进卡；输出目录直接指向 Tests/playback_service/fixtures/xing。
     "host-fixtures": [name for name, _, _, _ in HOST_FIXTURES],
 }
@@ -156,6 +159,13 @@ def make_seek():
     return out
 
 
+def make_soak():
+    """--set soak：{文件名: 字节}（确定性，只含这三首）。"""
+    return {sample.filename: gf.encode(tile_pcm(sample.rate, 2, card_soak.DURATION_SECONDS), sample.rate, 2,
+                                       bitrate=sample.bitrate)
+            for sample in card_soak.SOAK_SAMPLES}
+
+
 def make_host_fixtures():
     """--set host-fixtures：{文件名: 字节}（确定性，只含这四个）。CBR 两个与 VBR 两个各共用同一段音频码流。"""
     pcm = tile_pcm(44100, 2, HOST_FIXTURE_SECONDS)
@@ -177,19 +187,25 @@ def make_bigdir_audio():
     return small, probe
 
 
-def write_bigdir(output_dir):
-    small, probe = make_bigdir_audio()
+def write_bigdir(output_dir, audio=None):
+    """写出大目录卡（含末尾子目录）；audio 为 (小 MP3, 探针曲) 的字节，缺省现场编码。"""
+    small, probe = audio or make_bigdir_audio()
 
-    def sink(name, payload):
-        with open(os.path.join(output_dir, name), "wb") as handle:
+    def sink(path, payload):
+        target = os.path.join(output_dir, *path.split("/"))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "wb") as handle:
             handle.write(payload)
 
     card_bigdir.write_set(sink, small, probe)
 
 
 def copy_in_order(src_dir, dst_dir, names):
+    """names 可含 / 分隔的子目录路径；子目录在其第一个文件复制时创建。"""
     for name in names:
-        shutil.copyfile(os.path.join(src_dir, name), os.path.join(dst_dir, name))
+        target = os.path.join(dst_dir, *name.split("/"))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copyfile(os.path.join(src_dir, *name.split("/")), target)
         print("已复制", name)
 
 
@@ -206,7 +222,7 @@ def _file_lines(data, names, title):
 
 
 def _names_lines(data):
-    lines = ["\n曲目显示名样本（--set names；内容相同、只改文件名；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）："]
+    lines = ["\n曲目显示名样本（--set names；内容相同、只改文件名；不含在 all 内；复制进卡上的一个空文件夹（上板前改名成 Music），按此顺序，单独放一个文件夹）："]
     for index, sample in enumerate(card_names.NAME_SAMPLES, 1):
         lines.append("%d. %s  期望显示名 %r  %s%s" % (index, sample.filename, sample.display,
                      "[需滚动] " if sample.scroll else "", sample.note))
@@ -222,13 +238,14 @@ def _tag_lines(data, heading, samples, width):
     return lines
 
 
-_TAGS_HEADING = "\nID3 标签样本（--set tags；音频同上、只改标签；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）："
-_GLYPHS_HEADING = "\n曲目元数据字形样本（--set glyphs；音频同上、只改标签；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）："
-_SEEK_HEADING = "\n跳转样本（--set seek；44.1 kHz、3:30 刻度音；不含在 all 内；复制进卡的 Music/ 目录，按此顺序，建议用另一张空卡）："
+_TAGS_HEADING = "\nID3 标签样本（--set tags；音频同上、只改标签；不含在 all 内；复制进卡上的一个空文件夹（上板前改名成 Music），按此顺序，单独放一个文件夹）："
+_GLYPHS_HEADING = "\n曲目元数据字形样本（--set glyphs；音频同上、只改标签；不含在 all 内；复制进卡上的一个空文件夹（上板前改名成 Music），按此顺序，单独放一个文件夹）："
+_SEEK_HEADING = "\n跳转样本（--set seek；44.1 kHz、3:30 刻度音；不含在 all 内；复制进卡上的一个空文件夹（上板前改名成 Music），按此顺序，单独放一个文件夹）："
+_SOAK_HEADING = "\n长跑样本（--set soak；32、44.1、48 kHz 各一首 320 kbps，3:30；不含在 all 内；放进卡上的一个文件夹，按此顺序）："
 _HOST_HEADING = "\n主机精度夹具（--set host-fixtures；不上板；输出目录指向 Tests/playback_service/fixtures/xing）："
 _NOTICE = [
     "\n注意：FAT 目录顺序取决于创建顺序，复制到卡上必须按此顺序逐个复制，不要整夹拖拽；",
-    "测“首个文件是坏文件”时 bad-zero.mp3 必须最先复制到空卡（或先格式化）。",
+    "测“首个文件是坏文件”时 bad-zero.mp3 必须最先复制到空文件夹。",
 ]
 
 
@@ -243,18 +260,22 @@ def render_report(data, set_key=None):
         lines += _tag_lines(data, _TAGS_HEADING, card_tags.TAG_SAMPLES, 24)
         lines += _tag_lines(data, _GLYPHS_HEADING, card_glyphs.GLYPH_SAMPLES, 26)
         lines += render_report(data, "seek")[:len(card_seek.SEEK_SAMPLES) + 1]
+        lines += render_report(data, "soak")[:len(card_soak.SOAK_SAMPLES) + 1]
         lines += render_report(data, "host-fixtures")[:len(HOST_FIXTURES) + 1]
         lines.append("\n子集（均按上面的相对顺序复制）：")
         for key, names in SETS.items():
             lines.append("  --set %-16s %s" % (key, ", ".join(names)))
-        lines.append("  --set %-16s %d 首同文件夹，探针曲在第 %s 首（换空卡复制，详见 README）" % (
-                     "bigdir", card_bigdir.COUNT, "、".join(str(i) for i in card_bigdir.PROBE_INDEXES)))
+        lines.append("  --set %-16s %d 首（根目录 %d 首 + 末尾子目录 %d 首），探针曲在第 %s 首（放进卡上的一个文件夹，详见 README）" % (
+                     "bigdir", card_bigdir.COUNT, card_bigdir.COUNT - card_bigdir.TAIL_COUNT, card_bigdir.TAIL_COUNT, "、".join(str(i) for i in card_bigdir.PROBE_INDEXES)))
         return lines + _NOTICE
 
     names = SETS[set_key]
     if set_key == "seek":
         lines = [_SEEK_HEADING] + ["%d. %-26s %9d 字节  %s" % (i, sample.filename, len(data[sample.filename]), sample.note)
                                    for i, sample in enumerate(card_seek.SEEK_SAMPLES, 1)]
+    elif set_key == "soak":
+        lines = [_SOAK_HEADING] + ["%d. %-24s %9d 字节  %s" % (i, sample.filename, len(data[sample.filename]), sample.note)
+                                   for i, sample in enumerate(card_soak.SOAK_SAMPLES, 1)]
     elif set_key == "host-fixtures":
         lines = [_HOST_HEADING] + ["%d. %-16s %7d 字节  %s" % (i, name, len(data[name]), note)
                                    for i, (name, _, _, note) in enumerate(HOST_FIXTURES, 1)]
@@ -282,10 +303,10 @@ def main():
     if args.set == "bigdir":
         write_bigdir(args.output_dir)
         data = {}
-        names = card_bigdir.file_names()
+        names = card_bigdir.relative_paths()
     else:
-        # seek / host-fixtures 只生成各自的文件；其余沿用全套（含 names/tags/glyphs）。
-        data = {"seek": make_seek, "host-fixtures": make_host_fixtures}.get(args.set, make_all)()
+        # seek / soak / host-fixtures 只生成各自的文件；其余沿用全套（含 names/tags/glyphs）。
+        data = {"seek": make_seek, "soak": make_soak, "host-fixtures": make_host_fixtures}.get(args.set, make_all)()
         for name in data:
             with open(os.path.join(args.output_dir, name), "wb") as handle:
                 handle.write(data[name])

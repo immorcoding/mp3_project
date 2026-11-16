@@ -1100,9 +1100,22 @@ W25Qxx_StatusTypeDef W25Qxx_SectorEraseStart(
  *       中止 Flash 的内部写/擦），再把 Device 置 ERROR。本函数不调用延时函数、
  *       不循环等待。未来 Flash FTL 的后台任务必须等待完成事件；MSC 路径绝不能
  *       自行阻塞 tPP、tSE 或 DMA 完成。
+ * @note 读取顺序（#220）：每次调用先读一次墙钟（`GetTickMs`），再读一次 Adapter 锁存的完成状态，
+ *       只有“墙钟已过时限、而且随后读到的状态仍是 BUSY”才判超时。
+ *       反过来（先读状态、再读墙钟）有竞态：读到 BUSY 之后任务被更高优先级任务抢占几毫秒，
+ *       芯片这时恰好完成、IRQ 锁存了 OK，回来读墙钟发现已过时限，就把一次已经成功的操作
+ *       （页编程时限只有 5 ms，tPP 上限 4 ms）当成超时，中止轮询并让 Device 进入 ERROR；
+ *       第 6 次上板里后台任务降到优先级 1 之后出现过（`raw=timeout hw=19/3`）。
+ *       先读墙钟时，状态是在墙钟之后读的：状态仍是 BUSY，说明到读状态那一刻为止完成事件都没来，
+ *       而墙钟那一刻已过时限，是真超时。被抢占发生在两次读取之间时，最坏只是晚一次发现
+ *       （下一次调用再判），不会误判。非 BUSY 时 Adapter 的状态读取会做一次性收尾
+ *       （清待处理标记；数组读取还要做 Cache 失效），所以每次调用只读一次状态，
+ *       不采用“超时前再读一次状态”的写法。数组读取、页编程、扇区擦除三条路径一致。
+ *       移植到新的 Bus 实现时，`GetTickMs` 与完成状态的读取顺序同样不能颠倒。
  */
 W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash)
 {
+    uint32_t now_ms;
     uint32_t elapsed_ms;
     uint32_t timeout_ms;
     W25Qxx_ErrorTypeDef timeout_error;
@@ -1163,12 +1176,13 @@ W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash)
                                          W25QXX_BUS_ERROR);
         }
 
+        /* 先读墙钟、再读状态（原因见函数头的“读取顺序”）：这样“已超时又仍在忙”只会发生在真超时上。 */
+        now_ms = hflash->BusOps->GetTickMs(hflash->BusContext);
         bus_status = hflash->BusOps->GetReadAddressedCommandStatus(
             hflash->BusContext);
         if (bus_status == W25QXX_BUS_BUSY)
         {
-            elapsed_ms = hflash->BusOps->GetTickMs(hflash->BusContext) -
-                         hflash->ActiveOperationStartTickMs;
+            elapsed_ms = now_ms - hflash->ActiveOperationStartTickMs;
             if (elapsed_ms >= timeout_ms)
             {
                 return w25qxx_record_failure(hflash,
@@ -1202,11 +1216,12 @@ W25Qxx_StatusTypeDef W25Qxx_Process(W25Qxx_HandleTypeDef *hflash)
                                      W25QXX_BUS_ERROR);
     }
 
+    /* 先读墙钟、再读状态（原因见函数头的“读取顺序”）：这样“已超时又仍在忙”只会发生在真超时上。 */
+    now_ms = hflash->BusOps->GetTickMs(hflash->BusContext);
     bus_status = hflash->BusOps->GetStatusMatchPollingStatus(hflash->BusContext);
     if (bus_status == W25QXX_BUS_BUSY)
     {
-        elapsed_ms = hflash->BusOps->GetTickMs(hflash->BusContext) -
-                     hflash->ActiveOperationStartTickMs;
+        elapsed_ms = now_ms - hflash->ActiveOperationStartTickMs;
         if (elapsed_ms >= timeout_ms)
         {
             bus_status = hflash->BusOps->AbortStatusMatchPolling(

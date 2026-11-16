@@ -21,7 +21,7 @@
 - `Adapters/stm32_hal/irq/stm32_qspi_irq` 的 Handle 局部 QSPI 回调分发 Interface；
 - CubeMX 管理的 QSPI Handle、GPIO 与时钟配置。
 
-Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识、QSPI Adapter Context 和 QSPI IRQ 节点。启动识别成功后注册 `hqspi` 的读完成、自动轮询状态匹配、错误和中止回调；`MemoryType`（例如 `40` 或 `70`）只保留为诊断信息，不影响 W25Q256 兼容性判定。QE 已开启时不写 Flash；QE 为 0 时的 SR2 配置最多阻塞 20 ms，且仅发生在调度器启动前。`0xEC` 启动自检只读取物理地址 0 的 4 字节，不解释或记录内容。异步路线只有在已设置上层回调、且无其他操作在飞时才允许启动：IRQ 先更新 Adapter 结果，再转发轻量事件；拥有请求的任务随后调用 `ProcessOperation()`，MDMA 成功后数据才可被 CPU 使用，写擦成功后 Device 才回到 READY。当前唯一上层订阅者是 Filesystem Service Flash 执行器，在 Storage Task 启动时建立长期订阅；APP 物理 benchmark 直接调用 Filesystem 诊断 Interface，不由 benchmark 临时设置或清除回调。受限自检通过首/尾区域语义请求擦除、逐页编程和读回；每笔 `0x34/0x21` 提交后由 Adapter 自动轮询 `0x05` 的 WIP 位，Status Match 唤醒 Storage Task，Platform 自身绝不等待任务通知或访问 DMA 缓冲区。两条读回共同验证后，诊断入口仍不能被 FTL 或 MSC 当作通用写入能力。当前已持有 Flash FTL Handle、Bridge Context、78 KiB SDRAM 表和 4096/512 B AXI SRAM 工作/校验区，绑定完整物理分区。
+Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识、QSPI Adapter Context 和 QSPI IRQ 节点。启动识别成功后注册 `hqspi` 的读完成、自动轮询状态匹配、错误和中止回调；`MemoryType`（例如 `40` 或 `70`）只保留为诊断信息，不影响 W25Q256 兼容性判定。QE 已开启时不写 Flash；QE 为 0 时的 SR2 配置最多阻塞 20 ms，且仅发生在调度器启动前。`0xEC` 启动自检只读取物理地址 0 的 4 字节，不解释或记录内容。异步路线只有在已设置上层回调、且无其他操作在飞时才允许启动：IRQ 先更新 Adapter 结果，再转发轻量事件；拥有请求的任务随后调用 `ProcessOperation()`，MDMA 成功后数据才可被 CPU 使用，写擦成功后 Device 才回到 READY。当前唯一上层订阅者是 Filesystem Service Flash 执行器，在启动时（现在由 Flash 启动任务）建立长期订阅；APP 物理 benchmark 直接调用 Filesystem 诊断 Interface，不由 benchmark 临时设置或清除回调。受限自检通过首/尾区域语义请求擦除、逐页编程和读回；每笔 `0x34/0x21` 提交后由 Adapter 自动轮询 `0x05` 的 WIP 位，Status Match 给出 Flash 执行器的完成信号量，Platform 自身绝不等待信号量、任务通知或访问 DMA 缓冲区。两条读回共同验证后，诊断入口仍不能被 FTL 或 MSC 当作通用写入能力。当前已持有 Flash FTL Handle、Bridge Context、78 KiB SDRAM 表和 4096/512 B AXI SRAM 工作/校验区，绑定完整物理分区。
 
 ## 运行时请求与约束
 
@@ -37,6 +37,17 @@ Platform 当前长期持有 W25Qxx Handle、`EF / 19` 的期望标识、QSPI Ada
 
 原始诊断与逻辑卷共用唯一执行上下文。按 [FTL 设计](../../docs/shape/storage.durability.md)，本 Module 长期持有 FTL/Bridge、SDRAM 映射表与内部 SRAM 工作区，注入经过边界核验的分区；不向 Service 暴露原始任意地址擦写。
 
-唯一上层回调所有者是 Filesystem Service 的 Flash 执行器，仍在 Storage Task 上下文完成。Process 按当前操作派发到原始 W25Qxx 或 FTL，不重复推进同一底层操作。映射关闭覆盖整个 FTL 请求，不能每页完成就重新打开；错误时先确保控制器/DMA 不再访问缓冲，再显式恢复，NOR 内部仍忙不能视为已取消。
+唯一上层回调所有者是 Filesystem Service 的 Flash 执行器：它在 `InitFlash` 里先建立一个静态二值信号量、再设置回调，回调在 ISR 里只 `xSemaphoreGiveFromISR`；等待和 `ProcessOperation()` 由正在执行 Flash 请求的任务完成，不绑定固定任务（现在是 Flash 启动任务的挂载和后台任务的回收作业）。Process 按当前操作派发到原始 W25Qxx 或 FTL，不重复推进同一底层操作。映射关闭覆盖整个 FTL 请求，不能每页完成就重新打开；错误时先确保控制器/DMA 不再访问缓冲，再显式恢复，NOR 内部仍忙不能视为已取消。
+
+**FTL 失败诊断（#220，只读）**：`Platform_Flash_GetVolumeDiagnostics()` 除块计数外还给出 Platform 记下的最近一次 FTL 失败：`LastFailure`（FTL 非 OK 结果的归一化分类）、`LastFailureOperation`（打开、格式化、读、写、同步、回收）、`LastFailureRawStatus`（失败时 FTL 最近一次原始访问的结果：0 成功、1 忙、2 错误、3 超时）、`LastFailureDeviceError` 与 `LastFailurePortStatus`（失败时芯片后端快照）、`FailureCount`、`LastRejection`（最近一次被 FTL 在受理时就拒绝的请求），以及 QSPI 失败快照 `LastFailureQspiError`、`LastFailureQspiState`、`LastFailureQspiStatus`（失败时的 `hqspi.ErrorCode`、`hqspi.State`、`QUADSPI->SR`；每次 FTL 推进之后检查，W25Qxx Device 或 HAL 句柄一报告失败就立刻取，赶在 FTL 静默之前，静默会清掉 SR 里的 TEF/TCF/SMF/TOF；三个值始终取得到）。原因：Filesystem Service 把 FTL 的任何非 OK 结果压成 `SERVICE_ERROR`，而 FTL 自己的“最近结果”每次请求都会被覆盖，失败后卷又不就绪，事后读不到。记录发生在 `ProcessOperation()` 得到最终结果和 `start_volume` 被 FTL 拒绝的那一刻，唯一执行上下文，不参与任何状态判断，不改变产品行为；之后的请求不冲掉它。当前只有后台任务的回收失败行和 Flash 压力钩子的停下行读它，格式见 [后台任务](../../APP/tasks/background/README.md)“Flash 失败诊断”。
+
+**QSPI 软件时限（#220）**：单次阻塞式 HAL QSPI 调用的软件时限 `PLATFORM_FLASH_QSPI_TIMEOUT_MS` 是 **3000 ms**（原来 100 ms）：JEDEC ID、状态寄存器、SFDP、同步读、写使能与擦除命令，以及页编程的 `HAL_QSPI_Command` + `HAL_QSPI_Transmit`（256 B）都用它。HAL 在内部忙等标志位并用墙钟判超时（先读标志、后读墙钟，起点在调用入口取一次），调用者是优先级 1 的后台任务时发送中途可能被更高优先级任务抢占很久，回来 HAL 就判超时、把 `hqspi.State` 置 ERROR，而 `HAL_QSPI_Abort` 对 ERROR 态不起作用，之后所有命令失败直到重启（第 6 次上板：`hw=18/1`）。代价是芯片或总线真的挂死时，同步调用要 3 s 才报错：启动期（调度器启动前）`Platform_Flash_Init` 依次做 JEDEC、SFDP、QE、探测读，第一个失败就返回，最坏一次多等 3 s，没有看门狗；正常时序不受影响。Service 的单次请求预算要大于它：回收 `FILESYSTEM_FLASH_RECLAIM_TIMEOUT_MS` 和恢复 `FILESYSTEM_FLASH_RECOVERY_TIMEOUT_MS` 因此都从 2000 改成 5000，其余（读 30 s、写与打开 120 s、格式化 3600 s）本来就更大；基准的单块超时（`STORAGE_FLASH_BENCHMARK_*`）是异步完成的软件超时，不包含这类阻塞调用，不受影响。
+
+**QSPI 失败快照（`LastFailureQspiError`、`LastFailureQspiState`、`LastFailureQspiStatus`）怎么读**（日志里写成 `qspi=<ErrorCode>/<State>/<SR>`，十六进制；APP 与板测清单只原样打印，位含义和判读只在这里）：
+- `ErrorCode` 是 `hqspi.ErrorCode`（`HAL_QSPI_ERROR_*`）：`1` 超时、`2` 传输错误、`4` DMA 错误、`8` 参数错误；0 表示 HAL 没记错误。
+- `State` 是 `hqspi.State`（`HAL_QSPI_STATE_*`）：`1` 就绪、`2` 忙、`4` 错误、`8` 中止中、`12` 间接写中、`22` 间接读中、`42` 自动轮询中、`82` 内存映射中。
+- `SR` 是 `QUADSPI->SR`：bit0 TEF（传输错误）、bit1 TCF（传输完成）、bit2 FTF（FIFO 阈值）、bit3 SMF（状态匹配）、bit4 TOF（超时计数）、bit5 BUSY、bit13:8 FLEVEL（FIFO 水位）。
+- **判读**：`1/4/…`（超时、错误态）是 HAL 自己的软件时限到了：`HAL_QSPI_Abort` 只处理忙态，对错误态什么也不做，所以 `State` 会一直停在 `4`，之后所有命令都失败，直到重启（第 6 次上板 `hw=18/1` 就是这样撞出来的，所以才把时限放大）。`0/1/…` 说明 HAL 没出错，问题在更下面（芯片驱动自己的超时、FTL 校验、NOR 本身）。`2/4/…` 或 SR 的 TEF 置位是总线传输错误。
+- **取快照的时机**：每次 FTL 推进之后检查，W25Qxx Device 或 HAL 句柄一报告失败就取，FTL 的静默在下一次推进才开始，静默会清掉 SR 的 TEF/TCF/SMF/TOF，所以 HAL 调用本身失败的路径取到的是静默之前的值。**例外**：W25Qxx 自己判软件超时的路径（页编程 5 ms、擦除 500 ms、数组读 100 ms）要先 `AbortStatusMatchPolling`（里面是 `HAL_QSPI_Abort`），快照是中止之后的值，`State` 通常已回到 `1`、`ErrorCode` 为 `0`，那时 `0/1/…` 并不表示 HAL 没有参与；只在收尾才发现的失败取收尾时的值。
 
 诊断范围仍受 ADR-0009 限制，不能借自检接口操作 FTL。具体容量、内存和启动顺序在设计文档维护，主机与构建验证通过，实际 QSPI/MDMA 和掉电验收待完成。

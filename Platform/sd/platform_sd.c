@@ -41,6 +41,7 @@ typedef struct
     void *TransferContext; /**< 原样传给 TransferCallback 的调用者上下文。 */
     bool IRQRegistered; /**< DetectIRQCallback 是否已经注册到 GPIO EXTI Adapter。 */
     bool TransferIRQRegistered; /**< TransferIRQCallback 是否已经注册到 SDMMC IRQ Adapter。 */
+    Platform_SD_StateTypeDef ReportedState; /**< 最近一次告诉上层的状态（Init 之后、每次成功的 Process 之后）；拔出事件按它判断。 */
 } Platform_SD_HandleTypeDef;
 
 /** @brief 本板唯一 SD 卡槽对应的私有实例。 */
@@ -120,7 +121,7 @@ static void platform_sd_detect_irq_cb(uint16_t gpio_pin, void *context)
   * @param  event SDMMC IRQ Adapter 发布的源特定事件。
   * @param  context 注册时绑定的 Platform SD 私有 Handle。
   * @note   本函数运行在 IRQ 上下文；它不修改 Device 状态、不处理 Cache，也不调用
-  *         FreeRTOS。Storage Task 的已注入回调负责执行 xxxFromISR() 唤醒任务。
+  *         FreeRTOS。订阅者（Filesystem Service）的回调负责执行 xxxFromISR() 唤醒等待者。
   */
 static void platform_sd_transfer_irq_cb(STM32SDMMCIRQ_EventTypeDef event,
                                         void *context)
@@ -248,6 +249,8 @@ Platform_StatusTypeDef Platform_SD_Init(Platform_SD_DetectCallback_t detect_call
         status = PLATFORM_SD_ERROR;
     }
 
+    /* 上层（Storage）按 Init 之后的状态自己决定要不要挂载，这是它最后一次知道的状态。 */
+    hplatform_sd.ReportedState = Platform_SD_GetState();
     return status;
 }
 
@@ -285,6 +288,7 @@ Platform_StatusTypeDef Platform_SD_DeInit(void)
     hplatform_sd.DetectContext = NULL;
     hplatform_sd.TransferCallback = NULL;
     hplatform_sd.TransferContext = NULL;
+    hplatform_sd.ReportedState = PLATFORM_SD_STATE_RESET;
 
     return platform_sd_status(SDCard_DeInit(&hplatform_sd.Device));
 }
@@ -293,8 +297,9 @@ Platform_StatusTypeDef Platform_SD_DeInit(void)
   * @brief  根据当前稳定的 SD_CD 电平刷新介质生命周期。
   * @retval PLATFORM_OK 检测状态与 Device 生命周期刷新成功。
   * @retval PLATFORM_SD_ERROR Device 刷新失败。
-  * @note   本函数不实现机械触点消抖，且不得从 EXTI ISR 调用。当前 Storage
-  *         Task 在最后一个检测通知后的 30 ms 静默期结束后调用本函数。
+  * @note   本函数不实现机械触点消抖，且不得从 EXTI ISR 调用。当前 Volume
+  *         Task 在最后一个检测通知后的 30 ms 静默期结束后，经 `Service_Filesystem_RefreshSD`
+  *         （在 SD 卷锁内）调用 `Platform_SD_Process`，由它调用本函数。
   */
 Platform_StatusTypeDef Platform_SD_Refresh(void)
 {
@@ -379,15 +384,22 @@ Platform_StatusTypeDef Platform_SD_ClearTransferCallback(void)
 
 /**
   * @brief  处理一次已经完成消抖的 SD 卡状态刷新并生成稳定事件。
-  * @param  event 接收本次产生的稳定状态变化，不能为空。
+  * @param[out] event 接收本次产生的稳定状态变化，不能为空。
   * @retval PLATFORM_OK 刷新成功；无状态变化时 *event 为 EVENT_NONE。
   * @retval PLATFORM_SD_ERROR 参数无效、Platform 尚未初始化或刷新失败。
   * @note   本函数不等待也不消抖。调用者必须确保其在普通执行上下文调用，并且
-  *         SD_CD 输入已稳定；Storage Task 的任务通知循环负责这一时序。
+  *         SD_CD 输入已稳定；Volume Task 的等通知带超时循环负责这一时序。
+  *
+  *         拔出事件按“最近一次告诉上层的状态”判断，而不是按本函数入口时 Device 的状态：读写中途拔卡时，
+  *         `SDCard_FailTransfer`、`SDCard_AbortTransfer` 或启动被拒会在本函数之前就把 Device 写成 NOT_PRESENT，
+  *         入口状态已经等于刷新后的状态，旧写法因此吞掉拔出，Storage 不卸载卷，被占用的文件槽不释放，
+  *         重新插卡时挂载返回 BUSY。这样 READY → NOT_PRESENT 不管发生在本函数里还是之前，都恰好报告一次 REMOVED。
+  *         插入事件仍按入口状态判断：静默的拔出之后卡在本函数之前又插回，看到的是 NOT_PRESENT → READY，
+  *         报告 INSERTED（Storage 视同换卡）。
   */
 Platform_StatusTypeDef Platform_SD_Process(Platform_SD_EventTypeDef *event)
 {
-    Platform_SD_StateTypeDef previous_state;
+    Platform_SD_StateTypeDef entry_state;
     Platform_SD_StateTypeDef current_state;
     Platform_StatusTypeDef status;
 
@@ -397,7 +409,7 @@ Platform_StatusTypeDef Platform_SD_Process(Platform_SD_EventTypeDef *event)
     }
 
     *event = PLATFORM_SD_EVENT_NONE;
-    previous_state = Platform_SD_GetState();
+    entry_state = Platform_SD_GetState();
     status = Platform_SD_Refresh();
 
     if (status != PLATFORM_OK)
@@ -407,17 +419,18 @@ Platform_StatusTypeDef Platform_SD_Process(Platform_SD_EventTypeDef *event)
 
     current_state = Platform_SD_GetState();
 
-    if ((previous_state != current_state) &&
+    if ((entry_state != current_state) &&
         (current_state == PLATFORM_SD_STATE_READY))
     {
         *event = PLATFORM_SD_EVENT_INSERTED;
     }
-    else if ((previous_state != current_state) &&
+    else if ((hplatform_sd.ReportedState != current_state) &&
              (current_state == PLATFORM_SD_STATE_NOT_PRESENT))
     {
         *event = PLATFORM_SD_EVENT_REMOVED;
     }
 
+    hplatform_sd.ReportedState = current_state;
     return PLATFORM_OK;
 }
 
@@ -566,7 +579,7 @@ Platform_StatusTypeDef Platform_SD_StartWriteBlocks(const uint8_t *data,
 
 /**
   * @brief  在普通任务上下文处理已到达的 DMA 传输事件。
-  * @param  event Storage Task 从 IRQ 通知中取得的 Platform 传输事件。
+  * @param  event 等待传输的任务从 IRQ 信号中取得的 Platform 传输事件。
   * @retval PLATFORM_OK 数据阶段成功且介质已经回到 TRANSFER。
   * @retval PLATFORM_SD_ERROR DMA 失败/中止、事件非法或完成后的同步失败。
   * @note   此函数是 IRQ 与 Device 状态机之间唯一的普通上下文接缝。它不会等待
@@ -588,6 +601,57 @@ Platform_StatusTypeDef Platform_SD_CompleteTransfer(
     }
 
     return PLATFORM_SD_ERROR;
+}
+
+/**
+  * @brief  在上界内中止一笔等待超时的 DMA 传输，并让 SDMMC 与 Device 回到一个确定的状态。
+  * @param[out] result 接收结果分类，可为空。
+  * @retval PLATFORM_OK 传输已停住（PLATFORM_SD_ABORT_STOPPED），Device 回到 READY。
+  * @retval PLATFORM_SD_ERROR 没有干净地停住：卡已拔出、到上界还没停（SDMMC 已反初始化，Device 保持 ERROR）、
+  *         没有在飞的传输，或 SDMMC IRQ 节点与新状态对不上。具体原因见 *result。
+  * @note   只能在普通任务上下文、由刚刚等待这笔传输超时的任务调用（它持 SD 卷锁）；耗时不超过
+  *         Components/sd 的中止上界加一次反初始化。返回之后 SDMMC 不会再为被中止的那笔传输产生中断：
+  *         STOPPED 时数据通路静止且中断全部屏蔽，其余结果 SDMMC 已断电。Device 不再是 READY 时同时注销
+  *         SDMMC 传输 IRQ 节点（与 Refresh 的规则一致），以免重新初始化后 HAL 回调指针被复位而节点仍显示已注册。
+  */
+Platform_StatusTypeDef Platform_SD_AbortTransfer(Platform_SD_AbortResultTypeDef *result)
+{
+    Platform_SD_AbortResultTypeDef outcome;
+    const bool was_busy = (SDCard_GetState(&hplatform_sd.Device) == SDCARD_STATE_BUSY);
+    const SDCard_StatusTypeDef status = SDCard_AbortTransfer(&hplatform_sd.Device);
+
+    if (status == SDCARD_OK)
+    {
+        outcome = PLATFORM_SD_ABORT_STOPPED;
+    }
+    else if (!was_busy)
+    {
+        outcome = PLATFORM_SD_ABORT_REJECTED;
+    }
+    else if (SDCard_GetState(&hplatform_sd.Device) == SDCARD_STATE_NOT_PRESENT)
+    {
+        outcome = PLATFORM_SD_ABORT_NO_MEDIA;
+    }
+    else if (hplatform_sd.Device.ErrorCode == SDCARD_ERROR_PORT_ABORT)
+    {
+        outcome = PLATFORM_SD_ABORT_STUCK;
+    }
+    else
+    {
+        outcome = PLATFORM_SD_ABORT_REJECTED;
+    }
+
+    if (result != NULL)
+    {
+        *result = outcome;
+    }
+
+    if (platform_sd_sync_transfer_irq() != PLATFORM_OK)
+    {
+        return PLATFORM_SD_ERROR;
+    }
+
+    return (outcome == PLATFORM_SD_ABORT_STOPPED) ? PLATFORM_OK : PLATFORM_SD_ERROR;
 }
 
 /**

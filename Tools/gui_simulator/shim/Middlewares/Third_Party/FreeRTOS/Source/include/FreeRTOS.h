@@ -12,6 +12,7 @@
 #ifndef SIM_FREERTOS_H
 #define SIM_FREERTOS_H
 
+#include <assert.h>
 #include <stdint.h>
 
 typedef uint32_t TickType_t;
@@ -26,5 +27,7 @@ typedef unsigned long UBaseType_t;
 #define portYIELD_FROM_ISR(x) ((void)(x))
 
 #define configTASK_NOTIFICATION_ARRAY_ENTRIES 4
+
+#define configASSERT(x) assert(x) /* 与产品同形：失败即停；`ui_cell` 的写者唯一检查用它。 */
 
 #endif /* SIM_FREERTOS_H */

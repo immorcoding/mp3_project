@@ -21,6 +21,7 @@
 
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h"
 #include "Middlewares/Third_Party/FreeRTOS/Source/include/queue.h"
+#include "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
 
 /** @brief 单个静态日志块；tag 必须在 Log task 消费前保持有效。 */
 typedef struct
@@ -38,6 +39,23 @@ static QueueHandle_t message_free_queue;
 
 /** @brief 等待 Log task 转交至 Components/log 的消息块地址队列。 */
 static QueueHandle_t message_ready_queue;
+
+/** @brief Service_Log_Post() 丢弃的条数；多个生产者任务写，临界区内自增。 */
+static volatile uint32_t service_dropped_count;
+
+/** @brief Log task 在每次 Consume 里刷新的核心丢弃数副本；写者只有 Log task，32 位对齐读取不撕裂。 */
+static volatile uint32_t core_dropped_count;
+
+/**
+  * @brief  记一次 Service_Log_Post() 丢弃。
+  * @note   仅普通任务上下文；临界区只含一次自增。
+  */
+static void log_service_count_drop(void)
+{
+    taskENTER_CRITICAL();
+    service_dropped_count++;
+    taskEXIT_CRITICAL();
+}
 
 /**
   * @brief  将公开日志等级映射为日志核心的私有等级。
@@ -152,6 +170,7 @@ Service_StatusTypeDef Service_Log_Post(
 
     if (xQueueReceive(message_free_queue, &message, 0U) != pdPASS)
     {
+        log_service_count_drop();
         return SERVICE_BUSY;
     }
 
@@ -160,6 +179,7 @@ Service_StatusTypeDef Service_Log_Post(
     {
         /* 参数错误也必须把已取得的块归还，避免逐次投递耗尽整个消息池。 */
         (void)xQueueSend(message_free_queue, &message, 0U);
+        log_service_count_drop();
         return SERVICE_INVALID_PARAM;
     }
 
@@ -170,9 +190,29 @@ Service_StatusTypeDef Service_Log_Post(
     if (xQueueSend(message_ready_queue, &message, 0U) != pdPASS)
     {
         (void)xQueueSend(message_free_queue, &message, 0U);
+        log_service_count_drop();
         return SERVICE_ERROR;
     }
 
+    return SERVICE_OK;
+}
+
+/**
+  * @brief  读取日志丢失累计（Service 层与核心层各一项）。
+  * @param[out] stats 输出。
+  * @retval SERVICE_OK 已写入。
+  * @retval SERVICE_INVALID_PARAM stats 为空。
+  * @note   不碰日志核心：核心丢弃数是 Log task 在 Service_Log_Consume() 里刷新的副本（DIAG-1）。
+  */
+Service_StatusTypeDef Service_Log_GetDropStats(Service_Log_DropStatsTypeDef *stats)
+{
+    if (stats == NULL)
+    {
+        return SERVICE_INVALID_PARAM;
+    }
+
+    stats->ServiceDropped = service_dropped_count;
+    stats->CoreDropped = core_dropped_count;
     return SERVICE_OK;
 }
 
@@ -206,6 +246,8 @@ Service_StatusTypeDef Service_Log_Consume(void)
     {
         return SERVICE_ERROR;
     }
+
+    core_dropped_count = stats.DroppedCount;
 
     if (stats.PendingCount >= LOG_QUEUE_DEPTH)
     {

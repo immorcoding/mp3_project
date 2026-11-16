@@ -7,21 +7,21 @@
 #define PLAYBACK_TASK_CONFIG_H
 
 /* playback_machine.h */
-#define PLAYBACK_MACHINE_STALE_BLOCK_LIMIT  32U  /* 每次唤醒归还就绪队列队首旧序号块的上限（B1）；与块池块数 STORAGE_AUDIO_BLOCK_COUNT 同值（不引用以免本头依赖 Storage，由 playback_task.c 的 _Static_assert 核对）。 */
+#define PLAYBACK_MACHINE_STALE_BLOCK_LIMIT  32U  /* 每次唤醒归还就绪队列队首旧序号块的上限（B1）；与块池块数 AUDIO_READER_BLOCK_COUNT 同值（不引用以免本头依赖音频读取任务，由 playback_task.c 的 _Static_assert 核对）。 */
 #define PLAYBACK_MACHINE_FEED_BLOCK_LIMIT   32U  /* 一轮交字节最多处理的块数（手中块加队列），与块池块数同值（同上由 _Static_assert 核对）。 */
 #define PLAYBACK_MACHINE_FEED_ROUND_LIMIT   16U  /* 每次唤醒内“交字节 → 推进”的最大轮数；输入不够时本次结束去等块（B1）。 */
 #define PLAYBACK_MACHINE_LOG_TEXT_SIZE      96U  /* 单条 INFO 日志文本的格式化缓冲区字节数（含结尾 0）；放不下时末字符为 ~ 标记截断。Seek 行最长约 88 字节，须小于 Service_Log 单块正文 128 B。 */
 
 /* playback_machine.c：超时判定（#71 B7、B8），按外壳传入的单调毫秒时刻比较，经过时间达到该值即到期。 */
-#define PLAYBACK_MACHINE_DATA_TIMEOUT_MS    2000U  /* T_data：需要数据却没有的最长等待，到期停止 NO_DATA；板级需 ≥ 2 × Storage 单圈最大耗时（#52）。 */
+#define PLAYBACK_MACHINE_DATA_TIMEOUT_MS    5000U  /* T_data：需要数据却没有的最长等待，到期停止 NO_DATA；依据“≥ 2 × 最长非故障等待”（#194 第 7 条）：最长非故障等待是 12000 首同文件夹、定位符失效时按路径打开的 2.05 s，读取任务自己回退或等前台回退放锁都一样，两边同时回退约 4.1 s，5 s 也盖得住；真正的读卡故障约 500 ms 就报 READ_ERROR，T_data 只负责抓任务卡死。2000 改 5000 是 #202 M 节授权的；不写编译期断言，由持锁统计在板级验收核对（R4.2）。 */
 #define PLAYBACK_MACHINE_OUTPUT_TIMEOUT_MS  500U   /* T_out：Platform 运行时没有新的半区释放的最长时间，到期按 AUDIO_ERROR 处理。 */
 
 /* 同步预算 R 是播放模块的配置常量（Service/playback/playback_service_config.h 的 PLAYBACK_SERVICE_SYNC_BUDGET_BYTES），此处不重复。 */
 
 /* playback_task.h */
 #define PLAYBACK_NOTIFY_FLAG_COMMAND        (1UL << 0)  /* 事件槽：GUI 向命令 FIFO 入队了命令（K2）。 */
-#define PLAYBACK_NOTIFY_FLAG_STREAM_RECORD  (1UL << 1)  /* 事件槽：Storage 覆盖写了流记录信箱（C2）。 */
-#define PLAYBACK_NOTIFY_FLAG_BLOCK_READY    (1UL << 2)  /* 事件槽：Storage 把新块放进了就绪队列。 */
+#define PLAYBACK_NOTIFY_FLAG_STREAM_RECORD  (1UL << 1)  /* 事件槽：音频读取任务覆盖写了流记录信箱（C2）。 */
+#define PLAYBACK_NOTIFY_FLAG_BLOCK_READY    (1UL << 2)  /* 事件槽：音频读取任务把新块放进了就绪队列。 */
 #define PLAYBACK_NOTIFY_FLAG_AUDIO          (1UL << 3)  /* 事件槽：Platform 音频释放了半区或报告了故障（ISR 置位）。 */
 #define PLAYBACK_NOTIFY_FLAG_EVENT_MASK     (PLAYBACK_NOTIFY_FLAG_COMMAND | \
                                              PLAYBACK_NOTIFY_FLAG_STREAM_RECORD | \

@@ -4,7 +4,7 @@
 行距 2 px）；本 Module 的行工厂按 `Service_GUI_QueueApply()` 的 `Length` 在其中构造行。
 窗口滑动时在已有 panel 上转 head 改字，不按整表无限 `create`。
 
-本 Module 不包含 `storage_listbuffer.h`，也不向 APP 公开 Interface。曲名与歌手由 GUI Task
+本 Module 不包含 APP 的任何头（音乐的 `music_cells.h`、`ui_cell.h` 等），也不向 APP 公开 Interface。曲名与歌手由 GUI Task
 把窗口行的 {曲目显示名, 歌手} 原样传入（GUI-25），见 `docs/shape/storage.catalog.md`。
 `Length` 为 0 则没有可见行。
 
@@ -20,7 +20,7 @@ Noto 下为 46 px，曲名 Y 6、歌手 Y 24（从 Panel 上沿量起），一�
 取值在 `gui_service_main_queue_config.h`。整行滚动步长取首行实际高度加 `QueueTab` 行距，不写死像素（GUI-16）。
 
 歌手 Label 原样显示传入的文本；歌手为空串时的占位文案 `Unknown Artist` 由 GUI Task 的
-`gui_music_queue_rows()` 备好（GUI-25，文案定义在 `APP/tasks/gui/music/gui_music_text.h`），本 Module 不替换。
+`gui_music_queue_rows()` 备好（GUI-25，文案定义在 `APP/apps/music/gui/gui_music_text.h`），本 Module 不替换。
 
 当前/非当前只改 Border Opa、曲名颜色角色（Accent ↔ Ink，经 `service_gui_theme_style_replace()`）、
 Long mode 和右侧符号 Opa。不改 Border Width，以免文字漂移。点按 `CLICKED` 立刻只刷新这些样式，
@@ -41,7 +41,7 @@ Long mode 和右侧符号 Opa。不改 Border Width，以免文字漂移。点�
 - `QueueTab` 的 `LV_EVENT_SCROLL`（prepare 时注册）：本窗边沿之外还有曲目时，把越过该边沿的
   滚动拉回边沿，不露空白，换窗后从扣好的 `scroll_y` 带着惯性接着滑（#157）；列表真正的首尾照常
   弹性回弹。LVGL 8.3 的弹性只有一个开关，上下沿不能分开设，所以按边沿在事件里拉回。
-  窗口槽不带曲目总数，满上限行的窗口按“下沿之外可能还有”处理：曲库恰为上限行、或末尾所在窗口
+  窗口格不带曲目总数，满上限行的窗口按“下沿之外可能还有”处理：曲库恰为上限行、或末尾所在窗口
   恰好满上限时，快速滑到末尾的那一下停在末行不回弹，等不满上限的末窗 READY 后才回弹。
 
 ## 运行时路径

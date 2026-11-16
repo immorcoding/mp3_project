@@ -120,6 +120,33 @@ typedef struct
     uint32_t PhysicalBytes;
 } Platform_Flash_VolumeInfoTypeDef;
 
+/** @brief FTL 最近一次非 OK 结果的归一化分类（只用于诊断，0 表示没有失败过）。 */
+typedef enum
+{
+    PLATFORM_FLASH_FAILURE_NONE = 0,       /**< 没有失败过。 */
+    PLATFORM_FLASH_FAILURE_INVALID_PARAM,  /**< 参数、范围或几何不满足。 */
+    PLATFORM_FLASH_FAILURE_NOT_READY,      /**< 卷没打开或已故障。 */
+    PLATFORM_FLASH_FAILURE_NO_SPACE,       /**< 无法安全分配且没有可回收块。 */
+    PLATFORM_FLASH_FAILURE_IO_ERROR,       /**< 原始访问失败或被显式中止。 */
+    PLATFORM_FLASH_FAILURE_CORRUPT,        /**< 提交关联、数据、版本选择或回读验证损坏。 */
+    PLATFORM_FLASH_FAILURE_INCOMPATIBLE,   /**< 格式或几何不兼容，或版本空间耗尽。 */
+    PLATFORM_FLASH_FAILURE_INCOMPLETE,     /**< 最新格式代次未完成。 */
+    PLATFORM_FLASH_FAILURE_UNFORMATTED,    /**< 没有可识别的卷描述。 */
+    PLATFORM_FLASH_FAILURE_OTHER           /**< 其他非 OK 结果。 */
+} Platform_Flash_FailureTypeDef;
+
+/** @brief 失败发生时正在执行的 FTL 请求类别（只用于诊断，0 表示没有）。 */
+typedef enum
+{
+    PLATFORM_FLASH_FAILED_OP_NONE = 0,     /**< 没有。 */
+    PLATFORM_FLASH_FAILED_OP_OPEN,         /**< 打开卷、重建映射。 */
+    PLATFORM_FLASH_FAILED_OP_FORMAT,       /**< 格式化。 */
+    PLATFORM_FLASH_FAILED_OP_READ,         /**< 读逻辑扇区。 */
+    PLATFORM_FLASH_FAILED_OP_WRITE,        /**< 写逻辑扇区。 */
+    PLATFORM_FLASH_FAILED_OP_SYNC,         /**< 同步。 */
+    PLATFORM_FLASH_FAILED_OP_RECLAIM       /**< 回收一块。 */
+} Platform_Flash_FailedOperationTypeDef;
+
 typedef struct
 {
     uint32_t FormatVersion;
@@ -130,6 +157,25 @@ typedef struct
     uint32_t SessionErases;
     uint32_t DeviceError;
     uint32_t PortStatus;
+    /* 以下是失败诊断（#220，只读，不影响任何产品行为）：Platform 在每次 FTL 请求以非 OK 结果收尾时记下，
+     * 之后的请求不会冲掉它；FTL 自己的“最近结果”会被下一次请求覆盖，所以要在 Platform 层记。
+     * 目前只有后台任务读（回收失败行只在失败那一次读；Flash 压力钩子每个写步都读一次作写前快照，停下行再读一次），
+     * 不拿 Flash 卷锁：另一个任务正在收尾失败请求时，各字段之间可能差一次更新，只给人看，不用来做判断。
+     * 末尾三个 QSPI 快照在每次 FTL 推进之后检查：W25Qxx Device 或 HAL 句柄一报告失败就取，FTL 的静默在下一次推进才开始，
+     * 静默会清掉 SR 里的 TEF/TCF/SMF/TOF 标志，所以 HAL 调用本身失败的路径（HAL 超时、HAL 返回错误）取到的是静默之前的值。
+     * **例外**：W25Qxx 自己判软件超时的路径（页编程 5 ms、擦除 500 ms、数组读 100 ms）要先中止状态轮询
+     * （`AbortStatusMatchPolling` 里是 `HAL_QSPI_Abort`），快照是中止之后的值（`State` 通常已回到 1，`ErrorCode` 为 0），
+     * 不是中止之前的；只在收尾才发现的失败取收尾时的值。没有失败过时全 0；Platform 直接读 `hqspi` 与 `QUADSPI->SR`，三个值始终取得到。 */
+    Platform_Flash_FailureTypeDef LastFailure;               /**< 最近一次以非 OK 收尾的请求的 FTL 结果。 */
+    Platform_Flash_FailedOperationTypeDef LastFailureOperation; /**< 那次请求的类别。 */
+    uint32_t LastFailureRawStatus;                           /**< 失败时 FTL 最近一次原始访问的归一化结果：0 成功、1 忙、2 错误、3 超时；读不到时为 `UINT32_MAX`。 */
+    uint32_t LastFailureDeviceError;                         /**< 失败时芯片后端的错误码快照。 */
+    uint32_t LastFailurePortStatus;                          /**< 失败时端口状态快照。 */
+    uint32_t FailureCount;                                   /**< 开机以来以非 OK 收尾的请求数（饱和在 32 位）。 */
+    Platform_Flash_FailureTypeDef LastRejection;             /**< 最近一次被 FTL 在受理时就拒绝的请求的 FTL 结果（例如卷故障后的 NOT_READY）。 */
+    uint32_t LastFailureQspiError;                           /**< 失败时 `hqspi.ErrorCode`（`HAL_QSPI_ERROR_*`：1 超时、2 传输错误、4 DMA、8 参数）。 */
+    uint32_t LastFailureQspiState;                           /**< 失败时 `hqspi.State`（`HAL_QSPI_STATE_*`：1 就绪、2 忙、4 错误、8 中止中、0x12/0x22 间接写/读中、0x42 自动轮询中、0x82 内存映射中）。 */
+    uint32_t LastFailureQspiStatus;                          /**< 失败时 `QUADSPI->SR`（bit0 TEF、bit1 TCF、bit2 FTF、bit3 SMF、bit4 TOF、bit5 BUSY、bit13:8 FLEVEL）。 */
 } Platform_Flash_VolumeDiagnosticsTypeDef;
 
 Platform_StatusTypeDef Platform_Flash_BindVolume(void);

@@ -31,7 +31,7 @@ Complete-Utf8EntryScript -Action {
         Invoke-PowerShellScript -ScriptPath (Join-Path -Path $PSScriptRoot -ChildPath 'test-host.ps1') `
             -Parameters $hostParameters
 
-        # 模拟器编译 Service/gui、APP/tasks/gui 与部分 Component；只在 CHANGED 跑时，改这些源的票可能 FULL 通过而模拟器链接失败。
+        # 模拟器编译 Service/gui、APP/apps（注册表与音乐 GUI 分区）与部分 Component；只在 CHANGED 跑时，改这些源的票可能 FULL 通过而模拟器链接失败。
         $repositoryRoot = Get-RepositoryRoot -EntryScriptPath $PSCommandPath
         Invoke-PowerShellScript -ScriptPath (Join-Path -Path $repositoryRoot -ChildPath 'Tools/gui_simulator/run-scenarios.ps1') `
             -Parameters @{}

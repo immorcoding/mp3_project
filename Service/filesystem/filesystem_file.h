@@ -1,6 +1,10 @@
 /**
  * @file filesystem_file.h
- * @brief Storage Task 独占的卷感知文件 Interface。
+ * @brief 卷感知文件 Interface：线程安全，GUI 与播放任务不得调用（`Service_Filesystem_DenyCaller`）。
+ *
+ * @details
+ *          每个函数在入口拿所属卷的锁、返回前放（一次调用只拿一次），调用可能阻塞到前一个持锁者
+ *          放锁为止，最长见 `Service/filesystem/README.md` 的持锁上界表。句柄有效性在锁内检查。
  */
 
 #ifndef FILESYSTEM_FILE_H
@@ -10,6 +14,9 @@
 #include <stdint.h>
 #include "Service/filesystem/filesystem_types.h"
 #include "Service/service.h"
+
+/** @brief 单次 ReadFile/WriteFile 的字节数上限（32 KiB，与 SD 的 DMA bounce buffer 同大）；超过返回 SERVICE_INVALID_PARAM，不截短也不在内部拆分，持锁时长因此有界。 */
+#define SERVICE_FILESYSTEM_IO_MAX_BYTES (32U * 1024U)
 
 /**
  * @brief 不透明文件句柄；Token 由 Service 分配，调用者不得自行构造。
