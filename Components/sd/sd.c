@@ -339,8 +339,12 @@ SDCard_StatusTypeDef SDCard_DeInit(SDCard_HandleTypeDef *hsdcard)
   *         检测到拔卡时释放 Port 并进入 NOT_PRESENT；从 RESET 或
   *         NOT_PRESENT 检测到插卡时执行初始化。ERROR 状态不会自动反复
   *         重试，必须先拔卡或由调用者显式再次调用 SDCard_Init()。
-  * @note   本函数不做机械触点去抖，调用者应在 APP 或未来 Storage task 中
-  *         先确认卡检测电平稳定，且不得在 EXTI ISR 中调用。
+  * @note   本函数不做机械触点去抖，调用者应在 APP 中先确认卡检测
+  *         电平稳定，且不得在 EXTI ISR 中调用。
+  * @param[in,out] hsdcard Device 句柄，Port 必须已绑定。
+  * @retval SDCARD_OK    刷新完成：卡已拔出并释放 Port，或已插入并初始化成功，或状态无需变化。
+  * @retval SDCARD_ERROR 句柄为空，或设备处于 ERROR 状态；其他失败由 SDCard_Init() 或 Port 反初始化给出，
+  *                      错误细节记在句柄的 ErrorCode 与 LastPortStatus。
   */
 SDCard_StatusTypeDef SDCard_Refresh(SDCard_HandleTypeDef *hsdcard)
 {

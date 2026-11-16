@@ -56,7 +56,7 @@ target_compile_definitions(lvgl_sim PUBLIC LV_CONF_PATH=sim_lv_conf.h)
 target_compile_options(lvgl_sim PRIVATE -w)
 
 # ---------------------------------------------------------------------------
-# 模拟器本体：真实 Service/gui + 真实 APP 音乐分区 + SDL/Storage 替身
+# 模拟器本体：真实 Service/gui + 真实 APP 音乐分区 + SDL 与假后端替身（fakes/）
 # ---------------------------------------------------------------------------
 file(GLOB_RECURSE SERVICE_GUI_SOURCES CONFIGURE_DEPENDS
     "${REPO_ROOT}/Service/gui/*.c"

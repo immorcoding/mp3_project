@@ -1,6 +1,6 @@
 # 存储基准测试
 
-本目录从 `APP/tasks/storage/benchmark/` 搬到卷任务名下（#211；链接脚本的 `.storage_benchmark` 同时匹配新旧路径，用户已改）。函数与宏的 `storage_` 前缀和段名这次不改（纯搬动），改名随后续票。**谁在什么时候调用**：SDRAM 自检由 Boot 任务在创建其他任务之前调用；SD 文件基准由卷任务在挂载成功之后、发卷就绪之前调用（别的任务还不会碰这个卷）；Flash 物理基准与文件基准由 Flash 启动任务调用（执行器绑定之后、挂载之前，和挂载成功之后）。它们都是一次性的启动路径，运行期间不会有第二个调用者。
+本目录从 `APP/tasks/storage/benchmark/` 搬到卷任务名下（#211；链接脚本的 `.storage_benchmark` 只匹配新路径，旧路径的规则已在 c827d7d 删除）。函数与宏的 `storage_` 前缀和段名这次不改（纯搬动），改名随后续票。**谁在什么时候调用**：SDRAM 自检由 Boot 任务在创建其他任务之前调用；SD 文件基准由卷任务在挂载成功之后、发卷就绪之前调用（别的任务还不会碰这个卷）；Flash 物理基准与文件基准由 Flash 启动任务调用（执行器绑定之后、挂载之前，和挂载成功之后）。它们都是一次性的启动路径，运行期间不会有第二个调用者。
 
 本目录只放由 Boot 任务、卷任务或 Flash 启动任务在启动早期或 SD/Flash 成功挂载后发起的诊断与吞吐测试。它们不属于 Platform、Component、Filesystem Service 或正式的存储业务路径；是否执行完全由各自编译开关决定。`storage_flash_benchmark` 通过 Cortex-M7 Cycle Counter Adapter 使用 DWT 周期计数，不直接访问 CoreDebug 或 DWT 寄存器；该全局计数器只在启动期串行测试窗口使用。
 

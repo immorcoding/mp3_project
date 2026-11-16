@@ -7,7 +7,7 @@
 ## 目录约定
 
 - `app_table.h` / `app_table.c`：注册表，应用目录里唯一认识所有应用的地方。
-- `<app>/gui/`：应用的 GUI 分区（`gui_init`、`gui_step` 的实现、最新需求的写入与结果的读取、播放命令与快照归约）。LVGL 的那一半在 `Service/gui/main/<app>/` 与 `view/`，属于 Service 层，不放这里。
+- `<app>/gui/`：应用的 GUI 分区（`gui_init`、`gui_step` 的实现、最新需求的写入与结果的读取、播放命令与快照归约）。LVGL 的那一半在 `Service/gui/`，属于 Service 层，不放这里：`main/` 现在按控件分子目录（pager、queue、transport、title、vinyl、background），`view/` 是手写 Screen。Service/gui 的内容页按应用分区是 ARC-23 与 ADR-0023 的目标，还没有搬动，音乐的 LVGL 部分仍在上述目录里。
 - `<app>/catalog/`（音乐独有）：应用自己的数据模块，音乐的曲库在这里（一份表、模块内一把短锁，见 [music/catalog](music/catalog/README.md)）。锁在应用内部，不经 `ui_cell`；共用层不认识它，音频读取任务、前台任务和 `music_background.c`（扫描，后台任务调）作为它的调用者包含它的头（任务包含应用不受 `check-layer-includes` 限制，应用之间不互相包含）。
 - `<app>/foreground/`：应用的前台流程（`foreground_step` 的实现，行缓存与窗口组装；音乐的在 [music](music/README.md)“前台流程”）。`<app>_cells.h/.c`：应用的界面数据格子（需求与结果的结构体与存储），`<app>_app.c`：`boot_init`。`<app>_background.c`：应用的后台入口（`background_step` 的实现；音乐的 `music_background_step()` 现在只转交曲库扫描 `catalog_scan_step()`，有两个后台作业的应用在这里合并，ARC-22）。
 - 共用层的 `ui_cell`（界面数据短锁）在 `APP/ui_cell/`，不属于任何应用，见 [ui_cell](../ui_cell/README.md)；应用自己的格子结构体放在应用目录里。
@@ -20,7 +20,7 @@
 | 字段 | 谁调用 | 时机 |
 |---|---|---|
 | `name` | 前台任务的 step 耗时日志 | 日志里标明是哪个应用的 step 慢（短名，例如 `music`） |
-| `boot_init` | `APP/tasks/app_tasks.c`（Boot 任务，`app_table_boot_init()`） | 创建前台任务和 GUI 任务**之前**调用一次：初始化应用的界面数据格子、缓存键表、`.apps_sdram` 里的组装缓冲。栈只有 128 word，函数要浅，不调文件接口 |
+| `boot_init` | `APP/tasks/app_tasks.c`（Boot 任务，`app_table_boot_init()`） | 创建前台任务和 GUI 任务**之前**调用一次：初始化应用的界面数据格子、缓存键表、`.apps_sdram` 里的组装缓冲。栈只有 192 word，函数要浅，不调文件接口 |
 | `gui_init` | `APP/tasks/gui/gui_task.c` | `Service_GUI_Init()` 成功之后调用一次 |
 | `gui_step` | `APP/tasks/gui/gui_task.c` | 每圈 `Service_GUI_ConsumeInput()` 之后、`Service_GUI_Process()` 之前；不等文件、不查询卷状态 |
 | `foreground_step` | `APP/tasks/foreground/foreground_task.c` | 前台任务每圈每个应用恰好一次；返回“多少 ms 后再叫我”（0 马上，`FOREGROUND_WAIT_FOREVER` 等通知），取所有应用里的最小值 |
@@ -34,7 +34,7 @@
 
 `foreground_step` 在所有应用共用的前台任务里运行，一步太长会拖住别的应用：
 
-- **一步最多一次文件调用加约 1 ms CPU**（初值，板测修正），step 里不放大局部变量，**不碰 Flash 卷**（后台写 32 KiB 约 1.5 s，前台等就全停）。每个应用同一时刻持有的文件数最多 1 个（读完即关，不跨步持有），这是 SD 4 个文件槽核算的前提（音频流 1 + 前台 1，曲库扫描开目录不占文件槽）。
+- **一步最多读一个文件的一行（打开、取长度、至多 4 次读取、关闭）加约 1 ms CPU**（初值，板测修正），step 里不放大局部变量，**不碰 Flash 卷**（后台写 32 KiB 约 1.5 s，前台等就全停）。每个应用同一时刻持有的文件数最多 1 个（读完即关，不跨步持有），这是 SD 4 个文件槽核算的前提（音频流 1 + 前台 1，曲库扫描开目录不占文件槽）。
 - 一步要多次文件调用的活（读 12 行标签）拆成多步，每步做一点，返回 0（马上再调）或 1 ms；活做完返回 `FOREGROUND_WAIT_FOREVER` 等需求或事件叫醒。没活时必须睡，不能返回 0 空转。
 - 重活（CPU 吃重、Flash）进后台任务，不进前台。
 - 前台任务量每个 step 的耗时，超过 50 ms 记一行 WARN（`Foreground step slow app=<name> us=<N> limit=50000`），只记录不停机，没有锁或断言能拦住长 step，所以靠这行发现（见 [前台任务](../tasks/foreground/README.md)）。

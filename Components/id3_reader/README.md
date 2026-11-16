@@ -11,7 +11,7 @@
 
 ## 编译期依赖和运行路径
 
-Implementation 只依赖 ISO C 与本 Module 头文件。运行时由上层（Storage 的 `catalog_text`）读文件并驱动 `Open`/`NextFrame` 循环，再对每个目标帧调用 `DecodeField`；GBK 表由上层经 Filesystem Service 的 `Service_Filesystem_GbkToUnicode()` 注入，使 FatFs 仍只在 Filesystem Service 内（ARC-12）。不读 ID3v1/v1.1，不持有状态之外的内存。
+Implementation 只依赖 ISO C 与本 Module 头文件。运行时由上层读文件并驱动 `Open`/`NextFrame` 循环，再对每个目标帧调用 `DecodeField`；GBK 表由上层经 Filesystem Service 的 `Service_Filesystem_GbkToUnicode()` 注入，使 FatFs 仍只在 Filesystem Service 内（ARC-12）。不读 ID3v1/v1.1，不持有状态之外的内存。
 
 ## 约束
 

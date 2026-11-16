@@ -4,8 +4,8 @@
   * @brief   应用注册表：一个应用一行，共用层只经本表接入应用。
   *
   * @details
-  *          字段是 `boot_init`（Boot 任务在创建任务前逐行调用）、`gui_init`、`gui_step`、`foreground_step`；
-  *          后台作业的 `background_step` 随后台任务搬扫描和回收的票再加（现在的作业表在 `APP/tasks/background/`）。
+  *          字段是 `boot_init`（Boot 任务在创建任务前逐行调用）、`gui_init`、`gui_step`、`foreground_step`、
+  *          `background_step`（后台任务入口拼作业表时遍历；回收等后台任务自己的内置作业不进本表，见 `APP/tasks/background/`）。
   *          空字段（NULL）由调用方跳过。GUI 任务、前台任务与 GUI 模拟器遍历同一张表。
   ******************************************************************************
   */
@@ -30,7 +30,7 @@ typedef struct
     /** GUI 任务每圈在 Service_GUI_ConsumeInput() 之后、Service_GUI_Process() 之前调用；NULL 跳过。 */
     void (*gui_step)(const Service_GUI_InputTypeDef *input);
     /**
-     * 前台任务每圈调用一次；NULL 跳过。一步最多一次文件调用加约 1 ms CPU，不碰 Flash 卷（ARC-26）。
+     * 前台任务每圈调用一次；NULL 跳过。一步最多读一个文件的一行加约 1 ms CPU，不碰 Flash 卷（ARC-26）。
      * 返回多少毫秒后再叫它：0 马上，`FOREGROUND_WAIT_FOREVER` 等通知。
      */
     uint32_t (*foreground_step)(void);
