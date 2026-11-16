@@ -145,6 +145,29 @@ function Get-ShapeViolations {
     }
 }
 
+# link 行的内容：`旧目标` → `新目标`，或 `旧目标`: gone；目标照链接原样写，相对持有它的文件（shape-your-project INBOX.md）。
+$script:InboxLinkPattern = '^`(?<old>[^`]+)`\s*(?:→\s*`(?<new>[^`]+)`|:\s*gone)\s*$'
+
+# 分支 inbox 登记过的过期链接（skills#33）：键为 `docs/shape/<area[.title]>.md|旧目标`。领域文件里这些链接的目标缺失不算断链，等合并后 drain 改掉。
+function Get-InboxLinkCoverage {
+    param([string]$RepositoryRoot)
+    $covered = @{}
+    $shape = Join-Path $RepositoryRoot 'docs/shape'
+    $inbox = Join-Path $shape 'inbox'
+    if (-not (Test-Path -LiteralPath $inbox -PathType Container)) { return $covered }
+    foreach ($file in @(Get-ChildItem -LiteralPath $inbox -File -Filter '*.md' -Force)) {
+        foreach ($line in [IO.File]::ReadAllLines($file.FullName, [Text.Encoding]::UTF8)) {
+            if ($line -cnotmatch '^- \d{4}-\d{2}-\d{2} · ([a-z0-9-]+)(?:/([a-z0-9-]+))? · link · (.+)$') { continue }
+            $area = $Matches[1]; $title = $Matches[2]; $content = $Matches[3]
+            if ($content -cnotmatch $script:InboxLinkPattern) { continue }
+            $old = $Matches['old']
+            $names = @("$area.md"); if ($title) { $names = @("$area.$title.md") + $names }
+            foreach ($name in $names) { $covered['docs/shape/' + $name + '|' + $old] = $true }
+        }
+    }
+    $covered
+}
+
 # 分支 inbox（HAR-8）：每行按 shape-your-project INBOX.md 的 日期 · area[/title] · kind · 内容，area/title 须存在。
 function Get-InboxViolations {
     param([string]$RepositoryRoot)
@@ -152,7 +175,7 @@ function Get-InboxViolations {
     $inbox = Join-Path $shape 'inbox'
     if (-not (Test-Path -LiteralPath $inbox -PathType Container)) { return }
     $areaFiles = @(Get-ChildItem -LiteralPath $shape -File -Filter '*.md' | Where-Object { $_.Name -notin @('README.md','ROUTES.md') })
-    $linePattern = '^- \d{4}-\d{2}-\d{2} · ([a-z0-9-]+)(?:/([a-z0-9-]+))? · (cite|friction|contradiction|correction|proposed|approved|route) · \S'
+    $linePattern = '^- \d{4}-\d{2}-\d{2} · ([a-z0-9-]+)(?:/([a-z0-9-]+))? · (cite|friction|contradiction|correction|proposed|approved|route|link) · (.+)$'
     foreach ($file in @(Get-ChildItem -LiteralPath $inbox -File -Force)) {
         $name = 'docs/shape/inbox/' + $file.Name
         if ($file.Extension -ne '.md') { "${name}: inbox 只放 <分支>.md"; continue }
@@ -162,8 +185,9 @@ function Get-InboxViolations {
             if (-not $line.Trim()) { continue }
             if (-not $seenHeader -and $line -match '^# Inbox: \S') { $seenHeader = $true; continue }
             $seenHeader = $true
-            if ($line -cnotmatch $linePattern) { "${at}: inbox 行须为 '- 日期 · area[/title] · kind · 内容'（kind 取 INBOX.md 的七种）"; continue }
-            $area = $Matches[1]; $title = $Matches[2]; $kind = $Matches[3]
+            if ($line -cnotmatch $linePattern) { "${at}: inbox 行须为 '- 日期 · area[/title] · kind · 内容'（kind 取 INBOX.md 的八种）"; continue }
+            $area = $Matches[1]; $title = $Matches[2]; $kind = $Matches[3]; $content = $Matches[4]
+            if ($kind -eq 'link' -and $content -cnotmatch $script:InboxLinkPattern) { "${at}: link 行内容须为 ``旧目标`` → ``新目标`` 或 ``旧目标``: gone"; continue }
             if (($area -eq 'routes') -ne ($kind -eq 'route')) { "${at}: route 行的 area 须且只能为 routes"; continue }
             if ($area -eq 'routes') { continue }
             $areaFile = $areaFiles | Where-Object { $_.Name -eq "$area.md" }
@@ -183,6 +207,7 @@ function Invoke-DocumentationCheck {
     $errors = New-Object 'System.Collections.Generic.List[string]'
     $files = @(Get-DocumentationFiles -RepositoryRoot $root)
     $anchors = @{}
+    $coveredLinks = Get-InboxLinkCoverage -RepositoryRoot $root
     foreach ($file in $files) {
         $number = 0
         foreach ($line in @(Get-MarkdownBody -Path $file.FullName)) {
@@ -200,7 +225,11 @@ function Invoke-DocumentationCheck {
                 if ($destination -ne $root -and -not $destination.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) {
                     [void]$errors.Add("${location}: 链接超出仓库：$href"); continue
                 }
-                if (-not (Test-Path -LiteralPath $destination)) { [void]$errors.Add("${location}: 缺少链接目标：$href"); continue }
+                if (-not (Test-Path -LiteralPath $destination)) {
+                    $relative = $file.FullName.Substring($root.Length + 1).Replace('\','/')
+                    if ($coveredLinks.ContainsKey("$relative|$($raw.Trim('<','>'))") -or $coveredLinks.ContainsKey("$relative|$href")) { continue }
+                    [void]$errors.Add("${location}: 缺少链接目标：$href"); continue
+                }
                 if ($parts.Count -eq 2 -and $parts[1] -and [IO.Path]::GetExtension($destination) -eq '.md') {
                     if (-not $anchors.ContainsKey($destination)) { $anchors[$destination] = @(Get-MarkdownAnchors -Path $destination) }
                     if ($anchors[$destination] -cnotcontains $parts[1]) { [void]$errors.Add("${location}: 缺少锚点：$href") }

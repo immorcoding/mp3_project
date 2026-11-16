@@ -78,13 +78,12 @@ Next id: HAR-16
 ### Rules
 
 - **HAR-7** · provisional · 改动许可只由工具自身模式（Claude 默认/acceptEdits，Codex workspace-write + on-request）与 Hook 决定。_Why:_ 文字许可协议耗上下文且拦不住。
-- **HAR-8** · provisional · 领域文件 `docs/shape/*.md` 只在写入分支（默认 `main`）修改，规则编号也只在那里分配；其他分支把 Signal、草稿和用户当场的批准写进 `docs/shape/inbox/<分支>.md`，合并后在 `main` 上按 drain 处理。inbox 每行按 shape-your-project `INBOX.md` 写 `日期 · area[/title] · kind · 内容`，只放会改变规则或 ROUTES 的行；`hw:pending` 事项与票结果只记在 issue 与置顶「板上状态」#8（WF-3、WF-4）。_Why:_ 并行分支同时改领域文件会冲突，相同的 `Next id` 改动会被 git 静默合并成重号。_Source:_ shape-your-project `INBOX.md`
+- **HAR-8** · provisional · 领域文件 `docs/shape/*.md` 只在写入分支（默认 `main`）修改，规则编号也只在那里分配；其他分支把 Signal、草稿、用户当场的批准和改名造成的过期链接（`link` 行；`check-docs` 对已登记的断链放行）写进 `docs/shape/inbox/<分支>.md`，合并后在 `main` 上按 drain 处理。inbox 每行按 shape-your-project `INBOX.md` 写 `日期 · area[/title] · kind · 内容`，只放会改变规则或 ROUTES 的行；`hw:pending` 事项与票结果只记在 issue 与置顶「板上状态」#8（WF-3、WF-4）。_Why:_ 并行分支同时改领域文件会冲突，相同的 `Next id` 改动会被 git 静默合并成重号。_Source:_ shape-your-project `INBOX.md`
 
 ### Proposed
-
-- 2026-10-20 · provisional · HAR-8 补一句例外：仅“链接目标重命名”的文档引用修改，可随引起重命名的分支同步（须在 inbox 记明，合并后 drain 复核）。_Why:_ 改名和链接必须同一提交，否则 `check-docs` 断链；#98 和 0.10.0 都靠先在 `main` 改成纯文本绕过。用户 2026-11-04 同意方向，但写入分支是硬检查（`scripts/shape_writer.ps1` 的 pre-commit、pre-push 和 Agent Hook），只改规则文字会和检查矛盾，要连检查一起改，所以还没写进规则。
 
 ### Signals
 
 - 2026-10-20 · friction · HAR-8 · #98 把链接脚本改名为 `STM32H743xG_flash.ld`，`hardware.md` 的两处链接必须与改名同一提交，否则 `check-docs` 断链、FULL 失败；pre-commit 的写入分支检查拦住了分支上的链接修改。用户批准的绕法：先在 `main` 把两处链接改成纯文本文件名（`7f53d80`），再合入分支。
 - 2026-11-04 · friction · HAR-8 · 0.10.0 要搬走 `APP/tasks/storage/`（曲库到 `APP/apps/music/catalog/`，卷与基准到 `APP/tasks/volume/`，音频流到 `APP/tasks/audio_reader/`），领域文件不能在分支上改，所以第 0 步先把 `storage.catalog.md`、`storage.volumes.md`、`sources/storage-media.md`、ADR-0018 里指向它的链接改成纯文本，合入 `main` 后再补（#222 补回）。这是上面 Proposed 那条的第二次证据。
+- 2026-11-16 · decision · HAR-8 · 用户决定改名引起的规则链接走 inbox `link` 行（shape-your-project 的过期链接，[skills#33](https://github.com/immorcoding/skills/issues/33)、[skills#34](https://github.com/immorcoding/skills/pull/34)），`check-docs` 对 inbox 已登记的断链放行，写入分支检查不变；取代 2026-10-20 那条“分支随改名直接改链接”的待决提议。

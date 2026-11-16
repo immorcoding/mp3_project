@@ -107,6 +107,26 @@ try {
     Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · example/gone · cite · new · 未拆分 area 无此标题。')
     Assert-DocsFailure '未知 title example/gone'
     Remove-Item -LiteralPath (Join-Path $fixture 'docs/shape/inbox') -Recurse -Force
+    # 过期链接（skills#33）：领域文件里的断链有 inbox link 行登记时不算失败，没有登记照样失败。
+    $linked = $valid.Replace('规则。 _Why:_ 理由。 _Check:_ 检查。','规则。 _Why:_ 理由。 _Source:_ [旧位置](../../src/old/a.c) _Check:_ 检查。')
+    Write-Fixture 'docs/shape/example.md' $linked
+    Assert-DocsFailure 'src/old/a.c'
+    Write-Fixture 'src/new/a.c' 'x'
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · example/naming · link · `../../src/old/a.c` → `../../src/new/a.c`')
+    Invoke-DocumentationCheck -RepositoryRoot $fixture
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · example · link · `../../src/old/a.c`: gone')
+    Invoke-DocumentationCheck -RepositoryRoot $fixture
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · example · link · `../../src/other.c`: gone')
+    Assert-DocsFailure 'src/old/a.c'
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · example · link · 旧路径改到新路径')
+    Assert-DocsFailure 'link 行内容'
+    Write-Fixture 'README.md' '[非领域文件](src/old/a.c)'
+    Write-Fixture 'docs/shape/inbox/feature-x.md' ($inboxHead + '- 2026-10-22 · example · link · `../../src/old/a.c`: gone')
+    Assert-DocsFailure 'README.md:1'
+    Write-Fixture 'README.md' '# 入口'
+    Write-Fixture 'docs/shape/example.md' $valid
+    Remove-Item -LiteralPath (Join-Path $fixture 'src') -Recurse -Force
+    Remove-Item -LiteralPath (Join-Path $fixture 'docs/shape/inbox') -Recurse -Force
     # 审阅导航在根目录，链接仍需检查；旧大写 REVIEW 不再是 shape area 例外。
     Write-Fixture 'CODING_STANDARDS.md' '[规范](docs/shape/example.md)'
     Invoke-DocumentationCheck -RepositoryRoot $fixture

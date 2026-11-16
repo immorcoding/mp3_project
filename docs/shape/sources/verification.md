@@ -5,7 +5,7 @@
 | 入口（仓库根执行） | 覆盖范围 |
 | --- | --- |
 | `./scripts/install-git-hooks.ps1` | 安装 pre-commit/commit-msg/pre-push |
-| `./scripts/check-docs.ps1` | shape结构、分支 inbox 行格式及自维护Markdown本地链接/锚点；支持 `-Snapshot Index`，不检查外网或代替内容审阅 |
+| `./scripts/check-docs.ps1` | shape结构、分支 inbox 行格式及自维护Markdown本地链接/锚点（领域文件里 inbox `link` 行已登记的断链放行）；支持 `-Snapshot Index`，不检查外网或代替内容审阅 |
 | `./scripts/check-ps1-encoding.ps1` | 含非 ASCII 字节的 `.ps1` 须带 UTF-8 BOM（Windows PowerShell 5.1 否则按 ANSI 解析，中文注释与弯引号会让解析在别处报错）；FAST 运行，跳过 `build/`、`.claude/` |
 | `./scripts/capture-verification.ps1 -Mode FULL`（或 `GUI`） | 运行既有入口，每次独立保存metadata.json、stdout.log、stderr.log；默认build/evidence，可用-OutputDirectory指定归档位置 |
 | `./scripts/check-doxygen.ps1` | 自维护 C/H 中新增或修改的函数定义须有紧邻中文 Doxygen（STY-2 机械项）；支持 `-Snapshot Index`、`-BaseRef/-HeadRef`，`-Report` 只打印全仓库存量计数、不失败；盲区见脚本头注释 |
