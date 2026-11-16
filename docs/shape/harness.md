@@ -51,10 +51,17 @@ Next id: HAR-16
 - **HAR-13** · provisional · 最终验证证据记录提交 SHA、工作树状态、命令、退出码和完整输出；交付时把证据归档到 PR 附件或制品位置，不以系统临时目录作为唯一留存。 _Why:_ 摘要不能独立证明实际验收快照，临时文件也会被清理。 _Source:_ [spec #15](https://github.com/immorcoding/mp3_project/issues/15)
 - **HAR-15** · exploring · Vendor 补丁以仓库根 `patches/<上游>/` 下的 patch 文件维护；CubeMX 重新导出或上游更新后，先跑 `scripts/apply-vendor-patches.ps1`（可重复执行：已应用跳过、能干净应用则应用、冲突则停下报位置）再跑 FAST；FAST 以 `git apply --reverse --check` 确认每个补丁完整生效，否则报“<上游> 补丁未应用”（如“FatFs 补丁未应用”）并给出重打命令；补丁落到 Vendor 目录由用户设 `ALLOW_GENERATED_UPDATE` 后提交（HAR-4），把含该提交的分支推送或合入集成分支也由用户在设该变量的会话里执行。 _Why:_ 重新导出会静默覆盖补丁，等到链接失败才发现时看不出原因；提交前检查能直接给出原因与重打命令。_Source:_ [ADR-0022](../adr/0022-fatfs-open-by-locator-patch.md)、[打开文件提速](https://github.com/immorcoding/mp3_project/issues/167)
 
+### Proposed
+
+- 2026-11-16 · provisional · HAR-11 补一句：主机工程共用的 FreeRTOS 桩在 `Tests/stubs/freertos/`（头文件按产品 include 路径摆放，带脚本化接口：拿不到锁、阻塞钩子、tick 与通知观察；自测是 `Tests/flash_ftl` 的 `freertos_stub_behavior`），新增依赖 FreeRTOS 的主机工程把 `../stubs/freertos` 放在 include 路径最前，并在 `verification.psd1` 登记 `^Tests/stubs/freertos/`。_Why:_ 并发模块各带一份桩会各自漂移；路径不登记，改桩就选不中受影响的模块。（queued: 无人值守 drain，#203 inbox）
+- 2026-11-16 · provisional · HAR-5 补一句：要证明的是“对外部入口的调用顺序”（例如卷任务先卸载、再发卷消失、最后才开闸）时，把循环体拆成单步函数（如 `volume_sd_step(now, edge)`：吃一圈的输入、返回下一圈最多等多久），用链接期假实现记录顺序和调用那一刻的状态，`for(;;)` 外壳只留创建和等待。_Why:_ `for(;;)` 没法测，纯函数又证明不了调用顺序。（queued: 无人值守 drain，#211 inbox）
+
 ### Signals
 
+- 2026-11-16 · cite · HAR-5 · 0.10.0 的并发模块（Filesystem 锁与完成等待、卷、后台、前台、音频读取、`ui_cell`、曲库）的主机测试用共用 FreeRTOS 桩脚本化阻塞与顺序：PASS 只证明分支、调用顺序与状态更新时机，不证明任务抢占、优先级继承、真实时序、DMA/Cache 和栈余量，`*_task.c` 的 `for(;;)` 外壳没有主机测试；这些由第 7 次板测（#221）的证据承担，模拟器的假后端同样测不到“新需求覆盖旧需求”。
+- 2026-11-06 · friction · HAR-5 · pre-push 把待推送提交检出到 `%TEMP%\mp3-push-<guid>\`（根路径约 75 字符）再跑主机测试，那里没有 FULL 用的短根映射（`short_root.ps1` 只接在 `verify.ps1` 上）；主机工程的对象路径加上目标名和跨目录源文件会超过 MAX_PATH（260），报 `opening dependency file … .obj.d: No such file or directory`，看上去像测试失败（#218 第一次推送就这样失败）。处理：缩短 `Tests/music_foreground` 的构建目标名。约定候选：构建目标名要短，`2 × 根长 + 目标名 + 源相对路径` 不超过 259，或让 pre-push 的临时 worktree 也走短根映射。
+- 2026-11-06 · friction · HAR-6 · 手工 `cmake -S Tests/<模块> -B <目录>` 不带 `-DCMAKE_C_COMPILER` 时本机选到 Clang 加调试运行库，`assert` 失败的 `abort()` 弹模态对话框，进程挂着等人点；Harness 经 `MP3_HOST_CC` 用 GCC，没有这个问题。手工构建要带 `-DCMAKE_C_COMPILER=gcc`；`Tests/audio_reader` 的新测试用本目录的 `host_test_assert.h`（失败时打印位置、`exit(1)`）。
 - 2026-10-17 · cite · HAR-5 · 播放链路主机测试的保真边界：`Tests/playback_task` 的假播放模块不模拟半区、欠载与 Stop/Start 顺序，PASS 只证明状态机对播放模块 Interface 的使用与反应；外壳 `playback_task.c` 无主机测试，只由固件构建编译与静态断言覆盖；`Tests/playback_service` 的假 Platform 音频有唯一不忠实开关 `fake_audio_accept_rate_for_test()`（放宽 22.05 kHz 以覆盖流尾补 0）。
-- 2026-10-19 · friction · new · #85 游标退场后主机模块 `storage_catalog` 整体退场，`APP/tasks/storage/catalog/` 不再属于任何主机模块，改动它走“未知生产路径”回退跑全部主机测试；要缩小范围需另立票补 Catalog 主机测试。
 - 2026-10-19 · cite · HAR-5 · `scripts/check-doxygen.ps1`（STY-2 机械项）的盲区：K&R 旧式定义、返回函数指针的定义、无返回类型的宏包装（`TEST_CASE(x) {`）静默跳过；文档与函数间有空行或其他注释算未紧邻；纯删除文档不会被发现。描述措辞、阻塞性、所有权、线程/ISR 等语义仍靠 `code-review`。
 - 2026-10-19 · cite · HAR-11 · 主机模块 `PathPatterns` 手写会随 include 漂移；`scripts/check-test-paths.ps1`（FAST）对每个模块只配置 `Tests/<模块>/`、读 `compile_commands.json` 并以 `gcc -MM` 取依赖，要求每个仓库内依赖被该模块某个 PathPatterns 命中，首次运行补齐 22 处缺口并加路由断言；约 4.7 s。
 - 2026-10-19 · friction · HAR-5 · `check-test-paths.ps1` 发现的缺口集中在跨层聚合头与配置头（`Service/service.h`、`Platform/platform.h`、`APP/app_config.h`、`Service/log/log_service*.h` 等），一改就选中 4~6 个模块，CHANGED 变慢但正确；盲区：仅在别的宏定义下才包含的头、`file(READ)` 改写输入、链接脚本、测试数据与 `CMakeLists.txt` 不经 `#include`，过宽的模式不检查。
@@ -63,7 +70,6 @@ Next id: HAR-16
 - 2026-10-31 · friction · HAR-15 · 在仓库子目录（如 `build/host/<模块>/`）里对副本 `git apply` 会把补丁路径当作仓库根相对路径而 Skipped；主机测试用 `GIT_CEILING_DIRECTORIES` 绕开，且副本已含补丁（用户提交 Vendor 改动之后）时先 `--reverse --check` 跳过。
 - 2026-11-01 · cite · HAR-5 · 仓库根超过 56 个字符时 FULL（`verify.ps1`）自动 `subst` 到空闲盘符运行、结束含失败卸载，证据目录与 metadata 仍写真实路径（#183，`scripts/short_root.ps1`）。
 - 2026-11-01 · cite · HAR-11 · `verification.psd1` 的主机模块可设 `Kind = 'Python'`（unittest 模块，如 `board_test_card`），测试目录 `TestDirectory`、慢用例 `HasSlowTests` 也在该文件登记；CHANGED 传 `-SkipSlow` 跳过慢用例，FULL 全跑（#183）。
-- 2026-11-03 · friction · new · `Tests/filesystem_locator` 的“锁表满”用例依赖产品 `ffconf.h` 的 `_FS_LOCK`（原值 2）。#191 把它调到 4 后，用例在没有生产代码改动时失败（锁表与文件槽同时用尽，测不出锁表满）。主机测试复制产品配置时，凡用例依赖某个配置数值，就在测试的 CMake 里显式固定它，并注释原因。
 
 ## collaboration
 
@@ -81,4 +87,4 @@ Next id: HAR-16
 ### Signals
 
 - 2026-10-20 · friction · HAR-8 · #98 把链接脚本改名为 `STM32H743xG_flash.ld`，`hardware.md` 的两处链接必须与改名同一提交，否则 `check-docs` 断链、FULL 失败；pre-commit 的写入分支检查拦住了分支上的链接修改。用户批准的绕法：先在 `main` 把两处链接改成纯文本文件名（`7f53d80`），再合入分支。
-- 2026-11-04 · friction · HAR-8 · 0.10.0 要搬 `APP/tasks/storage/`，领域文件不能在分支上改，所以第 0 步先把 `storage.catalog.md`、`storage.volumes.md` 里指向它的链接改成纯文本，合入 `main` 后再补。这是上面 Proposed 那条的第二次证据。
+- 2026-11-04 · friction · HAR-8 · 0.10.0 要搬走 `APP/tasks/storage/`（曲库到 `APP/apps/music/catalog/`，卷与基准到 `APP/tasks/volume/`，音频流到 `APP/tasks/audio_reader/`），领域文件不能在分支上改，所以第 0 步先把 `storage.catalog.md`、`storage.volumes.md`、`sources/storage-media.md`、ADR-0018 里指向它的链接改成纯文本，合入 `main` 后再补（#222 补回）。这是上面 Proposed 那条的第二次证据。

@@ -26,11 +26,14 @@ Next id: DIAG-8
 
 - [Service Log](../../Service/log/README.md)：消息池所有权与任务接缝；[Log Component](../../Components/log/README.md)：核心队列；[USB Adapter](../../Adapters/stm32_hal/log_usb_cdc/README.md)：就绪和异步输出。
 
+### Proposed
+
+- 2026-11-16 · provisional · DIAG-3 补一句：新增常开日志行或任务前，按 `MONITOR_TASK_CONCURRENT_MAX + 5 + MONITOR_POOL_OTHER_WORST_LINES + MONITOR_POOL_SPARE_MIN ≤ LOG_SERVICE_QUEUE_LENGTH` 重算消息池（现为 11 + 5 + 18 + 8 = 42 ≤ 45，`monitor_task.c` 的 `_Static_assert` 守住），汇总类日志注明节拍；一轮曲库扫描最多 3 行日志（第一条 WARN、一条 ERROR、`Scan done`），目录打不开一类的 WARN 每轮只记第一条，其余计入 `skipped=`。_Why:_ 池只有 45 块，Log 任务每 5 ms 转交一条；#218 的保守口径最坏同时到达 34 行（池从 30 加到 45），每加一个任务或一种常开日志行就吃掉余量。（queued: 无人值守 drain，#204、#208、#212、#213、#215、#218、#220 inbox 合并；池深 45 是用户 2026-11-06 的决定）
+
 ### Signals
 
 - 2026-11-01 · friction · DIAG-4 · 曲名 INFO 的 `us=` 现为标签读取耗时（整行耗时减去 `open=`），窗口汇总行的 `max=`、`us=`、`top=` 仍含打开；汇总行新增 `omax=<本窗最长单次打开>`，其中一个触发条件仍是单行读取（含打开）超过防御阈值（0.10.0 前是 T_data/2，之后是 1 s）。建议 DIAG-4 的文字写明“`us=` 不含打开、`max/us/top` 含打开、新增 `omax=`”。汇总行 12 行窗口、十位数极端取值会超出 Service Log 单条 128 B 并丢尾部计数（现实取值约 120 字符）。
-- 2026-11-01 · friction · DIAG-5 · Storage `Stream` INFO 只在开启成功后记（`off=` 为请求的 `AudioOffset`，未钳位；`lseek=` 是最后一次定位到区间起点加偏移的耗时）；开启失败不记，失败时只有停止原因可查。需要失败也留痕时另开票（#179）。
-- 2026-11-03 · friction · DIAG-3 · 板测要的数字多（#191 约 20 行每 10 s），Service Log 消息池只有 30 条，Monitor 每 5 s 连发约 13 行，撞上就挤掉 PLAYBACK 等日志；spike 靠每行之后让出 6 ms 绕过，没有改池深度。汇总类日志要注明节拍，或随汇总需求复核池深度（同时引 WF-12）。
+- 2026-11-01 · friction · DIAG-5 · 音频读取任务（原 Storage）的 `Stream` INFO 只在开启成功后记（`off=` 为请求的 `AudioOffset`，未钳位；`lseek=` 是最后一次定位到区间起点加偏移的耗时）；开启失败不记，失败时只有停止原因可查。需要失败也留痕时另开票（#179）。
 
 ## evidence
 
@@ -38,5 +41,9 @@ Next id: DIAG-8
 
 ### Rules
 
-- **DIAG-6** · exploring · 板测用的时延一律在固件里算好再输出，日志时间戳是输出时刻，不能相减；边界上的结果常开（切歌到出声、扫描结束、卷路径、Abort 结果、写 `CARD_REMOVED` 的时延）；周期汇总进 Monitor 5 s 一批（欠载、CPU 占比、日志丢失数）；持锁统计（每把锁的最长持有、最长等待和对应操作，含 `ui_cell` 和曲库短锁）和显示延迟汇总走同一个编译开关，Debug 开、Release 关，只出汇总。_Why:_ 验收项要有固件出口（WF-12）；消息池只有 30 条，逐次打点会挤掉别的日志。_Source:_ [0.10.0 板级验收](https://github.com/immorcoding/mp3_project/issues/198)、[迁移切片与分支顺序](https://github.com/immorcoding/mp3_project/issues/201)、[0.10.0 spec](https://github.com/immorcoding/mp3_project/issues/202)
+- **DIAG-6** · exploring · 板测用的时延一律在固件里算好再输出，日志时间戳是输出时刻，不能相减；边界上的结果常开（切歌到出声、扫描结束、卷路径、Abort 结果、写 `CARD_REMOVED` 的时延）；周期汇总进 Monitor 5 s 一批（欠载、CPU 占比、日志丢失数）；持锁统计（每把锁的最长持有、最长等待和对应操作，含 `ui_cell` 和曲库短锁）和显示延迟汇总走同一个编译开关，Debug 开、Release 关，只出汇总。_Why:_ 验收项要有固件出口（WF-12）；消息池只有 45 块（原 30 块，用户 2026-11-06 在 #218 决定加深），逐次打点会挤掉别的日志。_Source:_ [0.10.0 板级验收](https://github.com/immorcoding/mp3_project/issues/198)、[迁移切片与分支顺序](https://github.com/immorcoding/mp3_project/issues/201)、[0.10.0 spec](https://github.com/immorcoding/mp3_project/issues/202)
 - **DIAG-7** · exploring · 产品固件走不到的验收场景用测试钩子：合入主线，每个场景一个默认关闭的编译开关，写成 `if (开关)` 让默认构建也编译，发布构建不开；启动日志打印开了哪些钩子。_Why:_ 证据要留在最终提交上，不靠丢弃分支；默认也编译，钩子才不会烂掉，FULL 也不用多编一版。_Source:_ [0.10.0 板级验收](https://github.com/immorcoding/mp3_project/issues/198)、[迁移切片与分支顺序](https://github.com/immorcoding/mp3_project/issues/201)
+
+### Proposed
+
+- 2026-11-16 · exploring · DIAG-7 补两句落地约定：① 每个钩子在所属模块首次初始化时投一行 WARN（标签 `HOOK`，串口里是 `HOOK: <名字> ON <参数>`，没有就是没开），结果行用各自的标签；② 开关是模块配置头里的宏（默认 `0U`，写成 `if (宏 != 0U)`），根 `CMakeLists.txt` 提供同名缓存变量 `MP3_HOOK_<场景>`，Debug 以外的构建类型打开直接报错；作业表里的注册项写成 `(开关 != 0U) ? step : NULL`，让默认构建既编译钩子源文件、又因符号不被引用而被 `--gc-sections` 丢掉；钩子构建会改变被测路径的时序，对应的时序行必须在钩子关闭的构建上量。_Why:_ 已有迟到 DMA、假抖动、Flash 压力、定位符失效、翻页注入五个钩子照此落地，每个钩子都要同样三样东西。（queued: 无人值守 drain，#209、#211、#213、#215、#218 inbox 合并）

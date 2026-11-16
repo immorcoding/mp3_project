@@ -22,6 +22,8 @@
 - 2026-10-26 · cite · GUI-4 · #121 曲名换字体后 20 个场景约 130 帧哈希变化；用 `--font-unavailable`（回退 Montserrat，与改动前同字体）重跑既有场景，17 个逐帧相同，余下 4 帧可由曲库扩到 16 首解释，于是看图只需看曲名区。
 - 2026-10-28 · friction · GUI-4 · 模拟器上电外观是 Solid（`SERVICE_GUI_THEME_STARTUP`），按 T 后才是 Default。`music_artist` 原先把按 T 后的帧命名为 `*_solid`，审阅据此误判缺了哪些外观；本分支已改名为 `*_default`。`music_title_cjk_short`（注释写“按 T 切到 Solid”、帧名 `cjk_short_solid`）同样命名反了，未改。
 - 2026-10-28 · cite · GUI-4 · #157：`queue_long_scroll` 两帧哈希变化，逐帧看图，版式与文字不变，只有当前行长名循环滚动相位随末次 Apply 时刻变化；新增 `queue_back_scroll`（6 帧）、`queue_forward_fling`（4 帧）逐帧看过，行连续、顶部与底部无空白，`back_tail_bounce` 与 `back_top_bounce` 分别在末尾与首行露出回弹空隙；换回旧实现时 `back_mid_second` 变红，换回“只在首窗开弹性”时 `back_tail_bounce` 变红。
+- 2026-11-07 · friction · GUI-4 · spec #202 和 #200 说模拟器里“只有 `music_card_removed` 受影响”，漏算了 `vinyl_rotation`（它清空后也点了一次播放，`cleared_play_not_ready` 拍摄时刻相同）；第一个提交只重录一个场景，FULL 在另一帧失败。#219 把无卡开播从约 100 ms 后 NOT_READY 改成当圈 NOT_READY，213 帧里 2 帧变化（各 253 像素，状态行文字拍到淡出到底），用户看过拼图后批准重录。判“只有某场景受影响”之前，先在各场景 `.args` 里搜触发该路径的按键，或用 `-BaselineRef` 对原型改动跑一次。
+- 2026-11-07 · friction · GUI-4 · `run-scenarios.ps1 -BaselineRef` 在 Windows PowerShell 5.1 下直接失败（`The term 'Build-GuiSimulator' is not recognized`）：`Tools/gui_simulator/compare-baseline.ps1` 的默认构建器用 `{...}.GetNewClosure()`，闭包跑在新的动态模块作用域里，看不到 dot-source 进来的 `Build-GuiSimulator`；自测用假构建器所以没测到。#219 绕过调用，没改脚本；修法：默认构建器在闭包里自己 dot-source `scenario_common.ps1`，并补一条走默认构建器的自测。
 
 ### Rejected
 
