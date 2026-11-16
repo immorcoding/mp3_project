@@ -1,6 +1,6 @@
 # ADR-0024：文件接口的并发模型
 
-- 状态：已接受，实施中（[0.10.0 spec](https://github.com/immorcoding/mp3_project/issues/202)）。替代 [ADR-0005](0005-sd-filesystem-task-ownership.md) 第 3 条，以及 [ADR-0010](0010-fatfs-user-diskio-service-ownership.md)、[ADR-0014](0014-filesystem-volume-aware-file-interface.md) 里“唯一 Storage Task”的部分。
+- 状态：已接受，已在 0.10.0 实施，第 7 次板级验收通过（[0.10.0 spec](https://github.com/immorcoding/mp3_project/issues/202)、[板级验收](https://github.com/immorcoding/mp3_project/issues/221)，2026-11-16）。替代 [ADR-0005](0005-sd-filesystem-task-ownership.md) 第 3 条，以及 [ADR-0010](0010-fatfs-user-diskio-service-ownership.md)、[ADR-0014](0014-filesystem-volume-aware-file-interface.md) 里“唯一 Storage Task”的部分。
 - 日期：2026-11-04
 - 相关 ticket：[FatFs 跨卷并发](https://github.com/immorcoding/mp3_project/issues/187)、[共享状态与完成通知](https://github.com/immorcoding/mp3_project/issues/188)、[上板验证：加锁](https://github.com/immorcoding/mp3_project/issues/191)、[文件接口的锁边界](https://github.com/immorcoding/mp3_project/issues/192)、[卷生命周期与卷事件](https://github.com/immorcoding/mp3_project/issues/195)、[上板验证：表锁](https://github.com/immorcoding/mp3_project/issues/199)
 - 相关决定：[ADR-0023](0023-task-split-and-app-contract.md)、[ADR-0022](0022-fatfs-open-by-locator-patch.md)；规则 ARC-11、ARC-12、ARC-21、STOR-8、STOR-9
@@ -15,7 +15,7 @@ ADR-0023 让多个任务直接调用文件接口。现状不允许：Service 内
 
 **1. 每卷一把锁，只在 Service 公开函数入口拿。** 一次公开调用拿一次，多步函数中途不放，句柄有效性在锁内检查。`_USE_LFN` 改 2，`_FS_REENTRANT` 保持 0。不开递归互斥量，公开函数之间不互相调用。
 
-**2. `Files[]` 用窄表锁，不改 `ff.c`。** 只有 `f_open`、`f_opendir` 和按定位符打开在卷锁内再拿表锁。依据是读 `ff.c`：跨卷会冲突的只有 `inc_lock` 里“找空位并占用”这一步，`dec_lock`、`clear_lock` 只写本卷条目，`chk_lock`、`enq_lock` 只读。Flash 操作最多让 SD 打开多等 10.1 ms；表锁的实际最长持有是大目录按路径打开的 2047 ms，那是 SD 挡 Flash，这个方向的等待未测，Flash 上也没有赶时间的读者。这些数字不是并发证明。
+**2. `Files[]` 用窄表锁，不改 `ff.c`。** 只有 `f_open`、`f_opendir` 和按定位符打开在卷锁内再拿表锁。依据是读 `ff.c`：跨卷会冲突的只有 `inc_lock` 里“找空位并占用”这一步，`dec_lock`、`clear_lock` 只写本卷条目，`chk_lock`、`enq_lock` 只读。Flash 操作最多让 SD 打开多等 10.1 ms；表锁的实际最长持有是大目录按路径打开的 2047 ms，那是 SD 挡 Flash，这个方向的等待未测，Flash 上也没有赶时间的读者。这些数字不是并发证明。第 7 次板测：常规库 Flash 压力下表锁最长 20.22 ms（单次，Flash 删旧建新那一刻，其余约 28 min ≤ 约 18 ms，下版 bug 票 #228）；12000 首大目录按路径打开占表锁 1.60–1.76 s，Flash 新建等表锁最长 135 ms，没有秒级放大。
 
 **3. 槽按卷固定分配。** 每个槽由所属卷的锁保护，不要第三把锁。`_FS_LOCK` 静态断言不小于槽总数。
 
@@ -23,9 +23,9 @@ ADR-0023 让多个任务直接调用文件接口。现状不允许：Service 内
 
 **5. 调用者限制。** APP 启动时登记 GUI 和播放任务，入口比较当前任务句柄，违反就断言停机，Release 也保留。用禁用名单是为了新增任务时共用层不用改。
 
-**6. 完成通知每卷一个信号量。** 持卷锁的任务等待，删掉 `notify_index` 参数和 owner 检查。owner 检查必须和加锁一起改，否则非 owner 时磁盘状态报 `STA_NOINIT`，可能触发 FatFs 重挂（推断）。
+**6. 完成通知每卷一个信号量。** 持卷锁的任务等待，删掉 `notify_index` 参数和 owner 检查。owner 检查必须和加锁一起改，否则非 owner 时磁盘状态报 `STA_NOINIT`，会触发 FatFs 重挂（读 `ff.c` 确认：`find_volume` 对已挂载的卷调 `disk_status`，返回 `STA_NOINIT` 就清 `fs_type` 并重新挂载）。
 
-**7. 迟到的 DMA 完成事件用有上界的显式 Abort。** 不改 Vendor，Adapter 新增中止函数，到上界还没停就 `HAL_SD_DeInit`，卷保持 ERROR。
+**7. 迟到的 DMA 完成事件用有上界的显式 Abort。** 不改 Vendor，Adapter 新增中止函数，到上界还没停就 `HAL_SD_DeInit`，卷保持 ERROR。等待上界 500 ms（`FILESYSTEM_FATFS_BSP_DMA_TIMEOUT_MS`，FatFs 与 BSP 传下来的超时一律忽略，生成的 `sd_diskio.c` 传的约 49.7 天），中止预算 100 ms；顺序是硬件先停、完成信号量后清、下一笔才允许启动，所以“清理之后、启动之前才完成”的窗口由顺序关掉。第 7 次板测：迟到 DMA 钩子 99 次连续 `victim=timeout verify=ok`，中止 44–45 µs，无内容 MISMATCH；`stuck` 分支健康卡上造不出，未测。
 
 **8. 死锁规则。** 绝不同时持两把卷锁，跨卷操作由调用者分成多次调用。顺序固定是卷锁 → 表锁，表锁内不拿别的锁。持文件锁时不调用会阻塞的接口。界面数据的锁和文件锁不嵌套，由 `ui_cell` 的结构保证。
 
@@ -62,4 +62,5 @@ ADR-0023 让多个任务直接调用文件接口。现状不允许：Service 内
 - Abort 要自己恢复 HAL 句柄的 `State`、`Context`，HAL 升级时复核。
 - 大目录按路径打开最长持 SD 锁 2.05 s，所以曲库文件一律走定位符。T_data 的依据要算上等锁（见 ADR-0023）。
 - 已知漏洞（推断）：数据脚比检测脚先断时，第一次失败仍是 `ERROR`，显示读取错误而不是 “No SD card”，同样会停播。
-- 窄表锁的并发正确性、迟到 DMA、闸和对账都还没有在产品代码上验证，由 0.10.0 板级验收负责。
+- Flash 压力下，被抢占会让短时限判成假超时：`W25Qxx_Process` 改成先读墙钟再读完成状态；HAL 的 QSPI 单次调用时限 100 → 3000 ms，回收与恢复预算 2000 → 5000 ms（服务层单次预算须大于 HAL 单次时限）；代价是芯片或总线真挂死时同步调用 3 s 才报错。HAL 超时后 `hqspi.State` 停在 ERROR，运行中没有恢复入口，失败一次就停到重启（#220）。
+- 窄表锁的并发正确性、迟到 DMA、闸和对账已由第 7 次板级验收验证（拔插 52 次、迟到 DMA 99 次、30 min Flash 压力下真擦除 255 → 9692 次，欠载 0，栈最低剩余 2040 B）。未测：30 ms 内抽插（带锁卡槽机械上做不到）、`stuck` 分支；误调文件接口停机只引用第 2 次上板结果。
